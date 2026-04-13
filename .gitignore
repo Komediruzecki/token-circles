@@ -1,7 +1,16 @@
+# Dependencies
 node_modules/
+
+# Database (server-only, contains real data)
+db/
 *.db
 *.db-shm
 *.db-wal
+
+# Environment and OS files
 .env
 .DS_Store
-db/
+
+# Server-only symlinks (created by deploy.sh, not in git)
+# backend/assets/
+# backend/db/
