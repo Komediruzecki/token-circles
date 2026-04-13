@@ -2112,20 +2112,30 @@ const loans = {
     this.calculate(loanId);
   },
   async calculate(loanId) {
-    const result = await api(`/loans/${loanId}/calculate`);
-    if (result.error) { toast(result.error, 'error'); return; }
+    const btn = event?.target?.closest('button');
+    const originalText = btn?.textContent;
+    if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
 
-    const loan = await api(`/loans/${loanId}`);
-    const details = document.getElementById(`loan-details-${loanId}`);
-    details.style.display = 'block';
+    try {
+      const [result, loan] = await Promise.all([
+        api(`/loans/${loanId}/calculate`),
+        api(`/loans/${loanId}`)
+      ]);
+      if (result.error) { toast(result.error, 'error'); return; }
 
-    // Destroy existing charts for this loan
-    if (this.loanCharts[loanId]) {
-      Object.values(this.loanCharts[loanId]).forEach(c => c.destroy());
-    }
-    if (!this.loanCharts[loanId]) this.loanCharts[loanId] = {};
+      const details = document.getElementById(`loan-details-${loanId}`);
+      details.style.display = 'block';
 
-    const s = result.summary;
+      // Scroll to results
+      details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      // Destroy existing charts for this loan
+      if (this.loanCharts[loanId]) {
+        Object.values(this.loanCharts[loanId]).forEach(c => c.destroy());
+      }
+      if (!this.loanCharts[loanId]) this.loanCharts[loanId] = {};
+
+      const s = result.summary;
     const ws = result.comparison.withoutPrepayments;
 
     details.innerHTML = `
@@ -2238,6 +2248,9 @@ const loans = {
         scales: { y: { ticks: { callback: v => formatCurrency(v) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
       }
     });
+    } finally {
+      if (btn) { btn.textContent = originalText; btn.disabled = false; }
+    }
   }
 };
 
