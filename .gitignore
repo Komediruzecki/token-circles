@@ -5,3 +5,7 @@ node_modules/
 .env
 .DS_Store
 db/
+
+# Live server symlinks (created on server, not in git)
+backend/assets/
+backend/db/
