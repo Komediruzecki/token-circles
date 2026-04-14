@@ -157,27 +157,8 @@ app.post('/api/profiles', (req, res) => {
     // Check name uniqueness across all profiles
     const existing = db.prepare('SELECT id FROM profiles WHERE LOWER(name) = LOWER(?)').get(name.trim());
     if (existing) return res.status(400).json({ error: 'A profile with this name already exists' });
-    const info = db.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)').run(name.trim(), req.session.userId);
-    // Seed default categories for new profile
-    const insertCat = db.prepare('INSERT INTO categories (name, color, icon, type, profile_id) VALUES (?, ?, ?, ?, ?)');
-    const defaults = [
-      ['Housing', '#ef4444', 'home', 'expense'],
-      ['Food & Dining', '#f97316', 'utensils', 'expense'],
-      ['Transportation', '#eab308', 'car', 'expense'],
-      ['Healthcare', '#22c55e', 'heart', 'expense'],
-      ['Entertainment', '#06b6d4', 'film', 'expense'],
-      ['Shopping', '#8b5cf6', 'shopping-bag', 'expense'],
-      ['Utilities', '#64748b', 'zap', 'expense'],
-      ['Education', '#ec4899', 'book', 'expense'],
-      ['Personal Care', '#f43f5e', 'smile', 'expense'],
-      ['Travel', '#14b8a6', 'plane', 'expense'],
-      ['Salary', '#10b981', 'briefcase', 'income'],
-      ['Freelance', '#3b82f6', 'laptop', 'income'],
-      ['Investments', '#6366f1', 'trending-up', 'income'],
-      ['Other Income', '#8b5cf6', 'plus-circle', 'income'],
-    ];
-    for (const c of defaults) insertCat.run(...c, info.lastInsertRowid);
-    res.json({ id: info.lastInsertRowid, name: name.trim(), transaction_count: 0 });
+    db.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)').run(name.trim(), req.session.userId);
+    res.json({ id: db.prepare('SELECT last_insert_rowid() as id').get().id, name: name.trim(), transaction_count: 0 });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
