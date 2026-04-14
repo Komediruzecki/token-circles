@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+docker.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+
+# Documentation
+*.md
+!package.json
+
+# CI/CD
+.github/
+.github-workflow.md
+
+# Backup files
+*.bak
+*.bak.*
+
+# SQLite WAL/shm files (created at runtime, not needed in build context)
+*.db-shm
+*.db-wal
+
+# Environment files
+.env
+.env.*

@@ -979,7 +979,7 @@ app.post('/api/import/googlesheet', (req, res) => {
 app.post('/api/import/execute', (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { rows, mapping } = req.body;
+    const { rows, mapping, categoryTypes } = req.body;
     if (!rows || !mapping) return res.status(400).json({ error: 'Missing data' });
 
     const insert = db.prepare(`
@@ -1011,7 +1011,9 @@ app.post('/api/import/execute', (req, res) => {
           const color = newCategoryColors[colorIndex % newCategoryColors.length];
           colorIndex++;
           const icon = 'tag';
-          const r = insertCat.run(String(catName).trim(), 'expense', color, icon, pid);
+          // Use user-specified type, or fallback to auto-detected default
+          const catType = (categoryTypes && categoryTypes[catName]) || 'expense';
+          const r = insertCat.run(String(catName).trim(), catType, color, icon, pid);
           return r.lastInsertRowid;
         })();
 
@@ -1058,6 +1060,56 @@ app.post('/api/import/execute', (req, res) => {
 
     insertMany(rows);
     res.json({ imported, message: `Successfully imported ${imported} transactions` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ========================
+// ACCOUNTS (per-profile)
+// ========================
+app.get('/api/accounts', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const accounts = db.prepare('SELECT * FROM accounts WHERE profile_id = ? ORDER BY type, name').all(pid);
+    res.json(accounts);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/accounts', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, type, currency, balance, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const validTypes = ['giro', 'ib', 'savings'];
+    const accountType = validTypes.includes(type) ? type : 'giro';
+    const result = db.prepare(
+      'INSERT INTO accounts (name, type, currency, balance, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), accountType, currency || 'USD', parseFloat(balance) || 0, notes || '', pid);
+    res.json({ id: result.lastInsertRowid, message: 'Account created' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/accounts/:id', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, type, currency, balance, notes } = req.body;
+    const existing = db.prepare('SELECT id FROM accounts WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Account not found' });
+    const validTypes = ['giro', 'ib', 'savings'];
+    const accountType = validTypes.includes(type) ? type : 'giro';
+    db.prepare(
+      'UPDATE accounts SET name = ?, type = ?, currency = ?, balance = ?, notes = ? WHERE id = ? AND profile_id = ?'
+    ).run(name.trim(), accountType, currency || 'USD', parseFloat(balance) || 0, notes || '', req.params.id, pid);
+    res.json({ message: 'Account updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/accounts/:id', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const existing = db.prepare('SELECT id FROM accounts WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Account not found' });
+    db.prepare('DELETE FROM accounts WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
+    res.json({ message: 'Account deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
