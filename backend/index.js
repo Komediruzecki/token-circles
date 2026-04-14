@@ -472,11 +472,24 @@ app.get('/api/loans/:id', (req, res) => {
 app.put('/api/loans/:id', (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { name, principal, interest_rate, start_date, term_months } = req.body;
+    const { name, principal, interest_rate, start_date, term_months, rate_periods } = req.body;
     const result = db.prepare(
       'UPDATE loans SET name=?, principal=?, interest_rate=?, start_date=?, term_months=? WHERE id=? AND profile_id=?'
     ).run(name, principal, interest_rate || 5.0, start_date, term_months, req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+
+    if (rate_periods !== undefined) {
+      db.prepare('DELETE FROM loan_rate_periods WHERE loan_id=?').run(req.params.id);
+      if (rate_periods.length > 0) {
+        const insert = db.prepare(
+          'INSERT INTO loan_rate_periods (loan_id, rate, start_month, end_month) VALUES (?, ?, ?, ?)'
+        );
+        for (const rp of rate_periods) {
+          insert.run(req.params.id, rp.rate, rp.start_month, rp.end_month || null);
+        }
+      }
+    }
+
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -501,6 +514,19 @@ app.post('/api/loans/:id/rates', (req, res) => {
       'INSERT INTO loan_rate_periods (loan_id, rate, start_month, end_month) VALUES (?, ?, ?, ?)'
     ).run(req.params.id, rate, start_month, end_month || null);
     res.json({ id: info.lastInsertRowid });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/loans/:id/rates/:rateId', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const loan = db.prepare('SELECT id FROM loans WHERE id=? AND profile_id=?').get(req.params.id, pid);
+    if (!loan) return res.status(404).json({ error: 'Loan not found' });
+    const { rate, start_month, end_month } = req.body;
+    db.prepare(
+      'UPDATE loan_rate_periods SET rate=?, start_month=?, end_month=? WHERE id=? AND loan_id=?'
+    ).run(rate, start_month, end_month || null, req.params.rateId, req.params.id);
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
