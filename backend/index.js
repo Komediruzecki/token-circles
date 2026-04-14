@@ -3,6 +3,9 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const SQLiteStore = require('connect-sqlite3')(session);
 const db = require('./database');
 const loanCalc = require('./models/loanCalculator');
 const XLSX = require('xlsx');
@@ -35,6 +38,22 @@ function parseDateString(dateStr) {
   return new Date().toISOString().split('T')[0];
 }
 
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'finance-manager-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Set to true if using HTTPS
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  },
+  store: new SQLiteStore({
+    db: 'sessions.db',
+    dir: path.join(__dirname, '..', 'db')
+  })
+}));
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -61,7 +80,48 @@ function profileWhere(tableAlias = 't', extra = '') {
 }
 
 // ========================
-// PROFILES
+// AUTH
+// ========================
+function requireAuth(req, res, next) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    res.json({ ok: true, username: user.username });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ error: 'Logout failed' });
+    res.json({ ok: true });
+  });
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json({ userId: req.session.userId, username: req.session.username });
+});
 // ========================
 app.get('/api/profiles', (req, res) => {
   try {
