@@ -24,6 +24,7 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
   const schedule = [];
   let balance = principal;
   let monthIndex = 0;
+  let lockedPayment = null;
 
   while (balance > 0.01 && monthIndex < termMonths * 2) {
     monthIndex++;
@@ -42,31 +43,17 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
     const prepayment = sortedPrepayments.find(p => p.month === monthIndex);
     const prepayAmount = prepayment ? prepayment.amount : 0;
 
-    // Calculate payment for remaining months with current rate
     const remainingMonths = termMonths - monthIndex + 1;
     if (remainingMonths <= 0) break;
 
-    // Find the rate for remaining months
-    let remainingRate = currentRate;
-    for (const rp of sortedRates) {
-      if (rp.start_month > monthIndex) {
-        remainingRate = rp.rate;
-        break;
-      }
-    }
-    if (remainingRate === currentRate) {
-      // Check if rate changes after this month
-      for (const rp of sortedRates) {
-        if (rp.start_month > monthIndex && rp.start_month <= monthIndex + remainingMonths) {
-          remainingRate = rp.rate;
-          break;
-        }
-      }
+    // Recalculate locked payment when rate changes or after prepayment
+    const rateChangesThisMonth = sortedRates.some(rp => rp.start_month === monthIndex);
+    if (rateChangesThisMonth || prepayment || lockedPayment === null) {
+      lockedPayment = calcMonthlyPayment(balance, currentRate, remainingMonths);
     }
 
-    const monthlyPayment = calcMonthlyPayment(balance, currentRate, remainingMonths);
     const interestPortion = balance * (currentRate / 100 / 12);
-    let principalPortion = monthlyPayment - interestPortion;
+    let principalPortion = lockedPayment - interestPortion;
 
     // Apply prepayment
     if (prepayment) {
@@ -88,7 +75,7 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
     schedule.push({
       month: monthIndex,
       date: monthDate,
-      payment: Math.min(monthlyPayment, principalPortion + interestPortion),
+      payment: lockedPayment,
       principal: principalPortion - (prepayment ? prepayAmount : 0),
       interest: interestPortion,
       balance: balance,
