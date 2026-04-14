@@ -761,6 +761,9 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
           <button onclick="analytics.setPeriod('week')" id="period-week">Week</button>
           <button onclick="analytics.setPeriod('month')" id="period-month">Month</button>
         </div>
+        <select class="form-control" id="analytics-year" onchange="analytics.onYearChange()" style="width:auto;min-width:100px;">
+          <option value="">All Time</option>
+        </select>
         <select class="form-control" id="analytics-months" onchange="analytics.load()" style="width:auto;min-width:120px;">
           <option value="1">1 Month</option>
           <option value="3">3 Months</option>
@@ -1928,6 +1931,23 @@ const analytics = {
   pieChart: null,
   currentPeriod: 'day',
   init() {
+    this.populateYears();
+    this.load();
+  },
+  populateYears() {
+    const select = document.getElementById('analytics-year');
+    if (select.options.length > 1) return; // Already populated
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= currentYear - 10; y--) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      select.appendChild(opt);
+    }
+  },
+  onYearChange() {
+    const year = document.getElementById('analytics-year').value;
+    document.getElementById('analytics-months').style.display = year ? 'none' : '';
     this.load();
   },
   setPeriod(period) {
@@ -1937,9 +1957,13 @@ const analytics = {
     this.load();
   },
   async load() {
+    const year = document.getElementById('analytics-year').value;
     const months = parseInt(document.getElementById('analytics-months').value) || 6;
+    const url = year
+      ? `/analytics/category-trends?year=${year}&period=${this.currentPeriod}`
+      : `/analytics/category-trends?months=${months}&period=${this.currentPeriod}`;
     const [data, settings] = await Promise.all([
-      api(`/analytics/category-trends?months=${months}&period=${this.currentPeriod}`),
+      api(url),
       api('/settings')
     ]);
     this.currentCurrency = settings.local_currency || 'EUR';
