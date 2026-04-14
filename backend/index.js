@@ -1295,6 +1295,16 @@ app.get('/api/analytics/category-trends', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/analytics/year-range', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const range = db.prepare(`SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions WHERE profile_id = ?`).get(pid);
+    const minYear = range.min_date ? parseInt(range.min_date.slice(0, 4)) : null;
+    const maxYear = range.max_date ? parseInt(range.max_date.slice(0, 4)) : null;
+    res.json({ minYear, maxYear });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Catch-all: serve index.html for SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));

@@ -2127,18 +2127,19 @@ const analytics = {
   pieChart: null,
   currentPeriod: 'day',
   init() {
-    this.populateYears();
-    this.load();
+    this.populateYears().then(() => this.load());
   },
-  populateYears() {
+  async populateYears() {
     const select = document.getElementById('analytics-year');
     if (select.options.length > 1) return; // Already populated
-    const currentYear = new Date().getFullYear();
-    for (let y = currentYear; y >= currentYear - 10; y--) {
-      const opt = document.createElement('option');
-      opt.value = y;
-      opt.textContent = y;
-      select.appendChild(opt);
+    const range = await api('/analytics/year-range');
+    if (range.minYear && range.maxYear) {
+      for (let y = range.maxYear; y >= range.minYear; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        select.appendChild(opt);
+      }
     }
   },
   onYearChange() {
