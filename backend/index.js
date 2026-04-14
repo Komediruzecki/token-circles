@@ -635,15 +635,19 @@ app.post('/api/loans/:id/calculate', (req, res) => {
     const ratePeriods = db.prepare('SELECT * FROM loan_rate_periods WHERE loan_id=? ORDER BY start_month').all(req.params.id);
     const prepayments = db.prepare('SELECT * FROM loan_prepayments WHERE loan_id=? ORDER BY month').all(req.params.id);
 
+    // Prepend the loan's initial rate as the first rate period (months 1 to before first user-set change)
+    const initialRatePeriod = [{ rate: loan.interest_rate, start_month: 1, end_month: undefined }];
+    const allRatePeriods = [...initialRatePeriod, ...ratePeriods.map(rp => ({ rate: rp.rate, start_month: rp.start_month, end_month: rp.end_month }))];
+
     const scheduleWithPrepayments = loanCalc.calculateSchedule(
       loan.principal, loan.start_date, loan.term_months,
-      ratePeriods.map(rp => ({ rate: rp.rate, start_month: rp.start_month, end_month: rp.end_month })),
+      allRatePeriods,
       prepayments.map(p => ({ month: p.month, amount: p.amount, note: p.note }))
     );
 
     const scheduleNoPrepayments = loanCalc.calculateSchedule(
       loan.principal, loan.start_date, loan.term_months,
-      ratePeriods.map(rp => ({ rate: rp.rate, start_month: rp.start_month, end_month: rp.end_month })),
+      allRatePeriods,
       []
     );
 
@@ -1076,14 +1080,21 @@ app.get('/api/stats/monthly', (req, res) => {
 app.get('/api/analytics/category-trends', (req, res) => {
   try {
     const pid = getProfileId(req);
+    const year = req.query.year ? parseInt(req.query.year) : null;
     const months = parseInt(req.query.months) || 6;
     const period = req.query.period || 'day'; // day, week, month
 
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - months);
-    const startStr = startDate.toISOString().split('T')[0];
-    const endStr = endDate.toISOString().split('T')[0];
+    let startStr, endStr;
+    if (year) {
+      startStr = `${year}-01-01`;
+      endStr = `${year}-12-31`;
+    } else {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - months);
+      startStr = startDate.toISOString().split('T')[0];
+      endStr = endDate.toISOString().split('T')[0];
+    }
 
     // Get all expense transactions with categories - use amount_local if available
     const transactions = db.prepare(`
@@ -1106,7 +1117,14 @@ app.get('/api/analytics/category-trends', (req, res) => {
     const labels = [];
     const periodMap = new Map();
 
-    if (period === 'day') {
+    if (year) {
+      // Full year view — always show 12 months
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      for (let m = 0; m < 12; m++) {
+        labels.push(`${monthNames[m]} ${year}`);
+        periodMap.set(`${year}-${String(m + 1).padStart(2, '0')}`, m);
+      }
+    } else if (period === 'day') {
       // Daily view - last 30 days
       for (let i = 29; i >= 0; i--) {
         const d = new Date();
@@ -1160,7 +1178,10 @@ app.get('/api/analytics/category-trends', (req, res) => {
     // Aggregate transactions
     transactions.forEach(t => {
       let idx;
-      if (period === 'day') {
+      if (year) {
+        const monthKey = t.date.slice(0, 7);
+        idx = periodMap.get(monthKey);
+      } else if (period === 'day') {
         idx = periodMap.get(t.date);
       } else if (period === 'week') {
         idx = periodMap.get(t.date);
