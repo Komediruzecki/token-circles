@@ -28,11 +28,9 @@ COPY --from=builder /build/node_modules ./node_modules
 # Copy application source
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
-COPY db/ ./db/
 
 # Ensure directories exist and are writable
-RUN mkdir -p db assets && \
-    chown -R appuser:appgroup /app
+RUN mkdir -p db assets && chown -R appuser:appgroup /app
 
 # Switch to non-root user
 USER appuser
