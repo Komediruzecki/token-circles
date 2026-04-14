@@ -1137,7 +1137,6 @@ app.get('/api/analytics/category-trends', (req, res) => {
     const pid = getProfileId(req);
     const year = req.query.year ? parseInt(req.query.year) : null;
     const month = req.query.month ? String(req.query.month).padStart(2, '0') : null;
-    const months = parseInt(req.query.months) || 6;
     const period = req.query.period || 'day'; // day, week, month
 
     let startStr, endStr;
@@ -1153,21 +1152,15 @@ app.get('/api/analytics/category-trends', (req, res) => {
         endStr = `${year}-12-31`;
       }
     } else {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - months);
-      startStr = startDate.toISOString().split('T')[0];
-      endStr = endDate.toISOString().split('T')[0];
+      // All years — no date filter
+      startStr = null;
+      endStr = null;
     }
 
     // Get all expense transactions with categories - use amount_local if available
-    const transactions = db.prepare(`
-      SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color
-      FROM transactions t
-      JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
-      ORDER BY t.date
-    `).all(pid, startStr, endStr);
+    const transactions = startStr
+      ? db.prepare(`SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ? ORDER BY t.date`).all(pid, startStr, endStr)
+      : db.prepare(`SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id = ? AND t.type = 'expense' ORDER BY t.date`).all(pid);
 
     // Get all expense categories for this profile
     const categories = db.prepare(`
@@ -1227,15 +1220,23 @@ app.get('/api/analytics/category-trends', (req, res) => {
         periodMap.set(t.date, labels.indexOf(label));
       });
     } else {
-      // Monthly view
-      for (let i = months - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-        labels.push(label);
-        const monthKey = d.toISOString().slice(0, 7);
-        periodMap.set(monthKey, labels.length - 1);
+      // All years — monthly buckets spanning actual data range
+      const range = db.prepare(`SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions WHERE profile_id = ?`).get(pid);
+      if (range.min_date && range.max_date) {
+        const minY = parseInt(range.min_date.slice(0, 4));
+        const maxY = parseInt(range.max_date.slice(0, 4));
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        let idx = 0;
+        for (let y = minY; y <= maxY; y++) {
+          const maxM = y === maxY ? parseInt(range.max_date.slice(5, 7)) : 12;
+          const minM = y === minY ? parseInt(range.min_date.slice(5, 7)) : 1;
+          for (let m = minM; m <= maxM; m++) {
+            labels.push(`${monthNames[m - 1]} ${y}`);
+            periodMap.set(`${y}-${String(m).padStart(2, '0')}`, idx++);
+          }
+        }
       }
+      if (labels.length === 0) labels.push('No data');
     }
 
     // Initialize datasets for each category
