@@ -30,7 +30,7 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
     monthIndex++;
 
     // Determine current rate
-    let currentRate = sortedRates.length > 0 ? sortedRates[0].rate : 0;
+    let currentRate = 0;
     for (const rp of sortedRates) {
       if (rp.start_month <= monthIndex) {
         if (!rp.end_month || monthIndex <= rp.end_month) {
