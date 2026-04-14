@@ -274,7 +274,7 @@ app.put('/api/categories/:id', (req, res) => {
     const { name, color, icon, type, parent_id } = req.body;
     const result = db.prepare(
       'UPDATE categories SET name=?, color=?, icon=?, type=?, parent_id=? WHERE id=? AND profile_id=?'
-    ).run(name, color, icon, type, parent_id || null, req.params.id, pid);
+    ).run(name, color, icon || 'tag', type, parent_id || null, req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
