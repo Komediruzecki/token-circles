@@ -1135,7 +1135,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   <div class='modal' style='max-width:440px;'>
     <div class='modal-header'>
       <div class='modal-title' id='prepay-modal-title'>Add Prepayment</div>
-      <button class='btn btn-ghost' onclick='modal.close('prepay-modal')'>
+      <button class='btn btn-ghost' onclick="modal.close('prepay-modal')">
         <svg width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path d='M6 18L18 6M6 6l12 12'/></svg>
       </button>
     </div>
@@ -1157,7 +1157,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       </div>
     </div>
     <div class='modal-footer'>
-      <button class='btn btn-secondary' onclick='modal.close('prepay-modal')'>Cancel</button>
+      <button class='btn btn-secondary' onclick="modal.close('prepay-modal')">Cancel</button>
       <button class='btn btn-primary' onclick='loans.savePrepayment()'>Save</button>
     </div>
   </div>
@@ -2020,15 +2020,15 @@ const loans = {
   // Client-side cache for loan calculations
   loanCache: {},
   // Current profile currency
-  currentCurrency: 'USD',
+  currentCurrency: 'EUR',
 
   async load() {
     // Load settings first to get currency
     try {
       const settings = await api('/settings');
-      this.currentCurrency = settings.local_currency || 'USD';
+      this.currentCurrency = settings.local_currency || 'EUR';
     } catch (e) {
-      this.currentCurrency = 'USD';
+      this.currentCurrency = 'EUR';
     }
 
     const loans = await api('/loans');
