@@ -159,6 +159,18 @@ function migrate() {
     try { db.exec('ALTER TABLE settings ADD COLUMN profile_id INTEGER DEFAULT 1'); } catch(e) {}
   }
 
+  // Migration: Fix sample transaction amounts (should be positive, type determines sign)
+  if (columnExists('transactions', 'amount')) {
+    try {
+      db.exec("UPDATE transactions SET amount = ABS(amount) WHERE profile_id = 1 AND amount < 0");
+    } catch(e) {}
+  }
+
+  // Migration: Add user_id to profiles table
+  if (!columnExists('profiles', 'user_id')) {
+    try { db.exec('ALTER TABLE profiles ADD COLUMN user_id INTEGER REFERENCES users(id)'); } catch(e) {}
+  }
+
   // Create default profile if none exist
   const profileCount = db.prepare('SELECT COUNT(*) as c FROM profiles').get();
   if (profileCount.c === 0) {
@@ -197,6 +209,42 @@ function migrate() {
     const bcrypt = require('bcrypt');
     const passwordHash = bcrypt.hashSync('add2', 10);
     db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('maff', passwordHash);
+  }
+
+  // Seed sample transactions for ExampleProfile (id=1) if none exist
+  const txCount = db.prepare('SELECT COUNT(*) as c FROM transactions WHERE profile_id = 1').get();
+  if (txCount.c === 0) {
+    const insertTx = db.prepare(
+      'INSERT INTO transactions (description, amount, date, category_id, type, profile_id, currency) VALUES (?,?,?,?,?,?,?)'
+    );
+    const now = new Date();
+    // Get category IDs for ExampleProfile
+    const cats = {};
+    db.prepare('SELECT name, id FROM categories WHERE profile_id = 1').all().forEach(c => { cats[c.name] = c.id; });
+
+    const samples = [
+      ['Monthly Salary', 4500, -15, 'Salary', 'income'],
+      ['Freelance Project', 850, -30, 'Freelance', 'income'],
+      ['Rent Payment', 1200, -3, 'Housing', 'expense'],
+      ['Grocery Shopping', 185.50, -5, 'Food & Dining', 'expense'],
+      ['Grocery Shopping', 142.30, -18, 'Food & Dining', 'expense'],
+      ['Electricity Bill', 95.00, -7, 'Utilities', 'expense'],
+      ['Internet Bill', 49.99, -12, 'Utilities', 'expense'],
+      ['Gas Station Fill-up', 65.00, -10, 'Transportation', 'expense'],
+      ['Public Transport Monthly', 45.00, -25, 'Transportation', 'expense'],
+      ['Netflix Subscription', 15.99, -35, 'Entertainment', 'expense'],
+      ['Gym Membership', 49.99, -20, 'Healthcare', 'expense'],
+      ['Health Checkup', 120.00, -45, 'Healthcare', 'expense'],
+      ['Online Shopping', 89.95, -40, 'Shopping', 'expense'],
+      ['Restaurant Dinner', 78.50, -8, 'Food & Dining', 'expense'],
+      ['Book Purchase', 24.99, -50, 'Education', 'expense'],
+    ];
+
+    for (const [desc, amt, daysAgo, catName, type] of samples) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + daysAgo);
+      insertTx.run(desc, amt, d.toISOString().split('T')[0], cats[catName] || null, type, 1, 'USD');
+    }
   }
 }
 

@@ -108,7 +108,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     req.session.userId = user.id;
     req.session.username = user.username;
-    res.json({ ok: true, username: user.username });
+    res.json({ ok: true, username: user.username, isLoggedIn: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -125,8 +125,17 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 // ========================
 app.get('/api/profiles', (req, res) => {
   try {
-    const profiles = db.prepare('SELECT * FROM profiles ORDER BY id').all();
-    // Include counts
+    let profiles;
+    if (req.session.userId) {
+      // Logged in: return user's profiles plus ExampleProfile
+      profiles = db.prepare(
+        'SELECT * FROM profiles WHERE user_id = ? OR id = 1 ORDER BY id'
+      ).all(req.session.userId);
+    } else {
+      // Not logged in: return only ExampleProfile
+      profiles = db.prepare('SELECT * FROM profiles WHERE id = 1').all();
+    }
+    // Include transaction counts
     const counts = {};
     const txCount = db.prepare('SELECT profile_id, COUNT(*) as c FROM transactions GROUP BY profile_id').all();
     for (const r of txCount) counts[r.profile_id] = r.c;
@@ -140,11 +149,15 @@ app.get('/api/profiles', (req, res) => {
 
 app.post('/api/profiles', (req, res) => {
   try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+    // Check name uniqueness across all profiles
     const existing = db.prepare('SELECT id FROM profiles WHERE LOWER(name) = LOWER(?)').get(name.trim());
     if (existing) return res.status(400).json({ error: 'A profile with this name already exists' });
-    const info = db.prepare('INSERT INTO profiles (name) VALUES (?)').run(name.trim());
+    const info = db.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)').run(name.trim(), req.session.userId);
     // Seed default categories for new profile
     const insertCat = db.prepare('INSERT INTO categories (name, color, icon, type, profile_id) VALUES (?, ?, ?, ?, ?)');
     const defaults = [
@@ -170,8 +183,17 @@ app.post('/api/profiles', (req, res) => {
 
 app.delete('/api/profiles/:id', (req, res) => {
   try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const pid = parseInt(req.params.id);
     if (pid === 1) return res.status(400).json({ error: 'Cannot delete the default profile' });
+    // Only allow deleting profiles owned by this user
+    const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(pid);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    if (profile.user_id !== req.session.userId) {
+      return res.status(403).json({ error: 'Cannot delete another user\'s profile' });
+    }
     const count = db.prepare('SELECT COUNT(*) as c FROM profiles').get();
     if (count.c <= 1) return res.status(400).json({ error: 'Cannot delete the last profile' });
     // Delete all data for this profile (cascades via foreign keys)
