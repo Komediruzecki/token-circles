@@ -2118,7 +2118,7 @@ const loans = {
 
     try {
       const [result, loan] = await Promise.all([
-        api(`/loans/${loanId}/calculate`),
+        api(`/loans/${loanId}/calculate`, { method: 'POST' }),
         api(`/loans/${loanId}`)
       ]);
       if (result.error) { toast(result.error, 'error'); return; }
