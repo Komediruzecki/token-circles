@@ -46,9 +46,8 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
     const remainingMonths = termMonths - monthIndex + 1;
     if (remainingMonths <= 0) break;
 
-    // Recalculate locked payment when rate changes or after prepayment
-    const rateChangesThisMonth = sortedRates.some(rp => rp.start_month === monthIndex);
-    if (rateChangesThisMonth || prepayment || lockedPayment === null) {
+    // Only recalculate locked payment after prepayment (not on rate change)
+    if (prepayment || lockedPayment === null) {
       lockedPayment = calcMonthlyPayment(balance, currentRate, remainingMonths);
     }
 

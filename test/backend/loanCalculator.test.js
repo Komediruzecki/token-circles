@@ -142,6 +142,96 @@ describe('loanCalculator', () => {
       expect(schedule[1].date).toBe('2024-02-15');
       expect(schedule[11].date).toBe('2024-12-15');
     });
+
+    test('rate column reflects exact rate changes in amortization schedule', () => {
+      // Test case: $100k at 3.3% months 1-12, then 2.8% from month 13 onwards
+      const schedule = calculateSchedule(
+        100000, '2024-01-01', 50,
+        [
+          { rate: 3.3, start_month: 1, end_month: 12 },
+          { rate: 2.8, start_month: 13, end_month: null }
+        ],
+        []
+      );
+
+      // Months 1-12 should have 3.3%
+      for (let month = 1; month <= 12; month++) {
+        const row = schedule.find(r => r.month === month);
+        expect(row).toBeDefined();
+        expect(row.rate).toBe(3.3);
+      }
+
+      // Months 13+ should have 2.8%
+      for (let month = 13; month <= schedule.length; month++) {
+        const row = schedule.find(r => r.month === month);
+        expect(row).toBeDefined();
+        expect(row.rate).toBe(2.8);
+      }
+    });
+
+    test('rate column in table shows multiple distinct rate periods correctly', () => {
+      // Three rate periods: 5% for 1-12, 6% for 13-36, 7% for 37+
+      const schedule = calculateSchedule(
+        50000, '2024-01-01', 60,
+        [
+          { rate: 5, start_month: 1, end_month: 12 },
+          { rate: 6, start_month: 13, end_month: 36 },
+          { rate: 7, start_month: 37, end_month: null }
+        ],
+        []
+      );
+
+      const uniqueRates = [...new Set(schedule.map(r => r.rate))];
+      expect(uniqueRates).toEqual([5, 6, 7]);
+    });
+
+    test('rate period with no end_month applies to end of term', () => {
+      const schedule = calculateSchedule(
+        10000, '2024-01-01', 24,
+        [
+          { rate: 4, start_month: 1, end_month: 12 },
+          { rate: 5, start_month: 13, end_month: null }
+        ],
+        []
+      );
+
+      // Last month should still have rate 5
+      const lastRow = schedule[schedule.length - 1];
+      expect(lastRow.rate).toBe(5);
+    });
+
+    test('prepayments work correctly with variable rate periods', () => {
+      // Loan with 2 rate periods, plus a prepayment in month 6
+      const scheduleWithPrepay = calculateSchedule(
+        100000, '2024-01-01', 24,
+        [
+          { rate: 5, start_month: 1, end_month: 12 },
+          { rate: 6, start_month: 13, end_month: null }
+        ],
+        [{ month: 6, amount: 5000, note: 'Prepayment' }]
+      );
+
+      const scheduleNoPrepay = calculateSchedule(
+        100000, '2024-01-01', 24,
+        [
+          { rate: 5, start_month: 1, end_month: 12 },
+          { rate: 6, start_month: 13, end_month: null }
+        ],
+        []
+      );
+
+      // Prepayment should shorten loan term
+      expect(scheduleWithPrepay.length).toBeLessThan(scheduleNoPrepay.length);
+
+      // Rates should still be correct after prepayment month
+      const row6 = scheduleWithPrepay.find(r => r.month === 6);
+      expect(row6.rate).toBe(5);
+      expect(row6.prepayment).toBe(5000);
+
+      // Month 13 should still have the rate change to 6%
+      const row13 = scheduleWithPrepay.find(r => r.month === 13);
+      expect(row13.rate).toBe(6);
+    });
   });
 
   describe('totalInterest', () => {
