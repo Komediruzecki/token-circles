@@ -517,6 +517,24 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         <button class="month-nav-btn" onclick="dashboard.nextMonth()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
         </button>
+        <select class="form-control" id="dashboard-year" onchange="dashboard.onYearChange()" style="width:auto;min-width:90px;margin-left:12px;">
+          <option value="">Year</option>
+        </select>
+        <select class="form-control" id="dashboard-month-select" onchange="dashboard.onMonthChange()" style="width:auto;min-width:110px;">
+          <option value="">All Months</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
       </div>
     </div>
 
@@ -1666,26 +1684,92 @@ function chartColors() {
 const dashboard = {
   charts: {},
   init() {
+    this.populateYears();
     this.load();
   },
+  populateYears() {
+    const select = document.getElementById('dashboard-year');
+    if (select.options.length > 1) return;
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= currentYear - 5; y--) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      select.appendChild(opt);
+    }
+    select.value = currentYear;
+  },
+  onYearChange() {
+    const year = document.getElementById('dashboard-year').value;
+    const monthSelect = document.getElementById('dashboard-month-select');
+    if (year) {
+      monthSelect.style.display = 'inline-block';
+    } else {
+      monthSelect.value = '';
+    }
+    this.updateDisplay();
+    this.loadSummary();
+  },
+  onMonthChange() {
+    this.updateDisplay();
+    this.loadSummary();
+  },
+  updateDisplay() {
+    const year = document.getElementById('dashboard-year').value;
+    const month = document.getElementById('dashboard-month-select').value;
+    const monthEl = document.getElementById('dashboard-month');
+
+    if (month) {
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      monthEl.textContent = `${monthNames[parseInt(month) - 1]} ${year}`;
+    } else if (year) {
+      monthEl.textContent = year;
+    } else {
+      monthEl.textContent = 'All Time';
+    }
+  },
   prevMonth() {
-    currentMonth.setMonth(currentMonth.getMonth() - 1);
-    document.getElementById('dashboard-month').textContent = formatMonth(currentMonth);
+    const yearEl = document.getElementById('dashboard-year');
+    const monthEl = document.getElementById('dashboard-month-select');
+    let year = parseInt(yearEl.value) || new Date().getFullYear();
+    let month = parseInt(monthEl.value) || new Date().getMonth() + 1;
+
+    month--;
+    if (month < 1) { month = 12; year--; }
+    yearEl.value = year;
+    monthEl.value = String(month).padStart(2, '0');
+    this.updateDisplay();
     this.loadSummary();
   },
   nextMonth() {
-    currentMonth.setMonth(currentMonth.getMonth() + 1);
-    document.getElementById('dashboard-month').textContent = formatMonth(currentMonth);
+    const yearEl = document.getElementById('dashboard-year');
+    const monthEl = document.getElementById('dashboard-month-select');
+    let year = parseInt(yearEl.value) || new Date().getFullYear();
+    let month = parseInt(monthEl.value) || new Date().getMonth() + 1;
+
+    month++;
+    if (month > 12) { month = 1; year++; }
+    yearEl.value = year;
+    monthEl.value = String(month).padStart(2, '0');
+    this.updateDisplay();
     this.loadSummary();
   },
   async load() {
-    document.getElementById('dashboard-month').textContent = formatMonth(currentMonth);
+    this.updateDisplay();
     await Promise.all([this.loadSummary(), this.loadCharts()]);
   },
   async loadSummary() {
-    const y = currentMonth.getFullYear();
-    const m = currentMonth.getMonth() + 1;
-    const data = await api(`/dashboard/summary?year=${y}&month=${m}`);
+    const year = document.getElementById('dashboard-year').value;
+    const month = document.getElementById('dashboard-month-select').value;
+
+    let url = '/dashboard/summary';
+    if (year && month) {
+      url += `?year=${year}&month=${month}`;
+    } else if (year) {
+      url += `?year=${year}`;
+    }
+
+    const data = await api(url);
     const currency = data.currency || 'EUR';
     document.getElementById('stat-income').textContent = formatCurrency(data.summary?.income || 0, currency);
     document.getElementById('stat-expense').textContent = formatCurrency(data.summary?.expense || 0, currency);
