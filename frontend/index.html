@@ -1130,6 +1130,39 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   </div>
 </div>
 
+<!-- PREPAYMENT MODAL -->
+<div class='modal-overlay' id='prepay-modal'>
+  <div class='modal' style='max-width:440px;'>
+    <div class='modal-header'>
+      <div class='modal-title' id='prepay-modal-title'>Add Prepayment</div>
+      <button class='btn btn-ghost' onclick='modal.close('prepay-modal')'>
+        <svg width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path d='M6 18L18 6M6 6l12 12'/></svg>
+      </button>
+    </div>
+    <div class='modal-body'>
+      <input type='hidden' id='prepay-loan-id'>
+      <input type='hidden' id='prepay-id'>
+      <div class='form-group'>
+        <label class='form-label'>Prepayment Date</label>
+        <input type='date' class='form-control' id='prepay-date' onchange='loans.updatePrepayMonthPreview()'>
+        <div id='prepay-month-preview' style='font-size:12px;color:var(--text-secondary);margin-top:4px;'></div>
+      </div>
+      <div class='form-group'>
+        <label class='form-label'>Amount</label>
+        <input type='number' step='0.01' class='form-control' id='prepay-amount' placeholder='e.g., 5000'>
+      </div>
+      <div class='form-group'>
+        <label class='form-label'>Note (optional)</label>
+        <input type='text' class='form-control' id='prepay-note' placeholder='e.g., Extra monthly payment'>
+      </div>
+    </div>
+    <div class='modal-footer'>
+      <button class='btn btn-secondary' onclick='modal.close('prepay-modal')'>Cancel</button>
+      <button class='btn btn-primary' onclick='loans.savePrepayment()'>Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1984,7 +2017,20 @@ const budgets = {
 const loans = {
   ratePeriodCount: 0,
   loanCharts: {},
+  // Client-side cache for loan calculations
+  loanCache: {},
+  // Current profile currency
+  currentCurrency: 'USD',
+
   async load() {
+    // Load settings first to get currency
+    try {
+      const settings = await api('/settings');
+      this.currentCurrency = settings.local_currency || 'USD';
+    } catch (e) {
+      this.currentCurrency = 'USD';
+    }
+
     const loans = await api('/loans');
     const container = document.getElementById('loans-list');
     if (!loans.length) {
@@ -1996,11 +2042,11 @@ const loans = {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
         <div>
           <h3 style="font-size:18px;font-weight:700;">${l.name}</h3>
-          <p style="font-size:13px;color:var(--text-secondary);">Principal: ${formatCurrency(l.principal)} | ${l.term_months} months</p>
+          <p style="font-size:13px;color:var(--text-secondary);">Principal: ${formatCurrency(l.principal, this.currentCurrency)} | ${l.term_months} months</p>
         </div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-secondary btn-sm" onclick="loans.calculate(${l.id})">Calculate</button>
-          <button class="btn btn-ghost btn-sm" onclick="loans.addPrepayment(${l.id})">+ Prepayment</button>
+          <button class="btn btn-ghost btn-sm" onclick="loans.openPrepaymentModal(${l.id})">+ Prepayment</button>
           <button class="btn btn-ghost btn-sm" onclick="loans.editLoan(${l.id})">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
           </button>
@@ -2097,56 +2143,149 @@ const loans = {
     toast('Loan deleted', 'success');
     this.load();
   },
-  async addPrepayment(loanId) {
-    const month = prompt('Month number (starting from 1):');
-    if (!month) return;
-    const amount = prompt('Prepayment amount:');
-    if (!amount) return;
-    const note = prompt('Note (optional):') || '';
+  openPrepaymentModal(loanId, prepaymentId = null) {
+    this.prepaymentLoanId = loanId;
+    document.getElementById('prepay-loan-id').value = loanId;
+    document.getElementById('prepay-id').value = prepaymentId || '';
+
+    if (prepaymentId) {
+      // Editing: find the prepayment
+      const cached = this.loanCache[loanId];
+      if (cached) {
+        const p = cached.loan.prepayments?.find(prep => prep.id === prepaymentId);
+        if (p) {
+          document.getElementById('prepay-modal-title').textContent = 'Edit Prepayment';
+          // Show date picker with the month
+          const loanStart = new Date(cached.loan.start_date);
+          const prepayDate = new Date(loanStart);
+          prepayDate.setMonth(prepayDate.getMonth() + p.month - 1);
+          document.getElementById('prepay-date').value = prepayDate.toISOString().split('T')[0];
+          document.getElementById('prepay-amount').value = p.amount;
+          document.getElementById('prepay-note').value = p.note || '';
+        }
+      }
+    } else {
+      // New prepayment
+      document.getElementById('prepay-modal-title').textContent = 'Add Prepayment';
+      document.getElementById('prepay-date').value = '';
+      document.getElementById('prepay-amount').value = '';
+      document.getElementById('prepay-note').value = '';
+    }
+    modal.open('prepay-modal');
+    // Update month preview
+    this.updatePrepayMonthPreview();
+  },
+  updatePrepayMonthPreview() {
+    const loanId = parseInt(document.getElementById('prepay-loan-id').value);
+    const dateStr = document.getElementById('prepay-date').value;
+    const preview = document.getElementById('prepay-month-preview');
+    if (!loanId || !dateStr || !this.loanCache[loanId]) {
+      if (preview) preview.textContent = '';
+      return;
+    }
+    const loanStart = new Date(this.loanCache[loanId].loan.start_date);
+    const prepayDate = new Date(dateStr + 'T00:00:00');
+    const monthNum = (prepayDate.getFullYear() - loanStart.getFullYear()) * 12 + (prepayDate.getMonth() - loanStart.getMonth()) + 1;
+    if (preview) preview.textContent = monthNum > 0 ? `Month ${monthNum}` : '';
+  },
+  async savePrepayment() {
+    const loanId = parseInt(document.getElementById('prepay-loan-id').value);
+    const prepayId = document.getElementById('prepay-id').value;
+    const dateStr = document.getElementById('prepay-date').value;
+    const amount = parseFloat(document.getElementById('prepay-amount').value);
+    const note = document.getElementById('prepay-note').value;
+
+    if (!dateStr) { toast('Please select a date', 'error'); return; }
+    if (!amount || amount <= 0) { toast('Please enter a valid amount', 'error'); return; }
+
+    // Convert date to month number
+    const loanStart = new Date(this.loanCache[loanId]?.loan.start_date + 'T00:00:00');
+    const prepayDate = new Date(dateStr + 'T00:00:00');
+    const monthNum = (prepayDate.getFullYear() - loanStart.getFullYear()) * 12 + (prepayDate.getMonth() - loanStart.getMonth()) + 1;
+    if (monthNum < 1) { toast('Prepayment date must be after loan start date', 'error'); return; }
+
+    if (prepayId) {
+      // Delete old and create new (PUT not supported, so delete + create)
+      const del = await api(`/loans/${loanId}/prepayments/${prepayId}`, { method: 'DELETE' });
+      if (del.error) { toast(del.error, 'error'); return; }
+    }
+
     const result = await api(`/loans/${loanId}/prepayments`, {
       method: 'POST',
-      body: { month: parseInt(month), amount: parseFloat(amount), note }
+      body: { month: monthNum, amount, note }
     });
     if (result.error) { toast(result.error, 'error'); return; }
-    toast('Prepayment added', 'success');
-    this.calculate(loanId);
+    toast(prepayId ? 'Prepayment updated' : 'Prepayment added', 'success');
+    modal.close('prepay-modal');
+    // Recalculate and cache
+    await this.fetchAndRenderLoan(loanId);
   },
-  async calculate(loanId) {
+  async deletePrepayment(loanId, prepaymentId) {
+    if (!confirm('Delete this prepayment?')) return;
+    const result = await api(`/loans/${loanId}/prepayments/${prepaymentId}`, { method: 'DELETE' });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Prepayment deleted', 'success');
+    await this.fetchAndRenderLoan(loanId);
+  },
+  async addPrepayment(loanId) {
+    // Legacy fallback
+    this.openPrepaymentModal(loanId);
+  },
+  async calculate(loanId, forceRecalc = false) {
     const btn = event?.target?.closest('button');
     const originalText = btn?.textContent;
     if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
 
     try {
-      const [result, loan] = await Promise.all([
-        api(`/loans/${loanId}/calculate`, { method: 'POST' }),
-        api(`/loans/${loanId}`)
-      ]);
-      if (result.error) { toast(result.error, 'error'); return; }
-
-      const details = document.getElementById(`loan-details-${loanId}`);
-      details.style.display = 'block';
-
-      // Scroll to results
-      details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-      // Destroy existing charts for this loan
-      if (this.loanCharts[loanId]) {
-        Object.values(this.loanCharts[loanId]).forEach(c => c.destroy());
+      // If we have cached results and not forcing recalc, just render
+      if (!forceRecalc && this.loanCache[loanId]) {
+        const details = document.getElementById(`loan-details-${loanId}`);
+        details.style.display = 'block';
+        details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        this.renderLoanDetails(loanId, this.loanCache[loanId].result, this.loanCache[loanId].loan);
+        return;
       }
-      if (!this.loanCharts[loanId]) this.loanCharts[loanId] = {};
+      await this.fetchAndRenderLoan(loanId);
+    } finally {
+      if (btn) { btn.textContent = originalText; btn.disabled = false; }
+    }
+  },
+  async fetchAndRenderLoan(loanId) {
+    const [result, loan] = await Promise.all([
+      api(`/loans/${loanId}/calculate`, { method: 'POST' }),
+      api(`/loans/${loanId}`)
+    ]);
+    if (result.error) { toast(result.error, 'error'); return; }
 
-      const s = result.summary;
-    const ws = result.comparison.withoutPrepayments;
+    // Cache the results
+    this.loanCache[loanId] = { result, loan };
+
+    const details = document.getElementById(`loan-details-${loanId}`);
+    details.style.display = 'block';
+    details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    this.renderLoanDetails(loanId, result, loan);
+  },
+  renderLoanDetails(loanId, result, loan) {
+    const details = document.getElementById(`loan-details-${loanId}`);
+    const currency = this.currentCurrency;
+
+    // Destroy existing charts for this loan
+    if (this.loanCharts[loanId]) {
+      Object.values(this.loanCharts[loanId]).forEach(c => c.destroy());
+    }
+    if (!this.loanCharts[loanId]) this.loanCharts[loanId] = {};
+
+    const s = result.summary;
 
     details.innerHTML = `
       <div class="loan-summary-grid">
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Total Paid</div>
-          <div class="loan-summary-stat-value">${formatCurrency(s.totalPaid)}</div>
+          <div class="loan-summary-stat-value">${formatCurrency(s.totalPaid, currency)}</div>
         </div>
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Total Interest</div>
-          <div class="loan-summary-stat-value">${formatCurrency(s.totalInterest)}</div>
+          <div class="loan-summary-stat-value">${formatCurrency(s.totalInterest, currency)}</div>
         </div>
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Payoff Date</div>
@@ -2154,7 +2293,7 @@ const loans = {
         </div>
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Interest Saved</div>
-          <div class="loan-summary-stat-value saved">${formatCurrency(s.interestSaved)}</div>
+          <div class="loan-summary-stat-value saved">${formatCurrency(s.interestSaved, currency)}</div>
         </div>
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Months Saved</div>
@@ -2162,13 +2301,46 @@ const loans = {
         </div>
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Monthly Payment</div>
-          <div class="loan-summary-stat-value">${formatCurrency(s.avgMonthlyPayment)}</div>
+          <div class="loan-summary-stat-value">${formatCurrency(s.avgMonthlyPayment, currency)}</div>
         </div>
       </div>
 
       ${loan.prepayments?.length ? `<div style="margin-bottom:16px;">
-        <div class="card-title" style="margin-bottom:8px;">Prepayments</div>
-        ${loan.prepayments.map(p => `<div class="prepayment-item"><span class="month">Month ${p.month}</span><span class="amount">+${formatCurrency(p.amount)}</span>${p.note ? `<span style="color:var(--text-secondary);font-size:11px;">${p.note}</span>` : ''}</div>`).join('')}
+        <div class="card-title" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+          <span>Prepayments</span>
+          <button class="btn btn-ghost btn-sm" onclick="loans.openPrepaymentModal(${loanId})">+ Add</button>
+        </div>
+        ${loan.prepayments.map(p => {
+          const loanStart = new Date(loan.start_date);
+          const prepayDate = new Date(loanStart);
+          prepayDate.setMonth(prepayDate.getMonth() + p.month - 1);
+          return `<div class="prepayment-item" style="display:flex;align-items:center;gap:8px;">
+            <span class="month">${formatDate(prepayDate.toISOString().split('T')[0])}</span>
+            <span class="amount">+${formatCurrency(p.amount, currency)}</span>
+            ${p.note ? `<span style="color:var(--text-secondary);font-size:11px;">${p.note}</span>` : ''}
+            <div style="margin-left:auto;display:flex;gap:4px;">
+              <button class="btn btn-ghost btn-sm" onclick="loans.openPrepaymentModal(${loanId}, ${p.id})" title="Edit">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="loans.deletePrepayment(${loanId}, ${p.id})" title="Delete">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : `<div style="margin-bottom:16px;">
+        <button class="btn btn-secondary btn-sm" onclick="loans.openPrepaymentModal(${loanId})">+ Add Prepayment</button>
+      </div>`}
+
+      ${loan.rate_periods?.length > 1 ? `<div style="margin-bottom:16px;">
+        <div class="card-title" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+          <span>Rate Periods</span>
+          <button class="btn btn-ghost btn-sm" onclick="loans.editLoan(${loanId})">Edit</button>
+        </div>
+        ${loan.rate_periods.map(rp => `<div class="prepayment-item">
+          <span class="month">${rp.start_month}${rp.end_month ? ' - ' + rp.end_month : '+'} month</span>
+          <span class="amount">${rp.rate}%</span>
+        </div>`).join('')}
       </div>` : ''}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
@@ -2192,12 +2364,12 @@ const loans = {
             return `<tr class="${rowClass}">
               <td>${row.month}</td>
               <td>${row.date}</td>
-              <td class="td-amount">${formatCurrency(row.payment)}</td>
-              <td class="td-amount income">${formatCurrency(row.principal)}</td>
-              <td class="td-amount expense">${formatCurrency(row.interest)}</td>
-              <td style="font-weight:600;">${formatCurrency(row.balance)}</td>
+              <td class="td-amount">${formatCurrency(row.payment, currency)}</td>
+              <td class="td-amount income">${formatCurrency(row.principal, currency)}</td>
+              <td class="td-amount expense">${formatCurrency(row.interest, currency)}</td>
+              <td style="font-weight:600;">${formatCurrency(row.balance, currency)}</td>
               <td>${row.rate.toFixed(3)}%</td>
-              <td>${row.prepayment > 0 ? `<span style="color:var(--success);font-weight:600;">${formatCurrency(row.prepayment)}</span>` : '-'}</td>
+              <td>${row.prepayment > 0 ? `<span style="color:var(--success);font-weight:600;">${formatCurrency(row.prepayment, currency)}</span>` : '-'}</td>
               <td>${note ? `<span style="font-size:11px;color:var(--warning);font-weight:600;">${note}</span>` : ''}</td>
             </tr>`;
           }).join('')}
@@ -2224,8 +2396,8 @@ const loans = {
       },
       options: {
         responsive: true, maintainAspectRatio: false, stacked: true,
-        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 }, color: cc.legend } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw)}` } } },
-        scales: { y: { stacked: true, ticks: { callback: v => formatCurrency(v) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 }, color: cc.legend } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw, currency)}` } } },
+        scales: { y: { stacked: true, ticks: { callback: v => formatCurrency(v, currency) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
       }
     });
 
@@ -2244,13 +2416,10 @@ const loans = {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { tooltip: { callbacks: { label: ctx => ` Balance: ${formatCurrency(ctx.raw)}` } } },
-        scales: { y: { ticks: { callback: v => formatCurrency(v) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
+        plugins: { tooltip: { callbacks: { label: ctx => ` Balance: ${formatCurrency(ctx.raw, currency)}` } } },
+        scales: { y: { ticks: { callback: v => formatCurrency(v, currency) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
       }
     });
-    } finally {
-      if (btn) { btn.textContent = originalText; btn.disabled = false; }
-    }
   }
 };
 
