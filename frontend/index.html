@@ -546,14 +546,38 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
           <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           <input type="text" class="form-control" placeholder="Search..." id="tx-search" oninput="transactions.search()">
         </div>
+        <div class="period-selector" style="margin-right:8px;">
+          <button class="active" onclick="txFilters.setPreset('month')" id="tx-preset-month">This Month</button>
+          <button onclick="txFilters.setPreset('last-month')" id="tx-preset-last-month">Last Month</button>
+          <button onclick="txFilters.setPreset('year')" id="tx-preset-year">This Year</button>
+          <button onclick="txFilters.setPreset('custom')" id="tx-preset-custom">Custom</button>
+        </div>
+        <select class="form-control" id="tx-year-filter" onchange="txFilters.onYearChange()" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <select class="form-control" id="tx-month-filter" onchange="txFilters.onMonthChange()" style="width:auto;min-width:100px;">
+          <option value="">Month</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
         <select class="form-control" id="tx-type-filter" onchange="transactions.load()">
           <option value="">All Types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
         </select>
         <select class="form-control" id="tx-cat-filter" onchange="transactions.load()">
           <option value="">All Categories</option>
         </select>
-        <input type="date" class="form-control" id="tx-date-from" onchange="transactions.load()">
-        <input type="date" class="form-control" id="tx-date-to" onchange="transactions.load()">
+        <input type="date" class="form-control" id="tx-date-from" onchange="txFilters.onCustomDateChange()">
+        <input type="date" class="form-control" id="tx-date-to" onchange="txFilters.onCustomDateChange()">
         <button class="btn btn-secondary btn-sm" onclick="transactions.clearFilters()">Clear</button>
       </div>
     </div>
@@ -1325,7 +1349,7 @@ const nav = {
         document.getElementById(`page-${page}`).classList.add('active');
         window.location.hash = page;
         if (page === 'dashboard') dashboard.load();
-        if (page === 'transactions') transactions.load();
+        if (page === 'transactions') { txFilters.init(); transactions.load(); }
         if (page === 'budgets') budgets.load();
         if (page === 'loans') loans.load();
         if (page === 'categories') categories.load();
@@ -1510,6 +1534,114 @@ const dashboard = {
   }
 };
 
+// ==================== TRANSACTION FILTERS ====================
+const txFilters = {
+  currentPreset: 'month',
+
+  async init() {
+    // Populate year dropdown
+    const yearSelect = document.getElementById('tx-year-filter');
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= currentYear - 10; y--) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    }
+    this.setPreset('month');
+  },
+
+  setPreset(preset) {
+    this.currentPreset = preset;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Update active button
+    document.querySelectorAll('#page-transactions .period-selector button').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(`tx-preset-${preset}`);
+    if (btn) btn.classList.add('active');
+
+    const fromInput = document.getElementById('tx-date-from');
+    const toInput = document.getElementById('tx-date-to');
+    const yearSelect = document.getElementById('tx-year-filter');
+    const monthSelect = document.getElementById('tx-month-filter');
+
+    if (preset === 'month') {
+      // Current month
+      fromInput.value = `${year}-${month}-01`;
+      const nextMonth = new Date(year, parseInt(month), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+      yearSelect.value = year;
+      monthSelect.value = month;
+    } else if (preset === 'last-month') {
+      // Last month
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lmYear = lastMonthDate.getFullYear();
+      const lmMonth = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
+      fromInput.value = `${lmYear}-${lmMonth}-01`;
+      const nextMonth = new Date(lmYear, parseInt(lmMonth), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${lmYear}-${lmMonth}-${String(lastDay).padStart(2, '0')}`;
+      yearSelect.value = lmYear;
+      monthSelect.value = lmMonth;
+    } else if (preset === 'year') {
+      // Current year
+      fromInput.value = `${year}-01-01`;
+      toInput.value = `${year}-12-31`;
+      yearSelect.value = year;
+      monthSelect.value = '';
+    } else {
+      // Custom - clear year/month but keep dates
+      yearSelect.value = '';
+      monthSelect.value = '';
+    }
+    transactions.load();
+  },
+
+  onYearChange() {
+    const year = document.getElementById('tx-year-filter').value;
+    const month = document.getElementById('tx-month-filter').value;
+    const fromInput = document.getElementById('tx-date-from');
+    const toInput = document.getElementById('tx-date-to');
+
+    if (year && month) {
+      fromInput.value = `${year}-${month}-01`;
+      const nextMonth = new Date(year, parseInt(month), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    } else if (year) {
+      fromInput.value = `${year}-01-01`;
+      toInput.value = `${year}-12-31`;
+    }
+    transactions.load();
+  },
+
+  onMonthChange() {
+    const year = document.getElementById('tx-year-filter').value;
+    const month = document.getElementById('tx-month-filter').value;
+    const fromInput = document.getElementById('tx-date-from');
+    const toInput = document.getElementById('tx-date-to');
+
+    if (year && month) {
+      fromInput.value = `${year}-${month}-01`;
+      const nextMonth = new Date(year, parseInt(month), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    }
+    transactions.load();
+  },
+
+  onCustomDateChange() {
+    // When user manually changes dates, set preset to custom
+    this.currentPreset = 'custom';
+    document.querySelectorAll('#page-transactions .period-selector button').forEach(b => b.classList.remove('active'));
+    document.getElementById('tx-preset-custom').classList.add('active');
+    transactions.load();
+  }
+};
+
 // ==================== TRANSACTIONS ====================
 const transactions = {
   currentType: 'expense',
@@ -1579,6 +1711,9 @@ const transactions = {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
+    document.getElementById('tx-year-filter').value = '';
+    document.getElementById('tx-month-filter').value = '';
+    txFilters.setPreset('month');
     this.page = 1; this.load();
   },
   setType(type) {
