@@ -1188,6 +1188,39 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   </div>
 </div>
 
+<!-- RATE PERIOD MODAL -->
+<div class="modal-overlay" id="rate-period-modal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div class="modal-title" id="rate-period-modal-title">Add Rate Period</div>
+      <button class="btn btn-ghost" onclick="modal.close('rate-period-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rp-loan-id">
+      <input type="hidden" id="rp-id">
+      <div class="form-group">
+        <label class="form-label">Interest Rate (%)</label>
+        <input type="number" step="0.001" class="form-control" id="rp-rate" placeholder="e.g., 3.5">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Start Month</label>
+        <input type="number" class="form-control" id="rp-start" min="1" placeholder="e.g., 13" onchange="loans.updateRatePeriodPreview()">
+        <div id="rp-start-preview" style="font-size:12px;color:var(--text-secondary);margin-top:4px;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Month (optional)</label>
+        <input type="number" class="form-control" id="rp-end" min="1" placeholder="Leave empty for open-ended">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('rate-period-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="loans.saveRatePeriod()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -2406,6 +2439,83 @@ const loans = {
     toast('Prepayment deleted', 'success');
     await this.fetchAndRenderLoan(loanId);
   },
+  openRatePeriodModal(loanId, ratePeriodId = null) {
+    this.ratePeriodLoanId = loanId;
+    document.getElementById('rp-loan-id').value = loanId;
+    document.getElementById('rp-id').value = ratePeriodId || '';
+
+    if (ratePeriodId) {
+      // Editing: find the rate period
+      const cached = this.loanCache[loanId];
+      if (cached) {
+        const rp = cached.loan.rate_periods?.find(r => r.id === ratePeriodId);
+        if (rp) {
+          document.getElementById('rate-period-modal-title').textContent = 'Edit Rate Period';
+          document.getElementById('rp-rate').value = rp.rate;
+          document.getElementById('rp-start').value = rp.start_month;
+          document.getElementById('rp-end').value = rp.end_month || '';
+          this.updateRatePeriodPreview();
+        }
+      }
+    } else {
+      // New rate period
+      document.getElementById('rate-period-modal-title').textContent = 'Add Rate Period';
+      document.getElementById('rp-rate').value = '';
+      document.getElementById('rp-start').value = '';
+      document.getElementById('rp-end').value = '';
+    }
+    modal.open('rate-period-modal');
+  },
+  updateRatePeriodPreview() {
+    const loanId = parseInt(document.getElementById('rp-loan-id').value);
+    const startStr = document.getElementById('rp-start').value;
+    const preview = document.getElementById('rp-start-preview');
+    if (!loanId || !startStr || !this.loanCache[loanId]) {
+      if (preview) preview.textContent = '';
+      return;
+    }
+    const loanStart = new Date(this.loanCache[loanId].loan.start_date);
+    const monthNum = parseInt(startStr);
+    const rateDate = new Date(loanStart);
+    rateDate.setMonth(rateDate.getMonth() + monthNum - 1);
+    if (preview) preview.textContent = `Starting ${rateDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+  },
+  async saveRatePeriod() {
+    const loanId = parseInt(document.getElementById('rp-loan-id').value);
+    const ratePeriodId = document.getElementById('rp-id').value;
+    const rate = parseFloat(document.getElementById('rp-rate').value);
+    const start_month = parseInt(document.getElementById('rp-start').value);
+    const end_month = document.getElementById('rp-end').value ? parseInt(document.getElementById('rp-end').value) : null;
+
+    if (!rate || !start_month) { toast('Please enter rate and start month', 'error'); return; }
+    if (end_month && end_month <= start_month) { toast('End month must be after start month', 'error'); return; }
+
+    if (ratePeriodId) {
+      // Update existing
+      const result = await api(`/loans/${loanId}/rates/${ratePeriodId}`, {
+        method: 'PUT',
+        body: { rate, start_month, end_month }
+      });
+      if (result.error) { toast(result.error, 'error'); return; }
+    } else {
+      // Create new
+      const result = await api(`/loans/${loanId}/rates`, {
+        method: 'POST',
+        body: { rate, start_month, end_month }
+      });
+      if (result.error) { toast(result.error, 'error'); return; }
+    }
+    toast(ratePeriodId ? 'Rate period updated' : 'Rate period added', 'success');
+    modal.close('rate-period-modal');
+    await this.fetchAndRenderLoan(loanId);
+  },
+  async deleteRatePeriod(loanId, ratePeriodId) {
+    if (!confirm('Delete this rate period?')) return;
+    const result = await api(`/loans/${loanId}/rates/${ratePeriodId}`, { method: 'DELETE' });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Rate period deleted', 'success');
+    await this.fetchAndRenderLoan(loanId);
+  },
   async addPrepayment(loanId) {
     // Legacy fallback
     this.openPrepaymentModal(loanId);
@@ -2514,15 +2624,29 @@ const loans = {
         <button class="btn btn-secondary btn-sm" onclick="loans.openPrepaymentModal(${loanId})">+ Add Prepayment</button>
       </div>`}
 
-      ${loan.rate_periods?.length > 1 ? `<div style="margin-bottom:16px;">
+      ${loan.rate_periods?.length ? `<div style="margin-bottom:16px;">
         <div class="card-title" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
           <span>Rate Periods</span>
-          <button class="btn btn-ghost btn-sm" onclick="loans.editLoan(${loanId})">Edit</button>
+          <button class="btn btn-ghost btn-sm" onclick="loans.openRatePeriodModal(${loanId})">+ Add</button>
         </div>
-        ${loan.rate_periods.map(rp => `<div class="prepayment-item">
-          <span class="month">${rp.start_month}${rp.end_month ? ' - ' + rp.end_month : '+'} month</span>
-          <span class="amount">${rp.rate}%</span>
-        </div>`).join('')}
+        ${loan.rate_periods.map(rp => {
+          const loanStart = new Date(loan.start_date);
+          const rateDate = new Date(loanStart);
+          rateDate.setMonth(rateDate.getMonth() + rp.start_month - 1);
+          return `<div class="prepayment-item" style="display:flex;align-items:center;gap:8px;">
+            <span class="month">${formatDate(rateDate.toISOString().split('T')[0])}</span>
+            <span style="color:var(--text-secondary);font-size:11px;">(${rp.start_month}${rp.end_month ? ' - ' + rp.end_month : '+'} mo)</span>
+            <span class="amount">${rp.rate}%</span>
+            <div style="margin-left:auto;display:flex;gap:4px;">
+              <button class="btn btn-ghost btn-sm" onclick="loans.openRatePeriodModal(${loanId}, ${rp.id})" title="Edit">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="loans.deleteRatePeriod(${loanId}, ${rp.id})" title="Delete">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>` : ''}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
