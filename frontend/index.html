@@ -2031,6 +2031,12 @@ const loans = {
       this.currentCurrency = 'EUR';
     }
 
+    // Save cached loan results before re-rendering so tab switches don't destroy them
+    const savedCache = {};
+    for (const [id, val] of Object.entries(this.loanCache)) {
+      savedCache[id] = { result: val.result, loan: val.loan };
+    }
+
     const loans = await api('/loans');
     const container = document.getElementById('loans-list');
     if (!loans.length) {
@@ -2057,6 +2063,16 @@ const loans = {
       </div>
       <div id="loan-details-${l.id}" style="display:none;"></div>
     </div>`).join('');
+
+    // Restore any previously cached loan calculations so diagrams and table persist across tab switches
+    for (const [id, val] of Object.entries(savedCache)) {
+      if (document.getElementById(`loan-details-${id}`)) {
+        this.loanCache[id] = val;
+        const details = document.getElementById(`loan-details-${id}`);
+        details.style.display = 'block';
+        this.renderLoanDetails(id, val.result, val.loan);
+      }
+    }
   },
   openLoanModal(id = null) {
     document.getElementById('loan-id').value = id || '';
@@ -2131,6 +2147,10 @@ const loans = {
     const url = id ? `/loans/${id}` : '/loans';
     const result = await api(url, { method, body: data });
     if (result.error) { toast(result.error, 'error'); return; }
+    // Invalidate cache so rate/prepayment changes trigger a fresh calculation
+    if (id) {
+      delete this.loanCache[parseInt(id)];
+    }
     toast(id ? 'Loan updated' : 'Loan created', 'success');
     modal.close('loan-modal');
     this.load();
@@ -2140,6 +2160,14 @@ const loans = {
     if (!confirm('Delete this loan?')) return;
     const result = await api(`/loans/${id}`, { method: 'DELETE' });
     if (result.error) { toast(result.error, 'error'); return; }
+    // Clean up cached data for this loan
+    if (this.loanCache[id]) {
+      if (this.loanCharts[id]) {
+        Object.values(this.loanCharts[id]).forEach(c => c.destroy());
+        delete this.loanCharts[id];
+      }
+      delete this.loanCache[id];
+    }
     toast('Loan deleted', 'success');
     this.load();
   },
@@ -2278,6 +2306,9 @@ const loans = {
     const s = result.summary;
 
     details.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="loans.calculate(${loanId}, true)" title="Recalculate with current loan data">Recalculate</button>
+      </div>
       <div class="loan-summary-grid">
         <div class="loan-summary-stat">
           <div class="loan-summary-stat-label">Total Paid</div>
