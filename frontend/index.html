@@ -796,7 +796,22 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
           <button onclick="analytics.setPeriod('month')" id="period-month">Month</button>
         </div>
         <select class="form-control" id="analytics-year" onchange="analytics.onYearChange()" style="width:auto;min-width:100px;">
-          <option value="">All Time</option>
+          <option value="">All Years</option>
+        </select>
+        <select class="form-control" id="analytics-month-filter" onchange="analytics.load()" style="width:auto;min-width:120px;display:none;">
+          <option value="">All Months</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
         </select>
         <select class="form-control" id="analytics-months" onchange="analytics.load()" style="width:auto;min-width:120px;">
           <option value="1">1 Month</option>
@@ -2049,7 +2064,17 @@ const analytics = {
   },
   onYearChange() {
     const year = document.getElementById('analytics-year').value;
-    document.getElementById('analytics-months').style.display = year ? 'none' : '';
+    const monthFilter = document.getElementById('analytics-month-filter');
+    if (year) {
+      // When a year is selected, show the month filter and hide the months dropdown
+      monthFilter.style.display = 'inline-block';
+      document.getElementById('analytics-months').style.display = 'none';
+    } else {
+      // All years: hide month filter and show months dropdown
+      monthFilter.style.display = 'none';
+      monthFilter.value = '';
+      document.getElementById('analytics-months').style.display = 'inline-block';
+    }
     this.load();
   },
   setPeriod(period) {
@@ -2060,9 +2085,10 @@ const analytics = {
   },
   async load() {
     const year = document.getElementById('analytics-year').value;
+    const month = document.getElementById('analytics-month-filter').value;
     const months = parseInt(document.getElementById('analytics-months').value) || 6;
     const url = year
-      ? `/analytics/category-trends?year=${year}&period=${this.currentPeriod}`
+      ? `/analytics/category-trends?year=${year}${month ? '&month=' + month : ''}&period=${this.currentPeriod}`
       : `/analytics/category-trends?months=${months}&period=${this.currentPeriod}`;
     const [data, settings] = await Promise.all([
       api(url),

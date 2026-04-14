@@ -1155,13 +1155,22 @@ app.get('/api/analytics/category-trends', (req, res) => {
   try {
     const pid = getProfileId(req);
     const year = req.query.year ? parseInt(req.query.year) : null;
+    const month = req.query.month ? String(req.query.month).padStart(2, '0') : null;
     const months = parseInt(req.query.months) || 6;
     const period = req.query.period || 'day'; // day, week, month
 
     let startStr, endStr;
     if (year) {
-      startStr = `${year}-01-01`;
-      endStr = `${year}-12-31`;
+      if (month) {
+        // Specific year + month
+        const lastDay = new Date(year, parseInt(month), 0).getDate();
+        startStr = `${year}-${month}-01`;
+        endStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+      } else {
+        // Full year
+        startStr = `${year}-01-01`;
+        endStr = `${year}-12-31`;
+      }
     } else {
       const endDate = new Date();
       const startDate = new Date();
@@ -1190,8 +1199,17 @@ app.get('/api/analytics/category-trends', (req, res) => {
     // Generate time periods based on the period type
     const labels = [];
     const periodMap = new Map();
+    const monthNamesFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-    if (year) {
+    if (year && month) {
+      // Specific month — show all days
+      const lastDay = new Date(year, parseInt(month), 0).getDate();
+      for (let d = 1; d <= lastDay; d++) {
+        const dayStr = `${year}-${month}-${String(d).padStart(2, '0')}`;
+        labels.push(`${monthNamesFull[parseInt(month) - 1]} ${d}`);
+        periodMap.set(dayStr, labels.length - 1);
+      }
+    } else if (year) {
       // Full year view — always show 12 months
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       for (let m = 0; m < 12; m++) {
@@ -1252,7 +1270,11 @@ app.get('/api/analytics/category-trends', (req, res) => {
     // Aggregate transactions
     transactions.forEach(t => {
       let idx;
-      if (year) {
+      if (year && month) {
+        // Day-level for specific month
+        idx = periodMap.get(t.date);
+      } else if (year) {
+        // Month-level for full year
         const monthKey = t.date.slice(0, 7);
         idx = periodMap.get(monthKey);
       } else if (period === 'day') {
