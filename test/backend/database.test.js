@@ -4,16 +4,18 @@
  */
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
-// Use a temporary in-memory database for testing
-const testDbPath = path.join(__dirname, '..', 'test', 'test.db');
+// Use a temporary file in system temp directory for testing
+const testDir = process.env.RUNNER_TEMP || '/tmp';
+const testDbPath = path.join(testDir, 'finance-manager-test.db');
 let db;
 
 beforeAll(() => {
   // Clean up any existing test db
-  try {
-    require('fs').unlinkSync(testDbPath);
-  } catch (e) {}
+  try { fs.unlinkSync(testDbPath); } catch (e) {}
+  try { fs.unlinkSync(testDbPath + '-wal'); } catch (e) {}
+  try { fs.unlinkSync(testDbPath + '-shm'); } catch (e) {}
 
   // Create a fresh test database
   db = new Database(testDbPath);
@@ -25,11 +27,12 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  db.close();
+  if (db && !db.open) return;
+  try { db.close(); } catch (e) {}
   // Clean up
-  try {
-    require('fs').unlinkSync(testDbPath);
-  } catch (e) {}
+  try { fs.unlinkSync(testDbPath); } catch (e) {}
+  try { fs.unlinkSync(testDbPath + '-wal'); } catch (e) {}
+  try { fs.unlinkSync(testDbPath + '-shm'); } catch (e) {}
 });
 
 function runMigrations(testDb) {
