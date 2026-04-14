@@ -1171,7 +1171,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 const API = '/api';
 let currentMonth = new Date();
 
-function formatCurrency(amount, currency = 'USD') {
+function formatCurrency(amount, currency = 'EUR') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
 }
 
@@ -1411,10 +1411,11 @@ const dashboard = {
     const y = currentMonth.getFullYear();
     const m = currentMonth.getMonth() + 1;
     const data = await api(`/dashboard/summary?year=${y}&month=${m}`);
-    document.getElementById('stat-income').textContent = formatCurrency(data.summary?.income || 0);
-    document.getElementById('stat-expense').textContent = formatCurrency(data.summary?.expense || 0);
-    document.getElementById('stat-balance').textContent = formatCurrency(data.summary?.balance || 0);
-    document.getElementById('stat-ytd').textContent = formatCurrency(data.ytd?.net || 0);
+    const currency = data.currency || 'EUR';
+    document.getElementById('stat-income').textContent = formatCurrency(data.summary?.income || 0, currency);
+    document.getElementById('stat-expense').textContent = formatCurrency(data.summary?.expense || 0, currency);
+    document.getElementById('stat-balance').textContent = formatCurrency(data.summary?.balance || 0, currency);
+    document.getElementById('stat-ytd').textContent = formatCurrency(data.ytd?.net || 0, currency);
 
     // Recent transactions
     const rt = document.getElementById('recent-transactions');
@@ -1426,13 +1427,14 @@ const dashboard = {
         ${data.recent.map(t => `<tr>
           <td>${formatDate(t.date)}</td>
           <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.description || '-'}</td>
-          <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount, t.currency)}</td>
+          <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount_local || t.amount, currency)}</td>
         </tr>`).join('')}
         </tbody></table></div>`;
     }
   },
   async loadCharts() {
     const chartData = await api('/dashboard/charts?months=12');
+    const currency = chartData.currency || 'EUR';
 
     // Spending by category - Doughnut
     if (this.charts.category) this.charts.category.destroy();
@@ -1451,7 +1453,7 @@ const dashboard = {
         responsive: true, maintainAspectRatio: false, cutout: '60%',
         plugins: {
           legend: { position: 'right', labels: { boxWidth: 12, padding: 12, font: { size: 12, color: chartColors().legend } } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${formatCurrency(ctx.raw)}` } }
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${formatCurrency(ctx.raw, currency)}` } }
         }
       }
     });
@@ -1477,9 +1479,9 @@ const dashboard = {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { labels: { font: { size: 12 }, color: cc.legend } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw)}` } }
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw, currency)}` } }
         },
-        scales: { y: { beginAtZero: true, ticks: { callback: v => formatCurrency(v) }, grid: { color: cc.grid }, title: { display: false, color: cc.text }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
+        scales: { y: { beginAtZero: true, ticks: { callback: v => formatCurrency(v, currency) }, grid: { color: cc.grid }, title: { display: false, color: cc.text }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
       }
     });
 
@@ -1501,8 +1503,8 @@ const dashboard = {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { tooltip: { callbacks: { label: ctx => ` Balance: ${formatCurrency(ctx.raw)}` } } },
-        scales: { y: { ticks: { callback: v => formatCurrency(v) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
+        plugins: { tooltip: { callbacks: { label: ctx => ` Balance: ${formatCurrency(ctx.raw, currency)}` } } },
+        scales: { y: { ticks: { callback: v => formatCurrency(v, currency) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, x: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
       }
     });
   }
@@ -1529,9 +1531,11 @@ const transactions = {
     if (to) params.append('endDate', to);
 
     const data = await api(`/transactions?${params}`);
-    this.render(data);
+    const settings = await api('/settings');
+    const currency = settings.local_currency || 'EUR';
+    this.render(data, currency);
   },
-  render(data) {
+  render(data, currency = 'EUR') {
     const tbody = document.getElementById('tx-table-body');
     if (!data.rows || data.rows.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
@@ -1544,7 +1548,7 @@ const transactions = {
       <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.description || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.category_name || '-'}</td>
       <td>${t.type==='expense' ? (t.beneficiary||'-') : (t.payor||'-')}</td>
-      <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount, t.currency)}</td>
+      <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount_local || t.amount, currency)}</td>
       <td><span class="badge badge-${t.type}">${t.type}</span></td>
       <td class="td-actions">
         <button class="btn btn-ghost btn-sm" onclick="transactions.edit(${t.id})" title="Edit">
@@ -1669,13 +1673,19 @@ const analytics = {
   },
   async load() {
     const months = parseInt(document.getElementById('analytics-months').value) || 6;
-    const data = await api(`/analytics/category-trends?months=${months}&period=${this.currentPeriod}`);
+    const [data, settings] = await Promise.all([
+      api(`/analytics/category-trends?months=${months}&period=${this.currentPeriod}`),
+      api('/settings')
+    ]);
+    this.currentCurrency = settings.local_currency || 'EUR';
     this.renderStackedChart(data);
     this.renderPieChart(data);
     this.renderTopCategories(data);
     this.renderAverages(data);
   },
+  currentCurrency: 'EUR',
   renderStackedChart(data) {
+    const currency = this.currentCurrency;
     const ctx = document.getElementById('analytics-stacked-chart').getContext('2d');
     if (this.chart) this.chart.destroy();
     const cc = chartColors();
@@ -1704,7 +1714,7 @@ const analytics = {
             padding: 12,
             cornerRadius: 8,
             callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`
+              label: (ctx) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw, currency)}`
             }
           }
         },
@@ -1719,7 +1729,7 @@ const analytics = {
             grid: { color: cc.grid },
             ticks: {
               color: cc.text,
-              callback: (v) => formatCurrency(v)
+              callback: (v) => formatCurrency(v, currency)
             }
           }
         }
@@ -1727,6 +1737,7 @@ const analytics = {
     });
   },
   renderPieChart(data) {
+    const currency = this.currentCurrency;
     const ctx = document.getElementById('analytics-pie-chart').getContext('2d');
     if (this.pieChart) this.pieChart.destroy();
     const cc = chartColors();
@@ -1767,7 +1778,7 @@ const analytics = {
             callbacks: {
               label: (ctx) => {
                 const pct = ((ctx.raw / totalByCat.reduce((a,b) => a + b.total, 0)) * 100).toFixed(1);
-                return `${ctx.label}: ${formatCurrency(ctx.raw)} (${pct}%)`;
+                return `${ctx.label}: ${formatCurrency(ctx.raw, currency)} (${pct}%)`;
               }
             }
           }
@@ -1776,6 +1787,7 @@ const analytics = {
     });
   },
   renderTopCategories(data) {
+    const currency = this.currentCurrency;
     const totalByCat = data.datasets.map(ds => ({
       name: ds.category,
       total: ds.data.reduce((a, b) => a + b, 0),
@@ -1794,20 +1806,21 @@ const analytics = {
         <span class="analytics-category-color" style="background:${c.color}"></span>
         <span class="analytics-category-name">${c.name}</span>
         <span class="analytics-category-pct">${pct}%</span>
-        <span class="analytics-category-amount">${formatCurrency(c.total)}</span>
+        <span class="analytics-category-amount">${formatCurrency(c.total, currency)}</span>
       </div>`;
     }).join('');
   },
   renderAverages(data) {
+    const currency = this.currentCurrency;
     const totalExpenses = data.datasets.reduce((sum, ds) => sum + ds.data.reduce((a, b) => a + b, 0), 0);
     const numDays = data.labels.length;
     const avgDay = numDays > 0 ? totalExpenses / numDays : 0;
     const avgWeek = avgDay * 7;
     const avgMonth = avgDay * 30;
 
-    document.getElementById('avg-day').textContent = formatCurrency(avgDay);
-    document.getElementById('avg-week').textContent = formatCurrency(avgWeek);
-    document.getElementById('avg-month').textContent = formatCurrency(avgMonth);
+    document.getElementById('avg-day').textContent = formatCurrency(avgDay, currency);
+    document.getElementById('avg-week').textContent = formatCurrency(avgWeek, currency);
+    document.getElementById('avg-month').textContent = formatCurrency(avgMonth, currency);
   }
 };
 
@@ -1919,10 +1932,12 @@ const categories = {
 const budgets = {
   budgetChart: null,
   async load() {
-    const [budgets, summary] = await Promise.all([
+    const [budgets, summary, settings] = await Promise.all([
       api('/budgets'),
-      api('/budgets/summary')
+      api('/budgets/summary'),
+      api('/settings')
     ]);
+    const currency = settings.local_currency || 'EUR';
 
     // Budget list
     const list = document.getElementById('budget-list');
@@ -1935,7 +1950,7 @@ const budgets = {
         return `<div class="budget-item">
           <div class="budget-item-header">
             <div style="display:flex;align-items:center;gap:6px;"><span class="cat-dot" style="background:${b.category_color||'#6b7280'}"></span><span class="budget-item-name">${b.category_name}</span></div>
-            <div class="budget-item-amounts">${formatCurrency(b.spent || 0)} / ${formatCurrency(b.amount)}</div>
+            <div class="budget-item-amounts">${formatCurrency(b.spent || 0, currency)} / ${formatCurrency(b.amount, currency)}</div>
           </div>
           <div class="budget-bar"><div class="budget-bar-fill ${cls}" style="width:${Math.min(100, pct)}%"></div></div>
         </div>`;
@@ -1958,8 +1973,8 @@ const budgets = {
         },
         options: {
           responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-          plugins: { legend: { display: true, position: 'top', labels: { color: cc.legend, font: { size: 12 } } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw)}` } } },
-          scales: { x: { beginAtZero: true, ticks: { callback: v => formatCurrency(v) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, y: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
+          plugins: { legend: { display: true, position: 'top', labels: { color: cc.legend, font: { size: 12 } } }, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw, currency)}` } } },
+          scales: { x: { beginAtZero: true, ticks: { callback: v => formatCurrency(v, currency) }, grid: { color: cc.grid }, ticks: { color: cc.text } }, y: { grid: { color: cc.grid }, ticks: { color: cc.text } } }
         }
       });
     }

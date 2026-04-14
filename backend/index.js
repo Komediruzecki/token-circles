@@ -393,8 +393,9 @@ app.get('/api/budgets/summary', (req, res) => {
       WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)
     `).all(pid, startDate);
 
+    // Use amount_local if available (for imported transactions), otherwise amount
     const spent = db.prepare(`
-      SELECT category_id, SUM(amount) as total
+      SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
       FROM transactions
       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
       GROUP BY category_id
@@ -613,8 +614,9 @@ app.get('/api/dashboard/summary', (req, res) => {
     const nextY = m === 12 ? y + 1 : y;
     const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
 
+    // Use amount_local if available (for imported transactions), otherwise amount
     const monthly = db.prepare(`
-      SELECT type, SUM(amount) as total, COUNT(*) as count
+      SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count
       FROM transactions
       WHERE profile_id = ? AND date >= ? AND date < ?
       GROUP BY type
@@ -637,9 +639,10 @@ app.get('/api/dashboard/summary', (req, res) => {
       LIMIT 10
     `).all(pid, startDate, endDate);
 
+    // Use amount_local if available (for imported transactions), otherwise amount
     const yearStart = `${y}-01-01`;
     const ytd = db.prepare(`
-      SELECT type, SUM(amount) as total FROM transactions WHERE profile_id = ? AND date >= ? GROUP BY type
+      SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id = ? AND date >= ? GROUP BY type
     `).all(pid, yearStart);
     const ytdSummary = { income: 0, expense: 0 };
     for (const r of ytd) {
@@ -648,7 +651,11 @@ app.get('/api/dashboard/summary', (req, res) => {
     }
     ytdSummary.net = ytdSummary.income - ytdSummary.expense;
 
-    res.json({ summary, recent, ytd: ytdSummary, month: `${y}-${String(m).padStart(2, '0')}` });
+    // Get currency setting
+    const currencyRow = db.prepare(`SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`).get(pid);
+    const currency = currencyRow ? currencyRow.value : 'EUR';
+
+    res.json({ summary, recent, ytd: ytdSummary, month: `${y}-${String(m).padStart(2, '0')}`, currency });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -662,8 +669,9 @@ app.get('/api/dashboard/charts', (req, res) => {
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
+    // Use amount_local if available (for imported transactions), otherwise amount
     const byCategory = db.prepare(`
-      SELECT c.name, c.color, c.icon, SUM(t.amount) as total, COUNT(*) as count
+      SELECT c.name, c.color, c.icon, SUM(COALESCE(t.amount_local, t.amount)) as total, COUNT(*) as count
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
       WHERE t.profile_id = ? AND t.type = 'expense'
@@ -672,7 +680,7 @@ app.get('/api/dashboard/charts', (req, res) => {
     `).all(pid);
 
     const monthly = db.prepare(`
-      SELECT strftime('%Y-%m', date) as month, type, SUM(amount) as total
+      SELECT strftime('%Y-%m', date) as month, type, SUM(COALESCE(amount_local, amount)) as total
       FROM transactions
       WHERE profile_id = ? AND date >= ? AND date <= ? AND type IN ('income', 'expense')
       GROUP BY month, type
@@ -693,10 +701,15 @@ app.get('/api/dashboard/charts', (req, res) => {
       row.cumulative = running;
     }
 
+    // Get currency setting
+    const currencyRow = db.prepare(`SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`).get(pid);
+    const currency = currencyRow ? currencyRow.value : 'EUR';
+
     res.json({
       byCategory,
       monthly: Object.values(monthlyMap),
-      cashFlow
+      cashFlow,
+      currency
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -975,9 +988,10 @@ app.get('/api/stats/monthly', (req, res) => {
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
+    // Use amount_local if available (for imported transactions), otherwise amount
     const rows = db.prepare(`
       SELECT strftime('%Y-%m', date) as month, type,
-        SUM(amount) as total, COUNT(*) as count
+        SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count
       FROM transactions
       WHERE profile_id = ? AND date >= ? AND date <= ? AND type IN ('income', 'expense')
       GROUP BY month, type
@@ -1011,9 +1025,9 @@ app.get('/api/analytics/category-trends', (req, res) => {
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
-    // Get all expense transactions with categories
+    // Get all expense transactions with categories - use amount_local if available
     const transactions = db.prepare(`
-      SELECT t.date, t.amount, c.id as cat_id, c.name as cat_name, c.color as cat_color
+      SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
       WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
