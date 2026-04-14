@@ -142,6 +142,21 @@ function migrate() {
     );
   `);
 
+  // Create accounts table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'giro',
+      currency TEXT NOT NULL DEFAULT 'USD',
+      balance REAL NOT NULL DEFAULT 0,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      profile_id INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_profile ON accounts(profile_id)');
+
   // Migration: Add profile_id to existing tables (for upgrades)
   if (!columnExists('categories', 'profile_id')) {
     try { db.exec('ALTER TABLE categories ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}

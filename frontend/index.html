@@ -209,6 +209,10 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 
 /* Budget progress */
 .budget-item { margin-bottom: 16px; }
+
+/* Account cards */
+.account-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.account-card:hover { border-color: var(--primary); }
 .budget-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .budget-item-name { font-size: 14px; font-weight: 500; }
 .budget-item-amounts { font-size: 12px; color: var(--text-secondary); }
@@ -473,6 +477,10 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
       <span>Import</span>
     </a>
+    <a href="#accounts" class="nav-item" data-page="accounts">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+      <span>Accounts</span>
+    </a>
     <a href="#analytics" class="nav-item" data-page="analytics">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
       <span>Analytics</span>
@@ -709,6 +717,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       <div class="card" style="margin-top:16px;">
         <div class="card-header"><div><div class="card-title">Column Mapping</div><div class="card-subtitle">Match your file columns to transaction fields</div></div></div>
         <div class="column-map" id="column-map"></div>
+        <div id="category-review-section"></div>
         <div class="form-group" style="margin-top:12px;">
           <label class="form-label">Import Limit</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -757,6 +766,20 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         <div id="income-categories"></div>
       </div>
     </div>
+  </div>
+
+  <!-- ACCOUNTS -->
+  <div id="page-accounts" class="page">
+    <div class="page-header">
+      <div><h2>Accounts</h2><p>Manage your financial accounts</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="accounts.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Account
+        </button>
+      </div>
+    </div>
+    <div id="accounts-content"></div>
   </div>
 
   <!-- ANALYTICS -->
@@ -1232,6 +1255,49 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   </div>
 </div>
 
+<!-- ACCOUNT MODAL -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title" id="account-modal-title">Add Account</div>
+      <button class="btn btn-ghost" onclick="modal.close('account-modal')" style="padding:4px;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="account-id">
+      <div class="form-group">
+        <label class="form-label">Account Name</label>
+        <input type="text" class="form-control" id="account-name" placeholder="e.g., My Bank Account">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Type</label>
+        <select class="form-control" id="account-type">
+          <option value="giro">Giro / Current Account</option>
+          <option value="ib">Investment (IB / Brokerage)</option>
+          <option value="savings">Savings Account</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <input type="text" class="form-control" id="account-currency" placeholder="USD" maxlength="3" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Current Balance</label>
+        <input type="number" step="0.01" class="form-control" id="account-balance" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-control" id="account-notes" placeholder="Optional notes">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('account-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="accounts.save()">Save Account</button>
+    </div>
+  </div>
+</div>
+
 <!-- RATE PERIOD MODAL -->
 <div class="modal-overlay" id="rate-period-modal">
   <div class="modal" style="max-width:440px;">
@@ -1523,6 +1589,7 @@ const nav = {
         if (page === 'categories') categories.load();
         if (page === 'analytics') analytics.load();
         if (page === 'settings') settings.load();
+        if (page === 'accounts') accounts.load();
         if (page === 'import') dataImport.reset();
       });
     });
@@ -2249,6 +2316,100 @@ const categories = {
       toast(result.message || 'All categories deleted', 'success');
       this.load();
     } catch(e) { toast('Failed: ' + e.message, 'error'); }
+  }
+};
+
+// ==================== ACCOUNTS ====================
+const accounts = {
+  async load() {
+    const data = await api('/accounts');
+    this.render(data);
+  },
+  render(data) {
+    const container = document.getElementById('accounts-content');
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div class="card"><div class="empty-state">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+        <p>No accounts yet</p><p style="font-size:12px;color:var(--text-secondary);">Add your first account to get started</p></div></div>`;
+      return;
+    }
+    const groups = { ib: { name: 'Investment', accounts: [] }, giro: { name: 'Giro / Current', accounts: [] }, savings: { name: 'Savings', accounts: [] } };
+    data.forEach(a => { if (groups[a.type]) groups[a.type].accounts.push(a); });
+    let html = '';
+    for (const [type, g] of Object.entries(groups)) {
+      if (g.accounts.length === 0) continue;
+      html += `<div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="card-title">${g.name}</div></div>
+        <div class="grid-3">${g.accounts.map(a => `
+          <div class="account-card">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+              <div style="font-weight:600;">${a.name}</div>
+              <span class="badge badge-${type === 'ib' ? 'primary' : type === 'savings' ? 'success' : 'secondary'}">${type.toUpperCase()}</span>
+            </div>
+            <div style="font-size:24px;font-weight:700;margin-bottom:4px;">${formatCurrency(a.balance, a.currency)}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${a.currency}</div>
+            ${a.notes ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">${a.notes}</div>` : ''}
+            <div style="display:flex;gap:4px;margin-top:12px;">
+              <button class="btn btn-ghost btn-sm" onclick="accounts.openModal(${a.id})" style="flex:1;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Edit
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="accounts.delete(${a.id})" style="color:var(--danger);">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+    container.innerHTML = html;
+  },
+  async openModal(id = null) {
+    document.getElementById('account-id').value = id || '';
+    document.getElementById('account-modal-title').textContent = id ? 'Edit Account' : 'Add Account';
+    if (id) {
+      const data = await api('/accounts');
+      const acc = data.find(a => a.id == id);
+      if (acc) {
+        document.getElementById('account-name').value = acc.name || '';
+        document.getElementById('account-type').value = acc.type || 'giro';
+        document.getElementById('account-currency').value = acc.currency || 'USD';
+        document.getElementById('account-balance').value = acc.balance || 0;
+        document.getElementById('account-notes').value = acc.notes || '';
+      }
+    } else {
+      document.getElementById('account-name').value = '';
+      document.getElementById('account-type').value = 'giro';
+      document.getElementById('account-currency').value = 'USD';
+      document.getElementById('account-balance').value = 0;
+      document.getElementById('account-notes').value = '';
+    }
+    modal.open('account-modal');
+  },
+  async save() {
+    const id = document.getElementById('account-id').value;
+    const data = {
+      name: document.getElementById('account-name').value,
+      type: document.getElementById('account-type').value,
+      currency: document.getElementById('account-currency').value || 'USD',
+      balance: document.getElementById('account-balance').value,
+      notes: document.getElementById('account-notes').value
+    };
+    if (!data.name) { toast('Account name is required', 'error'); return; }
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/accounts/${id}` : '/accounts';
+    const result = await api(url, { method, body: data });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(id ? 'Account updated' : 'Account created', 'success');
+    modal.close('account-modal');
+    this.load();
+  },
+  async delete(id) {
+    if (!confirm('Delete this account?')) return;
+    const result = await api(`/accounts/${id}`, { method: 'DELETE' });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Account deleted', 'success');
+    this.load();
   }
 };
 
@@ -2986,10 +3147,74 @@ const importData = {
     const limit = this.getImportLimit();
     document.getElementById('import-preview-info').textContent = `Previewing ${Math.min(10, Math.min(limit, data.rows.length))} of ${limit > 0 ? Math.min(limit, data.rows.length) : data.rows.length} rows${limit > 0 ? ` (import limit: ${limit.toLocaleString()})` : ''}`;
     this.updatePreview();
+
+    // Build category review section — extract unique categories and auto-detect types
+    this.detectedCategories = {};
+    const catIdx = parseInt(document.getElementById('map-category')?.value);
+    if (!isNaN(catIdx) && catIdx >= 0) {
+      const seen = new Set();
+      data.rows.forEach(row => {
+        const name = (row[catIdx] || '').toString().trim();
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          this.detectedCategories[name] = this.autoDetectCategoryType(name);
+        }
+      });
+    }
+    this.renderCategoryReview();
     document.getElementById('import-mapping-section').style.display = 'block';
+  },
+  autoDetectCategoryType(name) {
+    const lower = name.toLowerCase();
+    if (/\b(current|giro|rev|revolut)\b/.test(lower)) return 'account';
+    if (/\b(ib|investments?|investement|brokerage)\b/.test(lower)) return 'ib';
+    if (/\b(income|salary|passive.?income|reimbursements?)\b/.test(lower)) return 'income';
+    return 'expense';
+  },
+  renderCategoryReview() {
+    const container = document.getElementById('category-review-section');
+    if (!container) return;
+    const cats = Object.entries(this.detectedCategories || {});
+    if (cats.length === 0) { container.innerHTML = ''; return; }
+    container.innerHTML = `<div class="card" style="margin-top:16px;">
+      <div class="card-header"><div><div class="card-title">Category Types</div><div class="card-subtitle">Review and adjust category types before importing</div></div></div>
+      <div style="max-height:200px;overflow:auto;">
+        <table style="width:100%;font-size:13px;">
+          <thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);">Category</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);">Type</th></tr></thead>
+          <tbody>${cats.map(([name, type]) => `<tr>
+            <td style="padding:6px 8px;">${name}</td>
+            <td style="padding:6px 8px;">
+              <select class="form-control" id="cat-type-${btoa(name)}" style="font-size:12px;max-width:160px;">
+                <option value="expense"${type==='expense'?' selected':''}>Expense</option>
+                <option value="income"${type==='income'?' selected':''}>Income</option>
+                <option value="ib"${type==='ib'?' selected':''}>Investment</option>
+                <option value="account"${type==='account'?' selected':''}>Account</option>
+              </select>
+            </td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
   },
   updatePreview() {
     if (!this.rows) return;
+
+    // Re-detect categories when category column changes
+    const catIdx = parseInt(document.getElementById('map-category')?.value);
+    if (!isNaN(catIdx) && catIdx >= 0) {
+      const seen = new Set();
+      const newCats = {};
+      this.rows.forEach(row => {
+        const name = (row[catIdx] || '').toString().trim();
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          newCats[name] = this.autoDetectCategoryType(name);
+        }
+      });
+      this.detectedCategories = newCats;
+      this.renderCategoryReview();
+    }
+
     const fields = ['description','amount','date','beneficiary','payor','category','currency','type'];
     const preview = document.getElementById('import-preview');
     preview.innerHTML = `<table><thead><tr>${fields.map(f => `<th>${f}</th>`).join('')}</tr></thead><tbody>
@@ -3010,11 +3235,20 @@ const importData = {
     });
     if (mapping.amount === undefined) { toast('Please map the Amount column', 'error'); return; }
 
+    // Collect category type overrides from the review section
+    const categoryTypes = {};
+    if (this.detectedCategories) {
+      Object.keys(this.detectedCategories).forEach(name => {
+        const sel = document.getElementById(`cat-type-${btoa(name)}`);
+        if (sel) categoryTypes[name] = sel.value;
+      });
+    }
+
     const limit = this.getImportLimit();
     const rowsToImport = limit > 0 ? this.rows.slice(0, limit) : this.rows;
     const result = await api('/import/execute', {
       method: 'POST',
-      body: { rows: rowsToImport, mapping }
+      body: { rows: rowsToImport, mapping, categoryTypes }
     });
     if (result.error) { toast(result.error, 'error'); return; }
     toast(result.message, 'success');
@@ -3070,7 +3304,9 @@ const importData = {
     document.getElementById('import-sheet-selector').style.display = 'none';
     document.getElementById('column-map').innerHTML = '';
     document.getElementById('import-preview').innerHTML = '';
+    document.getElementById('category-review-section').innerHTML = '';
     this.fileId = null; this.fileData = null; this.headers = null; this.rows = null; this.mapping = {};
+    this.detectedCategories = null;
     this.importLimit = 1000;
     document.querySelectorAll('.import-limit-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('.import-limit-btn:nth-child(3)')?.classList.add('active');
