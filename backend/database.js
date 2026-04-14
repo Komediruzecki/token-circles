@@ -123,6 +123,25 @@ function migrate() {
     );
   `);
 
+  // Create users table for authentication
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Create sessions table for express-session
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      sid TEXT PRIMARY KEY,
+      sess TEXT NOT NULL,
+      expire TEXT NOT NULL
+    );
+  `);
+
   // Migration: Add profile_id to existing tables (for upgrades)
   if (!columnExists('categories', 'profile_id')) {
     try { db.exec('ALTER TABLE categories ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}
@@ -169,6 +188,15 @@ function migrate() {
       ['Other Income', '#9333ea', 'plus-circle', 'income'],
     ];
     for (const c of defaults) insertCat.run(...c, 1);
+  }
+
+  // Seed demo user if no users exist
+  const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
+  if (userCount.c === 0) {
+    // Demo user: maff / add2 (password will be bcrypt hashed)
+    const bcrypt = require('bcrypt');
+    const passwordHash = bcrypt.hashSync('add2', 10);
+    db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('maff', passwordHash);
   }
 }
 

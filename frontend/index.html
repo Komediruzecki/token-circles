@@ -438,6 +438,9 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       <div class="profile-dropdown-menu" id="profile-menu"></div>
     </div>
   </div>
+  <div style="padding:0 16px;margin-bottom:12px;">
+    <button class="btn btn-secondary btn-sm" style="width:100%;" id="login-btn" onclick="modal.open('login-modal')">Sign In</button>
+  </div>
   <div class="sidebar-nav">
     <a href="#dashboard" class="nav-item active" data-page="dashboard">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -1188,6 +1191,29 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   </div>
 </div>
 
+<!-- LOGIN MODAL -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title">Sign In</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" class="form-control" id="login-username" placeholder="Enter username" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-control" id="login-password" placeholder="Enter password" autocomplete="current-password">
+      </div>
+      <div id="login-error" style="color:var(--danger);font-size:13px;display:none;margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="auth.login()">Sign In</button>
+    </div>
+  </div>
+</div>
+
 <!-- RATE PERIOD MODAL -->
 <div class="modal-overlay" id="rate-period-modal">
   <div class="modal" style="max-width:440px;">
@@ -1353,6 +1379,75 @@ document.addEventListener('click', e => {
   }
 });
 
+// ==================== AUTH ====================
+const auth = {
+  async checkLogin() {
+    const result = await fetch(API + '/auth/me', { credentials: 'include' });
+    if (result.ok) {
+      const data = await result.json();
+      this.updateUI(data.username);
+      return data;
+    }
+    return null;
+  },
+
+  async login() {
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('login-error');
+
+    if (!username || !password) {
+      errorEl.textContent = 'Please enter username and password';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const result = await fetch(API + '/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await result.json();
+
+      if (data.error) {
+        errorEl.textContent = data.error;
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      this.updateUI(data.username);
+      modal.close('login-modal');
+      toast('Welcome, ' + data.username + '!', 'success');
+    } catch (err) {
+      errorEl.textContent = 'Login failed. Please try again.';
+      errorEl.style.display = 'block';
+    }
+  },
+
+  async logout() {
+    await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
+    this.updateUI(null);
+    toast('Logged out', 'success');
+  },
+
+  updateUI(username) {
+    const loginBtn = document.getElementById('login-btn');
+    if (loginBtn) {
+      if (username) {
+        loginBtn.textContent = username;
+        loginBtn.onclick = () => this.logout();
+        loginBtn.title = 'Click to logout';
+      } else {
+        loginBtn.textContent = 'Sign In';
+        loginBtn.onclick = () => modal.open('login-modal');
+        loginBtn.title = 'Sign in';
+      }
+    }
+  }
+};
+
 // ==================== API ====================
 function api(url, options = {}) {
   const headers = { 'Content-Type': 'application/json', 'X-Profile-Id': profile.currentId, ...options.headers };
@@ -1360,6 +1455,7 @@ function api(url, options = {}) {
     delete headers['Content-Type'];
   }
   return fetch(API + url, {
+    credentials: 'include',
     headers,
     ...options,
     body: options.body && typeof options.body === 'object' ? JSON.stringify(options.body) : options.body
@@ -2994,6 +3090,7 @@ nav.init();
 dashboard.init();
 profile.refreshUI();
 theme.init();
+auth.checkLogin();
 </script>
 </body>
 </html>
