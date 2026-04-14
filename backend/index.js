@@ -675,11 +675,20 @@ app.get('/api/dashboard/summary', (req, res) => {
     const pid = getProfileId(req);
     const { year, month } = req.query;
     const y = year || new Date().getFullYear();
-    const m = month || new Date().getMonth() + 1;
-    const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
-    const nextM = m === 12 ? 1 : m + 1;
-    const nextY = m === 12 ? y + 1 : y;
-    const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+    const m = month;
+    let startDate, endDate;
+
+    if (m) {
+      // Specific month
+      startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+      const nextM = m === 12 ? 1 : m + 1;
+      const nextY = m === 12 ? y + 1 : y;
+      endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+    } else {
+      // Full year
+      startDate = `${y}-01-01`;
+      endDate = `${y + 1}-01-01`;
+    }
 
     // Use amount_local if available (for imported transactions), otherwise amount
     const monthly = db.prepare(`
@@ -722,7 +731,7 @@ app.get('/api/dashboard/summary', (req, res) => {
     const currencyRow = db.prepare(`SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`).get(pid);
     const currency = currencyRow ? currencyRow.value : 'EUR';
 
-    res.json({ summary, recent, ytd: ytdSummary, month: `${y}-${String(m).padStart(2, '0')}`, currency });
+    res.json({ summary, recent, ytd: ytdSummary, month: m ? `${y}-${String(m).padStart(2, '0')}` : y, currency });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
