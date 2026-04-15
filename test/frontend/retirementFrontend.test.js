@@ -17,8 +17,8 @@ describe('Retirement Calculator Frontend', () => {
       expect(htmlContent).toContain('class="retirement-layout"');
     });
 
-    test('ret-scenarios div exists with FIRE Scenarios header', () => {
-      expect(htmlContent).toContain('id="ret-scenarios"');
+    test('res-scenarios div exists with FIRE Scenarios header', () => {
+      expect(htmlContent).toContain('id="res-scenarios"');
       expect(htmlContent).toContain('FIRE Scenarios');
     });
 
