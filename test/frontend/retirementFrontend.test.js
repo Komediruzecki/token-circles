@@ -108,4 +108,52 @@ describe('Retirement Calculator Frontend', () => {
       expect(afterForm).not.toContain('onclick="retirement.calculate()"');
     });
   });
+
+  describe('expensesAtRetirement input', () => {
+    test('ret-expenses-retire input exists for direct retirement expenses', () => {
+      expect(htmlContent).toContain('id="ret-expenses-retire"');
+    });
+
+    test('country selector has new options (USA, Europe, Switzerland, Croatia, Japan)', () => {
+      expect(htmlContent).toContain('<option value="usa">USA</option>');
+      expect(htmlContent).toContain('<option value="europe">Europe</option>');
+      expect(htmlContent).toContain('<option value="switzerland">Switzerland</option>');
+      expect(htmlContent).toContain('<option value="croatia">Croatia</option>');
+      expect(htmlContent).toContain('<option value="japan">Japan</option>');
+    });
+
+    test('country selector has onchange handler for enable/disable logic', () => {
+      expect(htmlContent).toContain('onchange="retirement.handleCountryChange()"');
+    });
+
+    test('handleCountryChange method exists in retirement object', () => {
+      // Search for handleCountryChange function definition
+      const lines = htmlContent.split('\n');
+      let found = false;
+      for (const line of lines) {
+        if (line.includes('handleCountryChange()')) { found = true; break; }
+      }
+      expect(found).toBe(true);
+    });
+
+    test('calculate function sends expensesAtRetirement parameter', () => {
+      // The payload should include expensesAtRetirement
+      const lines = htmlContent.split('\n');
+      let found = false;
+      for (const line of lines) {
+        if (line.includes('expensesAtRetirement:')) { found = true; break; }
+      }
+      expect(found).toBe(true);
+    });
+
+    test('calculate function disables expenses input when country selected', () => {
+      // When country is selected, expensesAtRetirement should be null
+      const lines = htmlContent.split('\n');
+      let foundCountryNull = false;
+      for (const line of lines) {
+        if (line.includes('const expensesAtRetirement = country ? null')) { foundCountryNull = true; break; }
+      }
+      expect(foundCountryNull).toBe(true);
+    });
+  });
 });

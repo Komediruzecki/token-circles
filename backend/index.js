@@ -1435,15 +1435,14 @@ app.post('/api/calculator/retire', (req, res) => {
   try {
     const { currentAge = 30, retirementAge = 65, currentSavings = 0, monthlyContribution = 0,
       annualReturn = 7, annualExpenses = 30000, withdrawalRate = 4, inflationRate = 2,
-      country = 'default' } = req.body;
+      expensesAtRetirement = null, country = '' } = req.body;
 
-    // Cost-of-living multipliers by country
+    // Use direct expenses at retirement if provided, otherwise apply country cost-of-living adjustment
     const colMultipliers = {
-      default: 1.0, usa: 1.2, uk: 1.0, germany: 0.95, japan: 0.85,
-      portugal: 0.75, spain: 0.8, thailand: 0.5, mexico: 0.6, india: 0.4
+      usa: 1.0, europe: 0.9, switzerland: 1.3, croatia: 0.6, japan: 0.85
     };
     const col = colMultipliers[country] || 1.0;
-    const adjustedExpenses = annualExpenses * col;
+    const adjustedExpenses = expensesAtRetirement !== null ? expensesAtRetirement : annualExpenses * col;
 
     // FIRE number: how much needed to retire (25x rule, or 100 / withdrawalRate)
     const fireNumber = adjustedExpenses / (withdrawalRate / 100);
@@ -1508,7 +1507,7 @@ app.post('/api/calculator/retire', (req, res) => {
         }
         return { ...s, fireAge: fa ? Math.round(fa * 10) / 10 : null, reached: fa !== null, savingsAtFire: Math.round(m), shortfall: fa === null ? s.fireNumber - Math.round(m) : 0 };
       }),
-      inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country }
+      inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country, expensesAtRetirement }
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

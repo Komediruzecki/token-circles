@@ -722,13 +722,16 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
             <div class="form-group"><label class="form-label">Current Savings</label><input type="number" class="form-control" id="ret-savings" value="50000"></div>
             <div class="form-group"><label class="form-label">Monthly Contribution</label><input type="number" class="form-control" id="ret-contrib" value="1000"></div>
             <div class="form-group"><label class="form-label">Annual Expenses ($)</label><input type="number" class="form-control" id="ret-expenses" value="30000"></div>
+            <div class="form-group"><label class="form-label">Expenses at Retirement ($/yr)</label><input type="number" class="form-control" id="ret-expenses-retire" value="30000" placeholder="Leave empty if using country"></div>
             <div class="form-group"><label class="form-label">Expected Annual Return (%)</label><input type="number" step="0.1" class="form-control" id="ret-return" value="7.0"></div>
             <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Country (Cost of Living)</label>
-              <select class="form-control" id="ret-country">
-                <option value="default">Default</option>
+              <select class="form-control" id="ret-country" onchange="retirement.handleCountryChange()">
+                <option value="">— Select Country —</option>
                 <option value="usa">USA</option>
-                <option value="thailand">Thailand</option>
-                <option value="india">India</option>
+                <option value="europe">Europe</option>
+                <option value="switzerland">Switzerland</option>
+                <option value="croatia">Croatia</option>
+                <option value="japan">Japan</option>
               </select>
             </div>
           </form>
@@ -3469,7 +3472,21 @@ const retirement = {
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this.calculate(), 400);
   },
+  handleCountryChange() {
+    const country = document.getElementById('ret-country').value;
+    const expensesInput = document.getElementById('ret-expenses-retire');
+    if (country) {
+      expensesInput.disabled = true;
+      expensesInput.placeholder = 'Disabled when country selected';
+    } else {
+      expensesInput.disabled = false;
+      expensesInput.placeholder = 'Leave empty if using country';
+    }
+    this.scheduleUpdate();
+  },
   async calculate() {
+    const country = document.getElementById('ret-country').value;
+    const expensesAtRetirement = country ? null : (parseFloat(document.getElementById('ret-expenses-retire').value) || null);
     const payload = {
       currentAge: parseInt(document.getElementById('ret-age').value) || 30,
       retirementAge: parseInt(document.getElementById('ret-age-goal').value) || 65,
@@ -3477,7 +3494,8 @@ const retirement = {
       monthlyContribution: parseFloat(document.getElementById('ret-contrib').value) || 0,
       annualExpenses: parseFloat(document.getElementById('ret-expenses').value) || 30000,
       annualReturn: parseFloat(document.getElementById('ret-return').value) || 7,
-      country: document.getElementById('ret-country').value || 'default'
+      country: country,
+      expensesAtRetirement: expensesAtRetirement
     };
     try {
       const resp = await fetch(API + '/calculator/retire', {
