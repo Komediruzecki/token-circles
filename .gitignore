@@ -6,6 +6,9 @@ node_modules/
 .DS_Store
 db/
 
+# Test coverage reports (generated locally/CI, not committed)
+coverage/
+
 # Live server symlinks (created on server, not in git)
 backend/assets/
 backend/db/

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node backend/index.js",
     "dev": "NODE_PATH=./node_modules node backend/index.js",
-    "test": "NODE_PATH=./node_modules jest --coverage",
+    "test": "NODE_PATH=./node_modules jest",
+    "test:ci": "NODE_PATH=./node_modules jest --coverage",
     "test:watch": "NODE_PATH=./node_modules jest --watch",
     "test:backend": "NODE_PATH=./node_modules jest backend/",
     "test:frontend": "NODE_PATH=./node_modules jest frontend/"
