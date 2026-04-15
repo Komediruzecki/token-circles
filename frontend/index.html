@@ -542,7 +542,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       <div class="stat-card income"><div class="stat-card-label">Income</div><div class="stat-card-value" id="stat-income">$0</div></div>
       <div class="stat-card expense"><div class="stat-card-label">Expenses</div><div class="stat-card-value" id="stat-expense">$0</div></div>
       <div class="stat-card balance"><div class="stat-card-label">Balance</div><div class="stat-card-value" id="stat-balance">$0</div></div>
-      <div class="stat-card networth"><div class="stat-card-label">YTD Net</div><div class="stat-card-value" id="stat-ytd">$0</div></div>
+      <div class="stat-card networth"><div class="stat-card-label">Net Worth</div><div class="stat-card-value" id="stat-networth">$0</div></div>
     </div>
 
     <div class="grid-2">
@@ -1806,7 +1806,10 @@ const dashboard = {
     document.getElementById('stat-income').textContent = formatCurrency(data.summary?.income || 0, currency);
     document.getElementById('stat-expense').textContent = formatCurrency(data.summary?.expense || 0, currency);
     document.getElementById('stat-balance').textContent = formatCurrency(data.summary?.balance || 0, currency);
-    document.getElementById('stat-ytd').textContent = formatCurrency(data.ytd?.net || 0, currency);
+
+    // Fetch and display net worth
+    const nw = await api('/dashboard/net-worth');
+    document.getElementById('stat-networth').textContent = formatCurrency(nw.totalNetWorth || 0, currency);
 
     // Recent transactions
     const rt = document.getElementById('recent-transactions');
