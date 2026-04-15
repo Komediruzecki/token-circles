@@ -157,6 +157,24 @@ function migrate() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_profile ON accounts(profile_id)');
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS recurring_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      profile_id INTEGER NOT NULL DEFAULT 1,
+      description TEXT NOT NULL DEFAULT '',
+      amount REAL NOT NULL,
+      type TEXT NOT NULL DEFAULT 'expense',
+      category_id INTEGER,
+      frequency TEXT NOT NULL DEFAULT 'monthly',
+      day_of_month INTEGER,
+      next_date TEXT,
+      notes TEXT DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_recurring_profile ON recurring_transactions(profile_id)');
+
   // Migration: Add profile_id to existing tables (for upgrades)
   if (!columnExists('categories', 'profile_id')) {
     try { db.exec('ALTER TABLE categories ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}
