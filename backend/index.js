@@ -1104,6 +1104,79 @@ app.delete('/api/accounts/:id', (req, res) => {
 });
 
 // ========================
+// RECURRING TRANSACTIONS
+// ========================
+app.get('/api/recurring', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const rows = db.prepare(`
+      SELECT r.*, c.name as category_name, c.color as category_color, c.type as category_type
+      FROM recurring_transactions r
+      LEFT JOIN categories c ON r.category_id = c.id
+      WHERE r.profile_id = ? AND r.active = 1
+      ORDER BY r.next_date ASC
+    `).all(pid);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/recurring', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { description, amount, type, category_id, frequency, day_of_month, next_date, notes } = req.body;
+    const info = db.prepare(
+      `INSERT INTO recurring_transactions (profile_id, description, amount, type, category_id, frequency, day_of_month, next_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(pid, description || '', amount, type || 'expense', category_id || null, frequency || 'monthly', day_of_month || null, next_date || null, notes || '');
+    res.json({ id: info.lastInsertRowid });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/recurring/:id', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const existing = db.prepare('SELECT id FROM recurring_transactions WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const { description, amount, type, category_id, frequency, day_of_month, next_date, notes, active } = req.body;
+    db.prepare(
+      `UPDATE recurring_transactions SET description=?, amount=?, type=?, category_id=?, frequency=?, day_of_month=?, next_date=?, notes=?, active=? WHERE id=? AND profile_id=?`
+    ).run(description ?? '', amount ?? 0, type ?? 'expense', category_id ?? null, frequency ?? 'monthly', day_of_month ?? null, next_date ?? null, notes ?? '', active ?? 1, req.params.id, pid);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/recurring/:id', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    db.prepare('DELETE FROM recurring_transactions WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/recurring/:id/populate', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const r = db.prepare('SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    const date = r.next_date || new Date().toISOString().split('T')[0];
+    const info = db.prepare(
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, date, notes, beneficiary, payor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(pid, r.description, r.amount, r.type, r.category_id, date, r.notes || '', '', '');
+
+    // Advance next_date
+    let next = new Date(date);
+    if (r.frequency === 'monthly') next.setMonth(next.getMonth() + 1);
+    else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7);
+    else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+    const nextStr = next.toISOString().split('T')[0];
+    db.prepare('UPDATE recurring_transactions SET next_date = ? WHERE id = ?').run(nextStr, req.params.id);
+
+    res.json({ ok: true, transactionId: info.lastInsertRowid, next_date: nextStr });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ========================
 // STATS (per-profile)
 // ========================
 app.get('/api/stats/monthly', (req, res) => {
