@@ -2221,6 +2221,108 @@ app.get("/api/analytics/category-trends", (req, res) => {
 });
 
 // ========================
+// EXPORT (per-profile)
+// ========================
+app.get("/api/export/:type", (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { type } = req.params;
+    const { format = 'csv' } = req.query;
+
+    let data, filename;
+    switch (type) {
+      case 'transactions': {
+        const rows = db.prepare(`
+          SELECT t.date, t.description, t.amount, t.type, t.currency, t.means_of_payment, t.beneficiary, t.payor, t.notes, c.name as category
+          FROM transactions t
+          LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+          WHERE t.profile_id = ?
+          ORDER BY t.date DESC
+        `).all(pid);
+        data = rows;
+        filename = 'transactions';
+        break;
+      }
+      case 'categories': {
+        const rows = db.prepare(`
+          SELECT name, color, icon, type, parent_id FROM categories WHERE profile_id = ?
+        `).all(pid);
+        data = rows;
+        filename = 'categories';
+        break;
+      }
+      case 'accounts': {
+        const rows = db.prepare(`
+          SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id = ?
+        `).all(pid);
+        data = rows;
+        filename = 'accounts';
+        break;
+      }
+      case 'budgets': {
+        const rows = db.prepare(`
+          SELECT b.*, c.name as category_name FROM budgets b
+          JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+          WHERE b.profile_id = ?
+        `).all(pid);
+        data = rows;
+        filename = 'budgets';
+        break;
+      }
+      case 'loans': {
+        const rows = db.prepare(`
+          SELECT l.name, l.principal, l.interest_rate, l.start_date, l.term_months,
+            (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid
+          FROM loans l WHERE l.profile_id = ?
+        `).all(pid);
+        data = rows;
+        filename = 'loans';
+        break;
+      }
+      case 'recurring': {
+        const rows = db.prepare(`
+          SELECT description, amount, type, frequency, day_of_month, next_date, notes, active
+          FROM recurring_transactions WHERE profile_id = ?
+        `).all(pid);
+        data = rows;
+        filename = 'recurring_transactions';
+        break;
+      }
+      default:
+        return res.status(400).json({ error: 'Invalid export type' });
+    }
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
+      res.json(data);
+    } else {
+      // CSV format
+      if (data.length === 0) {
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
+        return res.end('');
+      }
+      const headers = Object.keys(data[0]);
+      const csv = [
+        headers.join(','),
+        ...data.map(row => headers.map(h => {
+          const val = row[h] == null ? '' : String(row[h]);
+          return val.includes(',') || val.includes('"') || val.includes('\n')
+            ? `"${val.replace(/"/g, '""')}"`
+            : val;
+        }).join(','))
+      ].join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
+      res.end(csv);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // RETIREMENT CALCULATOR
 // ========================
 app.post("/api/calculator/retire", (req, res) => {

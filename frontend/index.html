@@ -1076,6 +1076,25 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       </div>
       <button class="btn btn-primary" onclick="settings.save()" style="margin-top:16px;">Save Settings</button>
     </div>
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Data Export</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download your data in CSV or JSON format. All data is scoped to the current profile.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;" id="export-type-buttons">
+        <button class="btn btn-secondary" onclick="exportData('transactions')">Transactions</button>
+        <button class="btn btn-secondary" onclick="exportData('categories')">Categories</button>
+        <button class="btn btn-secondary" onclick="exportData('accounts')">Accounts</button>
+        <button class="btn btn-secondary" onclick="exportData('budgets')">Budgets</button>
+        <button class="btn btn-secondary" onclick="exportData('loans')">Loans</button>
+        <button class="btn btn-secondary" onclick="exportData('recurring')">Recurring</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:13px;color:var(--text-secondary);">Format:</label>
+        <select class="form-control" id="export-format" style="max-width:120px;">
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+        </select>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -3984,6 +4003,12 @@ const importData = {
   }
 };
 window.dataImport = importData;
+
+// ==================== DATA EXPORT ====================
+function exportData(type) {
+  const format = document.getElementById('export-format').value;
+  window.open(`/api/export/${type}?format=${format}`, '_blank');
+}
 
 // ==================== SETTINGS ====================
 const settings = {
