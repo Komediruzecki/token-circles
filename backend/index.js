@@ -1518,6 +1518,9 @@ app.post('/api/calculator/retire', (req, res) => {
       fireMonth,
       fireYear: fireAge ? Math.floor(fireAge) : null,
       savingsAtRetirement: Math.round(savings),
+      monthsToFire: fireMonth,
+      currentNWAtFire: Math.round(savings),
+      traditionalRetirementAge: null,
       timeline: timeline.filter(t => t.year % 5 === 0 || t.year === currentAge),
       withdrawalTimeline,
       scenarios: [
@@ -1531,7 +1534,7 @@ app.post('/api/calculator/retire', (req, res) => {
           m = m * (1 + s.return / 100 / 12) + monthlyContribution;
           if (m >= s.fireNumber && fa === null) { fa = currentAge + mo / 12; }
         }
-        return { ...s, fireAge: fa ? Math.round(fa * 10) / 10 : null };
+        return { ...s, fireAge: fa ? Math.round(fa * 10) / 10 : null, reached: fa !== null, savingsAtFire: Math.round(m), shortfall: fa === null ? s.fireNumber - Math.round(m) : 0 };
       }),
       inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country }
     });
