@@ -1407,7 +1407,9 @@ app.get('/api/analytics/category-trends', (req, res) => {
 
     // Aggregate transactions
     transactions.forEach(t => {
-      const idx = periodMap.get(t.date);
+      // For month/week views use full date (YYYY-MM-DD), for year view use YYYY-MM
+      const dateKey = month ? t.date : t.date.substring(0, 7);
+      const idx = periodMap.get(dateKey);
       if (idx !== undefined && catDataMap[t.cat_id]) {
         catDataMap[t.cat_id].data[idx] += t.amount;
       }

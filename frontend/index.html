@@ -2036,14 +2036,24 @@ const txFilters = {
   currentPreset: 'month',
 
   async init() {
-    // Populate year dropdown
+    // Populate year dropdown from distinct-years API
     const yearSelect = document.getElementById('tx-year-filter');
+    yearSelect.innerHTML = '';
     const currentYear = new Date().getFullYear();
-    for (let y = currentYear; y >= currentYear - 10; y--) {
-      const opt = document.createElement('option');
-      opt.value = y;
-      opt.textContent = y;
-      yearSelect.appendChild(opt);
+    try {
+      const { years } = await api('/analytics/distinct-years');
+      if (years && years.length > 0) {
+        years.forEach(y => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          yearSelect.appendChild(opt);
+        });
+      } else {
+        yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+      }
+    } catch(e) {
+      yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
     }
     this.setPreset('month');
   },
