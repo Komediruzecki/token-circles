@@ -12,23 +12,23 @@ describe('Retirement Calculator Frontend', () => {
     htmlContent = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
   });
 
-  describe('retirement-results elements', () => {
-    test('retirement-results div exists with correct id', () => {
-      expect(htmlContent).toContain('id="retirement-results"');
+  describe('retirement-layout grid layout', () => {
+    test('retirement-layout grid container exists', () => {
+      expect(htmlContent).toContain('class="retirement-layout"');
     });
 
-    test('ret-scenarios div exists inside retirement-results', () => {
-      // Search for the ret-scenarios div anywhere in the HTML
+    test('ret-scenarios div exists with FIRE Scenarios header', () => {
       expect(htmlContent).toContain('id="ret-scenarios"');
-      // Verify it's within retirement-results section
-      const retResultsIdx = htmlContent.indexOf('id="retirement-results"');
-      const retScenariosIdx = htmlContent.indexOf('id="ret-scenarios"');
-      expect(retResultsIdx).toBeLessThan(retScenariosIdx);
-      expect(retScenariosIdx - retResultsIdx).toBeLessThan(500);
+      expect(htmlContent).toContain('FIRE Scenarios');
     });
 
-    test('placeholder element removed (auto-calculate enabled)', () => {
-      expect(htmlContent).not.toContain('id="retirement-placeholder"');
+    test('ret-chart canvas is in its own card spanning full width', () => {
+      expect(htmlContent).toContain('class="card retirement-chart-card"');
+      expect(htmlContent).toContain('id="ret-chart"');
+    });
+
+    test('retirement-right contains FIRE Summary card', () => {
+      expect(htmlContent).toContain('FIRE Summary');
     });
 
     test('all FIRE result elements exist', () => {
