@@ -1594,6 +1594,12 @@ function formatDate(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function formatMonth(date) {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
@@ -2004,7 +2010,7 @@ const dashboard = {
         <table><thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead><tbody>
         ${data.recent.map(t => `<tr>
           <td>${formatDate(t.date)}</td>
-          <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.description || '-'}</td>
+          <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${escapeHtml(t.description) || '-'}</td>
           <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount_local || t.amount, currency)}</td>
         </tr>`).join('')}
         </tbody></table></div>`;
@@ -2243,7 +2249,7 @@ const recurring = {
     document.getElementById('recurring-modal-title').textContent = id ? 'Edit Recurring' : 'Add Recurring';
     const cats = await api('/categories');
     document.getElementById('recurring-category').innerHTML =
-      '<option value="">Select category...</option>' + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      '<option value="">Select category...</option>' + cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     if (id) {
       const r = await api(`/recurring/${id}`).catch(() => null);
       if (r && !r.error) {
@@ -2336,7 +2342,7 @@ const transactions = {
     }
     tbody.innerHTML = data.rows.map(t => `<tr>
       <td>${formatDate(t.date)}</td>
-      <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.description || '-'}</div></td>
+      <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.category_name || '-'}</td>
       <td>${t.type==='expense' ? (t.beneficiary||'-') : (t.payor||'-')}</td>
       <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount_local || t.amount, currency)}</td>
@@ -2388,7 +2394,7 @@ const transactions = {
     const cats = await api('/categories');
     const catSelect = document.getElementById('tx-category');
     catSelect.innerHTML = '<option value="">Select category...</option>' +
-      cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 
     if (id) {
       const t = await api(`/transactions/${id}`).catch(() => null);
@@ -2646,7 +2652,7 @@ const analytics = {
       const pct = ((c.total / total) * 100).toFixed(0);
       return `<div class="analytics-category-item">
         <span class="analytics-category-color" style="background:${c.color}"></span>
-        <span class="analytics-category-name">${c.name}</span>
+        <span class="analytics-category-name">${escapeHtml(c.name)}</span>
         <span class="analytics-category-pct">${pct}%</span>
         <span class="analytics-category-amount">${formatCurrency(c.total, currency)}</span>
       </div>`;
@@ -2678,7 +2684,7 @@ const categories = {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="width:12px;height:12px;border-radius:50%;background:${c.color}"></span>
-          <span style="font-size:14px;">${c.name}</span>
+          <span style="font-size:14px;">${escapeHtml(c.name)}</span>
         </div>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-ghost btn-sm" onclick="categories.edit(${c.id})">
@@ -2697,7 +2703,7 @@ const categories = {
     // Update category filter in transactions
     const catFilter = document.getElementById('tx-cat-filter');
     if (catFilter) {
-      catFilter.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      catFilter.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     }
   },
   setType(type) {
@@ -2926,7 +2932,7 @@ const budgets = {
     document.getElementById('budget-modal-title').textContent = id ? 'Edit Budget' : 'Add Budget';
     const cats = await api('/categories');
     const catSelect = document.getElementById('budget-category');
-    catSelect.innerHTML = cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    catSelect.innerHTML = cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 
     if (id) {
       const budgets = await api('/budgets');
@@ -3986,7 +3992,7 @@ const quickAdd = {
     const cats = await api('/categories');
     document.getElementById('qa-category').innerHTML =
       '<option value="">Select category...</option>' +
-      cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     setTimeout(() => document.getElementById('qa-amount').focus(), 50);
   },
   async save() {
