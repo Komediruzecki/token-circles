@@ -1012,7 +1012,7 @@ app.post('/api/import/googlesheet', (req, res) => {
         // CSV failed — try XLSX, find the matching sheet by name
         const xlsxResult = await tryXlsxAndListSheets();
         if (xlsxResult.error) {
-          return res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + xlsxResult.error + '. Make sure the sheet is shared as "Anyone with link can view".' });
+          return res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + xlsxResult.error + '. Make sure the sheet is shared as \'Anyone with link can view\'.' });
         }
 
         const targetSheet = xlsxResult.sheetNames.includes(sheetName) ? sheetName : xlsxResult.sheetNames[0];
@@ -1031,7 +1031,7 @@ app.post('/api/import/googlesheet', (req, res) => {
         // CSV failed or returned empty — get sheet names via XLSX
         const xlsxResult = await tryXlsxAndListSheets();
         if (xlsxResult.error) {
-          return res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + xlsxResult.error + '. Make sure the sheet is shared as "Anyone with link can view".' });
+          return res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + xlsxResult.error + '. Make sure the sheet is shared as \'Anyone with link can view\'.' });
         }
         return res.json({ sheetNames: xlsxResult.sheetNames, selectedSheet: xlsxResult.sheetNames[0] });
       }
@@ -1508,7 +1508,7 @@ app.post('/api/calculator/retire', (req, res) => {
       const annualWithdrawal = adjustedExpenses;
       for (let y = 0; y < 20; y++) {
         retirementSavings = retirementSavings * (1 + annualReturn / 100) - annualWithdrawal;
-        withdrawalTimeline.push({ year: y + 1, savings: Math.max(0, Math.round(retirementSavings))), balance: Math.max(0, Math.round(retirementSavings)) });
+        withdrawalTimeline.push({ year: y + 1, savings: Math.max(0, Math.round(retirementSavings)), balance: Math.max(0, Math.round(retirementSavings)) });
       }
     }
 
@@ -1535,7 +1535,8 @@ app.post('/api/calculator/retire', (req, res) => {
       }),
       inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country }
     });
-=======
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 app.get('/api/analytics/year-range', (req, res) => {
   try {
     const pid = getProfileId(req);
@@ -1543,7 +1544,6 @@ app.get('/api/analytics/year-range', (req, res) => {
     const minYear = range.min_date ? parseInt(range.min_date.slice(0, 4)) : null;
     const maxYear = range.max_date ? parseInt(range.max_date.slice(0, 4)) : null;
     res.json({ minYear, maxYear });
->>>>>>> fix/analytics-year-range
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
