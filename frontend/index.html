@@ -1811,7 +1811,7 @@ const nav = {
         if (page === 'settings') settings.load();
         if (page === 'accounts') accounts.load();
         if (page === 'import') dataImport.reset();
-        if (page === 'retirement') retirement.calculate();
+        if (page === 'retirement') { retirement.init(); retirement.calculate(); }
       });
     });
 
@@ -3478,10 +3478,14 @@ const loans = {
 const retirement = {
   chart: null,
   _debounceTimer: null,
+  currentCurrency: 'EUR',
   scheduleUpdate() {
     // Debounce input changes - recalculate 400ms after last change
     if (this._debounceTimer) clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this.calculate(), 400);
+  },
+  init() {
+    this.currentCurrency = settings.currentCurrency || 'EUR';
   },
   handleCountryChange() {
     const country = document.getElementById('ret-country').value;
@@ -3522,6 +3526,7 @@ const retirement = {
   renderResults(result) {
     const r = result;
     const cc = chartColors();
+    const currency = this.currentCurrency;
 
     const resultsEl = document.getElementById('retirement-results');
     if (!resultsEl) { toast('Retirement results container not found', 'error'); return; }
@@ -3530,11 +3535,11 @@ const retirement = {
     resultsEl.style.flexDirection = 'column';
 
     document.getElementById('res-fire-age').textContent = r.fireAge || '-';
-    document.getElementById('res-fire-number').textContent = formatCurrency(r.fireNumber, 'USD');
+    document.getElementById('res-fire-number').textContent = formatCurrency(r.fireNumber, currency);
     document.getElementById('res-months-to-fire').textContent = r.monthsToFire ? `${r.monthsToFire} months` : '-';
-    document.getElementById('res-current-nw').textContent = formatCurrency(r.currentNWAtFire, 'USD');
+    document.getElementById('res-current-nw').textContent = formatCurrency(r.currentNWAtFire, currency);
     document.getElementById('res-traditional-age').textContent = r.traditionalRetirementAge || '-';
-    document.getElementById('res-savings-at-fire').textContent = formatCurrency(r.savingsAtRetirement, 'USD');
+    document.getElementById('res-savings-at-fire').textContent = formatCurrency(r.savingsAtRetirement, currency);
 
     // Scenarios at top of right panel
     const scenariosDiv = document.getElementById('res-scenarios');
@@ -3545,8 +3550,8 @@ const retirement = {
           <div style="font-weight:600;margin-bottom:4px;">${s.name} (${s.return}% return)</div>
           <div style="font-size:13px;color:var(--text-secondary);">
             FIRE Age: <span style="color:${isReached ? 'var(--success)' : 'var(--error)'};font-weight:600;">${s.fireAge ?? '-'}</span>
-            &nbsp;&bull;&nbsp;At FIRE: ${formatCurrency(s.savingsAtFire, 'USD')}
-            &nbsp;&bull;&nbsp;${isReached ? 'Target Reached!' : 'Target Missed by ' + formatCurrency(Math.abs(s.shortfall), 'USD')}
+            &nbsp;&bull;&nbsp;At FIRE: ${formatCurrency(s.savingsAtFire, currency)}
+            &nbsp;&bull;&nbsp;${isReached ? 'Target Reached!' : 'Target Missed by ' + formatCurrency(Math.abs(s.shortfall), currency)}
           </div>
         </div>`;
       }).join('');
@@ -3577,7 +3582,7 @@ const retirement = {
             fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5
           },
           {
-            label: `FIRE Target (${formatCurrency(r.fireNumber, 'USD')})`,
+            label: `FIRE Target (${formatCurrency(r.fireNumber, currency)})`,
             data: fireLineData,
             borderColor: '#10b981', borderDash: [5, 5], borderWidth: 2,
             fill: false, pointRadius: 0
@@ -3590,13 +3595,13 @@ const retirement = {
           legend: { position: 'top', labels: { color: cc.legend } },
           tooltip: {
             callbacks: {
-              label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw, 'USD')}`
+              label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw, currency)}`
             }
           }
         },
         scales: {
           y: {
-            ticks: { callback: v => formatCurrency(v, 'USD'), color: cc.text },
+            ticks: { callback: v => formatCurrency(v, currency), color: cc.text },
             grid: { color: cc.grid }
           },
           x: {
