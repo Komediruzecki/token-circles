@@ -2526,6 +2526,8 @@ const budgets = {
     } else {
       list.innerHTML = summary.map(b => {
         const pct = b.percentage || 0;
+        const diff = Math.abs(b.remaining);
+        const isOver = b.remaining < 0;
         const cls = pct >= 100 ? 'over' : pct >= 75 ? 'warning' : 'ok';
         return `<div class="budget-item">
           <div class="budget-item-header">
@@ -2533,6 +2535,10 @@ const budgets = {
             <div class="budget-item-amounts">${formatCurrency(b.spent || 0, currency)} / ${formatCurrency(b.amount, currency)}</div>
           </div>
           <div class="budget-bar"><div class="budget-bar-fill ${cls}" style="width:${Math.min(100, pct)}%"></div></div>
+          <div style="font-size:12px;margin-top:4px;color:var(--text-secondary);display:flex;justify-content:space-between;">
+             <span>${pct.toFixed(0)}% used</span>
+             <span class="${isOver?'text-danger':'text-success'}">${isOver?'Over':'Under'}: ${formatCurrency(diff, currency)}</span>
+          </div>
         </div>`;
       }).join('');
     }
