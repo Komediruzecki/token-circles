@@ -18,19 +18,17 @@ describe('Retirement Calculator Frontend', () => {
     });
 
     test('ret-scenarios div exists inside retirement-results', () => {
-      // Verify ret-scenarios div exists by checking line 743 content
-      const lines = htmlContent.split('\n');
-      const line743 = lines[742];
-      expect(line743).toContain('ret-scenarios');
-      // Check it's a div element
-      expect(line743.trim().startsWith('<div id="ret-scenarios"')).toBe(true);
-      // Verify it's nested inside retirement-results by checking the parent div (line 742)
-      const line742 = lines[741];
-      expect(line742).toContain('retirement-results');
+      // Search for the ret-scenarios div anywhere in the HTML
+      expect(htmlContent).toContain('id="ret-scenarios"');
+      // Verify it's within retirement-results section
+      const retResultsIdx = htmlContent.indexOf('id="retirement-results"');
+      const retScenariosIdx = htmlContent.indexOf('id="ret-scenarios"');
+      expect(retResultsIdx).toBeLessThan(retScenariosIdx);
+      expect(retScenariosIdx - retResultsIdx).toBeLessThan(500);
     });
 
-    test('retirement-placeholder div exists', () => {
-      expect(htmlContent).toContain('id="retirement-placeholder"');
+    test('placeholder element removed (auto-calculate enabled)', () => {
+      expect(htmlContent).not.toContain('id="retirement-placeholder"');
     });
 
     test('all FIRE result elements exist', () => {
@@ -53,8 +51,8 @@ describe('Retirement Calculator Frontend', () => {
       const renderResultsMatch = htmlContent.match(/renderResults\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\}\s*;?\s*$/m);
       expect(renderResultsMatch).toBeTruthy();
 
-      // Should have null check: if (!resultsEl || !placeholderEl)
-      expect(htmlContent).toContain('if (!resultsEl || !placeholderEl)');
+      // Should have null check: if (!resultsEl)
+      expect(htmlContent).toContain('if (!resultsEl)');
     });
 
     test('scenariosDiv is checked for existence before setting innerHTML', () => {
@@ -96,8 +94,18 @@ describe('Retirement Calculator Frontend', () => {
       expect(htmlContent).toContain('id="ret-country"');
     });
 
-    test('calculate button exists', () => {
-      expect(htmlContent).toContain('onclick="retirement.calculate()"');
+    test('retirement form has oninput handler for auto-recalculation', () => {
+      expect(htmlContent).toContain('oninput="retirement.scheduleUpdate()"');
+    });
+
+    test('calculate button removed (auto-calculate enabled)', () => {
+      // The button should NOT exist since we auto-calculate now
+      const lines = htmlContent.split('\n');
+      const formLine = lines.findIndex(l => l.includes('id="retirement-form"'));
+      expect(formLine).toBeGreaterThan(-1);
+      // Check next 30 lines after form don't contain onclick="retirement.calculate"
+      const afterForm = lines.slice(formLine, formLine + 30).join('\n');
+      expect(afterForm).not.toContain('onclick="retirement.calculate()"');
     });
   });
 });
