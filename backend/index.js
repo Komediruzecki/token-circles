@@ -1287,6 +1287,19 @@ app.get('/api/stats/monthly', (req, res) => {
 });
 
 // ========================
+// ANALYTICS
+// ========================
+app.get('/api/analytics/year-range', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const range = db.prepare(`SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions WHERE profile_id = ?`).get(pid);
+    const minYear = range.min_date ? parseInt(range.min_date.slice(0, 4)) : null;
+    const maxYear = range.max_date ? parseInt(range.max_date.slice(0, 4)) : null;
+    res.json({ minYear, maxYear });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ========================
 // ANALYTICS - Stacked Category Trends
 // ========================
 app.get('/api/analytics/category-trends', (req, res) => {
@@ -1440,6 +1453,88 @@ app.get('/api/analytics/category-trends', (req, res) => {
       });
 
     res.json({ labels, datasets });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ========================
+// RETIREMENT CALCULATOR
+// ========================
+app.post('/api/calculator/retire', (req, res) => {
+  try {
+    const { currentAge = 30, retirementAge = 65, currentSavings = 0, monthlyContribution = 0,
+      annualReturn = 7, annualExpenses = 30000, withdrawalRate = 4, inflationRate = 2,
+      country = 'default' } = req.body;
+
+    // Cost-of-living multipliers by country
+    const colMultipliers = {
+      default: 1.0, usa: 1.2, uk: 1.0, germany: 0.95, japan: 0.85,
+      portugal: 0.75, spain: 0.8, thailand: 0.5, mexico: 0.6, india: 0.4
+    };
+    const col = colMultipliers[country] || 1.0;
+    const adjustedExpenses = annualExpenses * col;
+
+    // FIRE number: how much needed to retire (25x rule, or 100 / withdrawalRate)
+    const fireNumber = adjustedExpenses / (withdrawalRate / 100);
+
+    // Project savings until retirement
+    const monthsToRetirement = (retirementAge - currentAge) * 12;
+    const monthlyReturn = annualReturn / 100 / 12;
+
+    let savings = currentSavings;
+    const timeline = [];
+    for (let m = 0; m <= monthsToRetirement; m++) {
+      if (m % 12 === 0) {
+        timeline.push({ year: currentAge + m / 12, age: Math.round(currentAge + m / 12), savings: Math.round(savings) });
+      }
+      savings = savings * (1 + monthlyReturn) + monthlyContribution;
+    }
+
+    // FIRE date: find first month where savings >= fireNumber
+    let fireMonth = null;
+    let fireAge = null;
+    savings = currentSavings;
+    for (let m = 1; m <= monthsToRetirement * 2; m++) {
+      savings = savings * (1 + monthlyReturn) + monthlyContribution;
+      if (savings >= fireNumber && fireMonth === null) {
+        fireMonth = m;
+        fireAge = currentAge + m / 12;
+      }
+    }
+
+    // Withdrawal phase projection (20 years)
+    let retirementSavings = savings;
+    const withdrawalTimeline = [];
+    if (fireMonth !== null) {
+      const annualWithdrawal = adjustedExpenses;
+      for (let y = 0; y < 20; y++) {
+        retirementSavings = retirementSavings * (1 + annualReturn / 100) - annualWithdrawal;
+        withdrawalTimeline.push({ year: y + 1, savings: Math.max(0, Math.round(retirementSavings))), balance: Math.max(0, Math.round(retirementSavings)) });
+      }
+    }
+
+    res.json({
+      fireNumber: Math.round(fireNumber),
+      fireAge: fireAge ? Math.round(fireAge * 10) / 10 : null,
+      fireMonth,
+      fireYear: fireAge ? Math.floor(fireAge) : null,
+      savingsAtRetirement: Math.round(savings),
+      timeline: timeline.filter(t => t.year % 5 === 0 || t.year === currentAge),
+      withdrawalTimeline,
+      scenarios: [
+        { name: 'Conservative (4%)', return: 4, fireNumber: Math.round(adjustedExpenses / 0.04), fireAge: null },
+        { name: 'Moderate (6%)', return: 6, fireNumber: Math.round(adjustedExpenses / 0.06), fireAge: null },
+        { name: 'Optimistic (8%)', return: 8, fireNumber: Math.round(adjustedExpenses / 0.08), fireAge: null },
+      ].map(s => {
+        let m = currentSavings;
+        let fa = null;
+        for (let mo = 1; mo <= monthsToRetirement * 2; mo++) {
+          m = m * (1 + s.return / 100 / 12) + monthlyContribution;
+          if (m >= s.fireNumber && fa === null) { fa = currentAge + mo / 12; }
+        }
+        return { ...s, fireAge: fa ? Math.round(fa * 10) / 10 : null };
+      }),
+      inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country }
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
