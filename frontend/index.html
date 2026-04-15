@@ -1065,6 +1065,44 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   </div>
 </div>
 
+<!-- QUICK-ADD TRANSACTION MODAL -->
+<div class="modal-overlay" id="quickadd-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Quick Add</div>
+      <button class="btn btn-ghost" onclick="modal.close('quickadd-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="quickadd-form" onsubmit="quickAdd.save(); return false;">
+        <div class="form-group">
+          <label class="form-label">Amount</label>
+          <input type="number" step="0.01" class="form-control" id="qa-amount" placeholder="0.00" autofocus required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="qa-category">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="qa-description" placeholder="e.g. Grocery shopping">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-control" id="qa-date">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('quickadd-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="quickAdd.save()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- CATEGORY MODAL -->
 <div class="modal-overlay" id="cat-modal">
   <div class="modal">
@@ -3466,6 +3504,53 @@ const settings = {
     } catch(e) { toast('Failed: ' + e.message, 'error'); }
   }
 };
+
+// ==================== QUICK-ADD ====================
+const quickAdd = {
+  async open() {
+    modal.open('quickadd-modal');
+    document.getElementById('qa-amount').value = '';
+    document.getElementById('qa-description').value = '';
+    document.getElementById('qa-date').value = new Date().toISOString().split('T')[0];
+    const cats = await api('/categories');
+    document.getElementById('qa-category').innerHTML =
+      '<option value="">Select category...</option>' +
+      cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    setTimeout(() => document.getElementById('qa-amount').focus(), 50);
+  },
+  async save() {
+    const amount = parseFloat(document.getElementById('qa-amount').value);
+    const description = document.getElementById('qa-description').value;
+    const category_id = document.getElementById('qa-category').value || null;
+    const date = document.getElementById('qa-date').value;
+    if (!amount || !date) { toast('Amount and date are required', 'error'); return; }
+    const cats = await api('/categories');
+    const cat = cats.find(c => String(c.id) === String(category_id));
+    const type = cat ? cat.type : 'expense';
+    const result = await api('/transactions', {
+      method: 'POST',
+      body: { description, amount, date, category_id, type }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Transaction added', 'success');
+    modal.close('quickadd-modal');
+    // Refresh current page data
+    const page = location.hash.slice(1) || 'dashboard';
+    if (page === 'transactions') transactions.load();
+    else if (page === 'dashboard') dashboard.load();
+  }
+};
+
+// Keyboard shortcut: Ctrl/Cmd+Shift+T opens quick-add
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
+    e.preventDefault();
+    quickAdd.open();
+  }
+  if (e.key === 'Escape' && document.getElementById('quickadd-modal').classList.contains('show')) {
+    modal.close('quickadd-modal');
+  }
+});
 
 // ==================== INIT ====================
 // Drag and drop for import
