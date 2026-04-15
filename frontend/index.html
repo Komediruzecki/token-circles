@@ -3494,10 +3494,14 @@ const retirement = {
     const r = result;
     const cc = chartColors();
 
+    const resultsEl = document.getElementById('retirement-results');
+    const placeholderEl = document.getElementById('retirement-placeholder');
+    if (!resultsEl || !placeholderEl) { toast('Retirement results container not found', 'error'); return; }
+
     // Show results, hide placeholder
-    document.getElementById('retirement-results').style.display = 'flex';
-    document.getElementById('retirement-results').style.flexDirection = 'column';
-    document.getElementById('retirement-placeholder').style.display = 'none';
+    resultsEl.style.display = 'flex';
+    resultsEl.style.flexDirection = 'column';
+    placeholderEl.style.display = 'none';
 
     document.getElementById('res-fire-age').textContent = r.fireAge || '-';
     document.getElementById('res-fire-number').textContent = formatCurrency(r.fireNumber, 'USD');
@@ -3508,22 +3512,25 @@ const retirement = {
 
     // Scenarios at top of right panel
     const scenariosDiv = document.getElementById('res-scenarios');
-    scenariosDiv.innerHTML = (r.scenarios || []).map(s => {
-      const isReached = s.reached;
-      return `<div style="background:${isReached ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'};border-left:3px solid ${isReached ? 'var(--success)' : 'var(--error)'};padding:12px;border-radius:6px;margin-bottom:8px;">
-        <div style="font-weight:600;margin-bottom:4px;">${s.name} (${s.return}% return)</div>
-        <div style="font-size:13px;color:var(--text-secondary);">
-          FIRE Age: <span style="color:${isReached ? 'var(--success)' : 'var(--error)'};font-weight:600;">${s.fireAge ?? '-'}</span>
-          &nbsp;&bull;&nbsp;At FIRE: ${formatCurrency(s.savingsAtFire, 'USD')}
-          &nbsp;&bull;&nbsp;${isReached ? 'Target Reached!' : 'Target Missed by ' + formatCurrency(Math.abs(s.shortfall), 'USD')}
-        </div>
-      </div>`;
-    }).join('');
+    if (scenariosDiv) {
+      scenariosDiv.innerHTML = (r.scenarios || []).map(s => {
+        const isReached = s.reached;
+        return `<div style="background:${isReached ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'};border-left:3px solid ${isReached ? 'var(--success)' : 'var(--error)'};padding:12px;border-radius:6px;margin-bottom:8px;">
+          <div style="font-weight:600;margin-bottom:4px;">${s.name} (${s.return}% return)</div>
+          <div style="font-size:13px;color:var(--text-secondary);">
+            FIRE Age: <span style="color:${isReached ? 'var(--success)' : 'var(--error)'};font-weight:600;">${s.fireAge ?? '-'}</span>
+            &nbsp;&bull;&nbsp;At FIRE: ${formatCurrency(s.savingsAtFire, 'USD')}
+            &nbsp;&bull;&nbsp;${isReached ? 'Target Reached!' : 'Target Missed by ' + formatCurrency(Math.abs(s.shortfall), 'USD')}
+          </div>
+        </div>`;
+      }).join('');
+    }
 
     // Timeline chart
     const timeline = r.timeline || [];
-    if (timeline.length === 0) {
-      document.getElementById('ret-chart').parentElement.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No timeline data available</p>';
+    const retChart = document.getElementById('ret-chart');
+    if (timeline.length === 0 || !retChart) {
+      retChart && (retChart.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No timeline data available</p>');
       return;
     }
     const labels = timeline.map(t => `${t.year} (age ${t.age})`);
