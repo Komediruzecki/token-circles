@@ -135,6 +135,12 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color
 .chart-container.tall { height: 320px; }
 .chart-container.short { height: 220px; }
 
+/* Retirement Calculator Layout */
+.retirement-layout { display: grid; grid-template-columns: 420px 1fr; gap: 24px; align-items: start; }
+.retirement-left .card { padding: 20px; }
+.retirement-left .form-group { margin-bottom: 8px; }
+.retirement-right { display: flex; flex-direction: column; gap: 16px; }
+
 /* Buttons */
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
   border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer;
@@ -706,37 +712,48 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
     <div class="page-header">
       <div><h2>Retirement Calculator</h2><p>Plan your financial independence</p></div>
     </div>
-    <div class="card">
-        <form id="retirement-form" class="grid-2">
+    <div class="retirement-layout">
+      <div class="retirement-left">
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Input Parameters</div></div></div>
+          <form id="retirement-form" class="grid-2" oninput="retirement.scheduleUpdate()">
             <div class="form-group"><label class="form-label">Current Age</label><input type="number" class="form-control" id="ret-age" value="30"></div>
             <div class="form-group"><label class="form-label">Retirement Age</label><input type="number" class="form-control" id="ret-age-goal" value="65"></div>
             <div class="form-group"><label class="form-label">Current Savings</label><input type="number" class="form-control" id="ret-savings" value="50000"></div>
             <div class="form-group"><label class="form-label">Monthly Contribution</label><input type="number" class="form-control" id="ret-contrib" value="1000"></div>
             <div class="form-group"><label class="form-label">Annual Expenses ($)</label><input type="number" class="form-control" id="ret-expenses" value="30000"></div>
+            <div class="form-group"><label class="form-label">Expenses at Retirement ($/yr)</label><input type="number" class="form-control" id="ret-expenses-retire" value="30000" placeholder="Leave empty if using country"></div>
             <div class="form-group"><label class="form-label">Expected Annual Return (%)</label><input type="number" step="0.1" class="form-control" id="ret-return" value="7.0"></div>
-            <div class="form-group">
-                <label class="form-label">Country (Cost of Living)</label>
-                <select class="form-control" id="ret-country">
-                    <option value="default">Default</option>
-                    <option value="usa">USA</option>
-                    <option value="thailand">Thailand</option>
-                    <option value="india">India</option>
-                </select>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Country (Cost of Living)</label>
+              <select class="form-control" id="ret-country" onchange="retirement.handleCountryChange()">
+                <option value="">— Select Country —</option>
+                <option value="usa">USA</option>
+                <option value="europe">Europe</option>
+                <option value="switzerland">Switzerland</option>
+                <option value="croatia">Croatia</option>
+                <option value="japan">Japan</option>
+              </select>
             </div>
-            <button type="button" class="btn btn-primary" onclick="retirement.calculate()">Calculate</button>
-        </form>
-    </div>
-    <div id="retirement-results" style="display:none; margin-top:16px;">
-        <div class="stat-card" style="margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;">
-            <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">FIRE Age</div><div style="font-size:28px;font-weight:700;color:var(--success);" id="res-fire-age">-</div></div>
-            <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">FIRE Number</div><div style="font-size:20px;font-weight:600;" id="res-fire-number">-</div></div>
-            <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Months to FIRE</div><div style="font-size:20px;font-weight:600;" id="res-months-to-fire">-</div></div>
-            <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Savings at FIRE</div><div style="font-size:20px;font-weight:600;" id="res-savings-at-fire">-</div></div>
-            <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Current NW at FIRE</div><div style="font-size:20px;font-weight:600;" id="res-current-nw">-</div></div>
-            <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Traditional Retirement</div><div style="font-size:20px;font-weight:600;" id="res-traditional-age">-</div></div>
+          </form>
         </div>
-        <div id="res-scenarios" style="margin-bottom:16px;"></div>
-        <div class="card"><canvas id="ret-chart" height="200"></canvas></div>
+      </div>
+      <div class="retirement-right">
+        <div id="retirement-results">
+          <div id="ret-scenarios" style="margin-bottom:16px;"></div>
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><div><div class="card-title">FIRE Summary</div></div></div>
+            <div class="stat-card" style="margin-bottom:0;display:flex;gap:24px;flex-wrap:wrap;">
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">FIRE Age</div><div style="font-size:28px;font-weight:700;color:var(--success);" id="res-fire-age">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">FIRE Number</div><div style="font-size:20px;font-weight:600;" id="res-fire-number">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Months to FIRE</div><div style="font-size:20px;font-weight:600;" id="res-months-to-fire">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Savings at FIRE</div><div style="font-size:20px;font-weight:600;" id="res-savings-at-fire">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Current NW at FIRE</div><div style="font-size:20px;font-weight:600;" id="res-current-nw">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Traditional Retirement</div><div style="font-size:20px;font-weight:600;" id="res-traditional-age">-</div></div>
+            </div>
+          </div>
+          <div class="card"><canvas id="ret-chart" height="280"></canvas></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -869,14 +886,11 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
         <div class="period-selector">
-          <button class="active" onclick="analytics.setPeriod('day')" id="period-day">Day</button>
-          <button onclick="analytics.setPeriod('week')" id="period-week">Week</button>
-          <button onclick="analytics.setPeriod('month')" id="period-month">Month</button>
+          <button class="active" onclick="analytics.setType('expense')" id="type-expense">Expense</button>
+          <button onclick="analytics.setType('income')" id="type-income">Income</button>
         </div>
-        <select class="form-control" id="analytics-year" onchange="analytics.onYearChange()" style="width:auto;min-width:100px;">
-          <option value="">All Years</option>
-        </select>
-        <select class="form-control" id="analytics-month-filter" onchange="analytics.load()" style="width:auto;min-width:120px;">
+        <select class="form-control" id="analytics-year" onchange="analytics.onYearChange()" style="width:auto;min-width:100px;"></select>
+        <select class="form-control" id="analytics-month-filter" onchange="analytics.onMonthChange()" style="width:auto;min-width:120px;">
           <option value="">All Months</option>
           <option value="01">January</option>
           <option value="02">February</option>
@@ -890,6 +904,9 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
           <option value="10">October</option>
           <option value="11">November</option>
           <option value="12">December</option>
+        </select>
+        <select class="form-control" id="analytics-week-filter" onchange="analytics.load()" style="width:auto;min-width:200px;display:none;">
+          <option value="">All Weeks</option>
         </select>
       </div>
     </div>
@@ -1779,10 +1796,11 @@ const nav = {
         if (page === 'budgets') budgets.load();
         if (page === 'loans') loans.load();
         if (page === 'categories') categories.load();
-        if (page === 'analytics') analytics.load();
+        if (page === 'analytics') analytics.init();
         if (page === 'settings') settings.load();
         if (page === 'accounts') accounts.load();
         if (page === 'import') dataImport.reset();
+        if (page === 'retirement') retirement.calculate();
       });
     });
 
@@ -2036,14 +2054,24 @@ const txFilters = {
   currentPreset: 'month',
 
   async init() {
-    // Populate year dropdown
+    // Populate year dropdown from distinct-years API
     const yearSelect = document.getElementById('tx-year-filter');
+    yearSelect.innerHTML = '';
     const currentYear = new Date().getFullYear();
-    for (let y = currentYear; y >= currentYear - 10; y--) {
-      const opt = document.createElement('option');
-      opt.value = y;
-      opt.textContent = y;
-      yearSelect.appendChild(opt);
+    try {
+      const { years } = await api('/analytics/distinct-years');
+      if (years && years.length > 0) {
+        years.forEach(y => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          yearSelect.appendChild(opt);
+        });
+      } else {
+        yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+      }
+    } catch(e) {
+      yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
     }
     this.setPreset('month');
   },
@@ -2388,58 +2416,76 @@ const transactions = {
 const analytics = {
   chart: null,
   pieChart: null,
-  currentPeriod: 'day',
+  currentType: 'expense',
   init() {
     this.populateYears().then(() => this.load());
   },
   async populateYears() {
     const select = document.getElementById('analytics-year');
     try {
-      const { minYear, maxYear } = await api('/analytics/year-range');
-      if (!minYear || !maxYear) return;
-      select.innerHTML = '<option value="">All Years</option>';
-      for (let y = maxYear; y >= minYear; y--) {
-        const opt = document.createElement('option');
-        opt.value = y;
-        opt.textContent = y;
-        select.appendChild(opt);
-      }
+      const { years } = await api('/analytics/distinct-years');
+      if (!years || years.length === 0) return;
+      select.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
     } catch(e) { console.error('Failed to load years:', e); }
   },
   onYearChange() {
+    document.getElementById('analytics-month-filter').value = '';
+    document.getElementById('analytics-week-filter').value = '';
+    document.getElementById('analytics-week-filter').style.display = 'none';
     this.load();
   },
-  setPeriod(period) {
-    this.currentPeriod = period;
+  async onMonthChange() {
+    const month = document.getElementById('analytics-month-filter').value;
+    const year = document.getElementById('analytics-year').value;
+    const weekSelect = document.getElementById('analytics-week-filter');
+    if (month) {
+      try {
+        const { weeks } = await api(`/analytics/weeks?year=${year}&month=${month}`);
+        weekSelect.innerHTML = '<option value="">All Weeks</option>' + weeks.map(w => `<option value="${w.week}">${w.label}</option>`).join('');
+        weekSelect.style.display = '';
+      } catch(e) { console.error('Failed to load weeks:', e); }
+    } else {
+      weekSelect.value = '';
+      weekSelect.style.display = 'none';
+    }
+    this.load();
+  },
+  setType(type) {
+    this.currentType = type;
     document.querySelectorAll('#page-analytics .period-selector button').forEach(b => b.classList.remove('active'));
-    document.getElementById(`period-${period}`).classList.add('active');
+    document.getElementById(`type-${type}`).classList.add('active');
     this.load();
   },
   async load() {
     const year = document.getElementById('analytics-year').value;
     const month = document.getElementById('analytics-month-filter').value;
-    let url = `/analytics/category-trends?period=${this.currentPeriod}`;
-    if (year && month) {
-      url = `/analytics/category-trends?year=${year}&month=${month}&period=${this.currentPeriod}`;
-    } else if (year) {
-      url = `/analytics/category-trends?year=${year}&period=${this.currentPeriod}`;
-    }
+    const week = document.getElementById('analytics-week-filter').value;
+    let url = `/analytics/category-trends?year=${year}&type=${this.currentType}`;
+    if (month) url += `&month=${month}`;
+    if (week) url += `&week=${week}`;
     const [data, settings] = await Promise.all([
       api(url),
       api('/settings')
     ]);
     this.currentCurrency = settings.local_currency || 'EUR';
-    this.renderStackedChart(data);
+    this.renderStackedChart(data, { year, month, week });
     this.renderPieChart(data);
     this.renderTopCategories(data);
     this.renderAverages(data);
   },
   currentCurrency: 'EUR',
-  renderStackedChart(data) {
+  renderStackedChart(data, { year, month, week }) {
     const currency = this.currentCurrency;
     const ctx = document.getElementById('analytics-stacked-chart').getContext('2d');
     if (this.chart) this.chart.destroy();
     const cc = chartColors();
+
+    // Determine label density based on view level
+    let maxTicks = 12;
+    if (week) maxTicks = 7;
+    else if (month) maxTicks = 15;
+    else maxTicks = 12;
+
     this.chart = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -2449,7 +2495,7 @@ const analytics = {
           data: ds.data,
           backgroundColor: ds.color,
           borderRadius: 2,
-          barPercentage: this.currentPeriod === 'day' ? 0.8 : 0.6
+          barPercentage: week ? 0.8 : month ? 0.8 : 0.7
         }))
       },
       options: {
@@ -2464,6 +2510,7 @@ const analytics = {
             bodyColor: cc.tooltipBody,
             padding: 12,
             cornerRadius: 8,
+            filter: (tooltipItem) => tooltipItem.raw > 0,
             callbacks: {
               label: (ctx) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw, currency)}`
             }
@@ -2473,7 +2520,12 @@ const analytics = {
           x: {
             stacked: true,
             grid: { display: false, color: cc.grid },
-            ticks: { color: cc.text, maxRotation: 45, minRotation: 45 }
+            ticks: {
+              color: cc.text,
+              maxRotation: 45,
+              minRotation: 0,
+              maxTicksLimit: maxTicks
+            }
           },
           y: {
             stacked: true,
@@ -2548,7 +2600,7 @@ const analytics = {
     const total = totalByCat.reduce((a, b) => a + b.total, 0);
     const el = document.getElementById('analytics-top-categories');
     if (totalByCat.length === 0) {
-      el.innerHTML = '<div class="empty-state"><p>No expense data</p></div>';
+      el.innerHTML = `<div class="empty-state"><p>No ${this.currentType} data</p></div>`;
       return;
     }
     el.innerHTML = totalByCat.map(c => {
@@ -3414,7 +3466,27 @@ const loans = {
 // ==================== RETIREMENT CALCULATOR ====================
 const retirement = {
   chart: null,
+  _debounceTimer: null,
+  scheduleUpdate() {
+    // Debounce input changes - recalculate 400ms after last change
+    if (this._debounceTimer) clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(() => this.calculate(), 400);
+  },
+  handleCountryChange() {
+    const country = document.getElementById('ret-country').value;
+    const expensesInput = document.getElementById('ret-expenses-retire');
+    if (country) {
+      expensesInput.disabled = true;
+      expensesInput.placeholder = 'Disabled when country selected';
+    } else {
+      expensesInput.disabled = false;
+      expensesInput.placeholder = 'Leave empty if using country';
+    }
+    this.scheduleUpdate();
+  },
   async calculate() {
+    const country = document.getElementById('ret-country').value;
+    const expensesAtRetirement = country ? null : (parseFloat(document.getElementById('ret-expenses-retire').value) || null);
     const payload = {
       currentAge: parseInt(document.getElementById('ret-age').value) || 30,
       retirementAge: parseInt(document.getElementById('ret-age-goal').value) || 65,
@@ -3422,7 +3494,8 @@ const retirement = {
       monthlyContribution: parseFloat(document.getElementById('ret-contrib').value) || 0,
       annualExpenses: parseFloat(document.getElementById('ret-expenses').value) || 30000,
       annualReturn: parseFloat(document.getElementById('ret-return').value) || 7,
-      country: document.getElementById('ret-country').value || 'default'
+      country: country,
+      expensesAtRetirement: expensesAtRetirement
     };
     try {
       const resp = await fetch(API + '/calculator/retire', {
@@ -3438,6 +3511,13 @@ const retirement = {
   renderResults(result) {
     const r = result;
     const cc = chartColors();
+
+    const resultsEl = document.getElementById('retirement-results');
+    if (!resultsEl) { toast('Retirement results container not found', 'error'); return; }
+
+    resultsEl.style.display = 'flex';
+    resultsEl.style.flexDirection = 'column';
+
     document.getElementById('res-fire-age').textContent = r.fireAge || '-';
     document.getElementById('res-fire-number').textContent = formatCurrency(r.fireNumber, 'USD');
     document.getElementById('res-months-to-fire').textContent = r.monthsToFire ? `${r.monthsToFire} months` : '-';
@@ -3445,26 +3525,27 @@ const retirement = {
     document.getElementById('res-traditional-age').textContent = r.traditionalRetirementAge || '-';
     document.getElementById('res-savings-at-fire').textContent = formatCurrency(r.savingsAtRetirement, 'USD');
 
-    // Scenarios
+    // Scenarios at top of right panel
     const scenariosDiv = document.getElementById('res-scenarios');
-    scenariosDiv.innerHTML = (r.scenarios || []).map(s => {
-      const isReached = s.reached;
-      return `<div class=\"scenario-card\" style=\"background:${isReached ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'};border-left:3px solid ${isReached ? 'var(--success)' : 'var(--error)'};padding:12px;border-radius:6px;margin-bottom:8px;\">
-        <div style=\"font-weight:600;margin-bottom:4px;\">${s.name} (${s.return}% return)</div>
-        <div style=\"font-size:13px;color:var(--text-secondary);\">
-          FIRE Age: <span style=\"color:${isReached ? 'var(--success)' : 'var(--error)'};font-weight:600;\">${s.fireAge ?? '-'}</span>
-          &nbsp;&bull;&nbsp;At FIRE: ${formatCurrency(s.savingsAtFire, 'USD')}
-          &nbsp;&bull;&nbsp;${isReached ? 'Target Reached!' : 'Target Missed by ' + formatCurrency(Math.abs(s.shortfall), 'USD')}
-        </div>
-      </div>`;
-    }).join('');
-
-    document.getElementById('retirement-results').style.display = 'block';
+    if (scenariosDiv) {
+      scenariosDiv.innerHTML = (r.scenarios || []).map(s => {
+        const isReached = s.reached;
+        return `<div style="background:${isReached ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'};border-left:3px solid ${isReached ? 'var(--success)' : 'var(--error)'};padding:12px;border-radius:6px;margin-bottom:8px;">
+          <div style="font-weight:600;margin-bottom:4px;">${s.name} (${s.return}% return)</div>
+          <div style="font-size:13px;color:var(--text-secondary);">
+            FIRE Age: <span style="color:${isReached ? 'var(--success)' : 'var(--error)'};font-weight:600;">${s.fireAge ?? '-'}</span>
+            &nbsp;&bull;&nbsp;At FIRE: ${formatCurrency(s.savingsAtFire, 'USD')}
+            &nbsp;&bull;&nbsp;${isReached ? 'Target Reached!' : 'Target Missed by ' + formatCurrency(Math.abs(s.shortfall), 'USD')}
+          </div>
+        </div>`;
+      }).join('');
+    }
 
     // Timeline chart
     const timeline = r.timeline || [];
-    if (timeline.length === 0) {
-      document.getElementById('ret-chart').parentElement.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No timeline data available</p>';
+    const retChart = document.getElementById('ret-chart');
+    if (timeline.length === 0 || !retChart) {
+      retChart && (retChart.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No timeline data available</p>');
       return;
     }
     const labels = timeline.map(t => `${t.year} (age ${t.age})`);

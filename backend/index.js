@@ -1289,13 +1289,40 @@ app.get('/api/stats/monthly', (req, res) => {
 // ========================
 // ANALYTICS
 // ========================
-app.get('/api/analytics/year-range', (req, res) => {
+app.get('/api/analytics/distinct-years', (req, res) => {
   try {
     const pid = getProfileId(req);
-    const range = db.prepare(`SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions WHERE profile_id = ?`).get(pid);
-    const minYear = range.min_date ? parseInt(range.min_date.slice(0, 4)) : null;
-    const maxYear = range.max_date ? parseInt(range.max_date.slice(0, 4)) : null;
-    res.json({ minYear, maxYear });
+    const rows = db.prepare(`SELECT DISTINCT substr(date, 1, 4) as year FROM transactions WHERE profile_id = ? ORDER BY year DESC`).all(pid);
+    const years = rows.map(r => parseInt(r.year));
+    const currentYear = new Date().getFullYear();
+    if (years.length === 0) years.push(currentYear);
+    if (!years.includes(currentYear)) years.unshift(currentYear);
+    res.json({ years });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/analytics/weeks', (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const year = parseInt(req.query.year);
+    const month = req.query.month ? String(req.query.month).padStart(2, '0') : null;
+    if (!year) { res.json({ weeks: [] }); return; }
+    const weeks = [];
+    const firstDay = month ? new Date(year, parseInt(month) - 1, 1) : new Date(year, 0, 1);
+    const last = month ? new Date(year, parseInt(month), 0).getDate() : 31;
+    const lastDay = month ? new Date(year, parseInt(month) - 1, last) : new Date(year, 11, 31);
+    let w = 1;
+    const current = new Date(firstDay);
+    while (current <= lastDay) {
+      const weekStart = new Date(current);
+      weekStart.setDate(current.getDate() - current.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weeks.push({ week: w, label: `Week ${w} (${weekStart.toISOString().slice(0, 10)} - ${weekEnd.toISOString().slice(0, 10)})` });
+      current.setDate(current.getDate() + 7);
+      w++;
+    }
+    res.json({ weeks });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1305,108 +1332,67 @@ app.get('/api/analytics/year-range', (req, res) => {
 app.get('/api/analytics/category-trends', (req, res) => {
   try {
     const pid = getProfileId(req);
-    const year = req.query.year ? parseInt(req.query.year) : null;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
     const month = req.query.month ? String(req.query.month).padStart(2, '0') : null;
-    const period = req.query.period || 'day'; // day, week, month
+    const week = req.query.week ? parseInt(req.query.week) : null;
+    const type = req.query.type || 'expense';
 
+    // Date range
     let startStr, endStr;
-    if (year) {
-      if (month) {
-        // Specific year + month
-        const lastDay = new Date(year, parseInt(month), 0).getDate();
+    if (month) {
+      const lastDay = new Date(year, parseInt(month), 0).getDate();
+      if (week) {
+        // Specific week within a month
+        const weekStartDay = (week - 1) * 7 + 1;
+        const weekEndDay = Math.min(week * 7, lastDay);
+        startStr = `${year}-${month}-${String(weekStartDay).padStart(2, '0')}`;
+        endStr = `${year}-${month}-${String(weekEndDay).padStart(2, '0')}`;
+      } else {
+        // Full month
         startStr = `${year}-${month}-01`;
         endStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-      } else {
-        // Full year
-        startStr = `${year}-01-01`;
-        endStr = `${year}-12-31`;
       }
     } else {
-      // All years — no date filter
-      startStr = null;
-      endStr = null;
+      // Full year
+      startStr = `${year}-01-01`;
+      endStr = `${year}-12-31`;
     }
 
-    // Get all expense transactions with categories - use amount_local if available
-    const transactions = startStr
-      ? db.prepare(`SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ? ORDER BY t.date`).all(pid, startStr, endStr)
-      : db.prepare(`SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id = ? AND t.type = 'expense' ORDER BY t.date`).all(pid);
+    // Transactions and categories filtered by type (income or expense)
+    const transactions = db.prepare(`SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id = ? AND t.type = ? AND t.date >= ? AND t.date <= ? ORDER BY t.date`).all(pid, type, startStr, endStr);
 
-    // Get all expense categories for this profile
-    const categories = db.prepare(`
-      SELECT id, name, color
-      FROM categories
-      WHERE profile_id = ? AND type = 'expense'
-      ORDER BY name
-    `).all(pid);
+    const categories = db.prepare(`SELECT id, name, color FROM categories WHERE profile_id = ? AND type = ? ORDER BY name`).all(pid, type);
 
-    // Generate time periods based on the period type
+    // Generate labels based on view level
     const labels = [];
     const periodMap = new Map();
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthNamesFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-    if (year && month) {
-      // Specific month — show all days
+    if (week && month) {
+      // Week view: show days of the week (Sun-Sat) for that month
+      const lastDay = new Date(year, parseInt(month), 0).getDate();
+      const weekStartDay = (week - 1) * 7 + 1;
+      const weekEndDay = Math.min(week * 7, lastDay);
+      for (let d = weekStartDay; d <= weekEndDay; d++) {
+        const date = new Date(year, parseInt(month) - 1, d);
+        labels.push(dayNames[date.getDay()]);
+        periodMap.set(`${year}-${month}-${String(d).padStart(2, '0')}`, labels.length - 1);
+      }
+    } else if (month) {
+      // Month view: show day numbers
       const lastDay = new Date(year, parseInt(month), 0).getDate();
       for (let d = 1; d <= lastDay; d++) {
-        const dayStr = `${year}-${month}-${String(d).padStart(2, '0')}`;
         labels.push(`${monthNamesFull[parseInt(month) - 1]} ${d}`);
-        periodMap.set(dayStr, labels.length - 1);
+        periodMap.set(`${year}-${month}-${String(d).padStart(2, '0')}`, labels.length - 1);
       }
-    } else if (year) {
-      // Full year view — always show 12 months
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    } else {
+      // Year view: show 12 months
       for (let m = 0; m < 12; m++) {
         labels.push(`${monthNames[m]} ${year}`);
         periodMap.set(`${year}-${String(m + 1).padStart(2, '0')}`, m);
       }
-    } else if (period === 'day') {
-      // Daily view - last 30 days
-      for (let i = 29; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const label = d.toISOString().split('T')[0];
-        labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        periodMap.set(label, labels.length - 1);
-      }
-    } else if (period === 'week') {
-      // Weekly view - group by week
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - (i * 7));
-        const weekStart = new Date(d);
-        weekStart.setDate(d.getDate() - d.getDay());
-        const label = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if (!labels.includes(label)) {
-          labels.push(label);
-        }
-      }
-      // Map dates to week indices
-      transactions.forEach(t => {
-        const d = new Date(t.date);
-        const weekStart = new Date(d);
-        weekStart.setDate(d.getDate() - d.getDay());
-        const label = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        periodMap.set(t.date, labels.indexOf(label));
-      });
-    } else {
-      // All years — monthly buckets spanning actual data range
-      const range = db.prepare(`SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions WHERE profile_id = ?`).get(pid);
-      if (range.min_date && range.max_date) {
-        const minY = parseInt(range.min_date.slice(0, 4));
-        const maxY = parseInt(range.max_date.slice(0, 4));
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        let idx = 0;
-        for (let y = minY; y <= maxY; y++) {
-          const maxM = y === maxY ? parseInt(range.max_date.slice(5, 7)) : 12;
-          const minM = y === minY ? parseInt(range.min_date.slice(5, 7)) : 1;
-          for (let m = minM; m <= maxM; m++) {
-            labels.push(`${monthNames[m - 1]} ${y}`);
-            periodMap.set(`${y}-${String(m).padStart(2, '0')}`, idx++);
-          }
-        }
-      }
-      if (labels.length === 0) labels.push('No data');
     }
 
     // Initialize datasets for each category
@@ -1421,23 +1407,9 @@ app.get('/api/analytics/category-trends', (req, res) => {
 
     // Aggregate transactions
     transactions.forEach(t => {
-      let idx;
-      if (year && month) {
-        // Day-level for specific month
-        idx = periodMap.get(t.date);
-      } else if (year) {
-        // Month-level for full year
-        const monthKey = t.date.slice(0, 7);
-        idx = periodMap.get(monthKey);
-      } else if (period === 'day') {
-        idx = periodMap.get(t.date);
-      } else if (period === 'week') {
-        idx = periodMap.get(t.date);
-      } else {
-        const monthKey = t.date.slice(0, 7);
-        idx = periodMap.get(monthKey);
-      }
-
+      // For month/week views use full date (YYYY-MM-DD), for year view use YYYY-MM
+      const dateKey = month ? t.date : t.date.substring(0, 7);
+      const idx = periodMap.get(dateKey);
       if (idx !== undefined && catDataMap[t.cat_id]) {
         catDataMap[t.cat_id].data[idx] += t.amount;
       }
@@ -1463,15 +1435,14 @@ app.post('/api/calculator/retire', (req, res) => {
   try {
     const { currentAge = 30, retirementAge = 65, currentSavings = 0, monthlyContribution = 0,
       annualReturn = 7, annualExpenses = 30000, withdrawalRate = 4, inflationRate = 2,
-      country = 'default' } = req.body;
+      expensesAtRetirement = null, country = '' } = req.body;
 
-    // Cost-of-living multipliers by country
+    // Use direct expenses at retirement if provided, otherwise apply country cost-of-living adjustment
     const colMultipliers = {
-      default: 1.0, usa: 1.2, uk: 1.0, germany: 0.95, japan: 0.85,
-      portugal: 0.75, spain: 0.8, thailand: 0.5, mexico: 0.6, india: 0.4
+      usa: 1.0, europe: 0.9, switzerland: 1.3, croatia: 0.6, japan: 0.85
     };
     const col = colMultipliers[country] || 1.0;
-    const adjustedExpenses = annualExpenses * col;
+    const adjustedExpenses = expensesAtRetirement !== null ? expensesAtRetirement : annualExpenses * col;
 
     // FIRE number: how much needed to retire (25x rule, or 100 / withdrawalRate)
     const fireNumber = adjustedExpenses / (withdrawalRate / 100);
@@ -1536,17 +1507,8 @@ app.post('/api/calculator/retire', (req, res) => {
         }
         return { ...s, fireAge: fa ? Math.round(fa * 10) / 10 : null, reached: fa !== null, savingsAtFire: Math.round(m), shortfall: fa === null ? s.fireNumber - Math.round(m) : 0 };
       }),
-      inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country }
+      inputs: { currentAge, retirementAge, currentSavings, monthlyContribution, annualReturn, adjustedExpenses, withdrawalRate, country, expensesAtRetirement }
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-app.get('/api/analytics/year-range', (req, res) => {
-  try {
-    const pid = getProfileId(req);
-    const range = db.prepare(`SELECT MIN(date) as min_date, MAX(date) as max_date FROM transactions WHERE profile_id = ?`).get(pid);
-    const minYear = range.min_date ? parseInt(range.min_date.slice(0, 4)) : null;
-    const maxYear = range.max_date ? parseInt(range.max_date.slice(0, 4)) : null;
-    res.json({ minYear, maxYear });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
