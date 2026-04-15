@@ -3443,7 +3443,7 @@ const retirement = {
     document.getElementById('res-months-to-fire').textContent = r.monthsToFire ? `${r.monthsToFire} months` : '-';
     document.getElementById('res-current-nw').textContent = formatCurrency(r.currentNWAtFire, 'USD');
     document.getElementById('res-traditional-age').textContent = r.traditionalRetirementAge || '-';
-    document.getElementById('res-savings-at-fire').textContent = formatCurrency(r.savingsAtFire, 'USD');
+    document.getElementById('res-savings-at-fire').textContent = formatCurrency(r.savingsAtRetirement, 'USD');
 
     // Scenarios
     const scenariosDiv = document.getElementById('res-scenarios');
@@ -3463,9 +3463,12 @@ const retirement = {
 
     // Timeline chart
     const timeline = r.timeline || [];
-    if (timeline.length === 0) return;
-    const labels = timeline.map(t => `${t.year} (${t.age})`);
-    const netWorthData = timeline.map(t => t.netWorth);
+    if (timeline.length === 0) {
+      document.getElementById('ret-chart').parentElement.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px;">No timeline data available</p>';
+      return;
+    }
+    const labels = timeline.map(t => `${t.year} (age ${t.age})`);
+    const savingsData = timeline.map(t => t.savings);
     const fireLineData = timeline.map(() => r.fireNumber);
 
     const ctx = document.getElementById('ret-chart').getContext('2d');
@@ -3476,8 +3479,8 @@ const retirement = {
         labels,
         datasets: [
           {
-            label: 'Net Worth',
-            data: netWorthData,
+            label: 'Savings Projection',
+            data: savingsData,
             borderColor: cc.primary, backgroundColor: cc.primaryBg,
             fill: true, tension: 0.3, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5
           },
