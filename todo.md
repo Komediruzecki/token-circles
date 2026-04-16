@@ -28,7 +28,7 @@
 - [ ] **Improved CSV import** — Smart detection of column types, duplicate detection
 
 ## Reports
-- [ ] **Monthly PDF report** — Generate a downloadable monthly summary report
+- [x] **Monthly PDF report** — Generate a downloadable monthly summary report
 - [ ] **Tax category grouping** — Tag categories as tax-deductible, generate year-end tax summary
 - [ ] **Income vs expense summary** — Year-end P&L style report
 
