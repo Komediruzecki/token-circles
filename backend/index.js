@@ -465,7 +465,7 @@ app.get("/api/transactions", (req, res) => {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     if (sort) {
-      const sortCol = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'].includes(sort) ? `t.${sort}` : 't.date';
+      const sortCol = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'].includes(sort) ? (sort === 'category_name' ? 'c.name' : `t.${sort}`) : 't.date';
       const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
       sql += ` ORDER BY ${sortCol} ${sortOrder}, t.id ${sortOrder}`;
     } else {
