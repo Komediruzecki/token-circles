@@ -470,6 +470,20 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 .amort-table table tr.rate-change-row td { border-left: 3px solid #f59e0b; }
 .amort-table table tr.prepayment-row { background: rgba(16, 185, 129, 0.1); }
 .amort-table table tr.prepayment-row td { border-left: 3px solid #10b981; }
+
+/* Form validation error styles */
+.form-group.is-invalid .form-control,
+.form-group.is-invalid select,
+.form-group.is-invalid textarea {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+.field-error {
+  color: var(--danger);
+  font-size: 11px;
+  margin-top: 3px;
+  display: block;
+}
 </style>
 </head>
 <body>
@@ -2525,12 +2539,56 @@ const transactions = {
     }
     modal.open('tx-modal');
   },
-  async edit(id) { this.openModal(id); },
+  async edit(id) { await this.openModal(id); },
+  validate() {
+    let valid = true;
+    const clearErrors = () => {
+      document.querySelectorAll('#tx-form .form-group.is-invalid').forEach(el => {
+        el.classList.remove('is-invalid');
+        const err = el.querySelector('.field-error');
+        if (err) err.remove();
+      });
+    };
+    clearErrors();
+
+    const setError = (fieldId, msg) => {
+      const field = document.getElementById(fieldId);
+      if (!field) return;
+      const group = field.closest('.form-group');
+      if (!group) return;
+      group.classList.add('is-invalid');
+      const span = document.createElement('span');
+      span.className = 'field-error';
+      span.textContent = msg;
+      group.appendChild(span);
+      valid = false;
+    };
+
+    const desc = document.getElementById('tx-description').value.trim();
+    if (!desc) setError('tx-description', 'Description is required');
+
+    const amt = document.getElementById('tx-amount').value;
+    if (!amt || isNaN(parseFloat(amt))) setError('tx-amount', 'Amount is required');
+    else if (parseFloat(amt) <= 0) setError('tx-amount', 'Amount must be greater than zero');
+
+    const date = document.getElementById('tx-date').value;
+    if (!date) setError('tx-date', 'Date is required');
+
+    const rate = document.getElementById('tx-exchange-rate').value;
+    if (rate && rate !== '' && parseFloat(rate) <= 0) setError('tx-exchange-rate', 'Exchange rate must be greater than zero');
+
+    return valid;
+  },
   async save() {
     const btn = document.getElementById('tx-save-btn');
     const origText = btn.textContent;
     btn.innerHTML = '<span class="loading-spinner"></span> Saving...';
     btn.classList.add('loading');
+    if (!this.validate()) {
+      btn.textContent = origText;
+      btn.classList.remove('loading');
+      return;
+    }
     try {
       const id = document.getElementById('tx-id').value;
       const data = {

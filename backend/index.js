@@ -514,6 +514,18 @@ app.post("/api/transactions", (req, res) => {
       type,
       notes,
     } = req.body;
+
+    // Validate required fields
+    if (!description || typeof description !== 'string' || !description.trim()) {
+      return res.status(400).json({ error: 'Description is required' });
+    }
+    if (amount === undefined || amount === null || isNaN(amount) || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'A valid date is required' });
+    }
+
     const info = db
       .prepare(
         `
@@ -560,6 +572,18 @@ app.put("/api/transactions/:id", (req, res) => {
       type,
       notes,
     } = req.body;
+
+    // Validate required fields
+    if (!description || typeof description !== 'string' || !description.trim()) {
+      return res.status(400).json({ error: 'Description is required' });
+    }
+    if (amount === undefined || amount === null || isNaN(amount) || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'A valid date is required' });
+    }
+
     const result = db
       .prepare(
         `
