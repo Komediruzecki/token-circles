@@ -502,6 +502,157 @@ app.delete("/api/categories", apiRateLimiter, (req, res) => {
 });
 
 // ========================
+// TAGS (per-profile)
+// ========================
+app.get("/api/tags", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const rows = db
+      .prepare("SELECT id, name, color, created_at FROM tags WHERE profile_id = ? ORDER BY name")
+      .all(pid);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/tags", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, color } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Tag name is required' });
+    }
+    const info = db
+      .prepare("INSERT INTO tags (name, color, profile_id) VALUES (?, ?, ?)")
+      .run(name.trim(), color || '#6b7280', pid);
+    res.json({ id: info.lastInsertRowid, name: name.trim(), color: color || '#6b7280' });
+  } catch (err) {
+    if (err.message.includes('UNIQUE constraint')) {
+      return res.status(400).json({ error: 'Tag already exists' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/tags/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, color } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Tag name is required' });
+    }
+    const result = db
+      .prepare("UPDATE tags SET name = ?, color = ? WHERE id = ? AND profile_id = ?")
+      .run(name.trim(), color || '#6b7280', req.params.id, pid);
+    if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.message.includes('UNIQUE constraint')) {
+      return res.status(400).json({ error: 'Tag name already exists' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/tags/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const result = db
+      .prepare("DELETE FROM tags WHERE id = ? AND profile_id = ?")
+      .run(req.params.id, pid);
+    if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add tags to a transaction
+app.post("/api/transactions/:id/tags", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { tagIds } = req.body;
+    if (!Array.isArray(tagIds)) {
+      return res.status(400).json({ error: 'tagIds must be an array' });
+    }
+    // Verify transaction belongs to profile
+    const tx = db.prepare("SELECT id FROM transactions WHERE id = ? AND profile_id = ?").get(req.params.id, pid);
+    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+
+    // Replace existing tags with new ones
+    db.prepare("DELETE FROM transaction_tags WHERE transaction_id = ?").run(req.params.id);
+    const insertStmt = db.prepare("INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)");
+    for (const tagId of tagIds) {
+      insertStmt.run(req.params.id, tagId);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get tags for a transaction
+app.get("/api/transactions/:id/tags", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    // Verify transaction belongs to profile
+    const tx = db.prepare("SELECT id FROM transactions WHERE id = ? AND profile_id = ?").get(req.params.id, pid);
+    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+
+    const tags = db
+      .prepare(`
+        SELECT t.id, t.name, t.color
+        FROM tags t
+        JOIN transaction_tags tt ON t.id = tt.tag_id
+        WHERE tt.transaction_id = ? AND t.profile_id = ?
+        ORDER BY t.name
+      `)
+      .all(req.params.id, pid);
+    res.json(tags);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Search transactions by tag
+app.get("/api/transactions/by-tag/:tagId", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { startDate, endDate, category_ids, type, limit, offset } = req.query;
+
+    let sql = `
+      SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+      JOIN transaction_tags tt ON t.id = tt.transaction_id
+      WHERE t.profile_id = ? AND tt.tag_id = ?
+    `;
+    const params = [pid, req.params.tagId];
+
+    if (startDate) { sql += " AND t.date >= ?"; params.push(startDate); }
+    if (endDate) { sql += " AND t.date <= ?"; params.push(endDate); }
+    if (category_ids) {
+      const ids = category_ids.split(',').map((id) => parseInt(id)).filter((id) => !isNaN(id));
+      if (ids.length > 0) {
+        sql += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
+        params.push(...ids);
+      }
+    }
+    if (type) { sql += " AND t.type = ?"; params.push(type); }
+
+    sql += " ORDER BY t.date DESC, t.id DESC";
+    if (limit) sql += ` LIMIT ${parseInt(limit)}`;
+    if (offset) sql += ` OFFSET ${parseInt(offset)}`;
+
+    const rows = db.prepare(sql).all(...params);
+    res.json({ rows, total: rows.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // TRANSACTIONS (per-profile)
 // ========================
 app.get("/api/transactions", apiRateLimiter, (req, res) => {

@@ -212,6 +212,15 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 .form-help { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
 
+/* Tag selector */
+.tag-selector { border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--card-bg); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tag-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white; cursor: pointer; }
+.tag-badge:hover { opacity: 0.8; }
+.tag-badge .remove-tag { margin-left: 4px; font-size: 14px; line-height: 1; }
+.tag-input-row { display: flex; gap: 8px; }
+#tx-tag-input { flex: 1; }
+
 /* Modal */
 .modal-overlay { position: fixed; inset: 0; background: var(--modal-overlay); z-index: 200;
   display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -1338,6 +1347,16 @@ tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !importan
         <div class="form-group">
           <label class="form-label">Notes</label>
           <textarea class="form-control" id="tx-notes" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div id="tx-tags-container" class="tag-selector">
+            <div class="tag-list" id="tx-tag-list"></div>
+            <div class="tag-input-row">
+              <input type="text" class="form-control" id="tx-tag-input" placeholder="Add tag..." style="flex:1;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="transactions.addTagFromInput()">Add</button>
+            </div>
+          </div>
         </div>
       </form>
     </div>
@@ -2619,6 +2638,7 @@ const transactions = {
   perPage: 50,
   sortBy: 'date',
   sortOrder: 'desc',
+  selectedTags: [], // Track selected tags for the current transaction
   async load() {
     const table = document.getElementById('tx-table-body');
     if (table) table.classList.add('table-loading');
@@ -2730,6 +2750,7 @@ const transactions = {
   },
   async openModal(id = null) {
     this.editingId = id;
+    this.selectedTags = []; // Reset selected tags
     document.getElementById('tx-modal-title').textContent = id ? 'Edit Transaction' : 'Add Transaction';
 
     // Load categories
@@ -2754,12 +2775,18 @@ const transactions = {
         document.getElementById('tx-means').value = t.means_of_payment || '';
         document.getElementById('tx-notes').value = t.notes || '';
         this.setType(t.type || 'expense');
+
+        // Load tags for this transaction
+        const tags = await api(`/transactions/${id}/tags`).catch(() => []);
+        this.selectedTags = tags.map(t => t.id);
+        this.renderTags();
       }
     } else {
       document.getElementById('tx-form').reset();
       document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
       document.getElementById('tx-exchange-rate').value = 1;
       this.setType('expense');
+      this.renderTags();
     }
     modal.open('tx-modal');
   },
@@ -2833,6 +2860,13 @@ const transactions = {
       const url = id ? `/transactions/${id}` : '/transactions';
       const result = await api(url, { method, body: data });
       if (result.error) { toast(result.error, 'error'); return; }
+
+      // Save tags if editing an existing transaction
+      const savedId = id || result.id;
+      if (savedId) {
+        await api(`/transactions/${savedId}/tags`, { method: 'POST', body: { tagIds: this.selectedTags } });
+      }
+
       toast(id ? 'Transaction updated' : 'Transaction added', 'success');
       modal.close('tx-modal');
       this.load();
@@ -2849,6 +2883,56 @@ const transactions = {
     toast('Transaction deleted', 'success');
     this.load();
     dashboard.load();
+  },
+  renderTags() {
+    const container = document.getElementById('tx-tag-list');
+    if (!container) return;
+    container.innerHTML = this.selectedTags.map(tagId => {
+      const tag = this.availableTags?.find(t => t.id === tagId);
+      if (!tag) return '';
+      return `<span class="tag-badge" style="background:${tag.color || '#6b7280'}">
+        ${escapeHtml(tag.name)}
+        <span class="remove-tag" onclick="transactions.removeTag(${tag.id})">&times;</span>
+      </span>`;
+    }).join('');
+  },
+  async loadTags() {
+    if (!this.availableTags) {
+      this.availableTags = await api('/tags').catch(() => []);
+    }
+    return this.availableTags;
+  },
+  async addTagFromInput() {
+    const input = document.getElementById('tx-tag-input');
+    const name = input?.value.trim();
+    if (!name) return;
+
+    const tags = await this.loadTags();
+    let tag = tags.find(t => t.name.toLowerCase() === name.toLowerCase());
+
+    if (!tag) {
+      // Create new tag
+      const result = await api('/tags', { method: 'POST', body: { name, color: '#6b7280' } });
+      if (result.error) { toast(result.error, 'error'); return; }
+      tag = result;
+      this.availableTags.push(tag);
+    }
+
+    if (!this.selectedTags.includes(tag.id)) {
+      this.selectedTags.push(tag.id);
+    }
+    input.value = '';
+    this.renderTags();
+  },
+  async addTag(tagId) {
+    if (!this.selectedTags.includes(tagId)) {
+      this.selectedTags.push(tagId);
+      this.renderTags();
+    }
+  },
+  removeTag(tagId) {
+    this.selectedTags = this.selectedTags.filter(id => id !== tagId);
+    this.renderTags();
   }
 };
 
@@ -4752,6 +4836,21 @@ dashboard.init();
 profile.refreshUI();
 theme.init();
 auth.checkLogin();
+
+// Tag input keyboard handler
+document.addEventListener('DOMContentLoaded', () => {
+  const tagInput = document.getElementById('tx-tag-input');
+  if (tagInput) {
+    tagInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (typeof transactions !== 'undefined') {
+          transactions.addTagFromInput();
+        }
+      }
+    });
+  }
+});
 </script>
 <script src="js/features/chartExport.js"></script>
 
