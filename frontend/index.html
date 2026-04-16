@@ -4203,27 +4203,7 @@ async function generateAnnualPDF() {
   btn.textContent = 'Generating...';
 
   try {
-    // Navigate to dashboard to render charts
-    document.getElementById('page-dashboard').classList.add('active');
-    document.getElementById('page-settings').classList.remove('active');
-    document.querySelectorAll('.nav-item').forEach(a => a.classList.remove('active'));
-    const dashNav = document.querySelector('.nav-item[data-page="dashboard"]');
-    if (dashNav) dashNav.classList.add('active');
-    window.location.hash = 'dashboard';
-    await new Promise(r => setTimeout(r, 800));
-
-    const charts = {};
-    if (window.dashboard && window.dashboard.charts) {
-      if (window.dashboard.charts.category) charts.category = window.dashboard.charts.category.toBase64Image();
-      if (window.dashboard.charts.monthly) charts.monthly = window.dashboard.charts.monthly.toBase64Image();
-      if (window.dashboard.charts.cashflow) charts.cashflow = window.dashboard.charts.cashflow.toBase64Image();
-    }
-
-    const resp = await fetch('/api/reports/annual-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year: parseInt(year), charts })
-    });
+    const resp = await fetch(`/api/reports/annual-pdf?year=${encodeURIComponent(year)}`);
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Unknown error' }));

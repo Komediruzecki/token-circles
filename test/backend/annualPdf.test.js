@@ -6,11 +6,10 @@ const request = require('supertest');
 const BASE_URL = 'http://localhost:3847';
 
 describe('Annual Financial Report PDF API', () => {
-  describe('POST /api/reports/annual-pdf', () => {
+  describe('GET /api/reports/annual-pdf', () => {
     test('returns PDF content-type with valid year', async () => {
       const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: 2026 });
+        .get('/api/reports/annual-pdf?year=2026');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -22,8 +21,7 @@ describe('Annual Financial Report PDF API', () => {
 
     test('PDF starts with valid PDF header', async () => {
       const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: 2026 });
+        .get('/api/reports/annual-pdf?year=2026');
 
       expect(resp.status).toBe(200);
       const header = resp.body.slice(0, 4).toString('utf8');
@@ -32,8 +30,7 @@ describe('Annual Financial Report PDF API', () => {
 
     test('returns PDF even with no transactions for the year', async () => {
       const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: 2020 });
+        .get('/api/reports/annual-pdf?year=2020');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -43,8 +40,7 @@ describe('Annual Financial Report PDF API', () => {
 
     test('returns 400 when year is missing', async () => {
       const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({});
+        .get('/api/reports/annual-pdf');
 
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
@@ -52,8 +48,7 @@ describe('Annual Financial Report PDF API', () => {
 
     test('returns 400 when year is invalid format', async () => {
       const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: 'abc' });
+        .get('/api/reports/annual-pdf?year=abc');
 
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
@@ -61,29 +56,9 @@ describe('Annual Financial Report PDF API', () => {
 
     test('returns 400 when year is empty string', async () => {
       const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: '' });
+        .get('/api/reports/annual-pdf?year=');
 
       expect(resp.status).toBe(400);
-    });
-
-    test('returns PDF when year is numeric', async () => {
-      const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: 2026 });
-
-      expect(resp.status).toBe(200);
-      expect(resp.headers['content-type']).toContain('application/pdf');
-    });
-
-    test('accepts chart data without crashing', async () => {
-      const fakeChart = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      const resp = await request(BASE_URL)
-        .post('/api/reports/annual-pdf')
-        .send({ year: 2026, charts: { category: fakeChart, monthly: fakeChart, cashflow: fakeChart } });
-
-      expect(resp.status).toBe(200);
-      expect(resp.headers['content-type']).toContain('application/pdf');
     });
   });
 });

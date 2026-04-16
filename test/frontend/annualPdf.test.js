@@ -36,33 +36,24 @@ describe('Annual Financial Report UI', () => {
   });
 
   describe('Backend Annual PDF endpoint', () => {
-    test('POST /api/reports/annual-pdf endpoint exists in backend', () => {
+    test('GET /api/reports/annual-pdf endpoint exists in backend', () => {
       const backendContent = fs.readFileSync(path.join(__dirname, '../../backend/index.js'), 'utf8');
       expect(backendContent).toContain('/api/reports/annual-pdf');
     });
 
-    test('generateAnnualPDF uses POST method', () => {
-      expect(htmlContent).toContain("method: 'POST'");
-      expect(htmlContent).toContain('/api/reports/annual-pdf');
-    });
-
-    test('generateAnnualPDF captures chart base64 images', () => {
-      expect(htmlContent).toContain('toBase64Image()');
-    });
-
-    test('generateAnnualPDF sends charts in request body', () => {
-      expect(htmlContent).toContain("body: JSON.stringify({ year:");
-      expect(htmlContent).toContain('charts');
+    test('generateAnnualPDF uses GET method', () => {
+      expect(htmlContent).toContain('fetch(`/api/reports/annual-pdf?year=');
     });
 
     test('generateAnnualPDF downloads blob as file', () => {
       expect(htmlContent).toContain('URL.createObjectURL(blob)');
       expect(htmlContent).toContain('download = ');
-      expect(htmlContent).toContain('annual-report-');
+      expect(htmlContent).toContain('annual-report-${year}.pdf');
     });
 
-    test('PDF filename includes year', () => {
-      expect(htmlContent).toContain('annual-report-${year}.pdf');
+    test('export.html exists as dedicated chart rendering page', () => {
+      const exportPath = path.join(__dirname, '../../frontend/export.html');
+      expect(fs.existsSync(exportPath)).toBe(true);
     });
   });
 });
