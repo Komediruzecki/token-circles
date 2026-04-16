@@ -1,0 +1,607 @@
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div class="page-header">
+      <div>
+        <h2>Dashboard</h2>
+        <p>Your financial overview</p>
+      </div>
+      <div class="month-nav">
+        <button class="month-nav-btn" onclick="dashboard.prevMonth()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <span class="month-nav-current" id="dashboard-month">Loading...</span>
+        <button class="month-nav-btn" onclick="dashboard.nextMonth()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <select class="form-control" id="dashboard-year" onchange="dashboard.onYearChange()" style="width:auto;min-width:90px;margin-left:12px;">
+          <option value="">Year</option>
+        </select>
+        <select class="form-control" id="dashboard-month-select" onchange="dashboard.onMonthChange()" style="width:auto;min-width:110px;">
+          <option value="">All Months</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid-4" id="dashboard-stats">
+      <div class="stat-card income"><div class="stat-card-label">Income</div><div class="stat-card-value" id="stat-income">$0</div></div>
+      <div class="stat-card expense"><div class="stat-card-label">Expenses</div><div class="stat-card-value" id="stat-expense">$0</div></div>
+      <div class="stat-card balance"><div class="stat-card-label">Balance</div><div class="stat-card-value" id="stat-balance">$0</div></div>
+      <div class="stat-card networth"><div class="stat-card-label">Net Worth</div><div class="stat-card-value" id="stat-networth">$0</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Spending by Category</div><div class="card-subtitle">This month's expenses</div></div></div>
+        <div class="chart-container tall"><canvas id="chart-category"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Income vs Expenses</div><div class="card-subtitle">Last 12 months</div></div></div>
+        <div class="chart-container tall"><canvas id="chart-monthly"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Cash Flow</div><div class="card-subtitle">Cumulative balance</div></div></div>
+        <div class="chart-container short"><canvas id="chart-cashflow"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Recent Transactions</div></div></div>
+        <div id="recent-transactions"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Upcoming Recurring</div><div class="card-subtitle">Auto-populate bills and subscriptions</div></div>
+        <button class="btn btn-ghost btn-sm" onclick="recurring.openModal()">+ Add</button></div>
+        <div id="recurring-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRANSACTIONS -->
+  <div id="page-transactions" class="page">
+    <div class="page-header">
+      <div><h2>Transactions</h2><p>Manage all your financial entries</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="transactions.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Transaction
+        </button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px; margin-bottom:16px;">
+      <div class="filters-bar">
+        <div class="search-input">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" class="form-control" placeholder="Search..." id="tx-search" oninput="transactions.search()">
+        </div>
+        <div class="period-selector" style="margin-right:8px;">
+          <button class="active" onclick="txFilters.setPreset('month')" id="tx-preset-month">This Month</button>
+          <button onclick="txFilters.setPreset('last-month')" id="tx-preset-last-month">Last Month</button>
+          <button onclick="txFilters.setPreset('year')" id="tx-preset-year">This Year</button>
+          <button onclick="txFilters.setPreset('custom')" id="tx-preset-custom">Custom</button>
+        </div>
+        <select class="form-control" id="tx-year-filter" onchange="txFilters.onYearChange()" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <select class="form-control" id="tx-month-filter" onchange="txFilters.onMonthChange()" style="width:auto;min-width:100px;">
+          <option value="">Month</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+        <select class="form-control" id="tx-type-filter" onchange="transactions.load()">
+          <option value="">All Types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
+        </select>
+        <select class="form-control" id="tx-cat-filter" onchange="transactions.load()">
+          <option value="">All Categories</option>
+        </select>
+        <input type="date" class="form-control" id="tx-date-from" onchange="txFilters.onCustomDateChange()">
+        <input type="date" class="form-control" id="tx-date-to" onchange="txFilters.onCustomDateChange()">
+        <button class="btn btn-secondary btn-sm" onclick="transactions.clearFilters()">Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Description</th><th>Category</th><th>Beneficiary/Payor</th><th>Amount</th><th>Type</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="tx-table-body"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <div class="pagination-info" id="tx-pagination-info"></div>
+        <div class="pagination-controls" id="tx-pagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUDGETS -->
+  <div id="page-budgets" class="page">
+    <div class="page-header">
+      <div><h2>Budgets</h2><p>Track spending limits by category</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="budgets.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Budget
+        </button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Monthly Budget Status</div><div class="card-subtitle" id="budget-period-label">Current month</div></div>
+        </div>
+        <div id="budget-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Budget vs Actual</div><div class="card-subtitle">Spending comparison</div></div></div>
+        <div class="chart-container tall"><canvas id="chart-budget"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOANS -->
+  <div id="page-loans" class="page">
+    <div class="page-header">
+      <div><h2>Loan Calculator</h2><p>Amortization schedules with rate changes and prepayments</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="loans.openLoanModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          New Loan
+        </button>
+      </div>
+    </div>
+
+    <div id="loans-list"></div>
+  </div>
+
+  <!-- RETIREMENT CALCULATOR -->
+  <div id="page-retirement" class="page">
+    <div class="page-header">
+      <div><h2>Retirement Calculator</h2><p>Plan your financial independence</p></div>
+    </div>
+    <div class="retirement-layout">
+      <div class="retirement-left">
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Input Parameters</div></div></div>
+          <form id="retirement-form" class="grid-2" oninput="retirement.scheduleUpdate()">
+            <div class="form-group"><label class="form-label">Current Age</label><input type="number" class="form-control" id="ret-age" value="30"></div>
+            <div class="form-group"><label class="form-label">Retirement Age</label><input type="number" class="form-control" id="ret-age-goal" value="65"></div>
+            <div class="form-group"><label class="form-label">Current Savings</label><input type="number" class="form-control" id="ret-savings" value="30000"></div>
+            <div class="form-group"><label class="form-label">Monthly Contribution</label><input type="number" class="form-control" id="ret-contrib" value="500"></div>
+            <div class="form-group"><label class="form-label">Annual Expenses ($)</label><input type="number" class="form-control" id="ret-expenses" value="24000"></div>
+            <div class="form-group"><label class="form-label">Expenses at Retirement ($/yr)</label><input type="number" class="form-control" id="ret-expenses-retire" value="30000" placeholder="Leave empty if using country"></div>
+            <div class="form-group"><label class="form-label">Expected Annual Return (%)</label><input type="number" step="0.1" class="form-control" id="ret-return" value="5.0"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Country (Cost of Living)</label>
+              <select class="form-control" id="ret-country" onchange="retirement.handleCountryChange()">
+                <option value="">— Select Country —</option>
+                <option value="usa">USA</option>
+                <option value="europe">Europe</option>
+                <option value="switzerland">Switzerland</option>
+                <option value="croatia">Croatia</option>
+                <option value="japan">Japan</option>
+              </select>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="retirement-right">
+        <div id="retirement-results">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><div><div class="card-title">FIRE Scenarios</div></div></div>
+            
+<div id="res-scenarios" style="margin-bottom:16px;"><div class="scenario-card" style="background:rgba(16,185,129,0.08);border-left:3px solid var(--success);padding:12px;border-radius:6px;margin-bottom:8px;">
+        <div style="font-weight:600;margin-bottom:4px;">Conservative (4% return)</div>
+        <div style="font-size:13px;color:var(--text-secondary);">
+          FIRE Age: <span style="color:var(--success);font-weight:600;">43</span>
+          &nbsp;•&nbsp;At FIRE: $9,767,718.00
+          &nbsp;•&nbsp;Target Reached!
+        </div>
+      </div><div class="scenario-card" style="background:rgba(16,185,129,0.08);border-left:3px solid var(--success);padding:12px;border-radius:6px;margin-bottom:8px;">
+        <div style="font-weight:600;margin-bottom:4px;">Moderate (6% return)</div>
+        <div style="font-size:13px;color:var(--text-secondary);">
+          FIRE Age: <span style="color:var(--success);font-weight:600;">40.2</span>
+          &nbsp;•&nbsp;At FIRE: $19,534,034.00
+          &nbsp;•&nbsp;Target Reached!
+        </div>
+      </div><div class="scenario-card" style="background:rgba(16,185,129,0.08);border-left:3px solid var(--success);padding:12px;border-radius:6px;margin-bottom:8px;">
+        <div style="font-weight:600;margin-bottom:4px;">Optimistic (8% return)</div>
+        <div style="font-size:13px;color:var(--text-secondary);">
+          FIRE Age: <span style="color:var(--success);font-weight:600;">38.8</span>
+          &nbsp;•&nbsp;At FIRE: $41,274,983.00
+          &nbsp;•&nbsp;Target Reached!
+        </div>
+      </div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">FIRE Summary</div></div></div>
+            <div style="display:flex;gap:24px;flex-wrap:wrap;">
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">FIRE Age</div><div style="font-size:28px;font-weight:700;color:var(--success);" id="res-fire-age">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">FIRE Number</div><div style="font-size:20px;font-weight:600;" id="res-fire-number">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Months to FIRE</div><div style="font-size:20px;font-weight:600;" id="res-months-to-fire">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Savings at FIRE</div><div style="font-size:20px;font-weight:600;" id="res-savings-at-fire">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Current NW at FIRE</div><div style="font-size:20px;font-weight:600;" id="res-current-nw">-</div></div>
+              <div><div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Traditional Retirement</div><div style="font-size:20px;font-weight:600;" id="res-traditional-age">65</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card retirement-chart-card"><canvas id="ret-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- IMPORT -->
+  <div id="page-import" class="page">
+    <div class="page-header">
+      <div><h2>Import Data</h2><p>Import transactions from CSV, XLSX, or Google Sheets</p></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="dataImport.switchTab('file')">File Upload</div>
+      <div class="tab" onclick="dataImport.switchTab('googlesheet')">Google Sheets</div>
+    </div>
+
+    <div id="import-tab-file">
+      <div class="card">
+        <div class="import-dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
+          <span class="loading-spinner dark" id="import-spinner" style="display:none;"></span>
+          <svg id="import-drop-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <p><strong>Click to upload</strong> or drag and drop</p>
+          <p style="font-size:12px;">CSV, XLSX, XLS files supported</p>
+          <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="dataImport.handleFile(this.files[0])">
+        </div>
+        <div id="import-sheet-selector" style="display:none; margin-top:12px;">
+          <label class="form-label">Sheet</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select class="form-control" id="import-sheet-select" style="max-width:200px;"></select>
+            <button class="btn btn-secondary btn-sm" onclick="dataImport.loadFileSheet()">Load Sheet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="import-tab-googlesheet" style="display:none;">
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">Google Sheets URL</label>
+          <input type="url" class="form-control" id="gs-url" placeholder="https://docs.google.com/spreadsheets/d/...">
+          <p class="form-help">Paste a Google Sheets URL. Make sure the sheet is shared as "Anyone with link can view".</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Or Sheet ID</label>
+          <input type="text" class="form-control" id="gs-id" placeholder="1BxiMVs0XRA...">
+        </div>
+        <div id="gs-sheet-selector" class="form-group" style="display:none;">
+          <label class="form-label">Select Sheet</label>
+          <select class="form-control" id="gs-sheet-select" style="max-width:300px;"></select>
+        </div>
+        <button class="btn btn-primary" onclick="dataImport.fetchGoogleSheet()">Fetch Sheet</button>
+        <p style="font-size:12px;color:var(--text-secondary);margin-top:8px;">
+          Note: Google Sheets import requires the sheet to be published or publicly accessible.
+        </p>
+      </div>
+    </div>
+
+    <div id="import-mapping-section" style="display:none;">
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header"><div><div class="card-title">Column Mapping</div><div class="card-subtitle">Match your file columns to transaction fields</div></div></div>
+        <div class="column-map" id="column-map"></div>
+        <div id="category-review-section"></div>
+        <div class="form-group" style="margin-top:12px;">
+          <label class="form-label">Import Limit</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-secondary import-limit-btn" onclick="dataImport.setImportLimit(10, this)">First 10</button>
+            <button class="btn btn-sm btn-secondary import-limit-btn" onclick="dataImport.setImportLimit(100, this)">100</button>
+            <button class="btn btn-sm btn-secondary import-limit-btn active" onclick="dataImport.setImportLimit(1000, this)">1,000</button>
+            <button class="btn btn-sm btn-secondary import-limit-btn" onclick="dataImport.setImportLimit(10000, this)">10,000</button>
+            <button class="btn btn-sm btn-secondary import-limit-btn" onclick="dataImport.setImportLimit(0, this)">All</button>
+          </div>
+        </div>
+        <div class="card-header" style="margin-top:16px;"><div><div class="card-title">Preview</div><div class="card-subtitle" id="import-preview-info"></div></div></div>
+        <div class="import-preview table-wrap" id="import-preview"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-secondary" onclick="dataImport.reset()">Cancel</button>
+          <button class="btn btn-success" id="import-execute-btn" onclick="dataImport.execute()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+            Import Transactions
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <div id="page-categories" class="page">
+    <div class="page-header">
+      <div><h2>Categories</h2><p>Manage your spending and income categories</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-danger-outline" onclick="categories.deleteAll()" style="margin-right:8px;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Delete All
+        </button>
+        <button class="btn btn-primary" onclick="categories.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Category
+        </button>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Expense Categories</div></div></div>
+        <div id="expense-categories"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Income Categories</div></div></div>
+        <div id="income-categories"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNTS -->
+  <div id="page-accounts" class="page">
+    <div class="page-header">
+      <div><h2>Accounts</h2><p>Manage your financial accounts</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="accounts.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Account
+        </button>
+      </div>
+    </div>
+    <div id="accounts-content"></div>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div id="page-analytics" class="page">
+    <div class="page-header">
+      <div>
+        <h2>Analytics</h2>
+        <p>Spending patterns by category</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="period-selector">
+          <button class="active" onclick="analytics.setType('expense')" id="type-expense">Expense</button>
+          <button onclick="analytics.setType('income')" id="type-income">Income</button>
+        </div>
+        <select class="form-control" id="analytics-year" onchange="analytics.onYearChange()" style="width:auto;min-width:100px;"></select>
+        <select class="form-control" id="analytics-month-filter" onchange="analytics.onMonthChange()" style="width:auto;min-width:120px;">
+          <option value="">All Months</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+        <select class="form-control" id="analytics-week-filter" onchange="analytics.load()" style="width:auto;min-width:200px;display:none;">
+          <option value="">All Weeks</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div><div class="card-title">Category Spending Over Time</div><p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Stacked view of expenses by category</div>
+      </div>
+      <div style="height:400px;position:relative;">
+        <canvas id="analytics-stacked-chart"></canvas>
+      </div>
+      <div class="analytics-averages" id="analytics-averages">
+        <div class="avg-card">
+          <div class="avg-label">Daily Average</div>
+          <div class="avg-value" id="avg-day">-</div>
+        </div>
+        <div class="avg-card">
+          <div class="avg-label">Weekly Average</div>
+          <div class="avg-value" id="avg-week">-</div>
+        </div>
+        <div class="avg-card">
+          <div class="avg-label">Monthly Average</div>
+          <div class="avg-value" id="avg-month">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Top Categories</div></div></div>
+        <div id="analytics-top-categories"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Category Breakdown</div></div></div>
+        <div style="height:300px;">
+          <canvas id="analytics-pie-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="page-settings" class="page">
+    <div class="page-header">
+      <div><h2>Settings</h2><p>Configure your finance manager</p></div>
+    </div>
+    <div class="card" style="max-width:600px;">
+      <div class="settings-section">
+        <div class="settings-section-title">General</div>
+        <div class="form-group">
+          <label class="form-label">Local Currency</label>
+          <select class="form-control" id="setting-currency" style="max-width:200px;">
+            <option value="USD">USD - US Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+            <option value="GBP">GBP - British Pound</option>
+            <option value="JPY">JPY - Japanese Yen</option>
+            <option value="CAD">CAD - Canadian Dollar</option>
+            <option value="AUD">AUD - Australian Dollar</option>
+            <option value="CHF">CHF - Swiss Franc</option>
+            <option value="CNY">CNY - Chinese Yuan</option>
+            <option value="INR">INR - Indian Rupee</option>
+            <option value="BRL">BRL - Brazilian Real</option>
+            <option value="MXN">MXN - Mexican Peso</option>
+            <option value="SGD">SGD - Singapore Dollar</option>
+            <option value="HKD">HKD - Hong Kong Dollar</option>
+            <option value="KRW">KRW - South Korean Won</option>
+            <option value="SEK">SEK - Swedish Krona</option>
+            <option value="NOK">NOK - Norwegian Krone</option>
+            <option value="DKK">DKK - Danish Krone</option>
+            <option value="NZD">NZD - New Zealand Dollar</option>
+            <option value="ZAR">ZAR - South African Rand</option>
+            <option value="PLN">PLN - Polish Zloty</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Appearance</label>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:14px;color:var(--text-secondary);">Light</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-dark-mode" onchange="theme.toggle()">
+              <span class="toggle-slider"></span>
+            </label>
+            <span style="font-size:14px;color:var(--text-secondary);">Dark</span>
+          </div>
+        </div>
+      </div>
+      <div class="danger-zone">
+        <div class="danger-zone-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          Danger Zone
+        </div>
+        <div class="danger-zone-item">
+          <div>
+            <div class="danger-zone-item-title">Delete All Transactions</div>
+            <div class="danger-zone-item-desc">Permanently remove all transactions for this profile. This cannot be undone.</div>
+          </div>
+          <button class="btn btn-danger-outline" onclick="settings.deleteAllTransactions()">Delete All Transactions</button>
+        </div>
+        <div class="danger-zone-item">
+          <div>
+            <div class="danger-zone-item-title">Delete All Profile Data</div>
+            <div class="danger-zone-item-desc">Permanently delete all transactions, budgets, loans, and reset categories to defaults. The profile will be kept.</div>
+          </div>
+          <button class="btn btn-danger-outline" onclick="settings.deleteAllProfileData()">Delete All Data</button>
+        </div>
+        <div class="danger-zone-item">
+          <div>
+            <div class="danger-zone-item-title">Delete All Categories</div>
+            <div class="danger-zone-item-desc">Permanently remove all categories for this profile. Transactions will keep their category IDs but show as "uncategorized".</div>
+          </div>
+          <button class="btn btn-danger-outline" onclick="settings.deleteAllCategories()">Delete All Categories</button>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="settings.save()" style="margin-top:16px;">Save Settings</button>
+    </div>
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Data Export</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download your data in CSV or JSON format. All data is scoped to the current profile.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;" id="export-type-buttons">
+        <button class="btn btn-secondary" onclick="exportData('transactions')">Transactions</button>
+        <button class="btn btn-secondary" onclick="exportData('categories')">Categories</button>
+        <button class="btn btn-secondary" onclick="exportData('accounts')">Accounts</button>
+        <button class="btn btn-secondary" onclick="exportData('budgets')">Budgets</button>
+        <button class="btn btn-secondary" onclick="exportData('loans')">Loans</button>
+        <button class="btn btn-secondary" onclick="exportData('recurring')">Recurring</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:13px;color:var(--text-secondary);">Format:</label>
+        <select class="form-control" id="export-format" style="max-width:120px;">
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+        </select>
+      </div>
+    </div>
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Monthly PDF Report</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a formatted monthly summary with income, expenses, and category breakdowns.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select class="form-control" id="pdf-report-month" style="width:auto;min-width:130px;">
+          <option value="">Month</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+        <select class="form-control" id="pdf-report-year" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <button class="btn btn-primary" onclick="generateMonthlyPDF()">Download PDF</button>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Year-End Tax Summary</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Get a breakdown of your tax-deductible vs non-deductible expenses for the year.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select class="form-control" id="tax-summary-year" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <button class="btn btn-primary" onclick="generateTaxSummaryPDF()">Download Tax PDF</button>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Year-End P&L Summary</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Profit & Loss report showing total income, expenses, and net savings with category breakdown.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select class="form-control" id="pl-summary-year" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <button class="btn btn-primary" onclick="generatePlSummaryPDF()">Download P&L PDF</button>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Annual Financial Report</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a comprehensive PDF with embedded charts and monthly breakdown for any year.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select class="form-control" id="annual-report-year" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <button class="btn btn-primary" onclick="generateAnnualPDF()">Download Annual PDF</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
