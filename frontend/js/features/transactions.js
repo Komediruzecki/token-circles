@@ -1,0 +1,473 @@
+// ==================== TRANSACTION FILTERS ====================
+const txFilters = {
+  currentPreset: 'month',
+
+  async init() {
+    // Populate year dropdown from distinct-years API
+    const yearSelect = document.getElementById('tx-year-filter');
+    yearSelect.innerHTML = '';
+    const currentYear = new Date().getFullYear();
+    try {
+      const { years } = await api('/analytics/distinct-years');
+      if (years && years.length > 0) {
+        years.forEach((y) => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          yearSelect.appendChild(opt);
+        });
+      } else {
+        yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+      }
+    } catch (e) {
+      yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+    }
+    this.setPreset('month');
+  },
+
+  setPreset(preset) {
+    this.currentPreset = preset;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Update active button
+    document
+      .querySelectorAll('#page-transactions .period-selector button')
+      .forEach((b) => b.classList.remove('active'));
+    const btn = document.getElementById(`tx-preset-${preset}`);
+    if (btn) btn.classList.add('active');
+
+    const fromInput = document.getElementById('tx-date-from');
+    const toInput = document.getElementById('tx-date-to');
+    const yearSelect = document.getElementById('tx-year-filter');
+    const monthSelect = document.getElementById('tx-month-filter');
+
+    if (preset === 'month') {
+      // Current month
+      fromInput.value = `${year}-${month}-01`;
+      const nextMonth = new Date(year, parseInt(month), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+      yearSelect.value = year;
+      monthSelect.value = month;
+    } else if (preset === 'last-month') {
+      // Last month
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lmYear = lastMonthDate.getFullYear();
+      const lmMonth = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
+      fromInput.value = `${lmYear}-${lmMonth}-01`;
+      const nextMonth = new Date(lmYear, parseInt(lmMonth), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${lmYear}-${lmMonth}-${String(lastDay).padStart(2, '0')}`;
+      yearSelect.value = lmYear;
+      monthSelect.value = lmMonth;
+    } else if (preset === 'year') {
+      // Current year
+      fromInput.value = `${year}-01-01`;
+      toInput.value = `${year}-12-31`;
+      yearSelect.value = year;
+      monthSelect.value = '';
+    } else {
+      // Custom - clear year/month but keep dates
+      yearSelect.value = '';
+      monthSelect.value = '';
+    }
+    if (typeof transactions !== 'undefined') transactions.load();
+  },
+
+  onYearChange() {
+    const year = document.getElementById('tx-year-filter').value;
+    const month = document.getElementById('tx-month-filter').value;
+    const fromInput = document.getElementById('tx-date-from');
+    const toInput = document.getElementById('tx-date-to');
+
+    if (year && month) {
+      fromInput.value = `${year}-${month}-01`;
+      const nextMonth = new Date(year, parseInt(month), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    } else if (year) {
+      fromInput.value = `${year}-01-01`;
+      toInput.value = `${year}-12-31`;
+    }
+    if (typeof transactions !== 'undefined') transactions.load();
+  },
+
+  onMonthChange() {
+    const year = document.getElementById('tx-year-filter').value;
+    const month = document.getElementById('tx-month-filter').value;
+    const fromInput = document.getElementById('tx-date-from');
+    const toInput = document.getElementById('tx-date-to');
+
+    if (year && month) {
+      fromInput.value = `${year}-${month}-01`;
+      const nextMonth = new Date(year, parseInt(month), 1);
+      const lastDay = new Date(nextMonth.getTime() - 86400000).getDate();
+      toInput.value = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    }
+    if (typeof transactions !== 'undefined') transactions.load();
+  },
+
+  onCustomDateChange() {
+    // When user manually changes dates, set preset to custom
+    this.currentPreset = 'custom';
+    document
+      .querySelectorAll('#page-transactions .period-selector button')
+      .forEach((b) => b.classList.remove('active'));
+    document.getElementById('tx-preset-custom').classList.add('active');
+    if (typeof transactions !== 'undefined') transactions.load();
+  },
+};
+
+// ==================== RECURRING ====================
+const recurring = {
+  async load() {
+    const list = document.getElementById('recurring-list');
+    if (!list) return;
+    const items = await api('/recurring');
+    const currency = (await api('/settings')).local_currency || 'EUR';
+    if (!items || items.length === 0) {
+      list.innerHTML =
+        '<div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><p>No recurring items</p></div>';
+      return;
+    }
+    list.innerHTML = items
+      .map(
+        (r) => `
+      <div class="recurring-item">
+        <div class="recurring-info">
+          <span class="cat-dot" style="background:${r.category_color || '#6b7280'}"></span>
+          <span class="recurring-name">${r.description}</span>
+          <span class="recurring-freq badge">${r.frequency}</span>
+        </div>
+        <div class="recurring-right">
+          <span class="recurring-amount ${r.type}">${r.type === 'expense' ? '-' : '+'}${formatCurrency(r.amount, currency)}</span>
+          <span class="recurring-next">${r.next_date ? formatDate(r.next_date) : '-'}</span>
+          <button class="btn btn-ghost btn-sm" onclick="recurring.populate(${r.id})" title="Add to transactions">+</button>
+          <button class="btn btn-ghost btn-sm" onclick="recurring.openModal(${r.id})" title="Edit">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm text-danger" onclick="recurring.delete(${r.id})" title="Delete">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </div>
+      </div>
+    `
+      )
+      .join('');
+  },
+  async openModal(id = null) {
+    document.getElementById('recurring-id').value = id || '';
+    document.getElementById('recurring-modal-title').textContent = id
+      ? 'Edit Recurring'
+      : 'Add Recurring';
+    const cats = await api('/categories');
+    document.getElementById('recurring-category').innerHTML =
+      '<option value="">Select category...</option>' +
+      cats.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    if (id) {
+      const r = await api(`/recurring/${id}`).catch(() => null);
+      if (r && !r.error) {
+        document.getElementById('recurring-id').value = r.id;
+        document.getElementById('recurring-description').value = r.description || '';
+        document.getElementById('recurring-amount').value = r.amount || '';
+        document.getElementById('recurring-frequency').value = r.frequency || 'monthly';
+        document.getElementById('recurring-day').value = r.day_of_month || '';
+        document.getElementById('recurring-next-date').value = r.next_date || '';
+        document.getElementById('recurring-category').value = r.category_id || '';
+        document.getElementById('recurring-type').value = r.type || 'expense';
+        document.getElementById('recurring-notes').value = r.notes || '';
+      }
+    } else {
+      document.getElementById('recurring-form').reset();
+      document.getElementById('recurring-next-date').value = new Date().toISOString().split('T')[0];
+    }
+    modal.open('recurring-modal');
+  },
+  async save() {
+    const id = document.getElementById('recurring-id').value;
+    const data = {
+      description: document.getElementById('recurring-description').value,
+      amount: parseFloat(document.getElementById('recurring-amount').value),
+      frequency: document.getElementById('recurring-frequency').value,
+      day_of_month: parseInt(document.getElementById('recurring-day').value) || null,
+      next_date: document.getElementById('recurring-next-date').value || null,
+      category_id: parseInt(document.getElementById('recurring-category').value) || null,
+      type: document.getElementById('recurring-type').value,
+      notes: document.getElementById('recurring-notes').value,
+    };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/recurring/${id}` : '/recurring';
+    const result = await api(url, { method, body: data });
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+    toast(id ? 'Recurring updated' : 'Recurring added', 'success');
+    modal.close('recurring-modal');
+    this.load();
+  },
+  async delete(id) {
+    if (!confirm('Delete this recurring transaction?')) return;
+    const result = await api(`/recurring/${id}`, { method: 'DELETE' });
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+    toast('Recurring deleted', 'success');
+    this.load();
+  },
+  async populate(id) {
+    const result = await api(`/recurring/${id}/populate`, { method: 'POST' });
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+    toast('Transaction added, next date updated', 'success');
+    this.load();
+    // Refresh dashboard
+    const page = location.hash.slice(1) || 'dashboard';
+    if (page === 'dashboard' && typeof dashboard !== 'undefined') dashboard.loadSummary();
+  },
+};
+
+// ==================== TRANSACTIONS ====================
+const transactions = {
+  currentType: 'expense',
+  editingId: null,
+  page: 1,
+  perPage: 50,
+  async load() {
+    const table = document.getElementById('tx-table-body');
+    if (table) table.classList.add('table-loading');
+    const search = document.getElementById('tx-search')?.value || '';
+    const type = document.getElementById('tx-type-filter')?.value || '';
+    const cat = document.getElementById('tx-cat-filter')?.value || '';
+    const from = document.getElementById('tx-date-from')?.value || '';
+    const to = document.getElementById('tx-date-to')?.value || '';
+
+    const params = new URLSearchParams({
+      limit: this.perPage,
+      offset: (this.page - 1) * this.perPage,
+    });
+    if (search) params.append('search', search);
+    if (type) params.append('type', type);
+    if (cat) params.append('category_id', cat);
+    if (from) params.append('startDate', from);
+    if (to) params.append('endDate', to);
+
+    const data = await api(`/transactions?${params}`);
+    const settings = await api('/settings');
+    const currency = settings.local_currency || 'EUR';
+    this.render(data, currency);
+  },
+  render(data, currency = 'EUR') {
+    const tbody = document.getElementById('tx-table-body');
+    if (tbody) tbody.classList.remove('table-loading');
+    if (!data.rows || data.rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
+      document.getElementById('tx-pagination-info').textContent = '0 transactions';
+      document.getElementById('tx-pagination').innerHTML = '';
+      return;
+    }
+    tbody.innerHTML = data.rows
+      .map(
+        (t) => `<tr>
+      <td>${formatDate(t.date)}</td>
+      <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
+      <td><span class="cat-dot" style="background:${t.category_color || '#6b7280'}"></span>${t.category_name || '-'}</td>
+      <td>${t.type === 'expense' ? t.beneficiary || '-' : t.payor || '-'}</td>
+      <td class="td-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${formatCurrency(t.amount_local || t.amount, currency)}</td>
+      <td><span class="badge badge-${t.type}">${t.type}</span></td>
+      <td class="td-actions">
+        <button class="btn btn-ghost btn-sm" onclick="transactions.edit(${t.id})" title="Edit">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="transactions.delete(${t.id})" title="Delete">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </td>
+    </tr>`
+      )
+      .join('');
+
+    const total = data.total || 0;
+    const pages = Math.ceil(total / this.perPage);
+    document.getElementById('tx-pagination-info').textContent =
+      `${total} transaction${total !== 1 ? 's' : ''} (page ${this.page}/${pages})`;
+    document.getElementById('tx-pagination').innerHTML =
+      pages > 1
+        ? `
+      <button class="btn btn-ghost btn-sm" ${this.page <= 1 ? 'disabled' : ''} onclick="transactions.goPage(${this.page - 1})">&laquo;</button>
+      ${Array.from({ length: Math.min(5, pages) }, (_, i) => {
+        const p = i + Math.max(1, this.page - 2);
+        return p <= pages
+          ? `<button class="btn btn-sm ${p === this.page ? 'btn-primary' : 'btn-secondary'}" onclick="transactions.goPage(${p})">${p}</button>`
+          : '';
+      }).join('')}
+      <button class="btn btn-ghost btn-sm" ${this.page >= pages ? 'disabled' : ''} onclick="transactions.goPage(${this.page + 1})">&raquo;</button>
+    `
+        : '';
+  },
+  goPage(p) {
+    this.page = p;
+    this.load();
+  },
+  search() {
+    this.page = 1;
+    this.load();
+  },
+  clearFilters() {
+    ['tx-search', 'tx-type-filter', 'tx-cat-filter', 'tx-date-from', 'tx-date-to'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('tx-year-filter').value = '';
+    document.getElementById('tx-month-filter').value = '';
+    txFilters.setPreset('month');
+    this.page = 1;
+    this.load();
+  },
+  setType(type) {
+    this.currentType = type;
+    document
+      .querySelectorAll('#tx-type-selector button')
+      .forEach((b) => b.classList.remove('active'));
+    document.querySelector(`#tx-type-selector button.${type}`).classList.add('active');
+  },
+  async openModal(id = null) {
+    this.editingId = id;
+    document.getElementById('tx-modal-title').textContent = id
+      ? 'Edit Transaction'
+      : 'Add Transaction';
+
+    // Load categories
+    const cats = await api('/categories');
+    const catSelect = document.getElementById('tx-category');
+    catSelect.innerHTML =
+      '<option value="">Select category...</option>' +
+      cats.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+
+    if (id) {
+      const t = await api(`/transactions/${id}`).catch(() => null);
+      if (t && !t.error) {
+        document.getElementById('tx-id').value = t.id;
+        document.getElementById('tx-description').value = t.description || '';
+        document.getElementById('tx-amount').value = t.amount || '';
+        document.getElementById('tx-date').value = t.date || '';
+        document.getElementById('tx-beneficiary').value = t.beneficiary || '';
+        document.getElementById('tx-payor').value = t.payor || '';
+        document.getElementById('tx-category').value = t.category_id || '';
+        document.getElementById('tx-currency').value = t.currency || 'USD';
+        document.getElementById('tx-amount-local').value = t.amount_local || '';
+        document.getElementById('tx-exchange-rate').value = t.exchange_rate || 1;
+        document.getElementById('tx-means').value = t.means_of_payment || '';
+        document.getElementById('tx-notes').value = t.notes || '';
+        this.setType(t.type || 'expense');
+      }
+    } else {
+      document.getElementById('tx-form').reset();
+      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('tx-exchange-rate').value = 1;
+      this.setType('expense');
+    }
+    modal.open('tx-modal');
+  },
+  async edit(id) {
+    await this.openModal(id);
+  },
+  validate() {
+    let valid = true;
+    const clearErrors = () => {
+      document.querySelectorAll('#tx-form .form-group.is-invalid').forEach((el) => {
+        el.classList.remove('is-invalid');
+        const err = el.querySelector('.field-error');
+        if (err) err.remove();
+      });
+    };
+    clearErrors();
+
+    const setError = (fieldId, msg) => {
+      const field = document.getElementById(fieldId);
+      if (!field) return;
+      const group = field.closest('.form-group');
+      if (!group) return;
+      group.classList.add('is-invalid');
+      const span = document.createElement('span');
+      span.className = 'field-error';
+      span.textContent = msg;
+      group.appendChild(span);
+      valid = false;
+    };
+
+    const desc = document.getElementById('tx-description').value.trim();
+    if (!desc) setError('tx-description', 'Description is required');
+
+    const amt = document.getElementById('tx-amount').value;
+    if (!amt || isNaN(parseFloat(amt))) setError('tx-amount', 'Amount is required');
+    else if (parseFloat(amt) <= 0) setError('tx-amount', 'Amount must be greater than zero');
+
+    const date = document.getElementById('tx-date').value;
+    if (!date) setError('tx-date', 'Date is required');
+
+    const rate = document.getElementById('tx-exchange-rate').value;
+    if (rate && rate !== '' && parseFloat(rate) <= 0)
+      setError('tx-exchange-rate', 'Exchange rate must be greater than zero');
+
+    return valid;
+  },
+  async save() {
+    const btn = document.getElementById('tx-save-btn');
+    const origText = btn.textContent;
+    btn.innerHTML = '<span class="loading-spinner"></span> Saving...';
+    btn.classList.add('loading');
+    if (!this.validate()) {
+      btn.textContent = origText;
+      btn.classList.remove('loading');
+      return;
+    }
+    try {
+      const id = document.getElementById('tx-id').value;
+      const data = {
+        description: document.getElementById('tx-description').value,
+        amount: parseFloat(document.getElementById('tx-amount').value),
+        date: document.getElementById('tx-date').value,
+        beneficiary: document.getElementById('tx-beneficiary').value,
+        payor: document.getElementById('tx-payor').value,
+        category_id: document.getElementById('tx-category').value || null,
+        currency: document.getElementById('tx-currency').value,
+        amount_local: parseFloat(document.getElementById('tx-amount-local').value) || null,
+        means_of_payment: document.getElementById('tx-means').value,
+        exchange_rate: parseFloat(document.getElementById('tx-exchange-rate').value) || 1,
+        type: this.currentType,
+        notes: document.getElementById('tx-notes').value,
+      };
+      const method = id ? 'PUT' : 'POST';
+      const url = id ? `/transactions/${id}` : '/transactions';
+      const result = await api(url, { method, body: data });
+      if (result.error) {
+        toast(result.error, 'error');
+        return;
+      }
+      toast(id ? 'Transaction updated' : 'Transaction added', 'success');
+      modal.close('tx-modal');
+      this.load();
+      if (typeof dashboard !== 'undefined') dashboard.load();
+    } finally {
+      btn.textContent = origText;
+      btn.classList.remove('loading');
+    }
+  },
+  async delete(id) {
+    if (!confirm('Delete this transaction?')) return;
+    const result = await api(`/transactions/${id}`, { method: 'DELETE' });
+    if (result.error) {
+      toast(result.error, 'error');
+      return;
+    }
+    toast('Transaction deleted', 'success');
+    this.load();
+    if (typeof dashboard !== 'undefined') dashboard.load();
+  },
+};

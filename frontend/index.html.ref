@@ -489,6 +489,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 <link rel="stylesheet" href="css/components.css">
 </head>
 <body>
+
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="sidebar-logo">

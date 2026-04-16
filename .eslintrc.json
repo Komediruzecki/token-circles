@@ -1,0 +1,50 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
+  "globals": {
+    "API": "readonly",
+    "api": "readonly",
+    "formatCurrency": "readonly",
+    "formatDate": "readonly",
+    "escapeHtml": "readonly",
+    "formatMonth": "readonly",
+    "toast": "readonly",
+    "currentMonth": "writable",
+    "chartColors": "readonly",
+    "profile": "readonly",
+    "auth": "readonly",
+    "theme": "readonly",
+    "modal": "readonly",
+    "nav": "readonly",
+    "dashboard": "readonly",
+    "transactions": "readonly",
+    "txFilters": "readonly",
+    "recurring": "readonly",
+    "budgets": "readonly",
+    "loans": "readonly",
+    "retirement": "readonly",
+    "analytics": "readonly",
+    "categories": "readonly",
+    "accounts": "readonly",
+    "dataImport": "readonly",
+    "settings": "readonly",
+    "quickAdd": "readonly",
+    "exportData": "readonly",
+    "generateMonthlyPDF": "readonly",
+    "generateTaxSummaryPDF": "readonly",
+    "generatePlSummaryPDF": "readonly",
+    "generateAnnualPDF": "readonly",
+    "populatePdfReportYears": "readonly",
+    "populateTaxSummaryYears": "readonly",
+    "populatePlSummaryYears": "readonly",
+    "populateAnnualReportYears": "readonly"
+  },
+  "parserOptions": { "ecmaVersion": 2021 },
+  "rules": {
+    "no-unused-vars": "off",
+    "no-redeclare": "off"
+  }
+}
