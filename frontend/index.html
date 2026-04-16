@@ -4097,6 +4097,7 @@ async function populatePdfReportYears() {
   if (!select) return;
   try {
     const { years } = await api('/analytics/distinct-years');
+    select.innerHTML = '<option value="">Year</option>';
     years.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
@@ -4111,6 +4112,7 @@ async function populateTaxSummaryYears() {
   if (!select) return;
   try {
     const { years } = await api('/analytics/distinct-years');
+    select.innerHTML = '<option value="">Year</option>';
     years.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
@@ -4134,6 +4136,7 @@ async function populatePlSummaryYears() {
   if (!select) return;
   try {
     const { years } = await api('/analytics/distinct-years');
+    select.innerHTML = '<option value="">Year</option>';
     years.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
@@ -4157,6 +4160,7 @@ async function populateAnnualReportYears() {
   if (!select) return;
   try {
     const { years } = await api('/analytics/distinct-years');
+    select.innerHTML = '<option value="">Year</option>';
     years.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
