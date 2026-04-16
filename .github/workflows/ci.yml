@@ -29,6 +29,9 @@ jobs:
 
       - name: Run tests
         run: |
+          # Create required directories
+          mkdir -p db assets
+
           # Start server in background
           node backend/index.js &
           SERVER_PID=$!
