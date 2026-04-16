@@ -188,6 +188,7 @@ tr:last-child td { border-bottom: none; }
 .td-amount.expense { color: var(--expense); }
 .td-amount.transfer { color: var(--transfer); }
 .td-actions { display: flex; gap: 4px; }
+tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !important; }
 
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
   border-radius: 20px; font-size: 11px; font-weight: 500; }
@@ -435,7 +436,23 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   .sidebar-nav a { justify-content: center; padding: 12px; }
   .main { margin-left: 60px; padding: 16px; }
   .grid-4, .grid-2 { grid-template-columns: 1fr; }
+  .retirement-layout { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; gap: 16px; }
+  .retirement-left .card, .retirement-right .card, .retirement-chart-card { padding: 12px; }
+  .retirement-chart-card { grid-column: 1; }
+  #ret-chart { height: 220px; }
 }
+
+/* Bulk action bar */
+.bulk-action-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  margin-bottom: 12px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-radius: 10px; border: 1px solid var(--border); flex-wrap: wrap; }
+[data-theme="dark"] .bulk-action-bar { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); }
+.bulk-action-bar #tx-bulk-count { font-weight: 600; font-size: 14px; margin-right: 8px; white-space: nowrap; }
+.th-checkbox { width: 40px; text-align: center; }
+.th-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
+.td-checkbox { text-align: center; width: 40px; }
+.td-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
+tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !important; }
 
 /* Toggle Switch */
 .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
@@ -2534,13 +2551,15 @@ const transactions = {
   render(data, currency = 'EUR') {
     const tbody = document.getElementById('tx-table-body');
     if (tbody) tbody.classList.remove('table-loading');
+    bulkEdit.clearSelection();
     if (!data.rows || data.rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
       document.getElementById('tx-pagination-info').textContent = '0 transactions';
       document.getElementById('tx-pagination').innerHTML = '';
       return;
     }
-    tbody.innerHTML = data.rows.map(t => `<tr>
+    tbody.innerHTML = data.rows.map(t => `<tr class="${bulkEdit.selected.has(t.id) ? 'row-selected' : ''}">
+      <td class="td-checkbox"><input type="checkbox" class="tx-bulk-checkbox" value="${t.id}" onchange="bulkEdit.toggle(${t.id})"></td>
       <td>${formatDate(t.date)}</td>
       <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.category_name || '-'}</td>
@@ -2734,6 +2753,127 @@ const transactions = {
     if (result.error) { toast(result.error, 'error'); return; }
     toast('Transaction deleted', 'success');
     this.load();
+    dashboard.load();
+  }
+};
+
+// ==================== BULK EDIT ====================
+const bulkEdit = {
+  selected: new Set(),
+
+  toggleSelectAll() {
+    const checked = document.getElementById('tx-bulk-select-all').checked;
+    document.querySelectorAll('.tx-bulk-checkbox').forEach(cb => { cb.checked = checked; });
+    if (checked) {
+      document.querySelectorAll('.tx-bulk-checkbox').forEach(cb => this.selected.add(parseInt(cb.value)));
+    } else {
+      this.selected.clear();
+    }
+    this.updateBar();
+  },
+
+  toggle(id) {
+    if (this.selected.has(id)) {
+      this.selected.delete(id);
+    } else {
+      this.selected.add(id);
+    }
+    this.updateHeaderCheckbox();
+    this.updateBar();
+  },
+
+  updateHeaderCheckbox() {
+    const allCheckboxes = document.querySelectorAll('.tx-bulk-checkbox');
+    const checkedBoxes = document.querySelectorAll('.tx-bulk-checkbox:checked');
+    const header = document.getElementById('tx-bulk-select-all');
+    if (header) {
+      header.checked = allCheckboxes.length > 0 && checkedBoxes.length === allCheckboxes.length;
+      header.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < allCheckboxes.length;
+    }
+  },
+
+  updateBar() {
+    const bar = document.getElementById('tx-bulk-bar');
+    const count = document.getElementById('tx-bulk-count');
+    if (bar && count) {
+      if (this.selected.size > 0) {
+        bar.style.display = 'flex';
+        count.textContent = `${this.selected.size} selected`;
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+  },
+
+  clearSelection() {
+    this.selected.clear();
+    document.querySelectorAll('.tx-bulk-checkbox').forEach(cb => { cb.checked = false; });
+    const header = document.getElementById('tx-bulk-select-all');
+    if (header) { header.checked = false; header.indeterminate = false; }
+    this.updateBar();
+  },
+
+  async openCategoryModal() {
+    if (this.selected.size === 0) return;
+    document.getElementById('bulk-cat-count').textContent = this.selected.size;
+    const cats = await api('/categories');
+    const sel = document.getElementById('bulk-category-select');
+    sel.innerHTML = '<option value="">No Category</option>' +
+      cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    modal.open('bulk-category-modal');
+  },
+
+  async applyCategory() {
+    const catId = document.getElementById('bulk-category-select').value;
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/bulk', {
+      method: 'PUT',
+      body: { ids, action: 'update', data: { category_id: catId === '' ? null : parseInt(catId) } }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Updated ${result.updated} transactions`, 'success');
+    modal.close('bulk-category-modal');
+    this.clearSelection();
+    transactions.load();
+  },
+
+  async openTypeModal() {
+    if (this.selected.size === 0) return;
+    document.getElementById('bulk-type-count').textContent = this.selected.size;
+    modal.open('bulk-type-modal');
+  },
+
+  async applyType() {
+    const type = document.getElementById('bulk-type-select').value;
+    if (!type) {
+      toast('Please select a type', 'error');
+      return;
+    }
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/bulk', {
+      method: 'PUT',
+      body: { ids, action: 'update', data: { type } }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Updated ${result.updated} transactions`, 'success');
+    modal.close('bulk-type-modal');
+    this.clearSelection();
+    transactions.load();
+  },
+
+  async deleteSelected() {
+    if (this.selected.size === 0) return;
+    const count = this.selected.size;
+    if (!confirm(`Delete ${count} selected transaction${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/bulk', {
+      method: 'PUT',
+      body: { ids, action: 'delete' }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Deleted ${result.deleted} transactions`, 'success');
+    this.clearSelection();
+    transactions.load();
     dashboard.load();
   }
 };

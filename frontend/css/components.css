@@ -334,3 +334,45 @@ th[data-sort] .sort-arrow {
 th[data-sort].sorted .sort-arrow {
   opacity: 1;
 }
+
+/* Bulk action bar */
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+[data-theme="dark"] .bulk-action-bar {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+}
+.bulk-action-bar #tx-bulk-count {
+  font-weight: 600;
+  font-size: 14px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+.th-checkbox {
+  width: 40px;
+  text-align: center;
+}
+.th-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+.td-checkbox {
+  text-align: center;
+  width: 40px;
+}
+.td-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}

@@ -2,7 +2,7 @@
 
 ## Charts & Visualization
 - [ ] **Interactive chart drill-down** — Click a bar/slice to zoom into that period
-- [ ] **Chart export** — Download charts as PNG/SVG
+- [x] **Chart export** — Download charts as PNG/SVG
 - [ ] **Net worth over time chart** — Line chart on dashboard showing net worth progression
 - [ ] **Comparison mode** — Overlay two periods on the same chart to compare spending
 - [ ] **Category heatmap** — Calendar heatmap of daily spending by category

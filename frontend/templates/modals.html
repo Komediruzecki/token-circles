@@ -520,3 +520,60 @@
   </div>
 </div>
 
+<!-- BULK EDIT CATEGORY MODAL -->
+<div class="modal-overlay" id="bulk-category-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Category</div>
+      <button class="btn btn-ghost" onclick="modal.close('bulk-category-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:13px;">
+        Apply to <strong id="bulk-cat-count">0</strong> selected transactions.
+      </p>
+      <div class="form-group">
+        <label class="form-label">New Category</label>
+        <select class="form-control" id="bulk-category-select">
+          <option value="">No Category</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('bulk-category-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bulkEdit.applyCategory()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK EDIT TYPE MODAL -->
+<div class="modal-overlay" id="bulk-type-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Type</div>
+      <button class="btn btn-ghost" onclick="modal.close('bulk-type-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:13px;">
+        Apply to <strong id="bulk-type-count">0</strong> selected transactions.
+      </p>
+      <div class="form-group">
+        <label class="form-label">New Type</label>
+        <select class="form-control" id="bulk-type-select">
+          <option value="">Select type...</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+          <option value="transfer">Transfer</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('bulk-type-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bulkEdit.applyType()">Apply</button>
+    </div>
+  </div>
+</div>
+

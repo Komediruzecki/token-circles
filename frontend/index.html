@@ -7,6 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Finance Manager</title>
+<link rel="manifest" href="/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -188,6 +189,7 @@ tr:last-child td { border-bottom: none; }
 .td-amount.expense { color: var(--expense); }
 .td-amount.transfer { color: var(--transfer); }
 .td-actions { display: flex; gap: 4px; }
+tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !important; }
 
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
   border-radius: 20px; font-size: 11px; font-weight: 500; }
@@ -210,6 +212,15 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
 input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 .form-help { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+
+/* Tag selector */
+.tag-selector { border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--card-bg); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tag-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white; cursor: pointer; }
+.tag-badge:hover { opacity: 0.8; }
+.tag-badge .remove-tag { margin-left: 4px; font-size: 14px; line-height: 1; }
+.tag-input-row { display: flex; gap: 8px; }
+#tx-tag-input { flex: 1; }
 
 /* Modal */
 .modal-overlay { position: fixed; inset: 0; background: var(--modal-overlay); z-index: 200;
@@ -435,7 +446,23 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
   .sidebar-nav a { justify-content: center; padding: 12px; }
   .main { margin-left: 60px; padding: 16px; }
   .grid-4, .grid-2 { grid-template-columns: 1fr; }
+  .retirement-layout { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; gap: 16px; }
+  .retirement-left .card, .retirement-right .card, .retirement-chart-card { padding: 12px; }
+  .retirement-chart-card { grid-column: 1; }
+  #ret-chart { height: 220px; }
 }
+
+/* Bulk action bar */
+.bulk-action-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  margin-bottom: 12px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-radius: 10px; border: 1px solid var(--border); flex-wrap: wrap; }
+[data-theme="dark"] .bulk-action-bar { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); }
+.bulk-action-bar #tx-bulk-count { font-weight: 600; font-size: 14px; margin-right: 8px; white-space: nowrap; }
+.th-checkbox { width: 40px; text-align: center; }
+.th-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
+.td-checkbox { text-align: center; width: 40px; }
+.td-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
+tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !important; }
 
 /* Toggle Switch */
 .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
@@ -613,18 +640,33 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Spending by Category</div><div class="card-subtitle">This month's expenses</div></div></div>
+        <div class="card-header">
+          <div><div class="card-title">Spending by Category</div><div class="card-subtitle">This month's expenses</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportDashboardCategory()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
         <div class="chart-container tall"><canvas id="chart-category"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Income vs Expenses</div><div class="card-subtitle">Last 12 months</div></div></div>
+        <div class="card-header">
+          <div><div class="card-title">Income vs Expenses</div><div class="card-subtitle">Last 12 months</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportDashboardMonthly()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
         <div class="chart-container tall"><canvas id="chart-monthly"></canvas></div>
       </div>
     </div>
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Cash Flow</div><div class="card-subtitle">Cumulative balance</div></div></div>
+        <div class="card-header">
+          <div><div class="card-title">Cash Flow</div><div class="card-subtitle">Cumulative balance</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportDashboardCashflow()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
         <div class="chart-container short"><canvas id="chart-cashflow"></canvas></div>
       </div>
       <div class="card">
@@ -693,10 +735,19 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 
     <div id="tx-summary-bar" class="tx-summary-bar" style="display:none;"></div>
 
+    <div id="tx-bulk-bar" class="bulk-action-bar" style="display:none;">
+      <span id="tx-bulk-count">0 selected</span>
+      <button class="btn btn-secondary btn-sm" onclick="bulkEdit.openCategoryModal()">Change Category</button>
+      <button class="btn btn-secondary btn-sm" onclick="bulkEdit.openTypeModal()">Change Type</button>
+      <button class="btn btn-danger btn-sm" onclick="bulkEdit.deleteSelected()">Delete Selected</button>
+      <button class="btn btn-ghost btn-sm" onclick="bulkEdit.clearSelection()">Deselect All</button>
+    </div>
+
     <div class="card">
       <div class="table-wrap">
         <table>
           <thead id="tx-table-sortable"><tr>
+            <th class="th-checkbox"><input type="checkbox" id="tx-bulk-select-all" onchange="bulkEdit.toggleSelectAll()"></th>
             <th data-sort="date" onclick="transactions.sortByColumn('date')">Date <span class="sort-arrow"> &#9660;&#9650;</span></th>
             <th data-sort="description" onclick="transactions.sortByColumn('description')">Description <span class="sort-arrow"> &#9660;&#9650;</span></th>
             <th data-sort="category_name" onclick="transactions.sortByColumn('category_name')">Category <span class="sort-arrow"> &#9660;&#9650;</span></th>
@@ -827,7 +878,12 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
           </div>
         </div>
       </div>
-      <div class="card retirement-chart-card"><canvas id="ret-chart"></canvas></div>
+      <div class="card retirement-chart-card" style="position:relative;">
+        <button class="btn btn-ghost btn-sm" onclick="chartExport.exportRetirement()" title="Export chart" style="position:absolute;top:12px;right:12px;z-index:10;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        </button>
+        <canvas id="ret-chart"></canvas>
+      </div>
     </div>
   </div>
 
@@ -988,7 +1044,10 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 
     <div class="card">
       <div class="card-header">
-        <div><div class="card-title">Category Spending Over Time</div><p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Stacked view of expenses by category</div>
+        <div><div class="card-title">Category Spending Over Time</div><p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Stacked view of expenses by category</div></div>
+        <button class="btn btn-ghost btn-sm" onclick="chartExport.exportAnalyticsStacked()" title="Export chart">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        </button>
       </div>
       <div style="height:400px;position:relative;">
         <canvas id="analytics-stacked-chart"></canvas>
@@ -1015,7 +1074,12 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         <div id="analytics-top-categories"></div>
       </div>
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Category Breakdown</div></div></div>
+        <div class="card-header">
+          <div><div class="card-title">Category Breakdown</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportAnalyticsPie()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
         <div style="height:300px;">
           <canvas id="analytics-pie-chart"></canvas>
         </div>
@@ -1284,6 +1348,16 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         <div class="form-group">
           <label class="form-label">Notes</label>
           <textarea class="form-control" id="tx-notes" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          <div id="tx-tags-container" class="tag-selector">
+            <div class="tag-list" id="tx-tag-list"></div>
+            <div class="tag-input-row">
+              <input type="text" class="form-control" id="tx-tag-input" placeholder="Add tag..." style="flex:1;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="transactions.addTagFromInput()">Add</button>
+            </div>
+          </div>
         </div>
       </form>
     </div>
@@ -1696,6 +1770,63 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="modal.close('rate-period-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="loans.saveRatePeriod()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK EDIT CATEGORY MODAL -->
+<div class="modal-overlay" id="bulk-category-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Category</div>
+      <button class="btn btn-ghost" onclick="modal.close('bulk-category-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:13px;">
+        Apply to <strong id="bulk-cat-count">0</strong> selected transactions.
+      </p>
+      <div class="form-group">
+        <label class="form-label">New Category</label>
+        <select class="form-control" id="bulk-category-select">
+          <option value="">No Category</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('bulk-category-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bulkEdit.applyCategory()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK EDIT TYPE MODAL -->
+<div class="modal-overlay" id="bulk-type-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Change Type</div>
+      <button class="btn btn-ghost" onclick="modal.close('bulk-type-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:13px;">
+        Apply to <strong id="bulk-type-count">0</strong> selected transactions.
+      </p>
+      <div class="form-group">
+        <label class="form-label">New Type</label>
+        <select class="form-control" id="bulk-type-select">
+          <option value="">Select type...</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+          <option value="transfer">Transfer</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('bulk-type-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bulkEdit.applyType()">Apply</button>
     </div>
   </div>
 </div>
@@ -2508,6 +2639,7 @@ const transactions = {
   perPage: 50,
   sortBy: 'date',
   sortOrder: 'desc',
+  selectedTags: [], // Track selected tags for the current transaction
   async load() {
     const table = document.getElementById('tx-table-body');
     if (table) table.classList.add('table-loading');
@@ -2535,13 +2667,15 @@ const transactions = {
   render(data, currency = 'EUR') {
     const tbody = document.getElementById('tx-table-body');
     if (tbody) tbody.classList.remove('table-loading');
+    bulkEdit.clearSelection();
     if (!data.rows || data.rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
       document.getElementById('tx-pagination-info').textContent = '0 transactions';
       document.getElementById('tx-pagination').innerHTML = '';
       return;
     }
-    tbody.innerHTML = data.rows.map(t => `<tr>
+    tbody.innerHTML = data.rows.map(t => `<tr class="${bulkEdit.selected.has(t.id) ? 'row-selected' : ''}">
+      <td class="td-checkbox"><input type="checkbox" class="tx-bulk-checkbox" value="${t.id}" onchange="bulkEdit.toggle(${t.id})"></td>
       <td>${formatDate(t.date)}</td>
       <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.category_name || '-'}</td>
@@ -2617,6 +2751,7 @@ const transactions = {
   },
   async openModal(id = null) {
     this.editingId = id;
+    this.selectedTags = []; // Reset selected tags
     document.getElementById('tx-modal-title').textContent = id ? 'Edit Transaction' : 'Add Transaction';
 
     // Load categories
@@ -2641,12 +2776,18 @@ const transactions = {
         document.getElementById('tx-means').value = t.means_of_payment || '';
         document.getElementById('tx-notes').value = t.notes || '';
         this.setType(t.type || 'expense');
+
+        // Load tags for this transaction
+        const tags = await api(`/transactions/${id}/tags`).catch(() => []);
+        this.selectedTags = tags.map(t => t.id);
+        this.renderTags();
       }
     } else {
       document.getElementById('tx-form').reset();
       document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
       document.getElementById('tx-exchange-rate').value = 1;
       this.setType('expense');
+      this.renderTags();
     }
     modal.open('tx-modal');
   },
@@ -2720,6 +2861,13 @@ const transactions = {
       const url = id ? `/transactions/${id}` : '/transactions';
       const result = await api(url, { method, body: data });
       if (result.error) { toast(result.error, 'error'); return; }
+
+      // Save tags if editing an existing transaction
+      const savedId = id || result.id;
+      if (savedId) {
+        await api(`/transactions/${savedId}/tags`, { method: 'POST', body: { tagIds: this.selectedTags } });
+      }
+
       toast(id ? 'Transaction updated' : 'Transaction added', 'success');
       modal.close('tx-modal');
       this.load();
@@ -2735,6 +2883,177 @@ const transactions = {
     if (result.error) { toast(result.error, 'error'); return; }
     toast('Transaction deleted', 'success');
     this.load();
+    dashboard.load();
+  },
+  renderTags() {
+    const container = document.getElementById('tx-tag-list');
+    if (!container) return;
+    container.innerHTML = this.selectedTags.map(tagId => {
+      const tag = this.availableTags?.find(t => t.id === tagId);
+      if (!tag) return '';
+      return `<span class="tag-badge" style="background:${tag.color || '#6b7280'}">
+        ${escapeHtml(tag.name)}
+        <span class="remove-tag" onclick="transactions.removeTag(${tag.id})">&times;</span>
+      </span>`;
+    }).join('');
+  },
+  async loadTags() {
+    if (!this.availableTags) {
+      this.availableTags = await api('/tags').catch(() => []);
+    }
+    return this.availableTags;
+  },
+  async addTagFromInput() {
+    const input = document.getElementById('tx-tag-input');
+    const name = input?.value.trim();
+    if (!name) return;
+
+    const tags = await this.loadTags();
+    let tag = tags.find(t => t.name.toLowerCase() === name.toLowerCase());
+
+    if (!tag) {
+      // Create new tag
+      const result = await api('/tags', { method: 'POST', body: { name, color: '#6b7280' } });
+      if (result.error) { toast(result.error, 'error'); return; }
+      tag = result;
+      this.availableTags.push(tag);
+    }
+
+    if (!this.selectedTags.includes(tag.id)) {
+      this.selectedTags.push(tag.id);
+    }
+    input.value = '';
+    this.renderTags();
+  },
+  async addTag(tagId) {
+    if (!this.selectedTags.includes(tagId)) {
+      this.selectedTags.push(tagId);
+      this.renderTags();
+    }
+  },
+  removeTag(tagId) {
+    this.selectedTags = this.selectedTags.filter(id => id !== tagId);
+    this.renderTags();
+  }
+};
+
+// ==================== BULK EDIT ====================
+const bulkEdit = {
+  selected: new Set(),
+
+  toggleSelectAll() {
+    const checked = document.getElementById('tx-bulk-select-all').checked;
+    document.querySelectorAll('.tx-bulk-checkbox').forEach(cb => { cb.checked = checked; });
+    if (checked) {
+      document.querySelectorAll('.tx-bulk-checkbox').forEach(cb => this.selected.add(parseInt(cb.value)));
+    } else {
+      this.selected.clear();
+    }
+    this.updateBar();
+  },
+
+  toggle(id) {
+    if (this.selected.has(id)) {
+      this.selected.delete(id);
+    } else {
+      this.selected.add(id);
+    }
+    this.updateHeaderCheckbox();
+    this.updateBar();
+  },
+
+  updateHeaderCheckbox() {
+    const allCheckboxes = document.querySelectorAll('.tx-bulk-checkbox');
+    const checkedBoxes = document.querySelectorAll('.tx-bulk-checkbox:checked');
+    const header = document.getElementById('tx-bulk-select-all');
+    if (header) {
+      header.checked = allCheckboxes.length > 0 && checkedBoxes.length === allCheckboxes.length;
+      header.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < allCheckboxes.length;
+    }
+  },
+
+  updateBar() {
+    const bar = document.getElementById('tx-bulk-bar');
+    const count = document.getElementById('tx-bulk-count');
+    if (bar && count) {
+      if (this.selected.size > 0) {
+        bar.style.display = 'flex';
+        count.textContent = `${this.selected.size} selected`;
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+  },
+
+  clearSelection() {
+    this.selected.clear();
+    document.querySelectorAll('.tx-bulk-checkbox').forEach(cb => { cb.checked = false; });
+    const header = document.getElementById('tx-bulk-select-all');
+    if (header) { header.checked = false; header.indeterminate = false; }
+    this.updateBar();
+  },
+
+  async openCategoryModal() {
+    if (this.selected.size === 0) return;
+    document.getElementById('bulk-cat-count').textContent = this.selected.size;
+    const cats = await api('/categories');
+    const sel = document.getElementById('bulk-category-select');
+    sel.innerHTML = '<option value="">No Category</option>' +
+      cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    modal.open('bulk-category-modal');
+  },
+
+  async applyCategory() {
+    const catId = document.getElementById('bulk-category-select').value;
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/bulk', {
+      method: 'PUT',
+      body: { ids, action: 'update', data: { category_id: catId === '' ? null : parseInt(catId) } }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Updated ${result.updated} transactions`, 'success');
+    modal.close('bulk-category-modal');
+    this.clearSelection();
+    transactions.load();
+  },
+
+  async openTypeModal() {
+    if (this.selected.size === 0) return;
+    document.getElementById('bulk-type-count').textContent = this.selected.size;
+    modal.open('bulk-type-modal');
+  },
+
+  async applyType() {
+    const type = document.getElementById('bulk-type-select').value;
+    if (!type) {
+      toast('Please select a type', 'error');
+      return;
+    }
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/bulk', {
+      method: 'PUT',
+      body: { ids, action: 'update', data: { type } }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Updated ${result.updated} transactions`, 'success');
+    modal.close('bulk-type-modal');
+    this.clearSelection();
+    transactions.load();
+  },
+
+  async deleteSelected() {
+    if (this.selected.size === 0) return;
+    const count = this.selected.size;
+    if (!confirm(`Delete ${count} selected transaction${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/bulk', {
+      method: 'PUT',
+      body: { ids, action: 'delete' }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Deleted ${result.deleted} transactions`, 'success');
+    this.clearSelection();
+    transactions.load();
     dashboard.load();
   }
 };
@@ -4516,9 +4835,30 @@ if (dz) {
 nav.init();
 dashboard.init();
 profile.refreshUI();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW registration failed:', err));
+}
 theme.init();
 auth.checkLogin();
+
+// Tag input keyboard handler
+document.addEventListener('DOMContentLoaded', () => {
+  const tagInput = document.getElementById('tx-tag-input');
+  if (tagInput) {
+    tagInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (typeof transactions !== 'undefined') {
+          transactions.addTagFromInput();
+        }
+      }
+    });
+  }
+});
 </script>
+<script src="js/features/chartExport.js"></script>
 
 </body>
 </html>

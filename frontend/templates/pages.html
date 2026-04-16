@@ -46,18 +46,27 @@
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Spending by Category</div><div class="card-subtitle">This month's expenses</div></div></div>
+        <div class="card-header"><div><div class="card-title">Spending by Category</div><div class="card-subtitle">This month's expenses</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportDashboardCategory()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button></div>
         <div class="chart-container tall"><canvas id="chart-category"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Income vs Expenses</div><div class="card-subtitle">Last 12 months</div></div></div>
+        <div class="card-header"><div><div class="card-title">Income vs Expenses</div><div class="card-subtitle">Last 12 months</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportDashboardMonthly()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button></div>
         <div class="chart-container tall"><canvas id="chart-monthly"></canvas></div>
       </div>
     </div>
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Cash Flow</div><div class="card-subtitle">Cumulative balance</div></div></div>
+        <div class="card-header"><div><div class="card-title">Cash Flow</div><div class="card-subtitle">Cumulative balance</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportDashboardCashflow()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button></div>
         <div class="chart-container short"><canvas id="chart-cashflow"></canvas></div>
       </div>
       <div class="card">
@@ -126,10 +135,19 @@
 
     <div id="tx-summary-bar" class="tx-summary-bar" style="display:none;"></div>
 
+    <div id="tx-bulk-bar" class="bulk-action-bar" style="display:none;">
+      <span id="tx-bulk-count">0 selected</span>
+      <button class="btn btn-secondary btn-sm" onclick="bulkEdit.openCategoryModal()">Change Category</button>
+      <button class="btn btn-secondary btn-sm" onclick="bulkEdit.openTypeModal()">Change Type</button>
+      <button class="btn btn-danger btn-sm" onclick="bulkEdit.deleteSelected()">Delete Selected</button>
+      <button class="btn btn-ghost btn-sm" onclick="bulkEdit.clearSelection()">Deselect All</button>
+    </div>
+
     <div class="card">
       <div class="table-wrap">
         <table>
           <thead id="tx-table-sortable"><tr>
+            <th class="th-checkbox"><input type="checkbox" id="tx-bulk-select-all" onchange="bulkEdit.toggleSelectAll()"></th>
             <th data-sort="date" onclick="transactions.sortByColumn('date')">Date <span class="sort-arrow"> &#9660;&#9650;</span></th>
             <th data-sort="description" onclick="transactions.sortByColumn('description')">Description <span class="sort-arrow"> &#9660;&#9650;</span></th>
             <th data-sort="category_name" onclick="transactions.sortByColumn('category_name')">Category <span class="sort-arrow"> &#9660;&#9650;</span></th>
@@ -260,7 +278,12 @@
           </div>
         </div>
       </div>
-      <div class="card retirement-chart-card"><canvas id="ret-chart"></canvas></div>
+      <div class="card retirement-chart-card" style="position:relative;">
+        <button class="btn btn-ghost btn-sm" onclick="chartExport.exportRetirement()" title="Export chart" style="position:absolute;top:12px;right:12px;z-index:10;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        </button>
+        <canvas id="ret-chart"></canvas>
+      </div>
     </div>
   </div>
 
@@ -422,6 +445,9 @@
     <div class="card">
       <div class="card-header">
         <div><div class="card-title">Category Spending Over Time</div><p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Stacked view of expenses by category</div>
+        <button class="btn btn-ghost btn-sm" onclick="chartExport.exportAnalyticsStacked()" title="Export chart">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        </button>
       </div>
       <div style="height:400px;position:relative;">
         <canvas id="analytics-stacked-chart"></canvas>
@@ -448,7 +474,12 @@
         <div id="analytics-top-categories"></div>
       </div>
       <div class="card">
-        <div class="card-header"><div><div class="card-title">Category Breakdown</div></div></div>
+        <div class="card-header">
+          <div><div class="card-title">Category Breakdown</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportAnalyticsPie()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
         <div style="height:300px;">
           <canvas id="analytics-pie-chart"></canvas>
         </div>

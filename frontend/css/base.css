@@ -1367,4 +1367,22 @@ input[type='color'] {
   .grid-2 {
     grid-template-columns: 1fr;
   }
+  /* Retirement page mobile */
+  .retirement-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    height: auto;
+    gap: 16px;
+  }
+  .retirement-left .card,
+  .retirement-right .card,
+  .retirement-chart-card {
+    padding: 12px;
+  }
+  .retirement-chart-card {
+    grid-column: 1;
+  }
+  #ret-chart {
+    height: 220px;
+  }
 }
