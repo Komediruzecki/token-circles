@@ -30,6 +30,7 @@ function migrate() {
       icon TEXT NOT NULL DEFAULT 'tag',
       type TEXT NOT NULL DEFAULT 'expense',
       parent_id INTEGER,
+      tax_deductible INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       profile_id INTEGER NOT NULL DEFAULT 1
     );
