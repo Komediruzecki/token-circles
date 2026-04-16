@@ -2534,6 +2534,17 @@ app.get("/api/reports/monthly-pdf", (req, res) => {
       return res.status(400).json({ error: "year and month are required" });
     }
 
+    // Validate year format (4 digits)
+    if (!/^\d{4}$/.test(String(year))) {
+      return res.status(400).json({ error: "Valid year is required" });
+    }
+
+    // Validate month format and range (1-12)
+    const monthNum = parseInt(month, 10);
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ error: "Valid month (1-12) is required" });
+    }
+
     const pid = getProfileId(req);
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -2741,7 +2752,9 @@ app.get("/api/reports/tax-summary", (req, res) => {
 app.get("/api/reports/tax-summary-pdf", (req, res) => {
   try {
     const { year } = req.query;
-    if (!year) return res.status(400).json({ error: "year is required" });
+    if (!year || !/^\d{4}$/.test(String(year))) {
+      return res.status(400).json({ error: "Valid year is required" });
+    }
 
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
@@ -2929,7 +2942,9 @@ app.get("/api/reports/pl-summary", (req, res) => {
 app.get("/api/reports/pl-summary-pdf", (req, res) => {
   try {
     const { year } = req.query;
-    if (!year) return res.status(400).json({ error: "year is required" });
+    if (!year || !/^\d{4}$/.test(String(year))) {
+      return res.status(400).json({ error: "Valid year is required" });
+    }
 
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
