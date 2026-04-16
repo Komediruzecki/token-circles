@@ -1,0 +1,522 @@
+<!-- CREATE PROFILE MODAL -->
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Create Profile</div>
+      <button class="btn btn-ghost" onclick="modal.close('profile-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Profile Name</label>
+        <input type="text" class="form-control" id="profile-name-input" placeholder="e.g. John's Finances" maxlength="50">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('profile-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="profile.createProfile()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSACTION MODAL -->
+<div class="modal-overlay" id="tx-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="tx-modal-title">Add Transaction</div>
+      <button class="btn btn-ghost" onclick="modal.close('tx-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="tx-form">
+        <input type="hidden" id="tx-id">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <div class="type-selector" id="tx-type-selector">
+            <button type="button" class="expense active" onclick="transactions.setType('expense')">Expense</button>
+            <button type="button" class="income" onclick="transactions.setType('income')">Income</button>
+            <button type="button" class="transfer" onclick="transactions.setType('transfer')">Transfer</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="tx-description" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Amount</label>
+            <input type="number" step="0.01" class="form-control" id="tx-amount" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Currency</label>
+            <select class="form-control" id="tx-currency">
+              <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+              <option value="JPY">JPY</option><option value="CAD">CAD</option><option value="AUD">AUD</option>
+              <option value="CHF">CHF</option><option value="CNY">CNY</option><option value="INR">INR</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-control" id="tx-date" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-control" id="tx-category"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Beneficiary</label>
+            <input type="text" class="form-control" id="tx-beneficiary" placeholder="Who you paid">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Payor</label>
+            <input type="text" class="form-control" id="tx-payor" placeholder="Who paid you">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Amount in Local Currency</label>
+            <input type="number" step="0.01" class="form-control" id="tx-amount-local">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Exchange Rate</label>
+            <input type="number" step="0.0001" class="form-control" id="tx-exchange-rate" value="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Means of Payment</label>
+          <select class="form-control" id="tx-means">
+            <option value="">Select...</option>
+            <option value="Cash">Cash</option>
+            <option value="Credit Card">Credit Card</option>
+            <option value="Debit Card">Debit Card</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Mobile Payment">Mobile Payment</option>
+            <option value="Check">Check</option>
+            <option value="Wire Transfer">Wire Transfer</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="tx-notes" rows="2"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('tx-modal')">Cancel</button>
+      <button class="btn btn-primary" id="tx-save-btn" onclick="transactions.save()">Save Transaction</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK-ADD TRANSACTION MODAL -->
+<div class="modal-overlay" id="quickadd-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Quick Add</div>
+      <button class="btn btn-ghost" onclick="modal.close('quickadd-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="quickadd-form" onsubmit="quickAdd.save(); return false;">
+        <div class="form-group">
+          <label class="form-label">Amount</label>
+          <input type="number" step="0.01" class="form-control" id="qa-amount" placeholder="0.00" autofocus required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="qa-category">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="qa-description" placeholder="e.g. Grocery shopping">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-control" id="qa-date">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('quickadd-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="quickAdd.save()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY MODAL -->
+<div class="modal-overlay" id="cat-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="cat-modal-title">Add Category</div>
+      <button class="btn btn-ghost" onclick="modal.close('cat-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="cat-form">
+        <input type="hidden" id="cat-id">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <div class="type-selector" id="cat-type-selector">
+            <button type="button" class="expense active" onclick="categories.setType('expense')">Expense</button>
+            <button type="button" class="income" onclick="categories.setType('income')">Income</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="cat-name" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <div class="color-palette" id="cat-color-palette">
+            <button type="button" class="color-swatch" style="background:#ef4444" data-color="#ef4444" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#f97316" data-color="#f97316" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#f59e0b" data-color="#f59e0b" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#eab308" data-color="#eab308" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#84cc16" data-color="#84cc16" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#22c55e" data-color="#22c55e" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#14b8a6" data-color="#14b8a6" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#06b6d4" data-color="#06b6d4" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#0ea5e9" data-color="#0ea5e9" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#3b82f6" data-color="#3b82f6" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#6366f1" data-color="#6366f1" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#8b5cf6" data-color="#8b5cf6" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#a855f7" data-color="#a855f7" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#d946ef" data-color="#d946ef" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#ec4899" data-color="#ec4899" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#f43f5e" data-color="#f43f5e" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#64748b" data-color="#64748b" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#78716c" data-color="#78716c" onclick="categories.selectColor(this)"></button>
+          </div>
+          <input type="hidden" id="cat-color" value="#6b7280">
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="cat-tax" style="width:16px;height:16px;">
+            <div>
+              <div style="font-size:14px;font-weight:500;">Tax-Deductible</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Mark this category as tax-deductible for year-end reports</div>
+            </div>
+          </label>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('cat-modal')">Cancel</button>
+      <button class="btn btn-primary" id="cat-save-btn" onclick="categories.save()">Save Category</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUDGET MODAL -->
+<div class="modal-overlay" id="budget-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="budget-modal-title">Add Budget</div>
+      <button class="btn btn-ghost" onclick="modal.close('budget-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="budget-form">
+        <input type="hidden" id="budget-id">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="budget-category" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Budget Amount</label>
+          <input type="number" step="0.01" class="form-control" id="budget-amount" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Period</label>
+          <select class="form-control" id="budget-period">
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" class="form-control" id="budget-start" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">End Date (optional)</label>
+            <input type="date" class="form-control" id="budget-end">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('budget-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="budgets.save()">Save Budget</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOAN MODAL -->
+<div class="modal-overlay" id="loan-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div class="modal-title" id="loan-modal-title">New Loan</div>
+      <button class="btn btn-ghost" onclick="modal.close('loan-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="loan-form">
+        <input type="hidden" id="loan-id">
+        <div class="form-group">
+          <label class="form-label">Loan Name</label>
+          <input type="text" class="form-control" id="loan-name" placeholder="e.g., Home Mortgage, Car Loan" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Principal Amount</label>
+            <input type="number" step="0.01" class="form-control" id="loan-principal" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" class="form-control" id="loan-start" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Term (Months)</label>
+            <input type="number" class="form-control" id="loan-term" value="360" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Initial Interest Rate (%)</label>
+            <input type="number" step="0.001" class="form-control" id="loan-rate" value="5.0">
+          </div>
+        </div>
+
+        <div style="margin-top:16px; margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <label class="form-label" style="margin:0;">Rate Change Periods</label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="loans.addRatePeriod()">+ Add Rate Period</button>
+          </div>
+          <p class="form-help">Add rate changes if your loan rate changes at a specific point (e.g., after promotional period)</p>
+          <div id="loan-rate-periods"></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('loan-modal')">Cancel</button>
+      <button class="btn btn-primary" id="loan-save-btn" onclick="loans.saveLoan()">Save Loan</button>
+    </div>
+  </div>
+</div>
+
+<!-- PREPAYMENT MODAL -->
+<div class='modal-overlay' id='prepay-modal'>
+  <div class='modal' style='max-width:440px;'>
+    <div class='modal-header'>
+      <div class='modal-title' id='prepay-modal-title'>Add Prepayment</div>
+      <button class='btn btn-ghost' onclick="modal.close('prepay-modal')">
+        <svg width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path d='M6 18L18 6M6 6l12 12'/></svg>
+      </button>
+    </div>
+    <div class='modal-body'>
+      <input type='hidden' id='prepay-loan-id'>
+      <input type='hidden' id='prepay-id'>
+      <div class='form-group'>
+        <label class='form-label'>Prepayment Date</label>
+        <input type='date' class='form-control' id='prepay-date' onchange='loans.updatePrepayMonthPreview()'>
+        <div id='prepay-month-preview' style='font-size:12px;color:var(--text-secondary);margin-top:4px;'></div>
+      </div>
+      <div class='form-group'>
+        <label class='form-label'>Amount</label>
+        <input type='number' step='0.01' class='form-control' id='prepay-amount' placeholder='e.g., 5000'>
+      </div>
+      <div class='form-group'>
+        <label class='form-label'>Note (optional)</label>
+        <input type='text' class='form-control' id='prepay-note' placeholder='e.g., Extra monthly payment'>
+      </div>
+    </div>
+    <div class='modal-footer'>
+      <button class='btn btn-secondary' onclick="modal.close('prepay-modal')">Cancel</button>
+      <button class='btn btn-primary' onclick='loans.savePrepayment()'>Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECURRING TRANSACTION MODAL -->
+<div class="modal-overlay" id="recurring-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="recurring-modal-title">Add Recurring</div>
+      <button class="btn btn-ghost" onclick="modal.close('recurring-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="recurring-form">
+        <input type="hidden" id="recurring-id">
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label class="form-label">Description</label>
+            <input type="text" class="form-control" id="recurring-description" placeholder="e.g. Netflix subscription" required>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Amount</label>
+            <input type="number" step="0.01" class="form-control" id="recurring-amount" placeholder="0.00" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Frequency</label>
+            <select class="form-control" id="recurring-frequency">
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Day of Month</label>
+            <input type="number" class="form-control" id="recurring-day" min="1" max="31" placeholder="1-31">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Next Date</label>
+            <input type="date" class="form-control" id="recurring-next-date">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Category</label>
+            <select class="form-control" id="recurring-category"></select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">Type</label>
+            <select class="form-control" id="recurring-type">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input type="text" class="form-control" id="recurring-notes" placeholder="Optional notes">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('recurring-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="recurring.save()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title">Sign In</div>
+      <button class="btn btn-ghost" onclick="modal.close('login-modal')" style="padding:4px;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" class="form-control" id="login-username" placeholder="Enter username" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-control" id="login-password" placeholder="Enter password" autocomplete="current-password">
+      </div>
+      <div id="login-error" style="color:var(--danger);font-size:13px;display:none;margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('login-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="auth.login()">Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACCOUNT MODAL -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title" id="account-modal-title">Add Account</div>
+      <button class="btn btn-ghost" onclick="modal.close('account-modal')" style="padding:4px;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="account-id">
+      <div class="form-group">
+        <label class="form-label">Account Name</label>
+        <input type="text" class="form-control" id="account-name" placeholder="e.g., My Bank Account">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Type</label>
+        <select class="form-control" id="account-type">
+          <option value="giro">Giro / Current Account</option>
+          <option value="ib">Investment (IB / Brokerage)</option>
+          <option value="savings">Savings Account</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <input type="text" class="form-control" id="account-currency" placeholder="USD" maxlength="3" style="text-transform:uppercase;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Current Balance</label>
+        <input type="number" step="0.01" class="form-control" id="account-balance" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-control" id="account-notes" placeholder="Optional notes">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('account-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="accounts.save()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- RATE PERIOD MODAL -->
+<div class="modal-overlay" id="rate-period-modal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <div class="modal-title" id="rate-period-modal-title">Add Rate Period</div>
+      <button class="btn btn-ghost" onclick="modal.close('rate-period-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rp-loan-id">
+      <input type="hidden" id="rp-id">
+      <div class="form-group">
+        <label class="form-label">Interest Rate (%)</label>
+        <input type="number" step="0.001" class="form-control" id="rp-rate" placeholder="e.g., 3.5">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Start Month</label>
+        <input type="number" class="form-control" id="rp-start" min="1" placeholder="e.g., 13" onchange="loans.updateRatePeriodPreview()">
+        <div id="rp-start-preview" style="font-size:12px;color:var(--text-secondary);margin-top:4px;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Month (optional)</label>
+        <input type="number" class="form-control" id="rp-end" min="1" placeholder="Leave empty for open-ended">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('rate-period-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="loans.saveRatePeriod()">Save</button>
+    </div>
+  </div>
+</div>
+
