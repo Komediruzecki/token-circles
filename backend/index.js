@@ -2112,6 +2112,13 @@ app.get("/api/analytics/category-trends", (req, res) => {
       endStr = `${year}-12-31`;
     }
 
+    // Calculate actual number of days in the selected period
+    const [startY, startM, startD] = startStr.split('-').map(Number);
+    const [endY, endM, endD] = endStr.split('-').map(Number);
+    const startDate = new Date(startY, startM - 1, startD);
+    const endDate = new Date(endY, endM - 1, endD);
+    const numDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
     // Transactions and categories filtered by type (income or expense)
     const transactions = db
       .prepare(
@@ -2218,7 +2225,7 @@ app.get("/api/analytics/category-trends", (req, res) => {
         return totalB - totalA;
       });
 
-    res.json({ labels, datasets });
+    res.json({ labels, datasets, numDays });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

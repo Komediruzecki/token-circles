@@ -99,4 +99,35 @@ describe('Analytics API — category-trends', () => {
     expect(resp.status).toBe(200);
     expect(resp.body.labels.length).toBe(12);
   });
+
+  test('year view returns numDays=365 (or 366 for leap year)', async () => {
+    const resp = await request(BASE_URL).get('/api/analytics/category-trends?year=2026&type=expense');
+    expect(resp.status).toBe(200);
+    expect(resp.body).toHaveProperty('numDays');
+    expect(typeof resp.body.numDays).toBe('number');
+    expect(resp.body.numDays).toBe(365); // 2026 is not a leap year
+  });
+
+  test('month view returns correct numDays for that month', async () => {
+    // April 2026 has 30 days
+    const resp = await request(BASE_URL).get('/api/analytics/category-trends?year=2026&month=04&type=expense');
+    expect(resp.status).toBe(200);
+    expect(resp.body).toHaveProperty('numDays');
+    expect(resp.body.numDays).toBe(30);
+  });
+
+  test('week view returns correct numDays (7 or fewer for partial weeks)', async () => {
+    const resp = await request(BASE_URL).get('/api/analytics/category-trends?year=2026&month=04&week=1&type=expense');
+    expect(resp.status).toBe(200);
+    expect(resp.body).toHaveProperty('numDays');
+    // Week 1 of April 2026 should have 7 days or fewer if month is short
+    expect(resp.body.numDays).toBeGreaterThan(0);
+    expect(resp.body.numDays).toBeLessThanOrEqual(7);
+  });
+
+  test('leap year returns 366 days for numDays', async () => {
+    const resp = await request(BASE_URL).get('/api/analytics/category-trends?year=2024&type=expense');
+    expect(resp.status).toBe(200);
+    expect(resp.body.numDays).toBe(366); // 2024 is a leap year
+  });
 });
