@@ -465,7 +465,7 @@ app.get("/api/transactions", (req, res) => {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     if (sort) {
-      const sortCol = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'].includes(sort) ? `t.${sort}` : 't.date';
+      const sortCol = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'].includes(sort) ? (sort === 'category_name' ? 'c.name' : `t.${sort}`) : 't.date';
       const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
       sql += ` ORDER BY ${sortCol} ${sortOrder}, t.id ${sortOrder}`;
     } else {
@@ -505,6 +505,60 @@ app.get("/api/transactions", (req, res) => {
     }
     const total = db.prepare(countSql).get(...cparams).c;
     res.json({ rows, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/transactions/summary", (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { startDate, endDate, category_ids, type, search } = req.query;
+
+    let sql = `
+      SELECT
+        SUM(t.amount) as total_amount,
+        SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) as total_expense,
+        SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) as total_income,
+        COUNT(*) as count
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+      WHERE t.profile_id = ?
+    `;
+    const params = [pid];
+
+    if (startDate) {
+      sql += " AND t.date >= ?";
+      params.push(startDate);
+    }
+    if (endDate) {
+      sql += " AND t.date <= ?";
+      params.push(endDate);
+    }
+    if (category_ids) {
+      const ids = category_ids.split(',').map((id) => parseInt(id)).filter((id) => !isNaN(id));
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        sql += ` AND t.category_id IN (${placeholders})`;
+        params.push(...ids);
+      }
+    }
+    if (type) {
+      sql += " AND t.type = ?";
+      params.push(type);
+    }
+    if (search) {
+      sql += " AND (t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ?)";
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    const result = db.prepare(sql).get(...params);
+    res.json({
+      total_amount: result.total_amount || 0,
+      total_expense: result.total_expense || 0,
+      total_income: result.total_income || 0,
+      count: result.count || 0
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

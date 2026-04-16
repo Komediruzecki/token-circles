@@ -72,7 +72,21 @@ const txFilters = {
     const allCheckbox = document.getElementById('tx-cat-all');
     const checkboxes = document.querySelectorAll('.tx-cat-checkbox');
     checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
-    this.selectedCategories = allCheckbox.checked ? [] : [];
+    // If "All" is checked, use empty array (show all). If unchecked, use empty to show all as fallback.
+    // The key is we don't toggle between empty and specific - either all or nothing based on checkbox state
+    if (allCheckbox.checked) {
+      this.selectedCategories = [];
+    } else {
+      // When unchecking "All", check if any individual are checked
+      const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+      if (anyChecked) {
+        this.selectedCategories = Array.from(checkboxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
+      } else {
+        // No individual selected - check "All" back on as fallback (show all)
+        allCheckbox.checked = true;
+        this.selectedCategories = [];
+      }
+    }
     this.updateLabel();
     if (typeof transactions !== 'undefined') transactions.load();
   },
@@ -81,6 +95,7 @@ const txFilters = {
     const allCheckbox = document.getElementById('tx-cat-all');
     const checkboxes = document.querySelectorAll('.tx-cat-checkbox:checked');
     this.selectedCategories = Array.from(checkboxes).map((cb) => parseInt(cb.value));
+    // "All" checkbox is checked only when no specific categories are selected
     allCheckbox.checked = this.selectedCategories.length === 0;
     this.updateLabel();
     if (typeof transactions !== 'undefined') transactions.load();
@@ -317,35 +332,76 @@ const transactions = {
   perPage: 50,
   sortBy: 'date',
   sortOrder: 'desc',
-  async load() {
-    const table = document.getElementById('tx-table-body');
-    if (table) table.classList.add('table-loading');
+  buildFilterParams() {
     const search = document.getElementById('tx-search')?.value || '';
     const type = document.getElementById('tx-type-filter')?.value || '';
     const catIds = txFilters.selectedCategories;
     const from = document.getElementById('tx-date-from')?.value || '';
     const to = document.getElementById('tx-date-to')?.value || '';
 
-    const params = new URLSearchParams({
-      limit: this.perPage,
-      offset: (this.page - 1) * this.perPage,
-    });
+    const params = new URLSearchParams();
     if (search) params.append('search', search);
     if (type) params.append('type', type);
     if (catIds.length > 0) params.append('category_ids', catIds.join(','));
     if (from) params.append('startDate', from);
     if (to) params.append('endDate', to);
-    if (this.sortBy) params.append('sort', this.sortBy);
-    if (this.sortOrder) params.append('order', this.sortOrder);
-
-    const data = await api(`/transactions?${params}`);
-    const settings = await api('/settings');
-    const currency = settings.local_currency || 'EUR';
-    this.render(data, currency);
+    return params;
   },
-  render(data, currency = 'EUR') {
+  async load() {
+    const table = document.getElementById('tx-table-body');
+    if (table) table.classList.add('table-loading');
+
+    // Build filter params for both data and summary requests
+    const filterParams = this.buildFilterParams();
+    filterParams.append('limit', this.perPage);
+    filterParams.append('offset', (this.page - 1) * this.perPage);
+    if (this.sortBy) filterParams.append('sort', this.sortBy);
+    if (this.sortOrder) filterParams.append('order', this.sortOrder);
+
+    // Fetch transactions and summary in parallel
+    const [data, summary, settings] = await Promise.all([
+      api(`/transactions?${filterParams}`),
+      api(`/transactions/summary?${this.buildFilterParams()}`),
+      api('/settings')
+    ]);
+    const currency = settings.local_currency || 'EUR';
+    this.render(data, summary, currency);
+  },
+  renderSummary(summary, currency = 'EUR') {
+    const bar = document.getElementById('tx-summary-bar');
+    if (!bar) return;
+    if (!summary || summary.count === 0) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+      <div class="summary-item">
+        <span class="summary-label">Total Amount</span>
+        <span class="summary-value total">${formatCurrency(summary.total_amount || 0, currency)}</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <span class="summary-label">Income</span>
+        <span class="summary-value income">+${formatCurrency(summary.total_income || 0, currency)}</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <span class="summary-label">Expenses</span>
+        <span class="summary-value expense">-${formatCurrency(summary.total_expense || 0, currency)}</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-item">
+        <span class="summary-label">Transactions</span>
+        <span class="summary-value count">${summary.count || 0}</span>
+      </div>
+    `;
+  },
+  render(data, summary, currency = 'EUR') {
     const tbody = document.getElementById('tx-table-body');
     if (tbody) tbody.classList.remove('table-loading');
+    // Render summary bar
+    this.renderSummary(summary, currency);
     if (!data.rows || data.rows.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
       document.getElementById('tx-pagination-info').textContent = '0 transactions';
