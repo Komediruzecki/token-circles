@@ -2240,6 +2240,82 @@ app.delete("/api/accounts/:id", apiRateLimiter, (req, res) => {
 });
 
 // ========================
+// ACCOUNT BALANCE HISTORY
+// ========================
+app.get("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const account = db
+      .prepare("SELECT id FROM accounts WHERE id = ? AND profile_id = ?")
+      .get(req.params.id, pid);
+    if (!account) return res.status(404).json({ error: "Account not found" });
+
+    const history = db
+      .prepare(
+        "SELECT id, balance, recorded_at FROM account_balance_history WHERE account_id = ? ORDER BY recorded_at DESC",
+      )
+      .all(req.params.id);
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const account = db
+      .prepare("SELECT balance FROM accounts WHERE id = ? AND profile_id = ?")
+      .get(req.params.id, pid);
+    if (!account) return res.status(404).json({ error: "Account not found" });
+
+    const result = db
+      .prepare(
+        "INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, datetime('now'))",
+      )
+      .run(req.params.id, account.balance);
+    res.json({ id: result.lastInsertRowid, balance: account.balance, recorded_at: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const account = db
+      .prepare("SELECT id FROM accounts WHERE id = ? AND profile_id = ?")
+      .get(req.params.id, pid);
+    if (!account) return res.status(404).json({ error: "Account not found" });
+
+    db.prepare("DELETE FROM account_balance_history WHERE account_id = ?").run(req.params.id);
+    res.json({ message: "Balance history deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Net worth timeline from balance history
+app.get("/api/accounts/history/timeline", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const rows = db
+      .prepare(
+        `SELECT abh.recorded_at as date, SUM(abh.balance) as net_worth
+         FROM account_balance_history abh
+         JOIN accounts a ON abh.account_id = a.id
+         WHERE a.profile_id = ?
+         GROUP BY date(abh.recorded_at)
+         ORDER BY date ASC`,
+      )
+      .all(pid);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // RECURRING TRANSACTIONS
 // ========================
 app.get("/api/recurring", apiRateLimiter, (req, res) => {

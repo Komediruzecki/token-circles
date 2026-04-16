@@ -158,6 +158,19 @@ function migrate() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_profile ON accounts(profile_id)');
 
+  // Create account_balance_history table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS account_balance_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      balance REAL NOT NULL,
+      recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_balance_history_account ON account_balance_history(account_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_balance_history_recorded ON account_balance_history(recorded_at)');
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS recurring_transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
