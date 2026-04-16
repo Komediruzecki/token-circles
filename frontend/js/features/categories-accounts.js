@@ -36,12 +36,9 @@ const categories = {
       ? renderCats(incomeCats, 'income')
       : '<div class="empty-state"><p>No income categories</p></div>';
 
-    // Update category filter in transactions
-    const catFilter = document.getElementById('tx-cat-filter');
-    if (catFilter) {
-      catFilter.innerHTML =
-        '<option value="">All Categories</option>' +
-        cats.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    // Trigger loading of multi-select category filter in transactions page
+    if (typeof txFilters !== 'undefined' && txFilters.loadCategories) {
+      txFilters.loadCategories();
     }
   },
   setType(type) {

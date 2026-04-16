@@ -424,7 +424,7 @@ app.get("/api/transactions", (req, res) => {
     const {
       startDate,
       endDate,
-      category_id,
+      category_ids,
       type,
       search,
       limit,
@@ -447,9 +447,13 @@ app.get("/api/transactions", (req, res) => {
       sql += " AND t.date <= ?";
       params.push(endDate);
     }
-    if (category_id) {
-      sql += " AND t.category_id = ?";
-      params.push(category_id);
+    if (category_ids) {
+      const ids = category_ids.split(',').map((id) => parseInt(id)).filter((id) => !isNaN(id));
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        sql += ` AND t.category_id IN (${placeholders})`;
+        params.push(...ids);
+      }
     }
     if (type) {
       sql += " AND t.type = ?";
@@ -460,8 +464,13 @@ app.get("/api/transactions", (req, res) => {
         " AND (t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ?)";
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
-    sql += ` ORDER BY t.date DESC, t.id DESC`;
-    if (sort) sql += `, t.${sort} ${order === "asc" ? "ASC" : "DESC"}`;
+    if (sort) {
+      const sortCol = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'].includes(sort) ? `t.${sort}` : 't.date';
+      const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
+      sql += ` ORDER BY ${sortCol} ${sortOrder}, t.id ${sortOrder}`;
+    } else {
+      sql += ` ORDER BY t.date DESC, t.id DESC`;
+    }
     if (limit) sql += ` LIMIT ${parseInt(limit)}`;
     if (offset) sql += ` OFFSET ${parseInt(offset)}`;
     const rows = db.prepare(sql).all(...params);
@@ -477,9 +486,13 @@ app.get("/api/transactions", (req, res) => {
       countSql += " AND t.date <= ?";
       cparams.push(endDate);
     }
-    if (category_id) {
-      countSql += " AND t.category_id = ?";
-      cparams.push(category_id);
+    if (category_ids) {
+      const ids = category_ids.split(',').map((id) => parseInt(id)).filter((id) => !isNaN(id));
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        countSql += ` AND t.category_id IN (${placeholders})`;
+        cparams.push(...ids);
+      }
     }
     if (type) {
       countSql += " AND t.type = ?";
