@@ -24,7 +24,7 @@ const txFilters = {
       yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
     }
     this.setPreset('month');
-    this.initMultiSelect();
+    this.loadCategories(); // Load categories for multi-select filter
   },
 
   initMultiSelect() {

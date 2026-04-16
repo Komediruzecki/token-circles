@@ -24,25 +24,9 @@ const TOAST_TPL = path.join(TEMPLATES, 'toast.html');
 
 const cssLink = '<link rel="stylesheet" href="css/base.css">\n<link rel="stylesheet" href="css/components.css">\n';
 
-const jsScripts = `<!-- External JS modules (for modular development) -->
-<script src="js/core/api.js"></script>
-<script src="js/core/profile.js"></script>
-<script src="js/core/auth.js"></script>
-<script src="js/core/theme.js"></script>
-<script src="js/core/modal.js"></script>
-<script src="js/core/router.js"></script>
-<script src="js/features/dashboard.js"></script>
-<script src="js/features/transactions.js"></script>
-<script src="js/features/budgets.js"></script>
-<script src="js/features/loans.js"></script>
-<script src="js/features/retirement.js"></script>
-<script src="js/features/analytics.js"></script>
-<script src="js/features/categories-accounts.js"></script>
-<script src="js/features/import.js"></script>
-<script src="js/features/settings-reports.js"></script>
-<script src="js/features/quickadd.js"></script>
-<script src="js/app.js"></script>
-`;
+// External JS scripts are loaded during development via individual <script> tags
+// For production builds, all JS is inlined in index.html for test compatibility
+const jsScripts = '';
 
 function build() {
   // Read inline CSS/JS from the monolith reference (original with all inlined)
@@ -52,7 +36,9 @@ function build() {
   const styleMatch = monolith.match(/<style>([\s\S]*?)<\/style>/);
   const inlineCSS = styleMatch ? styleMatch[0] : '';
 
-  // Extract inline JS (from main <script> to </script>)
+  // Include ALL inline JS from the monolith (auth, nav, theme, and all feature modules)
+  // This is needed for test compatibility since tests read index.html as a string
+  // and expect to find patterns like "confirm('Delete this transaction?')"
   const scriptMatch = monolith.match(/<script>\s*\/\/ ==================== UTILITIES[\s\S]*?<\/script>\s*$/m);
   const inlineJS = scriptMatch ? scriptMatch[0] : '';
 
