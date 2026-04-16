@@ -36,11 +36,15 @@ function build() {
   const styleMatch = monolith.match(/<style>([\s\S]*?)<\/style>/);
   const inlineCSS = styleMatch ? styleMatch[0] : '';
 
-  // Include ALL inline JS from the monolith (auth, nav, theme, and all feature modules)
-  // This is needed for test compatibility since tests read index.html as a string
-  // and expect to find patterns like "confirm('Delete this transaction?')"
-  const scriptMatch = monolith.match(/<script>\s*\/\/ ==================== UTILITIES[\s\S]*?<\/script>\s*$/m);
-  const inlineJS = scriptMatch ? scriptMatch[0] : '';
+  // Extract ALL inline JS from the monolith (from UTILITIES to INIT/</script>)
+  // This includes: UTILITIES, PROFILE, AUTH, API, NAVIGATION, THEME, DASHBOARD,
+  // TRANSACTION FILTERS, RECURRING, TRANSACTIONS, ANALYTICS, CATEGORIES, ACCOUNTS,
+  // BUDGETS, LOANS, RETIREMENT CALCULATOR, IMPORT, DATA EXPORT, MONTHLY PDF REPORT,
+  // SETTINGS, QUICK-ADD, INIT
+  const utilStart = monolith.indexOf('// ==================== UTILITIES');
+  const scriptTagStart = monolith.lastIndexOf('<script>', utilStart);
+  const scriptEnd = monolith.indexOf('</script>\n', utilStart) + '</script>\n'.length;
+  const inlineJS = monolith.slice(scriptTagStart, scriptEnd);
 
   // Build the output
   let output = '';
