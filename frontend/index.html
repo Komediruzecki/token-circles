@@ -2707,7 +2707,7 @@ const analytics = {
   renderAverages(data) {
     const currency = this.currentCurrency;
     const totalExpenses = data.datasets.reduce((sum, ds) => sum + ds.data.reduce((a, b) => a + b, 0), 0);
-    const numDays = data.labels.length;
+    const numDays = data.numDays || data.labels.length;
     const avgDay = numDays > 0 ? totalExpenses / numDays : 0;
     const avgWeek = avgDay * 7;
     const avgMonth = avgDay * 30;
