@@ -4095,29 +4095,43 @@ function generateMonthlyPDF() {
 async function populatePdfReportYears() {
   const select = document.getElementById('pdf-report-year');
   if (!select) return;
+  const currentYear = new Date().getFullYear();
   try {
     const { years } = await api('/analytics/distinct-years');
-    years.forEach(y => {
+    select.innerHTML = '<option value="">Year</option>';
+    const allYears = [...new Set([currentYear, ...(years || [])])].sort((a,b) => b - a);
+    allYears.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
       opt.textContent = y;
       select.appendChild(opt);
     });
-  } catch(e) {}
+    select.value = String(currentYear);
+  } catch(e) {
+    select.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+    select.value = currentYear;
+  }
 }
 
 async function populateTaxSummaryYears() {
   const select = document.getElementById('tax-summary-year');
   if (!select) return;
+  const currentYear = new Date().getFullYear();
   try {
     const { years } = await api('/analytics/distinct-years');
-    years.forEach(y => {
+    select.innerHTML = '<option value="">Year</option>';
+    const allYears = [...new Set([currentYear, ...(years || [])])].sort((a,b) => b - a);
+    allYears.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
       opt.textContent = y;
       select.appendChild(opt);
     });
-  } catch(e) {}
+    select.value = String(currentYear);
+  } catch(e) {
+    select.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+    select.value = currentYear;
+  }
 }
 
 function generateTaxSummaryPDF() {
@@ -4132,15 +4146,22 @@ function generateTaxSummaryPDF() {
 async function populatePlSummaryYears() {
   const select = document.getElementById('pl-summary-year');
   if (!select) return;
+  const currentYear = new Date().getFullYear();
   try {
     const { years } = await api('/analytics/distinct-years');
-    years.forEach(y => {
+    select.innerHTML = '<option value="">Year</option>';
+    const allYears = [...new Set([currentYear, ...(years || [])])].sort((a,b) => b - a);
+    allYears.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
       opt.textContent = y;
       select.appendChild(opt);
     });
-  } catch(e) {}
+    select.value = String(currentYear);
+  } catch(e) {
+    select.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+    select.value = currentYear;
+  }
 }
 
 function generatePlSummaryPDF() {
@@ -4155,15 +4176,22 @@ function generatePlSummaryPDF() {
 async function populateAnnualReportYears() {
   const select = document.getElementById('annual-report-year');
   if (!select) return;
+  const currentYear = new Date().getFullYear();
   try {
     const { years } = await api('/analytics/distinct-years');
-    years.forEach(y => {
+    select.innerHTML = '<option value="">Year</option>';
+    const allYears = [...new Set([currentYear, ...(years || [])])].sort((a,b) => b - a);
+    allYears.forEach(y => {
       const opt = document.createElement('option');
       opt.value = y;
       opt.textContent = y;
       select.appendChild(opt);
     });
-  } catch(e) {}
+    select.value = String(currentYear);
+  } catch(e) {
+    select.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+    select.value = currentYear;
+  }
 }
 
 async function generateAnnualPDF() {
@@ -4175,8 +4203,14 @@ async function generateAnnualPDF() {
   btn.textContent = 'Generating...';
 
   try {
-    showDashboard();
-    await new Promise(r => setTimeout(r, 500));
+    // Navigate to dashboard to render charts
+    document.getElementById('page-dashboard').classList.add('active');
+    document.getElementById('page-settings').classList.remove('active');
+    document.querySelectorAll('.nav-item').forEach(a => a.classList.remove('active'));
+    const dashNav = document.querySelector('.nav-item[data-page="dashboard"]');
+    if (dashNav) dashNav.classList.add('active');
+    window.location.hash = 'dashboard';
+    await new Promise(r => setTimeout(r, 800));
 
     const charts = {};
     if (window.dashboard && window.dashboard.charts) {
