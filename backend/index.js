@@ -9,6 +9,7 @@ const SQLiteStore = require("connect-sqlite3")(session);
 const db = require("./database");
 const loanCalc = require("./models/loanCalculator");
 const XLSX = require("xlsx");
+const PDFDocument = require("pdfkit");
 
 const app = express();
 const PORT = process.env.PORT || 3847;
@@ -2479,6 +2480,169 @@ app.post("/api/calculator/retire", (req, res) => {
         expensesAtRetirement,
       },
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// MONTHLY PDF REPORT
+// ========================
+app.get("/api/reports/monthly-pdf", (req, res) => {
+  try {
+    const { year, month } = req.query;
+    if (!year || !month) {
+      return res.status(400).json({ error: "year and month are required" });
+    }
+
+    const pid = getProfileId(req);
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endStr = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const monthName = monthNames[parseInt(month) - 1] || month;
+
+    // Fetch settings for currency
+    const settings = db.prepare(`SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`).get(pid);
+    const currency = settings ? settings.value : "EUR";
+
+    // Fetch transactions for the month
+    const transactions = db.prepare(`
+      SELECT t.date, t.amount, t.description, c.name as cat_name, c.type as cat_type, t.type as tx_type
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+      WHERE t.profile_id = ? AND t.date >= ? AND t.date <= ?
+      ORDER BY t.date
+    `).all(pid, startStr, endStr);
+
+    // Aggregate by category
+    const incomeByCat = {};
+    const expenseByCat = {};
+    let totalIncome = 0;
+    let totalExpenses = 0;
+
+    transactions.forEach(tx => {
+      const amt = Math.abs(parseFloat(tx.amount) || 0);
+      if (tx.tx_type === 'income') {
+        totalIncome += amt;
+        incomeByCat[tx.cat_name || 'Uncategorized'] = (incomeByCat[tx.cat_name || 'Uncategorized'] || 0) + amt;
+      } else {
+        totalExpenses += amt;
+        expenseByCat[tx.cat_name || 'Uncategorized'] = (expenseByCat[tx.cat_name || 'Uncategorized'] || 0) + amt;
+      }
+    });
+
+    const netSavings = totalIncome - totalExpenses;
+
+    // Generate PDF
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="report-${year}-${String(month).padStart(2, "0")}.pdf"`);
+
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    doc.pipe(res);
+
+    // Colors
+    const titleColor = "#1e293b";
+    const headerBg = "#1e293b";
+    const incomeColor = "#059669";
+    const expenseColor = "#dc2626";
+    const borderColor = "#e2e8f0";
+    const mutedColor = "#64748b";
+
+    // Header
+    doc.fillColor(titleColor).fontSize(22).font("Helvetica-Bold")
+      .text("Monthly Financial Report", { align: "center" });
+    doc.moveDown(0.3);
+    doc.fillColor(mutedColor).fontSize(13).font("Helvetica")
+      .text(`${monthName} ${year}`, { align: "center" });
+    doc.moveDown(0.8);
+
+    // Summary box
+    const boxY = doc.y;
+    const boxW = doc.page.width - 100;
+    const colW = boxW / 3;
+
+    // Draw box background
+    doc.rect(50, boxY, boxW, 60).fill("#f8fafc");
+    doc.rect(50, boxY, boxW, 60).stroke(borderColor);
+
+    // Vertical dividers
+    doc.moveTo(50 + colW, boxY).lineTo(50 + colW, boxY + 60).stroke(borderColor);
+    doc.moveTo(50 + colW * 2, boxY).lineTo(50 + colW * 2, boxY + 60).stroke(borderColor);
+
+    // Income
+    doc.fillColor(incomeColor).fontSize(10).font("Helvetica-Bold")
+      .text("Total Income", 50, boxY + 10, { width: colW, align: "center" });
+    doc.fillColor(incomeColor).fontSize(14).font("Helvetica-Bold")
+      .text(formatCurrencyPdf(totalIncome, currency), 50, boxY + 28, { width: colW, align: "center" });
+
+    // Expenses
+    doc.fillColor(expenseColor).fontSize(10).font("Helvetica-Bold")
+      .text("Total Expenses", 50 + colW, boxY + 10, { width: colW, align: "center" });
+    doc.fillColor(expenseColor).fontSize(14).font("Helvetica-Bold")
+      .text(formatCurrencyPdf(totalExpenses, currency), 50 + colW, boxY + 28, { width: colW, align: "center" });
+
+    // Net Savings
+    doc.fillColor(netSavings >= 0 ? incomeColor : expenseColor).fontSize(10).font("Helvetica-Bold")
+      .text("Net Savings", 50 + colW * 2, boxY + 10, { width: colW, align: "center" });
+    doc.fillColor(netSavings >= 0 ? incomeColor : expenseColor).fontSize(14).font("Helvetica-Bold")
+      .text(formatCurrencyPdf(netSavings, currency), 50 + colW * 2, boxY + 28, { width: colW, align: "center" });
+
+    doc.y = boxY + 70;
+
+    // Helper: section header
+    const drawSectionHeader = (title) => {
+      doc.moveDown(0.5);
+      doc.fillColor(headerBg).fontSize(12).font("Helvetica-Bold").text(title);
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor(borderColor).stroke();
+      doc.moveDown(0.3);
+    };
+
+    // Helper: currency formatter
+    function formatCurrencyPdf(amount, curr) {
+      const symbols = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF " };
+      const sym = symbols[curr] || curr + " ";
+      return sym + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    // Income section
+    if (Object.keys(incomeByCat).length > 0) {
+      drawSectionHeader("Income");
+      doc.fontSize(10).font("Helvetica");
+      const sortedIncome = Object.entries(incomeByCat).sort((a, b) => b[1] - a[1]);
+      sortedIncome.forEach(([cat, amt]) => {
+        doc.fillColor(incomeColor).text(`${formatCurrencyPdf(amt, currency)}  `, { continued: true });
+        doc.fillColor(titleColor).text(cat);
+      });
+    }
+
+    // Expenses section
+    if (Object.keys(expenseByCat).length > 0) {
+      drawSectionHeader("Expenses");
+      doc.fontSize(10).font("Helvetica");
+      const sortedExpenses = Object.entries(expenseByCat).sort((a, b) => b[1] - a[1]);
+      sortedExpenses.forEach(([cat, amt]) => {
+        const pct = totalExpenses > 0 ? ((amt / totalExpenses) * 100).toFixed(1) : "0.0";
+        doc.fillColor(expenseColor).text(`${formatCurrencyPdf(amt, currency)}  (${pct}%)  `, { continued: true });
+        doc.fillColor(titleColor).text(cat);
+      });
+    }
+
+    if (Object.keys(incomeByCat).length === 0 && Object.keys(expenseByCat).length === 0) {
+      doc.moveDown(1);
+      doc.fillColor(mutedColor).fontSize(11).font("Helvetica").text("No transactions found for this period.", { align: "center" });
+    }
+
+    // Footer
+    doc.moveDown(2);
+    doc.fillColor(mutedColor).fontSize(9).font("Helvetica")
+      .text(`Generated by Finance Manager — ${new Date().toLocaleDateString()}`, { align: "center" });
+
+    doc.end();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

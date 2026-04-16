@@ -1095,6 +1095,31 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         </select>
       </div>
     </div>
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Monthly PDF Report</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a formatted monthly summary with income, expenses, and category breakdowns.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select class="form-control" id="pdf-report-month" style="width:auto;min-width:130px;">
+          <option value="">Month</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+        <select class="form-control" id="pdf-report-year" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <button class="btn btn-primary" onclick="generateMonthlyPDF()">Download PDF</button>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -4010,6 +4035,31 @@ function exportData(type) {
   window.open(`/api/export/${type}?format=${format}`, '_blank');
 }
 
+// ==================== MONTHLY PDF REPORT ====================
+function generateMonthlyPDF() {
+  const year = document.getElementById('pdf-report-year').value;
+  const month = document.getElementById('pdf-report-month').value;
+  if (!year || !month) {
+    alert('Please select a year and month');
+    return;
+  }
+  window.open(`/api/reports/monthly-pdf?year=${year}&month=${month}`, '_blank');
+}
+
+async function populatePdfReportYears() {
+  const select = document.getElementById('pdf-report-year');
+  if (!select) return;
+  try {
+    const { years } = await api('/analytics/distinct-years');
+    years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      select.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
 // ==================== SETTINGS ====================
 const settings = {
   async load() {
@@ -4018,6 +4068,8 @@ const settings = {
     // Sync dark mode toggle
     const toggle = document.getElementById('setting-dark-mode');
     if (toggle) toggle.checked = theme.isDark();
+    // Populate PDF report year selector
+    populatePdfReportYears();
   },
   async save() {
     const data = { local_currency: document.getElementById('setting-currency').value };
