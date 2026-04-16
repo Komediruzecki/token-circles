@@ -684,9 +684,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         <select class="form-control" id="tx-type-filter" onchange="transactions.load()">
           <option value="">All Types</option><option value="income">Income</option><option value="expense">Expense</option><option value="transfer">Transfer</option>
         </select>
-        <select class="form-control" id="tx-cat-filter" onchange="transactions.load()">
-          <option value="">All Categories</option>
-        </select>
+        <div id="tx-cat-filter-container"></div>
         <input type="date" class="form-control" id="tx-date-from" onchange="txFilters.onCustomDateChange()">
         <input type="date" class="form-control" id="tx-date-to" onchange="txFilters.onCustomDateChange()">
         <button class="btn btn-secondary btn-sm" onclick="transactions.clearFilters()">Clear</button>
@@ -696,8 +694,14 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
     <div class="card">
       <div class="table-wrap">
         <table>
-          <thead><tr>
-            <th>Date</th><th>Description</th><th>Category</th><th>Beneficiary/Payor</th><th>Amount</th><th>Type</th><th>Actions</th>
+          <thead id="tx-table-sortable"><tr>
+            <th data-sort="date" onclick="transactions.sortByColumn('date')">Date <span class="sort-arrow"> &#9660;&#9650;</span></th>
+            <th data-sort="description" onclick="transactions.sortByColumn('description')">Description <span class="sort-arrow"> &#9660;&#9650;</span></th>
+            <th data-sort="category_name" onclick="transactions.sortByColumn('category_name')">Category <span class="sort-arrow"> &#9660;&#9650;</span></th>
+            <th data-sort="beneficiary" onclick="transactions.sortByColumn('beneficiary')">Beneficiary/Payor <span class="sort-arrow"> &#9660;&#9650;</span></th>
+            <th data-sort="amount" onclick="transactions.sortByColumn('amount')">Amount <span class="sort-arrow"> &#9660;&#9650;</span></th>
+            <th data-sort="type" onclick="transactions.sortByColumn('type')">Type <span class="sort-arrow"> &#9660;&#9650;</span></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody id="tx-table-body"></tbody>
         </table>

@@ -1,6 +1,7 @@
 // ==================== TRANSACTION FILTERS ====================
 const txFilters = {
   currentPreset: 'month',
+  selectedCategories: [],
 
   async init() {
     // Populate year dropdown from distinct-years API
@@ -23,6 +24,82 @@ const txFilters = {
       yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
     }
     this.setPreset('month');
+    this.initMultiSelect();
+  },
+
+  initMultiSelect() {
+    const container = document.getElementById('tx-cat-filter-container');
+    if (!container) return;
+
+    const cats = window.allCategories || [];
+    container.innerHTML = `
+      <div class="tx-cat-filter" id="tx-cat-filter">
+        <div class="tx-cat-filter-display" onclick="txFilters.toggleMultiSelect()">
+          <span id="tx-cat-filter-label">All Categories</span>
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="tx-cat-filter-dropdown" id="tx-cat-filter-dropdown">
+          <label class="tx-cat-option">
+            <input type="checkbox" id="tx-cat-all" checked onchange="txFilters.toggleAllCategories()">
+            <span>All Categories</span>
+          </label>
+          ${cats.map((c) => `
+            <label class="tx-cat-option">
+              <input type="checkbox" class="tx-cat-checkbox" value="${c.id}" onchange="txFilters.onCategoryChange()">
+              <span class="cat-dot" style="background:${c.color || '#6b7280'}"></span>
+              <span>${escapeHtml(c.name)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const filter = document.getElementById('tx-cat-filter');
+      if (filter && !filter.contains(e.target)) {
+        filter.classList.remove('open');
+      }
+    });
+  },
+
+  toggleMultiSelect() {
+    const filter = document.getElementById('tx-cat-filter');
+    if (filter) filter.classList.toggle('open');
+  },
+
+  toggleAllCategories() {
+    const allCheckbox = document.getElementById('tx-cat-all');
+    const checkboxes = document.querySelectorAll('.tx-cat-checkbox');
+    checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
+    this.selectedCategories = allCheckbox.checked ? [] : [];
+    this.updateLabel();
+    if (typeof transactions !== 'undefined') transactions.load();
+  },
+
+  onCategoryChange() {
+    const allCheckbox = document.getElementById('tx-cat-all');
+    const checkboxes = document.querySelectorAll('.tx-cat-checkbox:checked');
+    this.selectedCategories = Array.from(checkboxes).map((cb) => parseInt(cb.value));
+    allCheckbox.checked = this.selectedCategories.length === 0;
+    this.updateLabel();
+    if (typeof transactions !== 'undefined') transactions.load();
+  },
+
+  updateLabel() {
+    const label = document.getElementById('tx-cat-filter-label');
+    if (!label) return;
+    if (this.selectedCategories.length === 0) {
+      label.textContent = 'All Categories';
+    } else {
+      label.textContent = `${this.selectedCategories.length} Selected`;
+    }
+  },
+
+  async loadCategories() {
+    const cats = await api('/categories');
+    window.allCategories = cats;
+    this.initMultiSelect();
   },
 
   setPreset(preset) {
@@ -238,12 +315,14 @@ const transactions = {
   editingId: null,
   page: 1,
   perPage: 50,
+  sortBy: 'date',
+  sortOrder: 'desc',
   async load() {
     const table = document.getElementById('tx-table-body');
     if (table) table.classList.add('table-loading');
     const search = document.getElementById('tx-search')?.value || '';
     const type = document.getElementById('tx-type-filter')?.value || '';
-    const cat = document.getElementById('tx-cat-filter')?.value || '';
+    const catIds = txFilters.selectedCategories;
     const from = document.getElementById('tx-date-from')?.value || '';
     const to = document.getElementById('tx-date-to')?.value || '';
 
@@ -253,9 +332,11 @@ const transactions = {
     });
     if (search) params.append('search', search);
     if (type) params.append('type', type);
-    if (cat) params.append('category_id', cat);
+    if (catIds.length > 0) params.append('category_ids', catIds.join(','));
     if (from) params.append('startDate', from);
     if (to) params.append('endDate', to);
+    if (this.sortBy) params.append('sort', this.sortBy);
+    if (this.sortOrder) params.append('order', this.sortOrder);
 
     const data = await api(`/transactions?${params}`);
     const settings = await api('/settings');
@@ -319,14 +400,23 @@ const transactions = {
     this.load();
   },
   clearFilters() {
-    ['tx-search', 'tx-type-filter', 'tx-cat-filter', 'tx-date-from', 'tx-date-to'].forEach((id) => {
+    ['tx-search', 'tx-type-filter', 'tx-date-from', 'tx-date-to'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
     document.getElementById('tx-year-filter').value = '';
     document.getElementById('tx-month-filter').value = '';
+    txFilters.selectedCategories = [];
+    txFilters.updateLabel();
+    const allCheckbox = document.getElementById('tx-cat-all');
+    if (allCheckbox) allCheckbox.checked = true;
+    const checkboxes = document.querySelectorAll('.tx-cat-checkbox');
+    checkboxes.forEach((cb) => { cb.checked = false; });
     txFilters.setPreset('month');
     this.page = 1;
+    this.sortBy = 'date';
+    this.sortOrder = 'desc';
+    this.updateSortHeaders();
     this.load();
   },
   setType(type) {
@@ -335,6 +425,32 @@ const transactions = {
       .querySelectorAll('#tx-type-selector button')
       .forEach((b) => b.classList.remove('active'));
     document.querySelector(`#tx-type-selector button.${type}`).classList.add('active');
+  },
+  sortByColumn(col) {
+    if (this.sortBy === col) {
+      this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortBy = col;
+      this.sortOrder = 'asc';
+    }
+    this.updateSortHeaders();
+    this.page = 1;
+    this.load();
+  },
+  updateSortHeaders() {
+    const headers = document.querySelectorAll('#tx-table-sortable th[data-sort]');
+    headers.forEach((th) => {
+      const col = th.dataset.sort;
+      const arrow = th.querySelector('.sort-arrow');
+      if (col === this.sortBy) {
+        th.classList.add('sorted');
+        if (arrow) arrow.innerHTML = this.sortOrder === 'asc'
+          ? ' &#9650;' : ' &#9660;';
+      } else {
+        th.classList.remove('sorted');
+        if (arrow) arrow.innerHTML = ' &#9660;&#9650;';
+      }
+    });
   },
   async openModal(id = null) {
     this.editingId = id;
