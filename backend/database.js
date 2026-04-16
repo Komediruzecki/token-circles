@@ -244,6 +244,17 @@ function migrate() {
     try { db.exec('ALTER TABLE profiles ADD COLUMN user_id INTEGER REFERENCES users(id)'); } catch(e) {}
   }
 
+  // Migration: Add reconciled column to transactions
+  if (!columnExists('transactions', 'reconciled')) {
+    try { db.exec('ALTER TABLE transactions ADD COLUMN reconciled INTEGER DEFAULT 0'); } catch(e) {}
+  }
+
+  // Migration: Add reconciled_at column to transactions
+  if (!columnExists('transactions', 'reconciled_at')) {
+    try { db.exec('ALTER TABLE transactions ADD COLUMN reconciled_at TEXT'); } catch(e) {}
+  }
+  }
+
   // Create default profile if none exist
   const profileCount = db.prepare('SELECT COUNT(*) as c FROM profiles').get();
   if (profileCount.c === 0) {

@@ -190,6 +190,7 @@ tr:last-child td { border-bottom: none; }
 .td-amount.transfer { color: var(--transfer); }
 .td-actions { display: flex; gap: 4px; }
 tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !important; }
+tr.tx-reconciled { opacity: 0.75; }
 
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
   border-radius: 20px; font-size: 11px; font-weight: 500; }
@@ -463,6 +464,7 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
 .td-checkbox { text-align: center; width: 40px; }
 .td-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
 tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !important; }
+tr.tx-reconciled { opacity: 0.75; }
 
 /* Toggle Switch */
 .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
@@ -1372,6 +1374,14 @@ tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !importan
         <div class="form-group">
           <label class="form-label">Notes</label>
           <textarea class="form-control" id="tx-notes" rows="2"></textarea>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+          <label class="form-label" style="margin:0;">Reconciled</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="tx-reconciled">
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:12px;color:var(--text-secondary);">Mark as reconciled against bank statement</span>
         </div>
         <div class="form-group">
           <label class="form-label">Tags</label>
@@ -2698,15 +2708,18 @@ const transactions = {
       document.getElementById('tx-pagination').innerHTML = '';
       return;
     }
-    tbody.innerHTML = data.rows.map(t => `<tr class="${bulkEdit.selected.has(t.id) ? 'row-selected' : ''}">
+    tbody.innerHTML = data.rows.map(t => `<tr class="${bulkEdit.selected.has(t.id) ? 'row-selected' : ''}${t.reconciled ? ' tx-reconciled' : ''}">
       <td class="td-checkbox"><input type="checkbox" class="tx-bulk-checkbox" value="${t.id}" onchange="bulkEdit.toggle(${t.id})"></td>
-      <td>${formatDate(t.date)}</td>
+      <td>${t.reconciled ? '<svg width="14" height="14" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;" title="Reconciled"><path d="M5 13l4 4L19 7"/></svg>' : ''} ${formatDate(t.date)}</td>
       <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color||'#6b7280'}"></span>${t.category_name || '-'}</td>
       <td>${t.type==='expense' ? (t.beneficiary||'-') : (t.payor||'-')}</td>
       <td class="td-amount ${t.type}">${t.type==='expense'?'-':'+'}${formatCurrency(t.amount_local || t.amount, currency)}</td>
       <td><span class="badge badge-${t.type}">${t.type}</span></td>
       <td class="td-actions">
+        <button class="btn btn-ghost btn-sm ${t.reconciled ? 'text-success' : ''}" onclick="transactions.toggleReconcile(${t.id}, ${!t.reconciled})" title="${t.reconciled ? 'Unreconcile' : 'Reconcile'}">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="${t.reconciled ? '2' : '1.5'}" viewBox="0 0 24 24"><path d="${t.reconciled ? 'M5 13l4 4L19 7' : 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'}"/></svg>
+        </button>
         <button class="btn btn-ghost btn-sm" onclick="transactions.edit(${t.id})" title="Edit">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
         </button>
@@ -2756,6 +2769,11 @@ const transactions = {
     this.page = 1;
     this.load();
   },
+  async toggleReconcile(id, reconcile) {
+    await api(`/transactions/${id}/reconcile`, { method: 'PATCH' });
+    toast(reconcile ? 'Transaction reconciled' : 'Transaction unreconciled', 'success');
+    this.load();
+  },
   updateSortHeaders() {
     document.querySelectorAll('#page-transactions th[data-sort]').forEach(th => {
       const col = th.dataset.sort;
@@ -2799,6 +2817,7 @@ const transactions = {
         document.getElementById('tx-exchange-rate').value = t.exchange_rate || 1;
         document.getElementById('tx-means').value = t.means_of_payment || '';
         document.getElementById('tx-notes').value = t.notes || '';
+        document.getElementById('tx-reconciled').checked = !!t.reconciled;
         this.setType(t.type || 'expense');
 
         // Load tags for this transaction
@@ -2879,7 +2898,8 @@ const transactions = {
         means_of_payment: document.getElementById('tx-means').value,
         exchange_rate: parseFloat(document.getElementById('tx-exchange-rate').value) || 1,
         type: this.currentType,
-        notes: document.getElementById('tx-notes').value
+        notes: document.getElementById('tx-notes').value,
+        reconciled: document.getElementById('tx-reconciled').checked
       };
       const method = id ? 'PUT' : 'POST';
       const url = id ? `/transactions/${id}` : '/transactions';

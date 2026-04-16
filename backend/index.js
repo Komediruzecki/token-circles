@@ -965,6 +965,7 @@ app.put("/api/transactions/:id", apiRateLimiter, (req, res) => {
       exchange_rate,
       type,
       notes,
+      reconciled,
     } = req.body;
 
     // Validate required fields
@@ -983,7 +984,7 @@ app.put("/api/transactions/:id", apiRateLimiter, (req, res) => {
         `
       UPDATE transactions SET description=?, amount=?, date=?, beneficiary=?, payor=?,
         category_id=?, currency=?, amount_local=?, means_of_payment=?, exchange_rate=?,
-        type=?, notes=?, updated_at=datetime('now')
+        type=?, notes=?, reconciled=?, reconciled_at= CASE WHEN ? = 1 THEN datetime('now') ELSE reconciled_at END, updated_at=datetime('now')
       WHERE id=? AND profile_id=?
     `,
       )
@@ -1000,6 +1001,8 @@ app.put("/api/transactions/:id", apiRateLimiter, (req, res) => {
         exchange_rate || 1.0,
         type,
         notes || "",
+        reconciled ? 1 : 0,
+        reconciled ? 1 : 0,
         req.params.id,
         pid,
       );
@@ -1030,6 +1033,63 @@ app.delete("/api/transactions", apiRateLimiter, (req, res) => {
     const pid = getProfileId(req);
     db.prepare("DELETE FROM transactions WHERE profile_id=?").run(pid);
     res.json({ ok: true, message: "All transactions deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// RECONCILIATION (per-profile)
+// ========================
+// Toggle reconciled status for a single transaction
+app.patch("/api/transactions/:id/reconcile", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const existing = db
+      .prepare("SELECT id, reconciled FROM transactions WHERE id = ? AND profile_id = ?")
+      .get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: "Transaction not found" });
+
+    const newStatus = existing.reconciled ? 0 : 1;
+    db.prepare(
+      "UPDATE transactions SET reconciled = ?, reconciled_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END WHERE id = ? AND profile_id = ?"
+    ).run(newStatus, newStatus, req.params.id, pid);
+    res.json({ id: parseInt(req.params.id), reconciled: newStatus, reconciled_at: newStatus ? new Date().toISOString() : null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk reconcile transactions by date range
+app.post("/api/transactions/reconcile/bulk", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { startDate, endDate } = req.body;
+    if (!startDate || !endDate) return res.status(400).json({ error: "startDate and endDate are required" });
+
+    const result = db.prepare(
+      `UPDATE transactions SET reconciled = 1, reconciled_at = datetime('now')
+       WHERE profile_id = ? AND date >= ? AND date <= ? AND reconciled = 0`
+    ).run(pid, startDate, endDate);
+    res.json({ message: `${result.changes} transactions reconciled`, count: result.changes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get reconciliation status summary
+app.get("/api/transactions/reconcile/summary", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const summary = db.prepare(
+      `SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN reconciled = 1 THEN 1 ELSE 0 END) as reconciled_count,
+        SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN 1 ELSE 0 END) as unreconciled_count,
+        SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN amount ELSE 0 END) as unreconciled_total
+       FROM transactions WHERE profile_id = ?`
+    ).get(pid);
+    res.json(summary);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
