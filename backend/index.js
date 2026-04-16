@@ -568,6 +568,29 @@ app.post("/api/transactions", (req, res) => {
   }
 });
 
+// GET single transaction by ID
+app.get("/api/transactions/:id", (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { id } = req.params;
+
+    const tx = db.prepare(`
+      SELECT t.*, c.name as category_name, c.color as category_color
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+      WHERE t.id = ? AND t.profile_id = ?
+    `).get(id, pid);
+
+    if (!tx) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    res.json(tx);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put("/api/transactions/:id", (req, res) => {
   try {
     const pid = getProfileId(req);
@@ -3271,16 +3294,26 @@ app.get("/api/reports/annual-pdf", async (req, res) => {
 
     doc.moveDown(2);
 
+    // === CHARTS SECTION: Always start on a new page to avoid overflow ===
+    doc.addPage();
+    doc.y = 40;
+
     // Embedded rendered chart screenshot
     if (screenshotBuffer && screenshotBuffer.length > 100) {
       try {
-        const imgW = Math.min(pageW, 540);
-        const imgH = imgW * 1.05;
-        if (doc.y + imgH > doc.page.height - 50) doc.addPage();
-        doc.image(screenshotBuffer, 50, doc.y, { width: imgW, height: imgH, fit: [imgW, imgH] });
-        doc.y += imgH + 15;
+        // Calculate image dimensions to fit within page width with margins
+        const maxImgW = doc.page.width - 80; // page width minus margins
+        const imgW = Math.min(maxImgW, 700); // cap at 700px for readability
+        const imgH = imgW * 0.85; // aspect ratio based on export.html layout (3 charts + table)
+
+        // Center the image horizontally
+        const imgX = (doc.page.width - imgW) / 2;
+
+        doc.image(screenshotBuffer, imgX, doc.y, { width: imgW, height: imgH, fit: [imgW, imgH] });
+        doc.y += imgH + 20;
       } catch (e) {
         // Fall back to text sections if image embedding fails
+        console.error('Failed to embed chart image:', e.message);
         doc.moveDown(2);
       }
     } else {
