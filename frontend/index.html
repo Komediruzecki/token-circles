@@ -999,6 +999,10 @@ tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !importan
     <div class="page-header">
       <div><h2>Accounts</h2><p>Manage your financial accounts</p></div>
       <div class="page-header-actions">
+        <button class="btn btn-ghost" onclick="accounts.recordSnapshot()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Record Snapshot
+        </button>
         <button class="btn btn-primary" onclick="accounts.openModal()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           Add Account
@@ -1006,6 +1010,26 @@ tr.row-selected { background: var(--primary-bg, rgba(59,130,246,0.08)) !importan
       </div>
     </div>
     <div id="accounts-content"></div>
+    <div id="balance-history-section" style="margin-top:24px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Balance History</div>
+          <div style="display:flex;gap:8px;">
+            <select id="history-account-select" class="form-control" style="max-width:200px;" onchange="accounts.loadHistory()">
+              <option value="">All Accounts</option>
+            </select>
+          </div>
+        </div>
+        <div style="height:240px;position:relative;">
+          <canvas id="chart-balance-history"></canvas>
+        </div>
+        <div id="history-empty" class="empty-state" style="display:none;">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18"/></svg>
+          <p>No balance history recorded yet</p>
+          <p style="font-size:12px;color:var(--text-secondary);">Click "Record Snapshot" to capture current balances</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ANALYTICS -->
@@ -2096,7 +2120,7 @@ const nav = {
         if (page === 'categories') categories.load();
         if (page === 'analytics') analytics.init();
         if (page === 'settings') settings.load();
-        if (page === 'accounts') accounts.load();
+        if (page === 'accounts') { accounts.load(); accounts.loadHistory(); }
         if (page === 'import') dataImport.reset();
         if (page === 'retirement') { retirement.init(); retirement.calculate(); }
       });
@@ -3481,6 +3505,83 @@ const accounts = {
     if (result.error) { toast(result.error, 'error'); return; }
     toast('Account deleted', 'success');
     this.load();
+  },
+  balanceHistoryChart: null,
+  async loadHistory() {
+    const accountsData = await api('/accounts');
+    const select = document.getElementById('history-account-select');
+    select.innerHTML = '<option value="">All Accounts</option>' +
+      accountsData.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+
+    const canvas = document.getElementById('chart-balance-history');
+    const emptyDiv = document.getElementById('history-empty');
+    const accountId = select.value;
+
+    let history;
+    if (accountId) {
+      history = await api(`/accounts/${accountId}/history`);
+    } else {
+      history = await api('/accounts/history/timeline');
+    }
+
+    if (!history || history.length === 0) {
+      canvas.style.display = 'none';
+      emptyDiv.style.display = 'flex';
+      return;
+    }
+
+    canvas.style.display = 'block';
+    emptyDiv.style.display = 'none';
+
+    const ctx = canvas.getContext('2d');
+    if (this.balanceHistoryChart) this.balanceHistoryChart.destroy();
+
+    const cc = chartColors();
+    const labels = history.map(h => formatDate(h.date || h.recorded_at));
+    const data = history.map(h => h.net_worth !== undefined ? h.net_worth : h.balance);
+
+    this.balanceHistoryChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: accountId ? 'Account Balance' : 'Net Worth',
+          data,
+          borderColor: cc.primary,
+          backgroundColor: cc.primaryBg,
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'top', labels: { color: cc.legend } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${formatCurrency(ctx.raw)}`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: cc.grid }, ticks: { color: cc.text } },
+          y: { grid: { color: cc.grid }, ticks: { callback: v => formatCurrency(v), color: cc.text } }
+        }
+      }
+    });
+  },
+  async recordSnapshot() {
+    const accountsData = await api('/accounts');
+    if (!accountsData || accountsData.length === 0) {
+      toast('No accounts to snapshot', 'info');
+      return;
+    }
+    for (const acc of accountsData) {
+      await api(`/accounts/${acc.id}/history`, { method: 'POST' });
+    }
+    toast('Snapshot recorded for all accounts', 'success');
+    this.loadHistory();
   }
 };
 
