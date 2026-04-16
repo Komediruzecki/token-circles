@@ -1131,6 +1131,17 @@ input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
         <button class="btn btn-primary" onclick="generateTaxSummaryPDF()">Download Tax PDF</button>
       </div>
     </div>
+
+    <div class="card" style="max-width:600px; margin-top:24px;">
+      <div class="settings-section-title">Year-End P&L Summary</div>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Profit & Loss report showing total income, expenses, and net savings with category breakdown.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <select class="form-control" id="pl-summary-year" style="width:auto;min-width:100px;">
+          <option value="">Year</option>
+        </select>
+        <button class="btn btn-primary" onclick="generatePlSummaryPDF()">Download P&L PDF</button>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -4107,6 +4118,29 @@ function generateTaxSummaryPDF() {
   window.open(`/api/reports/tax-summary-pdf?year=${year}`, '_blank');
 }
 
+async function populatePlSummaryYears() {
+  const select = document.getElementById('pl-summary-year');
+  if (!select) return;
+  try {
+    const { years } = await api('/analytics/distinct-years');
+    years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      select.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+function generatePlSummaryPDF() {
+  const year = document.getElementById('pl-summary-year').value;
+  if (!year) {
+    alert('Please select a year');
+    return;
+  }
+  window.open(`/api/reports/pl-summary-pdf?year=${year}`, '_blank');
+}
+
 // ==================== SETTINGS ====================
 const settings = {
   async load() {
@@ -4118,6 +4152,7 @@ const settings = {
     // Populate PDF report year selector
     populatePdfReportYears();
     populateTaxSummaryYears();
+    populatePlSummaryYears();
   },
   async save() {
     const data = { local_currency: document.getElementById('setting-currency').value };

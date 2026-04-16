@@ -29,7 +29,7 @@
 
 ## Reports
 - [x] **Monthly PDF report** — Generate a downloadable monthly summary report
-- [ ] **Tax category grouping** — Tag categories as tax-deductible, generate year-end tax summary
+- [x] **Tax category grouping** — Tag categories as tax-deductible, generate year-end tax summary
 - [ ] **Income vs expense summary** — Year-end P&L style report
 
 ## UI/UX
