@@ -4,12 +4,12 @@
 const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
+const req = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
 
 describe('Year-End Tax Summary API', () => {
   describe('GET /api/reports/tax-summary', () => {
     test('returns JSON with correct structure for a valid year', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/tax-summary?year=2026');
+      const resp = await req.get('/api/reports/tax-summary?year=2026');
 
       expect(resp.status).toBe(200);
       expect(resp.body).toHaveProperty('year', 2026);
@@ -26,19 +26,18 @@ describe('Year-End Tax Summary API', () => {
     });
 
     test('returns 400 when year is missing', async () => {
-      const resp = await request(BASE_URL).get('/api/reports/tax-summary');
+      const resp = await req.get('/api/reports/tax-summary');
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when year param is empty', async () => {
-      const resp = await request(BASE_URL).get('/api/reports/tax-summary?year=');
+      const resp = await req.get('/api/reports/tax-summary?year=');
       expect(resp.status).toBe(400);
     });
 
     test('returns valid response for a year with no transactions', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/tax-summary?year=2020');
+      const resp = await req.get('/api/reports/tax-summary?year=2020');
 
       expect(resp.status).toBe(200);
       expect(resp.body).toHaveProperty('year', 2020);
@@ -51,8 +50,7 @@ describe('Year-End Tax Summary API', () => {
 
   describe('GET /api/reports/tax-summary-pdf', () => {
     test('returns PDF content-type with attachment disposition', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/tax-summary-pdf?year=2026');
+      const resp = await req.get('/api/reports/tax-summary-pdf?year=2026');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -63,8 +61,7 @@ describe('Year-End Tax Summary API', () => {
     });
 
     test('PDF starts with valid PDF header', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/tax-summary-pdf?year=2026');
+      const resp = await req.get('/api/reports/tax-summary-pdf?year=2026');
 
       expect(resp.status).toBe(200);
       const header = resp.body.slice(0, 4).toString('utf8');
@@ -72,7 +69,7 @@ describe('Year-End Tax Summary API', () => {
     });
 
     test('returns 400 when year is missing', async () => {
-      const resp = await request(BASE_URL).get('/api/reports/tax-summary-pdf');
+      const resp = await req.get('/api/reports/tax-summary-pdf');
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
@@ -81,41 +78,37 @@ describe('Year-End Tax Summary API', () => {
   describe('PUT /api/categories/:id - tax_deductible field', () => {
     test('can update category tax_deductible to true', async () => {
       // First create a category
-      const create = await request(BASE_URL)
-        .post('/api/categories')
+      const create = await req.post('/api/categories')
         .send({ name: 'TestTaxCategory', color: '#ef4444', type: 'expense' });
 
       expect(create.status).toBe(200);
       const catId = create.body.id;
 
       // Update with tax_deductible = true
-      const update = await request(BASE_URL)
-        .put(`/api/categories/${catId}`)
+      const update = await req.put(`/api/categories/${catId}`)
         .send({ name: 'TestTaxCategory', color: '#ef4444', type: 'expense', tax_deductible: true });
 
       expect(update.status).toBe(200);
 
       // Verify it was saved
-      const get = await request(BASE_URL).get('/api/categories');
+      const get = await req.get('/api/categories');
       const updated = get.body.find(c => c.id === catId);
       expect(updated.tax_deductible).toBe(1);
     });
 
     test('can update category tax_deductible to false', async () => {
       // Create and update back to false
-      const create = await request(BASE_URL)
-        .post('/api/categories')
+      const create = await req.post('/api/categories')
         .send({ name: 'TestTaxCategory2', color: '#f97316', type: 'expense', tax_deductible: true });
 
       const catId = create.body.id;
 
-      const update = await request(BASE_URL)
-        .put(`/api/categories/${catId}`)
+      const update = await req.put(`/api/categories/${catId}`)
         .send({ name: 'TestTaxCategory2', color: '#f97316', type: 'expense', tax_deductible: false });
 
       expect(update.status).toBe(200);
 
-      const get = await request(BASE_URL).get('/api/categories');
+      const get = await req.get('/api/categories');
       const updated = get.body.find(c => c.id === catId);
       expect(updated.tax_deductible).toBe(0);
     });

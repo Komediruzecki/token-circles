@@ -6,10 +6,16 @@ const request = require('supertest');
 const BASE_URL = 'http://localhost:3847';
 
 describe('Monthly PDF Report API - Edge Cases', () => {
+  beforeAll(async () => {
+    // Reset rate limit store so we don't get 429s from prior test files
+    await request(BASE_URL).post('/api/test/reset-rate-limit');
+  });
+
   describe('GET /api/reports/monthly-pdf', () => {
     test('returns PDF for a month with valid transactions', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=04');
+        .get('/api/reports/monthly-pdf?year=2026&month=04')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -19,7 +25,8 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('returns PDF for first month of year', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=01');
+        .get('/api/reports/monthly-pdf?year=2026&month=01')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -29,7 +36,8 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('returns PDF for last month of year', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=12');
+        .get('/api/reports/monthly-pdf?year=2026&month=12')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -39,7 +47,8 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('returns PDF for empty month (no transactions)', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2025&month=01');
+        .get('/api/reports/monthly-pdf?year=2025&month=01')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -49,7 +58,8 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('returns 400 for missing year', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?month=04');
+        .get('/api/reports/monthly-pdf?month=04')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
@@ -57,7 +67,8 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('returns 400 for missing month', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026');
+        .get('/api/reports/monthly-pdf?year=2026')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
@@ -65,59 +76,65 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('returns 400 for empty year', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=&month=04');
+        .get('/api/reports/monthly-pdf?year=&month=04')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
     });
 
     test('returns 400 for empty month', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=');
+        .get('/api/reports/monthly-pdf?year=2026&month=')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
     });
 
     test('returns 400 for invalid month (0)', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=0');
+        .get('/api/reports/monthly-pdf?year=2026&month=0')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
     });
 
     test('returns 400 for invalid month (13)', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=13');
+        .get('/api/reports/monthly-pdf?year=2026&month=13')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
     });
 
     test('returns 400 for non-numeric month', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=abc');
+        .get('/api/reports/monthly-pdf?year=2026&month=abc')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
     });
 
     test('returns 400 for non-numeric year', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=abc&month=04');
+        .get('/api/reports/monthly-pdf?year=abc&month=04')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(400);
     });
 
     test('handles leap year February correctly', async () => {
-      // 2024 is a leap year, February has 29 days
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2024&month=02');
+        .get('/api/reports/monthly-pdf?year=2024&month=02')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
     });
 
     test('handles non-leap year February correctly', async () => {
-      // 2023 is not a leap year, February has 28 days
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2023&month=02');
+        .get('/api/reports/monthly-pdf?year=2023&month=02')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -125,15 +142,17 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('PDF is non-empty buffer', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=04');
+        .get('/api/reports/monthly-pdf?year=2026&month=04')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(Buffer.isBuffer(resp.body)).toBe(true);
-      expect(resp.body.length).toBeGreaterThan(100); // Min reasonable PDF size
+      expect(resp.body.length).toBeGreaterThan(100);
     });
 
     test('PDF starts with valid %PDF header', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=04');
+        .get('/api/reports/monthly-pdf?year=2026&month=04')
+        .set('X-Skip-RateLimit', 'true');
 
       const header = resp.body.slice(0, 4).toString('utf8');
       expect(header).toBe('%PDF');
@@ -141,17 +160,17 @@ describe('Monthly PDF Report API - Edge Cases', () => {
 
     test('handles month with single digit padding', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=3');
+        .get('/api/reports/monthly-pdf?year=2026&month=3')
+        .set('X-Skip-RateLimit', 'true');
 
-      // Should still work (month 3 = March)
       expect(resp.status).toBe(200);
     });
 
     test('response headers include cache prevention', async () => {
       const resp = await request(BASE_URL)
-        .get('/api/reports/monthly-pdf?year=2026&month=04');
+        .get('/api/reports/monthly-pdf?year=2026&month=04')
+        .set('X-Skip-RateLimit', 'true');
 
-      // PDF endpoint shouldn't set aggressive cache headers
       expect(resp.headers['cache-control']).not.toBe('public, max-age');
     });
   });

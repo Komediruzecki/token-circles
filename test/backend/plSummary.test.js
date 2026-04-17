@@ -4,12 +4,12 @@
 const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
+const req = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
 
 describe('Year-End P&L Summary API', () => {
   describe('GET /api/reports/pl-summary', () => {
     test('returns JSON with correct structure for a valid year', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary?year=2026');
+      const resp = await req.get('/api/reports/pl-summary?year=2026');
 
       expect(resp.status).toBe(200);
       expect(resp.body).toHaveProperty('year', 2026);
@@ -23,8 +23,7 @@ describe('Year-End P&L Summary API', () => {
     });
 
     test('income and expenses totals match the sum of byCategory', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary?year=2026');
+      const resp = await req.get('/api/reports/pl-summary?year=2026');
 
       const incomeSum = Object.values(resp.body.income.byCategory)
         .reduce((s, c) => s + c.total, 0);
@@ -36,8 +35,7 @@ describe('Year-End P&L Summary API', () => {
     });
 
     test('netSavings equals income minus expenses', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary?year=2026');
+      const resp = await req.get('/api/reports/pl-summary?year=2026');
 
       expect(resp.body.netSavings).toBeCloseTo(
         resp.body.income.total - resp.body.expenses.total, 2
@@ -45,8 +43,7 @@ describe('Year-End P&L Summary API', () => {
     });
 
     test('savingsRate is calculated correctly', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary?year=2026');
+      const resp = await req.get('/api/reports/pl-summary?year=2026');
 
       const income = resp.body.income.total;
       const expense = resp.body.expenses.total;
@@ -57,19 +54,18 @@ describe('Year-End P&L Summary API', () => {
     });
 
     test('returns 400 when year is missing', async () => {
-      const resp = await request(BASE_URL).get('/api/reports/pl-summary');
+      const resp = await req.get('/api/reports/pl-summary');
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when year param is empty', async () => {
-      const resp = await request(BASE_URL).get('/api/reports/pl-summary?year=');
+      const resp = await req.get('/api/reports/pl-summary?year=');
       expect(resp.status).toBe(400);
     });
 
     test('returns valid response for a year with no transactions', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary?year=2020');
+      const resp = await req.get('/api/reports/pl-summary?year=2020');
 
       expect(resp.status).toBe(200);
       expect(resp.body.year).toBe(2020);
@@ -83,8 +79,7 @@ describe('Year-End P&L Summary API', () => {
 
   describe('GET /api/reports/pl-summary-pdf', () => {
     test('returns PDF content-type with attachment disposition', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary-pdf?year=2026');
+      const resp = await req.get('/api/reports/pl-summary-pdf?year=2026');
 
       expect(resp.status).toBe(200);
       expect(resp.headers['content-type']).toContain('application/pdf');
@@ -95,8 +90,7 @@ describe('Year-End P&L Summary API', () => {
     });
 
     test('PDF starts with valid PDF header', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/reports/pl-summary-pdf?year=2026');
+      const resp = await req.get('/api/reports/pl-summary-pdf?year=2026');
 
       expect(resp.status).toBe(200);
       const header = resp.body.slice(0, 4).toString('utf8');
@@ -104,7 +98,7 @@ describe('Year-End P&L Summary API', () => {
     });
 
     test('returns 400 when year is missing', async () => {
-      const resp = await request(BASE_URL).get('/api/reports/pl-summary-pdf');
+      const resp = await req.get('/api/reports/pl-summary-pdf');
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
