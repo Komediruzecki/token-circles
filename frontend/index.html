@@ -288,6 +288,14 @@
     <div class="page-header">
       <div><h2>Budgets</h2><p>Track spending limits by category</p></div>
       <div class="page-header-actions">
+        <button class="btn btn-secondary" onclick="budgets.duplicateLastMonth()" title="Copy last month's budgets">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          Copy Last Month
+        </button>
+        <button class="btn btn-secondary" onclick="budgets.setFromExpenses()" title="Set budgets from last month's expenses">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 7h.01M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          From Last Expenses
+        </button>
         <button class="btn btn-primary" onclick="budgets.openModal()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           Add Budget
@@ -299,6 +307,9 @@
       <div class="card">
         <div class="card-header">
           <div><div class="card-title">Monthly Budget Status</div><div class="card-subtitle" id="budget-period-label">Current month</div></div>
+          <select class="form-control" id="budget-month-select" onchange="budgets.load()" style="width:auto;min-width:140px;">
+            <option value="">Current Month</option>
+          </select>
         </div>
         <div id="budget-list"></div>
       </div>
@@ -306,6 +317,13 @@
         <div class="card-header"><div><div class="card-title">Budget vs Actual</div><div class="card-subtitle">Spending comparison</div></div></div>
         <div class="chart-container tall"><canvas id="chart-budget"></canvas></div>
       </div>
+    </div>
+
+    <div class="card" id="budget-history-section" style="display:none;">
+      <div class="card-header">
+        <div><div class="card-title">Budget History</div><div class="card-subtitle">Performance over time</div></div>
+      </div>
+      <div id="budget-history-chart" style="height:300px;"><canvas id="chart-budget-history"></canvas></div>
     </div>
   </div>
 
@@ -1516,26 +1534,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="js/core/api.js?v=1776445592351"></script>
-<script src="js/core/auth.js?v=1776445592351"></script>
-<script src="js/core/theme.js?v=1776445592351"></script>
-<script src="js/core/modal.js?v=1776445592351"></script>
-<script src="js/core/profile.js?v=1776445592351"></script>
-<script src="js/core/router.js?v=1776445592351"></script>
-<script src="js/features/dashboard.js?v=1776445592351"></script>
-<script src="js/features/transactions.js?v=1776445592351"></script>
-<script src="js/features/budgets.js?v=1776445592351"></script>
-<script src="js/features/loans.js?v=1776445592351"></script>
-<script src="js/features/retirement.js?v=1776445592351"></script>
-<script src="js/features/analytics.js?v=1776445592351"></script>
-<script src="js/features/categories-accounts.js?v=1776445592351"></script>
-<script src="js/features/import.js?v=1776445592351"></script>
-<script src="js/features/settings-reports.js?v=1776445592351"></script>
-<script src="js/features/chartExport.js?v=1776445592351"></script>
-<script src="js/features/bulkEdit.js?v=1776445592351"></script>
-<script src="js/features/quickadd.js?v=1776445592351"></script>
-<script src="js/features/savingsGoals.js?v=1776445592351"></script>
-<script src="js/app.js?v=1776445592351"></script>
+<script src="js/core/api.js?v=1776445795275"></script>
+<script src="js/core/auth.js?v=1776445795275"></script>
+<script src="js/core/theme.js?v=1776445795275"></script>
+<script src="js/core/modal.js?v=1776445795275"></script>
+<script src="js/core/profile.js?v=1776445795275"></script>
+<script src="js/core/router.js?v=1776445795275"></script>
+<script src="js/features/dashboard.js?v=1776445795275"></script>
+<script src="js/features/transactions.js?v=1776445795275"></script>
+<script src="js/features/budgets.js?v=1776445795275"></script>
+<script src="js/features/loans.js?v=1776445795275"></script>
+<script src="js/features/retirement.js?v=1776445795275"></script>
+<script src="js/features/analytics.js?v=1776445795275"></script>
+<script src="js/features/categories-accounts.js?v=1776445795275"></script>
+<script src="js/features/import.js?v=1776445795275"></script>
+<script src="js/features/settings-reports.js?v=1776445795275"></script>
+<script src="js/features/chartExport.js?v=1776445795275"></script>
+<script src="js/features/bulkEdit.js?v=1776445795275"></script>
+<script src="js/features/quickadd.js?v=1776445795275"></script>
+<script src="js/features/savingsGoals.js?v=1776445795275"></script>
+<script src="js/app.js?v=1776445795275"></script>
 
 </body>
 </html>

@@ -1274,6 +1274,136 @@ app.get("/api/budgets/summary", apiRateLimiter, (req, res) => {
   }
 });
 
+// Duplicate budgets from previous month
+app.post("/api/budgets/duplicate-last", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { year, month } = req.body;
+
+    // Calculate previous month
+    let prevYear = year || new Date().getFullYear();
+    let prevMonth = (month || new Date().getMonth() + 1) - 1;
+    if (prevMonth === 0) { prevMonth = 12; prevYear--; }
+
+    const prevStart = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
+
+    // Get previous month's budgets
+    const prevBudgets = db
+      .prepare(`
+        SELECT category_id, amount, period
+        FROM budgets
+        WHERE profile_id = ? AND start_date >= ? AND start_date < ?
+      `)
+      .all(pid, prevStart, `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-01`);
+
+    if (prevBudgets.length === 0) {
+      return res.json({ ok: false, message: 'No budgets found for previous month' });
+    }
+
+    // Create current month start date
+    const currYear = year || new Date().getFullYear();
+    const currMonth = month || new Date().getMonth() + 1;
+    const currStart = `${currYear}-${String(currMonth).padStart(2, "0")}-01`;
+
+    // Clear existing budgets for current month and insert from previous
+    db.prepare("DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?")
+      .run(pid, currStart, `${currYear}-${String(currMonth + 1).padStart(2, "0")}-01`);
+
+    const insert = db.prepare(
+      "INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)"
+    );
+
+    for (const b of prevBudgets) {
+      insert.run(b.category_id, b.amount, b.period, currStart, pid);
+    }
+
+    res.json({ ok: true, count: prevBudgets.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Set budgets from last month's actual expenses
+app.post("/api/budgets/from-expenses", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { year, month } = req.body;
+
+    // Calculate previous month
+    let prevYear = year || new Date().getFullYear();
+    let prevMonth = (month || new Date().getMonth() + 1) - 1;
+    if (prevMonth === 0) { prevMonth = 12; prevYear--; }
+
+    const prevStart = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
+    const prevEnd = `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-01`;
+
+    // Get actual expenses by category
+    const expenses = db
+      .prepare(`
+        SELECT t.category_id, c.name, SUM(COALESCE(t.amount_local, t.amount)) as total
+        FROM transactions t
+        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+        WHERE t.profile_id = ? AND t.date >= ? AND t.date < ? AND t.type = 'expense' AND t.category_id IS NOT NULL
+        GROUP BY t.category_id
+      `)
+      .all(pid, prevStart, prevEnd);
+
+    if (expenses.length === 0) {
+      return res.json({ ok: false, message: 'No expenses found for previous month' });
+    }
+
+    // Create current month start date
+    const currYear = year || new Date().getFullYear();
+    const currMonth = month || new Date().getMonth() + 1;
+    const currStart = `${currYear}-${String(currMonth).padStart(2, "0")}-01`;
+
+    // Clear existing budgets for current month
+    db.prepare("DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?")
+      .run(pid, currStart, `${currYear}-${String(currMonth + 1).padStart(2, "0")}-01`);
+
+    const insert = db.prepare(
+      "INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, 'monthly', ?, ?)"
+    );
+
+    for (const e of expenses) {
+      insert.run(e.category_id, e.total, currStart, pid);
+    }
+
+    res.json({ ok: true, count: expenses.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get budget history for a category
+app.get("/api/budgets/history", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { category_id, months = 6 } = req.query;
+
+    const history = db
+      .prepare(`
+        SELECT b.start_date as month, b.amount as budget_amount,
+               COALESCE(SUM(t.amount_local, t.amount), 0) as spent
+        FROM budgets b
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+          AND t.profile_id = b.profile_id
+          AND t.date >= b.start_date
+          AND t.date < date(b.start_date, '+1 month')
+          AND t.type = 'expense'
+        WHERE b.profile_id = ? AND b.category_id = ?
+        GROUP BY b.start_date
+        ORDER BY b.start_date DESC
+        LIMIT ?
+      `)
+      .all(pid, parseInt(category_id), parseInt(months));
+
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========================
 // BUDGET ALERTS
 // ========================
