@@ -132,6 +132,8 @@ const analytics = {
   },
   renderPieChart(data) {
     const currency = this.currentCurrency;
+    const pageAnalytics = document.getElementById('page-analytics');
+    if (!pageAnalytics || !pageAnalytics.classList.contains('active')) return;
     const ctx = document.getElementById('analytics-pie-chart').getContext('2d');
     if (this.pieChart) this.pieChart.destroy();
     const cc = chartColors();
@@ -189,6 +191,8 @@ const analytics = {
   },
   renderTopCategories(data) {
     const currency = this.currentCurrency;
+    const pageAnalytics = document.getElementById('page-analytics');
+    if (!pageAnalytics || !pageAnalytics.classList.contains('active')) return;
     const totalByCat = data.datasets
       .map((ds) => ({
         name: ds.category,
