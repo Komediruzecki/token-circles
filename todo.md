@@ -40,7 +40,7 @@
 
 ## Collaboration
 - [ ] **Multi-profile sharing** — Share read-only or full-access to another user
-- [ ] **Family mode** — Combined household view of all family member profiles
+- [x] **Family mode** — Combined household view of all family member profiles
 
 ## Accounts & Net Worth
 - [x] **Multi-account net worth** — Aggregate all account balances (giro, savings, investment) into net worth dashboard
