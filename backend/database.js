@@ -77,6 +77,31 @@ function migrate() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_profile ON budgets(profile_id)');
 
+  // Create savings_goals table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      target_amount REAL NOT NULL,
+      current_amount REAL NOT NULL DEFAULT 0,
+      deadline TEXT,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      profile_id INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_savings_goals_profile ON savings_goals(profile_id)');
+
+  // Create emergency_fund_config table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS emergency_fund_config (
+      id INTEGER PRIMARY KEY,
+      monthly_expenses REAL NOT NULL DEFAULT 0,
+      profile_id INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_emergency_fund_profile ON emergency_fund_config(profile_id)');
+
   // Create loans table
   db.exec(`
     CREATE TABLE IF NOT EXISTS loans (
@@ -252,7 +277,6 @@ function migrate() {
   // Migration: Add reconciled_at column to transactions
   if (!columnExists('transactions', 'reconciled_at')) {
     try { db.exec('ALTER TABLE transactions ADD COLUMN reconciled_at TEXT'); } catch(e) {}
-  }
   }
 
   // Create default profile if none exist
