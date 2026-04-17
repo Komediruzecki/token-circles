@@ -9,7 +9,7 @@ const retirement = {
     this._debounceTimer = setTimeout(() => this.calculate(), 400);
   },
   init() {
-    this.currentCurrency = settings.currentCurrency || 'EUR';
+    this.currentCurrency = settings.local_currency || 'EUR';
   },
   handleCountryChange() {
     const country = document.getElementById('ret-country').value;

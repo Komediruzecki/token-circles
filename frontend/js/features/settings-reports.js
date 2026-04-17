@@ -18,7 +18,7 @@ async function generateMonthlyPDF() {
   btn.textContent = 'Generating...';
 
   try {
-    const resp = await fetch(`/api/reports/monthly-pdf?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`);
+    const resp = await fetch(`/api/reports/monthly-pdf?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`, { credentials: 'include' });
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
@@ -88,7 +88,17 @@ function generateTaxSummaryPDF() {
     alert('Please select a year');
     return;
   }
-  window.open(`/api/reports/tax-summary-pdf?year=${year}`, '_blank');
+  fetch(`/api/reports/tax-summary-pdf?year=${year}`, { credentials: 'include' })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tax-summary-${year}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(e => alert('Failed to generate PDF: ' + e.message));
 }
 
 async function populatePlSummaryYears() {
@@ -118,7 +128,17 @@ function generatePlSummaryPDF() {
     alert('Please select a year');
     return;
   }
-  window.open(`/api/reports/pl-summary-pdf?year=${year}`, '_blank');
+  fetch(`/api/reports/pl-summary-pdf?year=${year}`, { credentials: 'include' })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pl-summary-${year}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(e => alert('Failed to generate PDF: ' + e.message));
 }
 
 async function populateAnnualReportYears() {
@@ -154,7 +174,7 @@ async function generateAnnualPDF() {
   btn.textContent = 'Generating...';
 
   try {
-    const resp = await fetch(`/api/reports/annual-pdf?year=${encodeURIComponent(year)}`);
+    const resp = await fetch(`/api/reports/annual-pdf?year=${encodeURIComponent(year)}`, { credentials: 'include' });
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
