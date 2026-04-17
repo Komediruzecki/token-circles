@@ -124,10 +124,17 @@ function interestSaved(originalSchedule, prepaySchedule) {
 }
 
 /**
- * Calculate months saved from prepayments
+ * Calculate months saved from prepayments.
+ * Uses financial equivalence: interest saved / monthly payment of original schedule.
+ * Falls back to schedule-length difference when equivalence rounds to 0 but
+ * actual months were eliminated (e.g. late-term prepayments).
  */
 function monthsSaved(originalSchedule, prepaySchedule) {
-  return originalSchedule.length - prepaySchedule.length;
+  const saved = interestSaved(originalSchedule, prepaySchedule);
+  const monthlyPayment = originalSchedule.length > 0 ? originalSchedule[0].payment : 1;
+  const equivMonths = Math.round(saved / monthlyPayment);
+  const eliminatedMonths = originalSchedule.length - prepaySchedule.length;
+  return Math.max(equivMonths, eliminatedMonths);
 }
 
 /**
@@ -143,7 +150,7 @@ function getSummary(schedule, originalSchedule) {
     totalPaid: totalPaid(schedule),
     totalInterest: newInterest,
     interestSaved: originalInterest - newInterest,
-    monthsSaved: originalMonths - newMonths,
+    monthsSaved: monthsSaved(originalSchedule, schedule),
     payoffDate: payoffDate(schedule),
     totalPayments: schedule.length,
     avgMonthlyPayment: schedule.length > 0

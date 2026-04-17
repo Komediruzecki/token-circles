@@ -134,10 +134,10 @@
     </div>
 
     <div class="grid-4" id="dashboard-stats">
-      <div class="stat-card income"><div class="stat-card-label">Income</div><div class="stat-card-value" id="stat-income">$0</div></div>
-      <div class="stat-card expense"><div class="stat-card-label">Expenses</div><div class="stat-card-value" id="stat-expense">$0</div></div>
-      <div class="stat-card balance"><div class="stat-card-label">Balance</div><div class="stat-card-value" id="stat-balance">$0</div></div>
-      <div class="stat-card networth"><div class="stat-card-label">Net Worth</div><div class="stat-card-value" id="stat-networth">$0</div></div>
+      <div class="stat-card income"><div class="stat-card-label">Income</div><div class="stat-card-value" id="stat-income">$0</div><div class="stat-card-delta" id="delta-income"></div></div>
+      <div class="stat-card expense"><div class="stat-card-label">Expenses</div><div class="stat-card-value" id="stat-expense">$0</div><div class="stat-card-delta" id="delta-expense"></div></div>
+      <div class="stat-card balance"><div class="stat-card-label">Balance</div><div class="stat-card-value" id="stat-balance">$0</div><div class="stat-card-delta" id="delta-balance"></div></div>
+      <div class="stat-card networth"><div class="stat-card-label">Net Worth</div><div class="stat-card-value" id="stat-networth">$0</div><div class="stat-card-delta" id="delta-networth"></div></div>
     </div>
 
     <div class="grid-2">
@@ -649,150 +649,157 @@
     <div class="page-header">
       <div><h2>Settings</h2><p>Configure your finance manager</p></div>
     </div>
-    <div class="card" style="max-width:600px;">
-      <div class="settings-section">
-        <div class="settings-section-title">General</div>
-        <div class="form-group">
-          <label class="form-label">Local Currency</label>
-          <select class="form-control" id="setting-currency" style="max-width:200px;">
-            <option value="USD">USD - US Dollar</option>
-            <option value="EUR">EUR - Euro</option>
-            <option value="GBP">GBP - British Pound</option>
-            <option value="JPY">JPY - Japanese Yen</option>
-            <option value="CAD">CAD - Canadian Dollar</option>
-            <option value="AUD">AUD - Australian Dollar</option>
-            <option value="CHF">CHF - Swiss Franc</option>
-            <option value="CNY">CNY - Chinese Yuan</option>
-            <option value="INR">INR - Indian Rupee</option>
-            <option value="BRL">BRL - Brazilian Real</option>
-            <option value="MXN">MXN - Mexican Peso</option>
-            <option value="SGD">SGD - Singapore Dollar</option>
-            <option value="HKD">HKD - Hong Kong Dollar</option>
-            <option value="KRW">KRW - South Korean Won</option>
-            <option value="SEK">SEK - Swedish Krona</option>
-            <option value="NOK">NOK - Norwegian Krone</option>
-            <option value="DKK">DKK - Danish Krone</option>
-            <option value="NZD">NZD - New Zealand Dollar</option>
-            <option value="ZAR">ZAR - South African Rand</option>
-            <option value="PLN">PLN - Polish Zloty</option>
-          </select>
+    <div class="settings-grid">
+      <div class="settings-col">
+        <div class="card">
+          <div class="settings-section">
+            <div class="settings-section-title">General</div>
+            <div class="form-group">
+              <label class="form-label">Local Currency</label>
+              <select class="form-control" id="setting-currency" style="max-width:200px;">
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="JPY">JPY - Japanese Yen</option>
+                <option value="CAD">CAD - Canadian Dollar</option>
+                <option value="AUD">AUD - Australian Dollar</option>
+                <option value="CHF">CHF - Swiss Franc</option>
+                <option value="CNY">CNY - Chinese Yuan</option>
+                <option value="INR">INR - Indian Rupee</option>
+                <option value="BRL">BRL - Brazilian Real</option>
+                <option value="MXN">MXN - Mexican Peso</option>
+                <option value="SGD">SGD - Singapore Dollar</option>
+                <option value="HKD">HKD - Hong Kong Dollar</option>
+                <option value="KRW">KRW - South Korean Won</option>
+                <option value="SEK">SEK - Swedish Krona</option>
+                <option value="NOK">NOK - Norwegian Krone</option>
+                <option value="DKK">DKK - Danish Krone</option>
+                <option value="NZD">NZD - New Zealand Dollar</option>
+                <option value="ZAR">ZAR - South African Rand</option>
+                <option value="PLN">PLN - Polish Zloty</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Appearance</label>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="font-size:14px;color:var(--text-secondary);">Light</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-dark-mode" onchange="theme.toggle()">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span style="font-size:14px;color:var(--text-secondary);">Dark</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="settings.save()" style="margin-top:16px;">Save Settings</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Appearance</label>
-          <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:14px;color:var(--text-secondary);">Light</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="setting-dark-mode" onchange="theme.toggle()">
-              <span class="toggle-slider"></span>
-            </label>
-            <span style="font-size:14px;color:var(--text-secondary);">Dark</span>
+        <div class="card" style="margin-top:16px;">
+          <div class="danger-zone">
+            <div class="danger-zone-title">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              Danger Zone
+            </div>
+            <div class="danger-zone-item">
+              <div>
+                <div class="danger-zone-item-title">Delete All Transactions</div>
+                <div class="danger-zone-item-desc">Permanently remove all transactions for this profile. This cannot be undone.</div>
+              </div>
+              <button class="btn btn-danger-outline" onclick="settings.deleteAllTransactions()">Delete All Transactions</button>
+            </div>
+            <div class="danger-zone-item">
+              <div>
+                <div class="danger-zone-item-title">Delete All Profile Data</div>
+                <div class="danger-zone-item-desc">Permanently delete all transactions, budgets, loans, and reset categories to defaults. The profile will be kept.</div>
+              </div>
+              <button class="btn btn-danger-outline" onclick="settings.deleteAllProfileData()">Delete All Data</button>
+            </div>
+            <div class="danger-zone-item">
+              <div>
+                <div class="danger-zone-item-title">Delete All Categories</div>
+                <div class="danger-zone-item-desc">Permanently remove all categories for this profile. Transactions will keep their category IDs but show as "uncategorized".</div>
+              </div>
+              <button class="btn btn-danger-outline" onclick="settings.deleteAllCategories()">Delete All Categories</button>
+            </div>
           </div>
         </div>
       </div>
-      <div class="danger-zone">
-        <div class="danger-zone-title">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-          Danger Zone
-        </div>
-        <div class="danger-zone-item">
-          <div>
-            <div class="danger-zone-item-title">Delete All Transactions</div>
-            <div class="danger-zone-item-desc">Permanently remove all transactions for this profile. This cannot be undone.</div>
+      <div class="settings-col">
+        <div class="card">
+          <div class="settings-section-title">Data Export</div>
+          <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download your data in CSV or JSON format. All data is scoped to the current profile.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;" id="export-type-buttons">
+            <button class="btn btn-secondary" onclick="exportData('transactions')">Transactions</button>
+            <button class="btn btn-secondary" onclick="exportData('categories')">Categories</button>
+            <button class="btn btn-secondary" onclick="exportData('accounts')">Accounts</button>
+            <button class="btn btn-secondary" onclick="exportData('budgets')">Budgets</button>
+            <button class="btn btn-secondary" onclick="exportData('loans')">Loans</button>
+            <button class="btn btn-secondary" onclick="exportData('recurring')">Recurring</button>
           </div>
-          <button class="btn btn-danger-outline" onclick="settings.deleteAllTransactions()">Delete All Transactions</button>
-        </div>
-        <div class="danger-zone-item">
-          <div>
-            <div class="danger-zone-item-title">Delete All Profile Data</div>
-            <div class="danger-zone-item-desc">Permanently delete all transactions, budgets, loans, and reset categories to defaults. The profile will be kept.</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="font-size:13px;color:var(--text-secondary);">Format:</label>
+            <select class="form-control" id="export-format" style="max-width:120px;">
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
           </div>
-          <button class="btn btn-danger-outline" onclick="settings.deleteAllProfileData()">Delete All Data</button>
         </div>
-        <div class="danger-zone-item">
-          <div>
-            <div class="danger-zone-item-title">Delete All Categories</div>
-            <div class="danger-zone-item-desc">Permanently remove all categories for this profile. Transactions will keep their category IDs but show as "uncategorized".</div>
+      </div>
+      <div class="settings-col">
+        <div class="card">
+          <div class="settings-section-title">Monthly PDF Report</div>
+          <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a formatted monthly summary with income, expenses, and category breakdowns.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <select class="form-control" id="pdf-report-month" style="width:auto;min-width:130px;">
+              <option value="">Month</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+              <option value="05">May</option>
+              <option value="06">June</option>
+              <option value="07">July</option>
+              <option value="08">August</option>
+              <option value="09">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+            <select class="form-control" id="pdf-report-year" style="width:auto;min-width:100px;">
+              <option value="">Year</option>
+            </select>
+            <button class="btn btn-primary" onclick="generateMonthlyPDF()">Download PDF</button>
           </div>
-          <button class="btn btn-danger-outline" onclick="settings.deleteAllCategories()">Delete All Categories</button>
         </div>
-      </div>
-      <button class="btn btn-primary" onclick="settings.save()" style="margin-top:16px;">Save Settings</button>
-    </div>
-    <div class="card" style="max-width:600px; margin-top:24px;">
-      <div class="settings-section-title">Data Export</div>
-      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download your data in CSV or JSON format. All data is scoped to the current profile.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;" id="export-type-buttons">
-        <button class="btn btn-secondary" onclick="exportData('transactions')">Transactions</button>
-        <button class="btn btn-secondary" onclick="exportData('categories')">Categories</button>
-        <button class="btn btn-secondary" onclick="exportData('accounts')">Accounts</button>
-        <button class="btn btn-secondary" onclick="exportData('budgets')">Budgets</button>
-        <button class="btn btn-secondary" onclick="exportData('loans')">Loans</button>
-        <button class="btn btn-secondary" onclick="exportData('recurring')">Recurring</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <label style="font-size:13px;color:var(--text-secondary);">Format:</label>
-        <select class="form-control" id="export-format" style="max-width:120px;">
-          <option value="csv">CSV</option>
-          <option value="json">JSON</option>
-        </select>
-      </div>
-    </div>
-    <div class="card" style="max-width:600px; margin-top:24px;">
-      <div class="settings-section-title">Monthly PDF Report</div>
-      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a formatted monthly summary with income, expenses, and category breakdowns.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <select class="form-control" id="pdf-report-month" style="width:auto;min-width:130px;">
-          <option value="">Month</option>
-          <option value="01">January</option>
-          <option value="02">February</option>
-          <option value="03">March</option>
-          <option value="04">April</option>
-          <option value="05">May</option>
-          <option value="06">June</option>
-          <option value="07">July</option>
-          <option value="08">August</option>
-          <option value="09">September</option>
-          <option value="10">October</option>
-          <option value="11">November</option>
-          <option value="12">December</option>
-        </select>
-        <select class="form-control" id="pdf-report-year" style="width:auto;min-width:100px;">
-          <option value="">Year</option>
-        </select>
-        <button class="btn btn-primary" onclick="generateMonthlyPDF()">Download PDF</button>
-      </div>
-    </div>
-
-    <div class="card" style="max-width:600px; margin-top:24px;">
-      <div class="settings-section-title">Year-End Tax Summary</div>
-      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Get a breakdown of your tax-deductible vs non-deductible expenses for the year.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <select class="form-control" id="tax-summary-year" style="width:auto;min-width:100px;">
-          <option value="">Year</option>
-        </select>
-        <button class="btn btn-primary" onclick="generateTaxSummaryPDF()">Download Tax PDF</button>
-      </div>
-    </div>
-
-    <div class="card" style="max-width:600px; margin-top:24px;">
-      <div class="settings-section-title">Year-End P&L Summary</div>
-      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Profit & Loss report showing total income, expenses, and net savings with category breakdown.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <select class="form-control" id="pl-summary-year" style="width:auto;min-width:100px;">
-          <option value="">Year</option>
-        </select>
-        <button class="btn btn-primary" onclick="generatePlSummaryPDF()">Download P&L PDF</button>
-      </div>
-    </div>
-
-    <div class="card" style="max-width:600px; margin-top:24px;">
-      <div class="settings-section-title">Annual Financial Report</div>
-      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a comprehensive PDF with embedded charts and monthly breakdown for any year.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        <select class="form-control" id="annual-report-year" style="width:auto;min-width:100px;">
-          <option value="">Year</option>
-        </select>
-        <button class="btn btn-primary" onclick="generateAnnualPDF()">Download Annual PDF</button>
+        <div class="card" style="margin-top:16px;">
+          <div class="settings-section-title">Year-End Tax Summary</div>
+          <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Get a breakdown of your tax-deductible vs non-deductible expenses for the year.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <select class="form-control" id="tax-summary-year" style="width:auto;min-width:100px;">
+              <option value="">Year</option>
+            </select>
+            <button class="btn btn-primary" onclick="generateTaxSummaryPDF()">Download Tax PDF</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div class="settings-section-title">Year-End P&L Summary</div>
+          <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Profit & Loss report showing total income, expenses, and net savings with category breakdown.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <select class="form-control" id="pl-summary-year" style="width:auto;min-width:100px;">
+              <option value="">Year</option>
+            </select>
+            <button class="btn btn-primary" onclick="generatePlSummaryPDF()">Download P&L PDF</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div class="settings-section-title">Annual Financial Report</div>
+          <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a comprehensive PDF with embedded charts and monthly breakdown for any year.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <select class="form-control" id="annual-report-year" style="width:auto;min-width:100px;">
+              <option value="">Year</option>
+            </select>
+            <button class="btn btn-primary" onclick="generateAnnualPDF()">Download Annual PDF</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1441,26 +1448,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="js/core/api.js?v=1776437642435"></script>
-<script src="js/core/auth.js?v=1776437642435"></script>
-<script src="js/core/theme.js?v=1776437642435"></script>
-<script src="js/core/modal.js?v=1776437642435"></script>
-<script src="js/core/profile.js?v=1776437642435"></script>
-<script src="js/core/router.js?v=1776437642435"></script>
-<script src="js/features/dashboard.js?v=1776437642435"></script>
-<script src="js/features/transactions.js?v=1776437642435"></script>
-<script src="js/features/budgets.js?v=1776437642435"></script>
-<script src="js/features/loans.js?v=1776437642435"></script>
-<script src="js/features/retirement.js?v=1776437642435"></script>
-<script src="js/features/analytics.js?v=1776437642435"></script>
-<script src="js/features/categories-accounts.js?v=1776437642435"></script>
-<script src="js/features/import.js?v=1776437642435"></script>
-<script src="js/features/settings-reports.js?v=1776437642435"></script>
-<script src="js/features/chartExport.js?v=1776437642435"></script>
-<script src="js/features/bulkEdit.js?v=1776437642435"></script>
-<script src="js/features/quickadd.js?v=1776437642435"></script>
-<script src="js/features/savingsGoals.js?v=1776437642435"></script>
-<script src="js/app.js?v=1776437642435"></script>
+<script src="js/core/api.js?v=1776442062877"></script>
+<script src="js/core/auth.js?v=1776442062877"></script>
+<script src="js/core/theme.js?v=1776442062877"></script>
+<script src="js/core/modal.js?v=1776442062877"></script>
+<script src="js/core/profile.js?v=1776442062877"></script>
+<script src="js/core/router.js?v=1776442062877"></script>
+<script src="js/features/dashboard.js?v=1776442062877"></script>
+<script src="js/features/transactions.js?v=1776442062877"></script>
+<script src="js/features/budgets.js?v=1776442062877"></script>
+<script src="js/features/loans.js?v=1776442062877"></script>
+<script src="js/features/retirement.js?v=1776442062877"></script>
+<script src="js/features/analytics.js?v=1776442062877"></script>
+<script src="js/features/categories-accounts.js?v=1776442062877"></script>
+<script src="js/features/import.js?v=1776442062877"></script>
+<script src="js/features/settings-reports.js?v=1776442062877"></script>
+<script src="js/features/chartExport.js?v=1776442062877"></script>
+<script src="js/features/bulkEdit.js?v=1776442062877"></script>
+<script src="js/features/quickadd.js?v=1776442062877"></script>
+<script src="js/features/savingsGoals.js?v=1776442062877"></script>
+<script src="js/app.js?v=1776442062877"></script>
 
 </body>
 </html>

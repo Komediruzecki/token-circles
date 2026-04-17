@@ -122,6 +122,25 @@ const dashboard = {
       currency
     );
 
+    // Month-over-month deltas
+    const prev = data.prevSummary || {};
+    const setDelta = (id, current, prevVal, inverse) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (!prevVal || prevVal === 0) { el.textContent = ''; return; }
+      const pct = ((current - prevVal) / Math.abs(prevVal)) * 100;
+      const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '';
+      // For expenses, lower is better; for income/balance, higher is better
+      const positive = inverse ? pct < 0 : pct > 0;
+      el.className = 'stat-card-delta ' + (pct === 0 ? '' : positive ? 'positive' : 'negative');
+      el.textContent = `${arrow} ${Math.abs(pct).toFixed(1)}% vs prev`;
+    };
+    setDelta('delta-income', data.summary?.income || 0, prev.income, false);
+    setDelta('delta-expense', data.summary?.expense || 0, prev.expense, true);
+    const balance = data.summary?.balance || 0;
+    const prevBalance = (prev.income || 0) - (prev.expense || 0);
+    setDelta('delta-balance', balance, prevBalance, false);
+
     // Fetch and display net worth
     const nw = await api('/dashboard/net-worth');
     document.getElementById('stat-networth').textContent = formatCurrency(
