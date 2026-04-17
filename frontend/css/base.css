@@ -1443,6 +1443,86 @@ input[type='color'] {
   }
 }
 
+/* Savings Goals */
+.goals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+.goal-card {
+  border-radius: 12px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
+}
+.goal-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.goal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.goal-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text);
+}
+.goal-deadline {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.goal-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.goal-progress-bar {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.goal-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+.goal-amounts {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.goal-amount-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.goal-amount-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+.goal-target-line {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+.goal-notes {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-style: italic;
+}
+
 /* Sankey diagram */
 .sankey-link {
   cursor: pointer;

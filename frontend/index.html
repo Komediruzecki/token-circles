@@ -60,6 +60,10 @@
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
       <span>Loan Calculator</span>
     </a>
+    <a href="#goals" class="nav-item" data-page="goals">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      <span>Savings Goals</span>
+    </a>
     <a href="#import" class="nav-item" data-page="import">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
       <span>Import</span>
@@ -385,6 +389,21 @@
         <canvas id="ret-chart"></canvas>
       </div>
     </div>
+  </div>
+
+  <!-- SAVINGS GOALS -->
+  <div id="page-goals" class="page">
+    <div class="page-header">
+      <div><h2>Savings Goals</h2><p>Track progress toward your financial targets</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="savingsGoals.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Goal
+        </button>
+      </div>
+    </div>
+
+    <div id="goals-grid"></div>
   </div>
 
   <!-- IMPORT -->
@@ -1100,6 +1119,45 @@
   </div>
 </div>
 
+<!-- SAVINGS GOAL MODAL -->
+<div class="modal-overlay" id="goal-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="goal-modal-title">New Savings Goal</div>
+      <button class="btn btn-ghost" onclick="modal.close('goal-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="goal-id">
+      <div class="form-group">
+        <label>Goal Name</label>
+        <input type="text" class="form-control" id="goal-name" placeholder="e.g. Emergency Fund, Vacation, New Car">
+      </div>
+      <div class="form-group">
+        <label>Target Amount</label>
+        <input type="number" class="form-control" id="goal-target" placeholder="10000" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Current Amount</label>
+        <input type="number" class="form-control" id="goal-current" placeholder="0" min="0" step="0.01" value="0">
+      </div>
+      <div class="form-group">
+        <label>Target Date</label>
+        <input type="date" class="form-control" id="goal-deadline">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-control" id="goal-notes" placeholder="Optional notes..." rows="2" style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('goal-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savingsGoals.save()">Save Goal</button>
+    </div>
+  </div>
+</div>
+
 <!-- PREPAYMENT MODAL -->
 <div class='modal-overlay' id='prepay-modal'>
   <div class='modal' style='max-width:440px;'>
@@ -1364,25 +1422,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="js/core/api.js?v=1776436914121"></script>
-<script src="js/core/auth.js?v=1776436914121"></script>
-<script src="js/core/theme.js?v=1776436914121"></script>
-<script src="js/core/modal.js?v=1776436914121"></script>
-<script src="js/core/profile.js?v=1776436914121"></script>
-<script src="js/core/router.js?v=1776436914121"></script>
-<script src="js/features/dashboard.js?v=1776436914121"></script>
-<script src="js/features/transactions.js?v=1776436914121"></script>
-<script src="js/features/budgets.js?v=1776436914121"></script>
-<script src="js/features/loans.js?v=1776436914121"></script>
-<script src="js/features/retirement.js?v=1776436914121"></script>
-<script src="js/features/analytics.js?v=1776436914121"></script>
-<script src="js/features/categories-accounts.js?v=1776436914121"></script>
-<script src="js/features/import.js?v=1776436914121"></script>
-<script src="js/features/settings-reports.js?v=1776436914121"></script>
-<script src="js/features/chartExport.js?v=1776436914121"></script>
-<script src="js/features/bulkEdit.js?v=1776436914121"></script>
-<script src="js/features/quickadd.js?v=1776436914121"></script>
-<script src="js/app.js?v=1776436914121"></script>
+<script src="js/core/api.js?v=1776437342746"></script>
+<script src="js/core/auth.js?v=1776437342746"></script>
+<script src="js/core/theme.js?v=1776437342746"></script>
+<script src="js/core/modal.js?v=1776437342746"></script>
+<script src="js/core/profile.js?v=1776437342746"></script>
+<script src="js/core/router.js?v=1776437342746"></script>
+<script src="js/features/dashboard.js?v=1776437342746"></script>
+<script src="js/features/transactions.js?v=1776437342746"></script>
+<script src="js/features/budgets.js?v=1776437342746"></script>
+<script src="js/features/loans.js?v=1776437342746"></script>
+<script src="js/features/retirement.js?v=1776437342746"></script>
+<script src="js/features/analytics.js?v=1776437342746"></script>
+<script src="js/features/categories-accounts.js?v=1776437342746"></script>
+<script src="js/features/import.js?v=1776437342746"></script>
+<script src="js/features/settings-reports.js?v=1776437342746"></script>
+<script src="js/features/chartExport.js?v=1776437342746"></script>
+<script src="js/features/bulkEdit.js?v=1776437342746"></script>
+<script src="js/features/quickadd.js?v=1776437342746"></script>
+<script src="js/features/savingsGoals.js?v=1776437342746"></script>
+<script src="js/app.js?v=1776437342746"></script>
 
 </body>
 </html>

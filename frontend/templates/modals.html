@@ -318,6 +318,45 @@
   </div>
 </div>
 
+<!-- SAVINGS GOAL MODAL -->
+<div class="modal-overlay" id="goal-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="goal-modal-title">New Savings Goal</div>
+      <button class="btn btn-ghost" onclick="modal.close('goal-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="goal-id">
+      <div class="form-group">
+        <label>Goal Name</label>
+        <input type="text" class="form-control" id="goal-name" placeholder="e.g. Emergency Fund, Vacation, New Car">
+      </div>
+      <div class="form-group">
+        <label>Target Amount</label>
+        <input type="number" class="form-control" id="goal-target" placeholder="10000" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Current Amount</label>
+        <input type="number" class="form-control" id="goal-current" placeholder="0" min="0" step="0.01" value="0">
+      </div>
+      <div class="form-group">
+        <label>Target Date</label>
+        <input type="date" class="form-control" id="goal-deadline">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea class="form-control" id="goal-notes" placeholder="Optional notes..." rows="2" style="resize:vertical;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('goal-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savingsGoals.save()">Save Goal</button>
+    </div>
+  </div>
+</div>
+
 <!-- PREPAYMENT MODAL -->
 <div class='modal-overlay' id='prepay-modal'>
   <div class='modal' style='max-width:440px;'>

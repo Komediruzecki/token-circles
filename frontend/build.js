@@ -46,6 +46,7 @@ const jsScripts = `<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.mi
 <script src="js/features/chartExport.js?v=${CACHE_BUST}"></script>
 <script src="js/features/bulkEdit.js?v=${CACHE_BUST}"></script>
 <script src="js/features/quickadd.js?v=${CACHE_BUST}"></script>
+<script src="js/features/savingsGoals.js?v=${CACHE_BUST}"></script>
 <script src="js/app.js?v=${CACHE_BUST}"></script>
 `;
 
