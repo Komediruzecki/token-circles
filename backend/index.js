@@ -4881,13 +4881,9 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
     doc.fillColor(mutedColor).fontSize(12).font("Helvetica")
       .text("Note: Charts could not be rendered in this session. Please try again later.", 50, doc.y, { width: pageW, align: "center" });
 
-    // Monthly Breakdown Table
-    doc.moveDown(2);
-    if (doc.y > doc.page.height - 280) {
-      doc.addPage();
-      doc.y = 50;
-    }
-
+    // Monthly Breakdown Table — start on a fresh page
+    doc.addPage();
+    doc.y = 50;
     doc.moveDown(0.5);
     doc.fillColor(titleColor).fontSize(13).font("Helvetica-Bold").text("Monthly Breakdown");
     doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor(borderColor).stroke();
