@@ -49,10 +49,10 @@
 
 ## Additional Ideas
 - [x] **Bill reminder / due date tracker** — Mark recurring transactions as bills with due dates, get reminders
-- [ ] **Savings rate goal** — Set a target savings rate % and track progress monthly
+- [x] **Savings rate goal** — Set a target savings rate % and track progress monthly
 - [x] **Month-over-month trends** — Automatic comparison with previous month/quarter on dashboard
 - [x] **Recurring transaction insights** — Show upcoming recurring charges this month
-- [ ] **Loan amortization table** — Detailed month-by-month breakdown with export option
+- [x] **Loan amortization table** — Detailed month-by-month breakdown with export option
 
 ## Technical
 - [x] **Transaction search** — Full-text search across transaction descriptions and notes
