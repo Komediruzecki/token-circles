@@ -914,28 +914,30 @@ input[type='color'] {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: var(--profile-btn-bg);
-  border-radius: 8px;
-  color: #fff;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  border: none;
-  transition: background 0.15s;
+  transition: all 0.15s;
 }
 .profile-dropdown-btn:hover {
-  background: var(--profile-btn-hover);
+  border-color: var(--primary);
 }
 .profile-dropdown-btn .profile-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 160px;
+  color: var(--text);
 }
 .profile-dropdown-btn svg {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+  color: var(--text-secondary);
 }
 .profile-dropdown {
   position: relative;
@@ -946,12 +948,13 @@ input[type='color'] {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: var(--dropdown-bg);
-  border: 1px solid var(--dropdown-border);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-lg);
   z-index: 200;
   overflow: hidden;
+  min-width: 220px;
 }
 .profile-dropdown-menu.open {
   display: block;
@@ -959,28 +962,29 @@ input[type='color'] {
 .profile-dropdown-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  color: var(--dropdown-text);
+  padding: 7px 12px;
+  color: var(--text);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.1s;
+  user-select: none;
 }
 .profile-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--dropdown-text);
+  background: var(--table-hover);
 }
 .profile-dropdown-item.active {
-  background: rgba(59, 130, 246, 0.2);
-  color: #fff;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary);
+  font-weight: 500;
 }
 .profile-dropdown-item .delete-profile-btn {
   opacity: 0;
+  margin-left: auto;
   background: none;
   border: none;
-  color: #f87171;
+  color: var(--danger);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
 }
@@ -988,7 +992,7 @@ input[type='color'] {
   opacity: 1;
 }
 .profile-dropdown-item .delete-profile-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.1);
 }
 .profile-dropdown-header {
   display: flex;
@@ -997,32 +1001,33 @@ input[type='color'] {
   padding: 8px 12px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--dropdown-text);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--table-header-bg);
+  border-bottom: 1px solid var(--border);
 }
 .profile-dropdown-clear,
 .profile-dropdown-all {
-  background: none;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: var(--dropdown-text);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
   font-size: 10px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 0.15s;
 }
 .profile-dropdown-clear:hover,
 .profile-dropdown-all:hover {
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 .profile-dropdown-item .profile-checkbox {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid var(--border);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -1039,20 +1044,21 @@ input[type='color'] {
 }
 .profile-dropdown-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border);
   margin: 4px 0;
 }
 .profile-dropdown-add {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   color: var(--primary);
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.1s;
 }
 .profile-dropdown-add:hover {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 /* Analytics averages */
