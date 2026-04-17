@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -98,7 +98,10 @@
     </a>
   </div>
   <div class="sidebar-footer">
-    Finance Manager v1.0
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span>Finance Manager v1.0</span>
+      <button class="btn btn-ghost btn-sm" onclick="resetZoom()" title="Reset zoom to default" style="padding:4px 8px;font-size:11px;">Reset Zoom</button>
+    </div>
   </div>
 </nav>
 
@@ -203,6 +206,10 @@
     <div class="page-header">
       <div><h2>Transactions</h2><p>Manage all your financial entries</p></div>
       <div class="page-header-actions">
+        <button class="btn btn-secondary" onclick="transactions.openAutoMapModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.135-1.76-.419-2.531l-.548-.547z"/></svg>
+          Auto-categorize
+        </button>
         <button class="btn btn-primary" onclick="transactions.openModal()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           Add Transaction
@@ -316,6 +323,23 @@
       <div class="card">
         <div class="card-header"><div><div class="card-title">Budget vs Actual</div><div class="card-subtitle">Spending comparison</div></div></div>
         <div class="chart-container tall"><canvas id="chart-budget"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px;">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Improvement Tracking</div><div class="card-subtitle">Month-over-month budget adherence</div></div>
+        </div>
+        <div id="budget-improvement-chart" style="height:250px;"><canvas id="chart-improvement"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Budget Overview</div><div class="card-subtitle">All categories at a glance</div></div>
+        </div>
+        <div id="budget-donut-container" style="height:250px;display:flex;align-items:center;justify-content:center;">
+          <canvas id="chart-budget-donut"></canvas>
+        </div>
       </div>
     </div>
 
@@ -711,6 +735,23 @@
       </div>
     </div>
 
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Top Categories</div></div></div>
+        <div id="analytics-top-categories"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Category Breakdown</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportAnalyticsPie()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
+        <div style="height:300px;">
+          <canvas id="analytics-pie-chart"></canvas>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- SETTINGS -->
@@ -867,6 +908,26 @@
               <option value="">Year</option>
             </select>
             <button class="btn btn-primary" onclick="generateAnnualPDF()">Download Annual PDF</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div class="settings-section-title">About</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="color:var(--text-secondary);font-size:14px;">Version</span>
+              <span id="app-version" style="font-weight:600;">1.0.0</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="color:var(--text-secondary);font-size:14px;">Repository</span>
+              <a href="https://github.com/Komediruzecki/finance-manager" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="font-size:12px;">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                GitHub
+              </a>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="color:var(--text-secondary);font-size:14px;">Built with</span>
+              <span style="font-size:13px;">Node.js + Express + SQLite</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1508,7 +1569,27 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="modal.close('balance-history-modal')">Close</button>
-      <button class="btn btn-primary" id="bh-record-btn" onclick="accounts.recordBalance()">Record Current Balance</button>
+      <button class="btn btn-primary" onclick="accounts.recordBalance()">Record Current Balance</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUTO-MAP CATEGORIES MODAL -->
+<div class="modal-overlay" id="automap-modal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <div class="modal-title">Auto-categorize Transactions</div>
+      <button class="btn btn-ghost" onclick="modal.close('automap-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="max-height:60vh;overflow-y:auto;">
+      <div id="automap-status" style="margin-bottom:16px;text-align:center;color:var(--text-secondary);">Analyzing transactions...</div>
+      <div id="automap-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('automap-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="transactions.applyAutoMappings()">Apply Mappings</button>
     </div>
   </div>
 </div>
@@ -1518,26 +1599,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="js/core/api.js?v=1744922400000"></script>
-<script src="js/core/auth.js?v=1744922400000"></script>
-<script src="js/core/theme.js?v=1744922400000"></script>
-<script src="js/core/modal.js?v=1744922400000"></script>
-<script src="js/core/profile.js?v=1744930000000"></script>
-<script src="js/core/router.js?v=1744922400000"></script>
-<script src="js/features/dashboard.js?v=1744922400000"></script>
-<script src="js/features/transactions.js?v=1744922400000"></script>
-<script src="js/features/budgets.js?v=1744922400000"></script>
-<script src="js/features/loans.js?v=1744922400000"></script>
-<script src="js/features/retirement.js?v=1744922400000"></script>
-<script src="js/features/analytics.js?v=1744922400000"></script>
-<script src="js/features/categories-accounts.js?v=1744922400000"></script>
-<script src="js/features/import.js?v=1744922400000"></script>
-<script src="js/features/settings-reports.js?v=1744922400000"></script>
-<script src="js/features/chartExport.js?v=1744922400000"></script>
-<script src="js/features/bulkEdit.js?v=1744922400000"></script>
-<script src="js/features/quickadd.js?v=1744922400000"></script>
-<script src="js/features/savingsGoals.js?v=1744922400000"></script>
-<script src="js/app.js?v=1744922400000"></script>
+<script src="js/core/api.js?v=1776461147956"></script>
+<script src="js/core/auth.js?v=1776461147956"></script>
+<script src="js/core/theme.js?v=1776461147956"></script>
+<script src="js/core/modal.js?v=1776461147956"></script>
+<script src="js/core/profile.js?v=1776461147956"></script>
+<script src="js/core/router.js?v=1776461147956"></script>
+<script src="js/features/dashboard.js?v=1776461147956"></script>
+<script src="js/features/transactions.js?v=1776461147956"></script>
+<script src="js/features/budgets.js?v=1776461147956"></script>
+<script src="js/features/loans.js?v=1776461147956"></script>
+<script src="js/features/retirement.js?v=1776461147956"></script>
+<script src="js/features/analytics.js?v=1776461147956"></script>
+<script src="js/features/categories-accounts.js?v=1776461147956"></script>
+<script src="js/features/import.js?v=1776461147956"></script>
+<script src="js/features/settings-reports.js?v=1776461147956"></script>
+<script src="js/features/chartExport.js?v=1776461147956"></script>
+<script src="js/features/bulkEdit.js?v=1776461147956"></script>
+<script src="js/features/quickadd.js?v=1776461147956"></script>
+<script src="js/features/savingsGoals.js?v=1776461147956"></script>
+<script src="js/app.js?v=1776461147956"></script>
 
 </body>
 </html>

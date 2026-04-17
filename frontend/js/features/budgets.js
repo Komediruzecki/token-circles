@@ -129,8 +129,11 @@ const budgets = {
   async loadImprovementCharts() {
     try {
       const data = await api('/budgets/improvements');
-      const ctx = document.getElementById('chart-improvement').getContext('2d');
-      const donutCtx = document.getElementById('chart-budget-donut').getContext('2d');
+      const chartEl = document.getElementById('chart-improvement');
+      const donutEl = document.getElementById('chart-budget-donut');
+      if (!chartEl || !donutEl) return;
+      const ctx = chartEl.getContext('2d');
+      const donutCtx = donutEl.getContext('2d');
       const cc = chartColors();
 
       // Improvement tracking line chart
