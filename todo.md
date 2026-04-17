@@ -3,7 +3,7 @@
 ## Charts & Visualization
 - [ ] **Interactive chart drill-down** — Click a bar/slice to zoom into that period
 - [x] **Chart export** — Download charts as PNG/SVG
-- [ ] **Net worth over time chart** — Line chart on dashboard showing net worth progression
+- [x] **Net worth over time chart** — Line chart on dashboard showing net worth progression
 - [ ] **Comparison mode** — Overlay two periods on the same chart to compare spending
 - [ ] **Category heatmap** — Calendar heatmap of daily spending by category
 
@@ -11,7 +11,7 @@
 - [x] **Retirement calculator** — Model retirement readiness based on current savings, expenses, and withdrawal rate (consider different countries/cost of living)
 - [x] **FIRE calculator** — Calculate when financial independence is achievable with configurable savings rate
 - [ ] **Compound interest projector** — Visualize growth of savings/investments over time with different contribution scenarios
-- [ ] **Savings goal tracker** — Set target amounts with deadlines, track progress bars
+- [x] **Savings goal tracker** — Set target amounts with deadlines, track progress bars
 - [ ] **Mortgage vs rent comparison** — Calculate total cost of ownership over time including maintenance, opportunity cost
 - [ ] **Emergency fund tracker** — Calculate recommended emergency fund (3/6/12 months) vs current savings
 
@@ -36,7 +36,7 @@
 ## UI/UX
 - [x] **Quick-add transaction** — Keyboard shortcut to quickly add a transaction without navigation
 - [ ] **Dashboard customization** — Let users show/hide/reorder dashboard widgets
-- [ ] **Bulk transaction edit** — Select multiple transactions to edit/categorize/delete at once
+- [x] **Bulk transaction edit** — Select multiple transactions to edit/categorize/delete at once
 
 ## Collaboration
 - [ ] **Multi-profile sharing** — Share read-only or full-access to another user
@@ -45,7 +45,7 @@
 ## Accounts & Net Worth
 - [x] **Multi-account net worth** — Aggregate all account balances (giro, savings, investment) into net worth dashboard
 - [ ] **Account reconciliation** — Mark transactions as reconciled against bank statements
-- [ ] **Account balance history** — Track and display balance changes over time per account
+- [x] **Account balance history** — Track and display balance changes over time per account
 
 ## Technical
 - [ ] **Transaction search** — Full-text search across transaction descriptions and notes
