@@ -7,6 +7,11 @@ function api(url, options = {}) {
     'X-Profile-Id': profile.currentId,
     ...options.headers,
   };
+  // Send multi-profile header if in combined view
+  const selectedIds = profile.selectedIds;
+  if (selectedIds && selectedIds.length > 0) {
+    headers['X-Profile-Ids'] = JSON.stringify(selectedIds);
+  }
   if (options.method === 'DELETE' && !options.body) {
     delete headers['Content-Type'];
   }

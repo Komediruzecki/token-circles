@@ -1,6 +1,7 @@
 // ==================== PROFILE ====================
 const profile = {
   currentId: parseInt(localStorage.getItem('currentProfileId') || '1'),
+  selectedIds: [], // For multi-select combined view
 
   async loadProfiles() {
     const profiles = await api('/profiles');
@@ -9,10 +10,55 @@ const profile = {
 
   async switchTo(id) {
     this.currentId = id;
+    this.selectedIds = [id]; // Reset multi-select to single profile
     localStorage.setItem('currentProfileId', id);
+    localStorage.setItem('selectedProfileIds', JSON.stringify([id]));
     await this.refreshUI();
+    this.updateDropdownDisplay();
     // Reload current page
     const page = window.location.hash.slice(1) || 'dashboard';
+    this.navigateToPage(page);
+  },
+
+  // Toggle a profile in multi-select
+  async toggleProfile(id) {
+    const idx = this.selectedIds.indexOf(id);
+    if (idx >= 0) {
+      this.selectedIds.splice(idx, 1);
+    } else {
+      this.selectedIds.push(id);
+    }
+
+    // Ensure at least one profile is selected
+    if (this.selectedIds.length === 0) {
+      this.selectedIds = [this.currentId];
+    }
+
+    // Update localStorage
+    localStorage.setItem('selectedProfileIds', JSON.stringify(this.selectedIds));
+
+    this.updateDropdownDisplay();
+    this.navigateToPage(window.location.hash.slice(1) || 'dashboard');
+  },
+
+  // Select all profiles for combined view
+  async selectAllProfiles() {
+    const profiles = await this.loadProfiles();
+    this.selectedIds = profiles.map(p => p.id);
+    localStorage.setItem('selectedProfileIds', JSON.stringify(this.selectedIds));
+    this.updateDropdownDisplay();
+    this.navigateToPage(window.location.hash.slice(1) || 'dashboard');
+  },
+
+  // Clear multi-select, go back to single profile
+  async clearMultiSelect() {
+    this.selectedIds = [this.currentId];
+    localStorage.setItem('selectedProfileIds', JSON.stringify(this.selectedIds));
+    this.updateDropdownDisplay();
+    this.navigateToPage(window.location.hash.slice(1) || 'dashboard');
+  },
+
+  navigateToPage(page) {
     if (page === 'dashboard') dashboard.load();
     else if (page === 'transactions') transactions.load();
     else if (page === 'budgets') budgets.load();
@@ -20,6 +66,7 @@ const profile = {
     else if (page === 'categories') categories.load();
     else if (page === 'settings') settings.load();
     else if (page === 'accounts') accounts.load();
+    else if (page === 'analytics') analytics.load();
   },
 
   toggleDropdown() {
@@ -34,17 +81,33 @@ const profile = {
     const profiles = await this.loadProfiles();
     const menu = document.getElementById('profile-menu');
     const isLoggedIn = auth.isLoggedIn();
-    let html = profiles
+
+    // Check if in multi-select mode
+    const isMultiSelect = this.selectedIds.length > 1;
+
+    let html = `
+      <div class="profile-dropdown-header">
+        <span>${isMultiSelect ? 'Household View' : 'Select Profile'}</span>
+        ${this.selectedIds.length > 1
+          ? `<button class="profile-dropdown-clear" onclick="profile.clearMultiSelect()">Clear</button>`
+          : `<button class="profile-dropdown-all" onclick="profile.selectAllProfiles()">All</button>`
+        }
+      </div>
+    `;
+
+    html += profiles
       .map(
         (p) => `
-      <div class="profile-dropdown-item${p.id === this.currentId ? ' active' : ''}"
-           onclick="profile.switchTo(${p.id})">
-        <span>${profile.escapeHtml(p.name)}</span>
-        ${p.id !== 1 ? `<button class="delete-profile-btn" onclick="event.stopPropagation(); profile.confirmDelete(${p.id}, '${profile.escapeHtml(p.name).replace(/'/g, "\\'")}')">✕</button>` : ''}
+      <div class="profile-dropdown-item${this.selectedIds.includes(p.id) ? ' active' : ''}"
+           onclick="profile.toggleProfile(${p.id})">
+        <span class="profile-checkbox">${this.selectedIds.includes(p.id) ? '&#10003;' : ''}</span>
+        <span>${this.escapeHtml(p.name)}</span>
+        ${p.id !== 1 ? `<button class="delete-profile-btn" onclick="event.stopPropagation(); profile.confirmDelete(${p.id}, '${this.escapeHtml(p.name).replace(/'/g, "\\'")}')">&#10005;</button>` : ''}
       </div>
     `
       )
       .join('');
+
     if (isLoggedIn) {
       html += `<div class="profile-dropdown-divider"></div>
       <div class="profile-dropdown-add" onclick="modal.open('profile-modal'); profile.toggleDropdown()">
@@ -65,11 +128,29 @@ const profile = {
     setTimeout(() => document.addEventListener('click', closeHandler), 0);
   },
 
+  updateDropdownDisplay() {
+    const btn = document.getElementById('profile-btn-name');
+    const profiles = this.loadProfiles().then(profiles => {
+      if (this.selectedIds.length > 1) {
+        btn.textContent = `${this.selectedIds.length} Profiles`;
+        btn.style.fontWeight = '600';
+      } else if (this.selectedIds.length === 1) {
+        const current = profiles.find((p) => p.id === this.selectedIds[0]);
+        btn.textContent = current ? current.name : 'Profile';
+        btn.style.fontWeight = '';
+      }
+    });
+  },
+
   async refreshUI() {
     const btn = document.getElementById('profile-btn-name');
     const profiles = await this.loadProfiles();
     const current = profiles.find((p) => p.id === this.currentId);
     if (btn) btn.textContent = current ? current.name : 'Profile';
+  },
+
+  getProfileIds() {
+    return this.selectedIds.length > 0 ? this.selectedIds : [this.currentId];
   },
 
   async createProfile() {
@@ -89,13 +170,29 @@ const profile = {
     if (confirm(`Delete profile "${name}"? This cannot be undone.`)) {
       api(`/profiles/${id}`, { method: 'DELETE' }).then(() => {
         if (this.currentId === id) this.switchTo(1);
-        else this.refreshUI();
+        else {
+          this.selectedIds = this.selectedIds.filter(i => i !== id);
+          this.refreshUI();
+          this.updateDropdownDisplay();
+        }
         toast('Profile deleted', 'success');
       });
     }
   },
 
   async init() {
+    // Load saved multi-select state
+    try {
+      const saved = localStorage.getItem('selectedProfileIds');
+      if (saved) {
+        this.selectedIds = JSON.parse(saved);
+      } else {
+        this.selectedIds = [this.currentId];
+      }
+    } catch (e) {
+      this.selectedIds = [this.currentId];
+    }
+
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('profile-menu');
       const btn = document.getElementById('profile-btn');
@@ -104,6 +201,7 @@ const profile = {
       }
     });
     await this.refreshUI();
+    this.updateDropdownDisplay();
   },
 
   escapeHtml(str) {

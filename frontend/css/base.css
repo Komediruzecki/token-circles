@@ -990,6 +990,53 @@ input[type='color'] {
 .profile-dropdown-item .delete-profile-btn:hover {
   background: rgba(239, 68, 68, 0.2);
 }
+.profile-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dropdown-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.profile-dropdown-clear,
+.profile-dropdown-all {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--dropdown-text);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.profile-dropdown-clear:hover,
+.profile-dropdown-all:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.profile-dropdown-item .profile-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.profile-dropdown-item.active .profile-checkbox {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
 .profile-dropdown-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.1);

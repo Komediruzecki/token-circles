@@ -5,14 +5,39 @@ function exportData(type) {
 }
 
 // ==================== MONTHLY PDF REPORT ====================
-function generateMonthlyPDF() {
+async function generateMonthlyPDF() {
   const year = document.getElementById('pdf-report-year').value;
   const month = document.getElementById('pdf-report-month').value;
   if (!year || !month) {
     alert('Please select a year and month');
     return;
   }
-  window.open(`/api/reports/monthly-pdf?year=${year}&month=${month}`, '_blank');
+
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  try {
+    const resp = await fetch(`/api/reports/monthly-pdf?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(err.error || 'PDF generation failed');
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report-${year}-${String(month).padStart(2, '0')}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Failed to generate PDF: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Download Monthly PDF';
+  }
 }
 
 async function populatePdfReportYears() {

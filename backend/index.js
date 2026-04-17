@@ -182,9 +182,35 @@ function getProfileId(req) {
   return parseInt(req.headers["x-profile-id"] || req.query.profile_id || 1);
 }
 
+// Helper: get profile IDs from request (supports JSON array via header)
+function getProfileIds(req) {
+  const header = req.headers["x-profile-ids"];
+  if (header) {
+    try {
+      const parsed = JSON.parse(header);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(id => parseInt(id)).filter(id => !isNaN(id));
+    } catch (e) {
+      // single ID fallback
+    }
+  }
+  // Fallback to legacy single X-Profile-Id
+  return [getProfileId(req)];
+}
+
 // Helper: wrap all data queries with profile_id
 function profileWhere(tableAlias = "t", extra = "") {
   return `${tableAlias}.profile_id = ?${extra ? " AND " + extra : ""}`;
+}
+
+// Helper: build profile IN clause for multiple profiles
+function profileInClause(tableAlias = "t", extra = "") {
+  const placeholder = extra ? `${tableAlias}.profile_id IN (?) AND ${extra}` : `${tableAlias}.profile_id IN (?)`;
+  return placeholder;
+}
+
+// Helper: wrap query params with profile IDs for IN clause
+function profileParams(pids, extra = []) {
+  return [...pids, ...extra];
 }
 
 // ========================
@@ -664,11 +690,12 @@ app.get("/api/transactions/by-tag/:tagId", apiRateLimiter, (req, res) => {
 });
 
 // ========================
-// TRANSACTIONS (per-profile)
+// TRANSACTIONS (per-profile, multi-profile for combined view)
 // ========================
 app.get("/api/transactions", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const {
       startDate,
       endDate,
@@ -684,9 +711,9 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
       SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ?
+      WHERE t.profile_id IN (${inClause})
     `;
-    const params = [pid];
+    const params = [...pids];
     if (startDate) {
       sql += " AND t.date >= ?";
       params.push(startDate);
@@ -724,8 +751,8 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
     const rows = db.prepare(sql).all(...params);
 
     // Count total
-    let countSql = `SELECT COUNT(*) as c FROM transactions t WHERE t.profile_id = ?`;
-    const cparams = [pid];
+    let countSql = `SELECT COUNT(*) as c FROM transactions t WHERE t.profile_id IN (${inClause})`;
+    const cparams = [...pids];
     if (startDate) {
       countSql += " AND t.date >= ?";
       cparams.push(startDate);
@@ -760,7 +787,8 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
 
 app.get("/api/transactions/summary", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { startDate, endDate, category_ids, type, search } = req.query;
 
     let sql = `
@@ -771,9 +799,9 @@ app.get("/api/transactions/summary", apiRateLimiter, (req, res) => {
         COUNT(*) as count
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ?
+      WHERE t.profile_id IN (${inClause})
     `;
-    const params = [pid];
+    const params = [...pids];
 
     if (startDate) {
       sql += " AND t.date >= ?";
@@ -1091,15 +1119,16 @@ app.post("/api/transactions/reconcile/bulk", apiRateLimiter, (req, res) => {
 // Get reconciliation status summary
 app.get("/api/transactions/reconcile/summary", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const summary = db.prepare(
       `SELECT
         COUNT(*) as total,
         SUM(CASE WHEN reconciled = 1 THEN 1 ELSE 0 END) as reconciled_count,
         SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN 1 ELSE 0 END) as unreconciled_count,
         SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN amount ELSE 0 END) as unreconciled_total
-       FROM transactions WHERE profile_id = ?`
-    ).get(pid);
+       FROM transactions WHERE profile_id IN (${inClause})`
+    ).get(...pids);
     res.json(summary);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1107,22 +1136,23 @@ app.get("/api/transactions/reconcile/summary", apiRateLimiter, (req, res) => {
 });
 
 // ========================
-// BUDGETS (per-profile)
+// BUDGETS (per-profile, multi-profile for combined view)
 // ========================
 app.get("/api/budgets", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const rows = db
       .prepare(
         `
       SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
       FROM budgets b
       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-      WHERE b.profile_id = ?
+      WHERE b.profile_id IN (${inClause})
       ORDER BY b.id DESC
     `,
       )
-      .all(pid);
+      .all(...pids);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1569,11 +1599,12 @@ app.post("/api/loans/:id/calculate", apiRateLimiter, (req, res) => {
 });
 
 // ========================
-// DASHBOARD (per-profile)
+// DASHBOARD (per-profile, multi-profile for combined view)
 // ========================
 app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { year, month } = req.query;
     const y = year || new Date().getFullYear();
     const m = month;
@@ -1597,11 +1628,11 @@ app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {
         `
       SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count
       FROM transactions
-      WHERE profile_id = ? AND date >= ? AND date < ?
+      WHERE profile_id IN (${inClause}) AND date >= ? AND date < ?
       GROUP BY type
     `,
       )
-      .all(pid, startDate, endDate);
+      .all(...pids, startDate, endDate);
 
     const summary = { income: 0, expense: 0, transfer: 0, balance: 0 };
     for (const r of monthly) {
@@ -1617,22 +1648,22 @@ app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {
       SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date < ?
+      WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date < ?
       ORDER BY t.date DESC, t.id DESC
       LIMIT 10
     `,
       )
-      .all(pid, startDate, endDate);
+      .all(...pids, startDate, endDate);
 
     // Use amount_local if available (for imported transactions), otherwise amount
     const yearStart = `${y}-01-01`;
     const ytd = db
       .prepare(
         `
-      SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id = ? AND date >= ? GROUP BY type
+      SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? GROUP BY type
     `,
       )
-      .all(pid, yearStart);
+      .all(...pids, yearStart);
     const ytdSummary = { income: 0, expense: 0 };
     for (const r of ytd) {
       if (r.type === "income") ytdSummary.income = r.total;
@@ -1662,7 +1693,8 @@ app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {
 
 app.get("/api/dashboard/charts", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { months = 12 } = req.query;
     const endDate = new Date();
     const startDate = new Date();
@@ -1677,24 +1709,24 @@ app.get("/api/dashboard/charts", apiRateLimiter, (req, res) => {
       SELECT c.name, c.color, c.icon, SUM(COALESCE(t.amount_local, t.amount)) as total, COUNT(*) as count
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.type = 'expense'
+      WHERE t.profile_id IN (${inClause}) AND t.type = 'expense'
       GROUP BY c.id
       ORDER BY total DESC
     `,
       )
-      .all(pid);
+      .all(...pids);
 
     const monthly = db
       .prepare(
         `
       SELECT strftime('%Y-%m', date) as month, type, SUM(COALESCE(amount_local, amount)) as total
       FROM transactions
-      WHERE profile_id = ? AND date >= ? AND date <= ? AND type IN ('income', 'expense')
+      WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income', 'expense')
       GROUP BY month, type
       ORDER BY month
     `,
       )
-      .all(pid, startStr, endStr);
+      .all(...pids, startStr, endStr);
 
     const monthlyMap = {};
     for (const r of monthly) {
@@ -1732,13 +1764,14 @@ app.get("/api/dashboard/charts", apiRateLimiter, (req, res) => {
 
 app.get("/api/dashboard/net-worth", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     // Get account balances
     const accounts = db
       .prepare(
-        `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id = ?`,
+        `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id IN (${inClause})`,
       )
-      .all(pid);
+      .all(...pids);
     const totalNetWorth = accounts.reduce(
       (sum, a) => sum + (a.balance || 0),
       0,
@@ -1754,12 +1787,12 @@ app.get("/api/dashboard/net-worth", apiRateLimiter, (req, res) => {
         `
       SELECT strftime('%Y-%m', date) as month, type, SUM(COALESCE(amount_local, amount)) as total
       FROM transactions
-      WHERE profile_id = ? AND date >= ? AND type IN ('income', 'expense')
+      WHERE profile_id IN (${inClause}) AND date >= ? AND type IN ('income', 'expense')
       GROUP BY month, type
       ORDER BY month
     `,
       )
-      .all(pid, startStr);
+      .all(...pids, startStr);
 
     const monthlyMap = {};
     for (const r of monthly) {
@@ -2591,12 +2624,13 @@ app.get("/api/stats/monthly", apiRateLimiter, (req, res) => {
 // ========================
 app.get("/api/analytics/distinct-years", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const rows = db
       .prepare(
-        `SELECT DISTINCT substr(date, 1, 4) as year FROM transactions WHERE profile_id = ? ORDER BY year DESC`,
+        `SELECT DISTINCT substr(date, 1, 4) as year FROM transactions WHERE profile_id IN (${inClause}) ORDER BY year DESC`,
       )
-      .all(pid);
+      .all(...pids);
     const years = rows.map((r) => parseInt(r.year));
     const currentYear = new Date().getFullYear();
     if (years.length === 0) years.push(currentYear);
@@ -2609,7 +2643,8 @@ app.get("/api/analytics/distinct-years", apiRateLimiter, (req, res) => {
 
 app.get("/api/analytics/weeks", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const year = parseInt(req.query.year);
     const month = req.query.month
       ? String(req.query.month).padStart(2, "0")
@@ -2690,15 +2725,15 @@ app.get("/api/analytics/category-trends", apiRateLimiter, (req, res) => {
     // Transactions and categories filtered by type (income or expense)
     const transactions = db
       .prepare(
-        `SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id = ? AND t.type = ? AND t.date >= ? AND t.date <= ? ORDER BY t.date`,
+        `SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = ? AND t.date >= ? AND t.date <= ? ORDER BY t.date`,
       )
-      .all(pid, type, startStr, endStr);
+      .all(...pids, type, startStr, endStr);
 
     const categories = db
       .prepare(
-        `SELECT id, name, color FROM categories WHERE profile_id = ? AND type = ? ORDER BY name`,
+        `SELECT id, name, color FROM categories WHERE profile_id IN (${inClause}) AND type = ? ORDER BY name`,
       )
-      .all(pid, type);
+      .all(...pids, type);
 
     // Generate labels based on view level
     const labels = [];
@@ -2804,7 +2839,8 @@ app.get("/api/analytics/category-trends", apiRateLimiter, (req, res) => {
 // ========================
 app.get("/api/analytics/sankey", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const year = parseInt(req.query.year) || new Date().getFullYear();
     const month = req.query.month ? String(req.query.month).padStart(2, "0") : null;
 
@@ -2821,17 +2857,17 @@ app.get("/api/analytics/sankey", apiRateLimiter, (req, res) => {
       SELECT b.category_id, b.amount as budget_amount, c.name as cat_name, c.color as cat_color
       FROM budgets b
       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-      WHERE b.profile_id = ? AND b.period = 'month'
+      WHERE b.profile_id IN (${inClause}) AND b.period = 'month'
       AND strftime('%Y-%m', b.start_date) <= ? AND (b.end_date IS NULL OR strftime('%Y-%m', b.end_date) >= ?)
-    `).all(pid, `${year}-${month}`, `${year}-${month}`);
+    `).all(...pids, `${year}-${month}`, `${year}-${month}`);
 
     // Get actual spending for this month
     const actualSpending = db.prepare(`
       SELECT t.category_id, SUM(COALESCE(t.amount_local, t.amount)) as actual_amount
       FROM transactions t
-      WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
+      WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
       GROUP BY t.category_id
-    `).all(pid, startStr, endStr);
+    `).all(...pids, startStr, endStr);
 
     // Create maps for easy lookup
     const budgetMap = new Map(budgets.map(b => [b.category_id, b]));
@@ -2926,11 +2962,12 @@ app.get("/api/analytics/sankey", apiRateLimiter, (req, res) => {
 });
 
 // ========================
-// EXPORT (per-profile)
+// EXPORT (per-profile, multi-profile for combined view)
 // ========================
 app.get("/api/export/:type", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { type } = req.params;
     const { format = 'csv' } = req.query;
 
@@ -2941,25 +2978,25 @@ app.get("/api/export/:type", apiRateLimiter, (req, res) => {
           SELECT t.date, t.description, t.amount, t.type, t.currency, t.means_of_payment, t.beneficiary, t.payor, t.notes, c.name as category
           FROM transactions t
           LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-          WHERE t.profile_id = ?
+          WHERE t.profile_id IN (${inClause})
           ORDER BY t.date DESC
-        `).all(pid);
+        `).all(...pids);
         data = rows;
         filename = 'transactions';
         break;
       }
       case 'categories': {
         const rows = db.prepare(`
-          SELECT name, color, icon, type, parent_id FROM categories WHERE profile_id = ?
-        `).all(pid);
+          SELECT name, color, icon, type, parent_id FROM categories WHERE profile_id IN (${inClause})
+        `).all(...pids);
         data = rows;
         filename = 'categories';
         break;
       }
       case 'accounts': {
         const rows = db.prepare(`
-          SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id = ?
-        `).all(pid);
+          SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id IN (${inClause})
+        `).all(...pids);
         data = rows;
         filename = 'accounts';
         break;
@@ -2968,8 +3005,8 @@ app.get("/api/export/:type", apiRateLimiter, (req, res) => {
         const rows = db.prepare(`
           SELECT b.*, c.name as category_name FROM budgets b
           JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-          WHERE b.profile_id = ?
-        `).all(pid);
+          WHERE b.profile_id IN (${inClause})
+        `).all(...pids);
         data = rows;
         filename = 'budgets';
         break;
@@ -2978,8 +3015,8 @@ app.get("/api/export/:type", apiRateLimiter, (req, res) => {
         const rows = db.prepare(`
           SELECT l.name, l.principal, l.interest_rate, l.start_date, l.term_months,
             (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid
-          FROM loans l WHERE l.profile_id = ?
-        `).all(pid);
+          FROM loans l WHERE l.profile_id IN (${inClause})
+        `).all(...pids);
         data = rows;
         filename = 'loans';
         break;
@@ -2987,8 +3024,8 @@ app.get("/api/export/:type", apiRateLimiter, (req, res) => {
       case 'recurring': {
         const rows = db.prepare(`
           SELECT description, amount, type, frequency, day_of_month, next_date, notes, active
-          FROM recurring_transactions WHERE profile_id = ?
-        `).all(pid);
+          FROM recurring_transactions WHERE profile_id IN (${inClause})
+        `).all(...pids);
         data = rows;
         filename = 'recurring_transactions';
         break;
@@ -3181,7 +3218,7 @@ app.post("/api/calculator/retire", apiRateLimiter, (req, res) => {
 // ========================
 // MONTHLY PDF REPORT
 // ========================
-app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
+app.get("/api/reports/monthly-pdf", apiRateLimiter, async (req, res) => {
   try {
     const { year, month } = req.query;
     if (!year || !month) {
@@ -3199,7 +3236,8 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
       return res.status(400).json({ error: "Valid month (1-12) is required" });
     }
 
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
@@ -3211,17 +3249,17 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
     const monthName = monthNames[parseInt(month) - 1] || month;
 
     // Fetch settings for currency
-    const settings = db.prepare(`SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`).get(pid);
+    const settings = db.prepare(`SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`).get(...pids);
     const currency = settings ? settings.value : "EUR";
 
     // Fetch transactions for the month
     const transactions = db.prepare(`
-      SELECT t.date, t.amount, t.description, c.name as cat_name, c.type as cat_type, t.type as tx_type
+      SELECT t.date, t.amount, t.description, c.name as cat_name, c.type as cat_type, c.color as cat_color, t.type as tx_type
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date <= ?
+      WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
       ORDER BY t.date
-    `).all(pid, startStr, endStr);
+    `).all(...pids, startStr, endStr);
 
     // Aggregate by category
     const incomeByCat = {};
@@ -3231,25 +3269,87 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
 
     transactions.forEach(tx => {
       const amt = Math.abs(parseFloat(tx.amount) || 0);
+      const catName = tx.cat_name || 'Uncategorized';
+      const catColor = tx.cat_color || (tx.tx_type === 'income' ? '#059669' : '#dc2626');
+
       if (tx.tx_type === 'income') {
         totalIncome += amt;
-        incomeByCat[tx.cat_name || 'Uncategorized'] = (incomeByCat[tx.cat_name || 'Uncategorized'] || 0) + amt;
+        if (!incomeByCat[catName]) incomeByCat[catName] = { name: catName, color: catColor, total: 0 };
+        incomeByCat[catName].total += amt;
       } else {
         totalExpenses += amt;
-        expenseByCat[tx.cat_name || 'Uncategorized'] = (expenseByCat[tx.cat_name || 'Uncategorized'] || 0) + amt;
+        if (!expenseByCat[catName]) expenseByCat[catName] = { name: catName, color: catColor, total: 0 };
+        expenseByCat[catName].total += amt;
       }
     });
 
     const netSavings = totalIncome - totalExpenses;
 
-    // Generate PDF
+    // Prepare data for export page
+    const exportData = {
+      yearMonth: `${year}-${String(month).padStart(2, "0")}`,
+      currency,
+      summary: { totalIncome, totalExpense: totalExpenses, netSavings },
+      incomeByCategory: Object.values(incomeByCat).sort((a, b) => b.total - a.total),
+      expenseByCategory: Object.values(expenseByCat).sort((a, b) => b.total - a.total),
+    };
+
+    // --- Use puppeteer to render and export as PDF directly ---
+    let pdfBuffer = null;
+
+    try {
+      const puppeteer = require("puppeteer");
+
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      });
+
+      try {
+        const exportPage = await browser.newPage();
+        await exportPage.setViewport({ width: 800, height: 1000, deviceScaleFactor: 2 });
+
+        await exportPage.evaluateOnNewDocument((data) => {
+          window.__DATA__ = data;
+        }, exportData);
+
+        const baseUrl = `http://localhost:${PORT}`;
+        await exportPage.goto(`${baseUrl}/export-monthly.html`, { waitUntil: 'networkidle0', timeout: 30000 });
+
+        // Wait for charts to render (wait for canvas elements to exist)
+        await exportPage.waitForSelector('canvas', { timeout: 10000 });
+        // Additional wait for Chart.js to fully render
+        await exportPage.waitForFunction(() => {
+          const canvases = document.querySelectorAll('canvas');
+          return canvases.length >= 2 && canvases.every(c => c.width > 0 && c.height > 0);
+        }, { timeout: 15000 });
+
+        pdfBuffer = Buffer.from(await exportPage.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: { top: '15px', right: '15px', bottom: '15px', left: '15px' }
+        }));
+      } finally {
+        await browser.close();
+      }
+    } catch (puppeteerErr) {
+      console.error('Puppeteer render failed:', puppeteerErr.message);
+    }
+
+    // --- Return the PDF directly ---
+    if (pdfBuffer && pdfBuffer.length > 1000) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="report-${year}-${String(month).padStart(2, "0")}.pdf"`);
+      return res.send(pdfBuffer);
+    }
+
+    // Fallback: text-only PDF
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="report-${year}-${String(month).padStart(2, "0")}.pdf"`);
 
     const doc = new PDFDocument({ margin: 50, size: "A4" });
     doc.pipe(res);
 
-    // Colors
     const titleColor = "#1e293b";
     const headerBg = "#1e293b";
     const incomeColor = "#059669";
@@ -3257,7 +3357,12 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
     const borderColor = "#e2e8f0";
     const mutedColor = "#64748b";
 
-    // Header
+    function formatCurrencyPdf(amount, curr) {
+      const symbols = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF " };
+      const sym = symbols[curr] || curr + " ";
+      return sym + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
     doc.fillColor(titleColor).fontSize(22).font("Helvetica-Bold")
       .text("Monthly Financial Report", { align: "center" });
     doc.moveDown(0.3);
@@ -3265,32 +3370,26 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
       .text(`${monthName} ${year}`, { align: "center" });
     doc.moveDown(0.8);
 
-    // Summary box
     const boxY = doc.y;
     const boxW = doc.page.width - 100;
     const colW = boxW / 3;
 
-    // Draw box background
     doc.rect(50, boxY, boxW, 60).fill("#f8fafc");
     doc.rect(50, boxY, boxW, 60).stroke(borderColor);
 
-    // Vertical dividers
     doc.moveTo(50 + colW, boxY).lineTo(50 + colW, boxY + 60).stroke(borderColor);
     doc.moveTo(50 + colW * 2, boxY).lineTo(50 + colW * 2, boxY + 60).stroke(borderColor);
 
-    // Income
     doc.fillColor(incomeColor).fontSize(10).font("Helvetica-Bold")
       .text("Total Income", 50, boxY + 10, { width: colW, align: "center" });
     doc.fillColor(incomeColor).fontSize(14).font("Helvetica-Bold")
       .text(formatCurrencyPdf(totalIncome, currency), 50, boxY + 28, { width: colW, align: "center" });
 
-    // Expenses
     doc.fillColor(expenseColor).fontSize(10).font("Helvetica-Bold")
       .text("Total Expenses", 50 + colW, boxY + 10, { width: colW, align: "center" });
     doc.fillColor(expenseColor).fontSize(14).font("Helvetica-Bold")
       .text(formatCurrencyPdf(totalExpenses, currency), 50 + colW, boxY + 28, { width: colW, align: "center" });
 
-    // Net Savings
     doc.fillColor(netSavings >= 0 ? incomeColor : expenseColor).fontSize(10).font("Helvetica-Bold")
       .text("Net Savings", 50 + colW * 2, boxY + 10, { width: colW, align: "center" });
     doc.fillColor(netSavings >= 0 ? incomeColor : expenseColor).fontSize(14).font("Helvetica-Bold")
@@ -3298,40 +3397,29 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
 
     doc.y = boxY + 70;
 
-    // Helper: section header
-    const drawSectionHeader = (title) => {
+    if (Object.keys(incomeByCat).length > 0) {
       doc.moveDown(0.5);
-      doc.fillColor(headerBg).fontSize(12).font("Helvetica-Bold").text(title);
+      doc.fillColor(headerBg).fontSize(12).font("Helvetica-Bold").text("Income");
       doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor(borderColor).stroke();
       doc.moveDown(0.3);
-    };
-
-    // Helper: currency formatter
-    function formatCurrencyPdf(amount, curr) {
-      const symbols = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF " };
-      const sym = symbols[curr] || curr + " ";
-      return sym + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    }
-
-    // Income section
-    if (Object.keys(incomeByCat).length > 0) {
-      drawSectionHeader("Income");
       doc.fontSize(10).font("Helvetica");
-      const sortedIncome = Object.entries(incomeByCat).sort((a, b) => b[1] - a[1]);
-      sortedIncome.forEach(([cat, amt]) => {
-        doc.fillColor(incomeColor).text(`${formatCurrencyPdf(amt, currency)}  `, { continued: true });
+      const sortedIncome = Object.entries(incomeByCat).sort((a, b) => b[1].total - a[1].total);
+      sortedIncome.forEach(([cat, data]) => {
+        doc.fillColor(incomeColor).text(`${formatCurrencyPdf(data.total, currency)}  `, { continued: true });
         doc.fillColor(titleColor).text(cat);
       });
     }
 
-    // Expenses section
     if (Object.keys(expenseByCat).length > 0) {
-      drawSectionHeader("Expenses");
+      doc.moveDown(0.5);
+      doc.fillColor(headerBg).fontSize(12).font("Helvetica-Bold").text("Expenses");
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor(borderColor).stroke();
+      doc.moveDown(0.3);
       doc.fontSize(10).font("Helvetica");
-      const sortedExpenses = Object.entries(expenseByCat).sort((a, b) => b[1] - a[1]);
-      sortedExpenses.forEach(([cat, amt]) => {
-        const pct = totalExpenses > 0 ? ((amt / totalExpenses) * 100).toFixed(1) : "0.0";
-        doc.fillColor(expenseColor).text(`${formatCurrencyPdf(amt, currency)}  (${pct}%)  `, { continued: true });
+      const sortedExpenses = Object.entries(expenseByCat).sort((a, b) => b[1].total - a[1].total);
+      sortedExpenses.forEach(([cat, data]) => {
+        const pct = totalExpenses > 0 ? ((data.total / totalExpenses) * 100).toFixed(1) : "0.0";
+        doc.fillColor(expenseColor).text(`${formatCurrencyPdf(data.total, currency)}  (${pct}%)  `, { continued: true });
         doc.fillColor(titleColor).text(cat);
       });
     }
@@ -3341,7 +3429,6 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
       doc.fillColor(mutedColor).fontSize(11).font("Helvetica").text("No transactions found for this period.", { align: "center" });
     }
 
-    // Footer
     doc.moveDown(2);
     doc.fillColor(mutedColor).fontSize(9).font("Helvetica")
       .text(`Generated by Finance Manager — ${new Date().toLocaleDateString()}`, { align: "center" });
@@ -3358,7 +3445,8 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, (req, res) => {
 // JSON tax summary
 app.get("/api/reports/tax-summary", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { year } = req.query;
     if (!year) return res.status(400).json({ error: "year is required" });
 
@@ -3369,9 +3457,9 @@ app.get("/api/reports/tax-summary", apiRateLimiter, (req, res) => {
       SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
+      WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
       ORDER BY c.tax_deductible DESC, c.name, t.date
-    `).all(pid, startStr, endStr);
+    `).all(...pids, startStr, endStr);
 
     const taxDeductible = rows.filter(r => r.tax_deductible);
     const nonDeductible = rows.filter(r => !r.tax_deductible);
@@ -3412,20 +3500,21 @@ app.get("/api/reports/tax-summary-pdf", apiRateLimiter, (req, res) => {
 
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
 
     const rows = db.prepare(`
       SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
+      WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
       ORDER BY c.tax_deductible DESC, c.name, t.date
-    `).all(pid, startStr, endStr);
+    `).all(...pids, startStr, endStr);
 
     const taxRows = rows.filter(r => r.tax_deductible);
     const nonRows = rows.filter(r => !r.tax_deductible);
 
-    const currency = db.prepare("SELECT value FROM settings WHERE key='local_currency' AND profile_id=?").get(pid)?.value || 'USD';
+    const currency = db.prepare(`SELECT value FROM settings WHERE key='local_currency' AND profile_id IN (${inClause}) ORDER BY profile_id DESC LIMIT 1`).get(...pids)?.value || 'USD';
     const symbols = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF " };
     const fmt = (amt) => (symbols[currency] || currency + " ") + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -3548,7 +3637,8 @@ app.get("/api/reports/tax-summary-pdf", apiRateLimiter, (req, res) => {
 // JSON P&L summary
 app.get("/api/reports/pl-summary", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { year } = req.query;
     if (!year) return res.status(400).json({ error: "year is required" });
 
@@ -3559,9 +3649,9 @@ app.get("/api/reports/pl-summary", apiRateLimiter, (req, res) => {
       SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date <= ?
+      WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
       ORDER BY t.type, c.name, t.date
-    `).all(pid, startStr, endStr);
+    `).all(...pids, startStr, endStr);
 
     const income = rows.filter(r => r.type === 'income');
     const expenses = rows.filter(r => r.type === 'expense');
@@ -3602,20 +3692,21 @@ app.get("/api/reports/pl-summary-pdf", apiRateLimiter, (req, res) => {
 
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
 
     const rows = db.prepare(`
       SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date <= ?
+      WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
       ORDER BY t.type, c.name, t.date
-    `).all(pid, startStr, endStr);
+    `).all(...pids, startStr, endStr);
 
     const incomeRows = rows.filter(r => r.type === 'income');
     const expenseRows = rows.filter(r => r.type === 'expense');
 
-    const currency = db.prepare("SELECT value FROM settings WHERE key='local_currency' AND profile_id=?").get(pid)?.value || 'USD';
+    const currency = db.prepare(`SELECT value FROM settings WHERE key='local_currency' AND profile_id IN (${inClause}) ORDER BY profile_id DESC LIMIT 1`).get(...pids)?.value || 'USD';
     const symbols = { EUR: "€", USD: "$", GBP: "£", CHF: "CHF " };
     const fmt = (amt) => (symbols[currency] || currency + " ") + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -3750,12 +3841,13 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
       return res.status(400).json({ error: "Valid year is required" });
     }
 
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
 
     // --- Fetch all data server-side ---
     const currencyRow = db.prepare(
-      "SELECT value FROM settings WHERE key='local_currency' AND (profile_id=? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1"
-    ).get(pid);
+      `SELECT value FROM settings WHERE key='local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`
+    ).get(...pids);
     const currency = currencyRow?.value || "USD";
 
     // Category breakdown (for doughnut chart)
@@ -3763,20 +3855,20 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
       SELECT c.name, c.color, SUM(COALESCE(t.amount_local, t.amount)) as total
       FROM transactions t
       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
+      WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
       GROUP BY c.id
       ORDER BY total DESC
-    `).all(pid, `${year}-01-01`, `${year}-12-31`);
+    `).all(...pids, `${year}-01-01`, `${year}-12-31`);
 
     // Monthly data for bar and line charts + breakdown table
     const monthly = db.prepare(`
       SELECT strftime('%m', date) as month_num,
              type, SUM(COALESCE(amount_local, amount)) as total
       FROM transactions
-      WHERE profile_id = ? AND date >= ? AND date <= ? AND type IN ('income', 'expense')
+      WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income', 'expense')
       GROUP BY month_num, type
       ORDER BY month_num
-    `).all(pid, `${year}-01-01`, `${year}-12-31`);
+    `).all(...pids, `${year}-01-01`, `${year}-12-31`);
 
     const monthlyMap = {};
     for (let m = 1; m <= 12; m++) {
@@ -3806,25 +3898,21 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
     const netSavings = totalIncome - totalExpenses;
     const savingsRate = totalIncome > 0 ? Math.round((netSavings / totalIncome) * 100) : 0;
 
-    // --- Use puppeteer to render charts ---
-    let screenshotBuffer = null;
+    // Prepare data for the export page
+    const exportData = {
+      year: parseInt(year),
+      currency,
+      summary: { totalIncome, totalExpense: totalExpenses, netSavings, savingsRate },
+      byCategory,
+      monthly: monthlyArr,
+      cashFlow,
+    };
+
+    // --- Use puppeteer to render and export as PDF directly ---
+    let pdfBuffer = null;
 
     try {
       const puppeteer = require("puppeteer");
-
-      // Prepare data for the export page
-      const exportData = {
-        year: parseInt(year),
-        currency,
-        summary: { totalIncome, totalExpense: totalExpenses, netSavings, savingsRate },
-        byCategory,
-        monthly: monthlyArr,
-        cashFlow,
-      };
-
-      // Encode as URL-safe base64
-      const jsonStr = JSON.stringify(exportData);
-      const encoded = Buffer.from(jsonStr).toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
       const browser = await puppeteer.launch({
         headless: true,
@@ -3843,31 +3931,35 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
         const baseUrl = `http://localhost:${PORT}`;
         await exportPage.goto(`${baseUrl}/export.html`, { waitUntil: 'networkidle0', timeout: 30000 });
 
-        // Wait for charts to render
-        await exportPage.waitForFunction('window.__RENDER_DONE__ === true', { timeout: 20000 });
+        // Wait for charts to render (wait for canvas elements to exist)
+        await exportPage.waitForSelector('canvas', { timeout: 10000 });
+        // Additional wait for Chart.js to fully render
+        await exportPage.waitForFunction(() => {
+          const canvases = document.querySelectorAll('canvas');
+          return canvases.length >= 3 && canvases.every(c => c.width > 0 && c.height > 0);
+        }, { timeout: 15000 });
 
-        // Capture just the body area (full page screenshot)
-        const bodyHandle = await exportPage.$('body');
-        const boundingBox = await bodyHandle.boundingBox();
-        screenshotBuffer = await exportPage.screenshot({
-          type: 'png',
-          clip: {
-            x: 0,
-            y: 0,
-            width: Math.ceil(boundingBox.width),
-            height: Math.ceil(boundingBox.height)
-          }
-        });
+        // Generate PDF directly from the rendered page (puppeteer returns Uint8Array, convert to Buffer)
+        pdfBuffer = Buffer.from(await exportPage.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+        }));
       } finally {
         await browser.close();
       }
     } catch (puppeteerErr) {
-      // If puppeteer fails (e.g., no display, missing deps), fall back to text-only PDF
-      console.error('Puppeteer render failed, falling back to text-only PDF:', puppeteerErr.message);
-      screenshotBuffer = null;
+      console.error('Puppeteer render failed:', puppeteerErr.message);
     }
 
-    // --- Generate PDF ---
+    // --- Return the PDF directly ---
+    if (pdfBuffer && pdfBuffer.length > 1000) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="annual-report-${year}.pdf"`);
+      return res.send(pdfBuffer);
+    }
+
+    // Fallback: if puppeteer failed, generate text-only PDF
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="annual-report-${year}.pdf"`);
@@ -3923,36 +4015,14 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
     doc.fillColor(netColor).fontSize(14)
       .text(fmt(netSavings), 50 + colW * 2 + 10, doc.y + 14, { width: colW, align: "center" });
 
+    // Note about charts
     doc.moveDown(2);
-
-    // === CHARTS SECTION: Always start on a new page to avoid overflow ===
     doc.addPage();
-    doc.y = 40;
-
-    // Embedded rendered chart screenshot
-    if (screenshotBuffer && screenshotBuffer.length > 100) {
-      try {
-        // Calculate image dimensions to fit within page width with margins
-        const maxImgW = doc.page.width - 80; // page width minus margins
-        const imgW = Math.min(maxImgW, 700); // cap at 700px for readability
-        const imgH = imgW * 0.85; // aspect ratio based on export.html layout (3 charts + table)
-
-        // Center the image horizontally
-        const imgX = (doc.page.width - imgW) / 2;
-
-        doc.image(screenshotBuffer, imgX, doc.y, { width: imgW, height: imgH, fit: [imgW, imgH] });
-        doc.y += imgH + 20;
-      } catch (e) {
-        // Fall back to text sections if image embedding fails
-        console.error('Failed to embed chart image:', e.message);
-        doc.moveDown(2);
-      }
-    } else {
-      // Text-only fallback: section headers and summary stats
-      doc.moveDown(1);
-    }
+    doc.fillColor(mutedColor).fontSize(12).font("Helvetica")
+      .text("Note: Charts could not be rendered in this session. Please try again later.", 50, doc.y, { width: pageW, align: "center" });
 
     // Monthly Breakdown Table
+    doc.moveDown(2);
     if (doc.y > doc.page.height - 280) {
       doc.addPage();
       doc.y = 50;

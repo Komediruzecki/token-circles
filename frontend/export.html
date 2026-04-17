@@ -398,11 +398,12 @@
   const tbody = document.getElementById('monthly-tbody');
   let running = 0;
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthlyMap = {};
+  (data.monthly || []).forEach(m => { monthlyMap[m.month] = m; });
 
   for (let m = 1; m <= 12; m++) {
     const monthStr = String(m).padStart(2, '0');
-    const yearMonth = data.year + '-' + monthStr;
-    const row = data.monthlyBreakdown ? data.monthlyBreakdown.find(b => b.month === monthStr) : null;
+    const row = monthlyMap[monthStr];
     const income = row ? row.income : 0;
     const expense = row ? row.expense : 0;
     const net = income - expense;
@@ -418,8 +419,10 @@
     tbody.appendChild(tr);
   }
 
-  // Signal that rendering is done
-  window.__RENDER_DONE__ = true;
+  // Signal that rendering is done (small delay to ensure charts fully render)
+  window.__CHART_RENDER_DONE__ = true;
+  // Give charts 500ms to fully render before signaling done
+  setTimeout(() => { window.__RENDER_DONE__ = true; }, 500);
 })();
 </script>
 </body>
