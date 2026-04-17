@@ -924,7 +924,8 @@ app.get("/api/transactions/:id", apiRateLimiter, (req, res) => {
 // Bulk update: PUT /api/transactions/bulk
 app.put("/api/transactions/bulk", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const { ids, action, data } = req.body;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -935,10 +936,10 @@ app.put("/api/transactions/bulk", apiRateLimiter, (req, res) => {
     }
 
     const placeholders = ids.map(() => '?').join(',');
-    const authParams = [pid, ...ids];
+    const authParams = [...pids, ...ids];
 
     if (action === 'delete') {
-      const stmt = db.prepare(`DELETE FROM transactions WHERE profile_id = ? AND id IN (${placeholders})`);
+      const stmt = db.prepare(`DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`);
       const result = stmt.run(...authParams);
       return res.json({ ok: true, deleted: result.changes });
     }
@@ -975,9 +976,9 @@ app.put("/api/transactions/bulk", apiRateLimiter, (req, res) => {
       }
 
       updates.push("updated_at = datetime('now')");
-      updateParams.push(pid, ...ids);
+      updateParams.push(...pids, ...ids);
 
-      const stmt = db.prepare(`UPDATE transactions SET ${updates.join(', ')} WHERE profile_id = ? AND id IN (${placeholders})`);
+      const stmt = db.prepare(`UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`);
       const result = stmt.run(...updateParams);
       return res.json({ ok: true, updated: result.changes });
     }
