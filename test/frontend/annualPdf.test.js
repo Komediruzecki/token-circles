@@ -1,37 +1,37 @@
 /**
  * Tests for Annual Financial Report PDF UI
  */
-const fs = require('fs');
-const path = require('path');
+const { readFrontendContent, fs, path } = require('./testUtils');
 
 describe('Annual Financial Report UI', () => {
-  let htmlContent;
+  let combinedContent;
 
   beforeAll(() => {
-    htmlContent = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+    const content = readFrontendContent();
+    combinedContent = content.combinedContent;
   });
 
   describe('Annual Financial Report section in Settings', () => {
     test('Annual Financial Report section exists in Settings', () => {
-      expect(htmlContent).toContain('Annual Financial Report');
-      expect(htmlContent).toContain('annual-report-year');
+      expect(combinedContent).toContain('Annual Financial Report');
+      expect(combinedContent).toContain('annual-report-year');
     });
 
     test('Annual Report button exists', () => {
-      expect(htmlContent).toContain('onclick="generateAnnualPDF()"');
-      expect(htmlContent).toContain('Download Annual PDF');
+      expect(combinedContent).toContain('onclick="generateAnnualPDF()"');
+      expect(combinedContent).toContain('Download Annual PDF');
     });
 
     test('generateAnnualPDF function exists', () => {
-      expect(htmlContent).toContain('function generateAnnualPDF()');
+      expect(combinedContent).toContain('function generateAnnualPDF()');
     });
 
     test('populateAnnualReportYears function exists', () => {
-      expect(htmlContent).toContain('function populateAnnualReportYears()');
+      expect(combinedContent).toContain('function populateAnnualReportYears()');
     });
 
     test('annual-report-year selector is populated on settings load', () => {
-      expect(htmlContent).toContain('populateAnnualReportYears()');
+      expect(combinedContent).toContain('populateAnnualReportYears()');
     });
   });
 
@@ -42,13 +42,13 @@ describe('Annual Financial Report UI', () => {
     });
 
     test('generateAnnualPDF uses GET method', () => {
-      expect(htmlContent).toContain('fetch(`/api/reports/annual-pdf?year=');
+      expect(combinedContent).toContain('fetch(`/api/reports/annual-pdf?year=');
     });
 
     test('generateAnnualPDF downloads blob as file', () => {
-      expect(htmlContent).toContain('URL.createObjectURL(blob)');
-      expect(htmlContent).toContain('download = ');
-      expect(htmlContent).toContain('annual-report-${year}.pdf');
+      expect(combinedContent).toContain('URL.createObjectURL(blob)');
+      expect(combinedContent).toContain('download = ');
+      expect(combinedContent).toContain('annual-report-${year}.pdf');
     });
 
     test('export.html exists as dedicated chart rendering page', () => {

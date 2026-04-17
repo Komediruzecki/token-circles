@@ -1,14 +1,14 @@
 /**
  * Tests for Analytics averages calculation
  */
-const fs = require('fs');
-const path = require('path');
+const { readFrontendContent, fs, path } = require('./testUtils');
 
 describe('Analytics Averages Calculation', () => {
-  let htmlContent;
+  let combinedContent;
 
   beforeAll(() => {
-    htmlContent = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+    const content = readFrontendContent();
+    combinedContent = content.combinedContent;
   });
 
   describe('renderAverages uses numDays from API', () => {
@@ -16,17 +16,17 @@ describe('Analytics Averages Calculation', () => {
       // The bug: renderAverages uses data.labels.length as numDays
       // Year view has 12 labels (months), so avg = total/12 (way too high)
       // Fix: use data.numDays from API
-      expect(htmlContent).toContain('data.numDays');
+      expect(combinedContent).toContain('data.numDays');
       // Should NOT use labels.length for average calculation
       // (We allow labels.length for other purposes like chart labels, but not for avg)
     });
 
     test('renderAverages function exists and calculates daily average', () => {
-      expect(htmlContent).toContain('renderAverages(data)');
+      expect(combinedContent).toContain('renderAverages(data)');
       // avgDay should be calculated from total and numDays
-      expect(htmlContent).toContain('avgDay');
-      expect(htmlContent).toContain('avgWeek');
-      expect(htmlContent).toContain('avgMonth');
+      expect(combinedContent).toContain('avgDay');
+      expect(combinedContent).toContain('avgWeek');
+      expect(combinedContent).toContain('avgMonth');
     });
   });
 

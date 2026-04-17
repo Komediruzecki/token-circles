@@ -29,6 +29,7 @@ const jsScripts = `<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.mi
 <script src="js/core/auth.js"></script>
 <script src="js/core/theme.js"></script>
 <script src="js/core/modal.js"></script>
+<script src="js/core/profile.js"></script>
 <script src="js/core/router.js"></script>
 <script src="js/features/dashboard.js"></script>
 <script src="js/features/transactions.js"></script>
@@ -40,6 +41,7 @@ const jsScripts = `<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.mi
 <script src="js/features/import.js"></script>
 <script src="js/features/settings-reports.js"></script>
 <script src="js/features/chartExport.js"></script>
+<script src="js/features/bulkEdit.js"></script>
 <script src="js/features/quickadd.js"></script>
 <script src="js/app.js"></script>
 `;

@@ -112,8 +112,9 @@ const txFilters = {
   },
 
   async loadCategories() {
-    const cats = await api('/categories');
-    window.allCategories = cats;
+    const res = await api('/categories');
+    // API returns { rows, total } - extract the array
+    window.allCategories = (res && res.rows) ? res.rows : (Array.isArray(res) ? res : []);
     this.initMultiSelect();
   },
 
@@ -254,7 +255,8 @@ const recurring = {
     document.getElementById('recurring-modal-title').textContent = id
       ? 'Edit Recurring'
       : 'Add Recurring';
-    const cats = await api('/categories');
+    const catsRes = await api('/categories');
+    const cats = (catsRes && catsRes.rows) ? catsRes.rows : (Array.isArray(catsRes) ? catsRes : []);
     document.getElementById('recurring-category').innerHTML =
       '<option value="">Select category...</option>' +
       cats.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
@@ -403,7 +405,7 @@ const transactions = {
     // Render summary bar
     this.renderSummary(summary, currency);
     if (!data.rows || data.rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><p>No transactions found</p></div></td></tr>`;
       document.getElementById('tx-pagination-info').textContent = '0 transactions';
       document.getElementById('tx-pagination').innerHTML = '';
       return;
@@ -411,6 +413,7 @@ const transactions = {
     tbody.innerHTML = data.rows
       .map(
         (t) => `<tr>
+      <td><input type="checkbox" class="tx-bulk-checkbox" value="${t.id}"></td>
       <td>${formatDate(t.date)}</td>
       <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color || '#6b7280'}"></span>${t.category_name || '-'}</td>
@@ -515,7 +518,8 @@ const transactions = {
       : 'Add Transaction';
 
     // Load categories
-    const cats = await api('/categories');
+    const catsRes = await api('/categories');
+    const cats = (catsRes && catsRes.rows) ? catsRes.rows : (Array.isArray(catsRes) ? catsRes : []);
     const catSelect = document.getElementById('tx-category');
     catSelect.innerHTML =
       '<option value="">Select category...</option>' +

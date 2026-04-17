@@ -4,14 +4,25 @@ const analytics = {
   pieChart: null,
   currentType: 'expense',
   init() {
-    this.populateYears().then(() => this.load());
+    this.populateYears();
   },
   async populateYears() {
     const select = document.getElementById('analytics-year');
+    const sankeyMonth = document.getElementById('sankey-month-filter');
     try {
       const { years } = await api('/analytics/distinct-years');
       if (!years || years.length === 0) return;
       select.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join('');
+
+      // Populate sankey month dropdown
+      const currentYear = new Date().getFullYear();
+      const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+      sankeyMonth.innerHTML = '<option value="">Select Month</option>' +
+        monthNames.slice(1).map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${i + 1 === parseInt(currentMonth) ? 'selected' : ''}>${m}</option>`).join('');
+
+      // Now load analytics data
+      this.load();
     } catch (e) {
       console.error('Failed to load years:', e);
     }
@@ -57,12 +68,16 @@ const analytics = {
     let url = `/analytics/category-trends?year=${year}&type=${this.currentType}`;
     if (month) url += `&month=${month}`;
     if (week) url += `&week=${week}`;
-    const [data, settings] = await Promise.all([api(url), api('/settings')]);
-    this.currentCurrency = settings.local_currency || 'EUR';
-    this.renderStackedChart(data, { year, month, week });
-    this.renderPieChart(data);
-    this.renderTopCategories(data);
-    this.renderAverages(data);
+    try {
+      const [data, settings] = await Promise.all([api(url), api('/settings')]);
+      this.currentCurrency = settings.local_currency || 'EUR';
+      this.renderStackedChart(data, { year, month, week });
+      this.renderPieChart(data);
+      this.renderTopCategories(data);
+      this.renderAverages(data);
+    } catch (e) {
+      console.error('Failed to load analytics:', e);
+    }
   },
   currentCurrency: 'EUR',
   renderStackedChart(data, { year, month, week }) {
@@ -320,19 +335,5 @@ const analytics = {
       .attr('fill', cc.text || '#1e293b')
       .attr('font-size', '12px')
       .text(d => `${d.name} (${formatCurrency(d.value || 0, this.currentCurrency)})`);
-  },
-  populateYears() {
-    const select = document.getElementById('analytics-year');
-    const sankeyMonth = document.getElementById('sankey-month-filter');
-    const currentYear = new Date().getFullYear();
-    api('/analytics/distinct-years').then(({ years }) => {
-      if (!years || years.length === 0) return;
-      const options = years.map(y => `<option value="${y}">${y}</option>`).join('');
-      select.innerHTML = options;
-      const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
-      sankeyMonth.innerHTML = '<option value="">Select Month</option>' +
-        monthNames.slice(1).map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${i + 1 === parseInt(currentMonth) ? 'selected' : ''}>${m}</option>`).join('');
-    }).catch(e => console.error('Failed to load years:', e));
   }
 };

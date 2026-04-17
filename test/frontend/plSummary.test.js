@@ -1,42 +1,42 @@
 /**
  * Tests for P&L Summary UI
  */
-const fs = require('fs');
-const path = require('path');
+const { readFrontendContent, fs, path } = require('./testUtils');
 
 describe('P&L Summary UI', () => {
-  let htmlContent;
+  let combinedContent;
 
   beforeAll(() => {
-    htmlContent = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+    const content = readFrontendContent();
+    combinedContent = content.combinedContent;
   });
 
   describe('Year-End P&L Summary section in Settings', () => {
     test('P&L Summary section exists in Settings', () => {
-      expect(htmlContent).toContain('Year-End P&L Summary');
-      expect(htmlContent).toContain('pl-summary-year');
+      expect(combinedContent).toContain('Year-End P&L Summary');
+      expect(combinedContent).toContain('pl-summary-year');
     });
 
     test('P&L PDF button exists', () => {
-      expect(htmlContent).toContain('onclick="generatePlSummaryPDF()"');
-      expect(htmlContent).toContain('Download P&L PDF');
+      expect(combinedContent).toContain('onclick="generatePlSummaryPDF()"');
+      expect(combinedContent).toContain('Download P&L PDF');
     });
 
     test('generatePlSummaryPDF function exists', () => {
-      expect(htmlContent).toContain('function generatePlSummaryPDF()');
+      expect(combinedContent).toContain('function generatePlSummaryPDF()');
     });
 
     test('generatePlSummaryPDF opens correct URL', () => {
-      expect(htmlContent).toContain('/api/reports/pl-summary-pdf?year=');
-      expect(htmlContent).toContain('pl-summary-year');
+      expect(combinedContent).toContain('/api/reports/pl-summary-pdf?year=');
+      expect(combinedContent).toContain('pl-summary-year');
     });
 
     test('populatePlSummaryYears function exists', () => {
-      expect(htmlContent).toContain('function populatePlSummaryYears()');
+      expect(combinedContent).toContain('function populatePlSummaryYears()');
     });
 
     test('pl-summary-year selector is populated on settings load', () => {
-      expect(htmlContent).toContain('populatePlSummaryYears()');
+      expect(combinedContent).toContain('populatePlSummaryYears()');
     });
   });
 
