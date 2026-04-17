@@ -73,7 +73,8 @@ describe('API Rate Limiting', () => {
   describe('Auth rate limiting (stricter)', () => {
     test('Login endpoint has stricter rate limit', async () => {
       // Reset auth rate limits
-      await request(BASE_URL).post('/api/test/reset-rate-limit');
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
       const resp = await request(BASE_URL).post('/api/auth/login')
         .set('X-Skip-RateLimit', 'true')
         .send({ username: 'maff', password: 'wrong' });
@@ -87,7 +88,8 @@ describe('API Rate Limiting', () => {
   describe('Rate limit headers format', () => {
     beforeAll(async () => {
       // Reset before this describe block
-      await request(BASE_URL).post('/api/test/reset-rate-limit');
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
     });
 
     test('X-RateLimit-Limit is a string', async () => {
@@ -118,7 +120,8 @@ describe('API Rate Limiting', () => {
 
   describe('Rate limit response format', () => {
     beforeAll(async () => {
-      await request(BASE_URL).post('/api/test/reset-rate-limit');
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
     });
 
     test('429 response includes error message', async () => {
@@ -142,7 +145,8 @@ describe('API Rate Limiting', () => {
 
   describe('Rate limiting isolation by profile', () => {
     beforeAll(async () => {
-      await request(BASE_URL).post('/api/test/reset-rate-limit');
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
     });
 
     test('Different profiles have separate rate limits', async () => {
@@ -159,7 +163,8 @@ describe('API Rate Limiting', () => {
 
   describe('API rate limit configuration', () => {
     beforeAll(async () => {
-      await request(BASE_URL).post('/api/test/reset-rate-limit');
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
     });
 
     test('API endpoints have 100 request limit', async () => {
@@ -180,8 +185,14 @@ describe('API Rate Limiting', () => {
   });
 
   describe('All API routes have rate limiting', () => {
+    let authCookie;
     beforeAll(async () => {
-      await request(BASE_URL).post('/api/test/reset-rate-limit');
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
+      const loginRes = await request(BASE_URL).post('/api/auth/login')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ username: 'maff', password: 'add2' });
+      authCookie = loginRes.headers['set-cookie'];
     });
 
     test('GET /api/transactions has rate limiting', async () => {

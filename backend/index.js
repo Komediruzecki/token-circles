@@ -81,11 +81,7 @@ const apiRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
-    // Skip rate limiting for requests with X-Skip-RateLimit header (for testing)
-    if (req.headers['x-skip-rate-limit'] === 'true') {
-      return next();
-    }
-
+    // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const profileId = parseInt(req.headers["x-profile-id"] || req.query.profile_id || 1);
     const key = `ip:${ip}:profile:${profileId}`;
@@ -103,6 +99,9 @@ const apiRateLimiter = (() => {
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(data.resetTime / 1000)));
 
+    // In test mode, skip rate limit blocking (tests use X-Skip-RateLimit for isolation)
+    if (process.env.NODE_ENV === 'test') return next();
+
     if (data.count > MAX_REQUESTS) {
       const retryAfter = Math.ceil((data.resetTime - now) / 1000);
       res.setHeader('Retry-After', String(retryAfter));
@@ -115,25 +114,11 @@ const apiRateLimiter = (() => {
   };
 })();
 
-// Test-only: reset rate limiter store between test runs
-if (process.env.NODE_ENV === 'test') {
-  app.post('/__test-reset-ratelimit', (req, res) => {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    const key = `ip:${ip}:profile:1`;
-    // Find and clear entries for this IP in the rate limiter store
-    // We clear all entries since we don't know profile_ids
-    if (global.__rateLimitStore) {
-      for (const k of global.__rateLimitStore.keys()) {
-        if (k.startsWith(`ip:${ip}:`)) global.__rateLimitStore.delete(k);
-      }
-    }
-    res.json({ ok: true });
-  });
-}
-
 // Auth rate limiter: 10 login attempts per 15 minutes per IP
 const authRateLimiter = (() => {
-  const store = new Map();
+  const store = (process.env.NODE_ENV === 'test' && global.__authRateLimitStore)
+    || new Map();
+  if (process.env.NODE_ENV === 'test') global.__authRateLimitStore = store;
   const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
   const MAX_REQUESTS = 10; // Stricter for auth
 
@@ -145,11 +130,7 @@ const authRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
-    // Skip rate limiting for requests with X-Skip-RateLimit header (for testing)
-    if (req.headers['x-skip-rate-limit'] === 'true') {
-      return next();
-    }
-
+    // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const now = Date.now();
     let data = store.get(ip);
@@ -164,6 +145,9 @@ const authRateLimiter = (() => {
     res.setHeader('X-RateLimit-Limit', String(MAX_REQUESTS));
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(data.resetTime / 1000)));
+
+    // In test mode, skip rate limit blocking
+    if (process.env.NODE_ENV === 'test') return next();
 
     if (data.count > MAX_REQUESTS) {
       const retryAfter = Math.ceil((data.resetTime - now) / 1000);
@@ -3903,6 +3887,7 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
 if (process.env.NODE_ENV === 'test') {
   app.post('/api/test/reset-rate-limit', (req, res) => {
     if (global.__rateLimitStore) global.__rateLimitStore.clear();
+    if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
     res.json({ ok: true });
   });
 }

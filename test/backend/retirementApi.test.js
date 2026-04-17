@@ -9,7 +9,8 @@ const BASE_URL = 'http://localhost:3847';
 describe('Retirement Calculator API', () => {
   beforeAll(async () => {
     // Reset rate limit store so we don't get 429s from prior test files
-    await request(BASE_URL).post('/api/test/reset-rate-limit');
+    await request(BASE_URL).post('/api/test/reset-rate-limit')
+      .set('X-Skip-RateLimit', 'true');
   });
 
   test('POST /api/calculator/retire returns required fields', async () => {
