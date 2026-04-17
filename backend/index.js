@@ -1674,9 +1674,9 @@ app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {
     // Get currency setting
     const currencyRow = db
       .prepare(
-        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
       )
-      .get(pid);
+      .get(...pids);
     const currency = currencyRow ? currencyRow.value : "EUR";
 
     res.json({
@@ -1746,9 +1746,9 @@ app.get("/api/dashboard/charts", apiRateLimiter, (req, res) => {
     // Get currency setting
     const currencyRow = db
       .prepare(
-        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id = ? OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
       )
-      .get(pid);
+      .get(...pids);
     const currency = currencyRow ? currencyRow.value : "EUR";
 
     res.json({
