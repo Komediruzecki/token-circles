@@ -1275,6 +1275,88 @@ app.get("/api/budgets/summary", apiRateLimiter, (req, res) => {
 });
 
 // ========================
+// SAVINGS GOALS
+// ========================
+app.get("/api/savings-goals", apiRateLimiter, (req, res) => {
+  try {
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
+    const rows = db
+      .prepare(
+        `SELECT * FROM savings_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC`,
+      )
+      .all(...pids);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/savings-goals", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, target_amount, current_amount, deadline, notes } = req.body;
+    if (!name || target_amount == null) {
+      return res.status(400).json({ error: "Name and target amount are required" });
+    }
+    const info = db
+      .prepare(
+        "INSERT INTO savings_goals (profile_id, name, target_amount, current_amount, deadline, notes) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        pid,
+        name,
+        target_amount,
+        current_amount || 0,
+        deadline || null,
+        notes || "",
+      );
+    res.json({ id: info.lastInsertRowid, name, target_amount, current_amount: current_amount || 0, deadline, notes, profile_id: pid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/savings-goals/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, target_amount, current_amount, deadline, notes } = req.body;
+    const result = db
+      .prepare(
+        "UPDATE savings_goals SET name=?, target_amount=?, current_amount=?, deadline=?, notes=? WHERE id=? AND profile_id=?",
+      )
+      .run(
+        name,
+        target_amount,
+        current_amount,
+        deadline || null,
+        notes || "",
+        req.params.id,
+        pid,
+      );
+    if (result.changes === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/savings-goals/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const result = db
+      .prepare("DELETE FROM savings_goals WHERE id=? AND profile_id=?")
+      .run(req.params.id, pid);
+    if (result.changes === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // LOANS (per-profile)
 // ========================
 app.get("/api/loans", apiRateLimiter, (req, res) => {
