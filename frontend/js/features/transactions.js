@@ -6,10 +6,13 @@ const txFilters = {
   async init() {
     // Populate year dropdown from distinct-years API
     const yearSelect = document.getElementById('tx-year-filter');
-    yearSelect.innerHTML = '';
-    const currentYear = new Date().getFullYear();
+    if (!yearSelect) return;
     try {
       const { years } = await api('/analytics/distinct-years');
+      // Clear then append in same synchronous block to prevent race condition
+      // where two init() calls could cause duplicates
+      yearSelect.innerHTML = '';
+      const currentYear = new Date().getFullYear();
       if (years && years.length > 0) {
         years.forEach((y) => {
           const opt = document.createElement('option');
@@ -21,7 +24,7 @@ const txFilters = {
         yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
       }
     } catch (e) {
-      yearSelect.innerHTML = `<option value="${currentYear}">${currentYear}</option>`;
+      yearSelect.innerHTML = '';
     }
     this.setPreset('month');
     this.loadCategories(); // Load categories for multi-select filter

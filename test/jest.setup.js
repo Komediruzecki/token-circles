@@ -13,3 +13,23 @@ if (process.env.NODE_ENV === 'test') {
 
 // Set up test environment
 process.env.NODE_ENV = 'test';
+
+// Initialize shared rate limit stores to prevent cross-test pollution
+if (typeof global.__rateLimitStore === 'undefined') {
+  global.__rateLimitStore = new Map();
+}
+if (typeof global.__authRateLimitStore === 'undefined') {
+  global.__authRateLimitStore = new Map();
+}
+
+// Clear rate limit stores before each test file
+beforeEach(() => {
+  if (global.__rateLimitStore) global.__rateLimitStore.clear();
+  if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
+});
+
+// Also clear after all tests
+afterAll(() => {
+  if (global.__rateLimitStore) global.__rateLimitStore.clear();
+  if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
+});

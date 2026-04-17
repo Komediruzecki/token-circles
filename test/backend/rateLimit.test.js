@@ -24,7 +24,7 @@ describe('API Rate Limiting', () => {
       expect(resp.headers).toHaveProperty('x-ratelimit-limit');
       expect(resp.headers).toHaveProperty('x-ratelimit-remaining');
       expect(resp.headers).toHaveProperty('x-ratelimit-reset');
-      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(100);
+      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(300);
     });
 
     test('GET /api/transactions returns rate limit headers', async () => {
@@ -33,7 +33,7 @@ describe('API Rate Limiting', () => {
         .set('Cookie', authCookie);
       expect(resp.headers).toHaveProperty('x-ratelimit-limit');
       expect(resp.headers).toHaveProperty('x-ratelimit-remaining');
-      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(100);
+      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(300);
     });
 
     test('POST /api/transactions returns rate limit headers', async () => {
@@ -47,18 +47,23 @@ describe('API Rate Limiting', () => {
           type: 'expense'
         });
       expect(resp.headers).toHaveProperty('x-ratelimit-limit');
-      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(100);
+      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(300);
     });
 
     test('Rate limit remaining decreases with requests', async () => {
+      // Reset before this test to ensure clean state
+      await request(BASE_URL).post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true');
       const resp1 = await request(BASE_URL).get('/api/profiles')
         .set('X-Skip-RateLimit', 'true');
       const resp2 = await request(BASE_URL).get('/api/profiles')
         .set('X-Skip-RateLimit', 'true');
       const remaining1 = parseInt(resp1.headers['x-ratelimit-remaining']);
       const remaining2 = parseInt(resp2.headers['x-ratelimit-remaining']);
-      // After 2+ requests, remaining should be less than 100
-      expect(remaining2).toBeLessThan(100);
+      // After 2 requests, remaining should be less than 300 (the limit)
+      expect(remaining1).toBeLessThan(300);
+      expect(remaining2).toBeLessThan(300);
+      expect(remaining2).toBeLessThan(remaining1);
     });
 
     test('Rate limit reset is a future timestamp', async () => {

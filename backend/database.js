@@ -295,6 +295,11 @@ function migrate() {
     try { db.exec('ALTER TABLE transactions ADD COLUMN reconciled_at TEXT'); } catch(e) {}
   }
 
+  // Migration: Add means_of_payment column to transactions
+  if (!columnExists('transactions', 'means_of_payment')) {
+    try { db.exec("ALTER TABLE transactions ADD COLUMN means_of_payment TEXT DEFAULT ''"); } catch(e) {}
+  }
+
   // Seed demo user if no users exist
   const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
   if (userCount.c === 0) {
@@ -389,7 +394,7 @@ function seedProfileData(profile) {
 
   // Tier-based configuration
   const tierConfig = getTierConfig(tier);
-  const startYear = 2020;
+  const startYear = 2000;
   const currentYear = 2026;
 
   // Create accounts for this profile

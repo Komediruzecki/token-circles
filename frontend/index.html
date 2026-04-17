@@ -1520,11 +1520,12 @@
       </button>
     </div>
     <div class="modal-body" style="max-height:400px;overflow-y:auto;">
+      <input type="hidden" id="bh-account-id">
       <div id="balance-history-list"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="modal.close('balance-history-modal')">Close</button>
-      <button class="btn btn-primary" onclick="accounts.recordBalance()">Record Current Balance</button>
+      <button class="btn btn-primary" id="bh-record-btn" onclick="accounts.recordBalance()">Record Current Balance</button>
     </div>
   </div>
 </div>

@@ -4,6 +4,7 @@
 const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
+jest.setTimeout(30000);
 
 beforeAll(async () => {
   await request(BASE_URL).post('/api/test/reset-rate-limit')

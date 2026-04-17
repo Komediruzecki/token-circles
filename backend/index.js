@@ -3081,12 +3081,14 @@ app.post("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
       .get(req.params.id, pid);
     if (!account) return res.status(404).json({ error: "Account not found" });
 
+    // Use balance from request body, or current account balance as fallback
+    const balance = parseFloat(req.body.balance ?? account.balance);
     const result = db
       .prepare(
         "INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, datetime('now'))",
       )
-      .run(req.params.id, account.balance);
-    res.json({ id: result.lastInsertRowid, balance: account.balance, recorded_at: new Date().toISOString() });
+      .run(req.params.id, balance);
+    res.json({ id: result.lastInsertRowid, balance, recorded_at: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

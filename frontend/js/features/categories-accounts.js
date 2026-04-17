@@ -256,6 +256,7 @@ const accounts = {
   },
   async viewBalanceHistory(id, name) {
     document.getElementById('bh-account-name').textContent = name;
+    document.getElementById('bh-account-id').value = id;
     try {
       const history = await api(`/accounts/${id}/history`);
       const list = document.getElementById('balance-history-list');
@@ -283,17 +284,25 @@ const accounts = {
       toast('Failed to load balance history: ' + e.message, 'error');
     }
   },
-  async recordBalance(id) {
-    const amount = parseFloat(prompt('Enter current balance:'));
-    if (isNaN(amount)) return;
+  async recordBalance() {
+    const id = parseInt(document.getElementById('bh-account-id').value);
+    if (!id) {
+      toast('No account selected', 'error');
+      return;
+    }
+    // Get current account balance from the API
+    const accountsData = await api('/accounts');
+    const acc = accountsData.find((a) => a.id === id);
+    const amount = acc ? parseFloat(acc.balance) : parseFloat(prompt('Enter current balance:'));
+    if (isNaN(amount) && !acc) return;
     try {
       await api(`/accounts/${id}/history`, {
         method: 'POST',
         body: { balance: amount },
       });
       toast('Balance recorded', 'success');
-      modal.close('balance-history-modal');
-      this.load();
+      // Refresh the list
+      await this.viewBalanceHistory(id, acc ? acc.name : '');
     } catch (e) {
       toast('Failed to record balance: ' + e.message, 'error');
     }
