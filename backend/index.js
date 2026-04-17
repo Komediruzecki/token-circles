@@ -2688,7 +2688,8 @@ app.get("/api/analytics/weeks", apiRateLimiter, (req, res) => {
 // ========================
 app.get("/api/analytics/category-trends", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const year = parseInt(req.query.year) || new Date().getFullYear();
     const month = req.query.month
       ? String(req.query.month).padStart(2, "0")
