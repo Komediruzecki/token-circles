@@ -37,7 +37,9 @@ const profile = {
     // Update localStorage
     localStorage.setItem('selectedProfileIds', JSON.stringify(this.selectedIds));
 
+    // Immediately update button text and re-render dropdown checkboxes
     this.updateDropdownDisplay();
+    this.renderDropdown();
     this.navigateToPage(window.location.hash.slice(1) || 'dashboard');
   },
 
@@ -47,6 +49,7 @@ const profile = {
     this.selectedIds = profiles.map(p => p.id);
     localStorage.setItem('selectedProfileIds', JSON.stringify(this.selectedIds));
     this.updateDropdownDisplay();
+    this.renderDropdown();
     this.navigateToPage(window.location.hash.slice(1) || 'dashboard');
   },
 
@@ -55,6 +58,7 @@ const profile = {
     this.selectedIds = [this.currentId];
     localStorage.setItem('selectedProfileIds', JSON.stringify(this.selectedIds));
     this.updateDropdownDisplay();
+    this.renderDropdown();
     this.navigateToPage(window.location.hash.slice(1) || 'dashboard');
   },
 
@@ -130,16 +134,18 @@ const profile = {
 
   updateDropdownDisplay() {
     const btn = document.getElementById('profile-btn-name');
-    const profiles = this.loadProfiles().then(profiles => {
-      if (this.selectedIds.length > 1) {
-        btn.textContent = `${this.selectedIds.length} Profiles`;
-        btn.style.fontWeight = '600';
-      } else if (this.selectedIds.length === 1) {
+    // Update button text immediately from cache (don't wait for API)
+    if (this.selectedIds.length > 1) {
+      btn.textContent = `${this.selectedIds.length} Profiles`;
+      btn.style.fontWeight = '600';
+    } else if (this.selectedIds.length === 1) {
+      // We can sync update from localStorage since profile names don't change often
+      this.loadProfiles().then(profiles => {
         const current = profiles.find((p) => p.id === this.selectedIds[0]);
-        btn.textContent = current ? current.name : 'Profile';
+        if (current) btn.textContent = current.name;
         btn.style.fontWeight = '';
-      }
-    });
+      });
+    }
   },
 
   async refreshUI() {

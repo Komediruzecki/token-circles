@@ -285,8 +285,8 @@ app.get("/api/profiles", apiRateLimiter, (req, res) => {
         )
         .all(req.session.userId);
     } else {
-      // Not logged in: return only ExampleProfile
-      profiles = db.prepare("SELECT * FROM profiles WHERE id = 1").all();
+      // Not logged in: return all example profiles (1, 2, 3)
+      profiles = db.prepare("SELECT * FROM profiles WHERE id IN (1, 2, 3) ORDER BY id").all();
     }
     // Include transaction counts
     const counts = {};
