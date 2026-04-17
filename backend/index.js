@@ -1758,6 +1758,77 @@ app.get("/api/budgets/history", apiRateLimiter, (req, res) => {
   }
 });
 
+// Get budget improvements (month-over-month adherence)
+app.get("/api/budgets/improvements", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { months = 6 } = req.query;
+    const numMonths = parseInt(months);
+
+    // Get monthly aggregated adherence
+    const history = db.prepare(`
+      WITH monthly_data AS (
+        SELECT
+          strftime('%Y-%m', b.start_date) as month,
+          b.amount as budget_amount,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+        FROM budgets b
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+          AND t.profile_id = b.profile_id
+          AND t.date >= b.start_date
+          AND t.date < date(b.start_date, '+1 month')
+        WHERE b.profile_id = ?
+        GROUP BY b.start_date
+      ),
+      aggregated AS (
+        SELECT
+          month,
+          SUM(budget_amount) as total_budget,
+          SUM(spent) as total_spent,
+          CASE WHEN SUM(budget_amount) > 0 THEN (SUM(spent) / SUM(budget_amount) * 100) ELSE 0 END as adherence_pct
+        FROM monthly_data
+        GROUP BY month
+        ORDER BY month DESC
+      )
+      SELECT
+        month,
+        total_budget,
+        total_spent,
+        adherence_pct,
+        LAG(adherence_pct) OVER (ORDER BY month) as prev_adherence,
+        CASE WHEN LAG(adherence_pct) OVER (ORDER BY month) IS NOT NULL
+             THEN adherence_pct - LAG(adherence_pct) OVER (ORDER BY month)
+             ELSE NULL END as change_pct
+      FROM aggregated
+      ORDER BY month DESC
+      LIMIT ?
+    `).all(pid, numMonths);
+
+    // Get category breakdown for latest month (for donut chart)
+    let categoryBudgets = [];
+    if (history.length > 0) {
+      const latestMonth = history[0].month;
+      const catData = db.prepare(`
+        SELECT c.name, c.color, b.amount
+        FROM budgets b
+        JOIN categories c ON c.id = b.category_id
+        WHERE b.profile_id = ? AND strftime('%Y-%m', b.start_date) = ?
+        ORDER BY b.amount DESC
+      `).all(pid, latestMonth);
+      categoryBudgets = catData;
+    }
+
+    // Attach category_budgets JSON to last item for donut
+    if (history.length > 0) {
+      history[0].category_budgets = JSON.stringify(categoryBudgets);
+    }
+
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========================
 // BUDGET ALERTS
 // ========================

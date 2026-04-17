@@ -2,6 +2,8 @@
 const budgets = {
   budgetChart: null,
   historyChart: null,
+  improvementChart: null,
+  budgetDonutChart: null,
   async load() {
     const monthSelect = document.getElementById('budget-month-select');
     this.populateMonthSelect(monthSelect);
@@ -119,6 +121,99 @@ const budgets = {
           },
         },
       });
+    }
+
+    // Load improvement and donut charts
+    await this.loadImprovementCharts();
+  },
+  async loadImprovementCharts() {
+    try {
+      const data = await api('/budgets/improvements');
+      const ctx = document.getElementById('chart-improvement').getContext('2d');
+      const donutCtx = document.getElementById('chart-budget-donut').getContext('2d');
+      const cc = chartColors();
+
+      // Improvement tracking line chart
+      if (this.improvementChart) this.improvementChart.destroy();
+      this.improvementChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => d.month),
+          datasets: [{
+            label: 'Adherence %',
+            data: data.map(d => parseFloat(d.adherence_pct) || 0),
+            borderColor: cc.primary,
+            backgroundColor: cc.primaryBg,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointBackgroundColor: cc.primary,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.raw.toFixed(1)}% adherence`,
+                afterLabel: (ctx) => {
+                  const d = data[ctx.dataIndex];
+                  return d.change_pct !== null ? ` vs last month: ${d.change_pct > 0 ? '+' : ''}${d.change_pct.toFixed(1)}%` : '';
+                },
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              ticks: { callback: v => v + '%', color: cc.text },
+              grid: { color: cc.grid },
+            },
+            x: { ticks: { color: cc.text }, grid: { color: cc.grid } },
+          },
+        },
+      });
+
+      // Budget donut chart (latest month totals)
+      if (this.budgetDonutChart) this.budgetDonutChart.destroy();
+      const latestMonth = data.length > 0 ? data[data.length - 1] : null;
+      if (latestMonth && latestMonth.category_budgets) {
+        const catBudgets = JSON.parse(latestMonth.category_budgets);
+        if (catBudgets.length > 0) {
+          this.budgetDonutChart = new Chart(donutCtx, {
+            type: 'doughnut',
+            data: {
+              labels: catBudgets.map(c => c.name),
+              datasets: [{
+                data: catBudgets.map(c => c.amount),
+                backgroundColor: catBudgets.map(c => c.color || cc.primary),
+                borderWidth: 0,
+              }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: true,
+                  position: 'right',
+                  labels: { color: cc.legend, font: { size: 11 }, boxWidth: 12 },
+                },
+                tooltip: {
+                  callbacks: {
+                    label: ctx => ` ${ctx.label}: ${formatCurrency(ctx.raw, 'USD')}`,
+                  },
+                },
+              },
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load improvement charts:', e);
     }
   },
   populateMonthSelect(select) {
