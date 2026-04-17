@@ -396,3 +396,241 @@ th[data-sort].sorted .sort-arrow {
 .confidence-badge {
   font-weight: 600;
 }
+
+/* Reconciliation Styles */
+.tr-reconciled {
+  opacity: 0.6;
+}
+.tr-reconciled:hover {
+  opacity: 0.85;
+}
+.reconcile-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+.th-reconcile {
+  width: 40px;
+  text-align: center;
+}
+.td-reconcile {
+  text-align: center;
+  width: 40px;
+}
+.reconcile-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.reconcile-toggle-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+.reconcile-toggle-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.reconcile-toggle-btn .badge {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.reconcile-toggle-btn:not(.active) .badge {
+  background: var(--primary);
+  color: #fff;
+}
+.reconciliation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #fff;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.reconcile-summary-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+  border-radius: 8px;
+  color: #ecfdf5;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.reconcile-summary-banner span {
+  font-weight: 600;
+}
+.reconcile-summary-banner .reconcile-banner-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+[data-theme="dark"] .reconcile-summary-banner {
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+  color: #d1fae5;
+}
+[data-theme="dark"] .reconcile-toggle-btn {
+  background: var(--card-bg);
+}
+[data-theme="dark"] .reconcile-toggle-btn.active {
+  background: var(--primary);
+}
+
+/* Housing Calculator Styles */
+.housing-calc-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.housing-input-section {
+  display: flex;
+  flex-direction: column;
+}
+.housing-results-section {
+  display: flex;
+  flex-direction: column;
+}
+.housing-calc-result {
+  margin-top: 24px;
+}
+.housing-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.housing-comparison-table th,
+.housing-comparison-table td {
+  padding: 10px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+.housing-comparison-table th:first-child,
+.housing-comparison-table td:first-child {
+  text-align: left;
+}
+.housing-comparison-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.housing-comparison-table tr:hover {
+  background: var(--bg-secondary);
+}
+.housing-comparison-table .positive {
+  color: var(--success);
+}
+.housing-comparison-table .negative {
+  color: var(--error);
+}
+.housing-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.housing-summary-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.housing-summary-card.rent {
+  border-left: 3px solid #f59e0b;
+}
+.housing-summary-card.buy {
+  border-left: 3px solid var(--primary);
+}
+.housing-summary-card.verdict {
+  border-left: 3px solid var(--success);
+}
+.housing-summary-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.housing-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.housing-summary-row .value {
+  font-weight: 600;
+}
+.housing-summary-row.highlight {
+  background: var(--bg-secondary);
+  margin: 8px -16px -16px;
+  padding: 12px 16px;
+  border-radius: 0 0 10px 10px;
+  font-weight: 600;
+}
+.housing-summary-row .value.success { color: var(--success); }
+.housing-summary-row .value.warning { color: var(--warning); }
+.housing-comparison-table-wrap {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+.housing-breakeven {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 12px;
+  margin-top: 16px;
+}
+.housing-breakeven.neutral {
+  background: rgba(245, 158, 11, 0.08);
+}
+.housing-breakeven .breakeven-icon {
+  color: var(--success);
+  flex-shrink: 0;
+}
+.housing-breakeven.neutral .breakeven-icon {
+  color: var(--warning);
+}
+.housing-breakeven .breakeven-text {
+  font-size: 14px;
+}
+.housing-breakeven .breakeven-text strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.housing-breakeven .breakeven-text p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
+  .housing-calc-layout {
+    grid-template-columns: 1fr;
+  }
+  .housing-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

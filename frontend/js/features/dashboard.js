@@ -95,6 +95,7 @@ const dashboard = {
     this.updateDisplay();
     await Promise.all([this.loadSummary(), this.loadCharts()]);
     if (typeof recurring !== 'undefined') recurring.load();
+    this.loadRecurringInsights();
   },
   async loadSummary() {
     const year = document.getElementById('dashboard-year').value;
@@ -372,7 +373,69 @@ const dashboard = {
       if (nwCard) nwCard.style.display = 'none';
     }
   },
-  async loadBudgetAlerts() {
+  async loadRecurringInsights() {
+    const card = document.getElementById('recurring-insights-card');
+    if (!card) return;
+    try {
+      const data = await api('/recurring/upcoming');
+      const currency = data.currency || 'EUR';
+      const container = document.getElementById('recurring-insights-list');
+
+      if (!data.transactions || data.transactions.length === 0) {
+        card.style.display = 'none';
+        return;
+      }
+      card.style.display = 'block';
+
+      // Show total
+      const totalEl = document.getElementById('recurring-insights-total');
+      if (totalEl) totalEl.textContent = formatCurrency(data.totalMonthly || 0, currency);
+
+      // Show top 5 upcoming
+      const top5 = data.transactions.slice(0, 5);
+      container.innerHTML = top5.map(t => {
+        const day = new Date(t.next_date).getDate();
+        const daySuffix = getDaySuffix(day);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="cat-dot" style="background:${t.category_color || '#6b7280'}"></span>
+            <span style="font-weight:500;">${escapeHtml(t.description || '-')}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <span style="font-weight:600;color:${t.type === 'expense' ? 'var(--expense)' : 'var(--income)'};">
+              ${t.type === 'expense' ? '-' : '+'}${formatCurrency(t.amount, currency)}
+            </span>
+            <span style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:right;">
+              ${day}${daySuffix}
+            </span>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Show category summary
+      const catSummary = document.getElementById('recurring-insights-categories');
+      if (catSummary && data.byCategory && data.byCategory.length > 0) {
+        catSummary.innerHTML = data.byCategory.slice(0, 4).map(c => {
+          const barPct = Math.min(100, (c.total / (data.totalMonthly || 1)) * 100);
+          return `<div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+              <span style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:5px;">
+                <span class="cat-dot" style="background:${c.color || '#6b7280'}"></span>
+                ${escapeHtml(c.name)}
+              </span>
+              <span style="font-size:12px;font-weight:500;">${formatCurrency(c.total, currency)}</span>
+            </div>
+            <div style="background:var(--bg-secondary);border-radius:3px;height:4px;overflow:hidden;">
+              <div style="width:${barPct}%;height:100%;background:${c.color || 'var(--primary)'};border-radius:3px;"></div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    } catch (e) {
+      const card = document.getElementById('recurring-insights-card');
+      if (card) card.style.display = 'none';
+    }
+  },
     const card = document.getElementById('budget-alerts-card');
     if (!card) return;
     try {
@@ -429,3 +492,13 @@ const dashboard = {
     }
   },
 };
+
+function getDaySuffix(day) {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}

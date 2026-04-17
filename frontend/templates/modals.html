@@ -656,3 +656,52 @@
   </div>
 </div>
 
+<!-- BILLS MODAL -->
+<div class="modal-overlay" id="bills-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="bills-modal-title">Add Bill</div>
+      <button class="btn btn-ghost" onclick="modal.close('bills-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="bills-form" class="modal-body">
+      <input type="hidden" id="bills-modal-id">
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" id="bills-name" placeholder="e.g. Netflix subscription" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <input type="number" step="0.01" class="form-control" id="bills-amount" placeholder="0.00" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Frequency</label>
+          <select class="form-control" id="bills-frequency">
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Day of Month (1-31)</label>
+          <input type="number" class="form-control" id="bills-day" min="1" max="31" placeholder="1-31">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-control" id="bills-category"><option value="">Select category...</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-control" id="bills-notes" placeholder="Optional notes">
+      </div>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('bills-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bills.save()">Save</button>
+    </div>
+  </div>
+</div>
+

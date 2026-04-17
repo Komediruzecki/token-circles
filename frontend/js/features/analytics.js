@@ -3,8 +3,28 @@ const analytics = {
   chart: null,
   pieChart: null,
   currentType: 'expense',
+  comparisonEnabled: false,
+  comparisonYear: null,
+  comparisonMonth: null,
   init() {
     this.populateYears();
+  },
+  toggleCompare() {
+    const btn = document.getElementById('compare-toggle');
+    const compareSelect = document.getElementById('analytics-compare-month');
+    this.comparisonEnabled = !this.comparisonEnabled;
+    if (this.comparisonEnabled) {
+      btn.classList.add('active');
+      compareSelect.style.display = '';
+      // Copy year from main selector
+      this.comparisonYear = document.getElementById('analytics-year').value;
+    } else {
+      btn.classList.remove('active');
+      compareSelect.style.display = 'none';
+      this.comparisonYear = null;
+      this.comparisonMonth = null;
+    }
+    this.load();
   },
   async populateYears() {
     const select = document.getElementById('analytics-year');
@@ -39,6 +59,10 @@ const analytics = {
     document.getElementById('analytics-month-filter').value = '';
     document.getElementById('analytics-week-filter').value = '';
     document.getElementById('analytics-week-filter').style.display = 'none';
+    if (this.comparisonEnabled) {
+      this.comparisonYear = document.getElementById('analytics-year').value;
+      document.getElementById('analytics-compare-month').value = '';
+    }
     this.load();
   },
   async onMonthChange() {
@@ -79,7 +103,25 @@ const analytics = {
     try {
       const [data, settings] = await Promise.all([api(url), api('/settings')]);
       this.currentCurrency = settings.local_currency || 'EUR';
-      this.renderStackedChart(data, { year, month, week });
+
+      let compareData = null;
+      if (this.comparisonEnabled) {
+        const compareYear = this.comparisonYear || year;
+        const compareMonth = document.getElementById('analytics-compare-month').value;
+        const compareWeek = compareMonth ? '' : week; // Reset week if changing months
+        let compareUrl = `/analytics/category-trends?year=${compareYear}&type=${this.currentType}`;
+        if (compareMonth) compareUrl += `&month=${compareMonth}`;
+        else if (compareWeek) compareUrl += `&week=${compareWeek}`;
+        try {
+          compareData = await api(compareUrl);
+          this.comparisonYear = compareYear;
+          this.comparisonMonth = compareMonth;
+        } catch (e) {
+          console.error('Failed to load comparison data:', e);
+        }
+      }
+
+      this.renderStackedChart(data, compareData, { year, month, week });
       this.renderPieChart(data);
       this.renderTopCategories(data);
       this.renderAverages(data);
@@ -88,7 +130,7 @@ const analytics = {
     }
   },
   currentCurrency: 'EUR',
-  renderStackedChart(data, { year, month, week }) {
+  renderStackedChart(data, compareData, { year, month, week }) {
     const currency = this.currentCurrency;
     const canvas = document.getElementById('analytics-stacked-chart');
     if (!canvas) return;
@@ -102,24 +144,78 @@ const analytics = {
     else if (month) maxTicks = 15;
     else maxTicks = 12;
 
+    // Build datasets: main data + optional comparison overlay
+    const datasets = data.datasets.map((ds, i) => ({
+      label: ds.category,
+      data: ds.data,
+      backgroundColor: ds.color,
+      borderRadius: 2,
+      barPercentage: week ? 0.8 : month ? 0.8 : 0.7,
+    }));
+
+    // Add comparison datasets with transparency and border
+    if (compareData && compareData.datasets && compareData.datasets.length > 0) {
+      // Match categories to comparison data by name
+      const mainCategories = new Set(data.datasets.map(d => d.category));
+      compareData.datasets.forEach((ds) => {
+        // Only add if category exists in main data (to avoid duplicate legends)
+        if (mainCategories.has(ds.category)) {
+          datasets.push({
+            label: `${ds.category} (Compare)`,
+            data: ds.data,
+            backgroundColor: ds.color,
+            borderColor: ds.color,
+            borderWidth: 2,
+            borderDash: [4, 4],
+            borderRadius: 2,
+            opacity: 0.5,
+            barPercentage: week ? 0.8 : month ? 0.8 : 0.7,
+          });
+        }
+      });
+    }
+
+    // Build legend labels
+    const legendLabels = {
+      display: true,
+      position: 'top',
+      labels: {
+        color: cc.legend || cc.text,
+        usePointStyle: true,
+        pointStyle: 'rect',
+        padding: 16,
+        font: { size: 11 },
+        generateLabels: (chart) => {
+          const map = new Map();
+          chart.data.datasets.forEach((ds, i) => {
+            if (!map.has(ds.label)) {
+              map.set(ds.label, {
+                text: ds.label,
+                fillStyle: ds.backgroundColor,
+                strokeStyle: ds.borderDash ? ds.borderColor : 'transparent',
+                lineWidth: ds.borderDash ? 2 : 0,
+                hidden: false,
+                index: i
+              });
+            }
+          });
+          return Array.from(map.values());
+        }
+      }
+    };
+
     this.chart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: data.labels,
-        datasets: data.datasets.map((ds, i) => ({
-          label: ds.category,
-          data: ds.data,
-          backgroundColor: ds.color,
-          borderRadius: 2,
-          barPercentage: week ? 0.8 : month ? 0.8 : 0.7,
-        })),
+        datasets: datasets,
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: legendLabels,
           tooltip: {
             backgroundColor: cc.tooltipBg,
             titleColor: cc.tooltipTitle,

@@ -47,6 +47,8 @@ const nav = {
           retirement.init();
           retirement.calculate();
         }
+        if (page === 'housing') housingCalc.init();
+        if (page === 'bills') bills.load();
       });
     });
 

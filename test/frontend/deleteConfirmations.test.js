@@ -64,7 +64,8 @@ describe('Delete confirmations', () => {
 
   describe('Import confirmation', () => {
     test('import execute has row count confirmation', () => {
-      expect(combinedContent).toContain("confirm(`Import ${rowCount} transactions?");
+      expect(combinedContent).toContain('confirm(`Import ${rowCount} transaction');
+      expect(combinedContent).toContain("rowCount !== 1 ? 's' : ''");
     });
 
     test('import execute button has id for loading state', () => {

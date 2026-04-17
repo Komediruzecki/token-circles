@@ -337,6 +337,7 @@ const transactions = {
   perPage: 50,
   sortBy: 'date',
   sortOrder: 'desc',
+  showReconciled: false,
   buildFilterParams() {
     const search = document.getElementById('tx-search')?.value || '';
     const type = document.getElementById('tx-type-filter')?.value || '';
@@ -350,7 +351,68 @@ const transactions = {
     if (catIds.length > 0) params.append('category_ids', catIds.join(','));
     if (from) params.append('startDate', from);
     if (to) params.append('endDate', to);
+    // Reconciliation filter - show unreconciled by default, or filter by reconciled status
+    if (!this.showReconciled) {
+      params.append('reconciled', '0');
+    }
     return params;
+  },
+  async initReconciliation() {
+    // Load unreconciled count for badge
+    try {
+      const summary = await api('/transactions/summary?reconciled=0');
+      const count = summary?.count || 0;
+      const badge = document.getElementById('tx-reconciled-count');
+      if (badge) badge.textContent = count;
+    } catch (e) { /* ignore */ }
+  },
+  toggleReconciledFilter() {
+    this.showReconciled = !this.showReconciled;
+    const btn = document.getElementById('tx-reconcile-toggle');
+    if (btn) btn.classList.toggle('active', this.showReconciled);
+    this.load();
+  },
+  async toggleReconcile(id, event) {
+    event.stopPropagation();
+    try {
+      await api(`/transactions/${id}/reconcile`, { method: 'PATCH' });
+      this.load();
+      this.initReconciliation();
+    } catch (e) {
+      toast('Failed to toggle reconciliation', 'error');
+    }
+  },
+  async markAllUnreconciledReconciled() {
+    try {
+      // Get all unreconciled transactions in current filter range
+      const summary = await api('/transactions/summary?reconciled=0');
+      if (summary.count === 0) {
+        toast('No unreconciled transactions', 'info');
+        return;
+      }
+      if (!confirm(`Mark ${summary.count} unreconciled transaction(s) as reconciled?`)) return;
+
+      const allParams = new URLSearchParams({ reconciled: '0', limit: '10000' });
+      const data = await api(`/transactions?${allParams}`);
+      const ids = (data.rows || []).map(t => t.id);
+
+      if (ids.length > 0) {
+        await api('/transactions/reconcile-batch', {
+          method: 'PUT',
+          body: { transaction_ids: ids }
+        });
+        toast(`Marked ${ids.length} transactions as reconciled`, 'success');
+      }
+      this.load();
+      this.initReconciliation();
+      this.dismissReconcileBanner();
+    } catch (e) {
+      toast('Failed to reconcile transactions', 'error');
+    }
+  },
+  dismissReconcileBanner() {
+    const banner = document.getElementById('tx-reconcile-banner');
+    if (banner) banner.style.display = 'none';
   },
   async load() {
     const table = document.getElementById('tx-table-body');
@@ -415,8 +477,11 @@ const transactions = {
     }
     tbody.innerHTML = data.rows
       .map(
-        (t) => `<tr>
+        (t) => `<tr class="${t.reconciled ? 'tr-reconciled' : ''}">
       <td><input type="checkbox" class="tx-bulk-checkbox" value="${t.id}"></td>
+      <td class="td-reconcile">
+        <input type="checkbox" class="reconcile-checkbox" ${t.reconciled ? 'checked' : ''} onchange="transactions.toggleReconcile(${t.id}, event)" title="${t.reconciled ? 'Mark unreconciled' : 'Mark reconciled'}">
+      </td>
       <td>${formatDate(t.date)}</td>
       <td><div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.description) || '-'}</div></td>
       <td><span class="cat-dot" style="background:${t.category_color || '#6b7280'}"></span>${t.category_name || '-'}</td>

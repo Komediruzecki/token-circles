@@ -1056,6 +1056,7 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
       category_ids,
       type,
       search,
+      reconciled,
       limit,
       offset,
       sort,
@@ -1092,6 +1093,13 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
       sql +=
         " AND (t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ? OR t.notes LIKE ?)";
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (reconciled !== undefined) {
+      if (reconciled === '0' || reconciled === 'false') {
+        sql += " AND (t.reconciled = 0 OR t.reconciled IS NULL)";
+      } else if (reconciled === '1' || reconciled === 'true') {
+        sql += " AND t.reconciled = 1";
+      }
     }
     if (sort) {
       const sortCol = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'].includes(sort) ? (sort === 'category_name' ? 'c.name' : `t.${sort}`) : 't.date';
@@ -1131,6 +1139,13 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
       countSql +=
         " AND (t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ? OR t.notes LIKE ?)";
       cparams.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (reconciled !== undefined) {
+      if (reconciled === '0' || reconciled === 'false') {
+        countSql += " AND (t.reconciled = 0 OR t.reconciled IS NULL)";
+      } else if (reconciled === '1' || reconciled === 'true') {
+        countSql += " AND t.reconciled = 1";
+      }
     }
     const total = db.prepare(countSql).get(...cparams).c;
     res.json({ rows, total });
@@ -1485,6 +1500,25 @@ app.get("/api/transactions/reconcile/summary", apiRateLimiter, (req, res) => {
        FROM transactions WHERE profile_id IN (${inClause})`
     ).get(...pids);
     res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch mark transactions as reconciled by ID list
+app.put("/api/transactions/reconcile-batch", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { transaction_ids } = req.body;
+    if (!Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+      return res.status(400).json({ error: "transaction_ids array is required" });
+    }
+    const placeholders = transaction_ids.map(() => '?').join(',');
+    const result = db.prepare(
+      `UPDATE transactions SET reconciled = 1, reconciled_at = datetime('now')
+       WHERE id IN (${placeholders}) AND profile_id = ?`
+    ).run(...transaction_ids, pid);
+    res.json({ message: `${result.changes} transactions reconciled`, updated: result.changes });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2616,7 +2650,7 @@ app.post("/api/import/upload", apiRateLimiter, upload.single("file"), (req, res)
 
 app.post("/api/import/file-sheet", apiRateLimiter, (req, res) => {
   try {
-    const { fileId, sheetName } = req.body;
+    const { fileId, sheetName, mapping } = req.body;
     const entry = importFiles[fileId];
     if (!entry)
       return res
@@ -2629,13 +2663,40 @@ app.post("/api/import/file-sheet", apiRateLimiter, (req, res) => {
 
     const sheet = entry.workbook.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ""));
+
+    // Server-side duplicate detection
+    let duplicateCount = 0;
+    let duplicateIndices = [];
+    if (mapping && mapping.description !== undefined && mapping.amount !== undefined && mapping.date !== undefined) {
+      const seen = new Map();
+      rows.forEach((row, idx) => {
+        const desc = (row[mapping.description] || '').toString().toLowerCase().trim();
+        const amount = (row[mapping.amount] || '').toString().trim();
+        const date = (row[mapping.date] || '').toString().trim();
+        if (!desc && !amount && !date) return;
+        const key = `${date}|${amount}|${desc}`;
+        if (seen.has(key)) {
+          duplicateIndices.push(idx);
+          const origIdx = seen.get(key);
+          if (!duplicateIndices.includes(origIdx)) duplicateIndices.push(origIdx);
+        } else {
+          seen.set(key, idx);
+        }
+      });
+      duplicateIndices = duplicateIndices.sort((a, b) => a - b);
+      duplicateCount = duplicateIndices.length;
+    }
+
     res.json({
       fileId,
       sheetName,
       sheetNames,
       headers: (data[0] || []).map(String),
-      rows: data.slice(1).filter((r) => r.some((c) => c != null && c !== "")),
+      rows,
       totalRows: data.length - 1,
+      duplicateCount,
+      duplicateIndices,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3109,6 +3170,43 @@ app.delete("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
   }
 });
 
+// Get reconciliation summary for a specific account
+app.get("/api/accounts/:id/reconciliation-summary", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const account = db
+      .prepare("SELECT id, name FROM accounts WHERE id = ? AND profile_id = ?")
+      .get(req.params.id, pid);
+    if (!account) return res.status(404).json({ error: "Account not found" });
+
+    // Get unreconciled transactions for this account
+    // Note: accounts table doesn't directly link to transactions, so we show all profile transactions
+    const unreconciled = db
+      .prepare(
+        `SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+         FROM transactions
+         WHERE profile_id = ? AND (reconciled = 0 OR reconciled IS NULL)`
+      )
+      .get(pid);
+    const reconciled = db
+      .prepare(
+        `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`
+      )
+      .get(pid);
+
+    res.json({
+      account_id: account.id,
+      account_name: account.name,
+      unreconciled_count: unreconciled.count,
+      unreconciled_total: unreconciled.total,
+      reconciled_count: reconciled.count,
+      total_transactions: unreconciled.count + reconciled.count
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Net worth timeline from balance history
 app.get("/api/accounts/history/timeline", apiRateLimiter, (req, res) => {
   try {
@@ -3283,6 +3381,291 @@ app.post("/api/recurring/:id/populate", apiRateLimiter, (req, res) => {
       transactionId: info.lastInsertRowid,
       next_date: nextStr,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// RECURRING INSIGHTS
+// ========================
+app.get("/api/recurring/upcoming", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const now = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30);
+
+    // Get all active recurring transactions
+    const recurring = db.prepare(`
+      SELECT r.id, r.description, r.amount, r.type, r.frequency, r.day_of_month, r.next_date,
+             c.name as category_name, c.color as category_color
+      FROM recurring_transactions r
+      LEFT JOIN categories c ON r.category_id = c.id
+      WHERE r.profile_id = ? AND r.active = 1
+    `).all(pid);
+
+    // Expand each recurring transaction into its upcoming occurrences in the next 30 days
+    const upcoming = [];
+    for (const r of recurring) {
+      let cursor = new Date(r.next_date || now.toISOString().split('T')[0]);
+      if (cursor < now) {
+        // Advance cursor to the next occurrence from today
+        cursor = new Date(now.toISOString().split('T')[0]);
+      }
+      // Cap to the next 30 days
+      const maxDate = new Date(endDate.toISOString().split('T')[0]);
+
+      while (cursor <= maxDate) {
+        upcoming.push({
+          id: r.id,
+          description: r.description,
+          amount: r.amount,
+          type: r.type,
+          frequency: r.frequency,
+          day_of_month: r.day_of_month,
+          next_date: cursor.toISOString().split('T')[0],
+          category_name: r.category_name,
+          category_color: r.category_color,
+        });
+
+        // Advance cursor to next occurrence
+        if (r.frequency === 'daily') {
+          cursor.setDate(cursor.getDate() + 1);
+        } else if (r.frequency === 'weekly') {
+          cursor.setDate(cursor.getDate() + 7);
+        } else if (r.frequency === 'monthly') {
+          cursor.setMonth(cursor.getMonth() + 1);
+          // Normalize day of month
+          const day = r.day_of_month || cursor.getDate();
+          cursor.setDate(Math.min(day, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()));
+        } else if (r.frequency === 'yearly') {
+          cursor.setFullYear(cursor.getFullYear() + 1);
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Sort by next_date
+    upcoming.sort((a, b) => a.next_date.localeCompare(b.next_date));
+
+    // Group by category
+    const byCategory = {};
+    let totalMonthly = 0;
+    for (const item of upcoming) {
+      const catKey = item.category_name || 'Uncategorized';
+      if (!byCategory[catKey]) {
+        byCategory[catKey] = { name: catKey, color: item.category_color, total: 0, items: [] };
+      }
+      byCategory[catKey].total += item.amount;
+      byCategory[catKey].items.push(item);
+      totalMonthly += item.amount;
+    }
+
+    // Get currency from settings
+    const currencyRow = db.prepare(
+      "SELECT value FROM settings WHERE key = 'local_currency' AND profile_id = ?"
+    ).get(pid);
+    const currency = currencyRow ? currencyRow.value : 'EUR';
+
+    res.json({
+      transactions: upcoming.slice(0, 20),
+      byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
+      totalMonthly,
+      currency,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ========================
+// BILLS API
+// ========================
+app.get("/api/bills", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const rows = db.prepare(`
+      SELECT b.*, c.name as category_name, c.color as category_color
+      FROM bills b
+      LEFT JOIN categories c ON b.category_id = c.id
+      WHERE b.profile_id = ?
+      ORDER BY b.is_active DESC, b.name ASC
+    `).all(pid);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/bills/upcoming", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const bills = db.prepare(`
+      SELECT b.*, c.name as category_name, c.color as category_color
+      FROM bills b
+      LEFT JOIN categories c ON b.category_id = c.id
+      WHERE b.profile_id = ? AND b.is_active = 1
+      ORDER BY b.name ASC
+    `).all(pid);
+
+    const upcoming = bills.map(b => {
+      let nextDue = null;
+      const lastPaid = b.last_paid ? new Date(b.last_paid) : null;
+
+      if (b.frequency === 'monthly') {
+        const dayOfMonth = b.day_of_month || 1;
+        if (lastPaid) {
+          nextDue = new Date(lastPaid);
+          nextDue.setMonth(nextDue.getMonth() + 1);
+          nextDue.setDate(Math.min(dayOfMonth, new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate()));
+        } else {
+          nextDue = new Date(now.getFullYear(), now.getMonth(), Math.min(dayOfMonth, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
+          if (nextDue < now) nextDue.setMonth(nextDue.getMonth() + 1);
+        }
+      } else if (b.frequency === 'weekly') {
+        if (lastPaid) {
+          nextDue = new Date(lastPaid);
+          nextDue.setDate(nextDue.getDate() + 7);
+        } else {
+          nextDue = new Date(todayStr);
+          nextDue.setDate(nextDue.getDate() + 7);
+        }
+      } else if (b.frequency === 'yearly') {
+        if (lastPaid) {
+          nextDue = new Date(lastPaid);
+          nextDue.setFullYear(nextDue.getFullYear() + 1);
+        } else {
+          const dayOfMonth = b.day_of_month || 1;
+          nextDue = new Date(now.getFullYear(), 0, dayOfMonth);
+          if (nextDue < now) nextDue.setFullYear(nextDue.getFullYear() + 1);
+        }
+      }
+
+      const nextDueStr = nextDue ? nextDue.toISOString().split('T')[0] : null;
+      const daysUntil = nextDueStr ? Math.ceil((nextDue - now) / (1000 * 60 * 60 * 24)) : null;
+      const isOverdue = daysUntil !== null && daysUntil < 0;
+
+      return {
+        id: b.id,
+        name: b.name,
+        amount: b.amount,
+        frequency: b.frequency,
+        day_of_month: b.day_of_month,
+        category_name: b.category_name,
+        category_color: b.category_color,
+        category_id: b.category_id,
+        last_paid: b.last_paid,
+        next_due_date: nextDueStr,
+        days_until: daysUntil,
+        is_overdue: isOverdue,
+      };
+    });
+
+    upcoming.sort((a, b) => {
+      if (a.is_overdue && !b.is_overdue) return -1;
+      if (!a.is_overdue && b.is_overdue) return 1;
+      if (a.days_until !== null && b.days_until !== null) return a.days_until - b.days_until;
+      if (a.days_until !== null) return -1;
+      if (b.days_until !== null) return 1;
+      return 0;
+    });
+
+    res.json(upcoming);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/bills", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { name, amount, frequency, day_of_month, category_id, notes } = req.body;
+    if (!name || amount === undefined) {
+      return res.status(400).json({ error: 'Name and amount are required' });
+    }
+    const info = db.prepare(`
+      INSERT INTO bills (profile_id, name, amount, frequency, day_of_month, category_id, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      pid,
+      name,
+      amount,
+      frequency || 'monthly',
+      day_of_month || null,
+      category_id || null,
+      notes || '',
+    );
+    res.json({ id: info.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/bills/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const existing = db.prepare('SELECT id FROM bills WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const { name, amount, frequency, day_of_month, category_id, is_active, notes } = req.body;
+    db.prepare(`
+      UPDATE bills SET name = ?, amount = ?, frequency = ?, day_of_month = ?, category_id = ?, is_active = ?, notes = ?
+      WHERE id = ? AND profile_id = ?
+    `).run(
+      name ?? '',
+      amount ?? 0,
+      frequency ?? 'monthly',
+      day_of_month ?? null,
+      category_id ?? null,
+      is_active ?? 1,
+      notes ?? '',
+      req.params.id,
+      pid,
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/bills/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    db.prepare('DELETE FROM bills WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/bills/:id/mark-paid", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const bill = db.prepare('SELECT * FROM bills WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!bill) return res.status(404).json({ error: 'Not found' });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const info = db.prepare(`
+      INSERT INTO transactions (profile_id, description, amount, type, category_id, date, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      pid,
+      bill.name,
+      bill.amount,
+      'expense',
+      bill.category_id,
+      todayStr,
+      bill.notes || '',
+    );
+
+    db.prepare('UPDATE bills SET last_paid = ? WHERE id = ?').run(todayStr, req.params.id);
+
+    res.json({ ok: true, transactionId: info.lastInsertRowid });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

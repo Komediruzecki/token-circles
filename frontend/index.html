@@ -72,6 +72,10 @@
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
       <span>Savings Goals</span>
     </a>
+    <a href="#bills" class="nav-item" data-page="bills">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+      <span>Bills</span>
+    </a>
     <a href="#import" class="nav-item" data-page="import">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
       <span>Import</span>
@@ -83,6 +87,10 @@
     <a href="#retirement" class="nav-item" data-page="retirement">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       <span>Retirement</span>
+    </a>
+    <a href="#housing" class="nav-item" data-page="housing">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      <span>Housing Calc</span>
     </a>
     <a href="#analytics" class="nav-item" data-page="analytics">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -154,6 +162,18 @@
     <div class="card" id="budget-alerts-card" style="display:none;">
       <div class="card-header"><div><div class="card-title">Budget Alerts</div><div class="card-subtitle" id="budget-alerts-subtitle">Categories nearing budget limits</div></div></div>
       <div id="budget-alerts-list"></div>
+    </div>
+
+    <div class="card" id="recurring-insights-card" style="display:none;">
+      <div class="card-header"><div><div class="card-title">Upcoming Recurring Charges</div><div class="card-subtitle">Next 30 days</div></div></div>
+      <div style="display:flex;gap:24px;margin-bottom:16px;">
+        <div style="flex:1;">
+          <div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;">Total this month</div>
+          <div style="font-size:20px;font-weight:700;" id="recurring-insights-total">-</div>
+        </div>
+        <div style="flex:1;" id="recurring-insights-categories"></div>
+      </div>
+      <div id="recurring-insights-list"></div>
     </div>
 
     <div class="grid-2">
@@ -254,6 +274,20 @@
         <input type="date" class="form-control" id="tx-date-from" onchange="txFilters.onCustomDateChange()">
         <input type="date" class="form-control" id="tx-date-to" onchange="txFilters.onCustomDateChange()">
         <button class="btn btn-secondary btn-sm" onclick="transactions.clearFilters()">Clear</button>
+        <button class="reconcile-toggle-btn" id="tx-reconcile-toggle" onclick="transactions.toggleReconciledFilter()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Reconciled
+          <span class="badge" id="tx-reconciled-count">0</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="tx-reconcile-banner" class="reconcile-summary-banner" style="display:none;">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span id="tx-reconcile-banner-text">0 unreconciled transactions</span>
+      <div class="reconcile-banner-actions">
+        <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);border:none;color:inherit;" onclick="transactions.markAllUnreconciledReconciled()">Mark All Reconciled</button>
+        <button class="btn btn-sm btn-ghost" onclick="transactions.dismissReconcileBanner()">Dismiss</button>
       </div>
     </div>
 
@@ -263,6 +297,7 @@
       <span id="tx-bulk-count">0 selected</span>
       <button class="btn btn-secondary btn-sm" onclick="bulkEdit.openCategoryModal()">Change Category</button>
       <button class="btn btn-secondary btn-sm" onclick="bulkEdit.openTypeModal()">Change Type</button>
+      <button class="btn btn-secondary btn-sm" onclick="bulkEdit.reconcileSelected()">Mark Reconciled</button>
       <button class="btn btn-danger btn-sm" onclick="bulkEdit.deleteSelected()">Delete Selected</button>
       <button class="btn btn-ghost btn-sm" onclick="bulkEdit.clearSelection()">Deselect All</button>
     </div>
@@ -272,6 +307,7 @@
         <table>
           <thead id="tx-table-sortable"><tr>
             <th class="th-checkbox"><input type="checkbox" id="tx-bulk-select-all" onchange="bulkEdit.toggleSelectAll()"></th>
+            <th class="th-reconcile" title="Reconciled"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></th>
             <th data-sort="date" onclick="transactions.sortByColumn('date')">Date <span class="sort-arrow"> &#9660;&#9650;</span></th>
             <th data-sort="description" onclick="transactions.sortByColumn('description')">Description <span class="sort-arrow"> &#9660;&#9650;</span></th>
             <th data-sort="category_name" onclick="transactions.sortByColumn('category_name')">Category <span class="sort-arrow"> &#9660;&#9650;</span></th>
@@ -501,6 +537,86 @@
     </div>
   </div>
 
+  <!-- HOUSING CALCULATOR -->
+  <div id="page-housing" class="page">
+    <div class="page-header">
+      <div><h2>Housing Calculator</h2><p>Compare buying vs renting over time</p></div>
+    </div>
+
+    <div class="housing-calc-layout">
+      <div class="housing-input-section">
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Rent Scenario</div></div></div>
+          <form id="housing-calc-form" class="grid-2" oninput="housingCalc.scheduleUpdate()">
+            <div class="form-group">
+              <label class="form-label">Monthly Rent</label>
+              <input type="number" class="form-control" id="h-rent-monthly" value="1200">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Annual Rent Increase (%)</label>
+              <input type="number" step="0.1" class="form-control" id="h-rent-increase" value="3">
+            </div>
+            <div class="form-group" style="grid-column: 1/-1;">
+              <label class="form-label">Investment Return (%) - What down payment could earn</label>
+              <input type="number" step="0.1" class="form-control" id="h-invest-return" value="7">
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header"><div><div class="card-title">Buy Scenario</div></div></div>
+          <form class="grid-2" oninput="housingCalc.scheduleUpdate()">
+            <div class="form-group">
+              <label class="form-label">Home Price</label>
+              <input type="number" class="form-control" id="h-buy-price" value="300000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Down Payment</label>
+              <input type="number" class="form-control" id="h-buy-downpayment" value="60000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Loan Term (years)</label>
+              <input type="number" class="form-control" id="h-buy-term" value="30">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Interest Rate (%)</label>
+              <input type="number" step="0.1" class="form-control" id="h-buy-rate" value="4">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Property Tax (year)</label>
+              <input type="number" class="form-control" id="h-buy-tax" value="3000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Insurance (year)</label>
+              <input type="number" class="form-control" id="h-buy-insurance" value="1200">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Maintenance (%) of value</label>
+              <input type="number" step="0.1" class="form-control" id="h-buy-maintenance" value="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">HOA (monthly)</label>
+              <input type="number" class="form-control" id="h-buy-hoa" value="200">
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="housing-results-section" id="housing-results" style="display: none;">
+        <!-- Results populated by JavaScript -->
+      </div>
+    </div>
+
+    <div class="card housing-calc-result" id="housing-chart-card" style="display: none; position: relative;">
+      <button class="btn btn-ghost btn-sm" onclick="housingCalc.exportChart()" title="Export chart" style="position: absolute; top: 12px; right: 12px; z-index: 10;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      </button>
+      <div style="height: 350px;">
+        <canvas id="housing-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- SAVINGS GOALS -->
   <div id="page-goals" class="page">
     <div class="page-header">
@@ -514,6 +630,20 @@
     </div>
 
     <div id="goals-grid"></div>
+  </div>
+
+  <!-- BILLS -->
+  <div id="page-bills" class="page">
+    <div class="page-header">
+      <div><h2>Bills</h2><p>Track your recurring bills and due dates</p></div>
+      <div class="page-header-actions">
+        <button class="btn btn-primary" onclick="bills.openModal()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          Add Bill
+        </button>
+      </div>
+    </div>
+    <div id="bills-list"></div>
   </div>
 
   <!-- IMPORT -->
@@ -573,6 +703,7 @@
         <div class="card-header"><div><div class="card-title">Column Mapping</div><div class="card-subtitle">Match your file columns to transaction fields</div></div></div>
         <div class="column-map" id="column-map"></div>
         <div id="category-review-section"></div>
+        <div id="import-duplicate-section"></div>
         <div class="form-group" style="margin-top:12px;">
           <label class="form-label">Import Limit</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -667,6 +798,25 @@
         </select>
         <select class="form-control" id="analytics-week-filter" onchange="analytics.load()" style="width:auto;min-width:200px;display:none;">
           <option value="">All Weeks</option>
+        </select>
+        <button class="btn btn-outline btn-sm" id="compare-toggle" onclick="analytics.toggleCompare()" style="white-space:nowrap;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+          Compare
+        </button>
+        <select class="form-control" id="analytics-compare-month" onchange="analytics.load()" style="width:auto;min-width:120px;display:none;">
+          <option value="">All Months</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
         </select>
       </div>
     </div>
@@ -1594,31 +1744,82 @@
   </div>
 </div>
 
+<!-- BILLS MODAL -->
+<div class="modal-overlay" id="bills-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="bills-modal-title">Add Bill</div>
+      <button class="btn btn-ghost" onclick="modal.close('bills-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="bills-form" class="modal-body">
+      <input type="hidden" id="bills-modal-id">
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" id="bills-name" placeholder="e.g. Netflix subscription" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount</label>
+        <input type="number" step="0.01" class="form-control" id="bills-amount" placeholder="0.00" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Frequency</label>
+          <select class="form-control" id="bills-frequency">
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Day of Month (1-31)</label>
+          <input type="number" class="form-control" id="bills-day" min="1" max="31" placeholder="1-31">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-control" id="bills-category"><option value="">Select category...</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-control" id="bills-notes" placeholder="Optional notes">
+      </div>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('bills-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bills.save()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="js/core/api.js?v=1776461765101"></script>
-<script src="js/core/auth.js?v=1776461765101"></script>
-<script src="js/core/theme.js?v=1776461765101"></script>
-<script src="js/core/modal.js?v=1776461765101"></script>
-<script src="js/core/profile.js?v=1776461765101"></script>
-<script src="js/core/router.js?v=1776461765101"></script>
-<script src="js/features/dashboard.js?v=1776461765101"></script>
-<script src="js/features/transactions.js?v=1776461765101"></script>
-<script src="js/features/budgets.js?v=1776461765101"></script>
-<script src="js/features/loans.js?v=1776461765101"></script>
-<script src="js/features/retirement.js?v=1776461765101"></script>
-<script src="js/features/analytics.js?v=1776461765101"></script>
-<script src="js/features/categories-accounts.js?v=1776461765101"></script>
-<script src="js/features/import.js?v=1776461765101"></script>
-<script src="js/features/settings-reports.js?v=1776461765101"></script>
-<script src="js/features/chartExport.js?v=1776461765101"></script>
-<script src="js/features/bulkEdit.js?v=1776461765101"></script>
-<script src="js/features/quickadd.js?v=1776461765101"></script>
-<script src="js/features/savingsGoals.js?v=1776461765101"></script>
-<script src="js/app.js?v=1776461765101"></script>
+<script src="js/core/api.js?v=1776465426343"></script>
+<script src="js/core/auth.js?v=1776465426343"></script>
+<script src="js/core/theme.js?v=1776465426343"></script>
+<script src="js/core/modal.js?v=1776465426343"></script>
+<script src="js/core/profile.js?v=1776465426343"></script>
+<script src="js/core/router.js?v=1776465426343"></script>
+<script src="js/features/dashboard.js?v=1776465426343"></script>
+<script src="js/features/transactions.js?v=1776465426343"></script>
+<script src="js/features/budgets.js?v=1776465426343"></script>
+<script src="js/features/loans.js?v=1776465426343"></script>
+<script src="js/features/retirement.js?v=1776465426343"></script>
+<script src="js/features/analytics.js?v=1776465426343"></script>
+<script src="js/features/categories-accounts.js?v=1776465426343"></script>
+<script src="js/features/import.js?v=1776465426343"></script>
+<script src="js/features/settings-reports.js?v=1776465426343"></script>
+<script src="js/features/chartExport.js?v=1776465426343"></script>
+<script src="js/features/bulkEdit.js?v=1776465426343"></script>
+<script src="js/features/quickadd.js?v=1776465426343"></script>
+<script src="js/features/savingsGoals.js?v=1776465426343"></script>
+<script src="js/features/bills.js?v=1776465426343"></script>
+<script src="js/features/housingCalc.js?v=1776465426343"></script>
+<script src="js/app.js?v=1776465426343"></script>
 
 </body>
 </html>

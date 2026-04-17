@@ -863,6 +863,33 @@ input[type='color'] {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
+/* Duplicate row highlighting in import preview */
+tr.row-duplicate {
+  background: #fef3c7 !important;
+}
+tr.row-duplicate td {
+  color: #92400e;
+}
+.row-duplicate-badge {
+  font-size: 11px;
+  background: #f59e0b;
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.column-type-detected {
+  font-size: 10px;
+  color: var(--success);
+  margin-left: 4px;
+}
+.column-type-detected.medium {
+  color: var(--warning);
+}
+.column-type-detected.low {
+  color: var(--text-secondary);
+}
+
 /* Settings */
 .settings-section {
   margin-bottom: 32px;

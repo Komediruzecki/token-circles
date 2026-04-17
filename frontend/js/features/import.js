@@ -5,6 +5,9 @@ const importData = {
   rows: null,
   mapping: {},
   importLimit: 1000,
+  columnTypes: {},     // detected column types with confidence
+  duplicateIndices: [], // indices of duplicate rows
+  skipDuplicates: true, // filter duplicates by default
   setImportLimit(n, btn) {
     this.importLimit = n;
     document.querySelectorAll('.import-limit-btn').forEach((b) => b.classList.remove('active'));
@@ -77,10 +80,32 @@ const importData = {
       return;
     }
     toast('Loading sheet...', 'info');
+
+    // Build current mapping to send to server for duplicate detection
+    const fields = [
+      'description',
+      'amount',
+      'date',
+      'beneficiary',
+      'payor',
+      'category',
+      'currency',
+      'amount_local',
+      'means_of_payment',
+      'exchange_rate',
+      'type',
+      'notes',
+    ];
+    const mapping = {};
+    fields.forEach((f) => {
+      const sel = document.getElementById(`map-${f}`);
+      if (sel && sel.value) mapping[f] = parseInt(sel.value);
+    });
+
     try {
       const resp = await fetch(API + '/import/file-sheet', {
         method: 'POST',
-        body: JSON.stringify({ fileId: this.fileId, sheetName }),
+        body: JSON.stringify({ fileId: this.fileId, sheetName, mapping }),
         headers: { 'Content-Type': 'application/json' },
       });
       const data = await resp.json();
@@ -90,10 +115,17 @@ const importData = {
       }
       this.headers = data.headers;
       this.rows = data.rows;
+      // Use server-side duplicate detection if available
+      if (data.duplicateCount !== undefined && data.duplicateIndices !== undefined) {
+        this.duplicateIndices = data.duplicateIndices;
+        this.renderDuplicateInfo();
+      }
       this.buildMapping(data);
       toast(`Loaded sheet "${sheetName}"`, 'success');
     } catch (e) {
       toast('Failed to load sheet: ' + e.message, 'error');
+    }
+  },
     }
   },
   buildMapping(data) {
@@ -125,6 +157,20 @@ const importData = {
       .join('');
 
     // Auto-map common column names
+    const fields = [
+      'description',
+      'amount',
+      'date',
+      'beneficiary',
+      'payor',
+      'category',
+      'currency',
+      'amount_local',
+      'means_of_payment',
+      'exchange_rate',
+      'type',
+      'notes',
+    ];
     data.headers.forEach((h, i) => {
       const lower = (h || '').toLowerCase().replace(/[^a-z]/g, '');
       if (lower.includes('description') || lower.includes('memo') || lower.includes('narrative'))
@@ -155,10 +201,27 @@ const importData = {
       if (lower.includes('note')) document.getElementById('map-notes').value = i;
     });
 
+    // Add confidence indicators to auto-mapped fields
+    fields.forEach((f) => {
+      const sel = document.getElementById(`map-${f}`);
+      if (sel && sel.value !== '') {
+        const colIdx = parseInt(sel.value);
+        const detected = this.columnTypes[colIdx];
+        const label = sel.closest('.column-map-item').querySelector('label');
+        if (label && detected) {
+          const confLabel = this.getConfidenceLabel(detected.confidence);
+          label.innerHTML += `<span class="column-type-detected ${confLabel}" title="Auto-detected: ${detected.type}">✓ ${detected.type} (${confLabel})</span>`;
+        }
+      }
+    });
+
     const limit = this.getImportLimit();
     document.getElementById('import-preview-info').textContent =
       `Previewing ${Math.min(10, Math.min(limit, data.rows.length))} of ${limit > 0 ? Math.min(limit, data.rows.length) : data.rows.length} rows${limit > 0 ? ` (import limit: ${limit.toLocaleString()})` : ''}`;
     this.updatePreview();
+
+    // Run smart column type detection
+    this.columnTypes = this.analyzeColumnTypes(data.headers, data.rows);
 
     // Build category review section — extract unique categories and auto-detect types
     this.detectedCategories = {};
@@ -174,7 +237,163 @@ const importData = {
       });
     }
     this.renderCategoryReview();
+
+    // Find duplicates based on current mapping
+    const fields = [
+      'description',
+      'amount',
+      'date',
+      'beneficiary',
+      'payor',
+      'category',
+      'currency',
+      'amount_local',
+      'means_of_payment',
+      'exchange_rate',
+      'type',
+      'notes',
+    ];
+    const mapping = {};
+    fields.forEach((f) => {
+      const sel = document.getElementById(`map-${f}`);
+      if (sel && sel.value) mapping[f] = parseInt(sel.value);
+    });
+    this.duplicateIndices = this.findDuplicates(data.rows, mapping);
+    this.renderDuplicateInfo();
+
     document.getElementById('import-mapping-section').style.display = 'block';
+  },
+  renderDuplicateInfo() {
+    const container = document.getElementById('import-duplicate-section');
+    if (!container) return;
+    const count = this.duplicateIndices.length;
+    if (count === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = `<div class="card" style="margin-top:12px;background:#fffbeb;border:1px solid #f59e0b;">
+      <div style="padding:12px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div>
+            <span class="row-duplicate-badge">${count} potential duplicate${count !== 1 ? 's' : ''}</span>
+            <span style="font-size:12px;color:#92400e;margin-left:8px;">Same date + amount + description</span>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="skip-duplicates" ${this.skipDuplicates ? 'checked' : ''} onchange="dataImport.toggleSkipDuplicates(this.checked)">
+            <span>Skip duplicates</span>
+          </label>
+        </div>
+      </div>
+    </div>`;
+  },
+  toggleSkipDuplicates(checked) {
+    this.skipDuplicates = checked;
+    this.updatePreview();
+  },
+  // ==================== SMART COLUMN TYPE DETECTION ====================
+  analyzeColumnTypes(headers, rows) {
+    const SAMPLE_SIZE = Math.min(10, rows.length);
+    const samples = rows.slice(0, SAMPLE_SIZE);
+    const detected = {};
+
+    headers.forEach((header, colIdx) => {
+      const values = samples.map(r => r[colIdx] !== undefined ? String(r[colIdx] || '') : '').filter(v => v.trim());
+      if (values.length === 0) return;
+
+      // Detect Date column
+      let dateScore = 0;
+      values.forEach(v => {
+        if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(v)) dateScore += 2;
+        if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(v)) dateScore += 2;
+        if (/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)/i.test(v)) dateScore += 1.5;
+        if (!isNaN(Date.parse(v)) && v.length >= 8) dateScore += 1;
+      });
+      if (dateScore / values.length >= 0.5) detected[colIdx] = { type: 'date', confidence: dateScore / values.length };
+
+      // Detect Amount column
+      let amountScore = 0;
+      values.forEach(v => {
+        if (/^[\-\+]?[\d,]+\.?\d*$/.test(v.trim())) amountScore += 2;
+        if (/^[\$\€\£]/.test(v.trim())) amountScore += 1.5;
+        if (/[\d]+\.[\d]{2}$/.test(v.trim())) amountScore += 1;
+        if (v.includes(',') && !v.includes('/')) amountScore += 0.5;
+      });
+      if (amountScore / values.length >= 0.4) {
+        const existing = detected[colIdx];
+        if (!existing || amountScore > (existing._score || 0)) {
+          detected[colIdx] = { type: 'amount', confidence: amountScore / values.length };
+        }
+      }
+
+      // Detect Description column
+      let descScore = 0;
+      values.forEach(v => {
+        if (v.length > 10 && /^[A-Za-z]/.test(v.trim())) descScore += 2;
+        if (!/^\d/.test(v.trim()) && /[A-Za-z]{3,}/.test(v)) descScore += 1;
+      });
+      if (descScore / values.length >= 0.5) {
+        const existing = detected[colIdx];
+        if (!existing) {
+          detected[colIdx] = { type: 'description', confidence: descScore / values.length };
+        }
+      }
+
+      // Detect Category column
+      const lower = (header || '').toLowerCase();
+      if (lower.includes('category') || lower.includes('cat') || lower.includes('type')) {
+        detected[colIdx] = { type: 'category', confidence: 0.9 };
+      }
+
+      // Detect Notes column
+      if (lower.includes('note') || lower.includes('comment') || lower.includes('memo') || lower.includes('reference')) {
+        detected[colIdx] = { type: 'notes', confidence: 0.9 };
+      }
+
+      // Detect Account column
+      if (lower.includes('account') || lower.includes('iban') || lower.includes('number') || lower.includes('card')) {
+        detected[colIdx] = { type: 'account', confidence: 0.85 };
+      }
+    });
+
+    return detected;
+  },
+  getConfidenceLabel(confidence) {
+    if (confidence >= 0.7) return 'high';
+    if (confidence >= 0.4) return 'medium';
+    return 'low';
+  },
+  // ==================== DUPLICATE DETECTION ====================
+  findDuplicates(rows, mapping) {
+    const seen = new Map();
+    const duplicateIndices = [];
+
+    rows.forEach((row, idx) => {
+      const descIdx = mapping.description !== undefined ? mapping.description : -1;
+      const amountIdx = mapping.amount !== undefined ? mapping.amount : -1;
+      const dateIdx = mapping.date !== undefined ? mapping.date : -1;
+
+      if (descIdx < 0 || amountIdx < 0 || dateIdx < 0) return;
+
+      const desc = (row[descIdx] || '').toString().toLowerCase().trim();
+      const amount = (row[amountIdx] || '').toString().trim();
+      const date = (row[dateIdx] || '').toString().trim();
+
+      if (!desc && !amount && !date) return;
+
+      const key = `${date}|${amount}|${desc}`;
+      if (seen.has(key)) {
+        duplicateIndices.push(idx);
+        // Also mark the original
+        if (!duplicateIndices.includes(seen.get(key))) {
+          duplicateIndices.push(seen.get(key));
+        }
+      } else {
+        seen.set(key, idx);
+      }
+    });
+
+    // Sort indices for consistent display
+    return duplicateIndices.sort((a, b) => a - b);
   },
   autoDetectCategoryType(name) {
     const lower = name.toLowerCase();
@@ -234,6 +453,7 @@ const importData = {
       this.renderCategoryReview();
     }
 
+    // Re-compute duplicates when mapping changes
     const fields = [
       'description',
       'amount',
@@ -244,29 +464,66 @@ const importData = {
       'currency',
       'type',
     ];
+    const mapping = {};
+    fields.forEach((f) => {
+      const sel = document.getElementById(`map-${f}`);
+      if (sel && sel.value) mapping[f] = parseInt(sel.value);
+    });
+    this.duplicateIndices = this.findDuplicates(this.rows, mapping);
+    this.renderDuplicateInfo();
+
+    // Apply skip duplicates filter
+    let previewRows = this.rows.slice(0, 10);
+    if (this.skipDuplicates && this.duplicateIndices.length > 0) {
+      const skipSet = new Set(this.duplicateIndices);
+      previewRows = previewRows.filter((_, idx) => !skipSet.has(idx));
+    }
+
     const preview = document.getElementById('import-preview');
     preview.innerHTML = `<table><thead><tr>${fields.map((f) => `<th>${f}</th>`).join('')}</tr></thead><tbody>
-    ${this.rows
-      .slice(0, 10)
-      .map(
-        (row) =>
-          `<tr>${fields
-            .map((f) => {
-              const sel = document.getElementById(`map-${f}`);
-              const idx = sel ? parseInt(sel.value) : -1;
-              const val = idx >= 0 ? (row[idx] !== undefined ? row[idx] : '') : '-';
-              return `<td>${val}</td>`;
-            })
-            .join('')}</tr>`
-      )
+    ${previewRows
+      .map((row, rowIdx) => {
+        const origIdx = this.rows.indexOf(row);
+        const isDup = this.duplicateIndices.includes(origIdx);
+        return `<tr${isDup ? ' class="row-duplicate"' : ''}>${fields
+          .map((f) => {
+            const sel = document.getElementById(`map-${f}`);
+            const idx = sel ? parseInt(sel.value) : -1;
+            const val = idx >= 0 ? (row[idx] !== undefined ? row[idx] : '') : '-';
+            return `<td>${val}</td>`;
+          })
+          .join('')}</tr>`;
+      })
       .join('')}
     </tbody></table>`;
   },
   async execute() {
-    const limit = this.getImportLimit();
-    const rowCount = limit > 0 ? Math.min(limit, this.rows.length) : this.rows.length;
+    let limit = this.getImportLimit();
+    // Adjust limit if we're skipping duplicates
+    if (this.skipDuplicates && this.duplicateIndices.length > 0) {
+      const skipSet = new Set(this.duplicateIndices);
+      const rowsToCheck = this.rows.slice(0, limit);
+      const filteredCount = rowsToCheck.filter((_, idx) => !skipSet.has(idx)).length;
+      if (filteredCount < rowsToCheck.length) {
+        const dupCount = this.duplicateIndices.filter(i => i < limit).length;
+        if (!confirm(`Skip ${dupCount} duplicate row${dupCount !== 1 ? 's' : ''}? Will import ${filteredCount} unique transactions.`)) {
+          return;
+        }
+      }
+    }
+
+    const limitAfterSkip = this.skipDuplicates && this.duplicateIndices.length > 0
+      ? this.rows.slice(0, limit).filter((_, idx) => !new Set(this.duplicateIndices).has(idx)).length
+      : limit;
+    const rowCount = limitAfterSkip > 0 ? Math.min(limitAfterSkip, this.rows.length) : this.rows.length;
+
+    if (rowCount === 0) {
+      toast('No transactions to import after skipping duplicates', 'warning');
+      return;
+    }
+
     if (
-      !confirm(`Import ${rowCount} transactions? This will add new transactions to your profile.`)
+      !confirm(`Import ${rowCount} transaction${rowCount !== 1 ? 's' : ''}? This will add new transactions to your profile.`)
     )
       return;
 
@@ -308,7 +565,13 @@ const importData = {
         });
       }
 
-      const rowsToImport = limit > 0 ? this.rows.slice(0, limit) : this.rows;
+      let rowsToImport = limit > 0 ? this.rows.slice(0, limit) : this.rows;
+      // Filter out duplicates if skip is enabled
+      if (this.skipDuplicates && this.duplicateIndices.length > 0) {
+        const skipSet = new Set(this.duplicateIndices);
+        rowsToImport = rowsToImport.filter((_, idx) => !skipSet.has(idx));
+      }
+
       const result = await api('/import/execute', {
         method: 'POST',
         body: { rows: rowsToImport, mapping, categoryTypes },
@@ -394,12 +657,16 @@ const importData = {
     document.getElementById('column-map').innerHTML = '';
     document.getElementById('import-preview').innerHTML = '';
     document.getElementById('category-review-section').innerHTML = '';
+    document.getElementById('import-duplicate-section').innerHTML = '';
     this.fileId = null;
     this.fileData = null;
     this.headers = null;
     this.rows = null;
     this.mapping = {};
     this.detectedCategories = null;
+    this.columnTypes = {};
+    this.duplicateIndices = [];
+    this.skipDuplicates = true;
     this.importLimit = 1000;
     document.querySelectorAll('.import-limit-btn').forEach((b) => b.classList.remove('active'));
     document.querySelector('.import-limit-btn:nth-child(3)')?.classList.add('active');

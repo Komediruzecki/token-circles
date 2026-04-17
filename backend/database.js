@@ -213,6 +213,24 @@ function migrate() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_recurring_profile ON recurring_transactions(profile_id)');
 
+  // Create bills table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      profile_id INTEGER NOT NULL DEFAULT 1,
+      name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      frequency TEXT NOT NULL DEFAULT 'monthly',
+      day_of_month INTEGER,
+      category_id INTEGER,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      last_paid TEXT,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_bills_profile ON bills(profile_id)');
+
   // Create tags table
   db.exec(`
     CREATE TABLE IF NOT EXISTS tags (

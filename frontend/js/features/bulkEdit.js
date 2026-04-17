@@ -120,5 +120,19 @@ const bulkEdit = {
     this.clearSelection();
     transactions.load();
     dashboard.load();
+  },
+
+  async reconcileSelected() {
+    if (this.selected.size === 0) return;
+    const ids = Array.from(this.selected);
+    const result = await api('/transactions/reconcile-batch', {
+      method: 'PUT',
+      body: { transaction_ids: ids }
+    });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast(`Marked ${result.updated} transactions as reconciled`, 'success');
+    this.clearSelection();
+    transactions.load();
+    transactions.initReconciliation();
   }
 };
