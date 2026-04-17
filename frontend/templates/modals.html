@@ -616,3 +616,22 @@
   </div>
 </div>
 
+<!-- ACCOUNT BALANCE HISTORY MODAL -->
+<div class="modal-overlay" id="balance-history-modal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div class="modal-title">Balance History — <span id="bh-account-name"></span></div>
+      <button class="btn btn-ghost" onclick="modal.close('balance-history-modal')">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="max-height:400px;overflow-y:auto;">
+      <div id="balance-history-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="modal.close('balance-history-modal')">Close</button>
+      <button class="btn btn-primary" onclick="accounts.recordBalance()">Record Current Balance</button>
+    </div>
+  </div>
+</div>
+

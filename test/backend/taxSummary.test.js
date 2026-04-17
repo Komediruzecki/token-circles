@@ -7,6 +7,11 @@ const BASE_URL = 'http://localhost:3847';
 const req = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
 
 describe('Year-End Tax Summary API', () => {
+  beforeAll(async () => {
+    await request(BASE_URL).post('/api/test/reset-rate-limit')
+      .set('X-Skip-RateLimit', 'true');
+  });
+
   describe('GET /api/reports/tax-summary', () => {
     test('returns JSON with correct structure for a valid year', async () => {
       const resp = await req.get('/api/reports/tax-summary?year=2026');

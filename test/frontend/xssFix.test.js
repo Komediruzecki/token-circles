@@ -61,7 +61,7 @@ describe('XSS vulnerability fix', () => {
 
   describe('Profile names escaping', () => {
     test('profile names use escapeHtml in dropdown', () => {
-      expect(jsContent).toContain('profile.escapeHtml(p.name)');
+      expect(jsContent).toMatch(/this\.escapeHtml\(p\.name\)|profile\.escapeHtml\(p\.name\)/);
     });
 
     test('profile current name uses textContent (safe)', () => {
