@@ -48,7 +48,7 @@
 - [x] **Account balance history** — Track and display balance changes over time per account
 
 ## Technical
-- [ ] **Transaction search** — Full-text search across transaction descriptions and notes
+- [x] **Transaction search** — Full-text search across transaction descriptions and notes
 - [ ] **Tags** — Add free-form tags to transactions for flexible categorization
 - [ ] **PWA support** — Add manifest and service worker for installable app on mobile
 - [x] **API rate limiting** — Add rate limiting to protect the API
