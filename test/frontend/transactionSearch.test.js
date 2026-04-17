@@ -1,13 +1,8 @@
 /**
  * Tests for transaction search functionality
  */
-const fs = require('fs');
-const path = require('path');
 
-const indexHtml = fs.readFileSync(
-  path.join(__dirname, '../../frontend/index.html'),
-  'utf8'
-);
+const { readFrontendContent, fs, path } = require('./testUtils');
 
 const backendIndex = fs.readFileSync(
   path.join(__dirname, '../../backend/index.js'),
@@ -15,6 +10,13 @@ const backendIndex = fs.readFileSync(
 );
 
 describe('Transaction Search Feature', () => {
+  let combinedContent;
+
+  beforeAll(() => {
+    const content = readFrontendContent();
+    combinedContent = content.combinedContent;
+  });
+
   describe('Backend search implementation', () => {
     test('GET /api/transactions supports search parameter', () => {
       // Should search in description, beneficiary, payor, and notes
@@ -42,42 +44,42 @@ describe('Transaction Search Feature', () => {
 
   describe('Frontend search input', () => {
     test('Search input exists with id tx-search', () => {
-      expect(indexHtml).toMatch(/id="tx-search"/);
+      expect(combinedContent).toMatch(/id="tx-search"/);
     });
 
     test('Search input has oninput handler calling transactions.search()', () => {
-      expect(indexHtml).toMatch(/id="tx-search".*oninput="transactions\.search\(\)"/s);
+      expect(combinedContent).toMatch(/id="tx-search".*oninput="transactions\.search\(\)"/s);
     });
 
     test('Search placeholder is "Search..."', () => {
-      expect(indexHtml).toMatch(/placeholder="Search\.\.\."/);
+      expect(combinedContent).toMatch(/placeholder="Search\.\.\."/);
     });
 
     test('Search is styled with search-input class', () => {
-      expect(indexHtml).toMatch(/<div class="search-input">[\s\S]*?<input[^>]*id="tx-search"/);
+      expect(combinedContent).toMatch(/<div class="search-input">[\s\S]*?<input[^>]*id="tx-search"/);
     });
 
     test('Search icon SVG is included', () => {
-      expect(indexHtml).toMatch(/<svg[^>]*viewBox/);
+      expect(combinedContent).toMatch(/<svg[^>]*viewBox/);
     });
   });
 
   describe('Frontend search integration', () => {
     test('transactions.load() reads tx-search value', () => {
-      expect(indexHtml).toMatch(/getElementById\(['"]tx-search['"]\).*value/);
+      expect(combinedContent).toMatch(/getElementById\(['"]tx-search['"]\).*value/);
     });
 
     test('transactions.load() appends search param to API call', () => {
-      expect(indexHtml).toMatch(/params\.append\(['"]search['"]\s*,\s*search\)/);
+      expect(combinedContent).toMatch(/params\.append\(['"]search['"]\s*,\s*search\)/);
     });
 
     test('transactions.search() resets page to 1', () => {
-      expect(indexHtml).toMatch(/search\(\)\s*\{[^}]*this\.page\s*=\s*1/);
+      expect(combinedContent).toMatch(/search\(\)\s*\{[^}]*this\.page\s*=\s*1/);
     });
 
     test('clearFilters() resets search input', () => {
-      expect(indexHtml).toMatch(/clearFilters\(\)/);
-      expect(indexHtml).toMatch(/tx-search/);
+      expect(combinedContent).toMatch(/clearFilters\(\)/);
+      expect(combinedContent).toMatch(/tx-search/);
     });
   });
 
@@ -102,23 +104,23 @@ describe('Transaction Search Feature', () => {
   describe('Search combined with filters', () => {
     test('Search works with date filters', () => {
       // The load function should handle both search and date filters
-      expect(indexHtml).toMatch(/startDate/);
-      expect(indexHtml).toMatch(/search/);
+      expect(combinedContent).toMatch(/startDate/);
+      expect(combinedContent).toMatch(/search/);
     });
 
     test('Search works with category filters', () => {
-      expect(indexHtml).toMatch(/search.*category_ids|category_ids.*search/s);
+      expect(combinedContent).toMatch(/search.*category_ids|category_ids.*search/s);
     });
 
     test('Search works with type filter', () => {
-      expect(indexHtml).toMatch(/search.*type|type.*search/s);
+      expect(combinedContent).toMatch(/search.*type|type.*search/s);
     });
   });
 
   describe('Search edge cases', () => {
     test('Empty search returns all results', () => {
       // When search is empty string, it should not add filter
-      const loadCode = indexHtml.match(/if\s*\(\s*search\s*\)/);
+      const loadCode = combinedContent.match(/if\s*\(\s*search\s*\)/);
       expect(loadCode).toBeTruthy();
     });
 
@@ -128,7 +130,7 @@ describe('Transaction Search Feature', () => {
     });
 
     test('Search input is a text input', () => {
-      expect(indexHtml).toMatch(/tx-search.*type="text"|type="text"[^>]*id="tx-search"/);
+      expect(combinedContent).toMatch(/tx-search.*type="text"|type="text"[^>]*id="tx-search"/);
     });
   });
 });
