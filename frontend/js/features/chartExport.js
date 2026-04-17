@@ -133,6 +133,40 @@ const chartExport = {
   },
 
   /**
+   * Export sankey diagram as SVG
+   */
+  exportSankey() {
+    const svg = document.getElementById('sankey-chart');
+    const year = document.getElementById('analytics-year')?.value || new Date().getFullYear();
+    const month = document.getElementById('sankey-month-filter')?.value || '';
+    const filename = month ? `sankey-${year}-${month}` : `sankey-${year}`;
+
+    if (!svg) {
+      toast('No sankey chart available to export', 'error');
+      return;
+    }
+
+    try {
+      // Get SVG as text
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svg);
+
+      // Create blob and download
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `${filename}.svg`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast('Sankey diagram exported as SVG', 'success');
+    } catch (e) {
+      toast('Failed to export sankey as SVG', 'error');
+      console.error('SVG export error:', e);
+    }
+  },
+
+  /**
    * Export loan amortization chart
    */
   exportLoanAmortization() {

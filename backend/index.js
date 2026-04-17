@@ -2800,6 +2800,132 @@ app.get("/api/analytics/category-trends", apiRateLimiter, (req, res) => {
 });
 
 // ========================
+// ANALYTICS: SANKEY (Budget vs Actual)
+// ========================
+app.get("/api/analytics/sankey", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const month = req.query.month ? String(req.query.month).padStart(2, "0") : null;
+
+    if (!month) {
+      return res.json({ nodes: [], links: [] });
+    }
+
+    const lastDay = new Date(year, parseInt(month), 0).getDate();
+    const startStr = `${year}-${month}-01`;
+    const endStr = `${year}-${month}-${String(lastDay).padStart(2, "0")}`;
+
+    // Get budgets for this month
+    const budgets = db.prepare(`
+      SELECT b.category_id, b.amount as budget_amount, c.name as cat_name, c.color as cat_color
+      FROM budgets b
+      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+      WHERE b.profile_id = ? AND b.period = 'month'
+      AND strftime('%Y-%m', b.start_date) <= ? AND (b.end_date IS NULL OR strftime('%Y-%m', b.end_date) >= ?)
+    `).all(pid, `${year}-${month}`, `${year}-${month}`);
+
+    // Get actual spending for this month
+    const actualSpending = db.prepare(`
+      SELECT t.category_id, SUM(COALESCE(t.amount_local, t.amount)) as actual_amount
+      FROM transactions t
+      WHERE t.profile_id = ? AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
+      GROUP BY t.category_id
+    `).all(pid, startStr, endStr);
+
+    // Create maps for easy lookup
+    const budgetMap = new Map(budgets.map(b => [b.category_id, b]));
+    const actualMap = new Map(actualSpending.map(a => [a.category_id, a]));
+
+    // Build nodes and links for sankey
+    const nodes = [];
+    const links = [];
+    const nodeNames = new Set();
+
+    // Add "Total Budget" source node
+    nodes.push({ name: 'Total Budget', category: 'budget' });
+    nodeNames.add('Total Budget');
+
+    // Add category nodes and links
+    budgets.forEach(b => {
+      if (!nodeNames.has(b.cat_name)) {
+        nodes.push({ name: b.cat_name, category: 'category', color: b.cat_color });
+        nodeNames.add(b.cat_name);
+      }
+    });
+
+    // Add "Total Actual" node
+    nodes.push({ name: 'Total Actual', category: 'actual' });
+    nodeNames.add('Total Actual');
+
+    // Budget -> Category links (planned flow)
+    let totalBudget = 0;
+    budgets.forEach(b => {
+      totalBudget += b.budget_amount;
+      links.push({
+        source: 'Total Budget',
+        target: b.cat_name,
+        value: b.budget_amount,
+        sourceCategory: 'budget',
+        targetCategory: 'category'
+      });
+    });
+
+    // Category -> Actual links (actual spent)
+    let totalActual = 0;
+    budgets.forEach(b => {
+      const actual = actualMap.get(b.category_id);
+      const actualAmount = actual ? actual.actual_amount : 0;
+      totalActual += actualAmount;
+      links.push({
+        source: b.cat_name,
+        target: 'Total Actual',
+        value: actualAmount,
+        sourceCategory: 'category',
+        targetCategory: 'actual'
+      });
+    });
+
+    // If no budgets, use actual spending as flow
+    if (budgets.length === 0) {
+      actualSpending.forEach(a => {
+        const cat = db.prepare('SELECT name, color FROM categories WHERE id = ?').get(a.category_id);
+        if (cat) {
+          if (!nodeNames.has(cat.name)) {
+            nodes.push({ name: cat.name, category: 'category', color: cat.color });
+            nodeNames.add(cat.name);
+          }
+          links.push({
+            source: cat.name,
+            target: 'Total Actual',
+            value: a.actual_amount,
+            sourceCategory: 'category',
+            targetCategory: 'actual'
+          });
+        }
+      });
+    }
+
+    // Budget unused (budget - actual) -> "Savings" node if there's difference
+    const budgetUnused = totalBudget - totalActual;
+    if (budgetUnused > 0 && budgets.length > 0) {
+      nodes.push({ name: 'Unused Budget', category: 'savings' });
+      links.push({
+        source: 'Total Budget',
+        target: 'Unused Budget',
+        value: budgetUnused,
+        sourceCategory: 'budget',
+        targetCategory: 'savings'
+      });
+    }
+
+    res.json({ nodes, links });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // EXPORT (per-profile)
 // ========================
 app.get("/api/export/:type", apiRateLimiter, (req, res) => {

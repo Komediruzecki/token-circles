@@ -236,4 +236,103 @@ const analytics = {
     document.getElementById('avg-week').textContent = formatCurrency(avgWeek, currency);
     document.getElementById('avg-month').textContent = formatCurrency(avgMonth, currency);
   },
+  async loadSankey() {
+    const year = document.getElementById('analytics-year').value;
+    const month = document.getElementById('sankey-month-filter').value;
+    if (!month) {
+      document.getElementById('sankey-chart-container').style.display = 'none';
+      document.getElementById('sankey-empty').style.display = 'block';
+      return;
+    }
+    try {
+      const [sankeyData, settings] = await Promise.all([
+        api(`/analytics/sankey?year=${year}&month=${month}`),
+        api('/settings')
+      ]);
+      this.currentCurrency = settings.local_currency || 'EUR';
+      this.renderSankey(sankeyData);
+    } catch (e) {
+      console.error('Failed to load sankey data:', e);
+    }
+  },
+  renderSankey(data) {
+    const pageAnalytics = document.getElementById('page-analytics');
+    if (!pageAnalytics || !pageAnalytics.classList.contains('active')) return;
+    const container = document.getElementById('sankey-chart-container');
+    const emptyState = document.getElementById('sankey-empty');
+    const svg = d3.select('#sankey-chart');
+    svg.selectAll('*').remove();
+
+    if (!data.nodes || data.nodes.length === 0) {
+      container.style.display = 'none';
+      emptyState.style.display = 'block';
+      emptyState.innerHTML = '<p>No budget data available for this month</p>';
+      return;
+    }
+
+    container.style.display = 'block';
+    emptyState.style.display = 'none';
+
+    const width = container.clientWidth || 800;
+    const height = 380;
+    svg.attr('width', width).attr('height', height);
+
+    const cc = chartColors();
+    const color = d3.scaleOrdinal().domain(['budget', 'actual', 'category', 'savings']).range([cc.budget || '#6366f1', cc.expense || '#ef4444', cc.primary || '#3b82f6', cc.success || '#22c55e']);
+
+    const sankey = d3.sankey().nodeId(d => d.name).nodeWidth(20).nodePadding(12).extent([[20, 20], [width - 20, height - 20]]);
+
+    const graph = sankey({
+      nodes: data.nodes.map(d => Object.assign({}, d)),
+      links: data.links.map(d => Object.assign({}, d))
+    });
+
+    const link = svg.append('g').selectAll('.sankey-link')
+      .data(graph.links)
+      .join('path')
+      .attr('class', 'sankey-link')
+      .attr('d', d3.sankeyLinkHorizontal())
+      .attr('stroke-width', d => Math.max(1, d.width))
+      .attr('stroke', d => color(d.source.category || 'link'))
+      .attr('stroke-opacity', 0.4)
+      .attr('fill', 'none');
+
+    link.append('title').text(d => `${d.source.name} → ${d.target.name}: ${formatCurrency(d.value, this.currentCurrency)}`);
+
+    const node = svg.append('g').selectAll('.sankey-node')
+      .data(graph.nodes)
+      .join('g')
+      .attr('class', 'sankey-node');
+
+    node.append('rect')
+      .attr('x', d => d.x0)
+      .attr('y', d => d.y0)
+      .attr('height', d => Math.max(1, d.y1 - d.y0))
+      .attr('width', d => d.x1 - d.x0)
+      .attr('fill', d => color(d.category || 'category'))
+      .attr('opacity', 0.9);
+
+    node.append('text')
+      .attr('x', d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
+      .attr('y', d => (d.y1 + d.y0) / 2)
+      .attr('dy', '0.35em')
+      .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
+      .attr('fill', cc.text || '#1e293b')
+      .attr('font-size', '12px')
+      .text(d => `${d.name} (${formatCurrency(d.value || 0, this.currentCurrency)})`);
+  },
+  populateYears() {
+    const select = document.getElementById('analytics-year');
+    const sankeyMonth = document.getElementById('sankey-month-filter');
+    const currentYear = new Date().getFullYear();
+    api('/analytics/distinct-years').then(({ years }) => {
+      if (!years || years.length === 0) return;
+      const options = years.map(y => `<option value="${y}">${y}</option>`).join('');
+      select.innerHTML = options;
+      const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+      sankeyMonth.innerHTML = '<option value="">Select Month</option>' +
+        monthNames.slice(1).map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${i + 1 === parseInt(currentMonth) ? 'selected' : ''}>${m}</option>`).join('');
+    }).catch(e => console.error('Failed to load years:', e));
+  }
 };

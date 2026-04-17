@@ -11,6 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1140,6 +1142,26 @@ tr.tx-reconciled { opacity: 0.75; }
           <div class="avg-label">Monthly Average</div>
           <div class="avg-value" id="avg-month">-</div>
         </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">
+        <div><div class="card-title">Budget vs Actual Flow</div><p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Expense flow from budgeted to actual by category</p></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <select class="form-control" id="sankey-month-filter" onchange="analytics.loadSankey()" style="width:auto;min-width:120px;">
+            <option value="">Select Month</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="chartExport.exportSankey()" title="Export chart">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="sankey-chart-container" style="height:400px;position:relative;display:none;">
+        <svg id="sankey-chart"></svg>
+      </div>
+      <div id="sankey-empty" class="empty-state" style="padding:40px;text-align:center;">
+        <p>Select a month to view budget vs actual flow</p>
       </div>
     </div>
 
@@ -3228,10 +3250,18 @@ const analytics = {
   },
   async populateYears() {
     const select = document.getElementById('analytics-year');
+    const sankeyMonth = document.getElementById('sankey-month-filter');
+    const currentYear = new Date().getFullYear();
     try {
       const { years } = await api('/analytics/distinct-years');
       if (!years || years.length === 0) return;
-      select.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+      const options = years.map(y => `<option value="${y}">${y}</option>`).join('');
+      select.innerHTML = options;
+      // Populate sankey month options
+      const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+      sankeyMonth.innerHTML = '<option value="">Select Month</option>' +
+        monthNames.slice(1).map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${i + 1 === parseInt(currentMonth) ? 'selected' : ''}>${m}</option>`).join('');
     } catch(e) { console.error('Failed to load years:', e); }
   },
   onYearChange() {
@@ -3434,6 +3464,91 @@ const analytics = {
     document.getElementById('avg-day').textContent = formatCurrency(avgDay, currency);
     document.getElementById('avg-week').textContent = formatCurrency(avgWeek, currency);
     document.getElementById('avg-month').textContent = formatCurrency(avgMonth, currency);
+  },
+  async loadSankey() {
+    const year = document.getElementById('analytics-year').value;
+    const month = document.getElementById('sankey-month-filter').value;
+    if (!month) {
+      document.getElementById('sankey-chart-container').style.display = 'none';
+      document.getElementById('sankey-empty').style.display = 'block';
+      return;
+    }
+    try {
+      const [sankeyData, settings] = await Promise.all([
+        api(`/analytics/sankey?year=${year}&month=${month}`),
+        api('/settings')
+      ]);
+      this.currentCurrency = settings.local_currency || 'EUR';
+      this.renderSankey(sankeyData);
+    } catch (e) {
+      console.error('Failed to load sankey data:', e);
+    }
+  },
+  renderSankey(data) {
+    const pageAnalytics = document.getElementById('page-analytics');
+    if (!pageAnalytics || !pageAnalytics.classList.contains('active')) return;
+    const container = document.getElementById('sankey-chart-container');
+    const emptyState = document.getElementById('sankey-empty');
+    const svg = d3.select('#sankey-chart');
+    svg.selectAll('*').remove();
+
+    if (!data.nodes || data.nodes.length === 0) {
+      container.style.display = 'none';
+      emptyState.style.display = 'block';
+      emptyState.innerHTML = '<p>No budget data available for this month</p>';
+      return;
+    }
+
+    container.style.display = 'block';
+    emptyState.style.display = 'none';
+
+    const width = container.clientWidth || 800;
+    const height = 380;
+    svg.attr('width', width).attr('height', height);
+
+    const cc = chartColors();
+    const color = d3.scaleOrdinal().domain(['budget', 'actual', 'category']).range([cc.budget || '#6366f1', cc.expense || '#ef4444', cc.primary || '#3b82f6']);
+
+    const sankey = d3.sankey().nodeId(d => d.name).nodeWidth(20).nodePadding(12).extent([[20, 20], [width - 20, height - 20]]);
+
+    const graph = sankey({
+      nodes: data.nodes.map(d => Object.assign({}, d)),
+      links: data.links.map(d => Object.assign({}, d))
+    });
+
+    const link = svg.append('g').selectAll('.sankey-link')
+      .data(graph.links)
+      .join('path')
+      .attr('class', 'sankey-link')
+      .attr('d', d3.sankeyLinkHorizontal())
+      .attr('stroke-width', d => Math.max(1, d.width))
+      .attr('stroke', d => color(d.source.category || 'link'))
+      .attr('stroke-opacity', 0.4)
+      .attr('fill', 'none');
+
+    link.append('title').text(d => `${d.source.name} → ${d.target.name}: ${formatCurrency(d.value, this.currentCurrency)}`);
+
+    const node = svg.append('g').selectAll('.sankey-node')
+      .data(graph.nodes)
+      .join('g')
+      .attr('class', 'sankey-node');
+
+    node.append('rect')
+      .attr('x', d => d.x0)
+      .attr('y', d => d.y0)
+      .attr('height', d => Math.max(1, d.y1 - d.y0))
+      .attr('width', d => d.x1 - d.x0)
+      .attr('fill', d => color(d.category || 'category'))
+      .attr('opacity', 0.9);
+
+    node.append('text')
+      .attr('x', d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
+      .attr('y', d => (d.y1 + d.y0) / 2)
+      .attr('dy', '0.35em')
+      .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
+      .attr('fill', cc.text || '#1e293b')
+      .attr('font-size', '12px')
+      .text(d => `${d.name} (${formatCurrency(d.value || 0, this.currentCurrency)})`);
   }
 };
 
