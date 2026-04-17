@@ -280,5 +280,74 @@ const dashboard = {
         },
       },
     });
+
+    // Net worth over time - Line
+    await this.loadNetWorthChart(currency);
+  },
+  async loadNetWorthChart(currency) {
+    const nwCard = document.getElementById('networth-chart-card');
+    if (!nwCard) return;
+
+    try {
+      const timeline = await api('/accounts/history/timeline');
+      if (!timeline || timeline.length === 0) {
+        nwCard.style.display = 'none';
+        return;
+      }
+      nwCard.style.display = 'block';
+
+      if (this.charts.networth) this.charts.networth.destroy();
+      const ctx = document.getElementById('chart-networth').getContext('2d');
+      const cc = chartColors();
+
+      const labels = timeline.map((r) => {
+        const d = new Date(r.date);
+        return `${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear()}`;
+      });
+      const data = timeline.map((r) => r.net_worth);
+
+      this.charts.networth = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Net Worth',
+              data,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              fill: true,
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: 4,
+              pointBackgroundColor: '#10b981',
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { font: { size: 12 }, color: cc.legend } },
+            tooltip: {
+              callbacks: { label: (ctx) => ` Net Worth: ${formatCurrency(ctx.raw, currency)}` },
+            },
+          },
+          scales: {
+            y: {
+              ticks: { callback: (v) => formatCurrency(v, currency), color: cc.text },
+              grid: { color: cc.grid },
+            },
+            x: {
+              grid: { color: cc.grid },
+              ticks: { color: cc.text, maxTicksLimit: 12 },
+            },
+          },
+        },
+      });
+    } catch (e) {
+      const nwCard = document.getElementById('networth-chart-card');
+      if (nwCard) nwCard.style.display = 'none';
+    }
   },
 };

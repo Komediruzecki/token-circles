@@ -355,6 +355,9 @@ body {
 .chart-container.short {
   height: 220px;
 }
+.chart-container.medium {
+  height: 260px;
+}
 
 /* Buttons */
 .btn {

@@ -18,7 +18,7 @@ describe('chartExport module', () => {
 
   describe('chartExport.js file exists', () => {
     test('chartExport.js is included in index.html', () => {
-      expect(htmlContent).toMatch(/<script\s+src\s*=\s*["']js\/features\/chartExport\.js["']\s*>/);
+      expect(htmlContent).toMatch(/<script\s+src\s*=\s*["']js\/features\/chartExport\.js(\?[^"']*)?["']\s*>/);
     });
 
     test('chartExport.js contains const chartExport', () => {
@@ -36,6 +36,7 @@ describe('chartExport module', () => {
       expect(chartExportJs).toMatch(/exportAnalyticsPie\s*\(/);
       expect(chartExportJs).toMatch(/exportLoanAmortization\s*\(/);
       expect(chartExportJs).toMatch(/exportRetirement\s*\(/);
+      expect(chartExportJs).toMatch(/exportNetWorth\s*\(/);
     });
   });
 
@@ -227,6 +228,10 @@ describe('chartExport module', () => {
 
     test('export buttons have title attribute', () => {
       expect(htmlContent).toMatch(/title\s*=\s*["']Export chart["']/);
+    });
+
+    test('net worth chart has export button', () => {
+      expect(htmlContent).toMatch(/onclick\s*=\s*["']chartExport\.exportNetWorth\(\)["']/);
     });
 
     test('export buttons use ghost variant', () => {

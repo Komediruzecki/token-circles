@@ -182,5 +182,13 @@ const chartExport = {
   exportRetirement() {
     const canvas = document.getElementById('ret-chart');
     this.showExportDialog(canvas, 'retirement-plan');
+  },
+
+  /**
+   * Export net worth over time chart
+   */
+  exportNetWorth() {
+    const canvas = document.getElementById('chart-networth');
+    this.showExportDialog(canvas, 'net-worth');
   }
 };

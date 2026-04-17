@@ -2405,17 +2405,18 @@ app.delete("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
 // Net worth timeline from balance history
 app.get("/api/accounts/history/timeline", apiRateLimiter, (req, res) => {
   try {
-    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
     const rows = db
       .prepare(
         `SELECT abh.recorded_at as date, SUM(abh.balance) as net_worth
          FROM account_balance_history abh
          JOIN accounts a ON abh.account_id = a.id
-         WHERE a.profile_id = ?
+         WHERE a.profile_id IN (${inClause})
          GROUP BY date(abh.recorded_at)
          ORDER BY date ASC`,
       )
-      .all(pid);
+      .all(...pids);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
