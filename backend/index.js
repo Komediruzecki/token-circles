@@ -66,12 +66,12 @@ app.use(
 );
 
 // ==================== RATE LIMITING ====================
-// API rate limiter: 100 requests per minute per IP+profile
+// API rate limiter: 300 requests per minute per IP+profile
 const apiRateLimiter = (() => {
   const store = global.__rateLimitStore || new Map();
   if (process.env.NODE_ENV === 'test') global.__rateLimitStore = store;
   const WINDOW_MS = 60 * 1000; // 1 minute
-  const MAX_REQUESTS = 100;
+  const MAX_REQUESTS = 300;
 
   setInterval(() => {
     const now = Date.now();

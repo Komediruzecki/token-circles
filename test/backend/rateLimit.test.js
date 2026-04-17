@@ -167,10 +167,10 @@ describe('API Rate Limiting', () => {
         .set('X-Skip-RateLimit', 'true');
     });
 
-    test('API endpoints have 100 request limit', async () => {
+    test('API endpoints have 300 request limit', async () => {
       const resp = await request(BASE_URL).get('/api/profiles')
         .set('X-Skip-RateLimit', 'true');
-      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(100);
+      expect(parseInt(resp.headers['x-ratelimit-limit'])).toBe(300);
     });
 
     test('Rate limit window is 1 minute (60 seconds)', async () => {
