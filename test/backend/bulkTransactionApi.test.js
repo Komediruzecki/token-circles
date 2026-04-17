@@ -11,7 +11,8 @@ describe('Bulk Transaction API', () => {
 
   beforeAll(async () => {
     // Reset rate limits first
-    await request(BASE_URL).post('/api/test/reset-rate-limit');
+    await request(BASE_URL).post('/api/test/reset-rate-limit')
+      .set('X-Skip-RateLimit', 'true');
     const loginRes = await request(BASE_URL).post('/api/auth/login')
       .set('X-Skip-RateLimit', 'true')
       .send({ username: 'maff', password: 'add2' });

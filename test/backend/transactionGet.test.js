@@ -10,7 +10,8 @@ describe('Transaction API - GET single transaction', () => {
 
   beforeAll(async () => {
     // Reset rate limit store so we don't get 429s from prior test files
-    await request(BASE_URL).post('/api/test/reset-rate-limit');
+    await request(BASE_URL).post('/api/test/reset-rate-limit')
+      .set('X-Skip-RateLimit', 'true');
 
     // Create a test transaction
     const createResp = await request(BASE_URL)

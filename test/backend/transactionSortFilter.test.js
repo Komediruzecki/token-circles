@@ -6,7 +6,8 @@ const request = require('supertest');
 const BASE_URL = 'http://localhost:3847';
 
 beforeAll(async () => {
-  await request(BASE_URL).post('/api/test/reset-rate-limit');
+  await request(BASE_URL).post('/api/test/reset-rate-limit')
+    .set('X-Skip-RateLimit', 'true');
 });
 
 describe('Transaction API - Sorting', () => {

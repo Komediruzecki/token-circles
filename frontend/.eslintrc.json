@@ -1,0 +1,30 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "globals": {
+    "document": "readonly",
+    "window": "readonly",
+    "fetch": "readonly",
+    "localStorage": "readonly",
+    "Chart": "readonly",
+    "console": "readonly",
+    "setTimeout": "readonly",
+    "setInterval": "readonly",
+    "alert": "readonly",
+    "confirm": "readonly",
+    "navigator": "readonly",
+    "FormData": "readonly",
+    "FileReader": "readonly",
+    "Blob": "readonly"
+  },
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-unused-vars": "off",
+    "no-undef": "off"
+  }
+}
