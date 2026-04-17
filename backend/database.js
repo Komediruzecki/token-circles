@@ -406,8 +406,8 @@ function seedProfileData(profile) {
   // Generate transactions
   seedTransactions(profileId, tierConfig, startYear, currentYear, catId);
 
-  // Create budgets for current year
-  seedBudgets(profileId, tierConfig, currentYear, catId);
+  // Create budgets for all years
+  seedBudgets(profileId, tierConfig, startYear, currentYear, catId);
 
   // Create savings goals
   seedSavingsGoals(profileId, tierConfig);
@@ -751,24 +751,22 @@ function seedTransactions(profileId, config, startYear, currentYear, catId) {
   }
 }
 
-function seedBudgets(profileId, config, currentYear, catId) {
+function seedBudgets(profileId, config, startYear, currentYear, catId) {
   const insertBudget = db.prepare('INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)');
 
-  // Current month and next few months
-  const months = [
-    `${currentYear}-01-01`,
-    `${currentYear}-02-01`,
-    `${currentYear}-03-01`,
-    `${currentYear}-04-01`,
-  ];
+  // Create budgets for all years from startYear to currentYear (each year gets all 12 months)
+  const years = [];
+  for (let y = startYear; y <= currentYear; y++) {
+    years.push(y);
+  }
 
-  // Calculate avg monthly spend per category from transactions
+  // Calculate avg monthly spend per category from all historical transactions
   const avgSpends = db.prepare(`
     SELECT category_id, AVG(monthly_total) as avg_amount
     FROM (
       SELECT category_id, strftime('%Y-%m', date) as month, SUM(amount) as monthly_total
       FROM transactions
-      WHERE profile_id = ? AND type = 'expense' AND date >= '2025-01-01'
+      WHERE profile_id = ? AND type = 'expense' AND category_id IS NOT NULL
       GROUP BY category_id, month
     )
     GROUP BY category_id
@@ -779,28 +777,39 @@ function seedBudgets(profileId, config, currentYear, catId) {
     avgMap[row.category_id] = row.avg_amount;
   }
 
-  // Create budgets for each month based on historical averages
+  // Create budgets for each year/month based on historical averages
+  // Category names must EXACTLY match seedCategoriesForProfile names
   const budgetCategories = [
     'Rent / Mortgage',
     'Utilities',
     'Groceries',
     'Food / Eating Out / Restaurants',
     'Car',
-    'Healthcare',
+    'Health',
     'Entertainment',
     'Clothing',
     'Subscriptions',
     'Transportation',
+    'Travel / Vacation',
+    'Education',
+    'Personal Care',
+    'Household Items',
   ];
 
-  for (const month of months) {
-    for (const catName of budgetCategories) {
-      const cid = catId(catName);
-      if (cid) {
-        const avg = avgMap[cid] || 0;
-        // Budget = 100% of average (realistic baseline)
-        const budgetAmount = avg > 0 ? avg : config[catName.toLowerCase().replace(/[^a-z]+/g, '')]?.min || 100;
-        insertBudget.run(cid, budgetAmount.toFixed(2), 'monthly', month, profileId);
+  for (const year of years) {
+    // Skip future years beyond current year + 1
+    if (year > currentYear + 1) break;
+
+    for (let month = 1; month <= 12; month++) {
+      const monthStr = `${year}-${String(month).padStart(2, '0')}-01`;
+      for (const catName of budgetCategories) {
+        const cid = catId(catName);
+        if (cid) {
+          const avg = avgMap[cid] || 0;
+          // Budget = 100% of average (realistic baseline)
+          const budgetAmount = avg > 0 ? avg : config[catName.toLowerCase().replace(/[^a-z]+/g, '')]?.min || 100;
+          insertBudget.run(cid, budgetAmount.toFixed(2), 'monthly', monthStr, profileId);
+        }
       }
     }
   }

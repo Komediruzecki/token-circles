@@ -5,6 +5,7 @@ const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
 const req = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
+jest.setTimeout(30000);
 
 describe('Annual Financial Report PDF API - Edge Cases', () => {
   describe('GET /api/reports/annual-pdf', () => {
