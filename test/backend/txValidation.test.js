@@ -5,49 +5,47 @@ const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
 
-describe('Transaction API validation', () => {
-  let authCookie;
+// Use a single agent with rate limit bypass
+const api = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
 
+describe('Transaction API validation', () => {
   beforeAll(async () => {
     // Log in to get auth cookie
-    const loginRes = await request(BASE_URL)
-      .post('/api/auth/login')
-      .send({ username: 'maff', password: 'add2' });
-    authCookie = loginRes.headers['set-cookie'];
+    const loginRes = await api.post('/api/auth/login').send({ username: 'maff', password: 'add2' });
+    // Set the cookie on the agent so it persists
+    if (loginRes.headers['set-cookie']) {
+      api.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
+    }
   });
 
   describe('POST /api/transactions', () => {
     test('returns 400 when description is empty', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .post('/api/transactions')
-        .set('Cookie', authCookie)
         .send({ description: '', amount: 100, date: '2026-04-15', type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when amount is zero', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .post('/api/transactions')
-        .set('Cookie', authCookie)
         .send({ description: 'Test', amount: 0, date: '2026-04-15', type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when amount is negative', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .post('/api/transactions')
-        .set('Cookie', authCookie)
         .send({ description: 'Test', amount: -50, date: '2026-04-15', type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when date is missing', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .post('/api/transactions')
-        .set('Cookie', authCookie)
         .send({ description: 'Test', amount: 100, type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
@@ -59,9 +57,8 @@ describe('Transaction API validation', () => {
 
     beforeAll(async () => {
       // Create a transaction to update
-      const createRes = await request(BASE_URL)
+      const createRes = await api
         .post('/api/transactions')
-        .set('Cookie', authCookie)
         .send({ description: 'Update me', amount: 100, date: '2026-04-15', type: 'expense' });
       txId = createRes.body.id;
     });
@@ -69,43 +66,37 @@ describe('Transaction API validation', () => {
     afterAll(async () => {
       // Clean up
       if (txId) {
-        await request(BASE_URL)
-          .delete(`/api/transactions/${txId}`)
-          .set('Cookie', authCookie);
+        await api.delete(`/api/transactions/${txId}`);
       }
     });
 
     test('returns 400 when description is empty', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .put(`/api/transactions/${txId}`)
-        .set('Cookie', authCookie)
         .send({ description: '', amount: 100, date: '2026-04-15', type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when amount is zero', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .put(`/api/transactions/${txId}`)
-        .set('Cookie', authCookie)
         .send({ description: 'Updated', amount: 0, date: '2026-04-15', type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when amount is negative', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .put(`/api/transactions/${txId}`)
-        .set('Cookie', authCookie)
         .send({ description: 'Updated', amount: -50, date: '2026-04-15', type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');
     });
 
     test('returns 400 when date is missing', async () => {
-      const resp = await request(BASE_URL)
+      const resp = await api
         .put(`/api/transactions/${txId}`)
-        .set('Cookie', authCookie)
         .send({ description: 'Updated', amount: 100, type: 'expense' });
       expect(resp.status).toBe(400);
       expect(resp.body).toHaveProperty('error');

@@ -5,13 +5,17 @@ const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
 
+beforeAll(async () => {
+  await request(BASE_URL).post('/api/test/reset-rate-limit');
+});
+
 describe('Transaction API - Sorting', () => {
   describe('GET /api/transactions with sort parameter', () => {
     test('returns 200 with valid sort fields', async () => {
       const sortFields = ['date', 'amount', 'description', 'category_name', 'type', 'beneficiary', 'payor'];
       for (const sort of sortFields) {
-        const resp = await request(BASE_URL)
-          .get(`/api/transactions?sort=${sort}&order=asc`);
+        const resp = await request(BASE_URL).get(`/api/transactions?sort=${sort}&order=asc`)
+          .set('X-Skip-RateLimit', 'true');
         expect(resp.status).toBe(200);
         expect(resp.body).toHaveProperty('rows');
         expect(resp.body).toHaveProperty('total');
@@ -19,18 +23,18 @@ describe('Transaction API - Sorting', () => {
     });
 
     test('sorting by category_name does not return empty results', async () => {
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?sort=category_name&order=asc&limit=50`);
+      const resp = await request(BASE_URL).get('/api/transactions?sort=category_name&order=asc&limit=50')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.body.rows.length).toBeGreaterThan(0);
     });
 
     test('sorting by date returns transactions in date order', async () => {
-      const ascResp = await request(BASE_URL)
-        .get(`/api/transactions?sort=date&order=asc&limit=10`);
-      const descResp = await request(BASE_URL)
-        .get(`/api/transactions?sort=date&order=desc&limit=10`);
+      const ascResp = await request(BASE_URL).get('/api/transactions?sort=date&order=asc&limit=10')
+        .set('X-Skip-RateLimit', 'true');
+      const descResp = await request(BASE_URL).get('/api/transactions?sort=date&order=desc&limit=10')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(ascResp.status).toBe(200);
       expect(descResp.status).toBe(200);
@@ -49,8 +53,8 @@ describe('Transaction API - Sorting', () => {
     });
 
     test('sorting by amount returns transactions in amount order', async () => {
-      const ascResp = await request(BASE_URL)
-        .get(`/api/transactions?sort=amount&order=asc&limit=10`);
+      const ascResp = await request(BASE_URL).get('/api/transactions?sort=amount&order=asc&limit=10')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(ascResp.status).toBe(200);
       if (ascResp.body.rows.length > 1) {
@@ -63,24 +67,24 @@ describe('Transaction API - Sorting', () => {
     });
 
     test('invalid sort field defaults to date', async () => {
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?sort=invalid_field&order=asc`);
+      const resp = await request(BASE_URL).get('/api/transactions?sort=invalid_field&order=asc')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       // Should default to date sorting
     });
 
     test('sort works with pagination', async () => {
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?sort=date&order=desc&limit=5&offset=5`);
+      const resp = await request(BASE_URL).get('/api/transactions?sort=date&order=desc&limit=5&offset=5')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.body.rows.length).toBeLessThanOrEqual(5);
     });
 
     test('sort works with date range filter', async () => {
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?sort=date&order=desc&startDate=2025-01-01&endDate=2026-12-31`);
+      const resp = await request(BASE_URL).get('/api/transactions?sort=date&order=desc&startDate=2025-01-01&endDate=2026-12-31')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       if (resp.body.rows.length > 0) {
@@ -93,8 +97,8 @@ describe('Transaction API - Sorting', () => {
     });
 
     test('sort works with type filter', async () => {
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?sort=date&order=desc&type=expense`);
+      const resp = await request(BASE_URL).get('/api/transactions?sort=date&order=desc&type=expense')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       if (resp.body.rows.length > 0) {
@@ -108,15 +112,16 @@ describe('Transaction API - Category Filtering', () => {
   describe('GET /api/transactions with category_ids parameter', () => {
     test('returns 200 with valid category_ids', async () => {
       // First get some categories
-      const catResp = await request(BASE_URL).get('/api/categories');
+      const catResp = await request(BASE_URL).get('/api/categories')
+        .set('X-Skip-RateLimit', 'true');
       if (catResp.body.length === 0) {
         console.log('No categories found, skipping test');
         return;
       }
 
       const catId = catResp.body[0].id;
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?category_ids=${catId}`);
+      const resp = await request(BASE_URL).get(`/api/transactions?category_ids=${catId}`)
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.body).toHaveProperty('rows');
@@ -124,15 +129,16 @@ describe('Transaction API - Category Filtering', () => {
     });
 
     test('returns only transactions of specified categories', async () => {
-      const catResp = await request(BASE_URL).get('/api/categories');
+      const catResp = await request(BASE_URL).get('/api/categories')
+        .set('X-Skip-RateLimit', 'true');
       if (catResp.body.length === 0) {
         console.log('No categories found, skipping test');
         return;
       }
 
       const catId = catResp.body[0].id;
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?category_ids=${catId}&limit=100`);
+      const resp = await request(BASE_URL).get(`/api/transactions?category_ids=${catId}&limit=100`)
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       if (resp.body.rows.length > 0) {
@@ -141,15 +147,16 @@ describe('Transaction API - Category Filtering', () => {
     });
 
     test('handles multiple category_ids separated by comma', async () => {
-      const catResp = await request(BASE_URL).get('/api/categories');
+      const catResp = await request(BASE_URL).get('/api/categories')
+        .set('X-Skip-RateLimit', 'true');
       if (catResp.body.length < 2) {
         console.log('Less than 2 categories found, skipping test');
         return;
       }
 
       const ids = `${catResp.body[0].id},${catResp.body[1].id}`;
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?category_ids=${ids}`);
+      const resp = await request(BASE_URL).get(`/api/transactions?category_ids=${ids}`)
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       if (resp.body.rows.length > 0) {
@@ -159,31 +166,32 @@ describe('Transaction API - Category Filtering', () => {
     });
 
     test('returns empty results for non-existent category', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/transactions?category_ids=999999');
+      const resp = await request(BASE_URL).get('/api/transactions?category_ids=999999')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.body.rows.length).toBe(0);
     });
 
     test('handles invalid category_ids gracefully', async () => {
-      const resp = await request(BASE_URL)
-        .get('/api/transactions?category_ids=abc,def');
+      const resp = await request(BASE_URL).get('/api/transactions?category_ids=abc,def')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       // Should return empty or all results depending on implementation
     });
 
     test('category_ids works with date range filter', async () => {
-      const catResp = await request(BASE_URL).get('/api/categories');
+      const catResp = await request(BASE_URL).get('/api/categories')
+        .set('X-Skip-RateLimit', 'true');
       if (catResp.body.length === 0) {
         console.log('No categories found, skipping test');
         return;
       }
 
       const catId = catResp.body[0].id;
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?category_ids=${catId}&startDate=2025-01-01&endDate=2026-12-31`);
+      const resp = await request(BASE_URL).get(`/api/transactions?category_ids=${catId}&startDate=2025-01-01&endDate=2026-12-31`)
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       if (resp.body.rows.length > 0) {
@@ -196,15 +204,16 @@ describe('Transaction API - Category Filtering', () => {
     });
 
     test('category_ids works with sorting', async () => {
-      const catResp = await request(BASE_URL).get('/api/categories');
+      const catResp = await request(BASE_URL).get('/api/categories')
+        .set('X-Skip-RateLimit', 'true');
       if (catResp.body.length === 0) {
         console.log('No categories found, skipping test');
         return;
       }
 
       const catId = catResp.body[0].id;
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?category_ids=${catId}&sort=date&order=desc`);
+      const resp = await request(BASE_URL).get(`/api/transactions?category_ids=${catId}&sort=date&order=desc`)
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       if (resp.body.rows.length > 1) {
@@ -215,15 +224,16 @@ describe('Transaction API - Category Filtering', () => {
     });
 
     test('category_ids works with pagination', async () => {
-      const catResp = await request(BASE_URL).get('/api/categories');
+      const catResp = await request(BASE_URL).get('/api/categories')
+        .set('X-Skip-RateLimit', 'true');
       if (catResp.body.length === 0) {
         console.log('No categories found, skipping test');
         return;
       }
 
       const catId = catResp.body[0].id;
-      const resp = await request(BASE_URL)
-        .get(`/api/transactions?category_ids=${catId}&limit=5&offset=0`);
+      const resp = await request(BASE_URL).get(`/api/transactions?category_ids=${catId}&limit=5&offset=0`)
+        .set('X-Skip-RateLimit', 'true');
 
       expect(resp.status).toBe(200);
       expect(resp.body.rows.length).toBeLessThanOrEqual(5);
@@ -232,10 +242,10 @@ describe('Transaction API - Category Filtering', () => {
 
   describe('GET /api/transactions with empty category_ids', () => {
     test('returns all transactions when category_ids is empty', async () => {
-      const allResp = await request(BASE_URL)
-        .get('/api/transactions?limit=100');
-      const filteredResp = await request(BASE_URL)
-        .get('/api/transactions?category_ids=&limit=100');
+      const allResp = await request(BASE_URL).get('/api/transactions?limit=100')
+        .set('X-Skip-RateLimit', 'true');
+      const filteredResp = await request(BASE_URL).get('/api/transactions?category_ids=&limit=100')
+        .set('X-Skip-RateLimit', 'true');
 
       expect(allResp.status).toBe(200);
       expect(filteredResp.status).toBe(200);

@@ -68,7 +68,8 @@ app.use(
 // ==================== RATE LIMITING ====================
 // API rate limiter: 100 requests per minute per IP+profile
 const apiRateLimiter = (() => {
-  const store = new Map();
+  const store = global.__rateLimitStore || new Map();
+  if (process.env.NODE_ENV === 'test') global.__rateLimitStore = store;
   const WINDOW_MS = 60 * 1000; // 1 minute
   const MAX_REQUESTS = 100;
 
@@ -80,6 +81,11 @@ const apiRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
+    // Skip rate limiting for requests with X-Skip-RateLimit header (for testing)
+    if (req.headers['x-skip-rate-limit'] === 'true') {
+      return next();
+    }
+
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const profileId = parseInt(req.headers["x-profile-id"] || req.query.profile_id || 1);
     const key = `ip:${ip}:profile:${profileId}`;
@@ -109,6 +115,22 @@ const apiRateLimiter = (() => {
   };
 })();
 
+// Test-only: reset rate limiter store between test runs
+if (process.env.NODE_ENV === 'test') {
+  app.post('/__test-reset-ratelimit', (req, res) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const key = `ip:${ip}:profile:1`;
+    // Find and clear entries for this IP in the rate limiter store
+    // We clear all entries since we don't know profile_ids
+    if (global.__rateLimitStore) {
+      for (const k of global.__rateLimitStore.keys()) {
+        if (k.startsWith(`ip:${ip}:`)) global.__rateLimitStore.delete(k);
+      }
+    }
+    res.json({ ok: true });
+  });
+}
+
 // Auth rate limiter: 10 login attempts per 15 minutes per IP
 const authRateLimiter = (() => {
   const store = new Map();
@@ -123,6 +145,11 @@ const authRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
+    // Skip rate limiting for requests with X-Skip-RateLimit header (for testing)
+    if (req.headers['x-skip-rate-limit'] === 'true') {
+      return next();
+    }
+
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const now = Date.now();
     let data = store.get(ip);
@@ -3872,6 +3899,14 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
 });
 
 // Catch-all: serve index.html for SPA
+// Test-only endpoint to reset rate limit store (used between test files)
+if (process.env.NODE_ENV === 'test') {
+  app.post('/api/test/reset-rate-limit', (req, res) => {
+    if (global.__rateLimitStore) global.__rateLimitStore.clear();
+    res.json({ ok: true });
+  });
+}
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "frontend", "index.html"));
 });

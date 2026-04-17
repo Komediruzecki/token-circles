@@ -2,21 +2,20 @@
  * Tests for Retirement Calculator API endpoint
  */
 const request = require('supertest');
-const path = require('path');
 
 // Test against the actual server
 const BASE_URL = 'http://localhost:3847';
 
 describe('Retirement Calculator API', () => {
-  let server;
-
-  beforeAll(() => {
-    // Use the running server
+  beforeAll(async () => {
+    // Reset rate limit store so we don't get 429s from prior test files
+    await request(BASE_URL).post('/api/test/reset-rate-limit');
   });
 
   test('POST /api/calculator/retire returns required fields', async () => {
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({
         currentAge: 30,
         retirementAge: 65,
@@ -45,6 +44,7 @@ describe('Retirement Calculator API', () => {
   test('POST /api/calculator/retire calculates correct FIRE number', async () => {
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({
         currentAge: 30,
         retirementAge: 65,
@@ -62,6 +62,7 @@ describe('Retirement Calculator API', () => {
   test('POST /api/calculator/retire scenarios have reached/savingsAtFire/shortfall', async () => {
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({
         currentAge: 30,
         retirementAge: 65,
@@ -93,6 +94,7 @@ describe('Retirement Calculator API', () => {
     // Croatia has 0.6x cost of living, so 30000 * 0.6 = 18000 expenses
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({
         currentAge: 30,
         retirementAge: 65,
@@ -110,6 +112,7 @@ describe('Retirement Calculator API', () => {
   test('POST /api/calculator/retire timeline contains year/age/savings', async () => {
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({
         currentAge: 30,
         retirementAge: 65,
@@ -134,6 +137,7 @@ describe('Retirement Calculator API', () => {
   test('POST /api/calculator/retire withdrawalTimeline has balance field', async () => {
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({
         currentAge: 30,
         retirementAge: 65,
@@ -158,6 +162,7 @@ describe('Retirement Calculator API', () => {
   test('POST /api/calculator/retire with defaults does not error', async () => {
     const resp = await request(BASE_URL)
       .post('/api/calculator/retire')
+      .set('X-Skip-RateLimit', 'true')
       .send({});
 
     expect(resp.status).toBe(200);
