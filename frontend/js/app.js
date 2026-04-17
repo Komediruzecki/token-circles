@@ -15,6 +15,19 @@ if (dz) {
   });
 }
 
+// Reset zoom to default (for mobile zoom prevention)
+function resetZoom() {
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    // Temporarily remove restriction to reset zoom
+    viewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+    setTimeout(() => {
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no');
+    }, 100);
+  }
+  toast('Zoom reset to default', 'success');
+}
+
 // Global init bootstrap
 nav.init();
 if (typeof dashboard !== 'undefined') dashboard.init();
