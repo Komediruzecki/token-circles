@@ -921,6 +921,11 @@ tr.row-duplicate td {
 .settings-grid .card {
   max-width: none;
 }
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0 0 0;
+}
 
 @media (max-width: 900px) {
   .settings-grid {

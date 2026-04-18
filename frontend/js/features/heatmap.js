@@ -250,8 +250,8 @@ const heatmap = {
   async showDayDetails(dateStr, amount, type) {
     // Fetch transactions for this specific day
     try {
-      const txns = await api(`/transactions?date=${dateStr}&type=${type}&limit=20`);
-      const list = Array.isArray(txns?.transactions) ? txns.transactions : [];
+      const txns = await api(`/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`);
+      const list = Array.isArray(txns?.transactions) ? txns.transactions : (Array.isArray(txns?.rows) ? txns.rows : []);
 
       // Build a simple modal-like popup
       let html = `

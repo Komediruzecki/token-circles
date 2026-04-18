@@ -171,6 +171,8 @@
     body { background: white; padding: 20px; }
     .chart-card { break-inside: avoid; }
     table { break-inside: avoid; }
+    .charts-grid { break-inside: avoid; }
+    .monthly-table { break-before: page; }
   }
 </style>
 </head>
@@ -246,8 +248,15 @@
     return sym + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
-  function fmtMonth(yyyy_mm) {
-    const [y, m] = yyyy_mm.split('-');
+  function fmtMonth(mm) {
+    // Accept both '2024-01' (YYYY-MM) and '01' (MM-only) formats
+    let y, m;
+    if (mm.includes('-')) {
+      [y, m] = mm.split('-');
+    } else {
+      y = new Date().getFullYear();
+      m = mm;
+    }
     const d = new Date(parseInt(y), parseInt(m) - 1, 1);
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   }

@@ -14,6 +14,11 @@ const PDFDocument = require("pdfkit");
 const app = express();
 const PORT = process.env.PORT || 3847;
 
+// Health check endpoint (no auth required)
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // Ensure directories exist
 const uploadsDir = path.join(__dirname, "..", "assets");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -117,8 +122,8 @@ const apiRateLimiter = (() => {
 // Auth rate limiter: 10 login attempts per 15 minutes per IP
 const authRateLimiter = (() => {
   const store = (process.env.NODE_ENV === 'test' && global.__authRateLimitStore)
-    || new Map();
-  if (process.env.NODE_ENV === 'test') global.__authRateLimitStore = store;
+    || global.__authRateLimitStore || new Map();
+  global.__authRateLimitStore = store;
   const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
   const MAX_REQUESTS = 10; // Stricter for auth
 
@@ -5357,7 +5362,7 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
     }
 
     const monthlyArr = Object.entries(monthlyMap).map(([m, v]) => ({
-      month: m,
+      month: `${year}-${m}`,
       income: v.income,
       expense: v.expense,
     }));

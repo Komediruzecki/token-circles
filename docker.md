@@ -140,7 +140,7 @@ docker cp finance-manager:/app/assets/finance.db.backup ./db-backup/
 
 ```bash
 # Check health endpoint (you may need to add this to your app)
-curl http://localhost:3847/
+curl http://localhost:3847/api/health
 
 # Get categories
 curl http://localhost:3847/api/categories

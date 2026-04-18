@@ -39,7 +39,7 @@ A personal finance tracking web application with transaction management, budgeti
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm
 - Apache2 (for production deployment)
 
@@ -50,14 +50,19 @@ A personal finance tracking web application with transaction management, budgeti
    npm install
    ```
 
-2. **Start the backend server:**
+2. **Build the frontend:**
    ```bash
-   cd backend
-   NODE_PATH=../node_modules node index.js
+   npm run build
+   ```
+   This bundles all JS/CSS modules into `frontend/index.html` using esbuild. Re-run after making frontend changes.
+
+3. **Start the backend server:**
+   ```bash
+   npm start
    ```
    The server runs on `http://localhost:3847` by default. Set `PORT` env var to change.
 
-3. **Serve the frontend:**
+4. **Serve the frontend:**
    The frontend is a static SPA. For local development, you can:
    - Open `frontend/index.html` directly in a browser, or
    - Use any static file server:
@@ -83,7 +88,12 @@ A personal finance tracking web application with transaction management, budgeti
    npm install
    ```
 
-3. Run the deployment script:
+3. Build the frontend:
+   ```bash
+   npm run build
+   ```
+
+4. Run the deployment script:
    ```bash
    ./deploy.sh
    ```
@@ -112,7 +122,7 @@ A personal finance tracking web application with transaction management, budgeti
    cd backend && NODE_PATH=../node_modules node index.js &
    ```
 
-6. Reload Apache:
+5. Reload Apache:
    ```bash
    sudo systemctl reload apache2
    ```
@@ -140,7 +150,9 @@ A personal finance tracking web application with transaction management, budgeti
 - Category spending trends over time
 - Top categories breakdown
 - Budget vs actual flow (Sankey diagram)
+- Spending heatmap calendar
 - Monthly/yearly summaries
+- Period comparison overlay
 - Dark/light theme support
 
 ### Loan Calculator

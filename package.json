@@ -5,14 +5,13 @@
   "main": "backend/index.js",
   "scripts": {
     "start": "node backend/index.js",
-    "dev": "NODE_PATH=./node_modules node backend/index.js",
+    "dev": "node frontend/build.js --watch",
     "test": "NODE_ENV=test NODE_PATH=./node_modules jest",
     "test:ci": "NODE_PATH=./node_modules jest --coverage",
     "test:watch": "NODE_PATH=./node_modules jest --watch",
     "test:backend": "NODE_PATH=./node_modules jest backend/",
     "test:frontend": "NODE_PATH=./node_modules jest frontend/",
     "build": "node frontend/build.js",
-    "dev": "node frontend/build.js --watch",
     "format": "prettier --write 'frontend/js/**/*.js' 'frontend/css/**/*.css'",
     "lint": "eslint frontend/js/"
   },
@@ -23,7 +22,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-session": "^1.19.0",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.1.1",
     "pdfkit": "^0.15.0",
     "puppeteer": "^24.41.0",
     "xlsx": "^0.18.5"
@@ -36,7 +35,7 @@
     "jest": "^29.7.0",
     "playwright": "^1.59.1",
     "prettier": "^3.8.3",
-    "supertest": "^6.3.4"
+    "supertest": "^7.2.2"
   },
   "jest": {
     "testEnvironment": "node",

@@ -1,21 +1,12 @@
 {
-  "version": "28b313dd",
-<<<<<<< HEAD
-  "swVersion": "227538ee",
-=======
-  "swVersion": "9134b907",
->>>>>>> origin/main
+  "version": "4b9b6741",
+  "swVersion": "321212c1",
   "hashes": {
     "core.js": "539b77e4",
-    "features/features.js": "2059d080",
+    "features/features.js": "4ac99b52",
     "app.js": "bdc8dc23",
-<<<<<<< HEAD
-    "css/base.css": "124ae12d",
-    "css/components.css": "0fa97373"
-=======
-    "css/base.css": "f8ba0f03",
+    "css/base.css": "ca0b06cb",
     "css/components.css": "6d942c38"
->>>>>>> origin/main
   },
   "pages": {
     "dashboard": [
@@ -59,9 +50,5 @@
       "settings-reports"
     ]
   },
-<<<<<<< HEAD
-  "timestamp": 1776496927124
-=======
-  "timestamp": 1776497704250
->>>>>>> origin/main
+  "timestamp": 1776503412480
 }

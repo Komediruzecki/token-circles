@@ -6,8 +6,8 @@
 <title>Finance Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/base.css?v=124ae12d">
-<link rel="stylesheet" href="css/components.css?v=0fa97373">
+<link rel="stylesheet" href="css/base.css?v=ca0b06cb">
+<link rel="stylesheet" href="css/components.css?v=6d942c38">
 </head>
 <body>
 <!-- MOBILE OVERLAY -->
@@ -990,35 +990,6 @@
           </div>
           <button class="btn btn-primary" data-action="settings.save" style="margin-top:16px;">Save Settings</button>
         </div>
-        <div class="card" style="margin-top:16px;">
-          <div class="danger-zone">
-            <div class="danger-zone-title">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-              Danger Zone
-            </div>
-            <div class="danger-zone-item">
-              <div>
-                <div class="danger-zone-item-title">Delete All Transactions</div>
-                <div class="danger-zone-item-desc">Permanently remove all transactions for this profile. This cannot be undone.</div>
-              </div>
-              <button class="btn btn-danger-outline" data-action="settings.deleteAllTransactions">Delete All Transactions</button>
-            </div>
-            <div class="danger-zone-item">
-              <div>
-                <div class="danger-zone-item-title">Delete All Profile Data</div>
-                <div class="danger-zone-item-desc">Permanently delete all transactions, budgets, loans, and reset categories to defaults. The profile will be kept.</div>
-              </div>
-              <button class="btn btn-danger-outline" data-action="settings.deleteAllProfileData">Delete All Data</button>
-            </div>
-            <div class="danger-zone-item">
-              <div>
-                <div class="danger-zone-item-title">Delete All Categories</div>
-                <div class="danger-zone-item-desc">Permanently remove all categories for this profile. Transactions will keep their category IDs but show as "uncategorized".</div>
-              </div>
-              <button class="btn btn-danger-outline" data-action="settings.deleteAllCategories">Delete All Categories</button>
-            </div>
-          </div>
-        </div>
       </div>
       <div class="settings-col">
         <div class="card">
@@ -1067,6 +1038,8 @@
             <button class="btn btn-primary" data-action="generateMonthlyPDF">Download PDF</button>
           </div>
         </div>
+        </div>
+        <hr class="settings-divider">
         <div class="card" style="margin-top:16px;">
           <div class="settings-section-title">Year-End Tax Summary</div>
           <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Get a breakdown of your tax-deductible vs non-deductible expenses for the year.</p>
@@ -1077,6 +1050,8 @@
             <button class="btn btn-primary" data-action="generateTaxSummaryPDF">Download Tax PDF</button>
           </div>
         </div>
+        </div>
+        <hr class="settings-divider">
         <div class="card" style="margin-top:16px;">
           <div class="settings-section-title">Year-End P&L Summary</div>
           <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Profit & Loss report showing total income, expenses, and net savings with category breakdown.</p>
@@ -1087,6 +1062,8 @@
             <button class="btn btn-primary" data-action="generatePlSummaryPDF">Download P&L PDF</button>
           </div>
         </div>
+        </div>
+        <hr class="settings-divider">
         <div class="card" style="margin-top:16px;">
           <div class="settings-section-title">Annual Financial Report</div>
           <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Download a comprehensive PDF with embedded charts and monthly breakdown for any year.</p>
@@ -1095,6 +1072,36 @@
               <option value="">Year</option>
             </select>
             <button class="btn btn-primary" data-action="generateAnnualPDF">Download Annual PDF</button>
+          </div>
+        </div>
+        <hr class="settings-divider">
+        <div class="card" style="margin-top:16px;">
+          <div class="danger-zone">
+            <div class="danger-zone-title">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              Danger Zone
+            </div>
+            <div class="danger-zone-item">
+              <div>
+                <div class="danger-zone-item-title">Delete All Transactions</div>
+                <div class="danger-zone-item-desc">Permanently remove all transactions for this profile. This cannot be undone.</div>
+              </div>
+              <button class="btn btn-danger-outline" data-action="settings.deleteAllTransactions">Delete All Transactions</button>
+            </div>
+            <div class="danger-zone-item">
+              <div>
+                <div class="danger-zone-item-title">Delete All Profile Data</div>
+                <div class="danger-zone-item-desc">Permanently delete all transactions, budgets, loans, and reset categories to defaults. The profile will be kept.</div>
+              </div>
+              <button class="btn btn-danger-outline" data-action="settings.deleteAllProfileData">Delete All Data</button>
+            </div>
+            <div class="danger-zone-item">
+              <div>
+                <div class="danger-zone-item-title">Delete All Categories</div>
+                <div class="danger-zone-item-desc">Permanently remove all categories for this profile. Transactions will keep their category IDs but show as "uncategorized".</div>
+              </div>
+              <button class="btn btn-danger-outline" data-action="settings.deleteAllCategories">Delete All Categories</button>
+            </div>
           </div>
         </div>
         <div class="card" style="margin-top:16px;">
@@ -1858,9 +1865,9 @@
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/dist/core.js?v=539b77e4"></script>
-<script src="js/dist/features.js?v=2059d080"></script>
+<script src="js/dist/features.js?v=4ac99b52"></script>
 <script src="js/dist/app.js?v=bdc8dc23"></script>
 
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js?v=227538ee').catch(()=>{});}</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js?v=321212c1').catch(()=>{});}</script>
 </body>
 </html>
