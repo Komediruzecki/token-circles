@@ -1,4 +1,7 @@
-// ==================== BILLS ====================
+// ==================== BILLS MODULE ====================
+// Self-registering feature module
+// Uses singleton FM namespace for utilities (Utils.escapeHtml, Utils.formatCurrency, etc.)
+
 const financeBills = {
   async load() {
     const container = document.getElementById('bills-list');
@@ -8,8 +11,8 @@ const financeBills = {
 
     try {
       const [upcoming, settings] = await Promise.all([
-        api('/bills/upcoming'),
-        api('/settings'),
+        FM.api('/bills/upcoming'),
+        FM.api('/settings'),
       ]);
       const currency = settings.local_currency || 'EUR';
 
@@ -71,27 +74,27 @@ const financeBills = {
     const catDot = b.category_color
       ? `<span class="cat-dot" style="background:${b.category_color}"></span>`
       : '';
-    const dueDate = b.next_due_date ? formatDate(b.next_due_date) : 'Not set';
+    const dueDate = b.next_due_date ? FM.Utils.formatDate(b.next_due_date) : 'Not set';
 
     return `
       <div class="bills-item">
         <div class="bills-item-left">
           ${catDot}
           <div class="bills-item-info">
-            <div class="bills-item-name">${escapeHtml(b.name)}</div>
+            <div class="bills-item-name">${FM.Utils.escapeHtml(b.name)}</div>
             <div class="bills-item-meta">${dueDate} &bull; ${b.frequency}</div>
           </div>
         </div>
         <div class="bills-item-right">
-          <span class="bills-item-amount">${formatCurrency(b.amount, currency)}</span>
+          <span class="bills-item-amount">${FM.Utils.formatCurrency(b.amount, currency)}</span>
           <span class="bills-item-days ${b.is_overdue ? 'overdue' : b.days_until <= 3 ? 'due-soon' : ''}">${daysLabel}</span>
-          <button class="btn btn-sm ${b.is_overdue ? 'btn-danger' : 'btn-secondary'}" onclick="financeBills.markPaid(${b.id})" title="Mark as paid">
+          <button class="btn btn-sm ${b.is_overdue ? 'btn-danger' : 'btn-secondary'}" data-action="bills:markPaid" data-arg="${b.id}" title="Mark as paid">
             Pay
           </button>
-          <button class="btn btn-ghost btn-sm" onclick="financeBills.openModal(${b.id})" title="Edit">
+          <button class="btn btn-ghost btn-sm" data-action="bills:openModal" data-arg="${b.id}" title="Edit">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <button class="btn btn-ghost btn-sm text-danger" onclick="financeBills.delete(${b.id})" title="Delete">
+          <button class="btn btn-ghost btn-sm text-danger" data-action="bills:delete" data-arg="${b.id}" title="Delete">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
           </button>
         </div>
@@ -103,15 +106,14 @@ const financeBills = {
     document.getElementById('bills-modal-id').value = id || '';
     document.getElementById('bills-modal-title').textContent = id ? 'Edit Bill' : 'Add Bill';
 
-    // Load categories
-    const catsRes = await api('/categories');
+    const catsRes = await FM.api('/categories');
     const cats = (catsRes && catsRes.rows) ? catsRes.rows : (Array.isArray(catsRes) ? catsRes : []);
     document.getElementById('bills-category').innerHTML =
       '<option value="">Select category...</option>' +
-      cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      cats.map(c => `<option value="${c.id}">${FM.Utils.escapeHtml(c.name)}</option>`).join('');
 
     if (id) {
-      const billsList = await api('/bills');
+      const billsList = await FM.api('/bills');
       const b = billsList.find(x => String(x.id) === String(id));
       if (b) {
         document.getElementById('bills-modal-id').value = b.id;
@@ -140,44 +142,46 @@ const financeBills = {
     };
 
     if (!data.name || isNaN(data.amount)) {
-      toast('Name and amount are required', 'error');
+      FM.Utils.toast('Name and amount are required', 'error');
       return;
     }
 
     const method = id ? 'PUT' : 'POST';
     const url = id ? `/bills/${id}` : '/bills';
-    const result = await api(url, { method, body: data });
+    const result = await FM.api(url, { method, body: data });
     if (result.error) {
-      toast(result.error, 'error');
+      FM.Utils.toast(result.error, 'error');
       return;
     }
-    toast(id ? 'Bill updated' : 'Bill added', 'success');
+    FM.Utils.toast(id ? 'Bill updated' : 'Bill added', 'success');
     if (typeof modal !== 'undefined') modal.close('bills-modal');
     this.load();
   },
 
   async markPaid(id) {
     if (!confirm('Mark this bill as paid? This will create a transaction for today.')) return;
-    const result = await api(`/bills/${id}/mark-paid`, { method: 'POST' });
+    const result = await FM.api(`/bills/${id}/mark-paid`, { method: 'POST' });
     if (result.error) {
-      toast(result.error, 'error');
+      FM.Utils.toast(result.error, 'error');
       return;
     }
-    toast('Bill marked as paid', 'success');
+    FM.Utils.toast('Bill marked as paid', 'success');
     this.load();
-    // Refresh dashboard if needed
     const page = location.hash.slice(1) || 'dashboard';
     if (page === 'dashboard' && typeof dashboard !== 'undefined') dashboard.loadSummary();
   },
 
   async delete(id) {
     if (!confirm('Delete this bill?')) return;
-    const result = await api(`/bills/${id}`, { method: 'DELETE' });
+    const result = await FM.api(`/bills/${id}`, { method: 'DELETE' });
     if (result.error) {
-      toast(result.error, 'error');
+      FM.Utils.toast(result.error, 'error');
       return;
     }
-    toast('Bill deleted', 'success');
+    FM.Utils.toast('Bill deleted', 'success');
     this.load();
   },
 };
+
+// Auto-register with FM
+FM.registerModule('bills', financeBills);

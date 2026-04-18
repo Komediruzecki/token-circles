@@ -32,7 +32,7 @@ const MODALS_TPL = path.join(TEMPLATES, 'modals.html');
 const TOAST_TPL = path.join(TEMPLATES, 'toast.html');
 
 // Core modules (always loaded)
-const CORE_FILES = ['api.js', 'auth.js', 'modal.js', 'profile.js', 'theme.js', 'router.js'];
+const CORE_FILES = ['app-singleton.js', 'auth.js', 'modal.js', 'profile.js', 'theme.js'];
 
 // Feature modules
 const FEATURE_FILES = [
@@ -42,6 +42,9 @@ const FEATURE_FILES = [
   'quickadd.js', 'retirement.js', 'savingsGoals.js',
   'settings-reports.js', 'transactions.js',
 ];
+
+// Modules that automatically register with FM
+const AUTO_REGISTER_FEATURES = FEATURE_FILES.filter(f => !['transactions.js'].includes(f));
 
 // Page → feature file mapping
 const PAGE_FEATURES = {
@@ -91,22 +94,18 @@ async function build(opts = {}) {
   };
   let totalJsBytes = 0;
 
-  // ========== 1. Core bundle (minified concatenation) ==========
-  // esbuild IIFE bundling causes tree-shaking of unused const declarations.
-  // Use esbuild transform (no bundling) for safe minification without tree-shaking.
-  let coreCode = '';
-  for (const f of CORE_FILES) {
-    coreCode += fs.readFileSync(path.join(JS_CORE, f), 'utf8') + '\n';
-  }
-  const coreMinified = await esbuild.transform(coreCode, { minify: true, logLevel: 'error' });
-  fs.writeFileSync(path.join(JS_DIST, 'core.js'), coreMinified.code);
+  // ========== 1. Singleton app bundle ==========
+  const singletonCode = fs.readFileSync(path.join(JS_CORE, 'app-singleton.js'), 'utf8');
+  const singletonMinified = await esbuild.transform(singletonCode, { minify: true, logLevel: 'error' });
+  fs.writeFileSync(path.join(JS_DIST, 'core.js'), singletonMinified.code);
   const coreHash = getFileHash(path.join(JS_DIST, 'core.js'));
   const coreSize = fs.statSync(path.join(JS_DIST, 'core.js')).size;
   totalJsBytes += coreSize;
   manifest.hashes['core.js'] = coreHash;
   console.log(`  core.js        ${(coreSize / 1024 / 1024).toFixed(2)}MB  hash=${coreHash}`);
 
-  // ========== 2. Feature bundle (minified concatenation) ==========
+  // ========== 2. Feature bundles (minified concatenation) ==========
+  // Each feature file exports its module name, then registers itself with FM
   let featCode = '';
   for (const feat of FEATURE_FILES) {
     featCode += fs.readFileSync(path.join(JS_FEATURES, feat), 'utf8') + '\n';
@@ -118,16 +117,6 @@ async function build(opts = {}) {
   totalJsBytes += featSize;
   manifest.hashes['features/features.js'] = featHash;
   console.log(`  features.js   ${(featSize / 1024 / 1024).toFixed(2)}MB  hash=${featHash}`);
-
-  // ========== 3. App bundle ==========
-  let appCode = fs.readFileSync(path.join(JS_SRC, 'app.js'), 'utf8');
-  const appMinified = await esbuild.transform(appCode, { minify: true, logLevel: 'error' });
-  fs.writeFileSync(path.join(JS_DIST, 'app.js'), appMinified.code);
-  const appHash = getFileHash(path.join(JS_DIST, 'app.js'));
-  const appSize = fs.statSync(path.join(JS_DIST, 'app.js')).size;
-  totalJsBytes += appSize;
-  manifest.hashes['app.js'] = appHash;
-  console.log(`  app.js        ${(appSize / 1024).toFixed(1)}KB  hash=${appHash}`);
 
   // ========== 4. CSS minification ==========
   const cssFiles = ['base.css', 'components.css'];

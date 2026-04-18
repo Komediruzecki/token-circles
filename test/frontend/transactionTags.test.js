@@ -173,8 +173,8 @@ describe('Transaction Tags Feature - Frontend', () => {
       expect(transactionsJs).toMatch(/function renderTagPills/);
     });
 
-    test('hexToRgba helper exists', () => {
-      expect(transactionsJs).toMatch(/function hexToRgba/);
+    test('hexToRgba helper exists via FM.Utils', () => {
+      expect(transactionsJs).toMatch(/FM\.Utils\.hexToRgba/);
     });
 
     test('Tag pills rendered in transaction list rows', () => {

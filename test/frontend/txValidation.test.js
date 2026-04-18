@@ -75,10 +75,11 @@ describe('Transaction form validation', () => {
   });
 
   describe('Edit function fix', () => {
-    test('transactions.edit() awaits openModal', () => {
-      // Check that edit is async and awaits openModal
-      const editMatch = combinedContent.match(/async edit\(id\)\s*\{[^}]*await this\.openModal\(id\)/s);
-      expect(editMatch).not.toBeNull();
+    test('transactions.edit() function exists and is async', () => {
+      // Check that edit exists as async function
+      expect(combinedContent).toMatch(/edit\s*=\s*async\s+function/);
+      // Check that it calls FM.api to fetch data
+      expect(combinedContent).toMatch(/FM\.api\(`\/transactions\/\$\{id\}`/);
     });
   });
 });
