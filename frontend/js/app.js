@@ -1,15 +1,95 @@
-// ==================== NAMESPACE BOOTSTRAP ====================
-// Load FM namespace first (includes all modules)
-import('/js/core/namespace.js').then(() => {
-  // Namespace loaded, now initialize core features
-  nav.init();
-  if (window.FM?.profile) FM.profile.init();
-  if (window.FM?.theme) FM.theme.init();
-  if (window.FM?.auth) FM.auth.checkLogin();
-});
+// ==================== FRONTEND APP INIT ====================
+
+// ==================== UTILITIES ====================
+const formatCurrency = (amount, currency = 'EUR') => {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+};
+
+const formatDate = (dateStr) => {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const formatMonth = (date) => {
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+};
+
+const escapeHtml = (str) => {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+};
+
+const toast = (message, type = 'info') => {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = message;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+};
+
+const hexToRgba = (hex, alpha = 1) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+window.formatCurrency = formatCurrency;
+window.formatDate = formatDate;
+window.formatMonth = formatMonth;
+window.escapeHtml = escapeHtml;
+window.toast = toast;
+window.hexToRgba = hexToRgba;
+
+// ==================== API ====================
+const API = '/api';
+
+function api(url, options = {}) {
+  const profileRef = window.profile;
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Profile-Id': profileRef?.currentId || '',
+    ...options.headers,
+  };
+  const selectedIds = profileRef?.selectedIds;
+  if (selectedIds && selectedIds.length > 0) {
+    headers['X-Profile-Ids'] = JSON.stringify(selectedIds);
+  }
+  if (options.method === 'DELETE' && !options.body) {
+    delete headers['Content-Type'];
+  }
+  return fetch(API + url, {
+    credentials: 'include',
+    headers,
+    ...options,
+    body: options.body && typeof options.body === 'object' ? JSON.stringify(options.body) : options.body,
+  }).then(async (r) => {
+    if (!r.ok) return null;
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) return null;
+    return r.json();
+  });
+}
+
+window.api = api;
+
+// ==================== NAMESPACE ====================
+const FM = {};
+
+function registerModule(name, module) {
+  FM[name] = module;
+  window[name] = module;
+}
+
+window.FM = FM;
+window.registerModule = registerModule;
 
 // ==================== EVENT DELEGATION ====================
-// Compound action helpers (for multi-step handlers)
 function authLogin() {
   if (typeof window.FM?.auth !== 'undefined') window.FM.auth.clearLoginForm();
   if (typeof window.FM?.modal !== 'undefined') window.FM.modal.open('login-modal');
@@ -23,7 +103,6 @@ function importFileFromInput() {
   if (el && el.files[0] && typeof window.FM?.importData !== 'undefined') window.FM.importData.handleFile(el.files[0]);
 }
 
-// Centralized action dispatcher — resolves module:method or named helper
 function dispatchAction(el) {
   const { action, arg, arg2 } = el.dataset;
   if (!action) return;
@@ -70,7 +149,6 @@ document.addEventListener('submit', (e) => {
 });
 
 // ==================== INIT BOOTSTRAP ====================
-// Drag and drop for import
 const dz = document.getElementById('import-dropzone');
 if (dz) {
   dz.addEventListener('dragover', (e) => {
@@ -86,7 +164,6 @@ if (dz) {
   });
 }
 
-// Reset zoom to default (for mobile zoom prevention)
 function resetZoom() {
   const viewport = document.querySelector('meta[name="viewport"]');
   if (viewport) {
@@ -96,4 +173,21 @@ function resetZoom() {
     }, 100);
   }
   toast('Zoom reset to default', 'success');
+}
+
+// ==================== ROUTER INIT ====================
+// Core modules will be loaded by the build system
+// This init is called after core.js loads
+window.initApp = function() {
+  if (typeof nav !== 'undefined') nav.init();
+  if (typeof window.FM?.profile !== 'undefined') window.FM.profile.init();
+  if (typeof window.FM?.theme !== 'undefined') window.FM.theme.init();
+  if (typeof window.FM?.auth !== 'undefined') window.FM.auth.checkLogin();
+};
+
+// Auto-init if already loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', window.initApp);
+} else {
+  window.initApp();
 }

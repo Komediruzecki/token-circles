@@ -32,7 +32,7 @@ const MODALS_TPL = path.join(TEMPLATES, 'modals.html');
 const TOAST_TPL = path.join(TEMPLATES, 'toast.html');
 
 // Core modules (always loaded)
-const CORE_FILES = ['namespace.js', 'utils.js', 'api.js', 'auth.js', 'modal.js', 'profile.js', 'theme.js', 'router.js'];
+const CORE_FILES = ['api.js', 'auth.js', 'modal.js', 'profile.js', 'theme.js', 'router.js'];
 
 // Feature modules
 const FEATURE_FILES = [

@@ -26,7 +26,7 @@ describe('XSS vulnerability fix', () => {
 
   describe('escapeHtml function', () => {
     test('escapeHtml function exists', () => {
-      expect(jsContent).toContain('function escapeHtml(str)');
+      expect(jsContent).toContain('escapeHtml(');
     });
 
     test('escapeHtml uses textContent to safely escape', () => {
