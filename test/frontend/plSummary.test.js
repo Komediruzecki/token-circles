@@ -18,7 +18,7 @@ describe('P&L Summary UI', () => {
     });
 
     test('P&L PDF button exists', () => {
-      expect(combinedContent).toContain('onclick="generatePlSummaryPDF()"');
+      expect(combinedContent).toContain('data-action="generatePlSummaryPDF"');
       expect(combinedContent).toContain('Download P&L PDF');
     });
 

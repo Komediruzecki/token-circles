@@ -18,7 +18,7 @@ describe('Tax Summary UI', () => {
     });
 
     test('Tax Summary PDF button exists', () => {
-      expect(combinedContent).toContain('onclick="generateTaxSummaryPDF()"');
+      expect(combinedContent).toContain('data-action="generateTaxSummaryPDF"');
       expect(combinedContent).toContain('Download Tax PDF');
     });
 

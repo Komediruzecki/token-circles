@@ -126,8 +126,6 @@ const importData = {
       toast('Failed to load sheet: ' + e.message, 'error');
     }
   },
-    }
-  },
   buildMapping(data) {
     const fields = [
       'description',
@@ -157,20 +155,6 @@ const importData = {
       .join('');
 
     // Auto-map common column names
-    const fields = [
-      'description',
-      'amount',
-      'date',
-      'beneficiary',
-      'payor',
-      'category',
-      'currency',
-      'amount_local',
-      'means_of_payment',
-      'exchange_rate',
-      'type',
-      'notes',
-    ];
     data.headers.forEach((h, i) => {
       const lower = (h || '').toLowerCase().replace(/[^a-z]/g, '');
       if (lower.includes('description') || lower.includes('memo') || lower.includes('narrative'))
@@ -239,21 +223,8 @@ const importData = {
     this.renderCategoryReview();
 
     // Find duplicates based on current mapping
-    const fields = [
-      'description',
-      'amount',
-      'date',
-      'beneficiary',
-      'payor',
-      'category',
-      'currency',
-      'amount_local',
-      'means_of_payment',
-      'exchange_rate',
-      'type',
-      'notes',
-    ];
     const mapping = {};
+    // Use same fields array already defined at top of function
     fields.forEach((f) => {
       const sel = document.getElementById(`map-${f}`);
       if (sel && sel.value) mapping[f] = parseInt(sel.value);

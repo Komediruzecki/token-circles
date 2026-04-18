@@ -18,7 +18,7 @@ describe('Annual Financial Report UI', () => {
     });
 
     test('Annual Report button exists', () => {
-      expect(combinedContent).toContain('onclick="generateAnnualPDF()"');
+      expect(combinedContent).toContain('data-action="generateAnnualPDF"');
       expect(combinedContent).toContain('Download Annual PDF');
     });
 

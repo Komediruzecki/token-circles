@@ -1,0 +1,54 @@
+{
+  "version": "28b313dd",
+  "swVersion": "227538ee",
+  "hashes": {
+    "core.js": "539b77e4",
+    "features/features.js": "2059d080",
+    "app.js": "bdc8dc23",
+    "css/base.css": "124ae12d",
+    "css/components.css": "0fa97373"
+  },
+  "pages": {
+    "dashboard": [
+      "dashboard"
+    ],
+    "transactions": [
+      "transactions"
+    ],
+    "budgets": [
+      "budgets"
+    ],
+    "loans": [
+      "loans"
+    ],
+    "goals": [
+      "savingsGoals"
+    ],
+    "bills": [
+      "bills"
+    ],
+    "import": [
+      "import"
+    ],
+    "accounts": [
+      "categories-accounts"
+    ],
+    "retirement": [
+      "retirement"
+    ],
+    "housing": [
+      "housingCalc"
+    ],
+    "analytics": [
+      "analytics",
+      "heatmap"
+    ],
+    "categories": [
+      "categories-accounts"
+    ],
+    "settings": [
+      "settings-reports"
+    ]
+  },
+  "timestamp": 1776496927124
+}
