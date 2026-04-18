@@ -1,6 +1,6 @@
 {
   "version": "391d3408",
-  "swVersion": "b8dba897",
+  "swVersion": "6dc53fc3",
   "hashes": {
     "core.js": "539b77e4",
     "features/features.js": "bc0a64a8",
@@ -50,5 +50,5 @@
       "settings-reports"
     ]
   },
-  "timestamp": 1776505207734
+  "timestamp": 1776505508596
 }
