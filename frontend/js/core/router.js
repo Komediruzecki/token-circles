@@ -20,21 +20,21 @@ function closeSidebarOnNavigate() {
   }
 }
 
-// Page init handlers
+// Page init handlers using FM namespace
 const PAGE_INIT = {
-  dashboard: () => { dashboard.init(); },
-  transactions: () => { txFilters.init(); transactions.load(); },
-  budgets: () => { budgets.load(); },
-  loans: () => { loans.load(); },
-  goals: () => { savingsGoals.load(); },
-  bills: () => { financeBills.load(); },
-  import: () => { if (typeof dataImport !== 'undefined') dataImport.reset(); },
-  accounts: () => { if (typeof accounts !== 'undefined') accounts.load(); },
-  retirement: () => { if (typeof retirement !== 'undefined') retirement.init(); },
-  housing: () => { if (typeof housingCalc !== 'undefined') housingCalc.init(); },
-  analytics: () => { if (typeof analytics !== 'undefined') analytics.init(); if (typeof chartHeatmap !== 'undefined') chartHeatmap.init(); },
-  categories: () => { categories.load(); },
-  settings: () => { settings.load(); },
+  dashboard: () => { FM.dashboard?.init(); },
+  transactions: () => { FM.transactions?.init?.(); FM.transactions?.load?.(); },
+  budgets: () => { FM.budgets?.load?.(); },
+  loans: () => { FM.loans?.load?.(); },
+  goals: () => { FM.savingsGoals?.load?.(); },
+  bills: () => { FM.bills?.load?.(); },
+  import: () => { FM.importData?.reset?.(); },
+  accounts: () => { FM.accounts?.load?.(); },
+  retirement: () => { FM.retirement?.init?.(); },
+  housing: () => { FM.housingCalc?.init?.(); },
+  analytics: () => { FM.analytics?.init?.(); FM.heatmap?.init?.(); },
+  categories: () => { FM.categories?.load?.(); },
+  settings: () => { FM.settings?.load?.(); },
 };
 
 const nav = {

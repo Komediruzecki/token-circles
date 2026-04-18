@@ -21,6 +21,7 @@ const theme = {
 };
 
 // Get chart-friendly hex colors based on current theme
+// Also exported for use in other modules
 function chartColors() {
   const isDark = theme.isDark();
   return {
@@ -35,4 +36,9 @@ function chartColors() {
     text: isDark ? '#94a3b8' : '#64748b',
     legend: isDark ? '#f1f5f9' : '#1e293b',
   };
+}
+
+// Export for use in other modules
+if (typeof window !== 'undefined') {
+  window.chartColors = chartColors;
 }

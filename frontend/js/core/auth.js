@@ -1,4 +1,6 @@
 // ==================== AUTH ====================
+const API = '/api';
+
 const auth = {
   async checkLogin() {
     const result = await fetch(API + '/auth/me', { credentials: 'include' });
@@ -38,8 +40,8 @@ const auth = {
       }
 
       this.updateUI(data.username);
-      modal.close('login-modal');
-      toast('Welcome, ' + data.username + '!', 'success');
+      if (typeof modal !== 'undefined') modal.close('login-modal');
+      if (typeof toast !== 'undefined') toast('Welcome, ' + data.username + '!', 'success');
     } catch (err) {
       errorEl.textContent = 'Login failed. Please try again.';
       errorEl.style.display = 'block';
@@ -49,7 +51,7 @@ const auth = {
   async logout() {
     await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
     this.updateUI(null);
-    toast('Logged out', 'success');
+    if (typeof toast !== 'undefined') toast('Logged out', 'success');
   },
 
   clearLoginForm() {
@@ -78,6 +80,6 @@ const auth = {
       if (usernameDisplay) usernameDisplay.textContent = '';
     }
     // Refresh profile list when auth state changes
-    profile.refreshUI();
+    if (typeof profile !== 'undefined') profile.refreshUI();
   },
 };

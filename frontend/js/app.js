@@ -1,8 +1,18 @@
+// ==================== NAMESPACE BOOTSTRAP ====================
+// Load FM namespace first (includes all modules)
+import('/js/core/namespace.js').then(() => {
+  // Namespace loaded, now initialize core features
+  nav.init();
+  if (window.FM?.profile) FM.profile.init();
+  if (window.FM?.theme) FM.theme.init();
+  if (window.FM?.auth) FM.auth.checkLogin();
+});
+
 // ==================== EVENT DELEGATION ====================
 // Compound action helpers (for multi-step handlers)
 function authLogin() {
-  if (typeof auth !== 'undefined') auth.clearLoginForm();
-  if (typeof modal !== 'undefined') modal.open('login-modal');
+  if (typeof window.FM?.auth !== 'undefined') window.FM.auth.clearLoginForm();
+  if (typeof window.FM?.modal !== 'undefined') window.FM.modal.open('login-modal');
 }
 function importFileInput() {
   const el = document.getElementById('import-file-input');
@@ -10,7 +20,7 @@ function importFileInput() {
 }
 function importFileFromInput() {
   const el = document.getElementById('import-file-input');
-  if (el && el.files[0] && typeof dataImport !== 'undefined') dataImport.handleFile(el.files[0]);
+  if (el && el.files[0] && typeof window.FM?.importData !== 'undefined') window.FM.importData.handleFile(el.files[0]);
 }
 
 // Centralized action dispatcher — resolves module:method or named helper
@@ -72,7 +82,7 @@ if (dz) {
     e.preventDefault();
     dz.classList.remove('dragover');
     const file = e.dataTransfer.files[0];
-    if (file && typeof dataImport !== 'undefined') dataImport.handleFile(file);
+    if (file && typeof window.FM?.importData !== 'undefined') window.FM.importData.handleFile(file);
   });
 }
 
@@ -87,9 +97,3 @@ function resetZoom() {
   }
   toast('Zoom reset to default', 'success');
 }
-
-// Nav init is in core (router.js) — nav handles page feature loading
-nav.init();
-if (typeof profile !== 'undefined') profile.init();
-if (typeof theme !== 'undefined') theme.init();
-if (typeof auth !== 'undefined') auth.checkLogin();

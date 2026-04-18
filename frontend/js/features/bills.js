@@ -125,7 +125,7 @@ const financeBills = {
     } else {
       document.getElementById('bills-form').reset();
     }
-    modal.open('bills-modal');
+    if (typeof modal !== 'undefined') modal.open('bills-modal');
   },
 
   async save() {
@@ -152,7 +152,7 @@ const financeBills = {
       return;
     }
     toast(id ? 'Bill updated' : 'Bill added', 'success');
-    modal.close('bills-modal');
+    if (typeof modal !== 'undefined') modal.close('bills-modal');
     this.load();
   },
 
