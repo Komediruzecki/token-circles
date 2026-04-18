@@ -1,5 +1,5 @@
 // ==================== HEATMAP ====================
-const chartHeatmap = {
+const heatmap = {
   currentCurrency: 'EUR',
 
   init() {
