@@ -61,6 +61,15 @@
     <div class="card" id="budget-alerts-card" style="display:none;">
       <div class="card-header"><div><div class="card-title">Budget Alerts</div><div class="card-subtitle" id="budget-alerts-subtitle">Categories nearing budget limits</div></div></div>
       <div id="budget-alerts-list"></div>
+      <div id="budget-alerts-history" style="display:none;margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div id="budget-alerts-history-title" style="font-size:13px;font-weight:600;color:var(--text-secondary);"></div>
+          <button id="budget-alerts-toggle" class="btn btn-ghost btn-sm" data-action="dashboard.toggleBudgetAlertsHistory">&#9650; Hide</button>
+        </div>
+        <div id="budget-alerts-history-content" style="max-height:240px;overflow-y:auto;">
+          <div id="budget-alerts-history-list"></div>
+        </div>
+      </div>
     </div>
 
     <div class="card" id="recurring-insights-card" style="display:none;">

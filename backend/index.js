@@ -2066,14 +2066,25 @@ app.get("/api/budgets/improvements", apiRateLimiter, (req, res) => {
 app.get("/api/budgets/alerts", apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { threshold = 80 } = req.query;
+    const { threshold = 80, year, month } = req.query;
     const alertThreshold = parseFloat(threshold);
 
-    const now = new Date();
-    const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
-    const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
-    const endDate = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
+    // Support optional year/month for historical alerts, default to current month
+    let startDate, endDate;
+    if (year && month) {
+      const y = parseInt(year);
+      const m = parseInt(month);
+      startDate = `${y}-${String(m).padStart(2, "0")}-01`;
+      const nextM = m === 12 ? 1 : m + 1;
+      const nextY = m === 12 ? y + 1 : y;
+      endDate = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
+    } else {
+      const now = new Date();
+      startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
+      const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+      endDate = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
+    }
 
     const budgets = db
       .prepare(
@@ -2121,7 +2132,7 @@ app.get("/api/budgets/alerts", apiRateLimiter, (req, res) => {
       .filter((b) => b.percentage >= alertThreshold)
       .sort((a, b) => b.percentage - a.percentage);
 
-    res.json({ alerts, threshold: alertThreshold });
+    res.json({ alerts, threshold: alertThreshold, startDate, endDate });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
