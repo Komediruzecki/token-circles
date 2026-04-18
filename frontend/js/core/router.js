@@ -32,7 +32,7 @@ const PAGE_INIT = {
   accounts: () => { if (typeof accounts !== 'undefined') accounts.load(); },
   retirement: () => { if (typeof retirement !== 'undefined') retirement.init(); },
   housing: () => { if (typeof housingCalc !== 'undefined') housingCalc.init(); },
-  analytics: () => { if (typeof analytics !== 'undefined') analytics.init(); if (typeof heatmap !== 'undefined') heatmap.init(); },
+  analytics: () => { if (typeof analytics !== 'undefined') analytics.init(); if (typeof chartHeatmap !== 'undefined') chartHeatmap.init(); },
   categories: () => { categories.load(); },
   settings: () => { settings.load(); },
 };

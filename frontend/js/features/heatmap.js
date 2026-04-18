@@ -1,5 +1,5 @@
 // ==================== HEATMAP ====================
-const heatmap = {
+const chartHeatmap = {
   currentCurrency: 'EUR',
 
   init() {
@@ -15,7 +15,6 @@ const heatmap = {
         select.innerHTML = '<option value="">-</option>';
         return;
       }
-      // Use the same years as the analytics page
       select.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join('');
       this.loadHeatmap();
     } catch (e) {
@@ -57,7 +56,6 @@ const heatmap = {
     const pageAnalytics = document.getElementById('page-analytics');
     if (!pageAnalytics || !pageAnalytics.classList.contains('active')) return;
 
-    // Remove any empty state
     const container = document.getElementById('heatmap-container');
     const existingEmpty = container.querySelector('.empty-state');
     if (existingEmpty) existingEmpty.remove();
@@ -71,8 +69,6 @@ const heatmap = {
     const dayLabelWidth = 30;
     const monthLabelHeight = 20;
 
-    // Build a date -> amount map from the data
-    // The API returns { dates: { '2024-01-01': 123.45 }, year, type }
     const dataMap = new Map();
     let maxAmount = 0;
     if (data && data.dates) {
@@ -85,18 +81,13 @@ const heatmap = {
     const year = parseInt(document.getElementById('heatmap-year-select')?.value);
     if (!year) return;
 
-    // Build weeks array for the year
     const weeks = [];
-    // Find the Monday of the first week that contains Jan 1
     const jan1 = new Date(year, 0, 1);
-    // Adjust to find the Monday of that week (ISO week: Monday = 0)
     let startDate = new Date(jan1);
-    const dow = jan1.getDay(); // 0=Sun, 1=Mon, ... 6=Sat
-    // Move back to Monday: if Sun (0), go back 6; if Mon (1), go back 0; etc.
+    const dow = jan1.getDay();
     const daysToMon = dow === 0 ? -6 : 1 - dow;
     startDate.setDate(jan1.getDate() + daysToMon);
 
-    // Generate 53 weeks
     for (let w = 0; w < 53; w++) {
       const weekDays = [];
       for (let d = 0; d < 7; d++) {
@@ -123,8 +114,6 @@ const heatmap = {
     const tooltip = document.getElementById('heatmap-tooltip');
     const cc = chartColors();
 
-    // Color scale: GitHub-style green palette
-    // Use expense color for expense, income color for income
     const type = document.getElementById('heatmap-type-select')?.value || 'expense';
     const noDataColor = cc.expenseBg || 'rgba(239,68,68,.12)';
     const colors = ['#c6e48b', '#7bc96f', '#239a3b', '#196127'];
@@ -135,12 +124,10 @@ const heatmap = {
       colors[3] = '#14532d';
     }
 
-    // Adaptive color scale based on actual max
     const colorScale = maxAmount > 0
       ? d3.scaleQuantize().domain([0, maxAmount]).range([...colors])
       : () => noDataColor;
 
-    // Draw cells
     const g = svg.append('g').attr('transform', `translate(${dayLabelWidth}, ${monthLabelHeight})`);
 
     weeks.forEach((week, wi) => {
@@ -184,7 +171,6 @@ const heatmap = {
       });
     });
 
-    // Day labels (Mon, Wed, Fri)
     const dayLabels = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
     svg.append('g')
       .selectAll('text')
@@ -199,7 +185,6 @@ const heatmap = {
       .attr('fill', cc.text)
       .text((d) => d);
 
-    // Month labels
     const months = [];
     let lastMonth = -1;
     weeks.forEach((week, wi) => {
@@ -227,7 +212,6 @@ const heatmap = {
       .attr('fill', cc.text)
       .text((d) => d.label);
 
-    // Legend
     this.renderLegend(colors, noDataColor);
   },
 
@@ -248,12 +232,10 @@ const heatmap = {
   },
 
   async showDayDetails(dateStr, amount, type) {
-    // Fetch transactions for this specific day
     try {
       const txns = await api(`/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`);
       const list = Array.isArray(txns?.transactions) ? txns.transactions : (Array.isArray(txns?.rows) ? txns.rows : []);
 
-      // Build a simple modal-like popup
       let html = `
         <div style="min-width:280px;">
           <div style="font-weight:600;font-size:14px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px;">
@@ -288,7 +270,6 @@ const heatmap = {
   },
 
   showPopup(html) {
-    // Remove existing popup
     const existing = document.getElementById('heatmap-popup');
     if (existing) existing.remove();
 
@@ -310,14 +291,12 @@ const heatmap = {
     `;
     popup.innerHTML = html;
 
-    // Close button
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close';
     closeBtn.style.cssText = 'margin-top:12px;width:100%;padding:8px;background:var(--btn-secondary-bg);color:var(--btn-secondary-color);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;';
     closeBtn.onclick = () => popup.remove();
     popup.appendChild(closeBtn);
 
-    // Backdrop
     const backdrop = document.createElement('div');
     backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:9998;';
     backdrop.onclick = () => {
@@ -327,5 +306,5 @@ const heatmap = {
 
     document.body.appendChild(backdrop);
     document.body.appendChild(popup);
-  },
+  }
 };
