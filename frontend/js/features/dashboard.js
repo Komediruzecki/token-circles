@@ -453,7 +453,7 @@ const dashboard = {
 
       const [summaryData, allSettings] = await Promise.all([
         api(summaryUrl),
-        api('/api/settings'),
+        api('/settings'),
       ]);
 
       if (!summaryData || !summaryData.summary) {
@@ -463,7 +463,7 @@ const dashboard = {
 
       const income = summaryData.summary?.income || 0;
       const expense = summaryData.summary?.expense || 0;
-      const goal = parseFloat(allSettings.savings_rate_goal) || null;
+      const goal = allSettings ? parseFloat(allSettings.savings_rate_goal) || null : null;
 
       const content = document.getElementById('savings-rate-content');
       const subtitle = document.getElementById('savings-rate-subtitle');
@@ -555,37 +555,49 @@ const dashboard = {
     const card = document.getElementById('budget-alerts-card');
     if (!card) return;
     try {
-      const data = await api('/budgets/alerts?threshold=80');
-      const alerts = data.alerts || [];
-      const list = document.getElementById('budget-alerts-list');
       const currency = settings.local_currency || 'EUR';
 
-      if (alerts.length === 0) {
+      // Check if history section was dismissed
+      const dismissed = localStorage.getItem('fm_budget_alerts_history_dismissed');
+      const dismissedKey = dismissed ? JSON.parse(dismissed) : {};
+
+      // Fetch current month alerts
+      const currentData = await api('/budgets/alerts?threshold=80');
+      const currentAlerts = currentData.alerts || [];
+
+      // Determine previous month
+      const now = new Date();
+      let prevYear = now.getFullYear();
+      let prevMonth = now.getMonth(); // 0-indexed, so this is the previous month
+      if (prevMonth < 1) { prevMonth = 12; prevYear--; }
+      const prevMonthStr = String(prevMonth).padStart(2, '0');
+
+      // Check if we already loaded prev month data for this profile
+      const key = `${prevYear}-${prevMonthStr}`;
+      let prevAlerts = [];
+      if (!dismissedKey[key]) {
+        prevAlerts = await api(`/budgets/alerts?threshold=80&year=${prevYear}&month=${prevMonth}`);
+        prevAlerts = prevAlerts.alerts || [];
+      }
+
+      if (currentAlerts.length === 0 && prevAlerts.length === 0) {
         card.style.display = 'none';
         return;
       }
       card.style.display = 'block';
-      list.innerHTML = alerts
-        .map((a) => {
-          const color =
-            a.status === 'over'
-              ? 'var(--error)'
-              : a.status === 'warning'
-              ? '#f59e0b'
-              : 'var(--success)';
-          const bg =
-            a.status === 'over'
-              ? 'rgba(239,68,68,0.08)'
-              : a.status === 'warning'
-              ? 'rgba(245,158,11,0.08)'
-              : 'rgba(16,185,129,0.08)';
-          const label =
-            a.status === 'over'
-              ? 'Over Budget!'
-              : a.status === 'warning'
-              ? 'Near Limit'
-              : 'On Track';
-          return `<div style="background:${bg};border-left:3px solid ${color};padding:12px;border-radius:6px;margin-bottom:8px;">
+
+      const list = document.getElementById('budget-alerts-list');
+      const historySection = document.getElementById('budget-alerts-history');
+      const historyList = document.getElementById('budget-alerts-history-list');
+
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const prevMonthLabel = `${monthNames[prevMonth - 1]} ${prevYear}`;
+
+      const alertHtml = (a) => {
+        const color = a.status === 'over' ? 'var(--error)' : a.status === 'warning' ? '#f59e0b' : 'var(--success)';
+        const bg = a.status === 'over' ? 'rgba(239,68,68,0.08)' : a.status === 'warning' ? 'rgba(245,158,11,0.08)' : 'rgba(16,185,129,0.08)';
+        const label = a.status === 'over' ? 'Over Budget!' : a.status === 'warning' ? 'Near Limit' : 'On Track';
+        return `<div style="background:${bg};border-left:3px solid ${color};padding:12px;border-radius:6px;margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="cat-dot" style="background:${a.categoryColor || '#6b7280'}"></span>
@@ -601,11 +613,45 @@ const dashboard = {
             <span>${a.percentage}%</span>
           </div>
         </div>`;
-        })
-        .join('');
+      };
+
+      // Render current month alerts
+      list.innerHTML = currentAlerts.map(alertHtml).join('');
+
+      // Render previous month alerts collapsible section
+      if (prevAlerts.length > 0) {
+        historySection.style.display = 'block';
+        historyList.innerHTML = prevAlerts.map(alertHtml).join('');
+        document.getElementById('budget-alerts-history-title').textContent = `Previous Month (${prevMonthLabel})`;
+
+        // Toggle collapse state
+        const isCollapsed = localStorage.getItem('fm_budget_alerts_collapsed') === 'true';
+        const toggleBtn = document.getElementById('budget-alerts-toggle');
+        const content = document.getElementById('budget-alerts-history-content');
+        if (isCollapsed) {
+          content.style.display = 'none';
+          toggleBtn.innerHTML = '&#9654; Show';
+        } else {
+          content.style.display = 'block';
+          toggleBtn.innerHTML = '&#9650; Hide';
+        }
+      } else {
+        historySection.style.display = 'none';
+      }
     } catch (e) {
-      card.style.display = 'none';
+      console.error('Failed to load budget alerts:', e);
+      const card = document.getElementById('budget-alerts-card');
+      if (card) card.style.display = 'none';
     }
+  },
+
+  toggleBudgetAlertsHistory() {
+    const content = document.getElementById('budget-alerts-history-content');
+    const toggleBtn = document.getElementById('budget-alerts-toggle');
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    toggleBtn.innerHTML = isHidden ? '&#9650; Hide' : '&#9654; Show';
+    localStorage.setItem('fm_budget_alerts_collapsed', String(!isHidden));
   },
   async setSavingsRateGoal() {
     const input = document.getElementById('savings-rate-goal-input');
@@ -617,7 +663,7 @@ const dashboard = {
       return;
     }
     try {
-      await api('/api/settings', {
+      await api('/settings', {
         method: 'PUT',
         body: { savings_rate_goal: value },
       });
