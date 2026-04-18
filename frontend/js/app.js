@@ -97,9 +97,15 @@ function resetZoom() {
 // This init is called after core.js loads
 window.initApp = function() {
   if (typeof nav !== 'undefined') nav.init();
-  if (typeof window.FM?.profile !== 'undefined') window.FM.profile.init();
-  if (typeof window.FM?.theme !== 'undefined') window.FM.theme.init();
-  if (typeof window.FM?.auth !== 'undefined') window.FM.auth.checkLogin();
+  // Initialize core modules
+  if (typeof FM !== 'undefined') {
+    const profile = FM.getModule('profile');
+    const theme = FM.getModule('theme');
+    const auth = FM.getModule('auth');
+    if (profile?.init) profile.init();
+    if (theme?.init) theme.init();
+    if (auth?.checkLogin) auth.checkLogin();
+  }
 };
 
 // Auto-init if already loaded

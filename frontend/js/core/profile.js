@@ -216,3 +216,7 @@ const profile = {
     return div.innerHTML;
   },
 };
+
+// Register with FM singleton (categories and accounts modules)
+FM.registerModule('categories', categories);
+FM.registerModule('accounts', accounts);

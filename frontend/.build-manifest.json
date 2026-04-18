@@ -1,10 +1,10 @@
 {
-  "version": "b40c924d",
-  "swVersion": "c63e6dd9",
+  "version": "a7a1390b",
+  "swVersion": "1c6b423f",
   "hashes": {
-    "core.js": "13b10128",
-    "features/features.js": "0b9a9659",
-    "app.js": "dcfb2b6a",
+    "core.js": "bbbf7b28",
+    "features/features.js": "24c23478",
+    "app.js": "fbbc04e9",
     "css/base.css": "ca0b06cb",
     "css/components.css": "6d942c38"
   },
@@ -50,5 +50,5 @@
       "settings-reports"
     ]
   },
-  "timestamp": 1776524609496
+  "timestamp": 1776542175221
 }

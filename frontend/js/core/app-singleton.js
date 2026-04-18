@@ -75,7 +75,14 @@ const Api = {
 
 // ==================== INITIALIZATION ====================
 const FM = {
-  profile: { currentId: null, selectedIds: [], name: 'No profile' },
+  profile: {
+    currentId: null,
+    selectedIds: [],
+    name: 'No profile',
+    init: async function() {
+      // Placeholder init - actual init in profile.js module
+    }
+  },
   api: Api.request,
   Utils: Utils,
 
@@ -84,20 +91,33 @@ const FM = {
 
   // Register a module (called by each feature file)
   registerModule(name, module) {
-    this.modules[name] = module;
+    // Replace placeholder if exists, otherwise add to modules
+    if (this[name] && typeof this[name] === 'object' && !this[name].api) {
+      this[name] = module;
+    } else {
+      this.modules[name] = module;
+    }
     window[name] = module;
   },
 
   // Get a module
   getModule(name) {
-    return this.modules[name];
+    return this.modules[name] || this[name];
   },
 
-  // Initialize all modules for a page
+  // Initialize all modules for a page (including core modules like profile)
   initPage(pageName) {
     const pageModule = this.modules[pageName];
     if (pageModule && typeof pageModule.init === 'function') {
       pageModule.init();
+    }
+    // Also initialize core modules that aren't in modules
+    const coreModules = ['profile', 'theme', 'modal'];
+    if (coreModules.includes(pageName)) {
+      const coreMod = this.getModule(pageName);
+      if (coreMod && typeof coreMod.init === 'function') {
+        coreMod.init();
+      }
     }
   },
 
