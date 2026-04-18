@@ -63,6 +63,22 @@ docker compose up -d --build
 docker compose up -d --build --no-cache
 ```
 
+### Auto-Reload with Watch Mode
+
+Docker Compose v2+ supports file watching for automatic rebuilds during development:
+
+```bash
+docker compose up -d
+docker compose watch
+```
+
+Changes are handled automatically:
+- `backend/` changes → full image rebuild + container restart
+- `frontend/` changes → sync files to container + restart
+- `package.json` changes → full image rebuild
+
+Press `Ctrl+C` to stop watching.
+
 ### Stop and Remove Containers
 
 ```bash
