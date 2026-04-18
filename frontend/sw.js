@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finance-manager-v1c6b423f';
+const CACHE_NAME = 'finance-manager-v16b90bd0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

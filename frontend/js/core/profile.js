@@ -67,9 +67,15 @@ const profile = {
     else if (page === 'transactions') transactions.load();
     else if (page === 'budgets') budgets.load();
     else if (page === 'loans') loans.load();
-    else if (page === 'categories') categories.load();
+    else if (page === 'categories') {
+      if (typeof FM.categories === 'undefined') return;
+      FM.categories.load();
+    }
     else if (page === 'settings') settings.load();
-    else if (page === 'accounts') accounts.load();
+    else if (page === 'accounts') {
+      if (typeof FM.accounts === 'undefined') return;
+      FM.accounts.load();
+    }
     else if (page === 'analytics') analytics.load();
   },
 

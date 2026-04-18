@@ -33,7 +33,7 @@ const PAGE_INIT = {
   retirement: () => { FM.retirement?.init?.(); },
   housing: () => { FM.housingCalc?.init?.(); },
   analytics: () => { FM.analytics?.init?.(); FM.heatmap?.init?.(); },
-  categories: () => { FM.categories?.load?.(); },
+  categories: () => { FM.categories?.load?.() ?? toast('Categories module not loaded', 'info'); },
   settings: () => { FM.settings?.load?.(); },
 };
 
