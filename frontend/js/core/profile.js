@@ -216,3 +216,6 @@ const profile = {
     return div.innerHTML;
   },
 };
+
+// Register with FM singleton
+FM.registerModule('profile', profile);

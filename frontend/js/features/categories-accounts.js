@@ -338,3 +338,7 @@ const accounts = {
     }
   },
 };
+
+// Register with FM singleton
+FM.registerModule('categories', categories);
+FM.registerModule('accounts', accounts);
