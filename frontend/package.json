@@ -1,0 +1,32 @@
+{
+  "name": "finance-manager-frontend",
+  "version": "2.0.0",
+  "description": "Finance Manager Frontend - SolidJS + TypeScript",
+  "scripts": {
+    "dev": "node build.js && vite",
+    "build": "node build.js",
+    "tsc": "npx tsc",
+    "vite": "npx vite",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "clsx": "^2.1.1",
+    "solid-js": "^1.8.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
+    "eslint": "^9.17.0",
+    "eslint-plugin-solid": "^0.14.5",
+    "prettier": "^3.4.2",
+    "solid-router": "^0.3.3",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vite-plugin-solid": "^2.11.12"
+  }
+}
