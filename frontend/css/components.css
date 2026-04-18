@@ -118,9 +118,10 @@
   gap: 24px;
   padding: 16px 20px;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  background: linear-gradient(135deg, var(--card-bg) 0%, var(--surface) 100%);
   border-radius: 12px;
-  color: #f8fafc;
+  color: var(--text);
+  border: 1px solid var(--border);
   flex-wrap: wrap;
 }
 .tx-summary-bar .summary-item {
@@ -130,7 +131,7 @@
 }
 .tx-summary-bar .summary-label {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -138,13 +139,13 @@
   font-size: 20px;
   font-weight: 600;
 }
-.tx-summary-bar .summary-value.income { color: #22c55e; }
-.tx-summary-bar .summary-value.expense { color: #ef4444; }
-.tx-summary-bar .summary-value.total { color: #3b82f6; }
-.tx-summary-bar .summary-value.count { color: #f8fafc; font-size: 16px; }
+.tx-summary-bar .summary-value.income { color: var(--income); }
+.tx-summary-bar .summary-value.expense { color: var(--expense); }
+.tx-summary-bar .summary-value.total { color: var(--primary); }
+.tx-summary-bar .summary-value.count { color: var(--text); font-size: 16px; }
 .tx-summary-bar .summary-divider {
   width: 1px;
-  background: rgba(148, 163, 184, 0.3);
+  background: var(--border);
   margin: 0 8px;
 }
 
@@ -460,8 +461,8 @@ th[data-sort].sorted .sort-arrow {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #22c55e;
-  color: #fff;
+  background: var(--income);
+  color: var(--bg);
   font-size: 11px;
   flex-shrink: 0;
 }
@@ -470,11 +471,12 @@ th[data-sort].sorted .sort-arrow {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+  background: var(--income-bg);
   border-radius: 8px;
-  color: #ecfdf5;
+  color: var(--income-text);
   margin-bottom: 12px;
   font-size: 13px;
+  border: 1px solid var(--income);
 }
 .reconcile-summary-banner span {
   font-weight: 600;
@@ -484,14 +486,10 @@ th[data-sort].sorted .sort-arrow {
   display: flex;
   gap: 8px;
 }
-[data-theme="dark"] .reconcile-summary-banner {
-  background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
-  color: #d1fae5;
+.reconcile-toggle-btn {
+  background: var(--surface);
 }
-[data-theme="dark"] .reconcile-toggle-btn {
-  background: var(--card-bg);
-}
-[data-theme="dark"] .reconcile-toggle-btn.active {
+.reconcile-toggle-btn.active {
   background: var(--primary);
 }
 
