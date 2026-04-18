@@ -456,6 +456,11 @@ const dashboard = {
         api('/api/settings'),
       ]);
 
+      if (!summaryData || !summaryData.summary) {
+        card.style.display = 'none';
+        return;
+      }
+
       const income = summaryData.summary?.income || 0;
       const expense = summaryData.summary?.expense || 0;
       const goal = parseFloat(allSettings.savings_rate_goal) || null;

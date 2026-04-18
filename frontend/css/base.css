@@ -79,6 +79,8 @@
   --period-btn-active-color: #f1f5f9;
   --prepayment-bg: #f0fdf4;
   --toggle-slider-bg: #94a3b8;
+  --income-bg: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  --income-text: #166534;
 }
 
 [data-theme='dark'] {
@@ -137,6 +139,8 @@
   --period-btn-active-color: #f1f5f9;
   --prepayment-bg: rgba(34, 197, 94, 0.1);
   --toggle-slider-bg: #64748b;
+  --income-bg: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.15) 100%);
+  --income-text: #d1fae5;
 }
 
 body {

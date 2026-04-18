@@ -3,7 +3,7 @@
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
       <div class="modal-title">Create Profile</div>
-      <button class="btn btn-ghost" onclick="modal.close('profile-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="profile-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -14,8 +14,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('profile-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="profile.createProfile()">Create</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="profile-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="profile:createProfile">Create</button>
     </div>
   </div>
 </div>
@@ -25,7 +25,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="tx-modal-title">Add Transaction</div>
-      <button class="btn btn-ghost" onclick="modal.close('tx-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="tx-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -35,9 +35,9 @@
         <div class="form-group">
           <label class="form-label">Type</label>
           <div class="type-selector" id="tx-type-selector">
-            <button type="button" class="expense active" onclick="transactions.setType('expense')">Expense</button>
-            <button type="button" class="income" onclick="transactions.setType('income')">Income</button>
-            <button type="button" class="transfer" onclick="transactions.setType('transfer')">Transfer</button>
+            <button type="button" class="expense active" data-action="transactions:setType" data-arg="expense">Expense</button>
+            <button type="button" class="income" data-action="transactions:setType" data-arg="income">Income</button>
+            <button type="button" class="transfer" data-action="transactions:setType" data-arg="transfer">Transfer</button>
           </div>
         </div>
         <div class="form-group">
@@ -72,7 +72,7 @@
           <label class="form-label">Tags</label>
           <div class="tx-tag-chips" id="tx-tag-chips"></div>
           <div class="tx-tag-input-row">
-            <input type="text" class="tx-tag-new-input" id="tx-tag-new-input" placeholder="Type tag name, press Enter to create..." onkeydown="if(event.key==='Enter'){event.preventDefault();transactions.addTagFromInput();}">
+            <input type="text" class="tx-tag-new-input" id="tx-tag-new-input" placeholder="Type tag name, press Enter to create..." data-action="transactions:addTagFromInput">
           </div>
         </div>
         <div class="form-row">
@@ -115,8 +115,8 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('tx-modal')">Cancel</button>
-      <button class="btn btn-primary" id="tx-save-btn" onclick="transactions.save()">Save Transaction</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="tx-modal">Cancel</button>
+      <button class="btn btn-primary" id="tx-save-btn" data-action="transactions:save">Save Transaction</button>
     </div>
   </div>
 </div>
@@ -126,12 +126,12 @@
   <div class="modal" style="max-width:420px;">
     <div class="modal-header">
       <div class="modal-title">Quick Add</div>
-      <button class="btn btn-ghost" onclick="modal.close('quickadd-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="quickadd-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
     <div class="modal-body">
-      <form id="quickadd-form" onsubmit="quickAdd.save(); return false;">
+      <form id="quickadd-form" data-action="quickAdd:save">
         <div class="form-group">
           <label class="form-label">Amount</label>
           <input type="number" step="0.01" class="form-control" id="qa-amount" placeholder="0.00" autofocus required>
@@ -153,8 +153,8 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('quickadd-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="quickAdd.save()">Save</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="quickadd-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="quickAdd:save">Save</button>
     </div>
   </div>
 </div>
@@ -164,7 +164,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="cat-modal-title">Add Category</div>
-      <button class="btn btn-ghost" onclick="modal.close('cat-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="cat-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -174,8 +174,8 @@
         <div class="form-group">
           <label class="form-label">Type</label>
           <div class="type-selector" id="cat-type-selector">
-            <button type="button" class="expense active" onclick="categories.setType('expense')">Expense</button>
-            <button type="button" class="income" onclick="categories.setType('income')">Income</button>
+            <button type="button" class="expense active" data-action="categories:setType" data-arg="expense">Expense</button>
+            <button type="button" class="income" data-action="categories:setType" data-arg="income">Income</button>
           </div>
         </div>
         <div class="form-group">
@@ -185,24 +185,24 @@
         <div class="form-group">
           <label class="form-label">Color</label>
           <div class="color-palette" id="cat-color-palette">
-            <button type="button" class="color-swatch" style="background:#ef4444" data-color="#ef4444" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#f97316" data-color="#f97316" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#f59e0b" data-color="#f59e0b" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#eab308" data-color="#eab308" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#84cc16" data-color="#84cc16" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#22c55e" data-color="#22c55e" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#14b8a6" data-color="#14b8a6" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#06b6d4" data-color="#06b6d4" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#0ea5e9" data-color="#0ea5e9" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#3b82f6" data-color="#3b82f6" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#6366f1" data-color="#6366f1" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#8b5cf6" data-color="#8b5cf6" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#a855f7" data-color="#a855f7" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#d946ef" data-color="#d946ef" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#ec4899" data-color="#ec4899" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#f43f5e" data-color="#f43f5e" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#64748b" data-color="#64748b" onclick="categories.selectColor(this)"></button>
-            <button type="button" class="color-swatch" style="background:#78716c" data-color="#78716c" onclick="categories.selectColor(this)"></button>
+            <button type="button" class="color-swatch" style="background:#ef4444" data-color="#ef4444" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#f97316" data-color="#f97316" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#f59e0b" data-color="#f59e0b" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#eab308" data-color="#eab308" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#84cc16" data-color="#84cc16" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#22c55e" data-color="#22c55e" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#14b8a6" data-color="#14b8a6" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#06b6d4" data-color="#06b6d4" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#0ea5e9" data-color="#0ea5e9" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#3b82f6" data-color="#3b82f6" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#6366f1" data-color="#6366f1" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#8b5cf6" data-color="#8b5cf6" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#a855f7" data-color="#a855f7" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#d946ef" data-color="#d946ef" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#ec4899" data-color="#ec4899" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#f43f5e" data-color="#f43f5e" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#64748b" data-color="#64748b" data-action="categories:selectColor"></button>
+            <button type="button" class="color-swatch" style="background:#78716c" data-color="#78716c" data-action="categories:selectColor"></button>
           </div>
           <input type="hidden" id="cat-color" value="#6b7280">
         </div>
@@ -218,8 +218,8 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('cat-modal')">Cancel</button>
-      <button class="btn btn-primary" id="cat-save-btn" onclick="categories.save()">Save Category</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="cat-modal">Cancel</button>
+      <button class="btn btn-primary" id="cat-save-btn" data-action="categories:save">Save Category</button>
     </div>
   </div>
 </div>
@@ -229,7 +229,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="budget-modal-title">Add Budget</div>
-      <button class="btn btn-ghost" onclick="modal.close('budget-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="budget-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -279,8 +279,8 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('budget-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="budgets.save()">Save Budget</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="budget-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="budgets:save">Save Budget</button>
     </div>
   </div>
 </div>
@@ -290,7 +290,7 @@
   <div class="modal" style="max-width:640px;">
     <div class="modal-header">
       <div class="modal-title" id="loan-modal-title">New Loan</div>
-      <button class="btn btn-ghost" onclick="modal.close('loan-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="loan-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -325,7 +325,7 @@
         <div style="margin-top:16px; margin-bottom:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <label class="form-label" style="margin:0;">Rate Change Periods</label>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="loans.addRatePeriod()">+ Add Rate Period</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-action="loans:addRatePeriod">+ Add Rate Period</button>
           </div>
           <p class="form-help">Add rate changes if your loan rate changes at a specific point (e.g., after promotional period)</p>
           <div id="loan-rate-periods"></div>
@@ -333,8 +333,8 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('loan-modal')">Cancel</button>
-      <button class="btn btn-primary" id="loan-save-btn" onclick="loans.saveLoan()">Save Loan</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="loan-modal">Cancel</button>
+      <button class="btn btn-primary" id="loan-save-btn" data-action="loans:saveLoan">Save Loan</button>
     </div>
   </div>
 </div>
@@ -344,7 +344,7 @@
   <div class="modal" style="max-width:480px;">
     <div class="modal-header">
       <div class="modal-title" id="goal-modal-title">New Savings Goal</div>
-      <button class="btn btn-ghost" onclick="modal.close('goal-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="goal-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -372,8 +372,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('goal-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="savingsGoals.save()">Save Goal</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="goal-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="savingsGoals:save">Save Goal</button>
     </div>
   </div>
 </div>
@@ -383,7 +383,7 @@
   <div class='modal' style='max-width:440px;'>
     <div class='modal-header'>
       <div class='modal-title' id='prepay-modal-title'>Add Prepayment</div>
-      <button class='btn btn-ghost' onclick="modal.close('prepay-modal')">
+      <button class='btn btn-ghost' data-action="modal:close" data-arg="prepay-modal">
         <svg width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path d='M6 18L18 6M6 6l12 12'/></svg>
       </button>
     </div>
@@ -392,7 +392,7 @@
       <input type='hidden' id='prepay-id'>
       <div class='form-group'>
         <label class='form-label'>Prepayment Date</label>
-        <input type='date' class='form-control' id='prepay-date' onchange='loans.updatePrepayMonthPreview()'>
+        <input type='date' class='form-control' id='prepay-date' data-action='loans.updatePrepayMonthPreview'>
         <div id='prepay-month-preview' style='font-size:12px;color:var(--text-secondary);margin-top:4px;'></div>
       </div>
       <div class='form-group'>
@@ -405,8 +405,8 @@
       </div>
     </div>
     <div class='modal-footer'>
-      <button class='btn btn-secondary' onclick="modal.close('prepay-modal')">Cancel</button>
-      <button class='btn btn-primary' onclick='loans.savePrepayment()'>Save</button>
+      <button class='btn btn-secondary' data-action="modal:close" data-arg="prepay-modal">Cancel</button>
+      <button class='btn btn-primary' data-action="loans:savePrepayment">Save</button>
     </div>
   </div>
 </div>
@@ -416,7 +416,7 @@
   <div class="modal" style="max-width:460px;">
     <div class="modal-header">
       <div class="modal-title" id="recurring-modal-title">Add Recurring</div>
-      <button class="btn btn-ghost" onclick="modal.close('recurring-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="recurring-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -471,8 +471,8 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('recurring-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="recurring.save()">Save</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="recurring-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="recurring:save">Save</button>
     </div>
   </div>
 </div>
@@ -482,7 +482,7 @@
   <div class="modal" style="max-width:380px;">
     <div class="modal-header">
       <div class="modal-title">Sign In</div>
-      <button class="btn btn-ghost" onclick="modal.close('login-modal')" style="padding:4px;">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="login-modal" style="padding:4px;">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -498,8 +498,8 @@
       <div id="login-error" style="color:var(--danger);font-size:13px;display:none;margin-top:8px;"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('login-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="auth.login()">Sign In</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="login-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="auth:login">Sign In</button>
     </div>
   </div>
 </div>
@@ -509,7 +509,7 @@
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
       <div class="modal-title" id="account-modal-title">Add Account</div>
-      <button class="btn btn-ghost" onclick="modal.close('account-modal')" style="padding:4px;">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="account-modal" style="padding:4px;">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -541,8 +541,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('account-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="accounts.save()">Save Account</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="account-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="accounts:save">Save Account</button>
     </div>
   </div>
 </div>
@@ -552,7 +552,7 @@
   <div class="modal" style="max-width:440px;">
     <div class="modal-header">
       <div class="modal-title" id="rate-period-modal-title">Add Rate Period</div>
-      <button class="btn btn-ghost" onclick="modal.close('rate-period-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="rate-period-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -565,7 +565,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Start Month</label>
-        <input type="number" class="form-control" id="rp-start" min="1" placeholder="e.g., 13" onchange="loans.updateRatePeriodPreview()">
+        <input type="number" class="form-control" id="rp-start" min="1" placeholder="e.g., 13" data-action="loans.updateRatePeriodPreview">
         <div id="rp-start-preview" style="font-size:12px;color:var(--text-secondary);margin-top:4px;"></div>
       </div>
       <div class="form-group">
@@ -574,8 +574,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('rate-period-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="loans.saveRatePeriod()">Save</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="rate-period-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="loans:saveRatePeriod">Save</button>
     </div>
   </div>
 </div>
@@ -585,7 +585,7 @@
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
       <div class="modal-title">Change Category</div>
-      <button class="btn btn-ghost" onclick="modal.close('bulk-category-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="bulk-category-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -601,8 +601,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('bulk-category-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="bulkEdit.applyCategory()">Apply</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="bulk-category-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="bulkEdit:applyCategory">Apply</button>
     </div>
   </div>
 </div>
@@ -612,7 +612,7 @@
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
       <div class="modal-title">Change Type</div>
-      <button class="btn btn-ghost" onclick="modal.close('bulk-type-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="bulk-type-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
@@ -631,8 +631,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('bulk-type-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="bulkEdit.applyType()">Apply</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="bulk-type-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="bulkEdit:applyType">Apply</button>
     </div>
   </div>
 </div>
@@ -642,7 +642,7 @@
   <div class="modal" style="max-width:560px;">
     <div class="modal-header">
       <div class="modal-title">Balance History — <span id="bh-account-name"></span></div>
-      <button class="btn btn-ghost" onclick="modal.close('balance-history-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="balance-history-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -651,8 +651,8 @@
       <div id="balance-history-list"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('balance-history-modal')">Close</button>
-      <button class="btn btn-primary" onclick="accounts.recordBalance()">Record Current Balance</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="balance-history-modal">Close</button>
+      <button class="btn btn-primary" data-action="accounts:recordBalance">Record Current Balance</button>
     </div>
   </div>
 </div>
@@ -662,7 +662,7 @@
   <div class="modal" style="max-width:700px;">
     <div class="modal-header">
       <div class="modal-title">Auto-categorize Transactions</div>
-      <button class="btn btn-ghost" onclick="modal.close('automap-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="automap-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -671,8 +671,8 @@
       <div id="automap-list"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('automap-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="transactions.applyAutoMappings()">Apply Mappings</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="automap-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="transactions:applyAutoMappings">Apply Mappings</button>
     </div>
   </div>
 </div>
@@ -682,7 +682,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="bills-modal-title">Add Bill</div>
-      <button class="btn btn-ghost" onclick="modal.close('bills-modal')">
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="bills-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -720,8 +720,8 @@
       </div>
     </form>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="modal.close('bills-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="bills.save()">Save</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="bills-modal">Cancel</button>
+      <button class="btn btn-primary" data-action="bills:save">Save</button>
     </div>
   </div>
 </div>

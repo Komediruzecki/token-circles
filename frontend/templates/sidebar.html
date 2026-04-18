@@ -1,10 +1,10 @@
 <!-- MOBILE OVERLAY -->
-<div class="mobile-overlay" id="mobile-overlay" onclick="toggleSidebar()"></div>
+<div class="mobile-overlay" id="mobile-overlay" data-action="toggleSidebar"></div>
 
 <!-- SIDEBAR -->
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle menu">
+    <button class="hamburger-btn" id="hamburger-btn" data-action="toggleSidebar" aria-label="Toggle menu">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
     </button>
   </div>
@@ -14,7 +14,7 @@
   </div>
   <div class="profile-selector">
     <div class="profile-dropdown">
-      <button class="profile-dropdown-btn" onclick="profile.toggleDropdown()" id="profile-btn">
+      <button class="profile-dropdown-btn" data-action="profile:toggleDropdown" id="profile-btn">
         <span class="profile-name" id="profile-btn-name">Loading...</span>
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
       </button>
@@ -23,13 +23,13 @@
   </div>
   <div style="padding:0 16px;margin-bottom:12px;">
     <div id="login-section">
-      <button class="btn btn-secondary btn-sm" style="width:100%;" onclick="auth.clearLoginForm(); modal.open('login-modal')">Sign In</button>
+      <button class="btn btn-secondary btn-sm" style="width:100%;" data-action="authLogin">Sign In</button>
     </div>
     <div id="user-section" style="display:none;">
       <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span id="username-display" style="flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-        <button class="btn btn-ghost btn-sm" onclick="auth.logout()" title="Logout" style="padding:4px 6px;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" data-action="auth:logout" title="Logout" style="padding:4px 6px;flex-shrink:0;">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
         </button>
       </div>
@@ -92,7 +92,7 @@
   <div class="sidebar-footer">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <span>Finance Manager v1.0</span>
-      <button class="btn btn-ghost btn-sm" onclick="resetZoom()" title="Reset zoom to default" style="padding:4px 8px;font-size:11px;">Reset Zoom</button>
+      <button class="btn btn-ghost btn-sm" data-action="resetZoom" title="Reset zoom to default" style="padding:4px 8px;font-size:11px;">Reset Zoom</button>
     </div>
   </div>
 </nav>

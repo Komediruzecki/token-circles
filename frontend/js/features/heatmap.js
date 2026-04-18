@@ -33,7 +33,7 @@ const heatmap = {
         api(`/analytics/daily-heatmap?year=${year}&type=${type}`),
         api('/settings'),
       ]);
-      this.currentCurrency = settings.local_currency || 'EUR';
+      this.currentCurrency = (settings && settings.local_currency) || 'EUR';
       this.renderHeatmap(data);
     } catch (e) {
       console.error('Failed to load heatmap data:', e);
@@ -251,7 +251,7 @@ const heatmap = {
     // Fetch transactions for this specific day
     try {
       const txns = await api(`/transactions?date=${dateStr}&type=${type}&limit=20`);
-      const list = txns.transactions || txns || [];
+      const list = Array.isArray(txns?.transactions) ? txns.transactions : [];
 
       // Build a simple modal-like popup
       let html = `
