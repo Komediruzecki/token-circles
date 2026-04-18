@@ -27,7 +27,7 @@ const PAGE_INIT = {
   budgets: () => { budgets.load(); },
   loans: () => { loans.load(); },
   goals: () => { savingsGoals.load(); },
-  bills: () => { bills.load(); },
+  bills: () => { financeBills.load(); },
   import: () => { if (typeof dataImport !== 'undefined') dataImport.reset(); },
   accounts: () => { if (typeof accounts !== 'undefined') accounts.load(); },
   retirement: () => { if (typeof retirement !== 'undefined') retirement.init(); },
