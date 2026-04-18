@@ -13,12 +13,12 @@ describe('Data Export', () => {
 
   describe('Export UI in settings page', () => {
     test('export buttons exist in settings page', () => {
-      expect(combinedContent).toContain('onclick="exportData(\'transactions\')"');
-      expect(combinedContent).toContain('onclick="exportData(\'categories\')"');
-      expect(combinedContent).toContain('onclick="exportData(\'accounts\')"');
-      expect(combinedContent).toContain('onclick="exportData(\'budgets\')"');
-      expect(combinedContent).toContain('onclick="exportData(\'loans\')"');
-      expect(combinedContent).toContain('onclick="exportData(\'recurring\')"');
+      expect(combinedContent).toContain('data-action="exportData" data-arg="transactions"');
+      expect(combinedContent).toContain('data-action="exportData" data-arg="categories"');
+      expect(combinedContent).toContain('data-action="exportData" data-arg="accounts"');
+      expect(combinedContent).toContain('data-action="exportData" data-arg="budgets"');
+      expect(combinedContent).toContain('data-action="exportData" data-arg="loans"');
+      expect(combinedContent).toContain('data-action="exportData" data-arg="recurring"');
     });
 
     test('export format selector exists', () => {

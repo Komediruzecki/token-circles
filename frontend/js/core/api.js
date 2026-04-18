@@ -23,7 +23,12 @@ function api(url, options = {}) {
       options.body && typeof options.body === 'object'
         ? JSON.stringify(options.body)
         : options.body,
-  }).then((r) => r.json());
+  }).then(async (r) => {
+    if (!r.ok) return null;
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) return null;
+    return r.json();
+  });
 }
 
 // ==================== UTILITIES ====================

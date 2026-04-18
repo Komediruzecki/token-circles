@@ -122,8 +122,8 @@ describe('Retirement Calculator Frontend', () => {
       expect(combinedContent).toContain('<option value="japan">Japan</option>');
     });
 
-    test('country selector has onchange handler for enable/disable logic', () => {
-      expect(combinedContent).toContain('onchange="retirement.handleCountryChange()"');
+    test('country selector has data-action for enable/disable logic', () => {
+      expect(combinedContent).toContain('data-action="retirement.handleCountryChange"');
     });
 
     test('handleCountryChange method exists in retirement object', () => {
