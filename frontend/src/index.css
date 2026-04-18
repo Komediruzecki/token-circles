@@ -1,0 +1,147 @@
+/**
+ * Main CSS Entry Point
+ * Imports all necessary stylesheets
+ */
+
+/* Theme CSS variables are already in base.css - just import it */
+@import '../css/base.css';
+@import '../css/components.css';
+
+/* Utility classes for SolidJS components */
+:root {
+  --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* App layout */
+.app-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter);
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.nav-brand h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.nav-links {
+  display: flex;
+  list-style: none;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+}
+
+.nav-item a {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.nav-item a:hover,
+.nav-item a.active {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+/* Mobile nav */
+.mobile-nav {
+  display: none;
+}
+
+/* Actions */
+.app-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Main */
+.app-main {
+  flex: 1;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* RouterOutlet spacing */
+RouterOutlet {
+  padding-bottom: 2rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .nav-links {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: block;
+  }
+
+  .app-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .app-main {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav-brand h1 {
+    font-size: 1rem;
+  }
+
+  .nav-item a {
+    font-size: 0.75rem;
+  }
+}
+
+/* Page transitions */
+.page-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

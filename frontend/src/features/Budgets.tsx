@@ -1,0 +1,1 @@
+export default function Budgets() { return (<div class="page page-${f.toLowerCase()} page-enter"><div class="page-header"><h1>Budgets</h1></div><div class="empty-state">Budgets page - content to be implemented</div></div>); }
