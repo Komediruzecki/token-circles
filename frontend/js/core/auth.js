@@ -1,13 +1,12 @@
 // ==================== AUTH ====================
-const API = '/api';
+// Uses FM.api from app-singleton.js
 
 const auth = {
   async checkLogin() {
-    const result = await fetch(API + '/auth/me', { credentials: 'include' });
-    if (result.ok) {
-      const data = await result.json();
-      this.updateUI(data.username);
-      return data;
+    const result = await FM.api('/auth/me');
+    if (result) {
+      this.updateUI(result.username);
+      return result;
     }
     this.updateUI(null);
     return null;
@@ -25,23 +24,20 @@ const auth = {
     }
 
     try {
-      const result = await fetch(API + '/auth/login', {
+      const result = await FM.api('/auth/login', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: { username, password },
       });
-      const data = await result.json();
 
-      if (data.error) {
-        errorEl.textContent = data.error;
+      if (result.error) {
+        errorEl.textContent = result.error;
         errorEl.style.display = 'block';
         return;
       }
 
-      this.updateUI(data.username);
+      this.updateUI(result.username);
       if (typeof modal !== 'undefined') modal.close('login-modal');
-      if (typeof toast !== 'undefined') toast('Welcome, ' + data.username + '!', 'success');
+      FM.Utils.toast('Welcome, ' + result.username + '!', 'success');
     } catch (err) {
       errorEl.textContent = 'Login failed. Please try again.';
       errorEl.style.display = 'block';
@@ -49,9 +45,9 @@ const auth = {
   },
 
   async logout() {
-    await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
+    await FM.api('/auth/logout', { method: 'POST' });
     this.updateUI(null);
-    if (typeof toast !== 'undefined') toast('Logged out', 'success');
+    FM.Utils.toast('Logged out', 'success');
   },
 
   clearLoginForm() {
