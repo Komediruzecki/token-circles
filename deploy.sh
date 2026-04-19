@@ -92,6 +92,13 @@ build_frontend() {
     cd frontend
     node build.mjs
     cd ..
+
+    # Copy docs if they exist
+    if [ -d "docs" ]; then
+        log_info "Copying documentation..."
+        cp -r docs/* public/ 2>/dev/null || true
+    fi
+
     log_info "Frontend built successfully"
 }
 
