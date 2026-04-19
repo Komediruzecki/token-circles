@@ -30,22 +30,10 @@ function readFrontendContent() {
     }
   });
 
-  // Read CSS files too (for CSS tests)
-  let cssContent = '';
-  const cssDir = path.join(frontendDir, 'css');
-  if (fs.existsSync(cssDir)) {
-    fs.readdirSync(cssDir).forEach((file) => {
-      if (file.endsWith('.css')) {
-        cssContent += fs.readFileSync(path.join(cssDir, file), 'utf8') + '\n';
-      }
-    });
-  }
-
   return {
     htmlContent,
     jsContent,
-    cssContent,
-    combinedContent: htmlContent + jsContent + cssContent,
+    combinedContent: htmlContent + jsContent,
   };
 }
 

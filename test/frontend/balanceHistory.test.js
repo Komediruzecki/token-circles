@@ -1,8 +1,10 @@
 /**
- * Tests for account balance history tracking feature
+ * Tests for account balance history tracking feature - backend only
+ * Note: Frontend migrated to SolidJS - see src/features/Accounts.tsx
  */
 
-const { readFrontendContent, fs, path } = require('./testUtils');
+const fs = require('fs');
+const path = require('path');
 
 const backendIndex = fs.readFileSync(
   path.join(__dirname, '../../backend/index.js'),
@@ -14,14 +16,7 @@ const databaseJs = fs.readFileSync(
   'utf8'
 );
 
-describe('Account Balance History', () => {
-  let combinedContent;
-
-  beforeAll(() => {
-    const content = readFrontendContent();
-    combinedContent = content.combinedContent;
-  });
-
+describe('Account Balance History - Backend API', () => {
   describe('Database schema', () => {
     test('account_balance_history table exists', () => {
       expect(databaseJs).toMatch(/CREATE TABLE.*account_balance_history/);
@@ -85,28 +80,5 @@ describe('Account Balance History', () => {
     test('History endpoints verify account ownership', () => {
       expect(backendIndex).toMatch(/accounts WHERE id = \? AND profile_id/);
     });
-  });
-
-  // Frontend UI - SKIPPED: feature not yet implemented in modular frontend
-  // TODO(#86): Add balance history UI to templates/pages/accounts.html and js/features/accounts.js
-  describe.skip('Frontend UI [SKIPPED - feature not implemented in modular frontend]', () => {
-    test('Record Snapshot button exists in accounts header', () => {});
-    test('Balance history section exists in accounts page', () => {});
-    test('Balance history canvas element exists', () => {});
-    test('History account select dropdown exists', () => {});
-    test('History empty state exists', () => {});
-  });
-
-  describe.skip('Frontend JavaScript [SKIPPED - feature not implemented in modular frontend]', () => {
-    test('accounts object has balanceHistoryChart property', () => {});
-    test('accounts object has loadHistory method', () => {});
-    test('accounts object has recordSnapshot method', () => {});
-    test('loadHistory is called when navigating to accounts page', () => {});
-    test('loadHistory fetches single account history', () => {});
-    test('loadHistory fetches timeline when no account selected', () => {});
-    test('loadHistory creates line chart', () => {});
-    test('loadHistory populates account select dropdown', () => {});
-    test('recordSnapshot calls POST for each account', () => {});
-    test('loadHistory destroys previous chart before creating new', () => {});
   });
 });

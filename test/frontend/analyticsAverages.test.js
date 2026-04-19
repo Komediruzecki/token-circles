@@ -22,11 +22,12 @@ describe('Analytics Averages Calculation', () => {
     });
 
     test('renderAverages function exists and calculates daily average', () => {
-      expect(combinedContent).toContain('renderAverages(data)');
-      // avgDay should be calculated from total and numDays
-      expect(combinedContent).toContain('avgDay');
-      expect(combinedContent).toContain('avgWeek');
-      expect(combinedContent).toContain('avgMonth');
+      // Check that avgDay, avgWeek, avgMonth appear in the JS context
+      const jsContent = readFrontendContent().jsContent;
+      expect(jsContent).toContain('renderAverages');
+      expect(jsContent).toContain('avgDay');
+      expect(jsContent).toContain('avgWeek');
+      expect(jsContent).toContain('avgMonth');
     });
   });
 
