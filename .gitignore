@@ -1,14 +1,22 @@
-node_modules/
-*.db
-*.db-shm
-*.db-wal
-.env
-.DS_Store
+# Database
 db/
 
-# Test coverage reports (generated locally/CI, not committed)
-coverage/
+# Uploaded files
+assets/
 
-# Live server symlinks (created on server, not in git)
-backend/assets/
-backend/db/
+# Build output
+frontend/dist/
+frontend/build/
+frontend/vite/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Node modules
+node_modules/

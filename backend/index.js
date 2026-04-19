@@ -4635,6 +4635,234 @@ app.get("/api/calculator/emergency-fund", apiRateLimiter, (req, res) => {
 });
 
 // ========================
+// STORAGE MODE MANAGEMENT (Serverless support)
+// ========================
+// Storage mode endpoint - gets current mode
+app.get("/api/storage-mode", (req, res) => {
+  try {
+    const mode = req.session.storageMode || 'self-hosted';
+    res.json(mode);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Storage mode endpoint - sets current mode
+app.post("/api/storage-mode", apiRateLimiter, (req, res) => {
+  try {
+    const { mode } = req.body;
+    if (!mode || !['serverless', 'self-hosted'].includes(mode)) {
+      return res.status(400).json({ error: 'Invalid mode. Must be "serverless" or "self-hosted"' });
+    }
+    req.session.storageMode = mode;
+    res.json({ mode });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export all data as JSON (serverless mode support)
+app.get("/api/export", apiRateLimiter, (req, res) => {
+  try {
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
+
+    // Get all data
+    const transactions = db.prepare(`
+      SELECT t.* FROM transactions t
+      WHERE t.profile_id IN (${inClause})
+      ORDER BY t.date DESC
+    `).all(...pids);
+
+    const categories = db.prepare(`
+      SELECT c.* FROM categories c
+      WHERE c.profile_id IN (${inClause})
+    `).all(...pids);
+
+    const accounts = db.prepare(`
+      SELECT a.* FROM accounts a
+      WHERE a.profile_id IN (${inClause})
+    `).all(...pids);
+
+    const budgets = db.prepare(`
+      SELECT b.* FROM budgets b
+      WHERE b.profile_id IN (${inClause})
+    `).all(...pids);
+
+    const loans = db.prepare(`
+      SELECT l.* FROM loans l
+      WHERE l.profile_id IN (${inClause})
+    `).all(...pids);
+
+    const settings = db.prepare(`
+      SELECT s.key, s.value
+      FROM settings s
+      WHERE s.profile_id = ? OR s.profile_id IS NULL
+    `).get(getProfileId(req));
+
+    // Build settings object
+    const settingsObj = {};
+    if (settings) {
+      settingsObj[settings.key] = settings.value;
+    }
+
+    res.json({
+      version: '2.0',
+      export_date: new Date().toISOString(),
+      storage_mode: req.session.storageMode || 'self-hosted',
+      profiles: [],
+      categories,
+      transactions,
+      accounts,
+      budgets,
+      goals: [],
+      loans,
+      balanceHistory: [],
+      settings: settingsObj,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Import data from JSON (serverless mode support)
+app.post("/api/import", apiRateLimiter, (req, res) => {
+  try {
+    const data = req.body;
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({ error: 'Invalid data format' });
+    }
+
+    const pid = getProfileId(req);
+
+    // Create transaction record ID counter
+    let txId = Math.max(...db.prepare('SELECT MAX(id) as max FROM transactions').get()?.max || [0]);
+    let catId = Math.max(...db.prepare('SELECT MAX(id) as max FROM categories').get()?.max || [0]);
+    let accId = Math.max(...db.prepare('SELECT MAX(id) as max FROM accounts').get()?.max || [0]);
+    let budgetId = Math.max(...db.prepare('SELECT MAX(id) as max FROM budgets').get()?.max || [0]);
+    let loanId = Math.max(...db.prepare('SELECT MAX(id) as max FROM loans').get()?.max || [0]);
+
+    // Map category names to IDs for reference
+    const categoryMap = new Map();
+
+    // Insert categories
+    const insertCat = db.prepare(`
+      INSERT INTO categories (name, color, icon, type, profile_id, tax_deductible, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    if (data.categories && data.categories.length > 0) {
+      for (const cat of data.categories) {
+        // Convert category data to match schema
+        const insertData = [
+          cat.name || cat.category_name,
+          cat.color || '#6b7280',
+          cat.icon || 'tag',
+          cat.type || 'expense',
+          pid,
+          cat.tax_deductible ? 1 : 0,
+          cat.created_at || new Date().toISOString(),
+        ];
+        catId++;
+        insertCat.run(...insertData);
+        categoryMap.set(cat.name, catId);
+      }
+    }
+
+    // Insert accounts
+    const insertAcc = db.prepare(`
+      INSERT INTO accounts (name, type, currency, balance, notes, profile_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    if (data.accounts && data.accounts.length > 0) {
+      for (const acc of data.accounts) {
+        accId++;
+        insertAcc.run(
+          acc.name,
+          acc.type || 'giro',
+          acc.currency || 'EUR',
+          acc.balance || 0,
+          acc.notes || '',
+          pid,
+          new Date().toISOString()
+        );
+      }
+    }
+
+    // Insert transactions
+    const insertTx = db.prepare(`
+      INSERT INTO transactions (date, description, amount, type, currency, means_of_payment, beneficiary, payor, notes, category_id, profile_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let importedCount = 0;
+
+    if (data.transactions && data.transactions.length > 0) {
+      for (const tx of data.transactions) {
+        txId++;
+        const catIdForTx = categoryMap.get(tx.description || tx.category_name) || null;
+        insertTx.run(
+          tx.date,
+          tx.description || tx.category_name,
+          parseFloat(tx.amount) || 0,
+          tx.type || 'expense',
+          tx.currency || 'EUR',
+          tx.means_of_payment || tx.means || '',
+          tx.beneficiary || '',
+          tx.payor || '',
+          tx.notes || '',
+          catIdForTx,
+          pid,
+          tx.created_at || new Date().toISOString()
+        );
+        importedCount++;
+      }
+    }
+
+    // Update settings
+    if (data.settings && Object.keys(data.settings).length > 0) {
+      const upsertSettings = db.prepare(`
+        INSERT OR REPLACE INTO settings (key, value, profile_id)
+        VALUES (?, ?, ?)
+      `);
+      for (const [key, value] of Object.entries(data.settings)) {
+        upsertSettings.run(key, String(value), pid);
+      }
+    }
+
+    res.json({
+      ok: true,
+      imported: importedCount,
+      message: `Successfully imported ${importedCount} transactions`,
+    });
+  } catch (err) {
+    console.error('Import error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear all data (dangerous!)
+app.delete("/api/clear-all", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    db.prepare('DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)').run(pid);
+    db.prepare('DELETE FROM loan_rate_periods WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)').run(pid);
+    db.prepare('DELETE FROM transactions WHERE profile_id = ?').run(pid);
+    db.prepare('DELETE FROM budgets WHERE profile_id = ?').run(pid);
+    db.prepare('DELETE FROM loans WHERE profile_id = ?').run(pid);
+    db.prepare('DELETE FROM categories WHERE profile_id = ?').run(pid);
+    db.prepare('DELETE FROM accounts WHERE profile_id = ?').run(pid);
+    // Also clear settings
+    db.prepare('DELETE FROM settings WHERE profile_id = ?').run(pid);
+
+    res.json({ ok: true, message: 'All data cleared' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // COMPOUND INTEREST PROJECTOR
 // ========================
 app.post("/api/calculator/compound-interest", apiRateLimiter, (req, res) => {
@@ -5572,7 +5800,17 @@ if (process.env.NODE_ENV === 'test') {
   });
 }
 
+// Serve index.html for client-side routes (SPA navigation) only
+// Static files (JS, CSS) are served by the middleware above
 app.get("*", (req, res) => {
+  // For requests to /frontend/dist/... or /frontend/css/...:
+  // These should be handled by Apache (Direct access to static files)
+  // Return 404 for these paths since Apache should handle them
+  if (req.path.startsWith('/frontend/dist/') || req.path.startsWith('/frontend/css/')) {
+    return res.status(404).send('File not found');
+  }
+
+  // For all other paths, serve index.html for SPA routes
   res.sendFile(path.join(__dirname, "..", "frontend", "index.html"));
 });
 
