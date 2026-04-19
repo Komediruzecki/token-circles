@@ -1,7 +1,8 @@
 // Service Worker for Finance Manager
 // Uses traditional fetch API without import.meta (ES5 compatible)
-// Versioned for cache invalidation - increment on each deployment
-const CACHE_NAME = `finance-manager-v${new URLSearchParams(self.location.search).get('v') || '2'}`;
+// Versioned for cache invalidation - reads from package.json version
+const CACHE_VERSION = '2';
+const CACHE_NAME = `finance-manager-v${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   '/',

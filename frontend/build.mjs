@@ -104,8 +104,13 @@ async function copyServiceWorker() {
   const destSw = path.join(DIST, 'assets', 'sw.js')
 
   if (fs.existsSync(srcSw)) {
-    await fs.promises.copyFile(srcSw, destSw)
-    console.log('Copied service worker to dist/assets/sw.js')
+    let swContent = await fs.promises.readFile(srcSw, 'utf8')
+    // Inject version from package.json
+    const pkg = JSON.parse(await fs.promises.readFile(path.join(__dirname, '../package.json'), 'utf8'))
+    const version = pkg.version
+    swContent = swContent.replace(/const CACHE_VERSION = '[^']*'/, `const CACHE_VERSION = '${version}'`)
+    await fs.promises.writeFile(destSw, swContent, 'utf8')
+    console.log(`Copied service worker with version ${version} to dist/assets/sw.js`)
   } else {
     console.warn('Service worker not found at frontend/sw.js')
   }
