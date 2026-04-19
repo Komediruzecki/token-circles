@@ -1,6 +1,6 @@
 export default function Goals() {
   return (
-    <div class="page page-${f.toLowerCase()} page-enter">
+    <div class="page page-goals page-enter">
       <div class="page-header">
         <h1>Goals</h1>
       </div>

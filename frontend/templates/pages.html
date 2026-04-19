@@ -1,9 +1,10 @@
 <!-- MAIN CONTENT -->
-<main class="main">
+<main class="app-main">
 
   <!-- DASHBOARD -->
-  <div id="page-dashboard" class="page active">
-    <div class="page-header">
+  <div id="page-dashboard" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
       <div>
         <h2>Dashboard</h2>
         <p>Your financial overview</p>
@@ -35,9 +36,10 @@
           <option value="12">December</option>
         </select>
       </div>
-    </div>
+      </div>
 
-    <div class="grid-4" id="dashboard-stats">
+      <div class="page-content">
+        <div class="grid-4" id="dashboard-stats">
       <div class="stat-card income"><div class="stat-card-label">Income</div><div class="stat-card-value" id="stat-income">$0</div><div class="stat-card-delta" id="delta-income"></div></div>
       <div class="stat-card expense"><div class="stat-card-label">Expenses</div><div class="stat-card-value" id="stat-expense">$0</div><div class="stat-card-delta" id="delta-expense"></div></div>
       <div class="stat-card balance"><div class="stat-card-label">Balance</div><div class="stat-card-value" id="stat-balance">$0</div><div class="stat-card-delta" id="delta-balance"></div></div>
@@ -127,12 +129,15 @@
         <div id="recurring-list"></div>
       </div>
     </div>
+      </div>
+    </div>
   </div>
 
   <!-- TRANSACTIONS -->
-  <div id="page-transactions" class="page">
-    <div class="page-header">
-      <div><h2>Transactions</h2><p>Manage all your financial entries</p></div>
+  <div id="page-transactions" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div><h2>Transactions</h2><p>Manage all your financial entries</p></div>
       <div class="page-header-actions">
         <button class="btn btn-secondary" data-action="transactions.openAutoMapModal">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.135-1.76-.419-2.531l-.548-.547z"/></svg>
@@ -231,14 +236,18 @@
       <div class="pagination">
         <div class="pagination-info" id="tx-pagination-info"></div>
         <div class="pagination-controls" id="tx-pagination"></div>
+        </div>
+      </div>
+    </div>
       </div>
     </div>
   </div>
 
   <!-- BUDGETS -->
-  <div id="page-budgets" class="page">
-    <div class="page-header">
-      <div><h2>Budgets</h2><p>Track spending limits by category</p></div>
+  <div id="page-budgets" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div><h2>Budgets</h2><p>Track spending limits by category</p></div>
       <div class="page-header-actions">
         <button class="btn btn-secondary" data-action="budgets.duplicateLastMonth" title="Copy last month's budgets">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
@@ -293,13 +302,17 @@
         <div><div class="card-title">Budget History</div><div class="card-subtitle">Performance over time</div></div>
       </div>
       <div id="budget-history-chart" style="height:300px;"><canvas id="chart-budget-history"></canvas></div>
+      </div>
+    </div>
+      </div>
     </div>
   </div>
 
   <!-- LOANS -->
-  <div id="page-loans" class="page">
-    <div class="page-header">
-      <div><h2>Loan Calculator</h2><p>Amortization schedules with rate changes and prepayments</p></div>
+  <div id="page-loans" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div><h2>Loan Calculator</h2><p>Amortization schedules with rate changes and prepayments</p></div>
       <div class="page-header-actions">
         <button class="btn btn-primary" data-action="loans.openLoanModal">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
@@ -312,13 +325,18 @@
 
     <!-- Detailed Amortization Table Container -->
     <div id="amortization-table-container" style="display:none;"></div>
+      </div>
+    </div>
   </div>
 
-  <!-- RETIREMENT CALCULATOR -->
-  <div id="page-retirement" class="page">
-    <div class="page-header">
-      <div><h2>Retirement Calculator</h2><p>Plan your financial independence</p></div>
-    </div>
+  </div>
+</main>
+
+  <div id="page-retirement" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div><h2>Retirement Calculator</h2><p>Plan your financial independence</p></div>
+      </div>
     <div class="retirement-layout">
       <div class="retirement-left">
         <div class="card">
@@ -450,7 +468,9 @@
   </div>
 
   <!-- HOUSING CALCULATOR -->
-  <div id="page-housing" class="page">
+  <div id="page-housing" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
     <div class="page-header">
       <div><h2>Housing Calculator</h2><p>Compare buying vs renting over time</p></div>
     </div>
@@ -527,10 +547,13 @@
         <canvas id="housing-chart"></canvas>
       </div>
     </div>
+    </div>
   </div>
 
   <!-- SAVINGS GOALS -->
-  <div id="page-goals" class="page">
+  <div id="page-goals" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
     <div class="page-header">
       <div><h2>Savings Goals</h2><p>Track progress toward your financial targets</p></div>
       <div class="page-header-actions">
@@ -542,27 +565,32 @@
     </div>
 
     <div id="goals-grid"></div>
+      </div>
+    </div>
   </div>
 
   <!-- BILLS -->
-  <div id="page-bills" class="page">
-    <div class="page-header">
-      <div><h2>Bills</h2><p>Track your recurring bills and due dates</p></div>
-      <div class="page-header-actions">
+  <div id="page-bills" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div><h2>Bills</h2><p>Track your recurring bills and due dates</p></div>
+        <div class="page-header-actions">
         <button class="btn btn-primary" data-action="financeBills.openModal">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           Add Bill
         </button>
       </div>
     </div>
-    <div id="bills-list"></div>
+      </div>
+    </div>
   </div>
 
   <!-- IMPORT -->
-  <div id="page-import" class="page">
-    <div class="page-header">
-      <div><h2>Import Data</h2><p>Import transactions from CSV, XLSX, or Google Sheets</p></div>
-    </div>
+  <div id="page-import" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div><h2>Import Data</h2><p>Import transactions from CSV, XLSX, or Google Sheets</p></div>
+      </div>
 
     <div class="tabs">
       <div class="tab active" data-action="dataImport.switchTab" data-arg="file">File Upload</div>
@@ -640,7 +668,7 @@
   </div>
 
   <!-- CATEGORIES -->
-  <div id="page-categories" class="page">
+  <div id="page-categories" class="page page-enter">
     <div class="page-header">
       <div><h2>Categories</h2><p>Manage your spending and income categories</p></div>
       <div class="page-header-actions">
@@ -667,7 +695,7 @@
   </div>
 
   <!-- ACCOUNTS -->
-  <div id="page-accounts" class="page">
+  <div id="page-accounts" class="page page-enter">
     <div class="page-header">
       <div><h2>Accounts</h2><p>Manage your financial accounts</p></div>
       <div class="page-header-actions">
@@ -681,9 +709,10 @@
   </div>
 
   <!-- ANALYTICS -->
-  <div id="page-analytics" class="page">
-    <div class="page-header">
-      <div>
+  <div id="page-analytics" class="page page-enter">
+    <div class="page-inner">
+      <div class="page-header">
+        <div>
         <h2>Analytics</h2>
         <p>Spending patterns by category</p>
       </div>
@@ -836,11 +865,12 @@
           <canvas id="analytics-pie-chart"></canvas>
         </div>
       </div>
+      </div>
     </div>
   </div>
 
   <!-- SETTINGS -->
-  <div id="page-settings" class="page">
+  <div id="page-settings" class="page page-enter">
     <div class="page-header">
       <div><h2>Settings</h2><p>Configure your finance manager</p></div>
     </div>

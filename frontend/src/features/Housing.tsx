@@ -1,6 +1,6 @@
 export default function Housing() {
   return (
-    <div class="page page-${f.toLowerCase()} page-enter">
+    <div class="page page-housing page-enter">
       <div class="page-header">
         <h1>Housing</h1>
       </div>

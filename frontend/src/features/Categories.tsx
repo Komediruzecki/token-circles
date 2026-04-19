@@ -1,6 +1,6 @@
 export default function Categories() {
   return (
-    <div class="page page-${f.toLowerCase()} page-enter">
+    <div class="page page-categories page-enter">
       <div class="page-header">
         <h1>Categories</h1>
       </div>

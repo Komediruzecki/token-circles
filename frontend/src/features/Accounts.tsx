@@ -1,6 +1,6 @@
 export default function Accounts() {
   return (
-    <div class="page page-${f.toLowerCase()} page-enter">
+    <div class="page page-accounts page-enter">
       <div class="page-header">
         <h1>Accounts</h1>
       </div>

@@ -1,6 +1,6 @@
 export default function Retirement() {
   return (
-    <div class="page page-${f.toLowerCase()} page-enter">
+    <div class="page page-retirement page-enter">
       <div class="page-header">
         <h1>Retirement</h1>
       </div>
