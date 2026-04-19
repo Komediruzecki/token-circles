@@ -89,7 +89,9 @@ pull_changes() {
 
 build_frontend() {
     log_info "Building frontend..."
-    node frontend/build.js
+    cd frontend
+    node build.mjs
+    cd ..
     log_info "Frontend built successfully"
 }
 

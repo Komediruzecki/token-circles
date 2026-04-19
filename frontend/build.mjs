@@ -16,7 +16,16 @@ const DIST = path.join(__dirname, 'dist')
 function runViteBuild() {
   console.log('Building with Vite...')
   try {
-    execSync('npx vite build', { stdio: 'inherit' })
+    // Use local node_modules vite to avoid version conflicts with npx
+    const vitePath = process.platform === 'win32'
+      ? path.join(__dirname, 'node_modules', 'vite', 'bin', 'vite.js')
+      : path.join(__dirname, 'node_modules', '.bin', 'vite')
+    // Use node to run the ESM module with proper flags
+    const nodeCmd = process.platform === 'win32' ? 'node' : 'node'
+    execSync(`${nodeCmd} ${vitePath} build`, {
+      stdio: 'inherit',
+      cwd: __dirname
+    })
   } catch (e) {
     console.error('Vite build failed')
     process.exit(1)

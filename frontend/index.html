@@ -6,8 +6,8 @@
 <title>Finance Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dist/assets/css/base.css">
-<link rel="stylesheet" href="/dist/assets/css/components.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
 </head>
 <body>
 <!-- MOBILE OVERLAY -->
@@ -2573,5 +2573,6 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script type="module" src="/dist/assets/index.js"></script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/dist/assets/sw.js").catch(()=>{});}</script>
 </body>
 </html>
