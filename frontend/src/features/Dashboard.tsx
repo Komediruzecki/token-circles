@@ -152,7 +152,7 @@ export default function Dashboard() {
   )
 }
 
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getIcon(type: 'income' | 'expense'): any {
   if (type === 'income') {
     return (
