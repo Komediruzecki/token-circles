@@ -1,6 +1,7 @@
 // Service Worker for Finance Manager
 // Uses traditional fetch API without import.meta (ES5 compatible)
-const CACHE_NAME = 'finance-manager-v1';
+// Versioned for cache invalidation - increment on each deployment
+const CACHE_NAME = `finance-manager-v${new URLSearchParams(self.location.search).get('v') || '1'}`;
 
 const STATIC_ASSETS = [
   '/',
