@@ -102,6 +102,22 @@ build_frontend() {
     log_info "Frontend built successfully"
 }
 
+deploy_backend() {
+    log_info "Deploying backend..."
+
+    # Reload systemd service
+    systemctl reload finance-manager
+    sleep 2
+
+    if systemctl is-active --quiet finance-manager; then
+        log_info "Backend server reloaded successfully"
+    else
+        log_error "Backend server failed to reload"
+        log_info "Check logs with: journalctl -u finance-manager -n 50"
+        exit 1
+    fi
+}
+
 restart_backend() {
     log_info "Restarting backend server..."
 
@@ -195,7 +211,7 @@ case $ACTION in
         log_info "Frontend rebuild complete"
         ;;
     backend)
-        restart_backend
+        deploy_backend
         ;;
     full)
         setup_symlinks
