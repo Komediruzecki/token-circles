@@ -13,7 +13,7 @@
     "test:frontend": "NODE_PATH=./node_modules jest frontend/",
     "build": "node frontend/build.mjs",
     "format": "prettier --write 'frontend/js/**/*.js' 'frontend/css/**/*.css'",
-    "lint": "eslint frontend/js/"
+    "lint": "cd frontend && npx eslint"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

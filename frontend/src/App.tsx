@@ -154,7 +154,7 @@ export default function App() {
             <div class="page-content">
               {(() => {
                 const page = currentPage()
-                return <div>{pages[page] ? pages[page]() : Dashboard()}</div>
+                return <div>{pages[page]()}</div>
               })()}
             </div>
           </div>

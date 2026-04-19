@@ -2,3 +2,4 @@ node_modules/
 db/
 coverage/
 assets/
+templates/pages.html

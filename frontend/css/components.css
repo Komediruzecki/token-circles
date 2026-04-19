@@ -146,7 +146,9 @@
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
-  transition: transform 0.15s, border-color 0.15s;
+  transition:
+    transform 0.15s,
+    border-color 0.15s;
 }
 .color-swatch:hover {
   transform: scale(1.15);
@@ -155,12 +157,36 @@
   border-color: var(--text);
   transform: scale(1.1);
 }
-  font-weight: 600;
+
+.tx-summary-bar .summary-value.income {
+  color: var(--income);
 }
-.tx-summary-bar .summary-value.income { color: var(--income); }
-.tx-summary-bar .summary-value.expense { color: var(--expense); }
-.tx-summary-bar .summary-value.total { color: var(--primary); }
-.tx-summary-bar .summary-value.count { color: var(--text); font-size: 16px; }
+
+.tx-summary-bar .summary-value.expense {
+  color: var(--expense);
+}
+
+.tx-summary-bar .summary-value.total {
+  color: var(--primary);
+}
+
+.tx-summary-bar .summary-value.count {
+  color: var(--text);
+  font-size: 16px;
+}
+.tx-summary-bar .summary-value.income {
+  color: var(--income);
+}
+.tx-summary-bar .summary-value.expense {
+  color: var(--expense);
+}
+.tx-summary-bar .summary-value.total {
+  color: var(--primary);
+}
+.tx-summary-bar .summary-value.count {
+  color: var(--text);
+  font-size: 16px;
+}
 .tx-summary-bar .summary-divider {
   width: 1px;
   background: var(--border);
@@ -369,7 +395,7 @@ th[data-sort].sorted .sort-arrow {
   border: 1px solid var(--border);
   flex-wrap: wrap;
 }
-[data-theme="dark"] .bulk-action-bar {
+[data-theme='dark'] .bulk-action-bar {
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
 }
 .bulk-action-bar #tx-bulk-count {
@@ -382,7 +408,7 @@ th[data-sort].sorted .sort-arrow {
   width: 40px;
   text-align: center;
 }
-.th-checkbox input[type="checkbox"] {
+.th-checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -392,7 +418,7 @@ th[data-sort].sorted .sort-arrow {
   text-align: center;
   width: 40px;
 }
-.td-checkbox input[type="checkbox"] {
+.td-checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -406,7 +432,7 @@ th[data-sort].sorted .sort-arrow {
 .automap-item:hover {
   background: var(--bg);
 }
-.automap-item input[type="checkbox"] {
+.automap-item input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;
@@ -605,8 +631,12 @@ th[data-sort].sorted .sort-arrow {
   border-radius: 0 0 10px 10px;
   font-weight: 600;
 }
-.housing-summary-row .value.success { color: var(--success); }
-.housing-summary-row .value.warning { color: var(--warning); }
+.housing-summary-row .value.success {
+  color: var(--success);
+}
+.housing-summary-row .value.warning {
+  color: var(--warning);
+}
 .housing-comparison-table-wrap {
   overflow-x: auto;
   margin-top: 16px;
@@ -661,7 +691,9 @@ th[data-sort].sorted .sort-arrow {
   font-size: 12px;
   cursor: pointer;
   border: 1.5px solid transparent;
-  transition: opacity 0.15s, border-color 0.15s;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
   user-select: none;
 }
 .tx-tag-chip:hover {
@@ -749,7 +781,7 @@ th[data-sort].sorted .sort-arrow {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 100;
   padding: 6px 0;
   display: none;

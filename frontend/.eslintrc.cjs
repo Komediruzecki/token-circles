@@ -29,4 +29,4 @@ module.exports = {
     'solid/no-set-state': 'off',
     'solid/jsx-no-bind': 'warn',
   },
-};
+}

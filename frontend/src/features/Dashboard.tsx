@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, onMount, type JSX } from 'solid-js'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type * as Models from '../types/models'
 
@@ -11,7 +11,7 @@ export default function Dashboard() {
   const [loading, setLoading] = createSignal(true)
 
   onMount(() => {
-    loadDashboard()
+    void loadDashboard()
   })
 
   const loadDashboard = async () => {
@@ -152,8 +152,7 @@ export default function Dashboard() {
   )
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getIcon(type: 'income' | 'expense'): any {
+function getIcon(type: 'income' | 'expense'): JSX.Element {
   if (type === 'income') {
     return (
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">

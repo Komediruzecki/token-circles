@@ -84,24 +84,60 @@
 }
 
 /* Color utility classes */
-.bg-red-500 { background-color: #ef4444; }
-.bg-orange-500 { background-color: #f97316; }
-.bg-amber-500 { background-color: #f59e0b; }
-.bg-yellow-500 { background-color: #eab308; }
-.bg-lime-500 { background-color: #84cc16; }
-.bg-green-500 { background-color: #22c55e; }
-.bg-teal-500 { background-color: #14b8a6; }
-.bg-cyan-500 { background-color: #06b6d4; }
-.bg-sky-500 { background-color: #0ea5e9; }
-.bg-blue-500 { background-color: #3b82f6; }
-.bg-indigo-500 { background-color: #6366f1; }
-.bg-violet-500 { background-color: #8b5cf6; }
-.bg-purple-500 { background-color: #a855f7; }
-.bg-fuchsia-500 { background-color: #d946ef; }
-.bg-pink-500 { background-color: #ec4899; }
-.bg-rose-500 { background-color: #f43f5e; }
-.bg-slate-500 { background-color: #64748b; }
-.bg-stone-500 { background-color: #78716c; }
+.bg-red-500 {
+  background-color: #ef4444;
+}
+.bg-orange-500 {
+  background-color: #f97316;
+}
+.bg-amber-500 {
+  background-color: #f59e0b;
+}
+.bg-yellow-500 {
+  background-color: #eab308;
+}
+.bg-lime-500 {
+  background-color: #84cc16;
+}
+.bg-green-500 {
+  background-color: #22c55e;
+}
+.bg-teal-500 {
+  background-color: #14b8a6;
+}
+.bg-cyan-500 {
+  background-color: #06b6d4;
+}
+.bg-sky-500 {
+  background-color: #0ea5e9;
+}
+.bg-blue-500 {
+  background-color: #3b82f6;
+}
+.bg-indigo-500 {
+  background-color: #6366f1;
+}
+.bg-violet-500 {
+  background-color: #8b5cf6;
+}
+.bg-purple-500 {
+  background-color: #a855f7;
+}
+.bg-fuchsia-500 {
+  background-color: #d946ef;
+}
+.bg-pink-500 {
+  background-color: #ec4899;
+}
+.bg-rose-500 {
+  background-color: #f43f5e;
+}
+.bg-slate-500 {
+  background-color: #64748b;
+}
+.bg-stone-500 {
+  background-color: #78716c;
+}
 
 [data-theme='dark'] {
   --bg: #0f172a;
@@ -1168,10 +1204,18 @@ tr.row-duplicate td {
 }
 
 /* Modal sizes */
-.modal-sm { max-width: 400px !important; }
-.modal-md { max-width: 480px !important; }
-.modal-lg { max-width: 640px !important; }
-.modal-xl { max-width: 700px !important; }
+.modal-sm {
+  max-width: 400px !important;
+}
+.modal-md {
+  max-width: 480px !important;
+}
+.modal-lg {
+  max-width: 640px !important;
+}
+.modal-xl {
+  max-width: 700px !important;
+}
 .profile-dropdown-item.active .profile-checkbox {
   background: var(--primary);
   border-color: var(--primary);
@@ -1531,8 +1575,13 @@ tr.row-duplicate td {
   align-items: stretch;
   margin-top: 16px;
 }
-.compound-left { min-height: 0; }
-.compound-right { min-height: 300px; display: flex; }
+.compound-left {
+  min-height: 0;
+}
+.compound-right {
+  min-height: 300px;
+  display: flex;
+}
 #ci-chart {
   width: 100%;
   height: 100%;
@@ -1685,7 +1734,8 @@ tr.row-duplicate td {
   .table-wrap {
     font-size: 12px;
   }
-  th, td {
+  th,
+  td {
     padding: 8px;
   }
   /* Modal mobile */
@@ -1751,7 +1801,7 @@ tr.row-duplicate td {
   transition: box-shadow 0.2s;
 }
 .goal-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 .goal-header {
   display: flex;
@@ -1838,15 +1888,36 @@ tr.row-duplicate td {
 }
 
 /* Heatmap styles */
-#heatmap-svg { display:block; overflow: visible; }
-.heatmap-tooltip { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+#heatmap-svg {
+  display: block;
+  overflow: visible;
+}
+.heatmap-tooltip {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
 .heatmap-scale {
-  display: flex; gap: 3px;
+  display: flex;
+  gap: 3px;
 }
 .heatmap-scale span {
-  width: 14px; height: 14px; border-radius: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
-.heatmap-cell { cursor: pointer; transition: opacity 0.15s; }
-.heatmap-cell:hover { opacity: 0.8; stroke: var(--text); stroke-width: 1.5; }
-.heatmap-month-label { font-size: 11px; fill: var(--text-secondary); }
-.heatmap-day-label { font-size: 10px; fill: var(--text-secondary); }
+.heatmap-cell {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.heatmap-cell:hover {
+  opacity: 0.8;
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+.heatmap-month-label {
+  font-size: 11px;
+  fill: var(--text-secondary);
+}
+.heatmap-day-label {
+  font-size: 10px;
+  fill: var(--text-secondary);
+}

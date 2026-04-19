@@ -1,6 +1,6 @@
-import { resolve } from 'path';
-import { defineConfig } from 'vite';
-import solid from 'vite-plugin-solid';
+import { resolve } from 'path'
+import { defineConfig } from 'vite'
+import solid from 'vite-plugin-solid'
 
 export default defineConfig({
   base: './',
@@ -10,7 +10,7 @@ export default defineConfig({
     sourcemap: true,
     minify: 'esbuild',
     rollupOptions: {
-      input: resolve(__dirname, 'src/main.ts'),
+      input: resolve(__dirname, 'src/main.tsx'),
       output: {
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -20,9 +20,8 @@ export default defineConfig({
   },
   plugins: [
     solid({
-      dev: {
-        injectStyles: true,
-      },
+      emitCss: true,
+      installSolidComponents: true,
     }),
   ],
   resolve: {
@@ -36,7 +35,10 @@ export default defineConfig({
       '@/lib': resolve(__dirname, 'src/lib'),
     },
   },
+  css: {
+    postcss: './postcss.config.cjs',
+  },
   server: {
     port: 3800,
   },
-});
+})

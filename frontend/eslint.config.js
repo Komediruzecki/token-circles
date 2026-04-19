@@ -1,105 +1,53 @@
-import eslint from '@eslint/js';
-import tsParser from '@typescript-eslint/parser';
-import { defineConfig } from 'eslint/config';
-import tseslint from 'typescript-eslint';
+import js from '@eslint/js'
+import tsPlugin from '@typescript-eslint/eslint-plugin'
+import tsParser from '@typescript-eslint/parser'
+import solid from 'eslint-plugin-solid'
+import globals from 'globals'
 
-export default defineConfig(
+/** @type {import('eslint').Linter.Config[]} */
+export default [
   {
     ignores: [
-      '**/*.css.d.ts',
-      '**/coverage',
-      '**/dist',
-      '**/node_modules',
-      '**/*.cjs',
-      '**/build.mjs',
-      '**/build.cjs',
-      '**/sw.js',
-      '**/index.html',
-      '**/*.html',
-      '**/js/**/*',
-      '**/*.d.ts',
+      'dist',
+      'node_modules',
+      '*.cjs',
+      '*.mjs',
+      'templates',
+      'assets',
+      'src/**/*.d.ts',
+      'js/dist',
     ],
   },
-  eslint.configs.recommended,
-  ...tseslint.configs.recommended,
   {
     languageOptions: {
+      ecmaVersion: 'latest',
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
       parser: tsParser,
       parserOptions: {
-        projectService: false,
-        tsconfigRootDir: import.meta.dirname,
-      },
-      globals: {
-        __dirname: true,
-        __filename: true,
-        console: true,
-        process: true,
-        Buffer: true,
-        require: true,
-        module: true,
-        exports: true,
-        setTimeout: true,
-        clearTimeout: true,
-        setInterval: true,
-        clearInterval: true,
-        setImmediate: true,
-        clearImmediate: true,
-        window: true,
-        document: true,
-        navigator: true,
-        location: true,
-        fetch: true,
-        Request: true,
-        Response: true,
-        URL: true,
-        HeadersInit: true,
-        RequestInit: true,
-        localStorage: true,
-        URLSearchParams: true,
-        Blob: true,
-        File: true,
-        FormData: true,
+        ecmaVersion: 'latest',
+        sourceType: 'module',
       },
     },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+      solid,
+    },
     rules: {
-      'no-console': ['error', { allow: ['info', 'warn', 'error', 'table'] }],
-      'no-throw-literal': 'error',
-      'no-useless-concat': 'error',
-      'prefer-template': 'error',
-      eqeqeq: 'error',
-      'padding-line-between-statements': [
-        'error',
-        {
-          blankLine: 'always',
-          prev: '*',
-          next: 'function',
-        },
-      ],
+      ...js.configs.recommended.rules,
+      ...tsPlugin.configs.recommended.rules,
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
           argsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
-          destructuredArrayIgnorePattern: '^_',
           varsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/strict-boolean-expressions': 'off',
-      '@typescript-eslint/no-dynamic-delete': 'off',
-      '@typescript-eslint/no-misused-promises': 'off',
-      '@typescript-eslint/no-non-null-assertion': 'off',
-      '@typescript-eslint/no-unsafe-argument': 'off',
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-      '@typescript-eslint/restrict-template-expressions': 'off',
-      '@typescript-eslint/no-invalid-void-type': 'off',
-      '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
-      '@typescript-eslint/no-unnecessary-condition': 'off',
-      '@typescript-eslint/no-useless-default-assignment': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'solid/no-set-state': 'off',
     },
   },
-);
+]

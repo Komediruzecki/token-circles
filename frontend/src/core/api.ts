@@ -41,12 +41,15 @@ export class ApiClient {
   }
 
   private getCurrentProfileId(): number {
-    return parseInt(localStorage.getItem(CURRENT_PROFILE_ID_KEY) || '1')
+    const stored = localStorage.getItem(CURRENT_PROFILE_ID_KEY)
+    const parsed = stored ? parseInt(stored, 10) : undefined
+    return parsed ?? 1
   }
 
   private getSelectedProfileIds(): number[] {
     const ids = localStorage.getItem(SELECTED_PROFILE_IDS_KEY)
-    return ids ? JSON.parse(ids) : [this.getCurrentProfileId()]
+    const parsed = ids ? JSON.parse(ids) : undefined
+    return parsed ? parsed : [this.getCurrentProfileId()]
   }
 
   // private setProfileIds(profileIds: number[]) {
@@ -82,7 +85,7 @@ export class ApiClient {
     }
 
     // For DELETE without body, don't set Content-Type
-    if (method === 'DELETE' && !body) {
+    if (method === 'DELETE') {
       requestOptions.headers = {}
     }
 
@@ -93,11 +96,11 @@ export class ApiClient {
         const errorData = await response.json().catch(() => ({
           error: `HTTP ${response.status}`,
         }))
-        throw new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
+        throw new Error((errorData.error || errorData.message) ?? `HTTP ${response.status}`)
       }
 
       const contentType = response.headers.get('content-type')
-      if (!contentType?.includes('application/json')) {
+      if (contentType === null || !contentType.includes('application/json')) {
         return {} as T
       }
 
@@ -200,7 +203,7 @@ export class ApiClient {
     if (params?.date_to) queryParams.append('date_to', params.date_to)
     if (params?.category_id) queryParams.append('category_id', params.category_id.toString())
     if (params?.search) queryParams.append('search', params.search)
-    if (params?.type) {
+    if (params?.type !== undefined) {
       queryParams.append('type', params.type)
     }
 
@@ -669,7 +672,7 @@ export class ApiClient {
   async exportTransactions(params?: { date_from?: string; date_to?: string }): Promise<Blob> {
     const queryParams = new URLSearchParams()
     if (params?.date_from) queryParams.append('date_from', params.date_from)
-    if (params?.date_to) queryParams.append('date_to', params.date_to)
+    if (params?.date_to) queryParams.append('date_to', params.date_to as string)
 
     const response = await fetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
       headers: this.headers,

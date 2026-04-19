@@ -31,7 +31,7 @@ export function createApiStore() {
       if (profileIds.length > 1) {
         headers['X-Profile-Ids'] = JSON.stringify(profileIds)
       } else {
-        headers['X-Profile-Id'] = profileIds[0]
+        headers['X-Profile-Id'] = (profileIds[0] ?? 1).toString()
       }
 
       const response = await fetch(url, {
@@ -43,7 +43,7 @@ export function createApiStore() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`)
+        throw new Error(data.error ?? `HTTP ${response.status}`)
       }
 
       setLastError(null)
@@ -96,7 +96,7 @@ export function createProfileStore() {
   const toggleProfile = async (id: number) => {
     const idx = selectedProfileIds().indexOf(id)
     let newIds: number[]
-    if (idx >= 0) {
+    if (idx !== -1) {
       newIds = selectedProfileIds().filter((pid) => pid !== id)
     } else {
       newIds = [...selectedProfileIds(), id]

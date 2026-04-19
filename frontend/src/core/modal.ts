@@ -75,7 +75,7 @@ export class ModalStore {
    * Get modal data
    */
   getData(): Record<string, unknown> | null {
-    return (this.data as Record<string, unknown> | null) || null
+    return this.data ?? null
   }
 
   /**
