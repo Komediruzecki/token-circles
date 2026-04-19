@@ -94,8 +94,21 @@ async function build() {
   console.log('Building Finance Manager...')
   await runViteBuild()
   await copyStaticFiles()
+  await copyServiceWorker()
   generateHTML()
   console.log('\nBuild complete!')
+}
+
+async function copyServiceWorker() {
+  const srcSw = path.join(__dirname, 'sw.js')
+  const destSw = path.join(DIST, 'assets', 'sw.js')
+
+  if (fs.existsSync(srcSw)) {
+    await fs.promises.copyFile(srcSw, destSw)
+    console.log('Copied service worker to dist/assets/sw.js')
+  } else {
+    console.warn('Service worker not found at frontend/sw.js')
+  }
 }
 
 build()
