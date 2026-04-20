@@ -63,7 +63,9 @@ function generateHTML() {
 </html>
 `
 
-  fs.writeFileSync(path.join(__dirname, 'index.html'), output, 'utf8')
+  // Write to repo root (not frontend/ which is served by Apache)
+  const repoRoot = path.join(__dirname, '..')
+  fs.writeFileSync(path.join(repoRoot, 'index.html'), output, 'utf8')
 }
 
 async function copyStaticFiles() {
