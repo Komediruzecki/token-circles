@@ -47,6 +47,7 @@ export default function Transactions() {
   const [selectedTxId, setSelectedTxId] = createSignal<number | null>(null)
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
+  const [type, setType] = createSignal<TransactionType>('expense')
 
   // Load transactions on mount
   onMount(async () => {
