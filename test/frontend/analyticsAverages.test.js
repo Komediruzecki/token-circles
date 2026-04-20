@@ -2,6 +2,8 @@
  * Tests for Analytics page
  * Analytics component is a placeholder - tests will be updated when Analytics is implemented
  */
+const { fs, path } = require('./testUtils');
+
 describe('Analytics Page', () => {
   const content = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
 

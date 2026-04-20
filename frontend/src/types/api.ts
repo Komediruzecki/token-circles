@@ -84,6 +84,10 @@ export type TransactionListParams = {
   search?: string
   type?: 'income' | 'expense'
   limit?: number
+  page?: number
+  perPage?: number
+  reconciled?: boolean
+  category_name?: string
 }
 
 export type TransactionCreateParams = Omit<Models.Transaction, 'id' | 'created_at' | 'updated_at'>

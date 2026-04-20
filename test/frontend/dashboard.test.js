@@ -2,9 +2,7 @@
  * Comprehensive tests for Dashboard feature
  * Tests loading states, error handling, empty states, and data rendering
  */
-
-const fs = require('fs');
-const path = require('path');
+const { fs, path } = require('./testUtils');
 
 describe('Dashboard Feature', () => {
   const content = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');

@@ -9,6 +9,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   width?: 'small' | 'medium' | 'large';
+  children?: any;
 }
 
 export function Modal(props: ModalProps) {
@@ -47,10 +48,10 @@ export function Modal(props: ModalProps) {
   return (
     <div
       class="modal-overlay"
-      class={{ visible: isVisible() }}
+      classList={{ visible: isVisible() }}
       onClick={handleOverlayClick}
     >
-      <div class={`modal ${widthClass}`} class={{ visible: isVisible() }}>
+      <div class={`modal ${widthClass}`} classList={{ visible: isVisible() }}>
         {/* Modal Header */}
         <div class="modal-header">
           <h2 class="modal-title">{props.title}</h2>
@@ -73,11 +74,11 @@ export function Modal(props: ModalProps) {
 
         {/* Modal Footer */}
         <div class="modal-footer">
-          {props.children?.type?.name !== 'SettingsDialog' ? (
+          {!props.title?.includes('Settings') && (
             <button class="btn btn-secondary" onClick={handleClose}>
               Close
             </button>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

@@ -223,8 +223,12 @@ function migrate() {
       frequency TEXT NOT NULL DEFAULT 'monthly',
       day_of_month INTEGER,
       category_id INTEGER,
+      due_date TEXT,
+      next_due_date TEXT,
+      recurring INTEGER NOT NULL DEFAULT 1,
       is_active INTEGER NOT NULL DEFAULT 1,
       last_paid TEXT,
+      last_paid_date TEXT,
       notes TEXT DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
@@ -335,6 +339,32 @@ function migrate() {
     try { db.exec("ALTER TABLE transactions ADD COLUMN means_of_payment TEXT DEFAULT ''"); } catch(e) {}
   }
 
+  // Migration: Add receipt_id column to transactions
+  if (!columnExists('transactions', 'receipt_id')) {
+    try { db.exec("ALTER TABLE transactions ADD COLUMN receipt_id INTEGER"); } catch(e) {}
+  }
+  if (!columnExists('transactions', 'receipt_name')) {
+    try { db.exec("ALTER TABLE transactions ADD COLUMN receipt_name TEXT DEFAULT ''"); } catch(e) {}
+  }
+
+  // Create receipts table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      transaction_id INTEGER UNIQUE,
+      filename TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      file_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      storage_path TEXT NOT NULL,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      profile_id INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_receipts_profile ON receipts(profile_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_receipts_transaction ON receipts(transaction_id)');
+
   // Migration: Add rollover columns to budgets
   if (!columnExists('budgets', 'rollover_enabled')) {
     try { db.exec('ALTER TABLE budgets ADD COLUMN rollover_enabled INTEGER DEFAULT 0'); } catch(e) {}
@@ -344,6 +374,22 @@ function migrate() {
   }
   if (!columnExists('budgets', 'rollover_used')) {
     try { db.exec('ALTER TABLE budgets ADD COLUMN rollover_used REAL DEFAULT 0'); } catch(e) {}
+  }
+
+  // Migration: Add missing columns to bills table (due_date, next_due_date, recurring)
+  if (!columnExists('bills', 'due_date')) {
+    try { db.exec('ALTER TABLE bills ADD COLUMN due_date TEXT'); } catch(e) {}
+  }
+  if (!columnExists('bills', 'next_due_date')) {
+    try { db.exec('ALTER TABLE bills ADD COLUMN next_due_date TEXT'); } catch(e) {}
+  }
+  if (!columnExists('bills', 'recurring')) {
+    try { db.exec('ALTER TABLE bills ADD COLUMN recurring INTEGER DEFAULT 1'); } catch(e) {}
+  }
+
+  // Migration: Add last_paid_date column to bills table
+  if (!columnExists('bills', 'last_paid_date')) {
+    try { db.exec('ALTER TABLE bills ADD COLUMN last_paid_date TEXT'); } catch(e) {}
   }
 
   // Seed demo user if no users exist
@@ -457,6 +503,9 @@ function seedProfileData(profile) {
 
   // Create savings goals
   seedSavingsGoals(profileId, tierConfig);
+
+  // Create bills for this profile
+  seedBills(profileId, tierConfig);
 
   // Set emergency fund config
   seedEmergencyFundConfig(profileId, tierConfig);
@@ -870,6 +919,55 @@ function seedSavingsGoals(profileId, config) {
   for (const goal of config.savingsGoals) {
     const deadline = `${currentYear + (Math.random() > 0.5 ? 1 : 2)}-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-01`;
     insertGoal.run(goal.name, goal.target, goal.current, deadline, `Savings goal for ${goal.name}`, profileId);
+  }
+}
+
+function seedBills(profileId, config) {
+  const insertBill = db.prepare(
+    'INSERT INTO bills (name, amount, profile_id, due_date, next_due_date, recurring, category_id, last_paid_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+
+  const bills = [
+    { name: 'Rent / Mortgage', amount: config.rent?.min || 1000, frequency: 'monthly', day_of_month: 1 },
+    { name: 'Electricity Bill', amount: 150, frequency: 'monthly', day_of_month: 15 },
+    { name: 'Natural Gas Bill', amount: 80, frequency: 'monthly', day_of_month: 20 },
+    { name: 'Internet Service', amount: 70, frequency: 'monthly', day_of_month: 5 },
+    { name: 'Car Insurance', amount: 120, frequency: 'monthly', day_of_month: 10 },
+    { name: 'Health Insurance', amount: 200, frequency: 'monthly', day_of_month: 1 },
+  ];
+
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+
+  for (const bill of bills) {
+    // Calculate due date based on frequency and day_of_month
+    let dueDate, nextDueDate;
+    if (bill.frequency === 'monthly' && bill.day_of_month !== undefined) {
+      const day = Math.min(Math.max(1, bill.day_of_month), 28);
+      dueDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      // Calculate next month's due date
+      let nextMonth = currentMonth + 1;
+      let nextYear = currentYear;
+      if (nextMonth >= 12) {
+        nextMonth = 0;
+        nextYear++;
+      }
+      nextDueDate = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    } else {
+      dueDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-15`;
+      nextDueDate = `${currentYear}-${String(currentMonth + 3).padStart(2, '0')}-15`;
+    }
+
+    insertBill.run(
+      bill.name,
+      bill.amount,
+      profileId,
+      dueDate,
+      nextDueDate,
+      1, // recurring
+      null, // category_id
+      null // last_paid_date
+    );
   }
 }
 

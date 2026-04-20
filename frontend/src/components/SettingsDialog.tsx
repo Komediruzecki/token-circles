@@ -3,8 +3,8 @@
  * Supports theme, language, currency, and storage mode selection
  */
 
-import { createSignal, Component, For } from 'solid-js';
-import { Modal } from './Modal.js';
+import { createSignal, type Component, For } from 'solid-js';
+import { Modal, type ModalProps } from './Modal.js';
 import { toast } from '../core/api.js';
 import { setStorageMode, StorageMode } from '../core/storage/storageFactory.js';
 
@@ -188,8 +188,8 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   ];
 
   return (
-    <Modal isOpen={props.isOpen} onClose={props.onClose} title="Settings">
-      <div class="settings-dialog">
+    <div class="settings-dialog">
+      <Modal isOpen={props.isOpen} onClose={props.onClose} title="Settings">
         {/* Tabs */}
         <div class="settings-tabs">
           <button
@@ -207,7 +207,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         </div>
 
         {/* General Settings */}
-        <div class="tab-content" class={{ active: activeTab() === 'general' }}>
+        <div class="tab-content" classList={{ active: activeTab() === 'general' }}>
           {/* Theme */}
           <div class="setting-group">
             <label class="setting-label">Theme</label>
@@ -276,7 +276,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         </div>
 
         {/* Storage Settings */}
-        <div class="tab-content" class={{ active: activeTab() === 'storage' }}>
+        <div class="tab-content" classList={{ active: activeTab() === 'storage' }}>
           {/* Storage Mode */}
           <div class="setting-group">
             <label class="setting-label">Storage Mode</label>
@@ -336,7 +336,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
             </button>
           </div>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+    </div>
   );
 };

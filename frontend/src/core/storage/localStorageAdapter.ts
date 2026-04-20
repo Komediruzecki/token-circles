@@ -12,8 +12,6 @@ import type {
   Budget,
   Goal,
   Loan,
-  LoanRatePeriod,
-  LoanPrepayment,
   BalanceEntry,
   Settings,
   ExportData,
@@ -32,9 +30,7 @@ import type { ProfileData as StoreProfile, CategoryData as StoreCategory, Transa
 
 const STORAGE_KEY = 'finance_data';
 const PROFILE_ID_KEY = 'finance_profile_id';
-const SELECTED_PROFILE_IDS_KEY = 'finance_selected_profile_ids';
 const VERSION_KEY = 'finance_version';
-const STORAGE_MODE_KEY = 'finance_storage_mode';
 
 // Data store structure
 let data: DataStore = {
@@ -728,19 +724,6 @@ function resetToDefaults(): void {
   counters.balanceHistory = 1;
   saveData();
   createDefaultProfile();
-}
-
-/**
- * Create default profile
- */
-function createDefaultProfile(): void {
-  const existingId = getCurrentProfileId();
-  if (getProfile(existingId)) {
-    return; // Already has a profile
-  }
-
-  profileCounter = 1;
-  createProfileData('Main Profile');
 }
 
 /**

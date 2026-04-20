@@ -1,24 +1,44 @@
 /**
  * Budgets Component
- * Includes traditional budgeting view and zero-based budgeting (envelope-style)
+ * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
 
 import { createSignal, createEffect, onMount, For } from 'solid-js'
-import { theme } from '../core/theme'
+import { formatDate, formatCurrency } from '../core/api'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
+
+interface ForecastMonth {
+  month: string
+  label: string
+  budget_amount: number
+  predicted_spent: number
+  adherence: number
+  status: 'ok' | 'warning' | 'over'
+  forecast_remaining: number
+}
+
+interface ForecastData {
+  period: string
+  history: any[]
+  forecast: ForecastMonth[]
+  total_budget: number
+  avg_adherence: number
+}
 
 interface CategoryAllocation {
   category_id: number
   category_name: string
   category_color: string
-  category_icon: string
-  amount: number
+  category_icon: string | null
+  allocated: number
   spent: number
   remaining_budget: number
   percent_used: number
-  is_budgeted: boolean
+  status: AllocationStatus
   can_allocate: boolean
+  is_budgeted: boolean
+  is_fully_allocated: boolean
 }
 
 interface ZeroBasedSummary {
@@ -36,7 +56,6 @@ interface ZeroBasedSummary {
 }
 
 export default function Budgets() {
-  const [activeTab, setActiveTab] = createSignal<'traditional' | 'zero-based'>('zero-based')
   const [month, setMonth] = createSignal(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
@@ -46,6 +65,8 @@ export default function Budgets() {
   const [selectedCategory, setSelectedCategory] = createSignal<CategoryAllocation | null>(null)
   const [allocateAmount, setAllocateAmount] = createSignal<number>(0)
   const [budgetMessage, setBudgetMessage] = createSignal<string>('')
+  const [forecastData, setForecastData] = createSignal<ForecastData | null>(null)
+  const [showForecast, setShowForecast] = createSignal(false)
   const [toastMessage, setToastMessage] = createSignal<string | null>(null)
 
   // Get current allocations and summary
@@ -54,9 +75,10 @@ export default function Budgets() {
     setError(null)
 
     try {
-      const [allocationsRes, summaryRes] = await Promise.all([
+      const [allocationsRes, summaryRes, forecastRes] = await Promise.all([
         fetch(`/api/budgets/zero-based?month=${month()}`),
         fetch(`/api/budgets/zero-based/summary?month=${month()}`),
+        fetch(`/api/budgets/forecast?month=${month()}`).catch(() => null),
       ])
 
       if (!allocationsRes.ok || !summaryRes.ok) {
@@ -65,17 +87,28 @@ export default function Budgets() {
 
       const allocationsData: CategoryAllocation[] = await allocationsRes.json()
       const summaryData: ZeroBasedSummary = await summaryRes.json()
-
       setAllocations(allocationsData)
       setSummary(summaryData)
       setBudgetMessage(summaryData.zero_based_remaining > 0
         ? `Unallocated: $${summaryData.zero_based_remaining.toFixed(2)}`
         : `All income allocated!`
       )
+
+      if (forecastRes?.ok) {
+        setForecastData(await forecastRes.json())
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load budget data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Toggle forecast view
+  const toggleForecast = () => {
+    setShowForecast(!showForecast())
+    if (!showForecast() && !forecastData()) {
+      loadData()
     }
   }
 
@@ -212,6 +245,77 @@ export default function Budgets() {
         </div>
       </div>
 
+      {/* Forecast Toggle Button */}
+      <div class="forecast-toggle-section">
+        <button class="btn btn-outline btn-lg" onClick={toggleForecast}>
+          {showForecast() ? 'Hide Budget Forecast' : 'Show Budget Forecast'}
+        </button>
+      </div>
+
+      {/* Forecast Section */}
+      {showForecast() && (
+        <div class="budget-forecast">
+          <div class="forecast-header">
+            <div class="forecast-title">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+              <span>Budget Forecast</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onClick={toggleForecast}>
+              Hide
+            </button>
+          </div>
+
+          {forecastData() ? (
+            <>
+              {/* Adherence Stats */}
+              <div class="forecast-stats">
+                <div class="stat-item">
+                  <div class="stat-label">Historical Adherence</div>
+                  <div class="stat-value" class={forecastData()!.avg_adherence >= 80 ? 'positive' : ''}>
+                    {forecastData()!.avg_adherence}%
+                  </div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-label">Total Budget</div>
+                  <div class="stat-value">{formatCurrency(forecastData()!.total_budget)}</div>
+                </div>
+              </div>
+
+              {/* Forecast Chart */}
+              <div class="forecast-chart">
+                <div class="chart-row">
+                  <span class="chart-label">Month</span>
+                  <span class="chart-label">Budget</span>
+                  <span class="chart-label">Predicted</span>
+                  <span class="chart-label">Adherence</span>
+                  <span class="chart-label">Status</span>
+                </div>
+                {forecastData()!.forecast.map((fm) => (
+                  <div class="chart-row" key={fm.month}>
+                    <span class="chart-label">{fm.label}</span>
+                    <span class="chart-value budget-val">{formatCurrency(fm.budget_amount)}</span>
+                    <span class="chart-value actual-val">{formatCurrency(fm.predicted_spent)}</span>
+                    <span class="chart-value">{Math.round(fm.adherence)}%</span>
+                    <span class={`chart-status chart-status-${fm.status}`}>
+                      {fm.status === 'over' ? 'Over' : fm.status === 'warning' ? 'Warning' : 'On Track'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Refresh Forecast Button */}
+              <button class="btn btn-outline" onClick={loadData}>
+                Refresh Forecast
+              </button>
+            </>
+          ) : (
+            <div class="empty-state">Loading forecast...</div>
+          )}
+        </div>
+      )}
+
       {/* Toast */}
       {toastMessage() && (
         <div class="toast toast-success">
@@ -273,7 +377,7 @@ export default function Budgets() {
               <thead>
                 <tr>
                   <th>Category</th>
-                  <th>Allocated</th>
+                  <th>Amount</th>
                   <th>Spent</th>
                   <th>Remaining</th>
                   <th>% Used</th>
@@ -362,7 +466,7 @@ export default function Budgets() {
             </div>
             <div class="modal-body">
               <p class="modal-text">
-                Allocate budget to <strong>{selectedCategory().category_name}</strong>
+                Allocate budget to <strong>{selectedCategory()!.category_name}</strong>
               </p>
               <label class="form-label">Amount</label>
               <input
@@ -373,7 +477,7 @@ export default function Budgets() {
                 value={allocateAmount()}
                 oninput={(e) => setAllocateAmount(parseFloat(e.target.value) || 0)}
                 placeholder="0.00"
-                autoFocus
+                autocapitalize="off"
               />
               <p class="help-text">
                 Available unallocated: {formatCurrency(summary()?.unassigned_budget || 0)}

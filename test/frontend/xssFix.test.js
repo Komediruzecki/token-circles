@@ -50,10 +50,14 @@ describe('XSS vulnerability fix in SolidJS frontend', () => {
   });
 
   describe('API content security', () => {
-    test('API calls use fetch or axios', () => {
-      const indexHtml = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
-      expect(indexHtml).toMatch(/fetch\s*\(/);
-      expect(indexHtml).not.toMatch(/XMLHttpRequest\s*\(/);
+    test('API calls use fetch in TypeScript source', () => {
+      // The built HTML contains the bundled JS, but fetch calls are in TS source
+      // Check the TS/TSX source files directly
+      const srcDir = path.join(__dirname, '../../frontend/src');
+      const tsContent = fs.readFileSync(path.join(srcDir, 'core/api.ts'), 'utf8');
+
+      expect(tsContent).toMatch(/fetch\s*\(/);
+      expect(tsContent).not.toMatch(/XMLHttpRequest\s*\(/);
     });
 
     test('responses are not directly inserted as HTML', () => {

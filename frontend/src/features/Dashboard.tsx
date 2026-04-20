@@ -5,6 +5,7 @@
 import { createSignal, onMount, type JSX } from 'solid-js'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type * as Models from '../types/models'
+import { DashboardSettings } from '../components/DashboardSettings'
 
 export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
@@ -26,13 +27,37 @@ export default function Dashboard() {
     }
   }
 
+  const showSettings = () => {
+    const settings = document.getElementById('dashboard-settings-modal')
+    if (settings) {
+      const overlay = settings.parentElement
+      overlay.classList.add('visible')
+      overlay.style.display = 'block'
+    }
+  }
+
   return (
     <div class="page page-dashboard page-enter">
       <div class="page-header">
-        <h1>Dashboard</h1>
-        <button class="btn btn-primary" data-action="dashboard:refresh">
-          Refresh
-        </button>
+        <div class="page-title">
+          <h2>Dashboard</h2>
+          <p>Your financial overview</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-secondary" onClick={showSettings}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Settings
+          </button>
+          <button class="btn btn-primary" onClick={loadDashboard}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loading() ? (
@@ -66,20 +91,22 @@ export default function Dashboard() {
             <div class="chart-container">
               <canvas id="expense-category-chart" />
             </div>
+            {!metrics()!.expenseByCategory || metrics()!.expenseByCategory.length === 0 && (
+              <div class="empty-state">No expense data to display</div>
+            )}
           </div>
 
           {/* Recent Transactions */}
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Recent Transactions</div>
-              <a href="#transactions" class="btn-link">
-                View All →
-              </a>
-            </div>
-            <div class="transaction-list">
-              {metrics()!
-                .recentTransactions.slice(0, 5)
-                .map((tx) => (
+          {metrics()!.recentTransactions && metrics()!.recentTransactions.length > 0 && (
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Recent Transactions</div>
+                <a href="#transactions" class="btn-link">
+                  View All →
+                </a>
+              </div>
+              <div class="transaction-list">
+                {metrics()!.recentTransactions.slice(0, 5).map((tx) => (
                   <div class="transaction-item">
                     <div class="transaction-icon" style={{ background: getIconColor(tx.type) }}>
                       {getIcon(tx.type)}
@@ -88,7 +115,7 @@ export default function Dashboard() {
                       <div class="transaction-name">{tx.description}</div>
                       <div class="transaction-meta">
                         {formatDate(tx.date)} •{' '}
-                        {tx.category_id ? `#${tx.category_id}` : 'No category'}
+                        {tx.category_name || tx.category_id ? `#${tx.category_id}` : 'No category'}
                       </div>
                     </div>
                     <div
@@ -99,11 +126,12 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Upcoming Bills */}
-          {metrics()!.upcomingBills.length > 0 && (
+          {(metrics()!.upcomingBills?.length ?? 0) > 0 && (
             <div class="card">
               <div class="card-header">
                 <div class="card-title">Upcoming Bills</div>
@@ -114,7 +142,7 @@ export default function Dashboard() {
               <div class="transaction-list">
                 {metrics()!
                   .upcomingBills.slice(0, 5)
-                  .map((bill) => (
+                  .map((bill: any) => (
                     <div class="transaction-item">
                       <div class="transaction-icon" style={{ background: getIconColor('expense') }}>
                         <svg
@@ -144,6 +172,29 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* Widget Settings Modal */}
+          <div class="modal-overlay" id="dashboard-settings-modal">
+            <div class="modal modal-md">
+              <div class="modal-header">
+                <div class="modal-title">Dashboard Settings</div>
+                <button class="modal-close" onClick={() => {
+                  const modal = document.getElementById('dashboard-settings-modal')
+                  if (modal) {
+                    const overlay = modal.parentElement
+                    overlay.style.display = 'none'
+                  }
+                }}>
+                  <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div class="modal-body">
+                <DashboardSettings />
+              </div>
+            </div>
+          </div>
         </>
       ) : (
         <div class="empty-state">Failed to load data</div>

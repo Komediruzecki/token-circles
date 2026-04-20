@@ -4,7 +4,7 @@
  */
 const Database = require('better-sqlite3');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs'); // Used in cleanup afterAll
 
 // Use a temporary file in system temp directory for testing
 const testDir = process.env.RUNNER_TEMP || '/tmp';

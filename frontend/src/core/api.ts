@@ -742,6 +742,33 @@ export class ApiClient {
     })
   }
 
+  // ============ EXCHANGE RATES ============
+
+  /**
+   * Get exchange rates for a base currency
+   */
+  async getExchangeRates(base?: string, symbols?: string): Promise<{
+    base: string
+    rates: Record<string, number>
+    timestamp: number
+    last_updated: string
+  }> {
+    const queryParams = new URLSearchParams()
+    if (base) queryParams.append('base', base)
+    if (symbols) queryParams.append('symbols', symbols)
+
+    return this.request<{ base: string; rates: Record<string, number>; timestamp: number; last_updated: string }>(
+      `/exchange-rates?${queryParams.toString()}`
+    )
+  }
+
+  /**
+   * Get exchange rate for a specific currency pair
+   */
+  async getExchangeRate(base: string, target: string): Promise<{ rate: number }> {
+    return this.request<{ rate: number }>(`/exchange-rates/${base}/${target}`)
+  }
+
   // ============ HEALTH ============
 
   /**
@@ -749,6 +776,68 @@ export class ApiClient {
    */
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
     return this.request<{ status: string; timestamp: string }>('/health')
+  }
+
+  // ============ RECEIPTS ============
+
+  /**
+   * Upload a receipt for a transaction
+   */
+  async uploadReceipt(transactionId: number, file: File): Promise<Models.Receipt> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE}/receipts`, {
+      method: 'POST',
+      headers: { 'X-Profile-Id': this.getCurrentProfileId().toString() },
+      body: formData,
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
+      throw new Error((errorData.error || errorData.message) ?? `Failed to upload receipt`)
+    }
+
+    return await response.json()
+  }
+
+  /**
+   * Get a single receipt by ID
+   */
+  async getReceipt(id: number): Promise<Models.Receipt> {
+    return this.request<Models.Receipt>(`/receipts/${id}`)
+  }
+
+  /**
+   * Get all receipts for a transaction
+   */
+  async getReceiptsForTransaction(transactionId: number): Promise<Models.Receipt[]> {
+    return this.request<Models.Receipt[]>(`/receipts/transaction/${transactionId}`)
+  }
+
+  /**
+   * Get receipt file as blob
+   */
+  async getReceiptFile(id: number): Promise<Blob> {
+    const url = `${API_BASE}/receipts/${id}/file`
+    const response = await fetch(url, {
+      headers: this.headers,
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to download receipt: ${response.statusText}`)
+    }
+
+    return await response.blob()
+  }
+
+  /**
+   * Delete a receipt
+   */
+  async deleteReceipt(id: number): Promise<void> {
+    await this.request(`/receipts/${id}`, { method: 'DELETE' })
   }
 }
 

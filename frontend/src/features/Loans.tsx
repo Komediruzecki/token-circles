@@ -1,6 +1,6 @@
 export default function Loans() {
   return (
-    <div class="page page-${f.toLowerCase()} page-enter">
+    <div class="page page-loans page-enter">
       <div class="page-header">
         <h1>Loans</h1>
       </div>

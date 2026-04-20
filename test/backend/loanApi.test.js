@@ -7,7 +7,6 @@ const session = require('express-session');
 const Database = require('better-sqlite3');
 const path = require('path');
 const os = require('os');
-const fs = require('fs');
 
 // Create temp DB per test suite
 const tmpDbPath = path.join(os.tmpdir(), `fm-loan-api-test-${Date.now()}.db`);

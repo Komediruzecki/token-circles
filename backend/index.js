@@ -14,6 +14,50 @@ const PDFDocument = require("pdfkit");
 const app = express();
 const PORT = process.env.PORT || 3847;
 
+// Server error logging
+const LOGS_DIR = path.join(__dirname, "..", "logs");
+const LOGS_FILE = path.join(LOGS_DIR, "server-logs.json");
+if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
+
+function logError(level, source, error, request) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level,
+    source,
+    error: error?.message || String(error),
+    stack: error?.stack || null,
+    request: request ? {
+      method: request.method,
+      path: request.path,
+      query: request.query,
+      ip: request.ip,
+      userAgent: request.get("user-agent")
+    } : null
+  };
+
+  let logs = { version: "1.0", max_entries: 500, entries: [] };
+  try {
+    if (fs.existsSync(LOGS_FILE)) {
+      const data = fs.readFileSync(LOGS_FILE, "utf-8");
+      logs = JSON.parse(data);
+    }
+  } catch (e) {
+    console.warn("Failed to read logs:", e.message);
+  }
+
+  logs.entries.unshift(logEntry);
+  if (logs.entries.length > logs.max_entries) {
+    logs.entries = logs.entries.slice(0, logs.max_entries);
+  }
+
+  try {
+    fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
+  } catch (e) {
+    console.error("Failed to write logs:", e.message);
+  }
+}
+
 // Health check endpoint (no auth required)
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -170,6 +214,96 @@ const authRateLimiter = (() => {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
+
+function logError(level, source, error, request) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level,
+    source,
+    error: error?.message || String(error),
+    stack: error?.stack || null,
+    request: request ? {
+      method: request.method,
+      path: request.path,
+      query: request.query,
+      ip: request.ip,
+      userAgent: request.get("user-agent")
+    } : null
+  };
+
+  let logs = { version: "1.0", max_entries: 500, entries: [] };
+  try {
+    if (fs.existsSync(LOGS_FILE)) {
+      const data = fs.readFileSync(LOGS_FILE, "utf-8");
+      logs = JSON.parse(data);
+    }
+  } catch (e) {
+    console.warn("Failed to read logs:", e.message);
+  }
+
+  logs.entries.unshift(logEntry);
+  if (logs.entries.length > logs.max_entries) {
+    logs.entries = logs.entries.slice(0, logs.max_entries);
+  }
+
+  try {
+    fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
+  } catch (e) {
+    console.error("Failed to write logs:", e.message);
+  }
+}
+
+// ==================== LOGS API ====================
+app.get("/api/logs", (req, res) => {
+  try {
+    const level = req.query.level;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+
+    let logs = { version: "1.0", max_entries: 500, entries: [] };
+    if (fs.existsSync(LOGS_FILE)) {
+      const data = fs.readFileSync(LOGS_FILE, "utf-8");
+      logs = JSON.parse(data);
+    }
+
+    let filteredLogs = logs.entries;
+    if (level) {
+      filteredLogs = logs.entries.filter(entry => entry.level === level);
+    }
+
+    const paginatedLogs = filteredLogs
+      .slice(offset, offset + limit)
+      .map(entry => ({
+        timestamp: entry.timestamp,
+        level: entry.level,
+        source: entry.source,
+        error: entry.error,
+        request: entry.request
+      }));
+
+    res.json({
+      logs: paginatedLogs,
+      total: filteredLogs.length,
+      offset,
+      limit,
+      hasMore: offset + limit < filteredLogs.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/logs/clear", (req, res) => {
+  try {
+    fs.writeFileSync(LOGS_FILE, JSON.stringify({ version: "1.0", max_entries: 500, entries: [] }));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Static files
 app.use(express.static(path.join(__dirname, "..", "frontend")));
 
 // Multer for file uploads
@@ -251,6 +385,8 @@ app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     req.session.username = user.username;
     res.json({ ok: true, username: user.username, isLoggedIn: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -314,6 +450,8 @@ app.get("/api/profiles", apiRateLimiter, (req, res) => {
     }));
     res.json(result);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -344,6 +482,8 @@ app.post("/api/profiles", apiRateLimiter, (req, res) => {
       transaction_count: 0,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -377,6 +517,8 @@ app.delete("/api/profiles/:id", apiRateLimiter, (req, res) => {
     db.prepare("DELETE FROM profiles WHERE id = ?").run(pid);
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -422,6 +564,8 @@ app.delete("/api/profile/data", apiRateLimiter, (req, res) => {
         "All profile data has been deleted and categories reset to defaults",
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -441,6 +585,8 @@ app.get("/api/settings", apiRateLimiter, (req, res) => {
     for (const r of rows) settings[r.key] = r.value;
     res.json(settings);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -455,6 +601,8 @@ app.put("/api/settings", apiRateLimiter, (req, res) => {
     for (const [k, v] of entries) upsert.run(k, String(v), pid);
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -478,6 +626,8 @@ app.get("/api/categories", apiRateLimiter, (req, res) => {
       .all(pid);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -509,6 +659,8 @@ app.post("/api/categories", apiRateLimiter, (req, res) => {
       profile_id: pid,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -535,6 +687,8 @@ app.put("/api/categories/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -549,6 +703,8 @@ app.delete("/api/categories/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -559,6 +715,8 @@ app.delete("/api/categories", apiRateLimiter, (req, res) => {
     db.prepare("DELETE FROM categories WHERE profile_id=?").run(pid);
     res.json({ ok: true, message: "All categories deleted" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -663,6 +821,8 @@ app.get("/api/categories/mappings", apiRateLimiter, (req, res) => {
     `).all(pid);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -695,6 +855,8 @@ app.post("/api/categories/mappings", apiRateLimiter, (req, res) => {
       res.json({ ok: true, id: info.lastInsertRowid });
     }
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -710,6 +872,8 @@ app.delete("/api/categories/mappings/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -854,6 +1018,8 @@ app.post("/api/categories/auto-map", apiRateLimiter, (req, res) => {
       mappings: proposedMappings
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -900,6 +1066,8 @@ app.post("/api/categories/apply-mappings", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true, updated });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -915,6 +1083,8 @@ app.get("/api/tags", apiRateLimiter, (req, res) => {
       .all(pid);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -944,6 +1114,8 @@ app.post("/api/tags", apiRateLimiter, (req, res) => {
       .run(name.trim(), tagColor, pid);
     res.json({ id: info.lastInsertRowid, name: name.trim(), color: tagColor });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     if (err.message.includes('UNIQUE constraint')) {
       return res.status(400).json({ error: 'Tag already exists' });
     }
@@ -964,6 +1136,8 @@ app.put("/api/tags/:id", apiRateLimiter, (req, res) => {
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     if (err.message.includes('UNIQUE constraint')) {
       return res.status(400).json({ error: 'Tag name already exists' });
     }
@@ -980,6 +1154,8 @@ app.delete("/api/tags/:id", apiRateLimiter, (req, res) => {
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1004,6 +1180,8 @@ app.post("/api/transactions/:id/tags", apiRateLimiter, (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1027,6 +1205,8 @@ app.put("/api/transactions/:id/tags", apiRateLimiter, (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1050,6 +1230,8 @@ app.get("/api/transactions/:id/tags", apiRateLimiter, (req, res) => {
       .all(req.params.id, pid);
     res.json(tags);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1087,6 +1269,8 @@ app.get("/api/transactions/by-tag/:tagId", apiRateLimiter, (req, res) => {
     const rows = db.prepare(sql).all(...params);
     res.json({ rows, total: rows.length });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1229,6 +1413,8 @@ app.get("/api/transactions", apiRateLimiter, (req, res) => {
     const total = db.prepare(countSql).get(...cparams).c;
     res.json({ rows, total });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1284,6 +1470,8 @@ app.get("/api/transactions/summary", apiRateLimiter, (req, res) => {
       count: result.count || 0
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1342,6 +1530,8 @@ app.post("/api/transactions", apiRateLimiter, (req, res) => {
       );
     res.json({ id: info.lastInsertRowid, ...req.body, profile_id: pid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1373,6 +1563,8 @@ app.get("/api/transactions/:id", apiRateLimiter, (req, res) => {
 
     res.json(tx);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1441,6 +1633,8 @@ app.put("/api/transactions/bulk", apiRateLimiter, (req, res) => {
 
     return res.status(400).json({ error: "Invalid action. Must be 'delete' or 'update'" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1506,6 +1700,8 @@ app.put("/api/transactions/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1520,6 +1716,8 @@ app.delete("/api/transactions/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1530,6 +1728,8 @@ app.delete("/api/transactions", apiRateLimiter, (req, res) => {
     db.prepare("DELETE FROM transactions WHERE profile_id=?").run(pid);
     res.json({ ok: true, message: "All transactions deleted" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1552,6 +1752,8 @@ app.patch("/api/transactions/:id/reconcile", apiRateLimiter, (req, res) => {
     ).run(newStatus, newStatus, req.params.id, pid);
     res.json({ id: parseInt(req.params.id), reconciled: newStatus, reconciled_at: newStatus ? new Date().toISOString() : null });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1569,6 +1771,8 @@ app.post("/api/transactions/reconcile/bulk", apiRateLimiter, (req, res) => {
     ).run(pid, startDate, endDate);
     res.json({ message: `${result.changes} transactions reconciled`, count: result.changes });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1588,6 +1792,8 @@ app.get("/api/transactions/reconcile/summary", apiRateLimiter, (req, res) => {
     ).get(...pids);
     res.json(summary);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1607,6 +1813,187 @@ app.put("/api/transactions/reconcile-batch", apiRateLimiter, (req, res) => {
     ).run(...transaction_ids, pid);
     res.json({ message: `${result.changes} transactions reconciled`, updated: result.changes });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// RECEIPTS
+// ========================
+
+// Upload receipt for a transaction
+app.post("/api/receipts/upload", apiRateLimiter, upload.single('receipt'), (req, res) => {
+  try {
+    const pid = getProfileId(req);
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const { transaction_id } = req.body;
+    if (!transaction_id) {
+      return res.status(400).json({ error: "Transaction ID is required" });
+    }
+
+    const filename = `${Date.now()}-${req.file.originalname}`;
+    const storagePath = path.join(__dirname, 'uploads', 'receipts', filename);
+
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(__dirname, 'uploads', 'receipts');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Save the file
+    fs.writeFileSync(storagePath, req.file.buffer);
+
+    // Get file size
+    const stats = fs.statSync(storagePath);
+    const fileSize = stats.size;
+
+    // Get file type from MIME type
+    const fileType = req.file.mimetype;
+
+    // Store receipt in database
+    const stmt = db.prepare(
+      `INSERT INTO receipts (transaction_id, filename, original_name, file_type, file_size, storage_path, profile_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    const result = stmt.run(
+      transaction_id,
+      filename,
+      req.file.originalname,
+      fileType,
+      fileSize,
+      storagePath,
+      pid
+    );
+
+    res.json({
+      id: result.lastInsertRowid,
+      transaction_id: parseInt(transaction_id),
+      filename,
+      original_name: req.file.originalname,
+      file_type: fileType,
+      file_size: fileSize,
+      url: `/receipts/${filename}`,
+      uploaded_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    if (err.code === 'ENOENT' || err.code === 'EACCES') {
+      res.status(500).json({ error: "Upload directory not accessible" });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
+// Get receipt by ID
+app.get("/api/receipts/:id", apiRateLimiter, (req, res) => {
+  try {
+    const { id } = req.params;
+    const receipt = db.prepare(
+      `SELECT * FROM receipts WHERE id = ?`
+    ).get(id);
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Receipt not found" });
+    }
+
+    res.json(receipt);
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get receipt by transaction ID
+app.get("/api/receipts/transaction/:transactionId", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { transactionId } = req.params;
+    const receipt = db.prepare(
+      `SELECT * FROM receipts WHERE transaction_id = ? AND profile_id = ?`
+    ).get(transactionId, pid);
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Receipt not found" });
+    }
+
+    res.json(receipt);
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get receipt file data
+app.get("/api/receipts/file/:filename", apiRateLimiter, (req, res) => {
+  try {
+    const { filename } = req.params;
+    const storagePath = path.join(__dirname, 'uploads', 'receipts', filename);
+
+    if (!fs.existsSync(storagePath)) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    const ext = path.extname(filename).toLowerCase();
+
+    // Set appropriate content type
+    let contentType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
+    else if (['.png'].includes(ext)) contentType = 'image/png';
+    else if (['.gif'].includes(ext)) contentType = 'image/gif';
+    else if (['.pdf'].includes(ext)) contentType = 'application/pdf';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.sendFile(storagePath, {}, (err) => {
+      if (err && err.code !== 'ECONNABORTED') {
+        console.error('Error sending file:', err);
+      }
+    });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete receipt
+app.delete("/api/receipts/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { id } = req.params;
+
+    const receipt = db.prepare("SELECT * FROM receipts WHERE id = ? AND profile_id = ?").get(id, pid);
+
+    if (!receipt) {
+      return res.status(404).json({ error: "Receipt not found" });
+    }
+
+    // Delete the file if it exists
+    try {
+      if (fs.existsSync(receipt.storage_path)) {
+        fs.unlinkSync(receipt.storage_path);
+      }
+    } catch (err) {
+      console.error('Error deleting receipt file:', err);
+    }
+
+    // Delete from database
+    db.prepare("DELETE FROM receipts WHERE id = ?").run(id);
+
+    res.json({ message: "Receipt deleted successfully" });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1631,6 +2018,8 @@ app.get("/api/budgets", apiRateLimiter, (req, res) => {
       .all(...pids);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1654,6 +2043,8 @@ app.post("/api/budgets", apiRateLimiter, (req, res) => {
       );
     res.json({ id: info.lastInsertRowid, ...req.body, profile_id: pid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1680,6 +2071,8 @@ app.put("/api/budgets/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1694,6 +2087,8 @@ app.delete("/api/budgets/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1742,6 +2137,8 @@ app.put("/api/budgets/:id/rollover", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true, budget });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1855,6 +2252,8 @@ app.get("/api/budgets/summary", apiRateLimiter, (req, res) => {
 
     res.json(summary);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1904,6 +2303,8 @@ app.post("/api/budgets/duplicate-last", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true, count: prevBudgets.length });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1956,6 +2357,8 @@ app.post("/api/budgets/from-expenses", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true, count: expenses.length });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1985,6 +2388,8 @@ app.get("/api/budgets/history", apiRateLimiter, (req, res) => {
 
     res.json(history);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2056,6 +2461,8 @@ app.get("/api/budgets/improvements", apiRateLimiter, (req, res) => {
 
     res.json(history);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2134,6 +2541,8 @@ app.get("/api/budgets/alerts", apiRateLimiter, (req, res) => {
 
     res.json({ alerts, threshold: alertThreshold, startDate, endDate });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2183,10 +2592,11 @@ app.get("/api/budgets/zero-based", apiRateLimiter, (req, res) => {
     `).all(pid, startOfMonth, endOfMonth)[0]?.total || 0;
 
     // Calculate already budgeted amounts
-    const alreadyBudgeted = db.prepare(
+    const alreadyBudgetedRows = db.prepare(
       `SELECT SUM(amount) as total FROM budgets
        WHERE profile_id = ? AND start_date >= ? AND start_date < ?
-    `).all(pid, startOfMonth, endOfMonth)[0]?.total || 0;
+    `).all(pid, startOfMonth, endOfMonth);
+    const alreadyBudgeted = (alreadyBudgetedRows && alreadyBudgetedRows[0]?.total) ?? 0;
 
     // Calculate unassigned budget for this month
     const unassignedBudget = Math.max(0, remaining - alreadyBudgeted);
@@ -2216,12 +2626,14 @@ app.get("/api/budgets/zero-based", apiRateLimiter, (req, res) => {
       categories,
       allocations,
       remaining_income: remaining,
-      already_budgeted,
+      alreadyBudgeted,
       unassigned_budget: unassignedBudget,
       period: month,
       can_allocate: unassignedBudget > 0,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2236,7 +2648,7 @@ app.post("/api/budgets/allocate", apiRateLimiter, (req, res) => {
       return res.status(400).json({ error: "Category ID and amount are required" });
     }
 
-    const period = period || "monthly";
+    const budgetPeriod = period || "monthly";
 
     // Get month for this budget (default to current month)
     const month = req.query.month || new Date().toISOString().slice(0, 7);
@@ -2267,6 +2679,8 @@ app.post("/api/budgets/allocate", apiRateLimiter, (req, res) => {
       message: "Budget allocated successfully"
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2364,6 +2778,175 @@ app.get("/api/budgets/zero-based/summary", apiRateLimiter, (req, res) => {
       period: month,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// BUDGET FORECASTING
+// ========================
+app.get("/api/budgets/forecast", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { month = new Date().toISOString().slice(0, 7) } = req.query;
+
+    // Get budgets active in or before the forecast start month
+    const startOfMonth = `${month}-01`;
+    const endOfMonth = new Date(new Date(`${month}-01`).setMonth(new Date(`${month}-01`).getMonth() + 1)).toISOString().slice(0, 10);
+
+    const budgets = db.prepare(`
+      SELECT b.*, c.name as category_name, c.color as category_color
+      FROM budgets b
+      JOIN categories c ON c.id = b.category_id
+      WHERE b.profile_id = ? AND b.start_date <= ?
+      ORDER BY b.start_date DESC
+    `).all(pid, month);
+
+    if (budgets.length === 0) {
+      return res.json({
+        period: month,
+        history: [],
+        forecast: [],
+        total_budget: 0,
+        avg_adherence: 0,
+      });
+    }
+
+    // Get historical spending by category for past 12 months
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const startHistory = oneYearAgo.toISOString().slice(0, 7);
+
+    const historicalData = db.prepare(`
+      SELECT
+        strftime('%Y-%m', date) as month,
+        b.category_id,
+        b.period,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+      FROM budgets b
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND t.profile_id = b.profile_id
+        AND t.date >= b.start_date
+        AND t.date < date(b.start_date, '+1 month')
+        AND t.type = 'expense'
+      WHERE b.profile_id = ?
+      GROUP BY month, b.category_id, b.period
+    `).all(pid);
+
+    // Build category historical averages
+    const categoryAverages = {};
+    for (const row of historicalData) {
+      if (!categoryAverages[row.category_id]) {
+        categoryAverages[row.category_id] = { total: 0, count: 0, avgAmount: 0 };
+      }
+      if (row.spent > 0) {
+        categoryAverages[row.category_id].total += row.spent;
+        categoryAverages[row.category_id].count += 1;
+      }
+    }
+
+    for (const cid in categoryAverages) {
+      if (categoryAverages[cid].count > 0) {
+        categoryAverages[cid].avgAmount = categoryAverages[cid].total / categoryAverages[cid].count;
+      }
+    }
+
+    // Generate forecast for next 6 months
+    const forecastMonths = [];
+    const now = new Date();
+    for (let i = 1; i <= 6; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      forecastMonths.push({
+        month: date.toISOString().slice(0, 7),
+        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      });
+    }
+
+    const forecastData = forecastMonths.map((fm) => {
+      const fmMonthStr = fm.month + '-01';
+      const fmNextMonthStr = new Date(new Date(fm.month + '-01').setMonth(new Date(fm.month + '-01').getMonth() + 1)).toISOString().slice(0, 10);
+
+      // Get current budget amount for this month (if active)
+      const currentBudget = budgets.find(b => b.start_date === fmMonthStr) || budgets[budgets.length - 1];
+
+      // Predicted spending based on historical average
+      const avgSpending = categoryAverages[currentBudget.category_id]
+        ? categoryAverages[currentBudget.category_id].avgAmount
+        : currentBudget.amount * 0.5; // Default to 50% if no history
+
+      // Apply inflation adjustment (3% annually)
+      const monthsDiff = new Date(fm.month + '-01').getMonth() - new Date().getMonth();
+      const inflationFactor = Math.pow(1.03, Math.max(0, monthsDiff));
+
+      const predictedSpent = avgSpending * inflationFactor;
+      const adherence = currentBudget.amount > 0 ? Math.min(100, (predictedSpent / currentBudget.amount) * 100) : 0;
+      const status = adherence > 100 ? 'over' : adherence >= 80 ? 'warning' : 'ok';
+      const forecastRemaining = Math.max(0, currentBudget.amount - predictedSpent);
+
+      return {
+        month: fm.month,
+        label: fm.label,
+        budget_amount: currentBudget.amount,
+        predicted_spent: predictedSpent,
+        adherence,
+        status,
+        forecast_remaining: forecastRemaining,
+      };
+    });
+
+    // Get historical adherence for comparison
+    const historyMonths = [];
+    const endOfHistory = new Date(now);
+    endOfHistory.setMonth(endOfHistory.getMonth() - 1);
+
+    for (let i = 1; i <= 6; i++) {
+      const date = new Date(endOfHistory.getFullYear(), endOfHistory.getMonth() - i, 1);
+      historyMonths.push({
+        month: date.toISOString().slice(0, 7),
+        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      });
+    }
+
+    const historyData = db.prepare(`
+      SELECT
+        strftime('%Y-%m', start_date) as month,
+        SUM(amount) as total_budget,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
+      FROM budgets b
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND t.profile_id = b.profile_id
+        AND t.date >= b.start_date
+        AND t.date < date(b.start_date, '+1 month')
+      WHERE b.profile_id = ? AND strftime('%Y-%m', start_date) <= ?
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT ?
+    `).all(pid, now.toISOString().slice(0, 7), 6);
+
+    const history = historyData.map((h) => ({
+      month: h.month,
+      label: new Date(h.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      total_budget: h.total_budget || 0,
+      total_spent: h.total_spent || 0,
+      adherence: h.total_budget > 0 ? Math.min(100, (h.total_spent / h.total_budget) * 100) : 0,
+    }));
+
+    const avgAdherence = history.length > 0
+      ? history.reduce((sum, h) => sum + h.adherence, 0) / history.length
+      : 0;
+
+    res.json({
+      period: month,
+      history,
+      forecast: forecastData,
+      total_budget: budgets.reduce((sum, b) => sum + b.amount, 0),
+      avg_adherence: Math.round(avgAdherence),
+    });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2382,6 +2965,8 @@ app.get("/api/savings-goals", apiRateLimiter, (req, res) => {
       .all(...pids);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2407,6 +2992,8 @@ app.post("/api/savings-goals", apiRateLimiter, (req, res) => {
       );
     res.json({ id: info.lastInsertRowid, name, target_amount, current_amount: current_amount || 0, deadline, notes, profile_id: pid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2432,6 +3019,8 @@ app.put("/api/savings-goals/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2446,6 +3035,8 @@ app.delete("/api/savings-goals/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2470,6 +3061,8 @@ app.get("/api/loans", apiRateLimiter, (req, res) => {
       .all(pid);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2515,6 +3108,8 @@ app.post("/api/loans", apiRateLimiter, (req, res) => {
       profile_id: pid,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2536,6 +3131,8 @@ app.get("/api/loans/:id", apiRateLimiter, (req, res) => {
       .all(req.params.id);
     res.json(loan);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2588,6 +3185,8 @@ app.put("/api/loans/:id", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2602,6 +3201,8 @@ app.delete("/api/loans/:id", apiRateLimiter, (req, res) => {
       return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2622,6 +3223,8 @@ app.post("/api/loans/:id/rates", apiRateLimiter, (req, res) => {
       .run(req.params.id, rate, start_month, end_month || null);
     res.json({ id: info.lastInsertRowid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2645,6 +3248,8 @@ app.put("/api/loans/:id/rates/:rateId", apiRateLimiter, (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2662,6 +3267,8 @@ app.delete("/api/loans/:id/rates/:rateId", apiRateLimiter, (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2682,6 +3289,8 @@ app.post("/api/loans/:id/prepayments", apiRateLimiter, (req, res) => {
       .run(req.params.id, month, amount, note || "");
     res.json({ id: info.lastInsertRowid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2699,6 +3308,8 @@ app.delete("/api/loans/:id/prepayments/:prepayId", apiRateLimiter, (req, res) =>
     );
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2771,6 +3382,8 @@ app.post("/api/loans/:id/calculate", apiRateLimiter, (req, res) => {
       },
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2895,6 +3508,8 @@ app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {
       currency,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2966,6 +3581,8 @@ app.get("/api/dashboard/charts", apiRateLimiter, (req, res) => {
       currency,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3032,6 +3649,8 @@ app.get("/api/dashboard/net-worth", apiRateLimiter, (req, res) => {
       timeline,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3082,6 +3701,8 @@ app.post("/api/import/upload", apiRateLimiter, upload.single("file"), (req, res)
       }
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3137,6 +3758,8 @@ app.post("/api/import/file-sheet", apiRateLimiter, (req, res) => {
       duplicateIndices,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3298,6 +3921,8 @@ app.post("/api/import/googlesheet", apiRateLimiter, (req, res) => {
         });
       }
     } catch (err) {
+    console.error(err.message);
+    logError("error", err);
       res
         .status(500)
         .json({ error: "Failed to fetch Google Sheet: " + err.message });
@@ -3460,6 +4085,8 @@ app.post("/api/import/execute", apiRateLimiter, (req, res) => {
       message: `Successfully imported ${imported} transactions`,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3477,6 +4104,8 @@ app.get("/api/accounts", apiRateLimiter, (req, res) => {
       .all(pid);
     res.json(accounts);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3502,6 +4131,8 @@ app.post("/api/accounts", apiRateLimiter, (req, res) => {
       );
     res.json({ id: result.lastInsertRowid, message: "Account created" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3529,6 +4160,8 @@ app.put("/api/accounts/:id", apiRateLimiter, (req, res) => {
     );
     res.json({ message: "Account updated" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3546,6 +4179,8 @@ app.delete("/api/accounts/:id", apiRateLimiter, (req, res) => {
     );
     res.json({ message: "Account deleted" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3568,6 +4203,8 @@ app.get("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
       .all(req.params.id);
     res.json(history);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3589,6 +4226,8 @@ app.post("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
       .run(req.params.id, balance);
     res.json({ id: result.lastInsertRowid, balance, recorded_at: new Date().toISOString() });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3604,6 +4243,8 @@ app.delete("/api/accounts/:id/history", apiRateLimiter, (req, res) => {
     db.prepare("DELETE FROM account_balance_history WHERE account_id = ?").run(req.params.id);
     res.json({ message: "Balance history deleted" });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3641,6 +4282,8 @@ app.get("/api/accounts/:id/reconciliation-summary", apiRateLimiter, (req, res) =
       total_transactions: unreconciled.count + reconciled.count
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3662,6 +4305,8 @@ app.get("/api/accounts/history/timeline", apiRateLimiter, (req, res) => {
       .all(...pids);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3685,6 +4330,8 @@ app.get("/api/recurring", apiRateLimiter, (req, res) => {
       .all(pid);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3720,6 +4367,8 @@ app.post("/api/recurring", apiRateLimiter, (req, res) => {
       );
     res.json({ id: info.lastInsertRowid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3761,6 +4410,8 @@ app.put("/api/recurring/:id", apiRateLimiter, (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3773,6 +4424,8 @@ app.delete("/api/recurring/:id", apiRateLimiter, (req, res) => {
     ).run(req.params.id, pid);
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3820,6 +4473,8 @@ app.post("/api/recurring/:id/populate", apiRateLimiter, (req, res) => {
       next_date: nextStr,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3914,6 +4569,8 @@ app.get("/api/recurring/upcoming", apiRateLimiter, (req, res) => {
       currency,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3934,6 +4591,8 @@ app.get("/api/bills", apiRateLimiter, (req, res) => {
     `).all(pid);
     res.json(rows);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4016,6 +4675,8 @@ app.get("/api/bills/upcoming", apiRateLimiter, (req, res) => {
 
     res.json(upcoming);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4041,6 +4702,8 @@ app.post("/api/bills", apiRateLimiter, (req, res) => {
     );
     res.json({ id: info.lastInsertRowid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4067,6 +4730,8 @@ app.put("/api/bills/:id", apiRateLimiter, (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4077,6 +4742,8 @@ app.delete("/api/bills/:id", apiRateLimiter, (req, res) => {
     db.prepare('DELETE FROM bills WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
     res.json({ ok: true });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4105,6 +4772,8 @@ app.post("/api/bills/:id/mark-paid", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true, transactionId: info.lastInsertRowid });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4147,6 +4816,8 @@ app.get("/api/stats/monthly", apiRateLimiter, (req, res) => {
 
     res.json(Object.values(map));
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4184,6 +4855,8 @@ app.get("/api/analytics/daily-heatmap", apiRateLimiter, (req, res) => {
 
     res.json({ dates, year, type });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4206,6 +4879,8 @@ app.get("/api/analytics/distinct-years", apiRateLimiter, (req, res) => {
     if (!years.includes(currentYear)) years.unshift(currentYear);
     res.json({ years });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4246,6 +4921,8 @@ app.get("/api/analytics/weeks", apiRateLimiter, (req, res) => {
     }
     res.json({ weeks });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4400,6 +5077,8 @@ app.get("/api/analytics/category-trends", apiRateLimiter, (req, res) => {
 
     res.json({ labels, datasets, numDays });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4527,6 +5206,8 @@ app.get("/api/analytics/sankey", apiRateLimiter, (req, res) => {
 
     res.json({ nodes, links });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4630,6 +5311,8 @@ app.get("/api/export/:type", apiRateLimiter, (req, res) => {
       res.end(csv);
     }
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4781,6 +5464,8 @@ app.post("/api/calculator/retire", apiRateLimiter, (req, res) => {
       },
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4860,6 +5545,8 @@ app.get("/api/calculator/emergency-fund", apiRateLimiter, (req, res) => {
       accounts: accounts.filter((a) => a.type === "savings"),
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4873,6 +5560,8 @@ app.get("/api/storage-mode", (req, res) => {
     const mode = req.session.storageMode || 'self-hosted';
     res.json(mode);
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4887,6 +5576,8 @@ app.post("/api/storage-mode", apiRateLimiter, (req, res) => {
     req.session.storageMode = mode;
     res.json({ mode });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4951,6 +5642,8 @@ app.get("/api/export", apiRateLimiter, (req, res) => {
       settings: settingsObj,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5067,6 +5760,8 @@ app.post("/api/import", apiRateLimiter, (req, res) => {
       message: `Successfully imported ${importedCount} transactions`,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     console.error('Import error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -5088,6 +5783,8 @@ app.delete("/api/clear-all", apiRateLimiter, (req, res) => {
 
     res.json({ ok: true, message: 'All data cleared' });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5167,6 +5864,8 @@ app.post("/api/calculator/compound-interest", apiRateLimiter, (req, res) => {
       scenarios,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5386,6 +6085,8 @@ app.get("/api/reports/monthly-pdf", apiRateLimiter, async (req, res) => {
 
     doc.end();
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5437,6 +6138,8 @@ app.get("/api/reports/tax-summary", apiRateLimiter, (req, res) => {
       transactionCount: rows.length,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5578,6 +6281,8 @@ app.get("/api/reports/tax-summary-pdf", apiRateLimiter, (req, res) => {
 
     doc.end();
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5629,6 +6334,8 @@ app.get("/api/reports/pl-summary", apiRateLimiter, (req, res) => {
       transactionCount: rows.length,
     });
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -5777,6 +6484,8 @@ app.get("/api/reports/pl-summary-pdf", apiRateLimiter, (req, res) => {
 
     doc.end();
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -6016,6 +6725,8 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
 
     doc.end();
   } catch (err) {
+    console.error(err.message);
+    logError("error", err);
     res.status(500).json({ error: err.message });
   }
 });

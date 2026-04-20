@@ -182,6 +182,44 @@
           <label class="form-label">Notes</label>
           <textarea class="form-control" id="tx-notes" rows="2"></textarea>
         </div>
+        <div class="form-group">
+          <label class="form-label">Receipt</label>
+          <div class="receipt-upload-container">
+            <input
+              type="file"
+              id="tx-receipt"
+              class="receipt-input"
+              accept="image/*,.pdf"
+              data-action="receipts:handleFileSelect"
+            />
+            <div class="receipt-preview" id="receipt-preview">
+              <div class="receipt-placeholder" id="receipt-placeholder">
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span class="receipt-text">Click to upload receipt</span>
+              </div>
+              <img
+                class="receipt-thumbnail"
+                id="receipt-thumbnail"
+                style="display: none"
+                alt="Receipt preview"
+              />
+              <div class="receipt-actions" id="receipt-actions" style="display: none">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  data-action="receipts:removeReceipt"
+                  title="Remove receipt"
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </form>
     </div>
     <div class="modal-footer">
@@ -190,6 +228,53 @@
       </button>
       <button class="btn btn-primary" id="tx-save-btn" data-action="transactions:save">
         Save Transaction
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIPT VIEW MODAL -->
+<div class="modal-overlay" id="receipt-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title">Receipt</div>
+      <button
+        class="btn btn-ghost"
+        data-action="modal:close"
+        data-arg="receipt-modal"
+      >
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <img id="receipt-view-image" style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto;" />
+      <div class="receipt-meta" id="receipt-meta" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border)">
+        <!-- Meta info populated by JS -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a
+        id="receipt-download-link"
+        href="#"
+        download
+        class="btn btn-secondary"
+      >
+        Download
+      </a>
+      <button
+        class="btn btn-danger"
+        data-action="receipts:delete"
+      >
+        Delete
+      </button>
+      <button
+        class="btn btn-secondary"
+        data-action="modal:close"
+        data-arg="receipt-modal"
+      >
+        Close
       </button>
     </div>
   </div>

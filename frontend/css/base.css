@@ -2068,3 +2068,62 @@ tr.row-duplicate td {
   padding-top: 24px;
   border-top: 1px solid var(--border);
 }
+
+/* Focus ring styles for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+.form-control:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard-only navigation */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--primary);
+  color: #fff;
+  padding: 8px 16px;
+  z-index: 9999;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Modal focus trap for keyboard navigation */
+.modal-overlay:focus {
+  outline: none;
+}
+
+.modal-overlay:focus-within .modal {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Active state styling for keyboard navigation */
+nav a:focus,
+.sidebar-nav a:focus,
+.nav-item a:focus {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-active-text) !important;
+}
+
+nav a.active,
+.sidebar-nav a.active,
+.nav-item a.active {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-active-text) !important;
+}
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}

@@ -2,9 +2,7 @@
  * Tests for Budgets page template
  * Budgets page exists in the template system
  */
-
-const fs = require('fs');
-const path = require('path');
+const { fs, path } = require('./testUtils');
 
 describe('Budgets Page', () => {
   const content = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');

@@ -56,6 +56,9 @@ export interface Transaction {
   created_at: string
   updated_at: string
   profile_id: ProfileId
+  category_name?: string
+  category_color?: string
+  reconciled?: boolean
 }
 
 // ============ CATEGORIES ============
@@ -104,6 +107,21 @@ export interface Budget {
   end_date: string | null
   created_at: string
   profile_id: ProfileId
+}
+
+export interface CategoryAllocation {
+  category_id: CategoryId
+  category_name: string
+  category_color: string
+  category_icon: string | null
+  budgeted: number
+  spent: number
+  remaining_budget: number
+  percent_used: number
+  status: 'ok' | 'warning' | 'over'
+  can_allocate: boolean
+  is_budgeted: boolean
+  is_fully_allocated: boolean
 }
 
 // ============ SAVINGS GOALS ============
@@ -281,4 +299,18 @@ export interface BalanceHistory {
   balance: number
   recorded_at: string
   notes?: string
+}
+
+// ============ RECEIPTS ============
+export interface Receipt {
+  id: number
+  transaction_id: TransactionId | null
+  filename: string
+  original_name: string
+  file_type: string
+  file_size: number
+  storage_path: string
+  uploaded_at: string
+  profile_id: ProfileId
+  transaction?: Transaction
 }
