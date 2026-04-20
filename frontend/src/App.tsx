@@ -255,6 +255,19 @@ window.transactions = {
 
 // Modal arg handlers for dynamic modals (using data-arg)
 window.handlers = {
+  'transactions:setType': (arg: string) => {
+    // Import and call the setType function from Transactions component
+    // This is called from the transaction modal buttons
+    const setType = (typeof window.transactionsSetType === 'function')
+      ? window.transactionsSetType
+      : (newType: string) => {
+          const txComponent = document.querySelector('[data-page="transactions"]') as any
+          if (txComponent?.setType) {
+            txComponent.setType(newType)
+          }
+        }
+    setType(arg)
+  },
   'receipt-modal': (arg: any) => {
     if (arg && typeof arg === 'object') {
       // Open receipt modal with receipt data
