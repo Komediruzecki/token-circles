@@ -1,27 +1,22 @@
 {
   "name": "Finance Manager",
-  "short_name": "FinanceMGR",
-  "description": "Personal finance management - track income, expenses, budgets, loans, and more",
+  "short_name": "Finance",
+  "description": "Personal finance tracker with budgeting, transactions, and reporting",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "background_color": "#ffffff",
   "theme_color": "#3b82f6",
-  "orientation": "any",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "/assets/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
-      "src": "/assets/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
-  ],
-  "categories": ["finance", "productivity"],
-  "lang": "en",
-  "dir": "ltr"
+  ]
 }
