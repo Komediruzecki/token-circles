@@ -4,7 +4,7 @@
  */
 
 import { createSignal, onMount } from 'solid-js'
-import { formatCurrency } from '../core/api'
+import { formatCurrency, api } from '../core/api'
 
 interface RetirementGoal {
   id: number
@@ -379,7 +379,8 @@ export default function Retirement() {
           <div class="projection-chart">
             <div class="projection-bars">
               {projectedBalances().slice(0, -1).map((pb) => {
-                const currentBalance = pb.balance
+                // currentBalance calculated but not displayed in current projection UI
+                const _currentBalance = pb.balance
                 const projectedTotal = projection()!.projected_total
                 const barWidth = (pb.balance / projectedTotal) * 100
                 const isStartAge = pb.age === projection()!.current_age
