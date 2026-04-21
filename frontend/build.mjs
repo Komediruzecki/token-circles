@@ -1,5 +1,6 @@
 /**
- * Build script - Generates index.html from templates for the SolidJS SPA.
+ * Build script - Generates index.html for the SolidJS SPA.
+ * Uses Vite for build output. CSS is bundled by Vite.
  */
 
 import fs from 'fs'
@@ -10,7 +11,6 @@ import { execSync } from 'child_process'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const TEMPLATES = path.join(__dirname, 'templates')
 const DIST = path.join(__dirname, 'dist')
 
 function runViteBuild() {
@@ -44,20 +44,326 @@ function generateHTML() {
 <link rel="manifest" href="/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=fallback" rel="stylesheet">
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/components.css">
-<link rel="stylesheet" href="css/dashboard-settings.css">
 <link rel="stylesheet" href="dist/assets/css/index.css">
 </head>
 <body>
 <div id="app"></div>
-`
+<!-- MOBILE OVERLAY -->
+<div class="mobile-overlay" id="mobile-overlay" data-action="toggleSidebar"></div>
 
-  output += fs.readFileSync(path.join(TEMPLATES, 'sidebar.html'), 'utf8')
-  output += fs.readFileSync(path.join(TEMPLATES, 'modals.html'), 'utf8')
-  output += fs.readFileSync(path.join(TEMPLATES, 'toast.html'), 'utf8')
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <button
+      class="hamburger-btn"
+      id="hamburger-btn"
+      data-action="toggleSidebar"
+      aria-label="Toggle menu"
+    >
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  </div>
+  <div class="sidebar-logo">
+    <h1>Finance<span>.</span></h1>
+    <p>Personal Finance Tracker</p>
+  </div>
+  <div class="profile-selector">
+    <div class="profile-dropdown">
+      <button class="profile-dropdown-btn" data-action="profile:toggleDropdown" id="profile-btn">
+        <span class="profile-name" id="profile-btn-name">Loading...</span>
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <div class="profile-dropdown-menu" id="profile-menu"></div>
+    </div>
+  </div>
+  <div style="padding: 0 16px; margin-bottom: 12px">
+    <div id="login-section">
+      <button class="btn btn-secondary btn-sm" style="width: 100%" data-action="authLogin">
+        Sign In
+      </button>
+    </div>
+    <div id="user-section" style="display: none">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0">
+        <svg
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          style="flex-shrink: 0"
+        >
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+        <span
+          id="username-display"
+          style="
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          "
+        ></span>
+        <button
+          class="btn btn-ghost btn-sm"
+          data-action="auth:logout"
+          title="Logout"
+          style="padding: 4px 6px; flex-shrink: 0"
+        >
+          <svg
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
 
-  output += `
+  <!-- Navigation Links -->
+  <nav class="sidebar-nav">
+    <a href="#" data-page="dashboard" class="nav-link active">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z" />
+      </svg>
+      <span>Dashboard</span>
+    </a>
+    <a href="#" data-page="transactions" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>Transactions</span>
+    </a>
+    <a href="#" data-page="budgets" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+      <span>Budgets</span>
+    </a>
+    <a href="#" data-page="goals" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+      <span>Goals</span>
+    </a>
+    <a href="#" data-page="accounts" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <span>Accounts</span>
+    </a>
+    <a href="#" data-page="categories" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+      </svg>
+      <span>Categories</span>
+    </a>
+    <a href="#" data-page="bills" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+      <span>Bills</span>
+    </a>
+    <a href="#" data-page="loans" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+      <span>Loans</span>
+    </a>
+    <a href="#" data-page="housing" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+      <span>Housing</span>
+    </a>
+    <a href="#" data-page="analytics" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+      <span>Analytics</span>
+    </a>
+    <a href="#" data-page="settings" class="nav-link">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+      <span>Settings</span>
+    </a>
+  </nav>
+</nav>
+
+<!-- TOAST NOTIFICATIONS -->
+<div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999"></div>
+
+<!-- MODALS -->
+<div id="toast-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Toast</h3>
+      <button class="modal-close" data-action="toast:close">&times;</button>
+    </div>
+    <div class="modal-body" id="toast-modal-content"></div>
+  </div>
+</div>
+
+<div id="tx-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="tx-modal-title">Transaction</h3>
+      <button class="modal-close" data-action="tx-modal:close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="tx-form">
+        <input type="hidden" id="tx-id" value="" />
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" id="tx-date" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" id="tx-description" class="form-control" placeholder="What's this for?" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount</label>
+          <input type="number" id="tx-amount" class="form-control" step="0.01" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select id="tx-type" class="form-control">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select id="tx-category" class="form-control">
+            <option value="">Select category</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account</label>
+          <select id="tx-account" class="form-control">
+            <option value="">Select account</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Means of Payment</label>
+          <select id="tx-means" class="form-control">
+            <option value="">Select means</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="bank">Bank Transfer</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="tx-notes" class="form-control" rows="3" placeholder="Additional notes..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Receipt</label>
+          <input type="file" id="tx-receipt" accept="image/*" class="form-control" />
+        </div>
+        <div class="form-footer">
+          <button type="button" class="btn btn-secondary" data-action="tx-modal:close">Cancel</button>
+          <button type="button" class="btn btn-primary" data-action="tx-modal:save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="receipt-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Receipt</h3>
+      <button class="modal-close" data-action="receipt-modal:close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="receipt-view-image" class="receipt-preview">
+        <img id="receipt-thumbnail" src="" alt="Receipt" style="display: none" />
+        <div id="receipt-placeholder" class="receipt-placeholder">
+          <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p>No receipt image</p>
+        </div>
+      </div>
+      <div id="receipt-actions" class="receipt-actions" style="display: none; margin-top: 16px">
+        <a id="receipt-download" href="#" download class="btn btn-secondary btn-sm">Download</a>
+        <button id="receipt-delete" class="btn btn-danger btn-sm">Delete</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="receipt-modal:close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="quickadd-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Quick Add Transaction</h3>
+      <button class="modal-close" data-action="quickadd-modal:close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="quickadd-form">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" name="date" class="form-control" value={new Date().toISOString().slice(0, 10)} />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" name="description" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount</label>
+          <input type="number" name="amount" class="form-control" step="0.01" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select name="type" class="form-control">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select name="category" class="form-control">
+            <option value="">Select category</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account</label>
+          <select name="account" class="form-control">
+            <option value="">Select account</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea name="notes" class="form-control" rows="3"></textarea>
+        </div>
+        <div class="form-footer">
+          <button type="submit" class="btn btn-primary">Add Transaction</button>
+          <button type="button" class="btn btn-secondary" data-action="quickadd-modal:close">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="/dist/assets/index.js"></script>
 <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/dist/assets/sw.js").catch(()=>{});}</script>
 </body>
@@ -69,55 +375,10 @@ function generateHTML() {
   fs.writeFileSync(path.join(repoRoot, 'index.html'), output, 'utf8')
 }
 
-async function copyStaticFiles() {
-  const cssDir = path.join(__dirname, 'css')
-  const srcCssDir = path.join(__dirname, 'src')
-  const outCssDir = path.join(DIST, 'assets', 'css')
-
-  if (!fs.existsSync(outCssDir)) {
-    fs.mkdirSync(outCssDir, { recursive: true })
-  }
-
-  // Copy CSS from both src and css directories (SolidJS refactor mixed files)
-  await fs.promises.copyFile(path.join(cssDir, 'base.css'), path.join(outCssDir, 'base.css'))
-
-  await fs.promises.copyFile(
-    path.join(cssDir, 'components.css'),
-    path.join(outCssDir, 'components.css')
-  )
-
-  // Copy dashboard-settings.css
-  if (fs.existsSync(path.join(cssDir, 'dashboard-settings.css'))) {
-    await fs.promises.copyFile(
-      path.join(cssDir, 'dashboard-settings.css'),
-      path.join(outCssDir, 'dashboard-settings.css')
-    )
-    console.log('Copied dashboard-settings.css')
-  }
-
-  // Copy index.css from src which contains app layout styles (.app-root, .app-header, etc.)
-  if (fs.existsSync(path.join(srcCssDir, 'index.css'))) {
-    await fs.promises.copyFile(path.join(srcCssDir, 'index.css'), path.join(outCssDir, 'index.css'))
-    console.log('Copied src/index.css with layout styles')
-  }
-
-  if (!fs.existsSync(path.join(DIST, 'assets', 'templates'))) {
-    fs.mkdirSync(path.join(DIST, 'assets', 'templates'), { recursive: true })
-  }
-
-  for (const file of ['sidebar.html', 'modals.html', 'toast.html']) {
-    await fs.promises.copyFile(
-      path.join(TEMPLATES, file),
-      path.join(DIST, 'assets', 'templates', file)
-    )
-  }
-}
-
 // Main build function
 async function build() {
   console.log('Building Finance Manager...')
   await runViteBuild()
-  await copyStaticFiles()
   await copyServiceWorker()
   await copyStandaloneServiceWorker()
   generateHTML()
