@@ -3,9 +3,9 @@
  * Imports all necessary stylesheets
  */
 
-/* Theme CSS variables are already in base.css - just import it */
-@import '../css/base.css';
-@import '../css/components.css';
+/* CSS modules and component styles */
+@import '../css/dashboard-settings.css';
+@import '../css/Sidebar.module.css';
 
 /* Utility classes for SolidJS components */
 :root {
