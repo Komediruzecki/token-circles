@@ -235,7 +235,22 @@ function migrate() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_bills_profile ON bills(profile_id)');
 
-  // Create zero-based budgeting table
+  // Create housings table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS housings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL DEFAULT 1,
+    name TEXT NOT NULL,
+    monthly_amount REAL NOT NULL,
+    due_date TEXT NOT NULL DEFAULT '',
+    autopay INTEGER NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)');
+
+// Create zero-based budgeting table
   db.exec(`
     CREATE TABLE IF NOT EXISTS budgets_zero_based (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

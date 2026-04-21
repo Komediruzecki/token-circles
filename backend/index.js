@@ -8,6 +8,76 @@ const bcrypt = require("bcrypt");
 const SQLiteStore = require("connect-sqlite3")(session);
 const db = require("./database");
 const loanCalc = require("./models/loanCalculator");
+
+// Retirement projection calculation helper function
+function calculateRetirementProjection(
+  database,
+  profileId,
+  settings = null,
+  currentAge = 30,
+  retirementAge = 65,
+  currentSavings = 0,
+  monthlyContribution = 500,
+  annualReturn = 7,
+  withdrawalRate = 4,
+  country = 'US'
+) {
+  const monthsToRetirement = (retirementAge - currentAge) * 12;
+  const annualContribution = monthlyContribution * 12;
+
+  const countryAdjustment = country === 'US' ? 1.0 : 0.9;
+  const monthlyExpenses = (currentAge >= retirementAge ? 0 : 2500) * countryAdjustment;
+  const adjustedExpenses = country === 'US' && currentAge >= retirementAge ? 2500 : monthlyExpenses;
+  const annualWithdrawal = adjustedExpenses * 12;
+
+  let savings = currentSavings;
+  let investmentGains = 0;
+  let balance = savings;
+
+  // Project savings until retirement
+  for (let i = 1; i <= monthsToRetirement; i++) {
+    const monthlyReturn = (annualReturn / 100) / 12;
+    investmentGains += savings * monthlyReturn;
+    savings += monthlyContribution;
+    balance = savings + investmentGains;
+  }
+
+  let retirementSavings = balance;
+  let yearsInRetirement = 0;
+  let balanceAtYearEnd = retirementSavings;
+  let finalBalance = retirementSavings;
+
+  // Project spending in retirement until fund is depleted
+  while (retirementSavings > 0 && yearsInRetirement < 50) {
+    retirementSavings -= annualWithdrawal;
+    const annualReturnReal = (annualReturn - 3) / 100;
+    retirementSavings *= (1 + annualReturnReal);
+    yearsInRetirement++;
+    balanceAtYearEnd = Math.max(0, retirementSavings);
+    finalBalance = balanceAtYearEnd;
+  }
+
+  const shortfall = balanceAtYearEnd < 0 ? Math.abs(balanceAtYearEnd) : 0;
+  const yearsOfRunway = Math.round(retirementSavings / (annualWithdrawal / 12));
+
+  return {
+    currentAge,
+    retirementAge,
+    currentSavings: Math.round(currentSavings),
+    monthlyContribution: Math.round(monthlyContribution),
+    annualReturn: Math.round(annualReturn),
+    withdrawalRate: Math.round(withdrawalRate),
+    country,
+    expensesAtRetirement: Math.round(annualWithdrawal),
+    retirementSavings: Math.round(retirementSavings),
+    retirementAgeActual: retirementAge + yearsInRetirement,
+    yearsInRetirement,
+    balanceAtRetirement: Math.round(balance),
+    finalBalance: Math.round(finalBalance),
+    shortfall,
+    yearsOfRunway,
+  };
+}
 const XLSX = require("xlsx");
 const PDFDocument = require("pdfkit");
 
@@ -5543,6 +5613,101 @@ app.get("/api/calculator/emergency-fund", apiRateLimiter, (req, res) => {
       monthsWithData,
       coverage,
       accounts: accounts.filter((a) => a.type === "savings"),
+    });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// RETIREMENT ENDPOINTS
+// ========================
+app.get("/api/retirement-goals", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const settings = db.prepare("SELECT * FROM settings WHERE key = ? AND profile_id = ?").get('retirement_goals', pid);
+
+    const goals = db.prepare(`
+      SELECT
+        id,
+        name,
+        target_amount,
+        current_amount,
+        deadline,
+        notes,
+        created_at
+      FROM savings_goals
+      WHERE profile_id = ?
+      ORDER BY deadline ASC
+    `).all(pid);
+
+    res.json({
+      settings: settings ? JSON.parse(settings.value) : null,
+      goals: goals.map(g => ({ ...g, profile_id: pid }))
+    });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/retirement/projection", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const params = req.query;
+
+    const settings = db.prepare("SELECT * FROM settings WHERE key = ? AND profile_id = ?").get('retirement_goals', pid);
+
+    const result = calculateRetirementProjection(
+      db,
+      pid,
+      settings ? JSON.parse(settings.value) : null,
+      parseFloat(params.currentAge || params.age || 30) || 30,
+      parseFloat(params.retirementAge || params.retire || 65) || 65,
+      parseFloat(params.currentSavings || params.savings || 0) || 0,
+      parseFloat(params.monthlyContribution || params.contribution || 500) || 0,
+      parseFloat(params.annualReturn || params.return || 7) || 7,
+      parseFloat(params.withdrawalRate || params.rate || 4) || 4,
+      params.country || 'US'
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// HOUSING ENDPOINTS
+// ========================
+app.get("/api/housing", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+
+    const housings = db.prepare(`
+      SELECT
+        id,
+        name,
+        monthly_amount,
+        due_date,
+        autopay,
+        notes,
+        created_at
+      FROM housings
+      WHERE profile_id = ?
+      ORDER BY due_date ASC
+    `).all(pid);
+
+    const totalMonthly = housings.reduce((sum, h) => sum + Math.abs(parseFloat(h.monthly_amount) || 0), 0);
+
+    res.json({
+      housings: housings.map(h => ({ ...h, profile_id: pid })),
+      total_monthly: Math.round(totalMonthly)
     });
   } catch (err) {
     console.error(err.message);
