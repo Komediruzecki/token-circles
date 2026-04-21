@@ -268,9 +268,9 @@ export default function Budgets() {
             <div class="forecast-title">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
                   d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
                 />
               </svg>
@@ -289,7 +289,9 @@ export default function Budgets() {
                   <div class="stat-label">Historical Adherence</div>
                   <div
                     class="stat-value"
-                    class={forecastData()!.avg_adherence >= 80 ? 'positive' : ''}
+                    classList={{
+                      positive: forecastData()!.avg_adherence >= 80,
+                    }}
                   >
                     {forecastData()!.avg_adherence}%
                   </div>
@@ -310,7 +312,7 @@ export default function Budgets() {
                   <span class="chart-label">Status</span>
                 </div>
                 {forecastData()!.forecast.map((fm) => (
-                  <div class="chart-row" key={fm.month}>
+                  <div class="chart-row" data-index={fm.month}>
                     <span class="chart-label">{fm.label}</span>
                     <span class="chart-value budget-val">{formatCurrency(fm.budget_amount)}</span>
                     <span class="chart-value actual-val">{formatCurrency(fm.predicted_spent)}</span>

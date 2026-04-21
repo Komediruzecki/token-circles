@@ -4,7 +4,7 @@
  */
 
 import { createSignal, onMount, For } from 'solid-js'
-import '../css/Sidebar.module.css'
+import styles from '@/css/Sidebar.module.css'
 
 export default function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = createSignal(false)

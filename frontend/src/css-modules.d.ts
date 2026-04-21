@@ -1,14 +1,13 @@
 /**
  * CSS Module Type Declarations
- * Global declaration for all CSS modules
  */
 
-declare module '*.css' {
+declare module '*.module.css' {
   const styles: Record<string, string>
   export default styles
 }
 
-declare module '*.module.css' {
+declare module '@/css/*.module.css' {
   const styles: Record<string, string>
   export default styles
 }

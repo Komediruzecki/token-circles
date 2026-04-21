@@ -1,8 +1,8 @@
 /**
- * CSS Module Type Declarations for components folder
+ * CSS Module Type Declarations for Sidebar
  */
 
-declare module '*.module.css' {
+declare module './Sidebar.module.css' {
   const styles: Record<string, string>
   export default styles
 }

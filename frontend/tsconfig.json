@@ -13,7 +13,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "jsxImportSource": "solid-js",
 
     /* Linting */
@@ -22,7 +22,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    /* Path aliases */
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
@@ -35,6 +34,6 @@
       "@/css/*": ["src/css/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "css-modules.d.ts", "src/css/**/*.d.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

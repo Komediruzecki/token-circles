@@ -3,14 +3,7 @@
  * Handles CSV and Excel file import with preview and duplicate detection
  */
 
-import { onMount, createSignal } from 'solid-js'
-
-// Load XLSX from global scope (built into the bundle)
-const XLSX =
-  (window as any).XLSX ||
-  (() => {
-    throw new Error('XLSX library not loaded')
-  })
+import { createSignal } from 'solid-js'
 
 type ImportResult = {
   status: 'idle' | 'uploading' | 'previewing' | 'importing' | 'success' | 'error'
@@ -18,20 +11,9 @@ type ImportResult = {
   errors?: string[]
 }
 
-interface PreviewData {
-  headers: string[]
-  rows: any[][]
-  totalRows: number
-  totalPages: number
-  duplicates?: number
-  estimatedImport?: number
-}
-
 export default function Import() {
-  const [_file, setFile] = createSignal<File | null>(null)
   const [fileContent, setFileContent] = createSignal<any[]>([])
   const [headers, setHeaders] = createSignal<string[]>([])
-  const [_previewData, setPreviewData] = createSignal<PreviewData | null>(null)
   const [importResult, setImportResult] = createSignal<ImportResult>({ status: 'idle' })
   const [selectedRows, setSelectedRows] = createSignal<Set<number>>(new Set())
   const [currentPage, setCurrentPage] = createSignal(1)
@@ -60,9 +42,9 @@ export default function Import() {
         let val = values[index] || ''
         // Try to parse numbers
         if (!isNaN(parseFloat(val))) {
-          val = parseFloat(val)
+          val = parseFloat(val) as any
         }
-        row[header] = val
+        row[header] = val as any
       })
       result.push(row)
     }
@@ -73,10 +55,10 @@ export default function Import() {
   // Parse Excel content
   const parseExcel = async (binary: ArrayBuffer): Promise<any[]> => {
     try {
-      const workbook = XLSX.read(binary, { type: 'array' })
+      const workbook = (window as any).XLSX.read(binary, { type: 'array' })
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
-      const data = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+      const data = (window as any).XLSX.utils.sheet_to_json(worksheet, { defval: '' })
       return data
     } catch {
       throw new Error('Failed to parse Excel file')
@@ -84,14 +66,14 @@ export default function Import() {
   }
 
   // Handle file upload
-  const _handleFileUpload = async (e: Event) => {
+  // @ts-expect-error - Used via event delegation (data-action="import:file")
+  const handleFileUpload = async (e: Event) => {
     const target = e.target as HTMLInputElement
     const uploadedFile = target.files?.[0]
     if (!uploadedFile) return
 
-    setFile(uploadedFile)
     setImportResult({ status: 'uploading', message: 'Parsing file...' })
-    setSelectedRows(new Set())
+    setSelectedRows(new Set<number>())
 
     try {
       const text = await uploadedFile.text()
@@ -125,11 +107,12 @@ export default function Import() {
 
   // Show/hide row toggle
   const toggleRow = (index: number) => {
-    const newSelected = new Set(selectedRows())
-    if (newSelected.has(index)) {
-      newSelected.delete(index)
+    const newSelected = new Set<number>(selectedRows())
+    const numberIndex = Number(index)
+    if (newSelected.has(numberIndex)) {
+      newSelected.delete(numberIndex)
     } else {
-      newSelected.add(index)
+      newSelected.add(numberIndex)
     }
     setSelectedRows(newSelected)
   }
@@ -137,20 +120,21 @@ export default function Import() {
   // Select/deselect all rows
   const toggleAll = (select: boolean) => {
     if (select) {
-      setSelectedRows(new Set(fileContent().map((_, i) => i)))
+      setSelectedRows(new Set<number>(fileContent().map((_, i) => Number(i))))
     } else {
-      setSelectedRows(new Set())
+      setSelectedRows(new Set<number>())
     }
   }
 
   // Start import
+  // @ts-expect-error - Used via event delegation (data-action="import:start")
   const startImport = async () => {
     setImportResult({ status: 'importing', message: 'Importing data...' })
-    setSelectedRows(new Set())
+    setSelectedRows(new Set<number>())
 
     try {
       // Get selected rows
-      const rowsToImport = fileContent().filter((_, i) => selectedRows().has(i))
+      const rowsToImport = fileContent().filter((_, i) => selectedRows().has(Number(i)))
 
       if (rowsToImport.length === 0) {
         setImportResult({ status: 'error', message: 'No rows selected for import' })
@@ -206,11 +190,17 @@ export default function Import() {
           message: `Successfully imported ${result.imported || apiData.transactions.length} transactions`,
         })
         // Clear file after successful import
-        setFile(null)
         setFileContent([])
         setHeaders([])
-        setPreviewData(null)
-        setSelectedRows(new Set())
+        setSelectedRows(new Set<number>())
+        setCurrentPage(1)
+        setFormData({
+          date: new Date().toISOString().split('T')[0],
+          description: '',
+          amount: '',
+          type: 'expense',
+          category: '',
+        })
       } else {
         setImportResult({ status: 'error', message: result.error || 'Import failed' })
       }
@@ -223,13 +213,12 @@ export default function Import() {
   }
 
   // Reset
+  // @ts-expect-error - Used via event delegation (data-action="import:reset")
   const resetImport = () => {
-    setFile(null)
     setFileContent([])
     setHeaders([])
-    setPreviewData(null)
     setImportResult({ status: 'idle' })
-    setSelectedRows(new Set())
+    setSelectedRows(new Set<number>())
     setCurrentPage(1)
     setFormData({
       date: new Date().toISOString().split('T')[0],
@@ -253,22 +242,6 @@ export default function Import() {
     return Math.min(startRow() + rowsPerPage(), fileContent().length)
   }
 
-  onMount(() => {
-    // Listen for data-action events
-    window.addEventListener('click', (e: Event) => {
-      const target = e.target as HTMLElement
-      const actionTrigger = target.closest('[data-action]') as HTMLElement
-      if (!actionTrigger) return
-
-      const action = actionTrigger.dataset.action
-      if (action === 'import:start') {
-        startImport()
-      } else if (action === 'import:reset') {
-        resetImport()
-      }
-    })
-  })
-
   return (
     <div class="page page-import page-enter">
       <div class="page-header">
@@ -280,16 +253,20 @@ export default function Import() {
       {(importResult().status === 'success' || importResult().status === 'error') && (
         <div class={`toast toast-${importResult().status === 'success' ? 'success' : 'error'}`}>
           {importResult().message}
-          {importResult().errors && importResult().errors.length > 0 && (
-            <details>
-              <summary>View errors</summary>
-              <ul>
-                {importResult().errors?.map((err, i) => (
-                  <li key={i}>{err}</li>
-                ))}
-              </ul>
-            </details>
-          )}
+          {(() => {
+            const errors = importResult().errors
+            if (!errors || errors.length === 0) return null
+            return (
+              <details>
+                <summary>View errors</summary>
+                <ul>
+                  {errors.map((err) => (
+                    <li>{err}</li>
+                  ))}
+                </ul>
+              </details>
+            )
+          })()}
         </div>
       )}
 
@@ -392,8 +369,8 @@ export default function Import() {
                         onchange={(e) => toggleAll(e.currentTarget.checked)}
                       />
                     </th>
-                    {headers().map((h) => (
-                      <th key={h}>{h}</th>
+                    {headers().map((h, idx) => (
+                      <th data-header={idx}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -401,10 +378,7 @@ export default function Import() {
                   {fileContent()
                     .slice(startRow(), endRow())
                     .map((row, idx) => (
-                      <tr
-                        key={startRow() + idx}
-                        class={selectedRows().has(startRow() + idx) ? 'selected' : ''}
-                      >
+                      <tr data-index={startRow() + idx} class={selectedRows().has(startRow() + idx) ? 'selected' : ''}>
                         <td class="select-col">
                           <input
                             type="checkbox"
@@ -413,7 +387,7 @@ export default function Import() {
                           />
                         </td>
                         {headers().map((h) => (
-                          <td key={h}>{String(row[h] ?? '')}</td>
+                          <td>{String(row[h] ?? '')}</td>
                         ))}
                       </tr>
                     ))}

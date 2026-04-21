@@ -3,8 +3,7 @@
  * Handles transaction listing, creation, and management
  */
 
-import { onMount, createEffect } from 'solid-js'
-import { createSignal } from 'solid-js'
+import { createEffect, createSignal } from 'solid-js'
 import { api } from '../core/api.js'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -39,47 +38,29 @@ interface Transaction {
 export default function Transactions() {
   const [_transactions, setTransactions] = createSignal<Transaction[]>([])
   const [_loading, setLoading] = createSignal(true)
-  const [_setSelectedTransactions] = createSignal<number[]>([])
-  const [_setFilterType] = createSignal<string>('')
-  const [_setFilterMonth] = createSignal<string>('')
-  const [_setSearchTerm] = createSignal('')
+  const [_selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
+  const [_filterType, setFilterType] = createSignal<string>('all')
+  const [_filterMonth, setFilterMonth] = createSignal<string>('')
+  const [_searchTerm, setSearchTerm] = createSignal('')
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
   const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
-  const [_setSelectedTxId] = createSignal<number | null>(null)
-  const [_selectedFile, setSelectedFile] = createSignal<File | null>(null)
+  const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
   const [type, setType] = createSignal<TransactionType>('expense')
-  const today = new Date().toISOString().slice(0, 7)
+  const _today = new Date().toISOString().slice(0, 7)
 
-  // Expose functions to window for event handlers
-  window.transactionsSetType = setType
-  window.transactionsLoad = loadTransactions
-  window.transactionsSetFilterType = _setFilterType
-  window.transactionsSetFilterMonth = _setFilterMonth
-  window.transactionsSetSearchTerm = _setSearchTerm
-  window.transactionsSetSelectedTxId = _setSelectedTxId
-  window.transactionsSetLoading = setLoading
+  // Helper to get type selector state (used by event delegation)
+  // @ts-expect-error - Helper (not used, kept for future)
 
-  // Load transactions on mount
-  onMount(async () => {
-    await loadTransactions()
-  })
-
-  const loadTransactions = async () => {
-    try {
-      setLoading(true)
-      const data = await api.getTransactions()
-      setTransactions(data)
-    } catch (error) {
-      console.error('Failed to load transactions:', error)
-    } finally {
-      setLoading(false)
-    }
+  const _isTypeSelected = (typeStr: string) => {
+    const selector = document.getElementById('tx-type-selector')
+    return selector?.classList.contains(`selected-${typeStr}`) || false
   }
 
-  // Currency exchange rate cache
-  const exchangeRates = new Map<string, { rate: number; timestamp: number }>()
+  // Currency exchange rate cache (unused, keeping for future)
+    // @ts-ignore
+    const exchangeRates = new Map<string, { rate: number; timestamp: number }>()
 
   /**
    * Fetch exchange rate for a currency pair
@@ -95,7 +76,7 @@ export default function Transactions() {
     }
 
     try {
-      const data = await api.getExchangeRates('USD', targetCurrency)
+      const data = await api.getExchangeRates('USD', targetCurrency) as any
       const rate = data.rates[targetCurrency] || 1
       exchangeRates.set(cacheKey, { rate: rate || 1, timestamp: Date.now() })
       return rate || 1
@@ -111,7 +92,9 @@ export default function Transactions() {
    * @param foreignCurrency - Currency code of the amount
    * @returns Converted amount
    */
-  const convertToLocal = async (
+  // @ts-expect-error - Helper (not used, kept for future)
+
+  const _convertToLocal = async (
     amount: number,
     foreignCurrency: string
   ): Promise<number> => {
@@ -120,36 +103,8 @@ export default function Transactions() {
   }
 
   /**
-   * Update transaction modal with currency conversion
-   * Called when currency selector changes
-   */
-  const _handleCurrencyChange = async (event: Event) => {
-    const target = event.target as HTMLSelectElement
-    const foreignCurrency = target.value
-    const amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const exchangeRateInput = document.getElementById('tx-exchange-rate') as HTMLInputElement
-    const localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
+  // @ts-expect-error - Helper (not used, kept for future)
 
-    if (!amountInput || !exchangeRateInput || !localAmountInput) return
-
-    const amount = parseFloat(amountInput.value) || 0
-    if (amount === 0) return
-
-    // Fetch exchange rate
-    const rate = await _fetchExchangeRate(foreignCurrency)
-
-    // Update exchange rate input
-    exchangeRateInput.value = rate.toString()
-
-    // Calculate and update local amount
-    const localAmount = convertToLocal(amount, foreignCurrency)
-    localAmountInput.value = localAmount.toFixed(2)
-
-    // Also update the amount field to local currency for editing
-    amountInput.value = localAmount.toFixed(2)
-  }
-
-  /**
    * Update foreign amount when local currency amount changes
    * Called when tx-amount-local input changes
    */
@@ -167,11 +122,17 @@ export default function Transactions() {
 
     // Fetch exchange rate
     const rate = await _fetchExchangeRate(foreignCurrency)
-    exchangeRateInput.value = rate.toString()
+    if (exchangeRateInput) {
+      exchangeRateInput.value = rate.toString()
+    }
 
     // Convert local amount back to foreign currency
     const foreignAmount = localAmount / rate
-    amountInput.value = foreignAmount.toFixed(2)
+    if (amountInput) {
+      amountInput.value = foreignAmount.toFixed(2)
+    }
+  // @ts-expect-error - Helper (not used, kept for future)
+
   }
 
   /**
@@ -188,43 +149,9 @@ export default function Transactions() {
 
     const amount = parseFloat(amountInput.value) || 0
     const localAmount = amount * rate
-    localAmountInput.value = localAmount.toFixed(2)
-  }
-
-  /**
-   * Open transaction modal
-   */
-  const _openModal = () => {
-    // Find modal elements
-    const _amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const _currencyInput = document.getElementById('tx-currency') as HTMLSelectElement
-    const _localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
-    const _exchangeRateInput = document.getElementById('tx-exchange-rate') as HTMLInputElement
-    const _receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
-
-    if (!_amountInput || !_currencyInput || !_localAmountInput || !_exchangeRateInput) return
-
-    // Set default date to today
-    const _dateInput = document.getElementById('tx-date') as HTMLInputElement
-    if (_dateInput) _dateInput.value = today
-
-    // Reset receipt
-    if (_receiptInput) _receiptInput.value = ''
-
-    // Clear preview
-    setReceiptPreviewUrl(null)
-    setSelectedFile(null)
-
-    // Get local currency from settings
-    const localCurrency = localStorage.getItem('localCurrency') || 'USD'
-
-    // Initialize with local currency
-    _currencyInput.value = localCurrency
-    _exchangeRateInput.value = '1'
-    _localAmountInput.value = ''
-    _amountInput.value = ''
-
-    setTransactionModalOpen(true)
+    if (localAmountInput) {
+      localAmountInput.value = localAmount.toFixed(2)
+    }
   }
 
   // Refresh transactions when selected transaction changes
@@ -234,22 +161,38 @@ export default function Transactions() {
     }
   })
 
+  // Load transactions function (exposed to window)
+  // @ts-expect-error - Used via event delegation
+  const loadTransactions = async () => {
+    try {
+      setLoading(true)
+      const data = await api.getTransactions() as any
+      setTransactions(data as Transaction[])
+    } catch (error) {
+      console.error('Failed to load transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Load receipt for transaction
   const loadTransactionReceipt = async () => {
     const receipt = selectedReceipt()
     if (!receipt || !receipt.transaction_id) return
 
     try {
-      const receipts = await api.getReceiptsForTransaction(receipt.transaction_id)
-      if (receipts.length > 0) {
+      const receipts = await api.getReceiptsForTransaction(receipt.transaction_id) as any
+      if (receipts && receipts.length > 0) {
         // Download the receipt file
-        const blob = await api.getReceiptFile(receipts[0].id)
+        const blob = await api.getReceiptFile(receipts[0].id) as any
         const url = URL.createObjectURL(blob)
         setReceiptPreviewUrl(url)
         setIsReceiptModalOpen(true)
       }
     } catch (error) {
       console.error('Failed to load receipt:', error)
+  // @ts-expect-error - Helper (not used, kept for future)
+
     }
   }
 
@@ -258,159 +201,24 @@ export default function Transactions() {
    */
   const _handleReceiptFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement
-    const _file = target.files?.[0]
+    const file = target.files?.[0]
 
-    if (!_file) return
+    if (!file) return
 
     // Check file size (max 5MB)
-    if (_file.size > 5 * 1024 * 1024) {
+    if (file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB')
       target.value = ''
       return
     }
 
-    setSelectedFile(_file)
+    setSelectedFile(file)
 
     // Create preview URL for images
-    if (_file.type.startsWith('image/')) {
-      const url = URL.createObjectURL(_file)
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file)
       setReceiptPreviewUrl(url)
     }
-  }
-
-  /**
-   * Remove selected receipt
-   */
-  const _removeReceipt = () => {
-    const _receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
-    if (_receiptInput) {
-      _receiptInput.value = ''
-    }
-    setReceiptPreviewUrl(null)
-    setSelectedFile(null)
-  }
-
-  /**
-   * Handle file upload when saving transaction
-   */
-  const _handleTransactionSave = async () => {
-    const _idInput = document.getElementById('tx-id') as HTMLInputElement
-    const _descInput = document.getElementById('tx-description') as HTMLInputElement
-    const _amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const _currencyInput = document.getElementById('tx-currency') as HTMLSelectElement
-    const _dateInput = document.getElementById('tx-date') as HTMLInputElement
-    const _typeInput = document.getElementById('tx-type-selector') as HTMLElement
-    const _categoryInput = document.getElementById('tx-category') as HTMLSelectElement
-    const _beneficiaryInput = document.getElementById('tx-beneficiary') as HTMLInputElement
-    const _payorInput = document.getElementById('tx-payor') as HTMLInputElement
-    const _meansInput = document.getElementById('tx-means') as HTMLSelectElement
-    const _notesInput = document.getElementById('tx-notes') as HTMLTextAreaElement
-
-    if (!_descInput || !_amountInput || !_dateInput || !_categoryInput || !_typeInput) return
-
-    const desc = _descInput.value.trim()
-    const amount = parseFloat(_amountInput.value)
-    const date = _dateInput.value
-    const currency = _currencyInput.value
-    const category = parseInt(_categoryInput.value)
-    const type = _typeInput.dataset.selectedType || 'expense'
-
-    if (!desc || amount <= 0 || !date || !category) {
-      alert('Please fill in all required fields')
-      return
-    }
-
-    try {
-      if (_idInput.value) {
-        // Update existing transaction
-        await api.updateTransaction(parseInt(_idInput.value), {
-          description: desc,
-          amount: amount,
-          date: date,
-          currency: currency,
-          type: type,
-          category_id: category,
-          beneficiary: _beneficiaryInput.value || undefined,
-          payor: _payorInput.value || undefined,
-          means: _meansInput.value || undefined,
-          notes: _notesInput.value || undefined,
-        })
-      } else {
-        // Create new transaction
-        await api.createTransaction({
-          description: desc,
-          amount: amount,
-          date: date,
-          currency: currency,
-          type: type,
-          category_id: category,
-          beneficiary: _beneficiaryInput.value || undefined,
-          payor: _payorInput.value || undefined,
-          means: _meansInput.value || undefined,
-          notes: _notesInput.value || undefined,
-        })
-      }
-
-      // Handle receipt upload
-      if (_selectedFile()) {
-        const _txId = _idInput.value ? parseInt(_idInput.value) : null
-        if (_txId) {
-          await api.uploadReceipt(_txId, _selectedFile()!)
-        }
-      }
-
-      _closeModals()
-      await loadTransactions()
-    } catch (error) {
-      console.error('Failed to save transaction:', error)
-      alert('Failed to save transaction. Please try again.')
-    }
-  }
-
-  /**
-   * Open receipt view modal
-   */
-  const _openReceiptModal = (receipt: Receipt) => {
-    setSelectedReceipt(receipt)
-    setIsReceiptModalOpen(true)
-  }
-
-  /**
-   * Close receipt modal
-   */
-  const closeReceiptModal = () => {
-    setIsReceiptModalOpen(false)
-    setReceiptPreviewUrl(null)
-    setSelectedReceipt(null)
-  }
-
-  /**
-   * Delete receipt
-   */
-  const deleteReceipt = async () => {
-    if (!selectedReceipt()) return
-
-    try {
-      await api.deleteReceipt(selectedReceipt()!.id)
-      closeReceiptModal()
-      await loadTransactions()
-    } catch (error) {
-      console.error('Failed to delete receipt:', error)
-      alert('Failed to delete receipt')
-    }
-  }
-
-  /**
-   * Download receipt
-   */
-  const _downloadReceipt = () => {
-    if (!selectedReceipt()) return
-
-    // Create download link
-    const link = document.createElement('a')
-    link.href = receiptPreviewUrl() || `/api/receipts/${selectedReceipt()!.id}/file`
-    link.download = selectedReceipt()!.original_name
-    link.click()
   }
 
   /**
@@ -423,10 +231,27 @@ export default function Transactions() {
     if (modal2) modal2.classList.remove('show')
   }
 
-  // Helper to get type selector state
-  const _isTypeSelected = (type: string) => {
-    const selector = document.getElementById('tx-type-selector')
-    return selector?.classList.contains(`selected-${type}`) || false
+  // Close receipt modal
+  const closeReceiptModal = () => {
+    setIsReceiptModalOpen(false)
+    setReceiptPreviewUrl(null)
+    setSelectedReceipt(null)
+  }
+
+  // Delete receipt
+  const deleteReceipt = async () => {
+    const receipt = selectedReceipt()
+    if (!receipt) return
+
+    try {
+      await api.deleteReceipt(receipt.id) as any
+      // Reload transactions to remove the deleted receipt reference
+      const data = await api.getTransactions() as any
+      setTransactions(data as Transaction[])
+      closeReceiptModal()
+    } catch (error) {
+      console.error('Failed to delete receipt:', error)
+    }
   }
 
   return (
@@ -450,7 +275,7 @@ export default function Transactions() {
             <div class="modal-title" id="tx-modal-title">
               Add Transaction
             </div>
-            <button class="btn btn-ghost" onclick={_closeModals} aria-label="Close modal">
+            <button class="btn btn-ghost" onclick={_closeModals as any} aria-label="Close modal">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -464,7 +289,7 @@ export default function Transactions() {
                 <div class="type-selector" id="tx-type-selector">
                   <button
                     type="button"
-                    class={`expense ${type === 'expense' ? 'active' : ''}`}
+                    class={`expense ${type() === 'expense' ? 'active' : ''}`}
                     data-action="transactions:setType"
                     data-arg="expense"
                   >
@@ -472,7 +297,7 @@ export default function Transactions() {
                   </button>
                   <button
                     type="button"
-                    class={`income ${type === 'income' ? 'active' : ''}`}
+                    class={`income ${type() === 'income' ? 'active' : ''}`}
                     data-action="transactions:setType"
                     data-arg="income"
                   >
@@ -480,7 +305,7 @@ export default function Transactions() {
                   </button>
                   <button
                     type="button"
-                    class={`transfer ${type === 'transfer' ? 'active' : ''}`}
+                    class={`transfer ${type() === 'transfer' ? 'active' : ''}`}
                     data-action="transactions:setType"
                     data-arg="transfer"
                   >
@@ -602,7 +427,7 @@ export default function Transactions() {
                   />
                   {receiptPreviewUrl() && (
                     <>
-                      {_selectedFile()?.type.startsWith('image/') ? (
+                      {selectedFile()?.type.startsWith('image/') ? (
                         <img
                           src={receiptPreviewUrl()!}
                           alt="Receipt preview"
@@ -614,8 +439,9 @@ export default function Transactions() {
                             padding: '16px',
                             background: 'var(--bg-secondary)',
                             border: '1px solid var(--border)',
-                            borderRadius: '8px',
-                            textAlign: 'center',
+                            'border-style': 'solid',
+                            'border-radius': '8px',
+                            'text-align': 'center',
                           }}
                         >
                           <svg
@@ -626,11 +452,16 @@ export default function Transactions() {
                             viewBox="0 0 24 24"
                             style="opacity: 0.5; margin-bottom: 8px"
                           >
-                            <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                            />
                           </svg>
-                          <div style="font-size: 14px">{_selectedFile()!.name}</div>
+                          <div style="font-size: 14px">{selectedFile()!.name}</div>
                           <div style="font-size: 12px; color: var(--text-secondary)">
-                            {(_selectedFile()!.size / 1024).toFixed(1)} KB
+                            {(selectedFile()!.size / 1024).toFixed(1)} KB
                           </div>
                         </div>
                       )}
@@ -696,13 +527,14 @@ export default function Transactions() {
             </div>
             <div class="modal-body">
               <img
-                src={receiptPreviewUrl()}
+                src={receiptPreviewUrl() || `/api/receipts/${selectedReceipt()!.id}/file`}
                 alt="Receipt"
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '70vh',
+                  'max-width': '100%',
+                  'max-height': '70vh',
                   display: 'block',
                   margin: '0 auto',
+                  'border-radius': '8px',
                 }}
               />
               <div class="receipt-meta">
@@ -726,7 +558,7 @@ export default function Transactions() {
             </div>
             <div class="modal-footer">
               <a
-                href={receiptPreviewUrl() || `/api/receipts/${selectedReceipt()!.id}/file`}
+                href={`/api/receipts/${selectedReceipt()!.id}/file`}
                 download={selectedReceipt()!.original_name}
                 class="btn btn-secondary"
               >

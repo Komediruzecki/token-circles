@@ -2,7 +2,19 @@
  * Storage Factory - Creates the appropriate storage adapter based on mode
  */
 
-import type { StorageAdapter } from '../types/storage.js'
+import type {
+  StorageAdapter,
+  TransactionFilters,
+  Transaction,
+  Category,
+  Account,
+  Budget,
+  Goal,
+  Loan,
+  BalanceEntry,
+  Settings,
+  ExportData,
+} from '../../types/storage'
 import { LocalStorageAdapter } from './localStorageAdapter.js'
 
 // Storage modes
@@ -111,7 +123,7 @@ class SelfHostedAdapter implements StorageAdapter {
     const storedId = localStorage.getItem('currentProfileId')
     if (storedId) {
       const id = parseInt(storedId, 10)
-      if (profiles.some((p) => p.id === id)) {
+      if (profiles.some((p: { id: number }) => p.id === id)) {
         return id
       }
     }
@@ -174,8 +186,8 @@ class SelfHostedAdapter implements StorageAdapter {
 
   // Transaction management
   async listTransactions(
-    filters?: Parameters<StorageAdapter['listTransactions']>[0]
-  ): Promise<Parameters<StorageAdapter['listTransactions']>[1]> {
+    filters?: TransactionFilters
+  ): Promise<Transaction[]> {
     const params = new URLSearchParams()
     if (filters?.date_from) params.append('date_from', filters.date_from)
     if (filters?.date_to) params.append('date_to', filters.date_to)
@@ -240,7 +252,7 @@ class SelfHostedAdapter implements StorageAdapter {
   // Category management
   async listCategories(
     type?: 'income' | 'expense'
-  ): Promise<Parameters<StorageAdapter['listCategories']>[1]> {
+  ): Promise<Category[]> {
     const params = type ? `?type=${type}` : ''
     const response = await fetch(`/api/categories${params}`, {
       method: 'GET',
@@ -255,7 +267,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async createCategory(category: Parameters<StorageAdapter['createCategory']>[1]): Promise<number> {
+  async createCategory(category: Category): Promise<number> {
     const response = await fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -297,7 +309,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Account management
-  async listAccounts(): Promise<Parameters<StorageAdapter['listAccounts']>[1]> {
+  async listAccounts(): Promise<Account[]> {
     const response = await fetch('/api/accounts', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -311,7 +323,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async createAccount(account: Parameters<StorageAdapter['createAccount']>[1]): Promise<number> {
+  async createAccount(account: Account): Promise<number> {
     const response = await fetch('/api/accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -346,7 +358,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Budget management
-  async listBudgets(): Promise<Parameters<StorageAdapter['listBudgets']>[1]> {
+  async listBudgets(): Promise<Budget[]> {
     const response = await fetch('/api/budgets', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -360,7 +372,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async createBudget(budget: Parameters<StorageAdapter['createBudget']>[1]): Promise<number> {
+  async createBudget(budget: Budget): Promise<number> {
     const response = await fetch('/api/budgets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -395,7 +407,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Goal management
-  async listGoals(): Promise<Parameters<StorageAdapter['listGoals']>[1]> {
+  async listGoals(): Promise<Goal[]> {
     const response = await fetch('/api/savings-goals', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -409,7 +421,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async createGoal(goal: Parameters<StorageAdapter['createGoal']>[1]): Promise<number> {
+  async createGoal(goal: Goal): Promise<number> {
     const response = await fetch('/api/savings-goals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -441,7 +453,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Loan management
-  async listLoans(): Promise<Parameters<StorageAdapter['listLoans']>[1]> {
+  async listLoans(): Promise<Loan[]> {
     const response = await fetch('/api/loans', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -455,7 +467,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async createLoan(loan: Parameters<StorageAdapter['createLoan']>[1]): Promise<number> {
+  async createLoan(loan: Loan): Promise<number> {
     const response = await fetch('/api/loans', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -489,7 +501,7 @@ class SelfHostedAdapter implements StorageAdapter {
   // Transaction history
   async getBalanceHistory(
     accountId: number
-  ): Promise<Parameters<StorageAdapter['getBalanceHistory']>[1]> {
+  ): Promise<BalanceEntry[]> {
     const response = await fetch(`/api/accounts/${accountId}/history`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -500,7 +512,8 @@ class SelfHostedAdapter implements StorageAdapter {
       throw new Error('Failed to get balance history')
     }
 
-    return response.json()
+    const data = await response.json()
+    return data || []
   }
 
   async recordBalance(accountId: number, balance: number): Promise<number> {
@@ -519,7 +532,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Settings
-  async getSettings(): Promise<Parameters<StorageAdapter['getSettings']>[1]> {
+  async getSettings(): Promise<Settings> {
     const response = await fetch('/api/settings', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -533,7 +546,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async updateSettings(settings: Parameters<StorageAdapter['updateSettings']>[1]): Promise<void> {
+  async updateSettings(settings: Partial<Settings>): Promise<void> {
     await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -549,7 +562,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Export/Import
-  async exportData(): Promise<Parameters<StorageAdapter['exportData']>[1]> {
+  async exportData(): Promise<ExportData> {
     const response = await fetch('/api/export', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -563,7 +576,7 @@ class SelfHostedAdapter implements StorageAdapter {
     return response.json()
   }
 
-  async importData(data: Parameters<StorageAdapter['importData']>[1]): Promise<void> {
+  async importData(data: ExportData): Promise<void> {
     const response = await fetch('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

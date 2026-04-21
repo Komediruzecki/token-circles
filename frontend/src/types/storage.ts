@@ -3,6 +3,8 @@
  * Abstracts storage operations to support multiple backends (localStorage, SQLite, etc.)
  */
 
+import type { BalanceEntryData } from './data.js'
+
 export interface StorageAdapter {
   // Profile management
   getCurrentProfileId(): Promise<number>
@@ -187,6 +189,8 @@ export interface ExportData {
   loans: ExportLoan[]
 
   settings: ExportSettings
+
+  balanceHistory?: Record<number, BalanceEntryData>
 }
 
 export interface ExportProfile {
