@@ -78,23 +78,52 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint HTML/JS
-        run: |
-          # Basic syntax check using Node.js
-          node -e "
-            const fs = require('fs');
-            const html = fs.readFileSync('frontend/index.html', 'utf8');
+      - name: Run ESLint
+        run: npm run lint
 
-            // Extract script content
-            const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
-            if (scriptMatch) {
-              const script = scriptMatch[1];
+      - name: Auto-push fixes using RTK
+        if: always()
+        env:
+          RTK_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cd frontend && node -e "
+            const fs = require('fs');
+            const rtk = require('rtk-cli');
+
+            const html = fs.readFileSync('index.html', 'utf8');
+            const jsMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+            if (jsMatch) {
               try {
-                new Function(script);
-                console.log('✓ JavaScript syntax is valid');
+                new Function(jsMatch[1]);
+                console.log('✓ Frontend code is valid');
               } catch (e) {
-                console.error('✗ JavaScript syntax error:', e.message);
+                console.error('✗ Frontend error:', e.message);
                 process.exit(1);
               }
+            }
+
+            const rtkExec = (cmd) => {
+              return new Promise((resolve, reject) => {
+                const proc = require('child_process').exec(cmd, { env: { ...process.env, RTK_GITHUB_TOKEN: process.env.RTK_GITHUB_TOKEN } }, (error, stdout, stderr) => {
+                  if (error && stderr) reject(new Error(stderr));
+                  else resolve(stdout);
+                });
+              });
+            };
+
+            if (process.env.RTK_GITHUB_TOKEN) {
+              try {
+                const status = await rtkExec('rtk git add -A');
+                const commitMsg = \`fix: auto-push ESLint fix via CI\`;
+                const commit = await rtkExec(\`rtk git commit -m "\${commitMsg}"\`);
+                const push = await rtkExec('rtk git push origin HEAD');
+                console.log('✓ Auto-push successful');
+              } catch (error) {
+                console.log('⚠ RTK push failed (expected on forks):', error.message);
+              }
+            } else {
+              console.log('⚠ RTK not configured, skipping auto-push');
             }
           "
