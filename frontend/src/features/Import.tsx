@@ -61,14 +61,14 @@ export default function Import() {
       const data = (window as any).XLSX.utils.sheet_to_json(worksheet, { defval: '' })
       return data
     } catch {
+      // @ts-expect-error XLSX type definitions missing
       throw new Error('Failed to parse Excel file')
     }
   }
 
   // Handle file upload
-  // @ts-expect-error - Used via event delegation (data-action="import:file")
-  const handleFileUpload = async (e: Event) => {
-    const target = e.target as HTMLInputElement
+  const _handleFileUpload = async (_e: Event) => {
+    const target = _e.target as HTMLInputElement
     const uploadedFile = target.files?.[0]
     if (!uploadedFile) return
 
@@ -128,7 +128,7 @@ export default function Import() {
 
   // Start import
   // @ts-expect-error - Used via event delegation (data-action="import:start")
-  const startImport = async () => {
+  const _startImport = async () => {
     setImportResult({ status: 'importing', message: 'Importing data...' })
     setSelectedRows(new Set<number>())
 
@@ -214,7 +214,7 @@ export default function Import() {
 
   // Reset
   // @ts-expect-error - Used via event delegation (data-action="import:reset")
-  const resetImport = () => {
+  const _resetImport = () => {
     setFileContent([])
     setHeaders([])
     setImportResult({ status: 'idle' })

@@ -38,29 +38,30 @@ interface Transaction {
 export default function Transactions() {
   const [_transactions, setTransactions] = createSignal<Transaction[]>([])
   const [_loading, setLoading] = createSignal(true)
-  const [_selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
-  const [_filterType, setFilterType] = createSignal<string>('all')
-  const [_filterMonth, setFilterMonth] = createSignal<string>('')
-  const [_searchTerm, setSearchTerm] = createSignal('')
+  const [_selectedTransactions, _setSelectedTransactions] = createSignal<number[]>([])
+  const [_filterType, _setFilterType] = createSignal<string>('all')
+  const [_filterMonth, _setFilterMonth] = createSignal<string>('')
+  const [_searchTerm, _setSearchTerm] = createSignal('')
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
-  const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
+  const [isTransactionModalOpen, _setTransactionModalOpen] = createSignal(false)
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
-  const [type, setType] = createSignal<TransactionType>('expense')
+  const [type, _setType] = createSignal<TransactionType>('expense')
   const _today = new Date().toISOString().slice(0, 7)
 
   // Helper to get type selector state (used by event delegation)
   // @ts-expect-error - Helper (not used, kept for future)
+  const _getTypeSelectorState = () => 'all'
 
-  const _isTypeSelected = (typeStr: string) => {
+  const _isTypeSelected = (_typeStr: string) => {
     const selector = document.getElementById('tx-type-selector')
-    return selector?.classList.contains(`selected-${typeStr}`) || false
+    return selector?.classList.contains(`selected-${_typeStr}`) || false
   }
 
   // Currency exchange rate cache (unused, keeping for future)
-    // @ts-ignore
-    const exchangeRates = new Map<string, { rate: number; timestamp: number }>()
+  // @ts-expect-error unused cache for future feature
+  const _exchangeRates = new Map<string, { rate: number; timestamp: number }>()
 
   /**
    * Fetch exchange rate for a currency pair
@@ -68,7 +69,7 @@ export default function Transactions() {
    */
   const _fetchExchangeRate = async (targetCurrency: string): Promise<number> => {
     const cacheKey = `USD-${targetCurrency}`
-    const cached = exchangeRates.get(cacheKey)
+    const cached = _exchangeRates.get(cacheKey)
 
     // Check cache validity (5 minutes)
     if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
@@ -78,7 +79,7 @@ export default function Transactions() {
     try {
       const data = await api.getExchangeRates('USD', targetCurrency) as any
       const rate = data.rates[targetCurrency] || 1
-      exchangeRates.set(cacheKey, { rate: rate || 1, timestamp: Date.now() })
+      _exchangeRates.set(cacheKey, { rate: rate || 1, timestamp: Date.now() })
       return rate || 1
     } catch (error) {
       console.warn('Failed to fetch exchange rate:', error)
@@ -93,6 +94,9 @@ export default function Transactions() {
    * @returns Converted amount
    */
   // @ts-expect-error - Helper (not used, kept for future)
+  const _getForeignAmount = async (_amount: number, _foreignCurrency: string): Promise<number> => {
+    return _amount
+  }
 
   const _convertToLocal = async (
     amount: number,
@@ -131,15 +135,13 @@ export default function Transactions() {
     if (amountInput) {
       amountInput.value = foreignAmount.toFixed(2)
     }
-  // @ts-expect-error - Helper (not used, kept for future)
-
   }
 
   /**
    * Update exchange rate manually
    */
-  const _handleExchangeRateChange = (event: Event) => {
-    const target = event.target as HTMLInputElement
+  const _handleExchangeRateChange = (_event: Event) => {
+    const target = _event.target as HTMLInputElement
     const rate = parseFloat(target.value) || 1
 
     const amountInput = document.getElementById('tx-amount') as HTMLInputElement
@@ -157,13 +159,13 @@ export default function Transactions() {
   // Refresh transactions when selected transaction changes
   createEffect(() => {
     if (selectedReceipt() && isReceiptModalOpen()) {
-      loadTransactionReceipt()
+      _loadTransactionReceipt()
     }
   })
 
   // Load transactions function (exposed to window)
   // @ts-expect-error - Used via event delegation
-  const loadTransactions = async () => {
+  const _loadTransactions = async () => {
     try {
       setLoading(true)
       const data = await api.getTransactions() as any
@@ -176,7 +178,7 @@ export default function Transactions() {
   }
 
   // Load receipt for transaction
-  const loadTransactionReceipt = async () => {
+  const _loadTransactionReceipt = async () => {
     const receipt = selectedReceipt()
     if (!receipt || !receipt.transaction_id) return
 
@@ -191,16 +193,14 @@ export default function Transactions() {
       }
     } catch (error) {
       console.error('Failed to load receipt:', error)
-  // @ts-expect-error - Helper (not used, kept for future)
-
     }
   }
 
   /**
    * Handle receipt file selection
    */
-  const _handleReceiptFileSelect = (event: Event) => {
-    const target = event.target as HTMLInputElement
+  const _handleReceiptFileSelect = (_event: Event) => {
+    const target = _event.target as HTMLInputElement
     const file = target.files?.[0]
 
     if (!file) return

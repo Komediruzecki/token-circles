@@ -279,10 +279,8 @@ export default function App() {
   const [currentPage, setCurrentPage] = createSignal<PageName>('dashboard')
 
   // Currency exchange rate cache - unused, keeping for future feature
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error - unused, keeping for future feature
-const _exchangeRates = new Map<string, { rate: number; timestamp: number }>()
+  // @ts-expect-error - unused, keeping for future feature
+  const _exchangeRates = new Map<string, { rate: number; timestamp: number }>()
 
   onMount(() => {
     theme.init()
