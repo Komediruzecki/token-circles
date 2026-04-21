@@ -10,7 +10,7 @@ export default defineConfig({
     sourcemap: true,
     minify: 'esbuild',
     rollupOptions: {
-      input: resolve(__dirname, 'index.html'),
+      input: resolve(__dirname, 'src/main.tsx'),
       output: {
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name]-[hash].js',

@@ -1,10 +1,357 @@
+/**
+ * Bills Component
+ * Manages upcoming bills and payment tracking
+ */
+
+import { createSignal, onMount } from 'solid-js'
+import { formatCurrency } from '../core/api'
+
+interface Bill {
+  id: number
+  name: string
+  amount: number
+  due_date: string
+  account_id?: number
+  category?: string
+  frequency: 'monthly' | 'weekly' | 'biweekly'
+  paid: boolean
+  autopay: boolean
+  profile_id: number
+  created_at: string
+}
+
 export default function Bills() {
+  const [bills, setBills] = createSignal<Bill[]>([])
+  const [upcoming, setUpcoming] = createSignal<Bill[]>([])
+  const [paid, setPaid] = createSignal<Bill[]>([])
+  const [loading, setLoading] = createSignal(true)
+  const [showAddModal, setShowAddModal] = createSignal(false)
+  const [formData, setFormData] = createSignal({
+    name: '',
+    amount: '',
+    due_date: '',
+    frequency: 'monthly' as Bill['frequency'],
+    autopay: false,
+  })
+
+  // Load bills
+  const loadBills = async () => {
+    setLoading(true)
+    try {
+      const [allRes, upcomingRes, paidRes] = await Promise.all([
+        fetch('/api/bills').then(r => r.json()),
+        fetch('/api/bills/upcoming').then(r => r.json()),
+        fetch('/api/bills?paid=true').then(r => r.json()),
+      ])
+      setBills(allRes)
+      setUpcoming(upcomingRes)
+      setPaid(paidRes)
+    } catch {
+      console.error('Failed to load bills')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle form submit
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault()
+    const data = {
+      name: formData().name,
+      amount: parseFloat(formData().amount),
+      due_date: formData().due_date,
+      frequency: formData().frequency,
+      autopay: formData().autopay,
+    }
+
+    try {
+      await fetch('/api/bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      setShowAddModal(false)
+      setFormData({ name: '', amount: '', due_date: '', frequency: 'monthly', autopay: false })
+      loadBills()
+    } catch (error) {
+      console.error('Failed to save bill', error)
+    }
+  }
+
+  // Mark bill as paid
+  const markPaid = async (id: number) => {
+    try {
+      await fetch(`/api/bills/${id}/mark-paid`, { method: 'POST' })
+      loadBills()
+    } catch (error) {
+      console.error('Failed to mark bill as paid', error)
+    }
+  }
+
+  // Delete bill
+  const deleteBill = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this bill?')) return
+    try {
+      await fetch(`/api/bills/${id}`, { method: 'DELETE' })
+      loadBills()
+    } catch (error) {
+      console.error('Failed to delete bill', error)
+    }
+  }
+
+  // Days until due
+  const daysUntil = (dateStr: string): string => {
+    const target = new Date(dateStr)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    target.setHours(0, 0, 0, 0)
+    const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    if (diff < 0) return `${Math.abs(diff)} days overdue`
+    if (diff === 0) return 'Due today'
+    if (diff === 1) return 'Due tomorrow'
+    return `Due in ${diff} days`
+  }
+
+  const isOverdue = (dateStr: string): boolean => {
+    const target = new Date(dateStr)
+    const today = new Date()
+    return target < today
+  }
+
+  // Format date
+  const formatDate = (dateStr: string): string => {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
+  onMount(() => {
+    loadBills()
+  })
+
   return (
     <div class="page page-bills page-enter">
       <div class="page-header">
-        <h1>Bills</h1>
+        <div class="header-top">
+          <h1>Bills</h1>
+          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Bill
+          </button>
+        </div>
+        <p class="page-subtitle">Track upcoming payments and never miss a due date</p>
       </div>
-      <div class="empty-state">Bills page - content to be implemented</div>
+
+      {/* Upcoming Section */}
+      {upcoming().length > 0 && (
+        <div class="bills-section">
+          <h2 class="section-title">
+            <span>🔔</span> Upcoming Bills
+            <span class="section-subtitle">{upcoming().length} bills</span>
+          </h2>
+          <div class="bills-list">
+            {upcoming().map((bill) => (
+              <div class={`bill-card ${isOverdue(bill.due_date) ? 'overdue' : ''}`}>
+                <div class="bill-main">
+                  <div class="bill-icon">{bill.autopay ? '🤖' : '📝'}</div>
+                  <div class="bill-info">
+                    <h3 class="bill-name">{bill.name}</h3>
+                    <p class="bill-details">
+                      {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
+                    </p>
+                  </div>
+                </div>
+                <div class="bill-amount ${isOverdue(bill.due_date) ? 'overdue' : ''}">
+                  <div class="amount-value">{formatCurrency(bill.amount)}</div>
+                  {!bill.paid && (
+                    <button class="btn btn-sm btn-primary" onClick={() => markPaid(bill.id)}>
+                      Mark Paid
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Paid Section */}
+      {paid().length > 0 && (
+        <div class="bills-section">
+          <h2 class="section-title">
+            <span>✅</span> Paid Bills
+            <span class="section-subtitle">{paid().length} bills</span>
+          </h2>
+          <div class="bills-list">
+            {paid().map((bill) => (
+              <div class="bill-card paid">
+                <div class="bill-main">
+                  <div class="bill-icon">✅</div>
+                  <div class="bill-info">
+                    <h3 class="bill-name">{bill.name}</h3>
+                    <p class="bill-details">
+                      Paid {formatDate(bill.due_date)}
+                    </p>
+                  </div>
+                </div>
+                <div class="bill-amount">
+                  <div class="amount-value">{formatCurrency(bill.amount)}</div>
+                  <button class="btn btn-sm btn-ghost" onClick={() => deleteBill(bill.id)}>
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All Bills Section */}
+      <div class="bills-section">
+        <h2 class="section-title">
+          <span>📋</span> All Bills
+          <span class="section-subtitle">{bills().length} total</span>
+        </h2>
+        {loading() ? (
+          <div class="empty-state">Loading bills...</div>
+        ) : bills().length === 0 ? (
+          <div class="empty-state">
+            <p>No bills yet</p>
+            <p>Add your first bill to start tracking your payments.</p>
+            <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+              Add Bill
+            </button>
+          </div>
+        ) : (
+          <div class="bills-list">
+            {bills().map((bill) => (
+              <div class="bill-card">
+                <div class="bill-main">
+                  <div class="bill-icon">{bill.autopay ? '🤖' : '📝'}</div>
+                  <div class="bill-info">
+                    <h3 class="bill-name">{bill.name}</h3>
+                    <p class="bill-details">
+                      {formatDate(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
+                      {bill.category && ` • {bill.category}`}
+                    </p>
+                  </div>
+                </div>
+                <div class="bill-amount">
+                  <div class="amount-value">{formatCurrency(bill.amount)}</div>
+                  <div class="bill-actions">
+                    {!bill.paid ? (
+                      <button class="btn btn-sm btn-primary" onClick={() => markPaid(bill.id)}>
+                        {isOverdue(bill.due_date) ? 'Mark as Paid (Overdue)' : 'Mark Paid'}
+                      </button>
+                    ) : (
+                      <button class="btn btn-sm btn-ghost" onClick={() => deleteBill(bill.id)}>
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add Bill Modal */}
+      {showAddModal() && (
+        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
+          <div class="modal" onclick={(e) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h3 class="modal-title">Add Bill</h3>
+              <button class="modal-close" onClick={() => setShowAddModal(false)}>
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form class="modal-body" onSubmit={handleSubmit}>
+              <div class="form-group">
+                <label class="form-label">Bill Name</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="e.g., Rent, Electricity, Internet"
+                  value={formData().name}
+                  oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  class="form-control"
+                  placeholder="500.00"
+                  value={formData().amount}
+                  oninput={(e) => setFormData({ ...formData(), amount: e.target.value })}
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Due Date</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  value={formData().due_date}
+                  oninput={(e) => setFormData({ ...formData(), due_date: e.target.value })}
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Frequency</label>
+                <select
+                  class="form-control"
+                  value={formData().frequency}
+                  oninput={(e) => setFormData({ ...formData(), frequency: e.target.value as Bill['frequency'] })}
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Biweekly</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">
+                  <span>🤖 Autopay</span>
+                  <span style="font-size: 14px; color: var(--text-secondary)">
+                    Automatically pay this bill
+                  </span>
+                </label>
+                <label class="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={formData().autopay}
+                    oninput={(e) => setFormData({ ...formData(), autopay: e.target.checked })}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Add Bill
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Bill Modal - disabled as unused - kept for future use */}
     </div>
   )
 }
