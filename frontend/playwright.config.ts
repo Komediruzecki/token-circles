@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
+  timeout: 20000,
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -23,9 +24,11 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run build && npm run preview -- --port 3800',
     url: 'http://localhost:3800',
     reuseExistingServer: !process.env.CI,
-    timeout: 120000,
+    timeout: 20000,
+    stdout: 'ignore',
+    stderr: 'pipe',
   },
 });
