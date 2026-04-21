@@ -1,0 +1,200 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: budgets-crud.spec.ts >> Budgets CRUD Operations >> should have amount input in modal
+- Location: tests/budgets-crud.spec.ts:175:3
+
+# Error details
+
+```
+Test timeout of 20000ms exceeded.
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - heading "Finance Manager" [level=1] [ref=e6]:
+        - img [ref=e7]
+        - text: Finance Manager
+      - button "Settings" [ref=e10]:
+        - img [ref=e11]
+    - generic [ref=e14]:
+      - complementary [ref=e15]:
+        - navigation [ref=e16]:
+          - link "Dashboard" [ref=e17] [cursor=pointer]:
+            - /url: "#dashboard"
+            - img [ref=e18]
+            - text: Dashboard
+          - link "Transactions" [ref=e20] [cursor=pointer]:
+            - /url: "#transactions"
+            - img [ref=e21]
+            - text: Transactions
+          - link "Accounts" [ref=e23] [cursor=pointer]:
+            - /url: "#accounts"
+            - img [ref=e24]
+            - text: Accounts
+          - link "Categories" [ref=e26] [cursor=pointer]:
+            - /url: "#categories"
+            - img [ref=e27]
+            - text: Categories
+          - link "Budgets" [ref=e29] [cursor=pointer]:
+            - /url: "#budgets"
+            - img [ref=e30]
+            - text: Budgets
+          - link "Goals" [ref=e33] [cursor=pointer]:
+            - /url: "#goals"
+            - img [ref=e34]
+            - text: Goals
+          - link "Loans" [ref=e36] [cursor=pointer]:
+            - /url: "#loans"
+            - img [ref=e37]
+            - text: Loans
+          - link "Bills" [ref=e39] [cursor=pointer]:
+            - /url: "#bills"
+            - img [ref=e40]
+            - text: Bills
+          - link "Retirement" [ref=e42] [cursor=pointer]:
+            - /url: "#retirement"
+            - img [ref=e43]
+            - text: Retirement
+          - link "Housing" [ref=e45] [cursor=pointer]:
+            - /url: "#housing"
+            - img [ref=e46]
+            - text: Housing
+          - link "Analytics" [ref=e48] [cursor=pointer]:
+            - /url: "#analytics"
+            - img [ref=e49]
+            - text: Analytics
+          - link "Import" [ref=e51] [cursor=pointer]:
+            - /url: "#import"
+            - img [ref=e52]
+            - text: Import
+          - link "Settings" [ref=e54] [cursor=pointer]:
+            - /url: "#settings"
+            - img [ref=e55]
+            - text: Settings
+      - main [ref=e58]:
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - generic [ref=e62]:
+              - heading "Budgets" [level=1] [ref=e63]
+              - generic [ref=e64]:
+                - button "Previous month" [ref=e65]:
+                  - img [ref=e66]
+                - text: 2026-04
+                - button "Next month" [ref=e68]:
+                  - img [ref=e69]
+            - paragraph [ref=e71]: "Zero-based budgeting: allocate every dollar to a category"
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - generic [ref=e74]: Income
+              - generic [ref=e75]: $5,566.79
+            - generic [ref=e76]:
+              - generic [ref=e77]: Allocated
+              - generic [ref=e78]: $6,575.78
+            - generic [ref=e79]:
+              - generic [ref=e80]: Spent
+              - generic [ref=e81]: $7,980.69
+            - generic [ref=e82]:
+              - generic [ref=e83]: Remaining
+              - generic [ref=e84]: "-$1,404.91"
+            - generic [ref=e85]:
+              - generic [ref=e86]: Unallocated
+              - generic [ref=e87]: "-$1,008.99"
+          - button "Show Budget Forecast" [ref=e89]
+          - generic [ref=e90]: Invalid array length
+          - generic [ref=e91]:
+            - generic [ref=e92]:
+              - heading "Category Allocations" [level=2] [ref=e93]
+              - button "Add Allocation" [disabled] [ref=e95]:
+                - img [ref=e96]
+                - text: Add Allocation
+            - table [ref=e99]:
+              - rowgroup [ref=e100]:
+                - row "Category Amount Spent Remaining % Used Status Actions" [ref=e101]:
+                  - columnheader "Category" [ref=e102]
+                  - columnheader "Amount" [ref=e103]
+                  - columnheader "Spent" [ref=e104]
+                  - columnheader "Remaining" [ref=e105]
+                  - columnheader "% Used" [ref=e106]
+                  - columnheader "Status" [ref=e107]
+                  - columnheader "Actions" [ref=e108]
+              - rowgroup
+          - generic [ref=e110]:
+            - paragraph [ref=e111]: Traditional view coming soon
+            - paragraph [ref=e112]: View budget vs actual reports and past budgets.
+  - navigation [ref=e113]:
+    - button "Toggle menu" [ref=e115]:
+      - img
+    - generic [ref=e117]:
+      - heading "Finance." [level=1] [ref=e118]
+      - paragraph [ref=e119]: Personal Finance Tracker
+    - button "Loading..." [ref=e122]:
+      - text: Loading...
+      - img [ref=e123]
+    - button "Sign In" [ref=e127]
+    - generic [ref=e128]:
+      - link "Dashboard" [ref=e129] [cursor=pointer]:
+        - /url: "#dashboard"
+        - img [ref=e130]
+        - text: Dashboard
+      - link "Transactions" [ref=e135] [cursor=pointer]:
+        - /url: "#transactions"
+        - img [ref=e136]
+        - text: Transactions
+      - link "Budgets" [ref=e138] [cursor=pointer]:
+        - /url: "#budgets"
+        - img [ref=e139]
+        - text: Budgets
+      - link "Loan Calculator" [ref=e141] [cursor=pointer]:
+        - /url: "#loans"
+        - img [ref=e142]
+        - text: Loan Calculator
+      - link "Savings Goals" [ref=e144] [cursor=pointer]:
+        - /url: "#goals"
+        - img [ref=e145]
+        - text: Savings Goals
+      - link "Bills" [ref=e147] [cursor=pointer]:
+        - /url: "#bills"
+        - img [ref=e148]
+        - text: Bills
+      - link "Import" [ref=e150] [cursor=pointer]:
+        - /url: "#import"
+        - img [ref=e151]
+        - text: Import
+      - link "Accounts" [ref=e153] [cursor=pointer]:
+        - /url: "#accounts"
+        - img [ref=e154]
+        - text: Accounts
+      - link "Retirement" [ref=e156] [cursor=pointer]:
+        - /url: "#retirement"
+        - img [ref=e157]
+        - text: Retirement
+      - link "Housing Calc" [ref=e159] [cursor=pointer]:
+        - /url: "#housing"
+        - img [ref=e160]
+        - text: Housing Calc
+      - link "Analytics" [ref=e162] [cursor=pointer]:
+        - /url: "#analytics"
+        - img [ref=e163]
+        - text: Analytics
+      - link "Categories" [ref=e165] [cursor=pointer]:
+        - /url: "#categories"
+        - img [ref=e166]
+        - text: Categories
+      - link "Settings" [ref=e168] [cursor=pointer]:
+        - /url: "#settings"
+        - img [ref=e169]
+        - text: Settings
+    - generic [ref=e173]:
+      - generic [ref=e174]: Finance Manager v1.0
+      - button "Reset Zoom" [ref=e175]
+```
