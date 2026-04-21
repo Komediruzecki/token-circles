@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -23,12 +23,22 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'npm run build && npm run preview -- --port 3800',
-    url: 'http://localhost:3800',
-    reuseExistingServer: !process.env.CI,
-    timeout: 20000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
-});
+  webServer: [
+    {
+      command: 'npm run build && npm run dev -- --port 3800',
+      url: 'http://localhost:3800',
+      reuseExistingServer: !process.env.CI,
+      timeout: 20000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      command: 'cd ../ && npm run start',
+      url: 'http://localhost:3800',
+      reuseExistingServer: !process.env.CI,
+      timeout: 20000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+  ],
+})
