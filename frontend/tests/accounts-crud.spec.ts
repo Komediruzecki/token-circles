@@ -129,8 +129,9 @@ test.describe('Accounts CRUD Operations', () => {
   test('should display current balance card', async ({ page }) => {
     await page.waitForLoadState('networkidle');
 
-    const balanceLabel = page.locator('.account-balance .balance-label');
-    const balanceAmount = page.locator('.account-balance .balance-amount');
+    // Note: balance-label and balance-amount exist in multiple account cards, using first() to get first account's values
+    const balanceLabel = page.locator('.account-balance .balance-label').first();
+    const balanceAmount = page.locator('.account-balance .balance-amount').first();
     await expect(balanceLabel).toBeVisible();
     await expect(balanceAmount).toBeVisible();
   });
@@ -138,14 +139,16 @@ test.describe('Accounts CRUD Operations', () => {
   test('should display recent activity section', async ({ page }) => {
     await page.waitForLoadState('networkidle');
 
-    const activitySection = page.locator('.account-activity');
+    // Note: account-activity exists in multiple account cards, using first() to get first account's values
+    const activitySection = page.locator('.account-activity').first();
     await expect(activitySection).toBeVisible();
   });
 
   test('should have activity header with view all link', async ({ page }) => {
     await page.waitForLoadState('networkidle');
 
-    const activityHeader = page.locator('.activity-header');
+    // Note: activity-header exists in multiple account cards, using first() to get first account's values
+    const activityHeader = page.locator('.activity-header').first();
     await expect(activityHeader).toBeVisible();
   });
 

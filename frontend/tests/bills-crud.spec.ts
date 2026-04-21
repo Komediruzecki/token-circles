@@ -336,15 +336,16 @@ test.describe('Bills CRUD Operations', () => {
     }
   });
 
-  test('should close modal when clicking overlay', async ({ page }) => {
+  test('should close modal when clicking outside modal content', async ({ page }) => {
     await page.locator('.page-header button:has-text("Add Bill")').click();
 
-    const modal = page.locator('.modal-overlay');
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
+    const modalContent = page.locator('.modal-content');
+    if (await modalContent.isVisible({ timeout: 2000 }).catch(() => false)) {
+      // Click the overlay/background, not the modal content itself
       await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } });
       await page.waitForTimeout(200);
 
-      const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false);
+      const isClosed = await modalContent.isVisible({ timeout: 500 }).catch(() => false);
       expect(isClosed).toBeFalsy();
     }
   });

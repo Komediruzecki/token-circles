@@ -69,13 +69,13 @@ test.describe('Budgets CRUD Operations', () => {
     expect(count).toBeGreaterThanOrEqual(3);
 
     // Check for specific labels
-    await expect(page.locator('.budget-summary .summary-card:has-text("Income")')).toBeVisible();
-    await expect(page.locator('.budget-summary .summary-card:has-text("Allocated")')).toBeVisible();
-    await expect(page.locator('.budget-summary .summary-card:has-text("Spent")')).toBeVisible();
+    await expect(page.locator('.budget-summary .summary-card:has-text("Income")').first()).toBeVisible();
+    await expect(page.locator('.budget-summary .summary-card:has-text("Allocated")').first()).toBeVisible();
+    await expect(page.locator('.budget-summary .summary-card:has-text("Spent")').first()).toBeVisible();
   });
 
   test('should have remaining summary card', async ({ page }) => {
-    await expect(page.locator('.budget-summary .summary-card:has-text("Remaining")')).toBeVisible();
+    await expect(page.locator('.budget-summary .summary-card:has-text("Remaining")').first()).toBeVisible();
   });
 
   test('should show unallocated budget message', async ({ page }) => {
