@@ -5,12 +5,12 @@ import solid from 'vite-plugin-solid'
 export default defineConfig({
   base: './',
   build: {
-    emptyOutDir: false,
+    emptyOutDir: true,
     outDir: 'dist',
     sourcemap: true,
     minify: 'esbuild',
     rollupOptions: {
-      input: resolve(__dirname, 'src/main.tsx'),
+      input: resolve(__dirname, 'index.html'),
       output: {
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name]-[hash].js',

@@ -238,42 +238,29 @@
   <div class="modal modal-lg">
     <div class="modal-header">
       <div class="modal-title">Receipt</div>
-      <button
-        class="btn btn-ghost"
-        data-action="modal:close"
-        data-arg="receipt-modal"
-      >
+      <button class="btn btn-ghost" data-action="modal:close" data-arg="receipt-modal">
         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
     </div>
     <div class="modal-body">
-      <img id="receipt-view-image" style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto;" />
-      <div class="receipt-meta" id="receipt-meta" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border)">
+      <img
+        id="receipt-view-image"
+        style="max-width: 100%; max-height: 70vh; display: block; margin: 0 auto"
+      />
+      <div
+        class="receipt-meta"
+        id="receipt-meta"
+        style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border)"
+      >
         <!-- Meta info populated by JS -->
       </div>
     </div>
     <div class="modal-footer">
-      <a
-        id="receipt-download-link"
-        href="#"
-        download
-        class="btn btn-secondary"
-      >
-        Download
-      </a>
-      <button
-        class="btn btn-danger"
-        data-action="receipts:delete"
-      >
-        Delete
-      </button>
-      <button
-        class="btn btn-secondary"
-        data-action="modal:close"
-        data-arg="receipt-modal"
-      >
+      <a id="receipt-download-link" href="#" download class="btn btn-secondary"> Download </a>
+      <button class="btn btn-danger" data-action="receipts:delete">Delete</button>
+      <button class="btn btn-secondary" data-action="modal:close" data-arg="receipt-modal">
         Close
       </button>
     </div>

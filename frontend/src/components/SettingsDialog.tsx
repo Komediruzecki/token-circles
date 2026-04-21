@@ -3,54 +3,54 @@
  * Supports theme, language, currency, and storage mode selection
  */
 
-import { createSignal, type Component, For } from 'solid-js';
-import { Modal, type ModalProps } from './Modal.js';
-import { toast } from '../core/api.js';
-import { setStorageMode, StorageMode } from '../core/storage/storageFactory.js';
+import { createSignal, type Component, For } from 'solid-js'
+import { Modal, type ModalProps } from './Modal.js'
+import { toast } from '../core/api.js'
+import { setStorageMode, StorageMode } from '../core/storage/storageFactory.js'
 
 interface SettingsDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen: boolean
+  onClose: () => void
 }
 
-type SettingTab = 'general' | 'storage';
+type SettingTab = 'general' | 'storage'
 
 export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
-  const [activeTab, setActiveTab] = createSignal<SettingTab>('general');
+  const [activeTab, setActiveTab] = createSignal<SettingTab>('general')
 
   // Settings state
-  const [theme, setTheme] = createSignal<'light' | 'dark'>('light');
-  const [language, setLanguage] = createSignal('en');
-  const [currency, setCurrency] = createSignal('USD');
-  const [primaryCurrency, setPrimaryCurrency] = createSignal('USD');
+  const [theme, setTheme] = createSignal<'light' | 'dark'>('light')
+  const [language, setLanguage] = createSignal('en')
+  const [currency, setCurrency] = createSignal('USD')
+  const [primaryCurrency, setPrimaryCurrency] = createSignal('USD')
 
   // Storage mode state
-  const [currentMode, setCurrentMode] = createSignal<StorageMode>('serverless');
+  const [currentMode, setCurrentMode] = createSignal<StorageMode>('serverless')
 
   // Load current settings
   const loadSettings = async () => {
     try {
-      const response = await fetch('/api/settings');
+      const response = await fetch('/api/settings')
       if (response.ok) {
-        const settings = await response.json();
-        setTheme(settings.theme || 'light');
-        setLanguage(settings.language || 'en');
-        setCurrency(settings.currency || 'USD');
-        setPrimaryCurrency(settings.primary_currency || 'USD');
+        const settings = await response.json()
+        setTheme(settings.theme || 'light')
+        setLanguage(settings.language || 'en')
+        setCurrency(settings.currency || 'USD')
+        setPrimaryCurrency(settings.primary_currency || 'USD')
       }
     } catch (error) {
-      console.error('Failed to load settings:', error);
+      console.error('Failed to load settings:', error)
     }
 
     try {
-      const response = await fetch('/api/storage-mode');
+      const response = await fetch('/api/storage-mode')
       if (response.ok) {
-        setCurrentMode(await response.json());
+        setCurrentMode(await response.json())
       }
     } catch (error) {
-      console.error('Failed to load storage mode:', error);
+      console.error('Failed to load storage mode:', error)
     }
-  };
+  }
 
   // Save settings
   const saveSettings = async () => {
@@ -65,13 +65,13 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
           currency: currency(),
           primary_currency: primaryCurrency(),
         }),
-      });
-      toast('Settings saved', 'success');
+      })
+      toast('Settings saved', 'success')
     } catch (error) {
-      toast('Failed to save settings', 'error');
-      console.error('Failed to save settings:', error);
+      toast('Failed to save settings', 'error')
+      console.error('Failed to save settings:', error)
     }
-  };
+  }
 
   // Set storage mode
   const handleSetMode = async (mode: StorageMode) => {
@@ -81,14 +81,14 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ mode }),
-      });
-      setStorageMode(mode);
-      setCurrentMode(mode);
-      toast(`Storage mode: ${mode === 'serverless' ? 'Serverless' : 'Self-Hosted'}`, 'success');
+      })
+      setStorageMode(mode)
+      setCurrentMode(mode)
+      toast(`Storage mode: ${mode === 'serverless' ? 'Serverless' : 'Self-Hosted'}`, 'success')
     } catch (error) {
-      toast('Failed to change storage mode', 'error');
+      toast('Failed to change storage mode', 'error')
     }
-  };
+  }
 
   // Export data
   const handleExport = async () => {
@@ -96,78 +96,78 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       const response = await fetch('/api/export', {
         method: 'GET',
         credentials: 'include',
-      });
+      })
 
-      if (!response.ok) throw new Error('Export failed');
+      if (!response.ok) throw new Error('Export failed')
 
-      const data = await response.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `finance-export-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast('Data exported successfully', 'success');
+      const data = await response.json()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `finance-export-${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast('Data exported successfully', 'success')
     } catch (error) {
-      toast('Failed to export data', 'error');
+      toast('Failed to export data', 'error')
     }
-  };
+  }
 
   // Import data
   const handleImport = async (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const file = target.files?.[0];
+    const target = e.target as HTMLInputElement
+    const file = target.files?.[0]
 
-    if (!file) return;
+    if (!file) return
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const formData = new FormData()
+      formData.append('file', file)
 
       const response = await fetch('/api/import', {
         method: 'POST',
         credentials: 'include',
         body: formData,
-      });
+      })
 
       if (!response.ok) {
-        throw new Error('Import failed');
+        throw new Error('Import failed')
       }
 
-      const result = await response.json();
-      toast(`${result.imported || 0} items imported`, 'success');
-      props.onClose();
+      const result = await response.json()
+      toast(`${result.imported || 0} items imported`, 'success')
+      props.onClose()
     } catch (error) {
-      toast('Failed to import data', 'error');
+      toast('Failed to import data', 'error')
     }
-  };
+  }
 
   // Reset data
   const handleReset = async () => {
     if (!confirm('Are you sure you want to reset all data? This cannot be undone.')) {
-      return;
+      return
     }
 
     if (!confirm('This will permanently delete all your data. Continue?')) {
-      return;
+      return
     }
 
     try {
       await fetch('/api/clear-all', {
         method: 'DELETE',
         credentials: 'include',
-      });
-      toast('All data has been reset', 'success');
-      props.onClose();
+      })
+      toast('All data has been reset', 'success')
+      props.onClose()
     } catch (error) {
-      toast('Failed to reset data', 'error');
+      toast('Failed to reset data', 'error')
     }
-  };
+  }
 
   // Initialize
   if (props.isOpen) {
-    loadSettings();
+    loadSettings()
   }
 
   const languages = [
@@ -176,7 +176,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
     { code: 'de', name: 'Deutsch' },
     { code: 'fr', name: 'Français' },
     { code: 'es', name: 'Español' },
-  ];
+  ]
 
   const currencies = [
     { code: 'USD', name: 'USD - US Dollar' },
@@ -185,7 +185,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
     { code: 'PLN', name: 'PLN - Polish Złoty' },
     { code: 'CZK', name: 'CZK - Czech Koruna' },
     { code: 'SEK', name: 'SEK - Swedish Krona' },
-  ];
+  ]
 
   return (
     <div class="settings-dialog">
@@ -235,9 +235,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
               value={language()}
               onChange={(e) => setLanguage(e.currentTarget.value)}
             >
-              <For each={languages}>
-                {(lang) => <option value={lang.code}>{lang.name}</option>}
-              </For>
+              <For each={languages}>{(lang) => <option value={lang.code}>{lang.name}</option>}</For>
             </select>
           </div>
 
@@ -318,12 +316,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
               </button>
               <button class="btn-secondary">
                 📥 Import Data
-                <input
-                  type="file"
-                  accept=".json"
-                  style="display: none"
-                  onChange={handleImport}
-                />
+                <input type="file" accept=".json" style="display: none" onChange={handleImport} />
               </button>
             </div>
           </div>
@@ -338,5 +331,5 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         </div>
       </Modal>
     </div>
-  );
-};
+  )
+}

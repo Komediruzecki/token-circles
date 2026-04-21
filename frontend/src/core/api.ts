@@ -747,7 +747,10 @@ export class ApiClient {
   /**
    * Get exchange rates for a base currency
    */
-  async getExchangeRates(base?: string, symbols?: string): Promise<{
+  async getExchangeRates(
+    base?: string,
+    symbols?: string
+  ): Promise<{
     base: string
     rates: Record<string, number>
     timestamp: number
@@ -757,9 +760,12 @@ export class ApiClient {
     if (base) queryParams.append('base', base)
     if (symbols) queryParams.append('symbols', symbols)
 
-    return this.request<{ base: string; rates: Record<string, number>; timestamp: number; last_updated: string }>(
-      `/exchange-rates?${queryParams.toString()}`
-    )
+    return this.request<{
+      base: string
+      rates: Record<string, number>
+      timestamp: number
+      last_updated: string
+    }>(`/exchange-rates?${queryParams.toString()}`)
   }
 
   /**

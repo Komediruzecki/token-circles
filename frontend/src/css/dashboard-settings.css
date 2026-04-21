@@ -84,7 +84,6 @@
   padding: 16px 20px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
-}
   width: 100%;
 }
 
@@ -181,12 +180,24 @@
 }
 
 /* Widget order utilities */
-.widget-order-metrics { order: 1; }
-.widget-order-category { order: 2; }
-.widget-order-recent { order: 3; }
-.widget-order-bills { order: 4; }
-.widget-order-savings { order: 5; }
-.widget-order-budget { order: 6; }
+.widget-order-metrics {
+  order: 1;
+}
+.widget-order-category {
+  order: 2;
+}
+.widget-order-recent {
+  order: 3;
+}
+.widget-order-bills {
+  order: 4;
+}
+.widget-order-savings {
+  order: 5;
+}
+.widget-order-budget {
+  order: 6;
+}
 
 /* ========================
 BUDGET FORECAST STYLES

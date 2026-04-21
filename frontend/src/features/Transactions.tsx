@@ -44,6 +44,7 @@ export default function Transactions() {
   const [searchTerm, setSearchTerm] = createSignal('')
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
+  const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
   const [selectedTxId, setSelectedTxId] = createSignal<number | null>(null)
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
@@ -218,6 +219,8 @@ export default function Transactions() {
     exchangeRateInput.value = '1'
     localAmountInput.value = ''
     amountInput.value = ''
+
+    setTransactionModalOpen(true)
   }
 
   // Refresh transactions when selected transaction changes
@@ -434,7 +437,7 @@ export default function Transactions() {
 
       {/* Transaction Modal */}
       <div
-        class={`modal-overlay ${modalOpen() ? 'show' : ''}`}
+        class={`modal-overlay ${isTransactionModalOpen() ? 'show' : ''}`}
         id="tx-modal"
         onclick={(e) => {
           if ((e.target as HTMLElement).classList.contains('modal-overlay')) {
@@ -447,11 +450,7 @@ export default function Transactions() {
             <div class="modal-title" id="tx-modal-title">
               Add Transaction
             </div>
-            <button
-              class="btn btn-ghost"
-              onclick={closeModals}
-              aria-label="Close modal"
-            >
+            <button class="btn btn-ghost" onclick={closeModals} aria-label="Close modal">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -548,7 +547,12 @@ export default function Transactions() {
                 </div>
                 <div class="form-group">
                   <label class="form-label">Payor</label>
-                  <input type="text" class="form-control" id="tx-payor" placeholder="Who paid you" />
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="tx-payor"
+                    placeholder="Who paid you"
+                  />
                 </div>
               </div>
               <div class="form-row">
@@ -583,11 +587,7 @@ export default function Transactions() {
               <div class="form-group">
                 <label class="form-label">Receipt</label>
                 <div class="receipt-upload-container">
-                  <label
-                    class="receipt-placeholder"
-                    for="tx-receipt"
-                    style="cursor: pointer"
-                  >
+                  <label class="receipt-placeholder" for="tx-receipt" style="cursor: pointer">
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
@@ -603,7 +603,11 @@ export default function Transactions() {
                   {receiptPreviewUrl() && (
                     <>
                       {selectedFile()?.type.startsWith('image/') ? (
-                        <img src={receiptPreviewUrl()!} alt="Receipt preview" class="receipt-thumbnail" />
+                        <img
+                          src={receiptPreviewUrl()!}
+                          alt="Receipt preview"
+                          class="receipt-thumbnail"
+                        />
                       ) : (
                         <div
                           style={{
@@ -614,7 +618,14 @@ export default function Transactions() {
                             textAlign: 'center',
                           }}
                         >
-                          <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="opacity: 0.5; margin-bottom: 8px">
+                          <svg
+                            width="32"
+                            height="32"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            style="opacity: 0.5; margin-bottom: 8px"
+                          >
                             <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                           </svg>
                           <div style="font-size: 14px">{selectedFile()!.name}</div>
@@ -630,7 +641,13 @@ export default function Transactions() {
                           data-action="transactions:removeReceipt"
                           title="Remove receipt"
                         >
-                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
                             <path d="M6 18L18 6M6 6l12 12" />
                           </svg>
                           Remove
@@ -671,11 +688,7 @@ export default function Transactions() {
           <div class="modal modal-lg">
             <div class="modal-header">
               <div class="modal-title">Receipt</div>
-              <button
-                class="btn btn-ghost"
-                onclick={closeReceiptModal}
-                aria-label="Close modal"
-              >
+              <button class="btn btn-ghost" onclick={closeReceiptModal} aria-label="Close modal">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -707,9 +720,7 @@ export default function Transactions() {
                 </div>
                 <div class="receipt-meta-item">
                   <span class="receipt-meta-label">Uploaded</span>
-                  <span>
-                    {new Date(selectedReceipt()!.uploaded_at).toLocaleString()}
-                  </span>
+                  <span>{new Date(selectedReceipt()!.uploaded_at).toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -719,13 +730,27 @@ export default function Transactions() {
                 download={selectedReceipt()!.original_name}
                 class="btn btn-secondary"
               >
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 4px">
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  style="margin-right: 4px"
+                >
                   <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
                 Download
               </a>
               <button class="btn btn-danger" onclick={deleteReceipt}>
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 4px">
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  style="margin-right: 4px"
+                >
                   <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
                 Delete

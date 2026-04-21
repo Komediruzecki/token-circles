@@ -89,9 +89,10 @@ export default function Budgets() {
       const summaryData: ZeroBasedSummary = await summaryRes.json()
       setAllocations(allocationsData)
       setSummary(summaryData)
-      setBudgetMessage(summaryData.zero_based_remaining > 0
-        ? `Unallocated: $${summaryData.zero_based_remaining.toFixed(2)}`
-        : `All income allocated!`
+      setBudgetMessage(
+        summaryData.zero_based_remaining > 0
+          ? `Unallocated: $${summaryData.zero_based_remaining.toFixed(2)}`
+          : `All income allocated!`
       )
 
       if (forecastRes?.ok) {
@@ -155,9 +156,12 @@ export default function Budgets() {
   // Get status class
   const getStatusClass = (status: AllocationStatus) => {
     switch (status) {
-      case 'over': return 'status-over'
-      case 'warning': return 'status-warning'
-      default: return 'status-ok'
+      case 'over':
+        return 'status-over'
+      case 'warning':
+        return 'status-warning'
+      default:
+        return 'status-ok'
     }
   }
 
@@ -195,7 +199,12 @@ export default function Budgets() {
               aria-label="Previous month"
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
             </button>
             <span class="month-display">{month()}</span>
@@ -209,7 +218,12 @@ export default function Budgets() {
               aria-label="Next month"
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
           </div>
@@ -233,15 +247,11 @@ export default function Budgets() {
         </div>
         <div class="summary-card highlighted">
           <div class="summary-label">Remaining</div>
-          <div class="summary-value status-ok">
-            {formatCurrency(summary()?.remaining || 0)}
-          </div>
+          <div class="summary-value status-ok">{formatCurrency(summary()?.remaining || 0)}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Unallocated</div>
-          <div class="summary-value">
-            {formatCurrency(summary()?.zero_based_remaining || 0)}
-          </div>
+          <div class="summary-value">{formatCurrency(summary()?.zero_based_remaining || 0)}</div>
         </div>
       </div>
 
@@ -258,7 +268,12 @@ export default function Budgets() {
           <div class="forecast-header">
             <div class="forecast-title">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                />
               </svg>
               <span>Budget Forecast</span>
             </div>
@@ -273,7 +288,10 @@ export default function Budgets() {
               <div class="forecast-stats">
                 <div class="stat-item">
                   <div class="stat-label">Historical Adherence</div>
-                  <div class="stat-value" class={forecastData()!.avg_adherence >= 80 ? 'positive' : ''}>
+                  <div
+                    class="stat-value"
+                    class={forecastData()!.avg_adherence >= 80 ? 'positive' : ''}
+                  >
                     {forecastData()!.avg_adherence}%
                   </div>
                 </div>
@@ -299,7 +317,11 @@ export default function Budgets() {
                     <span class="chart-value actual-val">{formatCurrency(fm.predicted_spent)}</span>
                     <span class="chart-value">{Math.round(fm.adherence)}%</span>
                     <span class={`chart-status chart-status-${fm.status}`}>
-                      {fm.status === 'over' ? 'Over' : fm.status === 'warning' ? 'Warning' : 'On Track'}
+                      {fm.status === 'over'
+                        ? 'Over'
+                        : fm.status === 'warning'
+                          ? 'Warning'
+                          : 'On Track'}
                     </span>
                   </div>
                 ))}
@@ -317,18 +339,10 @@ export default function Budgets() {
       )}
 
       {/* Toast */}
-      {toastMessage() && (
-        <div class="toast toast-success">
-          {toastMessage()}
-        </div>
-      )}
+      {toastMessage() && <div class="toast toast-success">{toastMessage()}</div>}
 
       {/* Error */}
-      {error() && (
-        <div class="toast toast-error">
-          {error()}
-        </div>
-      )}
+      {error() && <div class="toast toast-error">{error()}</div>}
 
       {/* Allocation Table */}
       <div class="budget-allocations">
@@ -338,7 +352,7 @@ export default function Budgets() {
             <button
               class="btn btn-primary"
               onclick={() => {
-                const firstUnallocated = allocations().find(a => !a.is_budgeted && a.can_allocate)
+                const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
                 if (firstUnallocated) {
                   openAllocateModal(firstUnallocated)
                 }
@@ -346,7 +360,12 @@ export default function Budgets() {
               disabled={!summary()?.can_allocate}
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
               </svg>
               Add Allocation
             </button>
@@ -362,7 +381,7 @@ export default function Budgets() {
             <button
               class="btn btn-primary"
               onClick={() => {
-                const firstUnallocated = allocations().find(a => !a.is_budgeted && a.can_allocate)
+                const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
                 if (firstUnallocated) {
                   openAllocateModal(firstUnallocated)
                 }
@@ -399,9 +418,7 @@ export default function Budgets() {
                       </td>
                       <td class="amount-col">{formatCurrency(item.allocated)}</td>
                       <td class="amount-col">{formatCurrency(item.spent)}</td>
-                      <td class="amount-col status-ok">
-                        {formatCurrency(item.remaining_budget)}
-                      </td>
+                      <td class="amount-col status-ok">{formatCurrency(item.remaining_budget)}</td>
                       <td class="percent-col">
                         <div class="progress-bar">
                           <div
@@ -418,9 +435,7 @@ export default function Budgets() {
                         {item.status === 'warning' && (
                           <span class="badge badge-warning">Near Limit</span>
                         )}
-                        {item.status === 'ok' && (
-                          <span class="badge badge-ok">On Track</span>
-                        )}
+                        {item.status === 'ok' && <span class="badge badge-ok">On Track</span>}
                         {item.is_fully_allocated && (
                           <span class="badge badge-ok">Fully Allocated</span>
                         )}
@@ -448,9 +463,12 @@ export default function Budgets() {
 
       {/* Allocate Modal */}
       {showAllocateModal() && selectedCategory() && (
-        <div class="modal-overlay" onclick={(e) => {
-          if (e.target === e.currentTarget) setShowAllocateModal(false)
-        }}>
+        <div
+          class="modal-overlay"
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowAllocateModal(false)
+          }}
+        >
           <div class="modal modal-small" onclick={(e) => e.stopPropagation()}>
             <div class="modal-header">
               <h3>Allocate Budget</h3>
@@ -460,7 +478,12 @@ export default function Budgets() {
                 aria-label="Close modal"
               >
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -484,10 +507,7 @@ export default function Budgets() {
               </p>
             </div>
             <div class="modal-footer">
-              <button
-                class="btn btn-ghost"
-                onClick={() => setShowAllocateModal(false)}
-              >
+              <button class="btn btn-ghost" onClick={() => setShowAllocateModal(false)}>
                 Cancel
               </button>
               <button

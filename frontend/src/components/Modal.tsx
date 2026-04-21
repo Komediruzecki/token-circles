@@ -2,55 +2,56 @@
  * Modal Component - Generic modal dialog
  */
 
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { createSignal, onMount, onCleanup } from 'solid-js'
 
 interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title?: string;
-  width?: 'small' | 'medium' | 'large';
-  children?: any;
+  isOpen: boolean
+  onClose: () => void
+  title?: string
+  width?: 'small' | 'medium' | 'large'
+  children?: any
 }
 
 export function Modal(props: ModalProps) {
-  const [isVisible, setIsVisible] = createSignal(false);
+  const [isVisible, setIsVisible] = createSignal(false)
 
   onMount(() => {
     if (props.isOpen) {
-      setIsVisible(true);
-      document.body.style.overflow = 'hidden';
+      setIsVisible(true)
+      document.body.style.overflow = 'hidden'
     }
-  });
+  })
 
   onCleanup(() => {
-    document.body.style.overflow = '';
-  });
+    document.body.style.overflow = ''
+  })
 
   const handleClose = () => {
-    setIsVisible(false);
+    setIsVisible(false)
     // Small delay to allow animation
     setTimeout(() => {
-      setIsVisible(false);
-      props.onClose();
-    }, 200);
-  };
+      setIsVisible(false)
+      props.onClose()
+    }, 200)
+  }
 
   const handleOverlayClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
-      handleClose();
+      handleClose()
     }
-  };
+  }
 
-  if (!props.isOpen) return null;
+  if (!props.isOpen) return null
 
-  const widthClass = props.width === 'small' ? 'modal-small' : props.width === 'large' ? 'modal-large' : 'modal-medium';
+  const widthClass =
+    props.width === 'small'
+      ? 'modal-small'
+      : props.width === 'large'
+        ? 'modal-large'
+        : 'modal-medium'
 
   return (
-    <div
-      class="modal-overlay"
-      classList={{ visible: isVisible() }}
-      onClick={handleOverlayClick}
-    >
+    <div class="modal-overlay" classList={{ visible: isVisible() }} onClick={handleOverlayClick}>
       <div class={`modal ${widthClass}`} classList={{ visible: isVisible() }}>
         {/* Modal Header */}
         <div class="modal-header">
@@ -68,9 +69,7 @@ export function Modal(props: ModalProps) {
         </div>
 
         {/* Modal Body */}
-        <div class="modal-body">
-          {props.children}
-        </div>
+        <div class="modal-body">{props.children}</div>
 
         {/* Modal Footer */}
         <div class="modal-footer">
@@ -82,5 +81,5 @@ export function Modal(props: ModalProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }

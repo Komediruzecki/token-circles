@@ -19,6 +19,9 @@ export default [
     ],
   },
   {
+    files: ['src/**/*.{ts,tsx,js,jsx}'],
+  },
+  {
     languageOptions: {
       ecmaVersion: 'latest',
       globals: {
@@ -38,7 +41,7 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...tsPlugin.configs.recommended.rules,
-      'no-unused-vars': 'off',
+      'no-unused-vars': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

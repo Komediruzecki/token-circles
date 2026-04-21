@@ -3,7 +3,7 @@
  */
 
 import { createSignal, onMount } from 'solid-js'
-import { api, escapeHtml } from './core/api.js'
+import { api, escapeHtml, toast } from './core/api.js'
 import { theme } from './core/theme.js'
 import Accounts from './features/Accounts'
 import Analytics from './features/Analytics'
@@ -200,8 +200,8 @@ window.transactions = {
   },
   openEditModal: (transactionId: number) => {
     // Load transaction data and populate modal
-    api.getTransactions().then(transactions => {
-      const tx = transactions.find(t => t.id === transactionId)
+    api.getTransactions().then((transactions) => {
+      const tx = transactions.find((t) => t.id === transactionId)
       if (!tx) return
 
       const modal = document.getElementById('tx-modal') as HTMLElement
@@ -216,7 +216,16 @@ window.transactions = {
       const idInput = document.getElementById('tx-id') as HTMLInputElement
       const typeSelector = document.getElementById('tx-type-selector') as HTMLElement
 
-      if (!modal || !title || !descInput || !amountInput || !dateInput || !categoryInput || !typeSelector) return
+      if (
+        !modal ||
+        !title ||
+        !descInput ||
+        !amountInput ||
+        !dateInput ||
+        !categoryInput ||
+        !typeSelector
+      )
+        return
 
       title.textContent = 'Edit Transaction'
       idInput.value = tx.id.toString()
@@ -225,20 +234,20 @@ window.transactions = {
       dateInput.value = tx.date
 
       // Set category
-      Array.from(categoryInput.options).forEach(opt => {
+      Array.from(categoryInput.options).forEach((opt) => {
         opt.selected = opt.value === tx.category_name
       })
 
       // Set type
       const typeButtons = typeSelector.querySelectorAll('button')
-      typeButtons.forEach(btn => {
+      typeButtons.forEach((btn) => {
         btn.classList.remove('active')
         if (btn.dataset.selectedType === tx.type) {
           btn.classList.add('active')
         }
       })
 
-      if (meansInput) meansInput.value = (tx.beneficiary || tx.payor || '')
+      if (meansInput) meansInput.value = tx.beneficiary || tx.payor || ''
       if (notesInput) notesInput.value = ''
       if (receiptInput) receiptInput.value = ''
 
@@ -258,14 +267,15 @@ window.handlers = {
   'transactions:setType': (arg: string) => {
     // Import and call the setType function from Transactions component
     // This is called from the transaction modal buttons
-    const setType = (typeof window.transactionsSetType === 'function')
-      ? window.transactionsSetType
-      : (newType: string) => {
-          const txComponent = document.querySelector('[data-page="transactions"]') as any
-          if (txComponent?.setType) {
-            txComponent.setType(newType)
+    const setType =
+      typeof window.transactionsSetType === 'function'
+        ? window.transactionsSetType
+        : (newType: string) => {
+            const txComponent = document.querySelector('[data-page="transactions"]') as any
+            if (txComponent?.setType) {
+              txComponent.setType(newType)
+            }
           }
-        }
     setType(arg)
   },
   'receipt-modal': (arg: any) => {
@@ -323,17 +333,19 @@ export default function App() {
 
     // Add keyboard navigation to sidebar
     const setupKeyboardNavigation = () => {
-      const navLinks = document.querySelectorAll('.sidebar-nav a[data-page], .nav-links a[data-page]')
+      const navLinks = document.querySelectorAll(
+        '.sidebar-nav a[data-page], .nav-links a[data-page]'
+      )
       const firstLink = navLinks[0] as HTMLElement
       const lastLink = navLinks[navLinks.length - 1] as HTMLElement
 
       // Add tabindex for keyboard navigation
-      navLinks.forEach(link => {
+      navLinks.forEach((link) => {
         link.setAttribute('tabindex', '0')
         link.setAttribute('role', 'link')
       })
 
-      navLinks.forEach(link => {
+      navLinks.forEach((link) => {
         link.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
@@ -358,15 +370,21 @@ export default function App() {
       })
     }
 
+    const setupDataActionDelegation = () => {
+      document.addEventListener('click', handleDataActionClick)
+    }
+
     setupKeyboardNavigation()
-    setupDataActionDelegation()
+    // setupDataActionDelegation()
 
     // Keyboard navigation shortcuts
     const handleKeyboardShortcuts = (event: KeyboardEvent) => {
       // Don't trigger shortcuts when typing in inputs or textareas
-      if (event.target instanceof HTMLInputElement ||
-          event.target instanceof HTMLTextAreaElement ||
-          event.target instanceof HTMLSelectElement) {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement
+      ) {
         // Allow Escape to close modals even when typing
         if (event.key === 'Escape') {
           const closeBtn = document.querySelector('.modal-close')
@@ -402,7 +420,7 @@ export default function App() {
       if (event.key === 'Escape') {
         const closeBtn = document.querySelector('.modal-close')
         const modalOverlays = document.querySelectorAll('.modal-overlay')
-        modalOverlays.forEach(overlay => {
+        modalOverlays.forEach((overlay) => {
           if (overlay.style.display !== 'none') {
             closeBtn?.click()
           }
@@ -432,6 +450,7 @@ export default function App() {
 
       const amountInput = document.getElementById('tx-amount') as HTMLInputElement
       const currencySelect = document.getElementById('tx-currency') as HTMLSelectElement
+      const localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
 
       if (!amountInput) return
 
@@ -461,10 +480,6 @@ export default function App() {
           moduleObj[method]()
         }
       }
-    }
-
-    const setupDataActionDelegation = () => {
-      document.addEventListener('click', handleDataActionClick)
     }
 
     const handleExchangeRateChange = (event: Event) => {
@@ -633,7 +648,7 @@ export default function App() {
 
     observer.observe(document.getElementById('modals') || document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
     })
 
     // Handle hash changes for routing

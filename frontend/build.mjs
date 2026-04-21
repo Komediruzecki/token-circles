@@ -17,14 +17,15 @@ function runViteBuild() {
   console.log('Building with Vite...')
   try {
     // Use local node_modules vite to avoid version conflicts with npx
-    const vitePath = process.platform === 'win32'
-      ? path.join(__dirname, 'node_modules', 'vite', 'bin', 'vite.js')
-      : path.join(__dirname, 'node_modules', '.bin', 'vite')
+    const vitePath =
+      process.platform === 'win32'
+        ? path.join(__dirname, 'node_modules', 'vite', 'bin', 'vite.js')
+        : path.join(__dirname, 'node_modules', '.bin', 'vite')
     // Use node to run the ESM module with proper flags
     const nodeCmd = process.platform === 'win32' ? 'node' : 'node'
     execSync(`${nodeCmd} ${vitePath} build`, {
       stdio: 'inherit',
-      cwd: __dirname
+      cwd: __dirname,
     })
   } catch (e) {
     console.error('Vite build failed')
@@ -96,10 +97,7 @@ async function copyStaticFiles() {
 
   // Copy index.css from src which contains app layout styles (.app-root, .app-header, etc.)
   if (fs.existsSync(path.join(srcCssDir, 'index.css'))) {
-    await fs.promises.copyFile(
-      path.join(srcCssDir, 'index.css'),
-      path.join(outCssDir, 'index.css')
-    )
+    await fs.promises.copyFile(path.join(srcCssDir, 'index.css'), path.join(outCssDir, 'index.css'))
     console.log('Copied src/index.css with layout styles')
   }
 
@@ -133,9 +131,14 @@ async function copyServiceWorker() {
   if (fs.existsSync(srcSw)) {
     let swContent = await fs.promises.readFile(srcSw, 'utf8')
     // Inject version from package.json
-    const pkg = JSON.parse(await fs.promises.readFile(path.join(__dirname, '../package.json'), 'utf8'))
+    const pkg = JSON.parse(
+      await fs.promises.readFile(path.join(__dirname, '../package.json'), 'utf8')
+    )
     const version = pkg.version
-    swContent = swContent.replace(/const CACHE_VERSION = '[^']*'/, `const CACHE_VERSION = '${version}'`)
+    swContent = swContent.replace(
+      /const CACHE_VERSION = '[^']*'/,
+      `const CACHE_VERSION = '${version}'`
+    )
     await fs.promises.writeFile(distSw, swContent, 'utf8')
     console.log(`Copied service worker with version ${version} to dist/assets/sw.js`)
   } else {
@@ -150,9 +153,14 @@ async function copyStandaloneServiceWorker() {
   if (fs.existsSync(srcSw)) {
     let swContent = await fs.promises.readFile(srcSw, 'utf8')
     // Inject version from package.json
-    const pkg = JSON.parse(await fs.promises.readFile(path.join(__dirname, '../package.json'), 'utf8'))
+    const pkg = JSON.parse(
+      await fs.promises.readFile(path.join(__dirname, '../package.json'), 'utf8')
+    )
     const version = pkg.version
-    swContent = swContent.replace(/const CACHE_VERSION = '[^']*'/, `const CACHE_VERSION = '${version}'`)
+    swContent = swContent.replace(
+      /const CACHE_VERSION = '[^']*'/,
+      `const CACHE_VERSION = '${version}'`
+    )
     await fs.promises.writeFile(distSw, swContent, 'utf8')
     console.log(`Updated standalone service worker with version ${version}`)
   }

@@ -7,7 +7,11 @@ import { createSignal, createEffect, onMount, For } from 'solid-js'
 import { api } from '../core/api.js'
 
 // Load XLSX from global scope (built into the bundle)
-const XLSX = (window as any).XLSX || (() => { throw new Error('XLSX library not loaded') })
+const XLSX =
+  (window as any).XLSX ||
+  (() => {
+    throw new Error('XLSX library not loaded')
+  })
 
 type ImportResult = {
   status: 'idle' | 'uploading' | 'previewing' | 'importing' | 'success' | 'error'
@@ -47,11 +51,11 @@ export default function Import() {
     const lines = text.trim().split('\n')
     if (lines.length < 2) return []
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+    const headers = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''))
     const result: any[] = []
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
+      const values = lines[i].split(',').map((v) => v.trim().replace(/"/g, ''))
       const row: any = {}
       headers.forEach((header, index) => {
         let val = values[index] || ''
@@ -113,7 +117,10 @@ export default function Import() {
       setCurrentPage(1)
       setImportResult({ status: 'previewing' })
     } catch (err) {
-      setImportResult({ status: 'error', message: err instanceof Error ? err.message : 'Failed to parse file' })
+      setImportResult({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Failed to parse file',
+      })
     }
   }
 
@@ -156,7 +163,7 @@ export default function Import() {
       const apiData = {
         categories: [],
         accounts: [],
-        transactions: rowsToImport.map(row => ({
+        transactions: rowsToImport.map((row) => ({
           date: row.date || formData().date,
           description: row.description || row.name || row.category || row.Transaction || 'Untitled',
           amount: parseFloat(row.amount || row.Amount || row.Money || row.Cost || 0),
@@ -176,7 +183,11 @@ export default function Import() {
 
       const preview = await previewRes.json()
       if (preview.duplicateTransactions > 0) {
-        if (!confirm(`This import will add ${preview.newTransactions} new transactions and skip ${preview.duplicateTransactions} existing duplicates. Continue?`)) {
+        if (
+          !confirm(
+            `This import will add ${preview.newTransactions} new transactions and skip ${preview.duplicateTransactions} existing duplicates. Continue?`
+          )
+        ) {
           setImportResult({ status: 'idle' })
           return
         }
@@ -192,7 +203,10 @@ export default function Import() {
       const result = await importRes.json()
 
       if (importRes.ok) {
-        setImportResult({ status: 'success', message: `Successfully imported ${result.imported || apiData.transactions.length} transactions` })
+        setImportResult({
+          status: 'success',
+          message: `Successfully imported ${result.imported || apiData.transactions.length} transactions`,
+        })
         // Clear file after successful import
         setFile(null)
         setFileContent([])
@@ -203,7 +217,10 @@ export default function Import() {
         setImportResult({ status: 'error', message: result.error || 'Import failed' })
       }
     } catch (err) {
-      setImportResult({ status: 'error', message: err instanceof Error ? err.message : 'Import failed' })
+      setImportResult({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Import failed',
+      })
     }
   }
 
@@ -302,11 +319,7 @@ export default function Import() {
           <div class="import-template">
             <h3>Need a template?</h3>
             <p>Download a sample CSV file to get started:</p>
-            <a
-              href="#"
-              class="btn btn-outline"
-              data-action="import:download-template"
-            >
+            <a href="#" class="btn btn-outline" data-action="import:download-template">
               Download Sample Template
             </a>
           </div>
@@ -353,30 +366,16 @@ export default function Import() {
                 </div>
               </div>
               <div class="preview-actions">
-                <button
-                  class="btn btn-outline"
-                  data-action="import:select-all"
-                  data-arg="all"
-                >
+                <button class="btn btn-outline" data-action="import:select-all" data-arg="all">
                   Select All
                 </button>
-                <button
-                  class="btn btn-outline"
-                  data-action="import:select-all"
-                  data-arg="none"
-                >
+                <button class="btn btn-outline" data-action="import:select-all" data-arg="none">
                   Deselect All
                 </button>
-                <button
-                  class="btn btn-outline"
-                  data-action="import:select-page"
-                >
+                <button class="btn btn-outline" data-action="import:select-page">
                   Select Page
                 </button>
-                <button
-                  class="btn btn-outline"
-                  data-action="import:preview-template"
-                >
+                <button class="btn btn-outline" data-action="import:preview-template">
                   Change File
                 </button>
               </div>
@@ -389,30 +388,37 @@ export default function Import() {
                     <th class="select-col">
                       <input
                         type="checkbox"
-                        checked={selectedRows().size === fileContent().length && fileContent().length > 0}
+                        checked={
+                          selectedRows().size === fileContent().length && fileContent().length > 0
+                        }
                         onchange={(e) => toggleAll(e.currentTarget.checked)}
                       />
                     </th>
-                    {headers().map(h => (
+                    {headers().map((h) => (
                       <th key={h}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {fileContent().slice(startRow(), endRow()).map((row, idx) => (
-                    <tr key={startRow() + idx} class={selectedRows().has(startRow() + idx) ? 'selected' : ''}>
-                      <td class="select-col">
-                        <input
-                          type="checkbox"
-                          checked={selectedRows().has(startRow() + idx)}
-                          onchange={() => toggleRow(startRow() + idx)}
-                        />
-                      </td>
-                      {headers().map(h => (
-                        <td key={h}>{String(row[h] ?? '')}</td>
-                      ))}
-                    </tr>
-                  ))}
+                  {fileContent()
+                    .slice(startRow(), endRow())
+                    .map((row, idx) => (
+                      <tr
+                        key={startRow() + idx}
+                        class={selectedRows().has(startRow() + idx) ? 'selected' : ''}
+                      >
+                        <td class="select-col">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows().has(startRow() + idx)}
+                            onchange={() => toggleRow(startRow() + idx)}
+                          />
+                        </td>
+                        {headers().map((h) => (
+                          <td key={h}>{String(row[h] ?? '')}</td>
+                        ))}
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -442,7 +448,10 @@ export default function Import() {
                 <select
                   class="form-control page-size"
                   value={rowsPerPage()}
-                  oninput={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  oninput={(e) => {
+                    setRowsPerPage(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
                 >
                   <option value="10">10 per page</option>
                   <option value="25">25 per page</option>
@@ -454,16 +463,10 @@ export default function Import() {
 
             {/* Import Actions */}
             <div class="import-actions">
-              <button
-                class="btn btn-outline"
-                data-action="import:reset"
-              >
+              <button class="btn btn-outline" data-action="import:reset">
                 Cancel
               </button>
-              <button
-                class="btn btn-primary"
-                data-action="import:start"
-              >
+              <button class="btn btn-primary" data-action="import:start">
                 Import {selectedRows().size} Transaction{selectedRows().size !== 1 ? 's' : ''}
               </button>
             </div>

@@ -2123,6 +2123,7 @@ nav a.active,
   background: var(--sidebar-active-bg) !important;
   color: var(--sidebar-active-text) !important;
 }
+.unset {
   margin-top: 40px;
   padding-top: 24px;
   border-top: 1px solid var(--border);

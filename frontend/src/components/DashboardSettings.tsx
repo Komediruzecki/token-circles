@@ -2,11 +2,11 @@
  * Dashboard Settings Component - Configure widget visibility and order
  */
 
-import { createSignal, onMount } from 'solid-js';
-import type { Component } from 'solid-js';
+import { createSignal, onMount } from 'solid-js'
+import type { Component } from 'solid-js'
 
 export const DashboardSettings: Component = () => {
-  const [selectedWidget, setSelectedWidget] = createSignal<string | null>(null);
+  const [selectedWidget, setSelectedWidget] = createSignal<string | null>(null)
 
   // Widget configuration
   const widgets = [
@@ -16,47 +16,50 @@ export const DashboardSettings: Component = () => {
     { id: 'upcoming-bills', name: 'Upcoming Bills', icon: '📅' },
     { id: 'savings-rate', name: 'Savings Rate', icon: '💰' },
     { id: 'budget-alerts', name: 'Budget Alerts', icon: '⚠️' },
-  ];
+  ]
 
   // Load saved preferences
   onMount(() => {
-    const saved = localStorage.getItem('dashboard_widgets');
+    const saved = localStorage.getItem('dashboard_widgets')
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        const parsed = JSON.parse(saved)
         parsed.visibleWidgets?.forEach((id: string) => {
-          setSelectedWidget(prev => (prev ? prev + ',' + id : id));
-        });
+          setSelectedWidget((prev) => (prev ? prev + ',' + id : id))
+        })
       } catch (e) {
-        console.error('Failed to load dashboard settings:', e);
+        console.error('Failed to load dashboard settings:', e)
       }
     }
-  });
+  })
 
   // Toggle widget visibility
   const toggleWidget = (widgetId: string) => {
-    const current = selectedWidget();
+    const current = selectedWidget()
     if (current?.split(',').includes(widgetId)) {
-      setSelectedWidget(current.replace(new RegExp(`(^|,)${widgetId}(,|$)`), '$1$2'));
+      setSelectedWidget(current.replace(new RegExp(`(^|,)${widgetId}(,|$)`), '$1$2'))
     } else {
-      setSelectedWidget(current ? `${current},${widgetId}` : widgetId);
+      setSelectedWidget(current ? `${current},${widgetId}` : widgetId)
     }
-  };
+  }
 
   // Save preferences
   const saveSettings = () => {
-    const current = selectedWidget();
-    localStorage.setItem('dashboard_widgets', JSON.stringify({
-      visibleWidgets: current ? current.split(',') : [],
-      widgetOrder: [], // Can add ordering in future
-    }));
-  };
+    const current = selectedWidget()
+    localStorage.setItem(
+      'dashboard_widgets',
+      JSON.stringify({
+        visibleWidgets: current ? current.split(',') : [],
+        widgetOrder: [], // Can add ordering in future
+      })
+    )
+  }
 
   // Reset to default
   const resetSettings = () => {
-    setSelectedWidget('metrics,category-chart,recent-transactions,upcoming-bills');
-    saveSettings();
-  };
+    setSelectedWidget('metrics,category-chart,recent-transactions,upcoming-bills')
+    saveSettings()
+  }
 
   return (
     <div class="dashboard-settings">
@@ -89,5 +92,5 @@ export const DashboardSettings: Component = () => {
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
