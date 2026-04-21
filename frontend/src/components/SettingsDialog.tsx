@@ -4,7 +4,7 @@
  */
 
 import { createSignal, type Component, For } from 'solid-js'
-import { Modal, type ModalProps } from './Modal.js'
+import { Modal } from './Modal.js'
 import { toast } from '../core/api.js'
 import { setStorageMode, StorageMode } from '../core/storage/storageFactory.js'
 
@@ -38,8 +38,8 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         setCurrency(settings.currency || 'USD')
         setPrimaryCurrency(settings.primary_currency || 'USD')
       }
-    } catch (error) {
-      console.error('Failed to load settings:', error)
+    } catch (_error) {
+      console.error('Failed to load settings:', _error)
     }
 
     try {
@@ -47,8 +47,8 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       if (response.ok) {
         setCurrentMode(await response.json())
       }
-    } catch (error) {
-      console.error('Failed to load storage mode:', error)
+    } catch (_error) {
+      console.error('Failed to load storage mode:', _error)
     }
   }
 
@@ -67,10 +67,13 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         }),
       })
       toast('Settings saved', 'success')
-    } catch (error) {
+    } catch (_error) {
       toast('Failed to save settings', 'error')
-      console.error('Failed to save settings:', error)
+      console.error('Failed to save settings:', _error)
     }
+  }
+
+  const _handleExport = async () => {
   }
 
   // Set storage mode
@@ -85,7 +88,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       setStorageMode(mode)
       setCurrentMode(mode)
       toast(`Storage mode: ${mode === 'serverless' ? 'Serverless' : 'Self-Hosted'}`, 'success')
-    } catch (error) {
+    } catch {
       toast('Failed to change storage mode', 'error')
     }
   }
@@ -109,7 +112,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       a.click()
       URL.revokeObjectURL(url)
       toast('Data exported successfully', 'success')
-    } catch (error) {
+    } catch {
       toast('Failed to export data', 'error')
     }
   }
@@ -138,13 +141,13 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       const result = await response.json()
       toast(`${result.imported || 0} items imported`, 'success')
       props.onClose()
-    } catch (error) {
+    } catch {
       toast('Failed to import data', 'error')
     }
   }
 
   // Reset data
-  const handleReset = async () => {
+  const _handleReset = async () => {
     if (!confirm('Are you sure you want to reset all data? This cannot be undone.')) {
       return
     }
@@ -160,7 +163,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       })
       toast('All data has been reset', 'success')
       props.onClose()
-    } catch (error) {
+    } catch {
       toast('Failed to reset data', 'error')
     }
   }
@@ -324,7 +327,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
           {/* Reset */}
           <div class="setting-group">
             <label class="setting-label">Danger Zone</label>
-            <button class="btn-danger" onClick={handleReset}>
+            <button class="btn-danger" onClick={_handleReset}>
               🗑️ Reset All Data
             </button>
           </div>

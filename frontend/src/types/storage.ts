@@ -205,14 +205,14 @@ export interface ExportCategory {
   tax_deductible: boolean
 }
 
-export interface ExportTransaction extends Transaction {}
+export type ExportTransaction = Transaction
 
-export interface ExportAccount extends Account {}
+export type ExportAccount = Account
 
-export interface ExportBudget extends Budget {}
+export type ExportBudget = Budget
 
-export interface ExportGoal extends Goal {}
+export type ExportGoal = Goal
 
-export interface ExportLoan extends Loan {}
+export type ExportLoan = Loan
 
-export interface ExportSettings extends Settings {}
+export type ExportSettings = Settings

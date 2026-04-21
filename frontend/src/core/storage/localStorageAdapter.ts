@@ -27,15 +27,15 @@ import type {
   DataStore,
 } from '../types/storage'
 import type {
-  ProfileData as StoreProfile,
-  CategoryData as StoreCategory,
-  TransactionData as StoreTransaction,
-  AccountData as StoreAccount,
-  BudgetData as StoreBudget,
-  GoalData as StoreGoal,
-  LoanData as StoreLoan,
-  BalanceEntryData as StoreBalance,
-  SettingsData as StoreSettings,
+  ProfileData as _StoreProfile,
+  CategoryData as _StoreCategory,
+  TransactionData as _StoreTransaction,
+  AccountData as _StoreAccount,
+  BudgetData as _StoreBudget,
+  GoalData as _StoreGoal,
+  LoanData as _StoreLoan,
+  BalanceEntryData as _StoreBalance,
+  SettingsData as _StoreSettings,
 } from '../types/data'
 
 const STORAGE_KEY = 'finance_data'
@@ -742,7 +742,7 @@ function resetToDefaults(): void {
   counters.loans = 1
   counters.balanceHistory = 1
   saveData()
-  createDefaultProfile()
+  // Default profile is created by the storage factory on first init
 }
 
 /**
@@ -1165,7 +1165,6 @@ export class LocalStorageAdapter implements StorageAdapter {
       data.loans[loan.id] = loan
     })
 
-    data.settings = data.settings
     data.balanceHistory = {}
 
     saveData()

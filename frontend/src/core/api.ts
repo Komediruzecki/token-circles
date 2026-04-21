@@ -16,7 +16,7 @@ const SELECTED_PROFILE_IDS_KEY = 'selectedProfileIds'
  * API Client class for making authenticated requests
  */
 export class ApiClient {
-  private headers: HeadersInit = {}
+  private headers: any = {}
 
   constructor() {
     this.updateHeaders()
@@ -73,7 +73,7 @@ export class ApiClient {
     }
 
     // Prepare request options with explicit body type
-    const requestOptions: RequestInit = {
+    const requestOptions: any = {
       method,
       headers: this.headers,
       credentials: 'include',

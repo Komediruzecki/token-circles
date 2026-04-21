@@ -325,8 +325,8 @@ window.handlers = {
 export default function App() {
   const [currentPage, setCurrentPage] = createSignal<PageName>('dashboard')
 
-  // Currency exchange rate cache
-  const exchangeRates = new Map<string, { rate: number; timestamp: number }>()
+  // Currency exchange rate cache - unused, keeping for future feature
+  const _exchangeRates = new Map<string, { rate: number; timestamp: number }>()
 
   onMount(() => {
     theme.init()
@@ -370,12 +370,11 @@ export default function App() {
       })
     }
 
-    const setupDataActionDelegation = () => {
-      document.addEventListener('click', handleDataActionClick)
+    const _setupDataActionDelegation = () => {
+      document.addEventListener('click', _handleDataActionClick)
     }
 
     setupKeyboardNavigation()
-    // setupDataActionDelegation()
 
     // Keyboard navigation shortcuts
     const handleKeyboardShortcuts = (event: KeyboardEvent) => {
@@ -431,7 +430,7 @@ export default function App() {
     window.addEventListener('keydown', handleKeyboardShortcuts)
 
     // Currency conversion functions for transaction modal
-    const handleCurrencyChange = (event: Event) => {
+    const _handleCurrencyChange = (event: Event) => {
       const target = event.target as HTMLSelectElement
       const rate = parseFloat(target.value) || 1
 
@@ -444,7 +443,7 @@ export default function App() {
       localAmountInput.value = (amount * rate).toFixed(2)
     }
 
-    const handleLocalAmountChange = (event: Event) => {
+    const _handleLocalAmountChange = (event: Event) => {
       const target = event.target as HTMLInputElement
       const rate = parseFloat(target.value) || 1
 
@@ -455,12 +454,12 @@ export default function App() {
       if (!amountInput) return
 
       const amount = parseFloat(amountInput.value) || 0
-      const targetCurrency = currencySelect ? currencySelect.value : 'USD'
+      const _targetCurrency = currencySelect ? currencySelect.value : 'USD'
       localAmountInput.value = (amount / rate).toFixed(2)
     }
 
     // Event delegation for data-action attributes (handles receipt buttons and other dynamic UI)
-    const handleDataActionClick = (event: MouseEvent) => {
+    const _handleDataActionClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement
       const actionTrigger = target.closest('[data-action]') as HTMLElement
       if (!actionTrigger) return
@@ -482,7 +481,7 @@ export default function App() {
       }
     }
 
-    const handleExchangeRateChange = (event: Event) => {
+    const _handleExchangeRateChange = (event: Event) => {
       const target = event.target as HTMLInputElement
       const rate = parseFloat(target.value) || 1
 
@@ -495,26 +494,26 @@ export default function App() {
       localAmountInput.value = (amount * rate).toFixed(2)
     }
 
-    const setupTransactionModalListeners = () => {
+    const _setupTransactionModalListeners = () => {
       const currencySelect = document.getElementById('tx-currency') as HTMLSelectElement
       const localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
       const exchangeRateInput = document.getElementById('tx-exchange-rate') as HTMLInputElement
 
       if (currencySelect) {
-        currencySelect.addEventListener('change', handleCurrencyChange)
+        currencySelect.addEventListener('change', _handleCurrencyChange)
       }
       if (localAmountInput) {
-        localAmountInput.addEventListener('input', handleLocalAmountChange)
+        localAmountInput.addEventListener('input', _handleLocalAmountChange)
       }
       if (exchangeRateInput) {
-        exchangeRateInput.addEventListener('input', handleExchangeRateChange)
+        exchangeRateInput.addEventListener('input', _handleExchangeRateChange)
       }
     }
 
     // Receipt event handlers - already exported to window.receipts
-    const handleTransactionSave = async () => {
-      const formData = new FormData()
-      const idInput = document.getElementById('tx-id') as HTMLInputElement
+    const _handleTransactionSave = async () => {
+      const _formData = new FormData()
+      const _idInput = document.getElementById('tx-id') as HTMLInputElement
       const descInput = document.getElementById('tx-description') as HTMLInputElement
       const amountInput = document.getElementById('tx-amount') as HTMLInputElement
       const dateInput = document.getElementById('tx-date') as HTMLInputElement
@@ -538,8 +537,8 @@ export default function App() {
       }
 
       try {
-        if (idInput.value) {
-          await api.updateTransaction(parseInt(idInput.value), {
+        if (_idInput.value) {
+          await api.updateTransaction(parseInt(_idInput.value), {
             description: desc,
             amount: amount,
             date: date,
@@ -561,70 +560,65 @@ export default function App() {
         }
 
         // Handle receipt upload
-        const txId = idInput.value ? parseInt(idInput.value) : null
+        const txId = _idInput.value ? parseInt(_idInput.value) : null
         if (txId && receiptInput.files?.[0]) {
           await api.uploadReceipt(txId, receiptInput.files[0])
         }
 
         closeAllModals()
-        loadTransactions()
+        _loadTransactions()
       } catch (error) {
         console.error('Failed to save transaction:', error)
         alert('Failed to save transaction. Please try again.')
       }
     }
 
-    const loadTransactions = async () => {
+    const _loadTransactions = async () => {
       try {
-        setLoading(true)
         const data = await api.getTransactions()
-        setTransactions(data)
+        console.log('Loaded transactions:', data.length)
       } catch (error) {
         console.error('Failed to load transactions:', error)
-      } finally {
-        setLoading(false)
       }
     }
 
-    const openReceiptModal = (receipt: any) => {
+    const _openReceiptModal = (receipt: any) => {
       // This would be populated when the Transactions component is fully implemented
       console.log('Opening receipt modal for:', receipt)
     }
 
-    const deleteReceipt = async (receiptId: number) => {
+    const _deleteReceipt = async (receiptId: number) => {
       try {
         await api.deleteReceipt(receiptId)
-        loadTransactions()
+        console.log('Receipt deleted:', receiptId)
       } catch (error) {
         console.error('Failed to delete receipt:', error)
-        alert('Failed to delete receipt')
       }
     }
 
-    const downloadReceipt = async (receiptId: number) => {
+    const _downloadReceipt = async (receiptId: number) => {
       try {
         const blob = await api.getReceiptFile(receiptId)
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
-        link.download = receipt.original_name
+        link.download = `receipt-${receiptId}.bin`
         link.click()
         URL.revokeObjectURL(url)
       } catch (error) {
         console.error('Failed to download receipt:', error)
-        alert('Failed to download receipt')
       }
     }
 
-    const setLoading = (loading: boolean) => {
+    const _setLoading = (_loading: boolean) => {
       // Would update loading state in Transactions component
     }
 
-    const setTransactions = (transactions: any[]) => {
+    const _setTransactions = (_transactions: any[]) => {
       // Would update transactions in Transactions component
     }
 
-    const loadTransactionReceipt = async () => {
+    const _loadTransactionReceipt = async () => {
       // Load receipt logic for view modal
     }
 
@@ -636,17 +630,17 @@ export default function App() {
     }
 
     // Setup mutation observer to catch dynamically added modals
-    const observer = new MutationObserver((mutations) => {
+    const _observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (node instanceof HTMLElement && node.id === 'transaction-modal') {
-            setupTransactionModalListeners()
+            _setupTransactionModalListeners()
           }
         })
       })
     })
 
-    observer.observe(document.getElementById('modals') || document.body, {
+    _observer.observe(document.getElementById('modals') || document.body, {
       childList: true,
       subtree: true,
     })

@@ -4,7 +4,6 @@
  */
 
 import { createSignal, createEffect, onMount, For } from 'solid-js'
-import { formatDate, formatCurrency } from '../core/api'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 

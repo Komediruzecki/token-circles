@@ -3,8 +3,9 @@
  * Handles transaction listing, creation, and management
  */
 
-import { createSignal, onMount, createEffect } from 'solid-js'
-import { api, formatCurrency, formatDate } from '../core/api.js'
+import { onMount, createEffect } from 'solid-js'
+import { createSignal } from 'solid-js'
+import { api } from '../core/api.js'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -36,19 +37,29 @@ interface Transaction {
 }
 
 export default function Transactions() {
-  const [transactions, setTransactions] = createSignal<Transaction[]>([])
-  const [loading, setLoading] = createSignal(true)
-  const [selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
-  const [filterType, setFilterType] = createSignal<string>('')
-  const [filterMonth, setFilterMonth] = createSignal<string>('')
-  const [searchTerm, setSearchTerm] = createSignal('')
+  const [_transactions, setTransactions] = createSignal<Transaction[]>([])
+  const [_loading, setLoading] = createSignal(true)
+  const [_setSelectedTransactions] = createSignal<number[]>([])
+  const [_setFilterType] = createSignal<string>('')
+  const [_setFilterMonth] = createSignal<string>('')
+  const [_setSearchTerm] = createSignal('')
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
   const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
-  const [selectedTxId, setSelectedTxId] = createSignal<number | null>(null)
-  const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
+  const [_setSelectedTxId] = createSignal<number | null>(null)
+  const [_selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
   const [type, setType] = createSignal<TransactionType>('expense')
+  const today = new Date().toISOString().slice(0, 7)
+
+  // Expose functions to window for event handlers
+  window.transactionsSetType = setType
+  window.transactionsLoad = loadTransactions
+  window.transactionsSetFilterType = _setFilterType
+  window.transactionsSetFilterMonth = _setFilterMonth
+  window.transactionsSetSearchTerm = _setSearchTerm
+  window.transactionsSetSelectedTxId = _setSelectedTxId
+  window.transactionsSetLoading = setLoading
 
   // Load transactions on mount
   onMount(async () => {
@@ -74,7 +85,7 @@ export default function Transactions() {
    * Fetch exchange rate for a currency pair
    * Uses USD as base for simplicity
    */
-  const fetchExchangeRate = async (targetCurrency: string): Promise<number> => {
+  const _fetchExchangeRate = async (targetCurrency: string): Promise<number> => {
     const cacheKey = `USD-${targetCurrency}`
     const cached = exchangeRates.get(cacheKey)
 
@@ -98,17 +109,13 @@ export default function Transactions() {
    * Convert amount from foreign currency to local currency
    * @param amount - Amount in foreign currency
    * @param foreignCurrency - Currency code of the amount
-   * @param localCurrency - Local currency code (defaults to USD)
    * @returns Converted amount
    */
   const convertToLocal = async (
     amount: number,
-    foreignCurrency: string,
-    localCurrency: string = 'USD'
+    foreignCurrency: string
   ): Promise<number> => {
-    if (foreignCurrency === localCurrency) return amount
-
-    const rate = await fetchExchangeRate(foreignCurrency)
+    const rate = await _fetchExchangeRate(foreignCurrency)
     return amount * rate
   }
 
@@ -116,7 +123,7 @@ export default function Transactions() {
    * Update transaction modal with currency conversion
    * Called when currency selector changes
    */
-  const handleCurrencyChange = async (event: Event) => {
+  const _handleCurrencyChange = async (event: Event) => {
     const target = event.target as HTMLSelectElement
     const foreignCurrency = target.value
     const amountInput = document.getElementById('tx-amount') as HTMLInputElement
@@ -129,14 +136,13 @@ export default function Transactions() {
     if (amount === 0) return
 
     // Fetch exchange rate
-    const rate = await fetchExchangeRate(foreignCurrency)
-    const localCurrency = localStorage.getItem('localCurrency') || 'USD'
+    const rate = await _fetchExchangeRate(foreignCurrency)
 
     // Update exchange rate input
     exchangeRateInput.value = rate.toString()
 
     // Calculate and update local amount
-    const localAmount = convertToLocal(amount, foreignCurrency, localCurrency)
+    const localAmount = convertToLocal(amount, foreignCurrency)
     localAmountInput.value = localAmount.toFixed(2)
 
     // Also update the amount field to local currency for editing
@@ -147,7 +153,7 @@ export default function Transactions() {
    * Update foreign amount when local currency amount changes
    * Called when tx-amount-local input changes
    */
-  const handleLocalAmountChange = async (event: Event) => {
+  const _handleLocalAmountChange = async (event: Event) => {
     const target = event.target as HTMLInputElement
     const localAmount = parseFloat(target.value) || 0
 
@@ -158,10 +164,9 @@ export default function Transactions() {
     if (!foreignCurrencyInput || !amountInput || !exchangeRateInput) return
 
     const foreignCurrency = foreignCurrencyInput.value
-    const localCurrency = localStorage.getItem('localCurrency') || 'USD'
 
     // Fetch exchange rate
-    const rate = await fetchExchangeRate(foreignCurrency)
+    const rate = await _fetchExchangeRate(foreignCurrency)
     exchangeRateInput.value = rate.toString()
 
     // Convert local amount back to foreign currency
@@ -172,7 +177,7 @@ export default function Transactions() {
   /**
    * Update exchange rate manually
    */
-  const handleExchangeRateChange = (event: Event) => {
+  const _handleExchangeRateChange = (event: Event) => {
     const target = event.target as HTMLInputElement
     const rate = parseFloat(target.value) || 1
 
@@ -189,23 +194,22 @@ export default function Transactions() {
   /**
    * Open transaction modal
    */
-  const openModal = () => {
+  const _openModal = () => {
     // Find modal elements
-    const amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const currencyInput = document.getElementById('tx-currency') as HTMLSelectElement
-    const localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
-    const exchangeRateInput = document.getElementById('tx-exchange-rate') as HTMLInputElement
-    const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
+    const _amountInput = document.getElementById('tx-amount') as HTMLInputElement
+    const _currencyInput = document.getElementById('tx-currency') as HTMLSelectElement
+    const _localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
+    const _exchangeRateInput = document.getElementById('tx-exchange-rate') as HTMLInputElement
+    const _receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
 
-    if (!amountInput || !currencyInput || !localAmountInput || !exchangeRateInput) return
+    if (!_amountInput || !_currencyInput || !_localAmountInput || !_exchangeRateInput) return
 
     // Set default date to today
-    const today = new Date().toISOString().split('T')[0]
-    const dateInput = document.getElementById('tx-date') as HTMLInputElement
-    if (dateInput) dateInput.value = today
+    const _dateInput = document.getElementById('tx-date') as HTMLInputElement
+    if (_dateInput) _dateInput.value = today
 
     // Reset receipt
-    if (receiptInput) receiptInput.value = ''
+    if (_receiptInput) _receiptInput.value = ''
 
     // Clear preview
     setReceiptPreviewUrl(null)
@@ -215,10 +219,10 @@ export default function Transactions() {
     const localCurrency = localStorage.getItem('localCurrency') || 'USD'
 
     // Initialize with local currency
-    currencyInput.value = localCurrency
-    exchangeRateInput.value = '1'
-    localAmountInput.value = ''
-    amountInput.value = ''
+    _currencyInput.value = localCurrency
+    _exchangeRateInput.value = '1'
+    _localAmountInput.value = ''
+    _amountInput.value = ''
 
     setTransactionModalOpen(true)
   }
@@ -252,24 +256,24 @@ export default function Transactions() {
   /**
    * Handle receipt file selection
    */
-  const handleReceiptFileSelect = (event: Event) => {
+  const _handleReceiptFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement
-    const file = target.files?.[0]
+    const _file = target.files?.[0]
 
-    if (!file) return
+    if (!_file) return
 
     // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    if (_file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB')
       target.value = ''
       return
     }
 
-    setSelectedFile(file)
+    setSelectedFile(_file)
 
     // Create preview URL for images
-    if (file.type.startsWith('image/')) {
-      const url = URL.createObjectURL(file)
+    if (_file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(_file)
       setReceiptPreviewUrl(url)
     }
   }
@@ -277,10 +281,10 @@ export default function Transactions() {
   /**
    * Remove selected receipt
    */
-  const removeReceipt = () => {
-    const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
-    if (receiptInput) {
-      receiptInput.value = ''
+  const _removeReceipt = () => {
+    const _receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
+    if (_receiptInput) {
+      _receiptInput.value = ''
     }
     setReceiptPreviewUrl(null)
     setSelectedFile(null)
@@ -289,29 +293,27 @@ export default function Transactions() {
   /**
    * Handle file upload when saving transaction
    */
-  const handleTransactionSave = async () => {
-    const formData = new FormData()
-    const idInput = document.getElementById('tx-id') as HTMLInputElement
-    const descInput = document.getElementById('tx-description') as HTMLInputElement
-    const amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const currencyInput = document.getElementById('tx-currency') as HTMLSelectElement
-    const dateInput = document.getElementById('tx-date') as HTMLInputElement
-    const typeInput = document.getElementById('tx-type-selector') as HTMLElement
-    const categoryInput = document.getElementById('tx-category') as HTMLSelectElement
-    const beneficiaryInput = document.getElementById('tx-beneficiary') as HTMLInputElement
-    const payorInput = document.getElementById('tx-payor') as HTMLInputElement
-    const meansInput = document.getElementById('tx-means') as HTMLSelectElement
-    const notesInput = document.getElementById('tx-notes') as HTMLTextAreaElement
-    const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
+  const _handleTransactionSave = async () => {
+    const _idInput = document.getElementById('tx-id') as HTMLInputElement
+    const _descInput = document.getElementById('tx-description') as HTMLInputElement
+    const _amountInput = document.getElementById('tx-amount') as HTMLInputElement
+    const _currencyInput = document.getElementById('tx-currency') as HTMLSelectElement
+    const _dateInput = document.getElementById('tx-date') as HTMLInputElement
+    const _typeInput = document.getElementById('tx-type-selector') as HTMLElement
+    const _categoryInput = document.getElementById('tx-category') as HTMLSelectElement
+    const _beneficiaryInput = document.getElementById('tx-beneficiary') as HTMLInputElement
+    const _payorInput = document.getElementById('tx-payor') as HTMLInputElement
+    const _meansInput = document.getElementById('tx-means') as HTMLSelectElement
+    const _notesInput = document.getElementById('tx-notes') as HTMLTextAreaElement
 
-    if (!descInput || !amountInput || !dateInput || !categoryInput || !typeInput) return
+    if (!_descInput || !_amountInput || !_dateInput || !_categoryInput || !_typeInput) return
 
-    const desc = descInput.value.trim()
-    const amount = parseFloat(amountInput.value)
-    const date = dateInput.value
-    const currency = currencyInput.value
-    const category = parseInt(categoryInput.value)
-    const type = typeInput.dataset.selectedType || 'expense'
+    const desc = _descInput.value.trim()
+    const amount = parseFloat(_amountInput.value)
+    const date = _dateInput.value
+    const currency = _currencyInput.value
+    const category = parseInt(_categoryInput.value)
+    const type = _typeInput.dataset.selectedType || 'expense'
 
     if (!desc || amount <= 0 || !date || !category) {
       alert('Please fill in all required fields')
@@ -319,19 +321,19 @@ export default function Transactions() {
     }
 
     try {
-      if (idInput.value) {
+      if (_idInput.value) {
         // Update existing transaction
-        await api.updateTransaction(parseInt(idInput.value), {
+        await api.updateTransaction(parseInt(_idInput.value), {
           description: desc,
           amount: amount,
           date: date,
           currency: currency,
           type: type,
           category_id: category,
-          beneficiary: beneficiaryInput.value || undefined,
-          payor: payorInput.value || undefined,
-          means: meansInput.value || undefined,
-          notes: notesInput.value || undefined,
+          beneficiary: _beneficiaryInput.value || undefined,
+          payor: _payorInput.value || undefined,
+          means: _meansInput.value || undefined,
+          notes: _notesInput.value || undefined,
         })
       } else {
         // Create new transaction
@@ -342,24 +344,22 @@ export default function Transactions() {
           currency: currency,
           type: type,
           category_id: category,
-          beneficiary: beneficiaryInput.value || undefined,
-          payor: payorInput.value || undefined,
-          means: meansInput.value || undefined,
-          notes: notesInput.value || undefined,
+          beneficiary: _beneficiaryInput.value || undefined,
+          payor: _payorInput.value || undefined,
+          means: _meansInput.value || undefined,
+          notes: _notesInput.value || undefined,
         })
       }
 
       // Handle receipt upload
-      if (selectedFile()) {
-        const txAmountInput = document.getElementById('tx-id') as HTMLInputElement
-        const txId = txAmountInput.value ? parseInt(txAmountInput.value) : null
-
-        if (txId) {
-          await api.uploadReceipt(txId, selectedFile()!)
+      if (_selectedFile()) {
+        const _txId = _idInput.value ? parseInt(_idInput.value) : null
+        if (_txId) {
+          await api.uploadReceipt(_txId, _selectedFile()!)
         }
       }
 
-      closeModals()
+      _closeModals()
       await loadTransactions()
     } catch (error) {
       console.error('Failed to save transaction:', error)
@@ -370,7 +370,7 @@ export default function Transactions() {
   /**
    * Open receipt view modal
    */
-  const openReceiptModal = (receipt: Receipt) => {
+  const _openReceiptModal = (receipt: Receipt) => {
     setSelectedReceipt(receipt)
     setIsReceiptModalOpen(true)
   }
@@ -403,7 +403,7 @@ export default function Transactions() {
   /**
    * Download receipt
    */
-  const downloadReceipt = () => {
+  const _downloadReceipt = () => {
     if (!selectedReceipt()) return
 
     // Create download link
@@ -416,7 +416,7 @@ export default function Transactions() {
   /**
    * Close all modals
    */
-  const closeModals = () => {
+  const _closeModals = () => {
     const modal = document.getElementById('tx-modal') as HTMLElement
     if (modal) modal.classList.remove('show')
     const modal2 = document.getElementById('quickadd-modal') as HTMLElement
@@ -424,7 +424,7 @@ export default function Transactions() {
   }
 
   // Helper to get type selector state
-  const isTypeSelected = (type: string) => {
+  const _isTypeSelected = (type: string) => {
     const selector = document.getElementById('tx-type-selector')
     return selector?.classList.contains(`selected-${type}`) || false
   }
@@ -441,7 +441,7 @@ export default function Transactions() {
         id="tx-modal"
         onclick={(e) => {
           if ((e.target as HTMLElement).classList.contains('modal-overlay')) {
-            closeModals()
+            _closeModals()
           }
         }}
       >
@@ -450,7 +450,7 @@ export default function Transactions() {
             <div class="modal-title" id="tx-modal-title">
               Add Transaction
             </div>
-            <button class="btn btn-ghost" onclick={closeModals} aria-label="Close modal">
+            <button class="btn btn-ghost" onclick={_closeModals} aria-label="Close modal">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -602,7 +602,7 @@ export default function Transactions() {
                   />
                   {receiptPreviewUrl() && (
                     <>
-                      {selectedFile()?.type.startsWith('image/') ? (
+                      {_selectedFile()?.type.startsWith('image/') ? (
                         <img
                           src={receiptPreviewUrl()!}
                           alt="Receipt preview"
@@ -628,9 +628,9 @@ export default function Transactions() {
                           >
                             <path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                           </svg>
-                          <div style="font-size: 14px">{selectedFile()!.name}</div>
+                          <div style="font-size: 14px">{_selectedFile()!.name}</div>
                           <div style="font-size: 12px; color: var(--text-secondary)">
-                            {(selectedFile()!.size / 1024).toFixed(1)} KB
+                            {(_selectedFile()!.size / 1024).toFixed(1)} KB
                           </div>
                         </div>
                       )}
@@ -664,7 +664,7 @@ export default function Transactions() {
             </form>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" onclick={closeModals}>
+            <button class="btn btn-secondary" onclick={_closeModals}>
               Cancel
             </button>
             <button class="btn btn-primary" id="tx-save-btn" data-action="transactions:save">

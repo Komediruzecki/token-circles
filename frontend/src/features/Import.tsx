@@ -3,8 +3,7 @@
  * Handles CSV and Excel file import with preview and duplicate detection
  */
 
-import { createSignal, createEffect, onMount, For } from 'solid-js'
-import { api } from '../core/api.js'
+import { onMount, createSignal } from 'solid-js'
 
 // Load XLSX from global scope (built into the bundle)
 const XLSX =
@@ -29,10 +28,10 @@ interface PreviewData {
 }
 
 export default function Import() {
-  const [file, setFile] = createSignal<File | null>(null)
+  const [_file, setFile] = createSignal<File | null>(null)
   const [fileContent, setFileContent] = createSignal<any[]>([])
   const [headers, setHeaders] = createSignal<string[]>([])
-  const [previewData, setPreviewData] = createSignal<PreviewData | null>(null)
+  const [_previewData, setPreviewData] = createSignal<PreviewData | null>(null)
   const [importResult, setImportResult] = createSignal<ImportResult>({ status: 'idle' })
   const [selectedRows, setSelectedRows] = createSignal<Set<number>>(new Set())
   const [currentPage, setCurrentPage] = createSignal(1)
@@ -79,13 +78,13 @@ export default function Import() {
       const worksheet = workbook.Sheets[sheetName]
       const data = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
       return data
-    } catch (err) {
+    } catch {
       throw new Error('Failed to parse Excel file')
     }
   }
 
   // Handle file upload
-  const handleFileUpload = async (e: Event) => {
+  const _handleFileUpload = async (e: Event) => {
     const target = e.target as HTMLInputElement
     const uploadedFile = target.files?.[0]
     if (!uploadedFile) return
@@ -116,10 +115,10 @@ export default function Import() {
       setHeaders(Object.keys(data[0]))
       setCurrentPage(1)
       setImportResult({ status: 'previewing' })
-    } catch (err) {
+    } catch {
       setImportResult({
         status: 'error',
-        message: err instanceof Error ? err.message : 'Failed to parse file',
+        message: 'Failed to parse file',
       })
     }
   }
@@ -137,7 +136,6 @@ export default function Import() {
 
   // Select/deselect all rows
   const toggleAll = (select: boolean) => {
-    const allSelected = fileContent().length > 0
     if (select) {
       setSelectedRows(new Set(fileContent().map((_, i) => i)))
     } else {
