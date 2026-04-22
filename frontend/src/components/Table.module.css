@@ -1,0 +1,91 @@
+/**
+ * Table CSS Module
+ * Reusable table component
+ */
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border);
+  background: var(--table-header-bg);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.table tr:hover {
+  background: var(--table-hover);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.tdAmount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tdAmount.income {
+  color: var(--income);
+}
+
+.tdAmount.expense {
+  color: var(--expense);
+}
+
+.tdAmount.transfer {
+  color: var(--transfer);
+}
+
+.tdActions {
+  display: flex;
+  gap: 4px;
+}
+
+.thCheckbox {
+  width: 40px;
+  text-align: center;
+}
+
+.thCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.tdCheckbox {
+  text-align: center;
+  width: 40px;
+}
+
+.tdCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.rowSelected {
+  background: var(--primary-bg, rgba(59, 130, 246, 0.08)) !important;
+}

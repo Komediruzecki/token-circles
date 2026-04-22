@@ -1,0 +1,184 @@
+/**
+ * Layout CSS Module
+ * Global app layout: sidebar, main content, grid systems
+ */
+
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  padding: 20px 0;
+  z-index: 100;
+  overflow-y: auto;
+  transition: width 0.2s;
+}
+
+.sidebarLogo {
+  padding: 0 20px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 10px;
+}
+
+.sidebarLogo h1 {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.sidebarLogo span {
+  color: var(--primary);
+}
+
+.sidebarLogo p {
+  font-size: 11px;
+  color: var(--sidebar-text);
+  margin-top: 2px;
+}
+
+.sidebarNav {
+  flex: 1;
+  padding: 0 10px;
+}
+
+.sidebarNav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+  margin-bottom: 2px;
+}
+
+.sidebarNav a:hover {
+  background: var(--sidebar-active-bg);
+  color: #fff;
+}
+
+.sidebarNav a.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+}
+
+.sidebarNav a svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.sidebarFooter {
+  padding: 15px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  color: var(--sidebar-text);
+}
+
+.main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 24px 32px;
+  min-height: 100vh;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.pageHeader h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pageHeader p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+.pageHeaderActions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Grid Systems */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .grid4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px;
+  }
+
+  .sidebarLogo h1,
+  .sidebarLogo p,
+  .sidebarNav a span,
+  .sidebarFooter {
+    display: none;
+  }
+
+  .sidebarLogo {
+    padding: 0 16px 16px;
+  }
+
+  .sidebarNav a {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .main {
+    margin-left: 60px;
+    padding: 16px;
+  }
+
+  .grid2,
+  .grid4 {
+    grid-template-columns: 1fr;
+  }
+}

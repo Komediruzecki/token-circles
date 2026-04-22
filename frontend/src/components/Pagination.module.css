@@ -1,0 +1,23 @@
+/**
+ * Pagination CSS Module
+ * Pagination controls for tables
+ */
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.paginationInfo {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.paginationControls {
+  display: flex;
+  gap: 4px;
+}

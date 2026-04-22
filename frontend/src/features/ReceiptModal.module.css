@@ -1,0 +1,266 @@
+/**
+ * Receipt Modal CSS Module
+ */
+
+.receiptModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.receiptModalTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.receiptModalClose {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 8px;
+  transition: color 0.15s;
+}
+
+.receiptModalClose:hover {
+  color: var(--danger);
+}
+
+.receiptModalBody {
+  padding: 24px;
+}
+
+.receiptPreview {
+  position: relative;
+  width: 100%;
+  background: var(--stat-bg);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.receiptPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  gap: 12px;
+}
+
+.receiptPlaceholderIcon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+}
+
+.receiptImage {
+  width: 100%;
+  height: auto;
+  display: none;
+  object-fit: contain;
+  max-height: 400px;
+}
+
+.receiptActions {
+  display: none;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.receiptActionsDownload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.receiptActionsDownload:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.receiptActionsDownload svg {
+  width: 16px;
+  height: 16px;
+}
+
+.receiptActionsDelete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.receiptActionsDelete:hover {
+  background: var(--btn-danger-hover);
+}
+
+.receiptActionsDelete svg {
+  width: 16px;
+  height: 16px;
+}
+
+.receiptActionsClose {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.receiptActionsClose:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+.receiptActionsClose svg {
+  width: 16px;
+  height: 16px;
+}
+
+.receiptMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.receiptMetaItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  background: var(--stat-bg);
+  border-radius: 8px;
+}
+
+.receiptMetaLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.receiptMetaValue {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Loan Calculator */
+.loanSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.loanSummaryStat {
+  text-align: center;
+  padding: 14px;
+  background: var(--loan-stat-bg);
+  border-radius: 10px;
+}
+
+.loanSummaryStatLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.loanSummaryStatValue {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.loanSummaryStatValue.saved {
+  color: var(--success);
+}
+
+.loanSummaryStatValue.highlight {
+  color: var(--primary);
+}
+
+.amortTable {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.amortTable table {
+  font-size: 13px;
+}
+
+.amortTable th {
+  position: sticky;
+  top: 0;
+  background: var(--amort-th-bg);
+  z-index: 1;
+}
+
+.amortRowInterest td:nth-child(3) {
+  color: var(--expense);
+}
+
+.amortRowPrincipal td:nth-child(3) {
+  color: var(--income);
+}
+
+.amortRowBalance td:nth-child(4) {
+  font-weight: 600;
+}
+
+.amortTable tr.rateChangeRow {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.amortTable tr.rateChangeRow td {
+  border-left: 3px solid #f59e0b;
+}
+
+.amortTable tr.prepaymentRow {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.amortTable tr.prepaymentRow td {
+  border-left: 3px solid #10b981;
+}

@@ -1,0 +1,29 @@
+/**
+ * Badge CSS Module
+ * Reusable badge component
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.badgeIncome {
+  background: var(--badge-income-bg);
+  color: var(--badge-income-text);
+}
+
+.badgeExpense {
+  background: var(--badge-expense-bg);
+  color: var(--badge-expense-text);
+}
+
+.badgeTransfer {
+  background: var(--badge-transfer-bg);
+  color: var(--badge-transfer-text);
+}

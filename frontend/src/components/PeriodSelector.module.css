@@ -1,0 +1,30 @@
+/**
+ * PeriodSelector CSS Module
+ * Time period selection buttons
+ */
+
+.periodSelector {
+  display: inline-flex;
+  background: var(--period-selector-bg);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.periodSelector button {
+  padding: 5px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.periodSelector button.active {
+  background: var(--period-btn-active-bg);
+  color: var(--period-btn-active-color);
+  box-shadow: var(--shadow);
+}
