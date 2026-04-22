@@ -4,37 +4,8 @@
 
 import { createSignal, onMount } from 'solid-js'
 import { theme } from './core/theme.js'
-import Accounts from './features/Accounts'
-import Analytics from './features/Analytics'
-import Bills from './features/Bills'
-import Budgets from './features/Budgets'
-import Categories from './features/Categories'
-import Dashboard from './features/Dashboard'
-import Goals from './features/Goals'
-import Housing from './features/Housing'
-import Import from './features/Import'
-import Loans from './features/Loans'
-import Retirement from './features/Retirement'
-import Settings from './features/Settings'
-import Transactions from './features/Transactions'
-import type { PageName, PageComponent } from './types/models.js'
+import { pages } from './router.tsx'
 import { receipts, transactions, handlers, handleReceiptFileSelect, handleModalAction } from './core/handlers.js'
-
-const pages: Record<PageName, PageComponent> = {
-  dashboard: Dashboard,
-  transactions: Transactions,
-  budgets: Budgets,
-  loans: Loans,
-  goals: Goals,
-  bills: Bills,
-  import: Import,
-  accounts: Accounts,
-  categories: Categories,
-  settings: Settings,
-  retirement: Retirement,
-  housing: Housing,
-  analytics: Analytics,
-}
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -404,7 +375,7 @@ export function App() {
 
         {/* Main Content */}
         <main class="main-content">
-          <div id="page-content">{pages[currentPage()]}</div>
+          <div id="page-content" class="page-active">{pages[currentPage()]}</div>
         </main>
       </div>
     </div>

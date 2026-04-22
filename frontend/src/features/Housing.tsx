@@ -169,7 +169,7 @@ export default function HousingForm() {
         </div>
       ) : (
         <div class="housing-list">
-          {housings().map((housing) => (
+          {Array.isArray(housings()) && housings().map((housing) => (
             <div class="housing-card">
               <div class="housing-header">
                 <div class="housing-icon">{getTypeIcon(housing.type)}</div>

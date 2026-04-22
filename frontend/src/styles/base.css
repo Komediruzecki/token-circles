@@ -241,8 +241,58 @@ body {
   display: none;
 }
 
-.page.active {
+.page-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Active page state for the page-content div */
+.page-active {
   display: block;
+}
+
+/* Individual pages */
+.page-accounts,
+.page-transactions,
+.page-budgets,
+.page-loans,
+.page-goals,
+.page-bills,
+.page-import,
+.page-analytics,
+.page-retirement,
+.page-housing {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Legacy page structure (for backward compatibility) */
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.pageHeader h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pageHeader p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 2px;
 }
 
 .pageHeader {
