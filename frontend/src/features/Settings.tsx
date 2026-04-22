@@ -1,3 +1,4 @@
+import styles from '../components/SettingsPage.module.css'
 /**
  * Settings Component
  * Application configuration and preferences
@@ -50,13 +51,13 @@ export default function Settings() {
 
   return (
     <div class="page page-settings page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <h1>Settings</h1>
       </div>
       <div class="page-content">
         <div class="settings-grid">
           <div class="settings-col">
-            <div class="card">
+            <div class={styles.card}>
               <div class="settings-section">
                 <div class="settings-section-title">General</div>
                 <div class="form-group">

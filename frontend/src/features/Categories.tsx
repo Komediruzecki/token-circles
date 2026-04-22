@@ -1,3 +1,4 @@
+import styles from '../components/CategoriesPage.module.css'
 /**
  * Categories Component
  * Manages expense and income categories with CRUD operations
@@ -167,10 +168,10 @@ export default function Categories() {
 
   return (
     <div class="page page-categories page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Categories</h1>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -192,12 +193,12 @@ export default function Categories() {
       </div>
 
       {loading() ? (
-        <div class="empty-state">Loading categories...</div>
+        <div class={styles.emptyState}>Loading categories...</div>
       ) : categories().length === 0 ? (
-        <div class="empty-state">
+        <div class={styles.emptyState}>
           <p>No categories yet</p>
           <p>Create your first category to start organizing your transactions.</p>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             Add Category
           </button>
         </div>
@@ -284,17 +285,17 @@ export default function Categories() {
 
       {/* Add/Edit Modal */}
       {showAddModal() && (
-        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}}>
-          <div class="modal" onclick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h3 class="modal-title">{editingCategory() ? 'Edit Category' : 'Add Category'}</h3>
-              <button class="modal-close" onClick={() => { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}>
+        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}}>
+          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>{editingCategory() ? 'Edit Category' : 'Add Category'}</h3>
+              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class="modal-body" onSubmit={handleSubmit}>
+            <form class={styles.modalBody} onSubmit={handleSubmit}>
               <div class="form-group">
                 <label class="form-label">Category Name</label>
                 <input
@@ -342,11 +343,11 @@ export default function Categories() {
                   ))}
                 </div>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onClick={() => { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}>
+              <div class={styles.modalFooter}>
+                <button type="button" class={styles.btnSecondary} onClick={() => { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}>
                   Cancel
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class={styles.btnPrimary}>
                   {editingCategory() ? 'Update' : 'Add'} Category
                 </button>
               </div>
@@ -357,17 +358,17 @@ export default function Categories() {
 
       {/* Budget Modal */}
       {showBudgetModal() && selectedCategory() && (
-        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) setShowBudgetModal(false) }}>
-          <div class="modal" onclick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h3 class="modal-title">Set Budget</h3>
-              <button class="modal-close" onClick={() => setShowBudgetModal(false)}>
+        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowBudgetModal(false) }}>
+          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>Set Budget</h3>
+              <button class={styles.modalClose} onClick={() => setShowBudgetModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div class="modal-body">
+            <div class={styles.modalBody}>
               <p class="modal-text">Set a monthly budget for <strong>{selectedCategory()!.name}</strong></p>
               <div class="form-group">
                 <label class="form-label">Monthly Budget Amount</label>
@@ -380,11 +381,11 @@ export default function Categories() {
                 />
               </div>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-secondary" onClick={() => setShowBudgetModal(false)}>
+            <div class={styles.modalFooter}>
+              <button class={styles.btnSecondary} onClick={() => setShowBudgetModal(false)}>
                 Cancel
               </button>
-              <button class="btn btn-primary" onClick={() => {
+              <button class={styles.btnPrimary} onClick={() => {
                 const input = document.getElementById('budget-input') as HTMLInputElement
                 updateBudget(parseFloat(input?.value) || 0)
               }}>

@@ -1,3 +1,4 @@
+import styles from '../components/AnalyticsPage.module.css'
 /**
  * Analytics Component
  * Visualizes financial data with charts and insights
@@ -68,15 +69,15 @@ export default function Analytics() {
 
   return (
     <div class="page page-analytics page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <h1>Analytics</h1>
         <p class="page-subtitle">Visualize your financial data and track trends</p>
       </div>
 
       {loading() ? (
-        <div class="empty-state">Loading analytics...</div>
+        <div class={styles.emptyState}>Loading analytics...</div>
       ) : !data() ? (
-        <div class="empty-state">
+        <div class={styles.emptyState}>
           <p>No data available</p>
           <p>Add some transactions to see analytics.</p>
         </div>
@@ -138,7 +139,7 @@ export default function Analytics() {
               <h3 class="chart-title">Spending by Category</h3>
               <div class="chart-container">
                 {data()!.byCategory.length === 0 ? (
-                  <div class="empty-state">No expense data</div>
+                  <div class={styles.emptyState}>No expense data</div>
                 ) : (
                   <div class="category-bars">
                     {data()!.byCategory.map((item) => {
@@ -173,7 +174,7 @@ export default function Analytics() {
               <h3 class="chart-title">Monthly Income vs Expense</h3>
               <div class="chart-container">
                 {data()!.byMonth.length === 0 ? (
-                  <div class="empty-state">No data available</div>
+                  <div class={styles.emptyState}>No data available</div>
                 ) : (
                   <div class="trend-bars">
                     {data()!.byMonth.map((item) => {

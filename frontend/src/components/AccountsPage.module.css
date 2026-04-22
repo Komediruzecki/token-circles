@@ -225,3 +225,414 @@
 .accountsPage .emptyState p {
   font-size: 14px;
 }
+
+/* Page structure classes (from base.css) */
+.accountsPage .page {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.accountsPage .page-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.accountsPage .page-accounts {
+  display: block;
+}
+
+/* Page Header */
+.accountsPage .pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accountsPage .header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.accountsPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Summary Cards */
+.accountsPage .accountsSummary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.accountsPage .summaryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.accountsPage .summaryCard.highlighted::before {
+  background: var(--success);
+}
+
+.accountsPage .summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.accountsPage .summaryValue {
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.accountsPage .summaryValue.positive {
+  color: var(--income);
+}
+
+.accountsPage .summaryValue.negative {
+  color: var(--expense);
+}
+
+/* Accounts Grid */
+.accountsPage .accountsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+/* Account Card */
+.accountsPage .accountCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.accountsPage .accountCard:hover {
+  border-color: var(--primary);
+}
+
+.accountsPage .accountHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.accountsPage .accountIcon {
+  font-size: 32px;
+}
+
+.accountsPage .accountInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.accountsPage .accountName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accountsPage .accountBank {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+}
+
+.accountsPage .accountActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accountsPage .accountBalance {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.accountsPage .balanceLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.accountsPage .balanceAmount {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Activity */
+.accountsPage .activityHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.accountsPage .activityLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.accountsPage .activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accountsPage .activityItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.accountsPage .activityItem:last-child {
+  border-bottom: none;
+}
+
+.accountsPage .activityContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.accountsPage .activityDesc {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accountsPage .activityDate {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.accountsPage .activityAmount {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.accountsPage .activityAmount.income {
+  color: var(--income);
+}
+
+.accountsPage .activityAmount.expense {
+  color: var(--expense);
+}
+
+/* Buttons */
+.accountsPage .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.accountsPage .btn-link {
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.accountsPage .btn-link:hover {
+  color: var(--primary-hover);
+}
+
+.accountsPage .btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.accountsPage .btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.accountsPage .btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.accountsPage .btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.accountsPage .btn-ghost:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+/* Badge */
+.accountsPage .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.accountsPage .badge-default {
+  background: var(--bg);
+  color: var(--text-secondary);
+}
+
+.accountsPage .badge-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.accountsPage .badge-success {
+  background: var(--success);
+  color: #fff;
+}
+
+.accountsPage .badge-warning {
+  background: var(--warning);
+  color: #fff;
+}
+
+.accountsPage .badge-info {
+  background: var(--info);
+  color: #fff;
+}
+
+/* Modal */
+.accountsPage .modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.accountsPage .modalOverlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.accountsPage .modal {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.accountsPage .modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.accountsPage .modalTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.accountsPage .modalClose {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  padding: 0;
+}
+
+.accountsPage .modalClose:hover {
+  color: var(--text);
+}
+
+.accountsPage .modalBody {
+  padding: 20px;
+  flex: 1;
+}
+
+.accountsPage .modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Form */
+.accountsPage .formGroup {
+  margin-bottom: 16px;
+}
+
+.accountsPage .formLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.accountsPage .formControl {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  transition: border-color 0.15s;
+}
+
+.accountsPage .formControl:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.accountsPage .formControl::placeholder {
+  color: var(--text-secondary);
+}

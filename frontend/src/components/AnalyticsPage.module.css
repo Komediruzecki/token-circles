@@ -1,250 +1,58 @@
-.analyticsPage {
-  margin-top: 24px;
-}
-
-.analyticsPage .pageHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.analyticsPage .pageHeader h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.analyticsPage .pageSubtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-top: 4px;
-}
-
-.analyticsPage .analyticsContainer {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.analyticsPage .analyticsSection {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-}
-
-.analyticsPage .analyticsSectionTitle {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 16px;
-}
-
-.analyticsPage .chartContainer {
-  position: relative;
-  height: 300px;
-}
-
-.analyticsPage .summaryCard {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-}
-
-.analyticsPage .summaryCard.income::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--income);
-}
-
-.analyticsPage .summaryCard.expense::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--expense);
-}
-
-.analyticsPage .summaryCard.total::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--primary);
-}
-
-.analyticsPage .summaryLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.analyticsPage .summaryValue {
-  font-size: 20px;
-  font-weight: 700;
-  margin-top: 6px;
-  color: var(--text);
-}
-
-.analyticsPage .summaryChange {
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.analyticsPage .summaryChange.positive {
-  color: var(--success);
-}
-
-.analyticsPage .summaryChange.negative {
-  color: var(--danger);
-}
-
-.analyticsPage .categoryRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.analyticsPage .categoryRow:last-child {
-  border-bottom: none;
-}
-
-.analyticsPage .categoryColor {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.analyticsPage .categoryName {
-  flex: 1;
-  font-size: 14px;
-}
-
-.analyticsPage .categoryAmount {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.analyticsPage .categoryPct {
-  font-size: 12px;
-  color: var(--text-secondary);
-  width: 40px;
-  text-align: right;
-}
-
-.analyticsPage .avgCard {
-  text-align: center;
-  padding: 16px;
-  background: var(--stat-bg);
-  border-radius: 8px;
-}
-
-.analyticsPage .avgLabel {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-}
-
-.analyticsPage .avgValue {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--expense);
-}
-
-.analyticsPage .emptyState {
-  text-align: center;
-  padding: 48px 20px;
-  color: var(--text-secondary);
-}
-
-.analyticsPage .emptyState svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.analyticsPage .emptyState p {
-  font-size: 14px;
-}
-
-.analyticsPage .chartControls {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.analyticsPage .periodSelector {
-  display: inline-flex;
-  background: var(--period-selector-bg);
-  border-radius: 8px;
-  padding: 3px;
-  gap: 2px;
-}
-
-.analyticsPage .periodSelector button {
-  padding: 5px 12px;
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  transition: all 0.15s;
-}
-
-.analyticsPage .periodSelector button.active {
-  background: var(--period-btn-active-bg);
-  color: var(--period-btn-active-color);
-  box-shadow: var(--shadow);
-}
-
-.analyticsPage .monthSelector {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.analyticsPage .monthSelector .monthDisplay {
-  font-weight: 600;
-  font-size: 15px;
-  min-width: 120px;
-  text-align: center;
-}
-
-.analyticsPage .monthSelector button {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card-bg);
-  cursor: pointer;
-  color: var(--text);
-  transition: all 0.15s;
-}
-
-.analyticsPage .monthSelector button:hover {
-  background: var(--month-nav-btn-hover-bg);
-}
+.analyticsPage { padding: 24px; }
+.analyticsPage .pageHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.analyticsPage .pageHeader h1 { font-size: 24px; font-weight: 700; color: var(--text); }
+.analyticsPage .pageSubtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+.analyticsPage .analyticsStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.analyticsPage .statCard { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.analyticsPage .statLabel { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+.analyticsPage .statValue { font-size: 24px; font-weight: 700; margin-top: 8px; color: var(--text); }
+.analyticsPage .statValue.positive { color: var(--income); }
+.analyticsPage .statValue.negative { color: var(--expense); }
+.analyticsPage .statDesc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.analyticsPage .analyticsTabs { display: flex; gap: 8px; margin-bottom: 24px; }
+.analyticsPage .tab { flex: 1; padding: 10px 16px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; }
+.analyticsPage .tab.active { background: var(--primary); color: #fff; }
+.analyticsPage .analyticsChart { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
+.analyticsPage .chartTitle { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+.analyticsPage .chartContainer { margin-bottom: 16px; }
+.analyticsPage .categoryBars { display: flex; flex-direction: column; gap: 12px; }
+.analyticsPage .categoryBarItem { display: flex; align-items: center; gap: 12px; }
+.analyticsPage .barInfo { flex: 1; min-width: 0; }
+.analyticsPage .barName { font-size: 14px; font-weight: 500; color: var(--text); }
+.analyticsPage .barPercent { font-size: 12px; color: var(--text-secondary); }
+.analyticsPage .barTrack { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.analyticsPage .barFill { height: 100%; background: var(--primary); transition: width 0.3s; }
+.analyticsPage .barAmount { font-size: 14px; font-weight: 600; color: var(--text); min-width: 80px; text-align: right; }
+.analyticsPage .trendBars { display: flex; flex-direction: column; gap: 12px; }
+.analyticsPage .trendBarItem { display: flex; align-items: center; gap: 12px; }
+.analyticsPage .barIncome { background: var(--income); }
+.analyticsPage .barExpense { background: var(--expense); }
+.analyticsPage .barLegend { flex: 1; display: flex; gap: 16px; font-size: 12px; }
+.analyticsPage .barIncomeLabel { color: var(--income); }
+.analyticsPage .barExpenseLabel { color: var(--expense); }
+.analyticsPage .savingsRateDisplay { display: flex; gap: 24px; padding: 24px; background: var(--card-bg); border-radius: var(--radius); margin-bottom: 16px; }
+.analyticsPage .rateCircle { width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; }
+.analyticsPage .rateCircle::before { content: ''; position: absolute; width: 80px; height: 80px; background: var(--card-bg); border-radius: 50%; }
+.analyticsPage .rateValue { position: relative; font-size: 24px; font-weight: 700; color: var(--primary); }
+.analyticsPage .rateLabel { position: relative; font-size: 12px; color: var(--text-secondary); }
+.analyticsPage .rateInfo { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.analyticsPage .rateRow { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+.analyticsPage .rateRow span:last-child { font-weight: 600; color: var(--text); }
+.analyticsPage .rateStatus.good { color: var(--success); }
+.analyticsPage .rateStatus.fair { color: var(--warning); }
+.analyticsPage .rateStatus.poor { color: var(--expense); }
+.analyticsPage .savingsTips { padding: 16px; background: var(--bg); border-radius: var(--radius); }
+.analyticsPage .savingsTips h4 { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; }
+.analyticsPage .savingsTips ul { margin: 0; padding-left: 20px; }
+.analyticsPage .savingsTips li { margin: 8px 0; font-size: 13px; }
+.analyticsPage .analyticsRecent { margin-top: 24px; }
+.analyticsPage .sectionTitle { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.analyticsPage .transactionList { display: flex; flex-direction: column; gap: 8px; }
+.analyticsPage .transactionItem { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); }
+.analyticsPage .transactionIcon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.analyticsPage .transactionDetails { flex: 1; min-width: 0; }
+.analyticsPage .transactionName { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.analyticsPage .transactionMeta { font-size: 12px; color: var(--text-secondary); }
+.analyticsPage .transactionAmount { font-size: 14px; font-weight: 600; min-width: 80px; text-align: right; }
+.analyticsPage .transactionAmount.income { color: var(--income); }
+.analyticsPage .transactionAmount.expense { color: var(--expense); }

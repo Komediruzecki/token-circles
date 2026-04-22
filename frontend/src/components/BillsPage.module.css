@@ -1,176 +1,33 @@
-.billsPage {
-  margin-top: 24px;
-}
-
-.billsPage .pageHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.billsPage .pageHeader h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.billsPage .pageSubtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-top: 4px;
-}
-
-.billsPage .addBillBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s;
-  background: var(--primary);
-  color: #fff;
-}
-
-.billsPage .addBillBtn:hover {
-  background: var(--primary-hover);
-}
-
-.billsPage .billsSection {
-  margin-bottom: 24px;
-}
-
-.billsPage .billsSection h2 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 12px;
-}
-
-.billsPage .billsList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.billsPage .billCard {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.billsPage .billCard.paid {
-  opacity: 0.6;
-}
-
-.billsPage .billCard:hover {
-  border-color: var(--primary);
-}
-
-.billsPage .billCard.paid:hover {
-  opacity: 0.85;
-}
-
-.billsPage .billIcon {
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.billsPage .billInfo {
-  flex: 1;
-  min-width: 0;
-}
-
-.billsPage .billName {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-
-.billsPage .billDetails {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.billsPage .billDetails .dueDate {
-  color: var(--primary);
-}
-
-.billsPage .billAmount {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--expense);
-  text-align: right;
-}
-
-.billsPage .billAmount.paid {
-  color: var(--success);
-}
-
-.billsPage .billActions {
-  display: flex;
-  gap: 4px;
-}
-
-.billsPage .markPaidBtn {
-  background: var(--success);
-  color: #fff;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.billsPage .markPaidBtn:hover {
-  background: var(--btn-success-hover);
-}
-
-.billsPage .markPaidBtn.paid {
-  background: var(--text-secondary);
-  color: #fff;
-}
-
-.billsPage .billActions .btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 6px 8px;
-}
-
-.billsPage .billActions .btn-ghost:hover {
-  background: var(--btn-ghost-hover);
-  color: var(--text);
-}
-
-.billsPage .emptyState {
-  text-align: center;
-  padding: 48px 20px;
-  color: var(--text-secondary);
-}
-
-.billsPage .emptyState svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.billsPage .emptyState p {
-  font-size: 14px;
-}
-
-.billsPage .billsSection:last-child {
-  margin-bottom: 0;
-}
+.billsPage { padding: 24px; }
+.billsPage .pageHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.billsPage .pageHeader h1 { font-size: 24px; font-weight: 700; color: var(--text); }
+.billsPage .pageSubtitle { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+.billsPage .billsSection { margin-bottom: 24px; }
+.billsPage .sectionTitle { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.billsPage .sectionSubtitle { font-size: 13px; color: var(--text-secondary); font-weight: 400; margin-left: auto; }
+.billsPage .billsList { display: flex; flex-direction: column; gap: 12px; }
+.billsPage .billCard { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.billsPage .billCard.overdue { border-color: var(--danger); }
+.billsPage .billCard.paid { opacity: 0.7; }
+.billsPage .billMain { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.billsPage .billIcon { font-size: 24px; }
+.billsPage .billInfo { flex: 1; min-width: 0; }
+.billsPage .billName { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.billsPage .billDetails { font-size: 13px; color: var(--text-secondary); }
+.billsPage .billAmount { display: flex; justify-content: space-between; align-items: center; }
+.billsPage .amountValue { font-size: 18px; font-weight: 700; color: var(--text); }
+.billsPage .billActions { display: flex; gap: 4px; }
+.billsPage .modal { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-lg); width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+.billsPage .modalHeader { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.billsPage .modalTitle { font-size: 18px; font-weight: 600; margin: 0; }
+.billsPage .modalClose { background: transparent; border: none; cursor: pointer; font-size: 24px; color: var(--text-secondary); }
+.billsPage .modalBody { padding: 20px; }
+.billsPage .modalFooter { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--border); }
+.billsPage .formGroup { margin-bottom: 16px; }
+.billsPage .formLabel { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.billsPage .formControl { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+.billsPage .toggleSwitch { display: flex; align-items: center; gap: 8px; }
+.billsPage .toggleSlider { width: 44px; height: 24px; background: var(--bg); border-radius: 12px; position: relative; transition: background 0.3s; }
+.billsPage .toggleSlider::before { content: ''; position: absolute; width: 20px; height: 20px; background: var(--text); border-radius: 50%; top: 2px; left: 2px; transition: transform 0.3s; }
+.billsPage .toggleSwitch input:checked + .toggleSlider { background: var(--primary); }
+.billsPage .toggleSwitch input:checked + .toggleSlider::before { transform: translateX(20px); }

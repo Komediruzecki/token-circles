@@ -1,3 +1,4 @@
+import styles from '../components/BillsPage.module.css'
 /**
  * Bills Component
  * Manages upcoming bills and payment tracking
@@ -133,10 +134,10 @@ export default function Bills() {
 
   return (
     <div class="page page-bills page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Bills</h1>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -219,12 +220,12 @@ export default function Bills() {
           <span class="section-subtitle">{bills().length} total</span>
         </h2>
         {loading() ? (
-          <div class="empty-state">Loading bills...</div>
+          <div class={styles.emptyState}>Loading bills...</div>
         ) : bills().length === 0 ? (
-          <div class="empty-state">
+          <div class={styles.emptyState}>
             <p>No bills yet</p>
             <p>Add your first bill to start tracking your payments.</p>
-            <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
               Add Bill
             </button>
           </div>
@@ -266,17 +267,17 @@ export default function Bills() {
 
       {/* Add Bill Modal */}
       {showAddModal() && (
-        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class="modal" onclick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h3 class="modal-title">Add Bill</h3>
-              <button class="modal-close" onClick={() => setShowAddModal(false)}>
+        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
+          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>Add Bill</h3>
+              <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class="modal-body" onSubmit={handleSubmit}>
+            <form class={styles.modalBody} onSubmit={handleSubmit}>
               <div class="form-group">
                 <label class="form-label">Bill Name</label>
                 <input
@@ -338,11 +339,11 @@ export default function Bills() {
                   <span class="toggle-slider"></span>
                 </label>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+              <div class={styles.modalFooter}>
+                <button type="button" class={styles.btnSecondary} onClick={() => setShowAddModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class={styles.btnPrimary}>
                   Add Bill
                 </button>
               </div>

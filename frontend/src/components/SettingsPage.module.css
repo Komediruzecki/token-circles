@@ -1,0 +1,9 @@
+.settingsPage { padding: 24px; }
+.settingsPage .pageHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.settingsPage .pageHeader h1 { font-size: 24px; font-weight: 700; }
+.settingsPage .pageContent { max-width: 800px; }
+.settingsPage .settingsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.settingsPage .settingsCol { display: flex; flex-direction: column; gap: 24px; }
+.settingsPage .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.settingsPage .settingsSection { margin-bottom: 16px; }
+.settingsPage .settingsSectionTitle { font-size: 16px; font-weight: 600; margin-bottom: 12px; }

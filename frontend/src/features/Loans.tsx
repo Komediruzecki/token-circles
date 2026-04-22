@@ -1,3 +1,4 @@
+import styles from '../components/LoansPage.module.css'
 /**
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
@@ -165,10 +166,10 @@ export default function Loans() {
 
   return (
     <div class="page page-loans page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Loans</h1>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -199,12 +200,12 @@ export default function Loans() {
       </div>
 
       {loading() ? (
-        <div class="empty-state">Loading loans...</div>
+        <div class={styles.emptyState}>Loading loans...</div>
       ) : loans().length === 0 ? (
-        <div class="empty-state">
+        <div class={styles.emptyState}>
           <p>No loans yet</p>
           <p>Add your first loan to start tracking your debt.</p>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             Add Loan
           </button>
         </div>
@@ -280,17 +281,17 @@ export default function Loans() {
 
       {/* Add/Edit Modal */}
       {showAddModal() && (
-        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}}>
-          <div class="modal" onclick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h3 class="modal-title">{editingLoan() ? 'Edit Loan' : 'Add Loan'}</h3>
-              <button class="modal-close" onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>
+        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}}>
+          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>{editingLoan() ? 'Edit Loan' : 'Add Loan'}</h3>
+              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class="modal-body" onSubmit={handleSubmit}>
+            <form class={styles.modalBody} onSubmit={handleSubmit}>
               <div class="form-group">
                 <label class="form-label">Loan Name</label>
                 <input
@@ -359,11 +360,11 @@ export default function Loans() {
                   <option value="paid">Paid Off</option>
                 </select>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>
+              <div class={styles.modalFooter}>
+                <button type="button" class={styles.btnSecondary} onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>
                   Cancel
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class={styles.btnPrimary}>
                   {editingLoan() ? 'Update' : 'Add'} Loan
                 </button>
               </div>
