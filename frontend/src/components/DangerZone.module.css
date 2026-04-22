@@ -1,0 +1,88 @@
+.dangerZone {
+  border: 1.5px solid var(--danger-outline);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 20px;
+  background: var(--danger-bg);
+}
+
+.dangerZoneTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--danger);
+  margin-bottom: 14px;
+}
+
+.dangerZoneTitle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dangerZoneItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--danger-outline);
+}
+
+.dangerZoneItem:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.dangerZoneItemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dangerZoneItemDesc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.dangerZoneItemCode {
+  font-size: 11px;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.dangerZoneButton {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dangerZoneButton:hover {
+  background: var(--btn-danger-hover);
+}
+
+.dangerZoneCancel {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dangerZoneCancel:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}

@@ -1,0 +1,57 @@
+.loadingSpinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.loadingSpinner.dark {
+  border-color: rgba(0, 0, 0, 0.2);
+  border-top-color: var(--text);
+}
+
+.btn .loadingSpinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.tableLoading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.rowLoading {
+  position: relative;
+}
+
+.rowLoading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btnLoadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

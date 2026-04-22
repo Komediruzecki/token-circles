@@ -1,0 +1,95 @@
+.dashboardStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dashboardStats .statCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboardStats .statCard.income::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--income);
+}
+
+.dashboardStats .statCard.expense::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--expense);
+}
+
+.dashboardStats .statCard.balance::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary);
+}
+
+.dashboardStats .statCard.networth::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--success);
+}
+
+.dashboardStats .statLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dashboardStats .statValue {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.dashboardStats .statValue.income {
+  color: var(--income);
+}
+
+.dashboardStats .statValue.expense {
+  color: var(--expense);
+}
+
+.dashboardStats .statValue.balance {
+  color: var(--primary);
+}
+
+.dashboardStats .statChange {
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+.dashboardStats .statChange.positive {
+  color: var(--success);
+}
+
+.dashboardStats .statChange.negative {
+  color: var(--danger);
+}

@@ -1,0 +1,67 @@
+.heatmapContainer {
+  margin-bottom: 24px;
+}
+
+.heatmapHeader {
+  margin-bottom: 12px;
+}
+
+.heatmapTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.heatmapSubtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.heatmapSvg {
+  display: block;
+  overflow: visible;
+}
+
+.heatmapTooltip {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: absolute;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.heatmapTooltip.visible {
+  opacity: 1;
+}
+
+.heatmapLegend {
+  display: flex;
+  gap: 3px;
+  margin-top: 12px;
+  align-items: center;
+}
+
+.heatmapLegendLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+.heatmapLegendColor {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.heatmapLegendLabelBottom {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
