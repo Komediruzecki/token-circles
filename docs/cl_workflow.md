@@ -92,7 +92,7 @@ gh issue close NUMBER --comment "See PR #PR_NUMBER for implementation"
 
 ```
 /var/www/finance-manager.clodhost.com/
-├── frontend/          # SolidJS SPA (src/, dist/, build.mjs)
+├── frontend/          # SolidJS SPA (src/, dist/)
 ├── backend/           # Node.js/Express API (index.js, database.js)
 ├── db/                # SQLite database (gitignored)
 ├── assets/            # User-uploaded files (gitignored)
@@ -141,7 +141,7 @@ sqlite3 db/finance-manager.db "PRAGMA integrity_check;"
 - **Framework**: SolidJS 1.8.15 with TypeScript
 - **Build Tool**: Vite 6.4.2
 - **Output**: `frontend/dist/` (served to public)
-- **Build Command**: `cd frontend && node build.mjs`
+- **Build Command**: `cd frontend && npm run build`
 
 ### Backend
 
@@ -168,6 +168,6 @@ If you get "database is locked" errors:
 
 ### Build Failures
 
-If `node build.mjs` fails:
+If Vite build fails:
 1. Delete `frontend/node_modules/.vite` to clear cache
-2. Rebuild: `cd frontend && rm -rf dist && node build.mjs`
+2. Rebuild: `cd frontend && rm -rf dist && npm run build`
