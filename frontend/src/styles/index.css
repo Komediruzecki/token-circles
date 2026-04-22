@@ -13,7 +13,6 @@
 /* CSS modules and component styles */
 @import './design/dashboard-settings.css';
 @import './design/Sidebar.module.css';
-@import './legacy.css';
 
 /* Utility classes for SolidJS components */
 :root {
