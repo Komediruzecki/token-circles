@@ -1,0 +1,227 @@
+.accountsPage {
+  margin-top: 24px;
+}
+
+.accountsPage .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.accountsPage .pageHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.accountsPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.accountsPage .addAccountBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--primary);
+  color: #fff;
+}
+
+.accountsPage .addAccountBtn:hover {
+  background: var(--primary-hover);
+}
+
+.accountsPage .accountsSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.accountsPage .summaryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.accountsPage .summaryCard.balance::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary);
+}
+
+.accountsPage .summaryCard.income::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--income);
+}
+
+.accountsPage .summaryCard.expenses::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--expense);
+}
+
+.accountsPage .summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.accountsPage .summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.accountsPage .summaryValue.income {
+  color: var(--income);
+}
+
+.accountsPage .summaryValue.expenses {
+  color: var(--expense);
+}
+
+.accountsPage .accountsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.accountsPage .accountCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.accountsPage .accountCard:hover {
+  border-color: var(--primary);
+}
+
+.accountsPage .accountHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.accountsPage .accountIcon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.accountsPage .accountActions {
+  display: flex;
+  gap: 4px;
+}
+
+.accountsPage .accountName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.accountsPage .accountBank {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.accountsPage .accountBalance {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.accountsPage .balanceLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.accountsPage .balanceAmount {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.accountsPage .accountActivity {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.accountsPage .activityItem {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.accountsPage .activityItem:last-child {
+  margin-bottom: 0;
+}
+
+.accountsPage .activityItem.label {
+  color: var(--text-secondary);
+}
+
+.accountsPage .activityItem.amount {
+  font-weight: 500;
+}
+
+.accountsPage .activityItem.amount.income {
+  color: var(--income);
+}
+
+.accountsPage .activityItem.amount.expense {
+  color: var(--expense);
+}
+
+.accountsPage .emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.accountsPage .emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.accountsPage .emptyState p {
+  font-size: 14px;
+}

@@ -5,7 +5,7 @@
 import { createSignal, onMount } from 'solid-js'
 import { theme } from './core/theme.js'
 import { pages } from './router.tsx'
-import { receipts, transactions, handlers, handleReceiptFileSelect, handleModalAction } from './core/handlers.js'
+import { receipts, transactions, handlers } from './core/handlers.js'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts

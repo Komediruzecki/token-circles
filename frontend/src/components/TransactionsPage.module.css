@@ -1,0 +1,187 @@
+.transactionsPage {
+  margin-top: 24px;
+}
+
+.transactionsPage .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.transactionsPage .pageHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.transactionsPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.transactionsPage .typeSelector {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.transactionsPage .typeSelector button {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+}
+
+.transactionsPage .typeSelector button.active.income {
+  background: var(--type-income-bg);
+  color: var(--income);
+}
+
+.transactionsPage .typeSelector button.active.expense {
+  background: var(--type-expense-bg);
+  color: var(--expense);
+}
+
+.transactionsPage .typeSelector button.active.transfer {
+  background: var(--type-transfer-bg);
+  color: var(--transfer);
+}
+
+.transactionsPage .filterBar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.transactionsPage .filterBar .form-control {
+  width: auto;
+  min-width: 120px;
+  max-width: 160px;
+}
+
+.transactionsPage .dataTableWrap {
+  overflow-x: auto;
+}
+
+.transactionsPage .dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.transactionsPage .dataTable th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border);
+  background: var(--table-header-bg);
+  white-space: nowrap;
+}
+
+.transactionsPage .dataTable td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.transactionsPage .dataTable tr:hover {
+  background: var(--table-hover);
+}
+
+.transactionsPage .tdAmount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.transactionsPage .tdAmount.income {
+  color: var(--income);
+}
+
+.transactionsPage .tdAmount.expense {
+  color: var(--expense);
+}
+
+.transactionsPage .tdAmount.transfer {
+  color: var(--transfer);
+}
+
+.transactionsPage .tdActions {
+  display: flex;
+  gap: 4px;
+}
+
+.transactionsPage .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.transactionsPage .badge.income {
+  background: var(--badge-income-bg);
+  color: var(--badge-income-text);
+}
+
+.transactionsPage .badge.expense {
+  background: var(--badge-expense-bg);
+  color: var(--badge-expense-text);
+}
+
+.transactionsPage .badge.transfer {
+  background: var(--badge-transfer-bg);
+  color: var(--badge-transfer-text);
+}
+
+.transactionsPage .actionButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.transactionsPage .emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.transactionsPage .emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.transactionsPage .emptyState p {
+  font-size: 14px;
+}
+
+.transactionsPage .bulkActionBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, var(--btn-secondary-bg) 0%, var(--btn-secondary-hover) 100%);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}

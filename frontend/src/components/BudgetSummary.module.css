@@ -1,0 +1,103 @@
+.budgetSummary {
+  margin-bottom: 20px;
+}
+
+.budgetSummary .summaryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.budgetSummary .summaryCard.income {
+  border-left: 3px solid var(--income);
+}
+
+.budgetSummary .summaryCard.allocated {
+  border-left: 3px solid var(--primary);
+}
+
+.budgetSummary .summaryCard.spent {
+  border-left: 3px solid var(--expense);
+}
+
+.budgetSummary .summaryCard.remaining {
+  border-left: 3px solid var(--success);
+}
+
+.budgetSummary .summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.budgetSummary .summaryValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.budgetSummary .summaryValue.income {
+  color: var(--income);
+}
+
+.budgetSummary .summaryValue.spent {
+  color: var(--expense);
+}
+
+.budgetSummary .summaryValue.remaining {
+  color: var(--success);
+}
+
+.budgetSummary .summaryValue.allocated {
+  color: var(--primary);
+}
+
+.budgetSummary .summaryChange {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.budgetSummary .summaryChange.positive {
+  color: var(--success);
+}
+
+.budgetSummary .summaryChange.negative {
+  color: var(--danger);
+}
+
+.budgetSummary .summaryProgressBar {
+  height: 6px;
+  background: var(--budget-bar-bg);
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.budgetSummary .summaryProgressBarFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.budgetSummary .summaryProgressBarFill.warning {
+  background: var(--warning);
+}
+
+.budgetSummary .summaryProgressBarFill.danger {
+  background: var(--danger);
+}
+
+.budgetSummary .summaryProgressBarFill.success {
+  background: var(--success);
+}
+
+.budgetSummary .summaryProgressBarFill.normal {
+  background: var(--primary);
+}

@@ -1,0 +1,140 @@
+.compoundLayout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 24px;
+  align-items: stretch;
+  margin-top: 16px;
+}
+
+.compoundLeft {
+  min-height: 0;
+}
+
+.compoundRight {
+  min-height: 300px;
+  display: flex;
+}
+
+.retirementLayout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 24px;
+  align-items: stretch;
+  height: 100vh;
+}
+
+.retirementLeft,
+.retirementRight,
+.retirementChartCard {
+  min-height: 0;
+}
+
+.retirementLeft .card {
+  padding: 20px;
+}
+
+.retirementLeft .formGroup {
+  margin-bottom: 8px;
+}
+
+.retirementRight {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.retirementChartCard {
+  grid-column: 1 / -1;
+  padding: 20px;
+  display: flex;
+}
+
+.housingCalcLayout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.housingInputSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.housingResultsSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.settingsGrid .settingsCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settingsGrid .card {
+  max-width: none;
+}
+
+.settingsDivider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0 0 0;
+}
+
+.importDropzone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 20px;
+}
+
+.importDropzone:hover,
+.importDropzone.dragover {
+  border-color: var(--primary);
+  background: var(--chart-primary-bg);
+}
+
+.importDropzone svg {
+  width: 40px;
+  height: 40px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.importDropzone p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.importDropzone strong {
+  color: var(--text);
+}
+
+.chartContainer {
+  position: relative;
+  height: 280px;
+}
+
+.chartContainer tall {
+  height: 320px;
+}
+
+.chartContainer short {
+  height: 220px;
+}
+
+.chartContainer medium {
+  height: 260px;
+}

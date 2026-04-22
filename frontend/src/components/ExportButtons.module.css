@@ -1,0 +1,65 @@
+.exportButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.exportTypeButtons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.exportTypeButtons button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--btn-secondary-bg);
+  color: var(--text);
+}
+
+.exportTypeButtons button:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.exportTypeButtons button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.exportTypeButtons svg {
+  width: 16px;
+  height: 16px;
+}
+
+.chartExportButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chartExportButton:hover {
+  background: var(--btn-ghost-hover);
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.chartExportButton svg {
+  width: 16px;
+  height: 16px;
+}

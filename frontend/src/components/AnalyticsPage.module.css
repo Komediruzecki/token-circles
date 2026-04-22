@@ -1,0 +1,250 @@
+.analyticsPage {
+  margin-top: 24px;
+}
+
+.analyticsPage .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.analyticsPage .pageHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.analyticsPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.analyticsPage .analyticsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.analyticsPage .analyticsSection {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.analyticsPage .analyticsSectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.analyticsPage .chartContainer {
+  position: relative;
+  height: 300px;
+}
+
+.analyticsPage .summaryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.analyticsPage .summaryCard.income::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--income);
+}
+
+.analyticsPage .summaryCard.expense::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--expense);
+}
+
+.analyticsPage .summaryCard.total::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary);
+}
+
+.analyticsPage .summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.analyticsPage .summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.analyticsPage .summaryChange {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.analyticsPage .summaryChange.positive {
+  color: var(--success);
+}
+
+.analyticsPage .summaryChange.negative {
+  color: var(--danger);
+}
+
+.analyticsPage .categoryRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.analyticsPage .categoryRow:last-child {
+  border-bottom: none;
+}
+
+.analyticsPage .categoryColor {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.analyticsPage .categoryName {
+  flex: 1;
+  font-size: 14px;
+}
+
+.analyticsPage .categoryAmount {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.analyticsPage .categoryPct {
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 40px;
+  text-align: right;
+}
+
+.analyticsPage .avgCard {
+  text-align: center;
+  padding: 16px;
+  background: var(--stat-bg);
+  border-radius: 8px;
+}
+
+.analyticsPage .avgLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.analyticsPage .avgValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--expense);
+}
+
+.analyticsPage .emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.analyticsPage .emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.analyticsPage .emptyState p {
+  font-size: 14px;
+}
+
+.analyticsPage .chartControls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.analyticsPage .periodSelector {
+  display: inline-flex;
+  background: var(--period-selector-bg);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.analyticsPage .periodSelector button {
+  padding: 5px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.analyticsPage .periodSelector button.active {
+  background: var(--period-btn-active-bg);
+  color: var(--period-btn-active-color);
+  box-shadow: var(--shadow);
+}
+
+.analyticsPage .monthSelector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.analyticsPage .monthSelector .monthDisplay {
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.analyticsPage .monthSelector button {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  cursor: pointer;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.analyticsPage .monthSelector button:hover {
+  background: var(--month-nav-btn-hover-bg);
+}

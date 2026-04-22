@@ -1,0 +1,279 @@
+.categoriesPage {
+  margin-top: 24px;
+}
+
+.categoriesPage .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.categoriesPage .pageHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.categoriesPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.categoriesPage .addCategoryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--primary);
+  color: #fff;
+}
+
+.categoriesPage .addCategoryBtn:hover {
+  background: var(--primary-hover);
+}
+
+.categoriesPage .categoriesTabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.categoriesPage .tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+}
+
+.categoriesPage .tab:hover {
+  color: var(--text);
+}
+
+.categoriesPage .tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.categoriesPage .categoriesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.categoriesPage .categoryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.categoriesPage .categoryCard:hover {
+  border-color: var(--primary);
+}
+
+.categoriesPage .categoryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.categoriesPage .categoryIcon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--btn-secondary-bg);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.categoriesPage .categoryActions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.categoriesPage .categoryCard:hover .categoryActions {
+  opacity: 1;
+}
+
+.categoriesPage .categoryName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.categoriesPage .categoryType {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.categoriesPage .categorySpending {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.categoriesPage .spendingAmount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.categoriesPage .spendingAmount.income {
+  color: var(--income);
+}
+
+.categoriesPage .spendingAmount.expense {
+  color: var(--expense);
+}
+
+.categoriesPage .spendingLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+.categoriesPage .budgetLimits {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.categoriesPage .budgetLimit {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.categoriesPage .budgetLimitLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.categoriesPage .budgetLimitAmount {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.categoriesPage .remainingAmount {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.categoriesPage .remainingLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.categoriesPage .remainingAmountValue {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.categoriesPage .remainingAmountValue.positive {
+  color: var(--success);
+}
+
+.categoriesPage .remainingAmountValue.negative {
+  color: var(--danger);
+}
+
+.categoriesPage .budgetProgress {
+  height: 6px;
+  background: var(--budget-bar-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.categoriesPage .budgetProgressBar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.categoriesPage .budgetProgressBar.warning {
+  background: var(--warning);
+}
+
+.categoriesPage .budgetProgressBar.danger {
+  background: var(--danger);
+}
+
+.categoriesPage .budgetProgressBar.success {
+  background: var(--success);
+}
+
+.categoriesPage .budgetProgressBar.normal {
+  background: var(--primary);
+}
+
+.categoriesPage .categoryColors {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.categoriesPage .colorDot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.categoriesPage .colorDot:hover {
+  transform: scale(1.15);
+}
+
+.categoriesPage .colorDot.selected {
+  border-color: var(--text);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--primary);
+}
+
+.categoriesPage .emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.categoriesPage .emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.categoriesPage .emptyState p {
+  font-size: 14px;
+}

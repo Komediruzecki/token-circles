@@ -1,0 +1,176 @@
+.billsPage {
+  margin-top: 24px;
+}
+
+.billsPage .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.billsPage .pageHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.billsPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.billsPage .addBillBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--primary);
+  color: #fff;
+}
+
+.billsPage .addBillBtn:hover {
+  background: var(--primary-hover);
+}
+
+.billsPage .billsSection {
+  margin-bottom: 24px;
+}
+
+.billsPage .billsSection h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.billsPage .billsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.billsPage .billCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.billsPage .billCard.paid {
+  opacity: 0.6;
+}
+
+.billsPage .billCard:hover {
+  border-color: var(--primary);
+}
+
+.billsPage .billCard.paid:hover {
+  opacity: 0.85;
+}
+
+.billsPage .billIcon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.billsPage .billInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.billsPage .billName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.billsPage .billDetails {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.billsPage .billDetails .dueDate {
+  color: var(--primary);
+}
+
+.billsPage .billAmount {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--expense);
+  text-align: right;
+}
+
+.billsPage .billAmount.paid {
+  color: var(--success);
+}
+
+.billsPage .billActions {
+  display: flex;
+  gap: 4px;
+}
+
+.billsPage .markPaidBtn {
+  background: var(--success);
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.billsPage .markPaidBtn:hover {
+  background: var(--btn-success-hover);
+}
+
+.billsPage .markPaidBtn.paid {
+  background: var(--text-secondary);
+  color: #fff;
+}
+
+.billsPage .billActions .btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 8px;
+}
+
+.billsPage .billActions .btn-ghost:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+.billsPage .emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.billsPage .emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.billsPage .emptyState p {
+  font-size: 14px;
+}
+
+.billsPage .billsSection:last-child {
+  margin-bottom: 0;
+}

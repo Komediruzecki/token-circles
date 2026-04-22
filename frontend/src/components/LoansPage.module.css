@@ -1,0 +1,296 @@
+.loansPage {
+  margin-top: 24px;
+}
+
+.loansPage .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.loansPage .pageHeader h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.loansPage .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.loansPage .addLoanBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--primary);
+  color: #fff;
+}
+
+.loansPage .addLoanBtn:hover {
+  background: var(--primary-hover);
+}
+
+.loansPage .loansSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.loansPage .summaryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.loansPage .summaryCard.borrowed::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary);
+}
+
+.loansPage .summaryCard.remaining::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--warning);
+}
+
+.loansPage .summaryCard.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary);
+}
+
+.loansPage .summaryCard.paid::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--success);
+}
+
+.loansPage .summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.loansPage .summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.loansPage .summaryValue.positive {
+  color: var(--success);
+}
+
+.loansPage .summaryValue.negative {
+  color: var(--danger);
+}
+
+.loansPage .loansGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.loansPage .loanCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.loansPage .loanCard:hover {
+  border-color: var(--primary);
+}
+
+.loansPage .loanCard.paid {
+  opacity: 0.6;
+}
+
+.loansPage .loanHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.loansPage .loanIcon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.loansPage .loanActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.loansPage .loanName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.loansPage .loanBank {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.loansPage .loanAmounts {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.loansPage .amountRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.loansPage .amountLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.loansPage .amountValue {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.loansPage .amountValue.positive {
+  color: var(--success);
+}
+
+.loansPage .loanStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.loansPage .loanStatus.active {
+  background: var(--badge-income-bg);
+  color: var(--badge-income-text);
+}
+
+.loansPage .loanStatus.paid {
+  background: var(--badge-expense-bg);
+  color: var(--badge-expense-text);
+}
+
+.loansPage .loanStatus.deferred {
+  background: var(--badge-transfer-bg);
+  color: var(--badge-transfer-text);
+}
+
+.loansPage .loanProgress {
+  height: 6px;
+  background: var(--budget-bar-bg);
+  border-radius: 3px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.loansPage .loanProgressBar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.loansPage .loanProgressBar.warning {
+  background: var(--warning);
+}
+
+.loansPage .loanProgressBar.success {
+  background: var(--success);
+}
+
+.loansPage .loanProgressBar.normal {
+  background: var(--primary);
+}
+
+.loansPage .loanMonthly {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.loansPage .loanMonthly .label {
+  color: var(--text-secondary);
+}
+
+.loansPage .loanMonthly .value {
+  font-weight: 500;
+}
+
+.loansPage .loanMonthly .value.positive {
+  color: var(--income);
+}
+
+.loansPage .loanMonthly .value.negative {
+  color: var(--expense);
+}
+
+.loansPage .emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.loansPage .emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.loansPage .emptyState p {
+  font-size: 14px;
+}
