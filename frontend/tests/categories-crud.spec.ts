@@ -7,18 +7,18 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should display categories header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Categories/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/organize.*transactions|expense and income/i)
   })
 
   test('should have new category button', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Category")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Category")')
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
   })
@@ -163,18 +163,18 @@ test.describe('Categories CRUD Operations', () => {
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(500)
 
-    const addBtn = page.locator('.page-header button:has-text("Add Category")').first()
+    const addBtn = page.locator('.pageHeader button:has-text("Add Category")').first()
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     if (isVisible) {
       await addBtn.click()
       await page.waitForTimeout(500)
 
       // The modal may not be fully rendered yet - just verify we can access it
-      const modal = page.locator('.modal-overlay').first()
+      const modal = page.locator('.modalOverlay').first()
       const hasModal = await modal.isVisible({ timeout: 1000 }).catch(() => false)
       // Modal might be rendered with animation delay
       if (hasModal) {
-        const title = modal.locator('.modal-title, h3')
+        const title = modal.locator('.modalTitle, h3')
         const hasTitle = await title.isVisible({ timeout: 500 }).catch(() => false)
         expect(hasTitle).toBeTruthy()
       }
@@ -182,19 +182,19 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have add/edit modal with title', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-title, h3')
+      const title = modal.locator('.modalTitle, h3')
       await expect(title).toBeVisible()
     }
   })
 
   test('should have form group for category name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameGroup = modal.locator('label:has-text("Category Name")')
       await expect(nameGroup).toBeVisible()
@@ -202,9 +202,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have input for category name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameInput = modal.locator(
         'input[type="text"], input[placeholder*="Food"], input[placeholder*="Rent"]'
@@ -214,9 +214,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have form group for category type', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const typeGroup = modal.locator('label:has-text("Category Type")')
       await expect(typeGroup).toBeVisible()
@@ -224,9 +224,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have select for category type', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const typeSelect = modal.locator('select')
       await expect(typeSelect).toBeVisible()
@@ -234,9 +234,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have form group for icon', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const iconGroup = modal.locator('label:has-text("Icon")')
       await expect(iconGroup).toBeVisible()
@@ -244,9 +244,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have input for icon', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const iconInput = modal.locator('input[placeholder*="emoji"]')
       await expect(iconInput).toBeVisible()
@@ -254,9 +254,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have form group for color', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const colorGroup = modal.locator('label:has-text("Color")')
       await expect(colorGroup).toBeVisible()
@@ -264,9 +264,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have color picker in modal', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const colorPicker = modal.locator('.color-picker')
       await expect(colorPicker).toBeVisible()
@@ -274,9 +274,9 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have color picker options in modal', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const colorBtns = modal.locator('.color-picker-btn')
       const count = await colorBtns.count()
@@ -285,11 +285,11 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have modal footer with cancel and submit buttons', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const buttons = footer.locator('button')
@@ -299,11 +299,11 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const cancelBtn = footer.locator('button:has-text("Cancel")')
@@ -312,11 +312,11 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have create/update button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const submitBtn = footer.locator('button:has-text("Add"), button:has-text("Update")')
@@ -325,11 +325,11 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } })
+      await page.locator('.modalOverlay').click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -338,11 +338,11 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should close modal when clicking cancel button', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.locator('.modal-close').click()
+      await modal.locator('.modalClose').click()
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -358,7 +358,7 @@ test.describe('Categories CRUD Operations', () => {
       await budgetBtns.first().click()
       await page.waitForTimeout(200)
 
-      const modal = page.locator('.modal-overlay')
+      const modal = page.locator('.modalOverlay')
       const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
       expect(hasModal).toBeTruthy()
     }
@@ -370,9 +370,9 @@ test.describe('Categories CRUD Operations', () => {
       .click()
       .catch(() => {})
 
-    const modal = page.locator('.modal-overlay:has-text("Set Budget")')
+    const modal = page.locator('.modalOverlay:has-text("Set Budget")')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-header h3')
+      const title = modal.locator('.modalHeader h3')
       await expect(title).toBeVisible()
     }
   })
@@ -383,7 +383,7 @@ test.describe('Categories CRUD Operations', () => {
       .click()
       .catch(() => {})
 
-    const modal = page.locator('.modal-overlay:has-text("Set Budget")')
+    const modal = page.locator('.modalOverlay:has-text("Set Budget")')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const budgetInput = modal.locator('input[type="number"]')
       await expect(budgetInput).toBeVisible()
@@ -396,9 +396,9 @@ test.describe('Categories CRUD Operations', () => {
       .click()
       .catch(() => {})
 
-    const modal = page.locator('.modal-overlay:has-text("Set Budget")')
+    const modal = page.locator('.modalOverlay:has-text("Set Budget")')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const saveBtn = modal.locator('.modal-footer button:has-text("Save")')
+      const saveBtn = modal.locator('.modalFooter button:has-text("Save")')
       await expect(saveBtn).toBeVisible()
     }
   })
@@ -407,7 +407,7 @@ test.describe('Categories CRUD Operations', () => {
     await page.goto('#categories')
     await page.waitForLoadState('networkidle')
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Empty state should be hidden if there are no categories
     expect(hasEmptyState).toBeFalsy()
@@ -418,7 +418,7 @@ test.describe('Categories CRUD Operations', () => {
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state').first()
+    const emptyState = page.locator('.emptyState').first()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Either visible empty state or no categories shown
     expect(hasEmptyText || !document.querySelectorAll('.category-card').length).toBeTruthy()
@@ -460,7 +460,7 @@ test.describe('Categories CRUD Operations', () => {
     await page.goto('#categories')
     await page.waitForTimeout(500)
 
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -475,13 +475,13 @@ test.describe('Categories CRUD Operations', () => {
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Category")').click()
+    await page.locator('.pageHeader button:has-text("Add Category")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Try to submit form without required fields
       const submitBtn = modal.locator(
-        '.modal-footer button:has-text("Add"), button:has-text("Update")'
+        '.modalFooter button:has-text("Add"), button:has-text("Update")'
       )
       await submitBtn.click()
       await page.waitForTimeout(200)
@@ -504,8 +504,8 @@ test.describe('Categories CRUD Operations', () => {
 
     // Check for page structure
     await expect(page.locator('.page.page-categories')).toBeVisible()
-    await expect(page.locator('.page-header')).toBeVisible()
-    await expect(page.locator('.page-subtitle')).toBeVisible()
+    await expect(page.locator('.pageHeader')).toBeVisible()
+    await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 
   test('should have tab switching', async ({ page }) => {
@@ -518,7 +518,7 @@ test.describe('Categories CRUD Operations', () => {
     await tabs.nth(1).click()
     await page.waitForTimeout(300)
 
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     const headerText = await header.textContent()
     expect(headerText).toBeTruthy()
   })

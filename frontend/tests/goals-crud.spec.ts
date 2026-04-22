@@ -7,19 +7,19 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should display goals header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Savings Goals|Goals/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/Track savings progress|financial goals/i)
   })
 
   test('should have new goal button', async ({ page }) => {
     const addBtn = page.locator(
-      '.page-header button:has-text("New Goal"), .page-header button:has-text("Create Goal")'
+      '.pageHeader button:has-text("New Goal"), .pageHeader button:has-text("Create Goal")'
     )
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
@@ -185,32 +185,32 @@ test.describe('Goals CRUD Operations', () => {
 
   test('should open add goal modal', async ({ page }) => {
     const addBtn = page.locator(
-      '.page-header button:has-text("New Goal"), .page-header button:has-text("Create Goal")'
+      '.pageHeader button:has-text("New Goal"), .pageHeader button:has-text("Create Goal")'
     )
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
       await page.waitForTimeout(200)
 
-      const modal = page.locator('.modal-overlay')
+      const modal = page.locator('.modalOverlay')
       const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
       expect(hasModal).toBeTruthy()
     }
   })
 
   test('should have add/edit modal with title', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-title, h3')
+      const title = modal.locator('.modalTitle, h3')
       await expect(title).toBeVisible()
     }
   })
 
   test('should have form group for goal name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameGroup = modal.locator('label:has-text("Goal Name")')
       await expect(nameGroup).toBeVisible()
@@ -218,9 +218,9 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have input for goal name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameInput = modal.locator(
         'input[placeholder*="Goal"], input[placeholder*="vacation"], input[placeholder*="fund"]'
@@ -230,9 +230,9 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have form group for target amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const targetGroup = modal.locator('label:has-text("Target Amount")')
       await expect(targetGroup).toBeVisible()
@@ -240,9 +240,9 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have input for target amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const targetInput = modal.locator('input[placeholder*="5000"], input[placeholder*="target"]')
       await expect(targetInput).toBeVisible()
@@ -250,9 +250,9 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have form group for target date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateGroup = modal.locator('label:has-text("Target Date")')
       await expect(dateGroup).toBeVisible()
@@ -260,9 +260,9 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have date input for target date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateInput = modal.locator('input[type="date"]')
       await expect(dateInput).toBeVisible()
@@ -270,11 +270,11 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have modal footer with cancel and submit buttons', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const buttons = footer.locator('button')
@@ -284,11 +284,11 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const cancelBtn = footer.locator('button:has-text("Cancel")')
@@ -297,11 +297,11 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have create/update button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const submitBtn = footer.locator('button:has-text("Create"), button:has-text("Update")')
@@ -310,11 +310,11 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } })
+      await page.locator('.modalOverlay').click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -323,11 +323,11 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should close modal when clicking cancel button', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.locator('.modal-close').click()
+      await modal.locator('.modalClose').click()
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -339,7 +339,7 @@ test.describe('Goals CRUD Operations', () => {
     await page.goto('#goals')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Empty state should be hidden if there are no goals
     expect(hasEmptyState).toBeFalsy()
@@ -349,7 +349,7 @@ test.describe('Goals CRUD Operations', () => {
     await page.goto('#goals')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const emptyText = emptyState.textContent()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmptyText).toBeFalsy()
@@ -415,7 +415,7 @@ test.describe('Goals CRUD Operations', () => {
     await page.goto('#goals')
     await page.waitForTimeout(500)
 
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -430,13 +430,13 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await page.locator('.page-header button:has-text("New Goal")').click()
+    await page.locator('.pageHeader button:has-text("New Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Try to submit form without required fields
       const submitBtn = modal.locator(
-        '.modal-footer button:has-text("Create"), button:has-text("Update")'
+        '.modalFooter button:has-text("Create"), button:has-text("Update")'
       )
       await submitBtn.click()
       await page.waitForTimeout(200)
@@ -459,8 +459,8 @@ test.describe('Goals CRUD Operations', () => {
 
     // Check for page structure
     await expect(page.locator('.page.page-goals')).toBeVisible()
-    await expect(page.locator('.page-header')).toBeVisible()
-    await expect(page.locator('.page-subtitle')).toBeVisible()
+    await expect(page.locator('.pageHeader')).toBeVisible()
+    await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 
   test('should format date correctly', async ({ page }) => {

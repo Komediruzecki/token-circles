@@ -7,7 +7,7 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should display transactions header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText('Transactions')
   })
 
@@ -22,7 +22,7 @@ test.describe('Transactions CRUD Operations', () => {
   test('should open add transaction modal', async ({ page }) => {
     // Click on Add Transaction button (if exists) or open modal via data-action
     const addBtn = page
-      .locator('.page-header button:has-text("Add"), button:has-text("Add Transaction")')
+      .locator('.pageHeader button:has-text("Add"), button:has-text("Add Transaction")')
       .first()
     if (await addBtn.isVisible()) {
       await addBtn.click()
@@ -51,7 +51,7 @@ test.describe('Transactions CRUD Operations', () => {
 
     await page.waitForSelector('#tx-modal', { state: 'visible', timeout: 5000 }).catch(() => {
       // Try alternative method
-      page.locator('.modal-overlay[data-action=""]').first().click()
+      page.locator('.modalOverlay[data-action=""]').first().click()
     })
   })
 
@@ -154,7 +154,7 @@ test.describe('Transactions CRUD Operations', () => {
   test('should have modal close button', async ({ page }) => {
     const modal = page.locator('#tx-modal')
     if (await modal.isVisible().catch(() => false)) {
-      const closeButton = modal.locator('.modal-header button')
+      const closeButton = modal.locator('.modalHeader button')
       await expect(closeButton).toBeVisible()
     }
   })
@@ -162,7 +162,7 @@ test.describe('Transactions CRUD Operations', () => {
   test('should have modal footer with cancel and save buttons', async ({ page }) => {
     const modal = page.locator('#tx-modal')
     if (await modal.isVisible().catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
       const buttons = footer.locator('button')
       await expect(buttons).toHaveCount(2)
@@ -182,7 +182,7 @@ test.describe('Transactions CRUD Operations', () => {
     if (await modal.isVisible({ timeout: 1000 }).catch(() => false)) {
       // Click outside modal
       await page
-        .locator('.modal-overlay')
+        .locator('.modalOverlay')
         .first()
         .click({ position: { x: 0, y: 0 } })
       // Wait for modal to close
@@ -200,7 +200,7 @@ test.describe('Transactions CRUD Operations', () => {
 
     const modal = page.locator('#tx-modal')
     if (await modal.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await modal.locator('.modal-footer button:has-text("Cancel")').click()
+      await modal.locator('.modalFooter button:has-text("Cancel")').click()
       await page.waitForTimeout(200)
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
       expect(isClosed).toBeFalsy()
@@ -401,7 +401,7 @@ test.describe('Transactions CRUD Operations', () => {
 
     await page.waitForSelector('#tx-modal', { state: 'visible', timeout: 2000 }).catch(() => {
       // Try alternative method if the above fails
-      page.locator('.page-header button:has-text("Add")').first().click()
+      page.locator('.pageHeader button:has-text("Add")').first().click()
     })
 
     // Fill in form fields
@@ -462,7 +462,7 @@ test.describe('Transactions CRUD Operations', () => {
     }
 
     // Cancel the modal
-    const cancelBtn = page.locator('.modal-footer button:has-text("Cancel")')
+    const cancelBtn = page.locator('.modalFooter button:has-text("Cancel")')
     await cancelBtn.click()
 
     // Modal should be closed
@@ -484,10 +484,10 @@ test.describe('Transactions CRUD Operations', () => {
     const title = page.locator('#tx-modal-title')
     await expect(title).toBeVisible()
 
-    const modalContent = page.locator('.modal-body')
+    const modalContent = page.locator('.modalBody')
     await expect(modalContent).toBeVisible()
 
-    const modalFooter = page.locator('.modal-footer')
+    const modalFooter = page.locator('.modalFooter')
     await expect(modalFooter).toBeVisible()
   })
 })

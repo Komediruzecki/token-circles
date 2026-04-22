@@ -7,18 +7,18 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should display housing header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Housing/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/Track housing|expenses/i)
   })
 
   test('should have add expense button', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Expense")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Expense")')
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
   })
@@ -26,7 +26,7 @@ test.describe('Housing CRUD Operations', () => {
   test('should have summary cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const cards = page.locator('.housing-summary .summary-card')
+    const cards = page.locator('.housing-summary .summaryCard')
     const count = await cards.count()
 
     // Should have at least 3 summary cards
@@ -34,13 +34,13 @@ test.describe('Housing CRUD Operations', () => {
 
     // Check for specific labels
     await expect(
-      page.locator('.housing-summary .summary-card:has-text("Monthly Total")')
+      page.locator('.housing-summary .summaryCard:has-text("Monthly Total")')
     ).toBeVisible()
     await expect(
-      page.locator('.housing-summary .summary-card:has-text("Active Expenses")')
+      page.locator('.housing-summary .summaryCard:has-text("Active Expenses")')
     ).toBeVisible()
     await expect(
-      page.locator('.housing-summary .summary-card:has-text("Autopay Enabled")')
+      page.locator('.housing-summary .summaryCard:has-text("Autopay Enabled")')
     ).toBeVisible()
   })
 
@@ -48,7 +48,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const total = page.locator(
-      '.housing-summary .summary-card:has-text("Monthly Total") .summary-value'
+      '.housing-summary .summaryCard:has-text("Monthly Total") .summaryValue'
     )
     await expect(total).toBeVisible()
   })
@@ -57,7 +57,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const count = page.locator(
-      '.housing-summary .summary-card:has-text("Active Expenses") .summary-value'
+      '.housing-summary .summaryCard:has-text("Active Expenses") .summaryValue'
     )
     await expect(count).toBeVisible()
   })
@@ -66,7 +66,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const autopayCount = page.locator(
-      '.housing-summary .summary-card:has-text("Autopay Enabled") .summary-value'
+      '.housing-summary .summaryCard:has-text("Autopay Enabled") .summaryValue'
     )
     await expect(autopayCount).toBeVisible()
   })
@@ -203,31 +203,31 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should open add housing modal', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Expense")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Expense")')
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
       await page.waitForTimeout(200)
 
-      const modal = page.locator('.modal-overlay')
+      const modal = page.locator('.modalOverlay')
       const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
       expect(hasModal).toBeTruthy()
     }
   })
 
   test('should have modal with title', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-title, h3')
+      const title = modal.locator('.modalTitle, h3')
       await expect(title).toBeVisible()
     }
   })
 
   test('should have form group for expense type', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const typeGroup = modal.locator('label:has-text("Expense Type")')
       await expect(typeGroup).toBeVisible()
@@ -235,9 +235,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have select for expense type', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const typeSelect = modal.locator('select')
       await expect(typeSelect).toBeVisible()
@@ -245,9 +245,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have expense type options', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const typeSelect = modal.locator('select')
       await typeSelect.selectOption('rent')
@@ -262,9 +262,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have form group for property/description', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const descGroup = modal.locator('label:has-text("Property"), label:has-text("Description")')
       await expect(descGroup).toBeVisible()
@@ -272,9 +272,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have input for property/description', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const descInput = modal.locator(
         'input[placeholder*="property"], input[placeholder*="Apart"], input[placeholder*="Monthly"]'
@@ -284,9 +284,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have form group for monthly amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const amountGroup = modal.locator('label:has-text("Monthly Amount")')
       await expect(amountGroup).toBeVisible()
@@ -294,9 +294,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have input for monthly amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const amountInput = modal.locator('input[placeholder*="1200"], input[placeholder*="amount"]')
       await expect(amountInput).toBeVisible()
@@ -304,9 +304,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have form row for due month and day', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const formRow = modal.locator('.form-row')
       await expect(formRow).toBeVisible()
@@ -314,19 +314,19 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have due month select', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const monthSelect = modal.locator('select, .form-control').first()
+      const monthSelect = modal.locator('select, .formControl').first()
       await expect(monthSelect).toBeVisible()
     }
   })
 
   test('should have due day input', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dayInput = modal.locator('input[type="number"]')
       await expect(dayInput).toBeVisible()
@@ -334,9 +334,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have autopay toggle switch', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const toggle = modal.locator('.toggle-switch, label:has-text("Autopay")')
       await expect(toggle).toBeVisible()
@@ -344,9 +344,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should toggle autopay state', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const toggle = modal.locator('.toggle-switch input')
       await toggle.click()
@@ -358,9 +358,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have form group for notes', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const notesGroup = modal.locator('label:has-text("Notes")')
       await expect(notesGroup).toBeVisible()
@@ -368,9 +368,9 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have textarea for notes', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const notesTextarea = modal.locator('textarea')
       await expect(notesTextarea).toBeVisible()
@@ -378,11 +378,11 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const buttons = footer.locator('button')
@@ -392,11 +392,11 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have submit button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const submitBtn = footer.locator('button:has-text("Add Expense")')
@@ -405,11 +405,11 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } })
+      await page.locator('.modalOverlay').click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -418,11 +418,11 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should close modal when clicking cancel button', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.locator('.modal-close, button:has-text("Cancel")').click()
+      await modal.locator('.modalClose, button:has-text("Cancel")').click()
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -434,7 +434,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.goto('#housing')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Empty state should be hidden if there are no expenses
     expect(hasEmptyState).toBeFalsy()
@@ -444,7 +444,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.goto('#housing')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const emptyText = emptyState.textContent()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmptyText).toBeFalsy()
@@ -454,7 +454,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const hasTotal = await page
-      .locator('.housing-summary .summary-card:has-text("Monthly Total")')
+      .locator('.housing-summary .summaryCard:has-text("Monthly Total")')
       .isVisible({ timeout: 2000 })
       .catch(() => false)
     expect(hasTotal).toBeFalsy() // Total exists but may be hidden
@@ -499,7 +499,7 @@ test.describe('Housing CRUD Operations', () => {
     await page.goto('#housing')
     await page.waitForTimeout(500)
 
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -522,12 +522,12 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Expense")').click()
+    await page.locator('.pageHeader button:has-text("Add Expense")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Try to submit form without required fields
-      const submitBtn = modal.locator('.modal-footer button:has-text("Add Expense")')
+      const submitBtn = modal.locator('.modalFooter button:has-text("Add Expense")')
       await submitBtn.click()
       await page.waitForTimeout(200)
 
@@ -549,8 +549,8 @@ test.describe('Housing CRUD Operations', () => {
 
     // Check for page structure
     await expect(page.locator('.page.page-housing')).toBeVisible()
-    await expect(page.locator('.page-header')).toBeVisible()
-    await expect(page.locator('.page-subtitle')).toBeVisible()
+    await expect(page.locator('.pageHeader')).toBeVisible()
+    await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 })
 
