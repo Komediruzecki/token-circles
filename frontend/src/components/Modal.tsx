@@ -3,6 +3,7 @@
  */
 
 import { createSignal, onMount, onCleanup } from 'solid-js'
+import styles from './Modal.module.css'
 
 interface ModalProps {
   isOpen: boolean
@@ -43,20 +44,17 @@ export function Modal(props: ModalProps) {
 
   if (!props.isOpen) return null
 
-  const widthClass =
-    props.width === 'small'
-      ? 'modal-small'
-      : props.width === 'large'
-        ? 'modal-large'
-        : 'modal-medium'
-
   return (
-    <div class="modal-overlay" classList={{ visible: isVisible() }} onClick={handleOverlayClick}>
-      <div class={`modal ${widthClass}`} classList={{ visible: isVisible() }}>
+    <div
+      class={styles.modalOverlay}
+      classList={{ visible: isVisible() }}
+      onClick={handleOverlayClick}
+    >
+      <div class={styles.modal} classList={{ visible: isVisible() }}>
         {/* Modal Header */}
-        <div class="modal-header">
-          <h2 class="modal-title">{props.title}</h2>
-          <button class="modal-close" onClick={handleClose} aria-label="Close modal">
+        <div class={styles.modalHeader}>
+          <h2 class={styles.modalTitle}>{props.title}</h2>
+          <button class={styles.modalClose} onClick={handleClose} aria-label="Close modal">
             <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
@@ -69,12 +67,12 @@ export function Modal(props: ModalProps) {
         </div>
 
         {/* Modal Body */}
-        <div class="modal-body">{props.children}</div>
+        <div class={styles.modalBody}>{props.children}</div>
 
         {/* Modal Footer */}
-        <div class="modal-footer">
+        <div class={styles.modalFooter}>
           {!props.title?.includes('Settings') && (
-            <button class="btn btn-secondary" onClick={handleClose}>
+            <button class={styles.modalFooterButton} onClick={handleClose}>
               Close
             </button>
           )}

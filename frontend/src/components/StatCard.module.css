@@ -1,0 +1,67 @@
+/**
+ * StatCard CSS Module
+ * Dashboard statistics card
+ */
+
+.statCard {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.statCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.statCard.income::before {
+  background: var(--income);
+}
+
+.statCard.expense::before {
+  background: var(--expense);
+}
+
+.statCard.balance::before {
+  background: var(--primary);
+}
+
+.statCard.networth::before {
+  background: var(--success);
+}
+
+.statCardLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statCardValue {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.statCardChange {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.statCardChange.positive {
+  color: var(--success);
+}
+
+.statCardChange.negative {
+  color: var(--danger);
+}

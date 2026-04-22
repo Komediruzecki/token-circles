@@ -3,21 +3,7 @@
  * Declares handlers and utilities exposed to window for event delegation
  */
 
-interface ReceiptHandler {
-  handleFileSelect(event: Event): void
-  remove(): void
-  delete(receiptId: number): Promise<void>
-}
-
-interface TransactionsHandler {
-  handleReceiptFileSelect(event: Event): void
-  openEditModal(transactionId: number): void
-  closeModal(): void
-  save(): Promise<void>
-  setType(type: string): void
-  handleReceiptFileSelect(event: Event): void
-  removeReceipt(): void
-}
+import type { ReceiptHandler, TransactionsHandler } from './core/handlers.js'
 
 interface HandlersArg {
   [key: string]: string | number | object | null | undefined

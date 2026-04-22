@@ -1,0 +1,39 @@
+/**
+ * Filter CSS Module
+ * Filter controls for lists and tables
+ */
+
+.filtersBar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filtersBar .formControl {
+  width: auto;
+  min-width: 140px;
+}
+
+.filtersBar input[type="date"] {
+  width: auto;
+}
+
+.searchInput {
+  position: relative;
+}
+
+.searchInput input {
+  padding-left: 36px;
+}
+
+.searchInput svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}

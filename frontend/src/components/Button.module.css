@@ -1,0 +1,125 @@
+/**
+ * Button CSS Module
+ * Reusable button styles
+ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btnPrimary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btnPrimary:hover {
+  background: var(--primary-hover);
+}
+
+.btnSecondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
+}
+
+.btnSecondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.btnSuccess {
+  background: var(--success);
+  color: #fff;
+}
+
+.btnSuccess:hover {
+  background: var(--btn-success-hover);
+}
+
+.btnDanger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btnDanger:hover {
+  background: var(--btn-danger-hover);
+}
+
+.btnDangerOutline {
+  background: transparent;
+  color: var(--danger);
+  border: 1.5px solid var(--danger);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btnDangerOutline:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+}
+
+.btnGhost:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+.btnSm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.btn .loadingSpinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.btnLoadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,115 @@
+/**
+ * Budget CSS Module
+ * Budget tracking and progress
+ */
+
+.budgetItem {
+  margin-bottom: 16px;
+}
+
+.budgetItemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.budgetItemName {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.budgetItemAmounts {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.budgetBar {
+  height: 8px;
+  background: var(--budget-bar-bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.budgetBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.budgetBarFill.over {
+  background: var(--danger);
+}
+
+.budgetBarFill.warning {
+  background: var(--warning);
+}
+
+.budgetBarFill.ok {
+  background: var(--success);
+}
+
+/* Analytics */
+.analyticsAverages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.avgCard {
+  text-align: center;
+  padding: 16px;
+  background: var(--stat-bg);
+  border-radius: 8px;
+}
+
+.avgLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.avgValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--expense);
+}
+
+.analyticsCategoryItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.analyticsCategoryItem:last-child {
+  border-bottom: none;
+}
+
+.analyticsCategoryColor {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.analyticsCategoryName {
+  flex: 1;
+  font-size: 14px;
+}
+
+.analyticsCategoryAmount {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.analyticsCategoryPct {
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 40px;
+  text-align: right;
+}
