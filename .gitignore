@@ -11,6 +11,10 @@ db/sessions.db
 frontend/dist/
 frontend/build/
 frontend/vite/
+frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
+frontend/index-old.html
 
 # Environment
 .env
@@ -23,3 +27,6 @@ logs/
 
 # Node modules
 node_modules/
+dist/
+
+.idea

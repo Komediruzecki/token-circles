@@ -44,3 +44,9 @@ coverage/
 # Environment files
 .env
 .env.*
+
+logs/
+./frontend/test-results
+./frontend/playwright-report/
+./frontend/node_modules/
+

@@ -275,7 +275,7 @@ window.handlers = {
   },
 }
 
-export default function App() {
+export function App() {
   const [currentPage, setCurrentPage] = createSignal<PageName>('dashboard')
 
   // Currency exchange rate cache - unused, keeping for future feature
@@ -318,7 +318,7 @@ export default function App() {
               prevLink.focus()
             }
           } else if (key === 'Enter' || key === ' ') {
-            (e as KeyboardEvent).preventDefault()
+            ;(e as KeyboardEvent).preventDefault()
             currentLink.click()
           }
         })
@@ -328,7 +328,7 @@ export default function App() {
         firstLink.setAttribute('tabindex', '0')
         firstLink.addEventListener('keydown', (e: Event) => {
           if ((e as KeyboardEvent).key === 'ArrowUp') {
-            (e as KeyboardEvent).preventDefault()
+            ;(e as KeyboardEvent).preventDefault()
             lastLink.focus()
           }
         })
@@ -336,7 +336,7 @@ export default function App() {
         lastLink.setAttribute('tabindex', '0')
         lastLink.addEventListener('keydown', (e: Event) => {
           if ((e as KeyboardEvent).key === 'ArrowDown') {
-            (e as KeyboardEvent).preventDefault()
+            ;(e as KeyboardEvent).preventDefault()
             firstLink.focus()
           }
         })
@@ -638,11 +638,10 @@ export default function App() {
 
         {/* Main Content */}
         <main class="main-content">
-          <div id="page-content">
-            {pages[currentPage()]}
-          </div>
+          <div id="page-content">{pages[currentPage()]}</div>
         </main>
       </div>
     </div>
   )
 }
+

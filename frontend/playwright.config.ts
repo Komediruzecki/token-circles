@@ -34,7 +34,7 @@ export default defineConfig({
     },
     {
       command: 'cd ../ && npm run start',
-      url: 'http://localhost:3800',
+      url: 'http://localhost:3847',
       reuseExistingServer: !process.env.CI,
       timeout: 20000,
       stdout: 'ignore',

@@ -3,9 +3,15 @@
  * Imports all necessary stylesheets
  */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+@import './preflight.css';
+/* todo: add some design system */
+/* @import './designSystem/layout.css'; */
+/* @import './designSystem/colors.css'; */
+/* @import './designSystem/dark-mode.css'; */
 /* CSS modules and component styles */
-@import '../css/dashboard-settings.css';
-@import '../css/Sidebar.module.css';
+@import './design/dashboard-settings.css';
+@import './design/Sidebar.module.css';
 
 /* Utility classes for SolidJS components */
 :root {
