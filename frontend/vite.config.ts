@@ -43,7 +43,7 @@ export default defineConfig({
   },
   css: {
     modules: {
-      localsConvention: 'camelCaseOnly',
+      localsConvention: 'dashes',
     },
   },
   // todo: was this used?
