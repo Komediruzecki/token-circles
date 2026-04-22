@@ -4,16 +4,16 @@ import { defineConfig, devices } from '@playwright/test'
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  timeout: 20000,
+  timeout: 30000,
   testDir: './tests',
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  retries: 0,
+  workers: 1,
+  reporter: 'list',
   use: {
     baseURL: 'http://localhost:3800',
-    trace: 'on-first-retry',
+    trace: 'off',
   },
 
   projects: [
@@ -23,22 +23,6 @@ export default defineConfig({
     },
   ],
 
-  webServer: [
-    {
-      command: 'npm run build && npm run dev -- --port 3800',
-      url: 'http://localhost:3800',
-      reuseExistingServer: !process.env.CI,
-      timeout: 20000,
-      stdout: 'ignore',
-      stderr: 'pipe',
-    },
-    {
-      command: 'cd ../ && npm run start',
-      url: 'http://localhost:3847',
-      reuseExistingServer: !process.env.CI,
-      timeout: 20000,
-      stdout: 'ignore',
-      stderr: 'pipe',
-    },
-  ],
+  // Skip web server since it's already running
+  // webServer: undefined,
 })

@@ -374,7 +374,7 @@ export function App() {
         </aside>
 
         {/* Main Content */}
-        <main class="main-content">
+        <main class="main">
           <div id="page-content" class="page-active">{pages[currentPage()]}</div>
         </main>
       </div>

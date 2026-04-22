@@ -2442,7 +2442,7 @@ app.get("/api/budgets/history", apiRateLimiter, (req, res) => {
     const history = db
       .prepare(`
         SELECT b.start_date as month, b.amount as budget_amount,
-               COALESCE(SUM(t.amount_local, t.amount), 0) as spent
+               COALESCE(SUM(COALESCE(t.amount_local, t.amount)), 0) as spent
         FROM budgets b
         LEFT JOIN transactions t ON t.category_id = b.category_id
           AND t.profile_id = b.profile_id
@@ -2515,7 +2515,7 @@ app.get("/api/budgets/improvements", apiRateLimiter, (req, res) => {
     if (history.length > 0) {
       const latestMonth = history[0].month;
       const catData = db.prepare(`
-        SELECT c.name, c.color, b.amount
+        SELECT c.name, c.color, b.amount as budget_amount
         FROM budgets b
         JOIN categories c ON c.id = b.category_id
         WHERE b.profile_id = ? AND strftime('%Y-%m', b.start_date) = ?
