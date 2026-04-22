@@ -1,3 +1,4 @@
+import styles from '../components/RetirementPage.module.css'
 /**
  * Retirement Component
  * Tracks retirement savings, calculates projected growth, and sets retirement goals
@@ -234,10 +235,10 @@ export default function Retirement() {
 
   return (
     <div class="page page-retirement page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Retirement Planning</h1>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -301,12 +302,12 @@ export default function Retirement() {
       <div class="retirement-goals">
         <h2 class="section-title">Retirement Goals</h2>
         {loading() ? (
-          <div class="empty-state">Loading goals...</div>
+          <div class={styles.emptyState}>Loading goals...</div>
         ) : goals().length === 0 ? (
-          <div class="empty-state">
+          <div class={styles.emptyState}>
             <p>No retirement goals yet</p>
             <p>Add your first retirement goal to start planning.</p>
-            <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
               Add Goal
             </button>
           </div>
@@ -412,23 +413,23 @@ export default function Retirement() {
             </div>
           </div>
         ) : (
-          <div class="empty-state">Loading projection...</div>
+          <div class={styles.emptyState}>Loading projection...</div>
         )}
       </div>
 
       {/* Add/Edit Modal */}
       {showAddModal() && (
-        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}}>
-          <div class="modal" onclick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h3 class="modal-title">{editingGoal() ? 'Edit Goal' : 'Add Retirement Goal'}</h3>
-              <button class="modal-close" onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>
+        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}}>
+          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>{editingGoal() ? 'Edit Goal' : 'Add Retirement Goal'}</h3>
+              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class="modal-body" onSubmit={handleSubmit}>
+            <form class={styles.modalBody} onSubmit={handleSubmit}>
               <div class="form-group">
                 <label class="form-label">Goal Name</label>
                 <input
@@ -532,11 +533,11 @@ export default function Retirement() {
                   required
                 />
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>
+              <div class={styles.modalFooter}>
+                <button type="button" class={styles.btnSecondary} onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>
                   Cancel
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class={styles.btnPrimary}>
                   {editingGoal() ? 'Update' : 'Add'} Goal
                 </button>
               </div>

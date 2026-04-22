@@ -1,3 +1,4 @@
+import styles from '../components/BudgetsPage.module.css'
 /**
  * Budgets Component
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
@@ -184,12 +185,12 @@ export default function Budgets() {
 
   return (
     <div class="page page-budgets page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Budgets</h1>
           <div class="month-selector">
             <button
-              class="btn btn-ghost"
+              class={styles.btnGhost}
               onclick={() => {
                 const date = new Date(`${month()}-01`)
                 date.setMonth(date.getMonth() - 1)
@@ -208,7 +209,7 @@ export default function Budgets() {
             </button>
             <span class="month-display">{month()}</span>
             <button
-              class="btn btn-ghost"
+              class={styles.btnGhost}
               onclick={() => {
                 const date = new Date(`${month()}-01`)
                 date.setMonth(date.getMonth() + 1)
@@ -334,7 +335,7 @@ export default function Budgets() {
               </button>
             </>
           ) : (
-            <div class="empty-state">Loading forecast...</div>
+            <div class={styles.emptyState}>Loading forecast...</div>
           )}
         </div>
       )}
@@ -351,7 +352,7 @@ export default function Budgets() {
           <h2>Category Allocations</h2>
           <div class="actions">
             <button
-              class="btn btn-primary"
+              class={styles.btnPrimary}
               onclick={() => {
                 const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
                 if (firstUnallocated) {
@@ -374,13 +375,13 @@ export default function Budgets() {
         </div>
 
         {loading() ? (
-          <div class="empty-state">Loading budgets...</div>
+          <div class={styles.emptyState}>Loading budgets...</div>
         ) : allocations().length === 0 ? (
-          <div class="empty-state">
+          <div class={styles.emptyState}>
             <p>No allocations for this month yet.</p>
             <p>Start by allocating income to expense categories.</p>
             <button
-              class="btn btn-primary"
+              class={styles.btnPrimary}
               onClick={() => {
                 const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
                 if (firstUnallocated) {
@@ -465,13 +466,13 @@ export default function Budgets() {
       {/* Allocate Modal */}
       {showAllocateModal() && selectedCategory() && (
         <div
-          class="modal-overlay"
+          class={styles.modalOverlay}
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAllocateModal(false)
           }}
         >
           <div class="modal modal-small" onclick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
+            <div class={styles.modalHeader}>
               <h3>Allocate Budget</h3>
               <button
                 class="btn-close"
@@ -488,7 +489,7 @@ export default function Budgets() {
                 </svg>
               </button>
             </div>
-            <div class="modal-body">
+            <div class={styles.modalBody}>
               <p class="modal-text">
                 Allocate budget to <strong>{selectedCategory()!.category_name}</strong>
               </p>
@@ -507,12 +508,12 @@ export default function Budgets() {
                 Available unallocated: {formatCurrency(summary()?.unassigned_budget || 0)}
               </p>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-ghost" onClick={() => setShowAllocateModal(false)}>
+            <div class={styles.modalFooter}>
+              <button class={styles.btnGhost} onClick={() => setShowAllocateModal(false)}>
                 Cancel
               </button>
               <button
-                class="btn btn-primary"
+                class={styles.btnPrimary}
                 onClick={allocateBudget}
                 disabled={allocateAmount() <= 0}
               >
@@ -525,7 +526,7 @@ export default function Budgets() {
 
       {/* Traditional View (placeholder) */}
       <div class="budget-traditional">
-        <div class="empty-state">
+        <div class={styles.emptyState}>
           <p>Traditional view coming soon</p>
           <p>View budget vs actual reports and past budgets.</p>
         </div>

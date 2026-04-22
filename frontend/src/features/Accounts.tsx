@@ -5,6 +5,7 @@
 
 import { createSignal, onMount } from 'solid-js'
 import { formatCurrency } from '../core/api'
+import styles from '../components/AccountsPage.module.css'
 
 interface Account {
   id: number
@@ -123,40 +124,40 @@ export default function Accounts() {
   }
 
   return (
-    <div class="page page-accounts page-enter">
-      <div class="page-header">
-        <div class="header-top">
+    <div class={styles.page}>
+      <div class={styles.pageHeader}>
+        <div class={styles.headerTop}>
           <h1>Accounts</h1>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btn + ' ' + styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Account
           </button>
         </div>
-        <p class="page-subtitle">Manage your bank accounts and track balances</p>
+        <p class={styles.pageSubtitle}>Manage your bank accounts and track balances</p>
       </div>
 
       {/* Summary Cards */}
-      <div class="accounts-summary">
-        <div class="summary-card">
-          <div class="summary-label">Total Balance</div>
-          <div class="summary-value">{formatAmount(totalBalance())}</div>
+      <div class={styles.accountsSummary}>
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Total Balance</div>
+          <div class={styles.summaryValue}>{formatAmount(totalBalance())}</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Accounts</div>
-          <div class="summary-value">{accounts().length}</div>
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Accounts</div>
+          <div class={styles.summaryValue}>{accounts().length}</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Income (this month)</div>
-          <div class="summary-value positive">+{formatAmount(accounts().reduce((s, a) => {
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Income (this month)</div>
+          <div class={styles.summaryValue + ' ' + styles.positive}>+{formatAmount(accounts().reduce((s, a) => {
             const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'income')
             return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
           }, 0))}</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Expenses (this month)</div>
-          <div class="summary-value negative">-{formatAmount(accounts().reduce((s, a) => {
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Expenses (this month)</div>
+          <div class={styles.summaryValue + ' ' + styles.negative}>-{formatAmount(accounts().reduce((s, a) => {
             const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'expense')
             return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
           }, 0))}</div>

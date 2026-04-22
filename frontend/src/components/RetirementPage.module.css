@@ -1,0 +1,47 @@
+.retirementPage { padding: 24px; }
+.retirementPage .pageHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.retirementPage .headerTop { display: flex; justify-content: space-between; align-items: center; }
+.retirementPage h1 { font-size: 24px; font-weight: 700; }
+.retirementPage .pageSubtitle { color: var(--text-secondary); font-size: 14px; }
+.retirementPage .retirementProjection { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+.retirementPage .projectionRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.retirementPage .projectionCard { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.retirementPage .projectionCard.primary { border-left: 4px solid var(--primary); }
+.retirementPage .cardLabel { font-size: 12px; color: var(--text-secondary); }
+.retirementPage .cardValue { font-size: 20px; font-weight: 700; margin-top: 4px; }
+.retirementPage .cardSub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.retirementPage .projectionDetails { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.retirementPage .detailRow { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+.retirementPage .detailLabel { color: var(--text-secondary); }
+.retirementPage .detailValue { font-weight: 600; }
+.retirementPage .detailValue.positive { color: var(--income); }
+.retirementPage .retirementGoals { margin-bottom: 24px; }
+.retirementPage .sectionTitle { font-size: 18px; font-weight: 600; }
+.retirementPage .goalsGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.retirementPage .goalCard { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.retirementPage .goalHeader { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.retirementPage .goalIcon { font-size: 32px; }
+.retirementPage .goalInfo { flex: 1; min-width: 0; }
+.retirementPage .goalName { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+.retirementPage .goalActions { display: flex; gap: 4px; }
+.retirementPage .goalBalance { padding-top: 12px; border-top: 1px solid var(--border); margin-top: 12px; }
+.retirementPage .balanceLabel { font-size: 12px; color: var(--text-secondary); }
+.retirementPage .balanceValue { font-size: 20px; font-weight: 700; }
+.retirementPage .goalProgress { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.retirementPage .goalDetails { padding-top: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.retirementPage .detailItem { display: flex; justify-content: space-between; font-size: 13px; }
+.retirementPage .retirementProjections { margin-bottom: 24px; }
+.retirementPage .projectionChart { margin-bottom: 16px; }
+.retirementPage .projectionBars { display: flex; flex-direction: column; gap: 12px; }
+.retirementPage .projectionBarItem { display: flex; align-items: center; gap: 12px; }
+.retirementPage .barLabel { font-size: 14px; width: 60px; }
+.retirementPage .barTrack { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.retirementPage .barFill { height: 100%; background: var(--primary); transition: width 0.3s; }
+.retirementPage .barFill.start { background: var(--success); }
+.retirementPage .barFill.retirement { background: var(--warning); }
+.retirementPage .barValue { font-size: 14px; font-weight: 600; width: 100px; text-align: right; }
+.retirementPage .chartLegend { display: flex; gap: 16px; padding: 12px; background: var(--bg); border-radius: var(--radius); }
+.retirementPage .legendItem { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.retirementPage .legendDot { width: 12px; height: 12px; border-radius: 50%; }
+.retirementPage .legendDot.current { background: var(--success); }
+.retirementPage .legendDot.retirement { background: var(--warning); }

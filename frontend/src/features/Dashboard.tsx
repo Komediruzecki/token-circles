@@ -6,6 +6,7 @@ import { createSignal, onMount, type JSX } from 'solid-js'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type * as Models from '../types/models'
 import { DashboardSettings } from '../components/DashboardSettings'
+import styles from '../components/DashboardPage.module.css'
 
 export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
@@ -39,13 +40,13 @@ export default function Dashboard() {
   }
 
   return (
-    <div class="page page-dashboard page-enter">
-      <div class="page-header">
-        <div class="page-title">
+    <div class={styles.page}>
+      <div class={styles.pageHeader}>
+        <div class={styles.pageTitle}>
           <h2>Dashboard</h2>
           <p>Your financial overview</p>
         </div>
-        <div class="page-header-actions">
+        <div class={styles.pageHeaderActions}>
           <button class="btn btn-secondary" onClick={showSettings}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -73,62 +74,62 @@ export default function Dashboard() {
       </div>
 
       {loading() ? (
-        <div class="empty-state">Loading...</div>
+        <div class={styles.emptyState}>Loading...</div>
       ) : metrics() ? (
         <>
           {/* Metrics Grid */}
-          <div class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-label">Balance</div>
-              <div class="metric-value positive">{formatCurrency(metrics()!.balance)}</div>
-              <div class="metric-subtext">Total available</div>
+          <div class={styles.metricsGrid}>
+            <div class={styles.metricCard}>
+              <div class={styles.metricLabel}>Balance</div>
+              <div class={styles.metricValue + " " + styles.positive}>{formatCurrency(metrics()!.balance)}</div>
+              <div class={styles.metricSubtext}>Total available</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Income</div>
-              <div class="metric-value positive">{formatCurrency(metrics()!.totalIncome)}</div>
-              <div class="metric-subtext">For this period</div>
+            <div class={styles.metricCard}>
+              <div class={styles.metricLabel}>Income</div>
+              <div class={styles.metricValue + " " + styles.positive}>{formatCurrency(metrics()!.totalIncome)}</div>
+              <div class={styles.metricSubtext}>For this period</div>
             </div>
-            <div class="metric-card">
-              <div class="metric-label">Expenses</div>
-              <div class="metric-value">{formatCurrency(metrics()!.totalExpenses)}</div>
-              <div class="metric-subtext">For this period</div>
+            <div class={styles.metricCard}>
+              <div class={styles.metricLabel}>Expenses</div>
+              <div class={styles.metricValue}>{formatCurrency(metrics()!.totalExpenses)}</div>
+              <div class={styles.metricSubtext}>For this period</div>
             </div>
           </div>
 
           {/* Category Breakdown */}
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Spending by Category</div>
+          <div class={styles.card}>
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Spending by Category</div>
             </div>
-            <div class="chart-container">
+            <div class={styles.chartContainer}>
               <canvas id="expense-category-chart" />
             </div>
             {!metrics()!.expenseByCategory ||
               (metrics()!.expenseByCategory.length === 0 && (
-                <div class="empty-state">No expense data to display</div>
+                <div class={styles.emptyState}>No expense data to display</div>
               ))}
           </div>
 
           {/* Recent Transactions */}
           {metrics()!.recentTransactions && metrics()!.recentTransactions.length > 0 && (
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">Recent Transactions</div>
-                <a href="#transactions" class="btn-link">
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Recent Transactions</div>
+                <a href="#transactions" class={styles.btnLink}>
                   View All →
                 </a>
               </div>
-              <div class="transaction-list">
+              <div class={styles.transactionList}>
                 {metrics()!
                   .recentTransactions.slice(0, 5)
                   .map((tx) => (
-                    <div class="transaction-item">
-                      <div class="transaction-icon" style={{ background: getIconColor(tx.type) }}>
+                    <div class={styles.transactionItem}>
+                      <div class={styles.transactionIcon} style={{ background: getIconColor(tx.type) }}>
                         {getIcon(tx.type)}
                       </div>
-                      <div class="transaction-details">
-                        <div class="transaction-name">{tx.description}</div>
-                        <div class="transaction-meta">
+                      <div class={styles.transactionDetails}>
+                        <div class={styles.transactionName}>{tx.description}</div>
+                        <div class={styles.transactionMeta}>
                           {formatDate(tx.date)} •{' '}
                           {tx.category_name || tx.category_id
                             ? `#${tx.category_id}`
@@ -149,19 +150,19 @@ export default function Dashboard() {
 
           {/* Upcoming Bills */}
           {(metrics()!.upcomingBills?.length ?? 0) > 0 && (
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">Upcoming Bills</div>
-                <a href="#bills" class="btn-link">
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Upcoming Bills</div>
+                <a href="#bills" class={styles.btnLink}>
                   View All →
                 </a>
               </div>
-              <div class="transaction-list">
+              <div class={styles.transactionList}>
                 {metrics()!
                   .upcomingBills.slice(0, 5)
                   .map((bill: any) => (
-                    <div class="transaction-item">
-                      <div class="transaction-icon" style={{ background: getIconColor('expense') }}>
+                    <div class={styles.transactionItem}>
+                      <div class={styles.transactionIcon} style={{ background: getIconColor('expense') }}>
                         <svg
                           width="16"
                           height="16"
@@ -177,13 +178,13 @@ export default function Dashboard() {
                           />
                         </svg>
                       </div>
-                      <div class="transaction-details">
-                        <div class="transaction-name">{bill.name}</div>
-                        <div class="transaction-meta">
+                      <div class={styles.transactionDetails}>
+                        <div class={styles.transactionName}>{bill.name}</div>
+                        <div class={styles.transactionMeta}>
                           Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
                         </div>
                       </div>
-                      <div class="transaction-amount expense">{formatCurrency(bill.amount)}</div>
+                      <div class={styles.transactionAmount + ' ' + styles.expense}>{formatCurrency(bill.amount)}</div>
                     </div>
                   ))}
               </div>
@@ -191,12 +192,12 @@ export default function Dashboard() {
           )}
 
           {/* Widget Settings Modal */}
-          <div class="modal-overlay" id="dashboard-settings-modal">
-            <div class="modal modal-md">
-              <div class="modal-header">
-                <div class="modal-title">Dashboard Settings</div>
+          <div class={styles.modalOverlay} id="dashboard-settings-modal">
+            <div class={styles.modal + ' ' + styles.modalMd}>
+              <div class={styles.modalHeader}>
+                <div class={styles.modalTitle}>Dashboard Settings</div>
                 <button
-                  class="modal-close"
+                  class={styles.modalClose}
                   onClick={() => {
                     const modal = document.getElementById('dashboard-settings-modal')
                     if (modal) {
@@ -217,14 +218,14 @@ export default function Dashboard() {
                   </svg>
                 </button>
               </div>
-              <div class="modal-body">
+              <div class={styles.modalBody}>
                 <DashboardSettings />
               </div>
             </div>
           </div>
         </>
       ) : (
-        <div class="empty-state">Failed to load data</div>
+        <div class={styles.emptyState}>Failed to load data</div>
       )}
     </div>
   )

@@ -1,3 +1,4 @@
+import styles from '../components/TransactionsPage.module.css'
 /**
  * Transactions Component
  * Handles transaction listing, creation, and management
