@@ -5,13 +5,13 @@
   "main": "backend/index.js",
   "scripts": {
     "start": "node backend/index.js",
-    "dev": "node frontend/build.mjs --watch",
+    "dev": "cd frontend && node build.mjs --watch",
     "test": "NODE_ENV=test NODE_PATH=./node_modules jest",
     "test:ci": "NODE_PATH=./node_modules jest --coverage",
     "test:watch": "NODE_PATH=./node_modules jest --watch",
     "test:backend": "NODE_PATH=./node_modules jest backend/",
     "test:frontend": "NODE_PATH=./node_modules jest frontend/",
-    "build": "node frontend/build.mjs",
+    "build": "cd frontend && node build.mjs",
     "format": "prettier --write 'frontend/js/**/*.js' 'frontend/css/**/*.css'",
     "lint": "cd frontend && npx eslint"
   },
