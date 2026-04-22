@@ -312,7 +312,7 @@ export default function Retirement() {
           </div>
         ) : (
           <div class="goals-grid">
-            {goals().map((goal) => {
+            {Array.isArray(goals()) && goals().map((goal) => {
               const progress = getProgress(goal)
               return (
                 <div class="goal-card">

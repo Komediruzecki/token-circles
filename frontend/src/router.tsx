@@ -2,25 +2,26 @@
  * Router - Simplified routing for SolidJS
  */
 
-import Accounts from './features/Accounts'
-import Analytics from './features/Analytics'
-import Bills from './features/Bills'
-import Budgets from './features/Budgets'
-import Categories from './features/Categories'
+import type { PageName, PageComponent } from './types/models.js'
+
 // Page components
-import Dashboard from './features/Dashboard'
-import Goals from './features/Goals'
-import Housing from './features/Housing'
-import Import from './features/Import'
-import Loans from './features/Loans'
-import Retirement from './features/Retirement'
-import Settings from './features/Settings'
-import Transactions from './features/Transactions'
-import type { PageName } from './types/models'
+import Accounts from './features/Accounts.js'
+import Analytics from './features/Analytics.js'
+import Bills from './features/Bills.js'
+import Budgets from './features/Budgets.js'
+import Categories from './features/Categories.js'
+import Dashboard from './features/Dashboard.js'
+import Goals from './features/Goals.js'
+import Housing from './features/Housing.js'
+import Import from './features/Import.js'
+import Loans from './features/Loans.js'
+import Retirement from './features/Retirement.js'
+import Settings from './features/Settings.js'
+import Transactions from './features/Transactions.js'
 
-export type { PageName }
+export type { PageName, PageComponent }
 
-export const pages: Record<PageName, typeof Dashboard> = {
+export const pages: Record<PageName, PageComponent> = {
   dashboard: Dashboard,
   transactions: Transactions,
   budgets: Budgets,

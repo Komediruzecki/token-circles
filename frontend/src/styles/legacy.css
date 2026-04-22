@@ -3,6 +3,68 @@
  * Provides CSS class names from the original app for backward compatibility with E2E tests
  */
 
+/* Page Structure */
+.page {
+  display: block;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.page-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Individual pages */
+.page-accounts {
+  display: block;
+}
+
+.page-transactions {
+  display: block;
+}
+
+.page-budgets {
+  display: block;
+}
+
+.page-loans {
+  display: block;
+}
+
+.page-goals {
+  display: block;
+}
+
+.page-bills {
+  display: block;
+}
+
+.page-import {
+  display: block;
+}
+
+.page-analytics {
+  display: block;
+}
+
+.page-retirement {
+  display: block;
+}
+
+.page-housing {
+  display: block;
+}
+
 /* Page Header */
 .page-header {
   display: flex;
