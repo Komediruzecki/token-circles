@@ -7,18 +7,18 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should display retirement header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Retirement Planning/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/retirement|savings progress|track/i)
   })
 
   test('should have add goal button', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Goal")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Goal")')
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
   })
@@ -173,31 +173,31 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should open add goal modal', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Goal")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Goal")')
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
       await page.waitForTimeout(200)
 
-      const modal = page.locator('.modal-overlay')
+      const modal = page.locator('.modalOverlay')
       const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
       expect(hasModal).toBeTruthy()
     }
   })
 
   test('should have add/edit modal with title', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-title, h3')
+      const title = modal.locator('.modalTitle, h3')
       await expect(title).toBeVisible()
     }
   })
 
   test('should have form group for goal name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameGroup = modal.locator('label:has-text("Goal Name")')
       await expect(nameGroup).toBeVisible()
@@ -205,9 +205,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for goal name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameInput = modal.locator(
         'input[type="text"], input[placeholder*="Full"], input[placeholder*="Early"]'
@@ -217,9 +217,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for target amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const targetGroup = modal.locator('label:has-text("Target Amount")')
       await expect(targetGroup).toBeVisible()
@@ -227,9 +227,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for target amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const targetInput = modal.locator('input[type="number"], input[placeholder*="1000000"]')
       await expect(targetInput).toBeVisible()
@@ -237,9 +237,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for current amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const currentGroup = modal.locator('label:has-text("Current Amount")')
       await expect(currentGroup).toBeVisible()
@@ -247,9 +247,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for current amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const currentInput = modal.locator('input[type="number"], input[placeholder*="50000"]')
       await expect(currentInput).toBeVisible()
@@ -257,9 +257,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for current age', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const ageGroup = modal.locator('label:has-text("Current Age")')
       await expect(ageGroup).toBeVisible()
@@ -267,9 +267,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for current age', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const ageInput = modal.locator('input[type="number"], input[placeholder*="30"]')
       await expect(ageInput).toBeVisible()
@@ -277,9 +277,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for retirement age', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const retGroup = modal.locator('label:has-text("Retirement Age")')
       await expect(retGroup).toBeVisible()
@@ -287,9 +287,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for retirement age', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const retInput = modal.locator('input[type="number"], input[placeholder*="65"]')
       await expect(retInput).toBeVisible()
@@ -297,9 +297,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for target date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateGroup = modal.locator('label:has-text("Target Date")')
       await expect(dateGroup).toBeVisible()
@@ -307,9 +307,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have date input for target date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateInput = modal.locator('input[type="date"]')
       await expect(dateInput).toBeVisible()
@@ -317,9 +317,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for monthly contribution', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const monthlyGroup = modal.locator('label:has-text("Monthly Contribution")')
       await expect(monthlyGroup).toBeVisible()
@@ -327,9 +327,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for monthly contribution', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const monthlyInput = modal.locator('input[type="number"], input[placeholder*="500"]')
       await expect(monthlyInput).toBeVisible()
@@ -337,9 +337,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form group for expected return', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const retGroup = modal.locator('label:has-text("Expected Annual Return")')
       await expect(retGroup).toBeVisible()
@@ -347,9 +347,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have input for expected return', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const retInput = modal.locator('input[type="number"], input[placeholder*="7"]')
       await expect(retInput).toBeVisible()
@@ -357,9 +357,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have form row layout', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const formRows = modal.locator('.form-row')
       const count = await formRows.count()
@@ -368,11 +368,11 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have modal footer with cancel and submit buttons', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const buttons = footer.locator('button')
@@ -382,11 +382,11 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const cancelBtn = footer.locator('button:has-text("Cancel")')
@@ -395,11 +395,11 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have create/update button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const submitBtn = footer.locator('button:has-text("Add"), button:has-text("Update")')
@@ -408,11 +408,11 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } })
+      await page.locator('.modalOverlay').click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -421,11 +421,11 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should close modal when clicking cancel button', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.locator('.modal-close').click()
+      await modal.locator('.modalClose').click()
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -437,7 +437,7 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.goto('#retirement')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Empty state should be hidden if there are no goals
     expect(hasEmptyState).toBeFalsy()
@@ -447,7 +447,7 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.goto('#retirement')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const emptyText = emptyState.textContent()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmptyText).toBeFalsy()
@@ -495,7 +495,7 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.goto('#retirement')
     await page.waitForTimeout(500)
 
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -510,13 +510,13 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Goal")').click()
+    await page.locator('.pageHeader button:has-text("Add Goal")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Try to submit form without required fields
       const submitBtn = modal.locator(
-        '.modal-footer button:has-text("Add"), button:has-text("Update")'
+        '.modalFooter button:has-text("Add"), button:has-text("Update")'
       )
       await submitBtn.click()
       await page.waitForTimeout(200)
@@ -539,8 +539,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
 
     // Check for page structure
     await expect(page.locator('.page.page-retirement')).toBeVisible()
-    await expect(page.locator('.page-header')).toBeVisible()
-    await expect(page.locator('.page-subtitle')).toBeVisible()
+    await expect(page.locator('.pageHeader')).toBeVisible()
+    await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 
   test('should format currency correctly', async ({ page }) => {

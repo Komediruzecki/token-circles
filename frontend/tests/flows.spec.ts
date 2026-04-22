@@ -10,11 +10,11 @@ test.describe('Critical Feature Flows', () => {
     await page.waitForSelector('#app', { timeout: 10000 })
 
     // Dashboard should have the header
-    const header = page.locator('.app-header, .page-header')
+    const header = page.locator('.app-header, .pageHeader')
     await expect(header.first()).toBeVisible()
 
     // Note: summary cards may not exist if there's no data yet
-    const summaryCards = page.locator('.summary-card')
+    const summaryCards = page.locator('.summaryCard')
     const cardCount = await summaryCards.count()
     // Either cards exist, or at least the page header exists
     const hasHeader = (await header.count()) > 0

@@ -7,12 +7,12 @@ test.describe('Budgets CRUD Operations', () => {
   })
 
   test('should display budgets header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Budgets/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/zero-based budgeting|allocate/i)
   })
@@ -62,7 +62,7 @@ test.describe('Budgets CRUD Operations', () => {
   test('should have summary cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const cards = page.locator('.budget-summary .summary-card')
+    const cards = page.locator('.budget-summary .summaryCard')
     const count = await cards.count()
 
     // Should have at least 3 summary cards
@@ -70,25 +70,25 @@ test.describe('Budgets CRUD Operations', () => {
 
     // Check for specific labels
     await expect(
-      page.locator('.budget-summary .summary-card:has-text("Income")').first()
+      page.locator('.budget-summary .summaryCard:has-text("Income")').first()
     ).toBeVisible()
     await expect(
-      page.locator('.budget-summary .summary-card:has-text("Allocated")').first()
+      page.locator('.budget-summary .summaryCard:has-text("Allocated")').first()
     ).toBeVisible()
     await expect(
-      page.locator('.budget-summary .summary-card:has-text("Spent")').first()
+      page.locator('.budget-summary .summaryCard:has-text("Spent")').first()
     ).toBeVisible()
   })
 
   test('should have remaining summary card', async ({ page }) => {
     await expect(
-      page.locator('.budget-summary .summary-card:has-text("Remaining")').first()
+      page.locator('.budget-summary .summaryCard:has-text("Remaining")').first()
     ).toBeVisible()
   })
 
   test('should show unallocated budget message', async ({ page }) => {
     const message = page
-      .locator('.page-subtitle, .page-header p')
+      .locator('.pageSubtitle, .pageHeader p')
       .filter({ hasText: /unallocated/i })
     const isVisible = await message.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeFalsy() // May not show if all allocated
@@ -152,7 +152,7 @@ test.describe('Budgets CRUD Operations', () => {
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.budget-allocations .empty-state').first()
+    const emptyState = page.locator('.budget-allocations .emptyState').first()
     const hasEmptyState = await emptyState.isVisible({ timeout: 3000 }).catch(() => false)
     // Either empty state or table is shown
     expect(hasEmptyState).toBeFalsy() // Expected false if table is shown
@@ -173,7 +173,7 @@ test.describe('Budgets CRUD Operations', () => {
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(500)
 
-    const modals = page.locator('.modal-overlay').first()
+    const modals = page.locator('.modalOverlay').first()
     const hasModal = await modals.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasModal).toBeFalsy() // Modal may not be open by default
   })
@@ -192,7 +192,7 @@ test.describe('Budgets CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Modal should not be visible by default
-    const modal = page.locator('.modal-overlay').first()
+    const modal = page.locator('.modalOverlay').first()
     const isVisible = await modal.isVisible({ timeout: 1000 }).catch(() => false)
     expect(isVisible).toBeFalsy()
   })
@@ -242,14 +242,14 @@ test.describe('Budgets CRUD Operations', () => {
 
     const modal = page.locator('.modal:has-text("Allocate Budget")')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const allocateBtn = modal.locator('.modal-footer button:has-text("Allocate")')
+      const allocateBtn = modal.locator('.modalFooter button:has-text("Allocate")')
       await expect(allocateBtn).toBeDisabled()
     }
   })
 
   test('should enable allocate button when amount is positive', async ({ page }) => {
     await page
-      .locator('.modal-overlay:has-text("Allocate Budget")')
+      .locator('.modalOverlay:has-text("Allocate Budget")')
       .click()
       .catch(() => {})
 
@@ -258,7 +258,7 @@ test.describe('Budgets CRUD Operations', () => {
       const amountInput = modal.locator('input[type="number"], .form-input')
       await amountInput.fill('100.00')
 
-      const allocateBtn = modal.locator('.modal-footer button:has-text("Allocate")')
+      const allocateBtn = modal.locator('.modalFooter button:has-text("Allocate")')
       await expect(allocateBtn).toBeEnabled()
     }
   })
@@ -367,7 +367,7 @@ test.describe('Budgets CRUD Operations', () => {
 
     // Values may not be set if no data
     await expect
-      .poll(async () => page.locator('.budget-summary .summary-value').count())
+      .poll(async () => page.locator('.budget-summary .summaryValue').count())
       .toBeGreaterThan(3)
   })
 
@@ -428,8 +428,8 @@ test.describe('Budgets CRUD Operations', () => {
 
     // Check for page structure
     await expect(page.locator('.page.page-budgets')).toBeVisible()
-    await expect(page.locator('.page-header')).toBeVisible()
-    await expect(page.locator('.page-subtitle')).toBeVisible()
+    await expect(page.locator('.pageHeader')).toBeVisible()
+    await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 
   test('should handle errors gracefully', async ({ page }) => {
@@ -446,7 +446,7 @@ test.describe('Budgets CRUD Operations', () => {
     })
 
     // Attempt various operations
-    await page.locator('.modal-overlay').first().click()
+    await page.locator('.modalOverlay').first().click()
     await page
       .locator('button')
       .filter({ hasText: /Allocate|Add/ })
@@ -465,7 +465,7 @@ test.describe('Budgets CRUD Operations', () => {
     await page.waitForTimeout(1000)
 
     // Check if loading indicator exists
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -477,7 +477,7 @@ test.describe('Budgets CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Empty state message should be available
-    const emptyMessage = page.locator('.empty-state')
+    const emptyMessage = page.locator('.emptyState')
     const hasEmpty = await emptyMessage.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmpty).toBeFalsy() // Should not show if there's data
   })
@@ -485,7 +485,7 @@ test.describe('Budgets CRUD Operations', () => {
   test('should have help text for budget system', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toBeTruthy()
   })

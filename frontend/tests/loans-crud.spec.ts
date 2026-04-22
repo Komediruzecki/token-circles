@@ -7,18 +7,18 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should display loans header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Loans/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/Track loans|manage payments/i)
   })
 
   test('should have add loan button', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Loan")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Loan")')
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
   })
@@ -26,7 +26,7 @@ test.describe('Loans CRUD Operations', () => {
   test('should have summary cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const cards = page.locator('.loans-summary .summary-card')
+    const cards = page.locator('.loans-summary .summaryCard')
     const count = await cards.count()
 
     // Should have at least 4 summary cards
@@ -34,22 +34,22 @@ test.describe('Loans CRUD Operations', () => {
 
     // Check for specific labels
     await expect(
-      page.locator('.loans-summary .summary-card:has-text("Total Borrowed")')
+      page.locator('.loans-summary .summaryCard:has-text("Total Borrowed")')
     ).toBeVisible()
     await expect(
-      page.locator('.loans-summary .summary-card:has-text("Remaining Balance")')
+      page.locator('.loans-summary .summaryCard:has-text("Remaining Balance")')
     ).toBeVisible()
     await expect(
-      page.locator('.loans-summary .summary-card:has-text("Active Loans")')
+      page.locator('.loans-summary .summaryCard:has-text("Active Loans")')
     ).toBeVisible()
-    await expect(page.locator('.loans-summary .summary-card:has-text("Paid Off")')).toBeVisible()
+    await expect(page.locator('.loans-summary .summaryCard:has-text("Paid Off")')).toBeVisible()
   })
 
   test('should display total borrowed amount', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const totalBorrowed = page.locator(
-      '.loans-summary .summary-card:has-text("Total Borrowed") .summary-value'
+      '.loans-summary .summaryCard:has-text("Total Borrowed") .summaryValue'
     )
     await expect(totalBorrowed).toBeVisible()
   })
@@ -58,7 +58,7 @@ test.describe('Loans CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const remainingBalance = page.locator(
-      '.loans-summary .summary-card:has-text("Remaining Balance") .summary-value'
+      '.loans-summary .summaryCard:has-text("Remaining Balance") .summaryValue'
     )
     await expect(remainingBalance).toBeVisible()
   })
@@ -67,7 +67,7 @@ test.describe('Loans CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const activeLoans = page.locator(
-      '.loans-summary .summary-card:has-text("Active Loans") .summary-value'
+      '.loans-summary .summaryCard:has-text("Active Loans") .summaryValue'
     )
     await expect(activeLoans).toBeVisible()
   })
@@ -75,7 +75,7 @@ test.describe('Loans CRUD Operations', () => {
   test('should display paid off loans count', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const paidOff = page.locator('.loans-summary .summary-card:has-text("Paid Off") .summary-value')
+    const paidOff = page.locator('.loans-summary .summaryCard:has-text("Paid Off") .summaryValue')
     await expect(paidOff).toBeVisible()
   })
 
@@ -150,8 +150,8 @@ test.describe('Loans CRUD Operations', () => {
   test('should display remaining balance card', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const balanceLabel = page.locator('.loan-balance .balance-label')
-    const balanceAmount = page.locator('.loan-balance .balance-amount')
+    const balanceLabel = page.locator('.loan-balance .balanceLabel')
+    const balanceAmount = page.locator('.loan-balance .balanceAmount')
     await expect(balanceLabel).toBeVisible()
     await expect(balanceAmount).toBeVisible()
   })
@@ -259,41 +259,41 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should open add/edit modal', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Loan")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Loan")')
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
       await page.waitForTimeout(200)
 
-      const modal = page.locator('.modal-overlay')
+      const modal = page.locator('.modalOverlay')
       const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
       expect(hasModal).toBeTruthy()
     }
   })
 
   test('should have add/edit modal with title', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-title, h3')
+      const title = modal.locator('.modalTitle, h3')
       await expect(title).toBeVisible()
     }
   })
 
   test('should have close button in modal', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const closeButton = modal.locator('.modal-close, .btn-close')
+      const closeButton = modal.locator('.modalClose, .btn-close')
       await expect(closeButton).toBeVisible()
     }
   })
 
   test('should have form group for loan name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameGroup = modal.locator('label:has-text("Loan Name")')
       await expect(nameGroup).toBeVisible()
@@ -301,9 +301,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have input for loan name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameInput = modal.locator('input[placeholder*="Loan"], input[placeholder*="Auto Loan"]')
       await expect(nameInput).toBeVisible()
@@ -311,9 +311,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have form group for principal amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const principalGroup = modal.locator('label:has-text("Principal Amount")')
       await expect(principalGroup).toBeVisible()
@@ -321,9 +321,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have input for principal amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const principalInput = modal.locator('input[placeholder*="15"], input[placeholder*="amount"]')
       await expect(principalInput).toBeVisible()
@@ -331,9 +331,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have form group for interest rate', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const rateGroup = modal.locator('label:has-text("Interest Rate")')
       await expect(rateGroup).toBeVisible()
@@ -341,9 +341,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have input for interest rate', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const rateInput = modal.locator('input[placeholder*="5"], input[placeholder*="rate"]')
       await expect(rateInput).toBeVisible()
@@ -351,9 +351,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have form group for term', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const termGroup = modal.locator('label:has-text("Term")')
       await expect(termGroup).toBeVisible()
@@ -361,9 +361,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have input for term (months)', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const termInput = modal.locator('input[placeholder*="60"], input[placeholder*="term"]')
       await expect(termInput).toBeVisible()
@@ -371,9 +371,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have form group for start date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const startDateGroup = modal.locator('label:has-text("Start Date")')
       await expect(startDateGroup).toBeVisible()
@@ -381,9 +381,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have date input for start date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateInput = modal.locator('input[type="date"]')
       await expect(dateInput).toBeVisible()
@@ -391,9 +391,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have form group for status', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const statusGroup = modal.locator('label:has-text("Status")')
       await expect(statusGroup).toBeVisible()
@@ -401,9 +401,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have select for status', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const statusSelect = modal.locator('select')
       await expect(statusSelect).toBeVisible()
@@ -411,9 +411,9 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have status options: active, deferred, paid', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const statusSelect = modal.locator('select')
       await statusSelect.selectOption('active')
@@ -424,11 +424,11 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const buttons = footer.locator('button')
@@ -438,11 +438,11 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have submit button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const submitBtn = footer.locator('button:has-text("Add Loan"), button:has-text("Update")')
@@ -451,12 +451,12 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Click outside modal
-      await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } })
+      await page.locator('.modalOverlay').click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -465,11 +465,11 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should close modal when clicking close button', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.locator('.modal-close').click()
+      await modal.locator('.modalClose').click()
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -483,7 +483,7 @@ test.describe('Loans CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Check for empty state
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Empty state should be hidden if no loans
     expect(hasEmptyState).toBeFalsy()
@@ -493,7 +493,7 @@ test.describe('Loans CRUD Operations', () => {
     await page.goto('#loans')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const emptyText = emptyState.textContent()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmptyText).toBeFalsy()
@@ -562,7 +562,7 @@ test.describe('Loans CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Check if loading indicator exists
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -599,12 +599,12 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Loan")').click()
+    await page.locator('.pageHeader button:has-text("Add Loan")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Try to submit form without required fields
-      const submitBtn = modal.locator('.modal-footer button:has-text("Add Loan")')
+      const submitBtn = modal.locator('.modalFooter button:has-text("Add Loan")')
       await submitBtn.click()
       await page.waitForTimeout(200)
 

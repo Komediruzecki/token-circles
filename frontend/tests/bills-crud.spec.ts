@@ -7,18 +7,18 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should display bills header', async ({ page }) => {
-    const header = page.locator('.page-header h1')
+    const header = page.locator('.pageHeader h1')
     await expect(header).toHaveText(/Bills/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.page-subtitle')
+    const subtitle = page.locator('.pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/track.*payments|upcoming bills/i)
   })
 
   test('should have new bill button', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Bill")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Bill")')
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
   })
@@ -186,31 +186,31 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should open add bill modal', async ({ page }) => {
-    const addBtn = page.locator('.page-header button:has-text("Add Bill")')
+    const addBtn = page.locator('.pageHeader button:has-text("Add Bill")')
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
       await page.waitForTimeout(200)
 
-      const modal = page.locator('.modal-overlay')
+      const modal = page.locator('.modalOverlay')
       const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
       expect(hasModal).toBeTruthy()
     }
   })
 
   test('should have add bill modal with title', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.locator('.modal-title, h3')
+      const title = modal.locator('.modalTitle, h3')
       await expect(title).toBeVisible()
     }
   })
 
   test('should have form group for bill name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameGroup = modal.locator('label:has-text("Bill Name")')
       await expect(nameGroup).toBeVisible()
@@ -218,9 +218,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have input for bill name', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const nameInput = modal.locator(
         'input[type="text"], input[placeholder*="Rent"], input[placeholder*="Electricity"]'
@@ -230,9 +230,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have form group for amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const amountGroup = modal.locator('label:has-text("Amount")')
       await expect(amountGroup).toBeVisible()
@@ -240,9 +240,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have input for amount', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const amountInput = modal.locator('input[type="number"], input[placeholder*="500"]')
       await expect(amountInput).toBeVisible()
@@ -250,9 +250,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have form group for due date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateGroup = modal.locator('label:has-text("Due Date")')
       await expect(dateGroup).toBeVisible()
@@ -260,9 +260,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have date input for due date', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const dateInput = modal.locator('input[type="date"]')
       await expect(dateInput).toBeVisible()
@@ -270,9 +270,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have form group for frequency', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const freqGroup = modal.locator('label:has-text("Frequency")')
       await expect(freqGroup).toBeVisible()
@@ -280,9 +280,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have select for frequency', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const freqSelect = modal.locator('select')
       await expect(freqSelect).toBeVisible()
@@ -290,9 +290,9 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have autopay toggle', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       const autopayToggle = modal.locator('.toggle-switch')
       const hasToggle = await autopayToggle.isVisible({ timeout: 2000 }).catch(() => false)
@@ -301,11 +301,11 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have modal footer with cancel and submit buttons', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const buttons = footer.locator('button')
@@ -315,11 +315,11 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const cancelBtn = footer.locator('button:has-text("Cancel")')
@@ -328,11 +328,11 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have add button in modal footer', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modal-footer')
+      const footer = modal.locator('.modalFooter')
       await expect(footer).toBeVisible()
 
       const addBtn = footer.locator('button:has-text("Add")')
@@ -341,12 +341,12 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should close modal when clicking outside modal content', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
     const modalContent = page.locator('.modal-content')
     if (await modalContent.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Click the overlay/background, not the modal content itself
-      await page.locator('.modal-overlay').click({ position: { x: 0, y: 0 } })
+      await page.locator('.modalOverlay').click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modalContent.isVisible({ timeout: 500 }).catch(() => false)
@@ -355,11 +355,11 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should close modal when clicking cancel button', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.locator('.modal-close').click()
+      await modal.locator('.modalClose').click()
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -371,7 +371,7 @@ test.describe('Bills CRUD Operations', () => {
     await page.goto('#bills')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     // Empty state should be hidden if there are no bills
     expect(hasEmptyState).toBeFalsy()
@@ -381,7 +381,7 @@ test.describe('Bills CRUD Operations', () => {
     await page.goto('#bills')
     await page.waitForTimeout(500)
 
-    const emptyState = page.locator('.empty-state')
+    const emptyState = page.locator('.emptyState')
     const emptyText = emptyState.textContent()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmptyText).toBeFalsy()
@@ -413,7 +413,7 @@ test.describe('Bills CRUD Operations', () => {
     await page.goto('#bills')
     await page.waitForTimeout(500)
 
-    const loadingText = page.locator('.empty-state:has-text("Loading")')
+    const loadingText = page.locator('.emptyState:has-text("Loading")')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
     // May or may not show loading state
     expect(hasLoading).toBeFalsy()
@@ -428,12 +428,12 @@ test.describe('Bills CRUD Operations', () => {
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await page.locator('.page-header button:has-text("Add Bill")').click()
+    await page.locator('.pageHeader button:has-text("Add Bill")').click()
 
-    const modal = page.locator('.modal-overlay')
+    const modal = page.locator('.modalOverlay')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
       // Try to submit form without required fields
-      const submitBtn = modal.locator('.modal-footer button:has-text("Add")')
+      const submitBtn = modal.locator('.modalFooter button:has-text("Add")')
       await submitBtn.click()
       await page.waitForTimeout(200)
 
@@ -455,8 +455,8 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check for page structure
     await expect(page.locator('.page.page-bills')).toBeVisible()
-    await expect(page.locator('.page-header')).toBeVisible()
-    await expect(page.locator('.page-subtitle')).toBeVisible()
+    await expect(page.locator('.pageHeader')).toBeVisible()
+    await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 
   test('should format currency correctly', async ({ page }) => {
