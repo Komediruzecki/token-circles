@@ -30,8 +30,12 @@ export function App() {
       const navLinks = document.querySelectorAll(
         '.sidebar-nav a[data-page], .nav-links a[data-page]'
       )
+
+      // Get first and last link for boundary handling
       const firstLink = navLinks[0] as HTMLElement
       const lastLink = navLinks[navLinks.length - 1] as HTMLElement
+
+      if (!firstLink || !lastLink) return
 
       // Add tabindex for keyboard navigation
       navLinks.forEach((link) => {
@@ -39,6 +43,25 @@ export function App() {
         link.setAttribute('role', 'link')
       })
 
+      // Set up first link's boundary behavior (wraps to last)
+      firstLink.setAttribute('tabindex', '0')
+      firstLink.addEventListener('keydown', (e: Event) => {
+        if ((e as KeyboardEvent).key === 'ArrowUp') {
+          ;(e as KeyboardEvent).preventDefault()
+          lastLink.focus()
+        }
+      })
+
+      // Set up last link's boundary behavior (wraps to first)
+      lastLink.setAttribute('tabindex', '0')
+      lastLink.addEventListener('keydown', (e: Event) => {
+        if ((e as KeyboardEvent).key === 'ArrowDown') {
+          ;(e as KeyboardEvent).preventDefault()
+          firstLink.focus()
+        }
+      })
+
+      // Add arrow key navigation for all links
       navLinks.forEach((link) => {
         const currentLink = link as HTMLElement
         currentLink.addEventListener('keydown', (e: Event) => {
@@ -62,22 +85,6 @@ export function App() {
             currentLink.click()
           }
         })
-      })
-
-      firstLink.setAttribute('tabindex', '0')
-      firstLink.addEventListener('keydown', (e: Event) => {
-        if ((e as KeyboardEvent).key === 'ArrowUp') {
-          ;(e as KeyboardEvent).preventDefault()
-          lastLink.focus()
-        }
-      })
-
-      lastLink.setAttribute('tabindex', '0')
-      lastLink.addEventListener('keydown', (e: Event) => {
-        if ((e as KeyboardEvent).key === 'ArrowDown') {
-          ;(e as KeyboardEvent).preventDefault()
-          firstLink.focus()
-        }
       })
     }
 
