@@ -37,8 +37,9 @@ export default function HousingForm() {
   const loadHousings = async () => {
     setLoading(true)
     try {
-      const data = await fetch('/api/housing').then(r => r.json()) || []
-      setHousings(data)
+      const response = await fetch('/api/housing')
+      const result: any = await response.json()
+      setHousings(result.housings || [])
     } catch {
       console.error('Failed to load housing expenses')
     } finally {

@@ -22,18 +22,60 @@ export default function Analytics() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [categoryRes, monthRes, transactionsRes, savingsRes] = await Promise.all([
+      const [categoryRes, heatmapRes, transactionsRes] = await Promise.all([
         fetch('/api/analytics/category-trends').then(r => r.json()),
-        fetch('/api/analytics/weeks').then(r => r.json()),
+        fetch('/api/analytics/daily-heatmap?year=2026').then(r => r.json()),
         fetch('/api/transactions/summary').then(r => r.json()),
-        fetch('/api/analytics/distinct-years').then(r => r.json()),
       ])
 
+      // Transform category-trends response
+      const byCategory = categoryRes.datasets.slice(0, 10).map((d: any, i: number) => ({
+        category_id: i,
+        category_name: d.category,
+        amount: d.data[d.data.length - 1] || 0,
+      }))
+
+      // Transform heatmap to monthly data (last 6 months)
+      const monthMap = new Map<string, { income: number; expense: number }>()
+
+      if (heatmapRes.dates) {
+        Object.entries(heatmapRes.dates).forEach(([date, amount]: [string, unknown]) => {
+          const numAmount = typeof amount === 'number' ? amount : 0
+          if (numAmount > 0) {
+            const monthKey = date.slice(0, 7)
+            if (!monthMap.has(monthKey)) {
+              monthMap.set(monthKey, { income: 0, expense: 0 })
+            }
+            monthMap.get(monthKey)!.expense += numAmount
+          }
+        })
+      }
+
+      // Add current month if no data
+      const now = new Date()
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      if (!monthMap.has(currentMonth)) {
+        monthMap.set(currentMonth, { income: 0, expense: 0 })
+      }
+
+      // Get last 6 months sorted by month key
+      const byMonth = Array.from(monthMap.entries())
+        .slice(-6)
+        .map(([month, values]) => ({
+          month,
+          income: values.income,
+          expense: values.expense,
+        }))
+        .sort((a, b) => b.month.localeCompare(a.month))
+
+      // Recent transactions from summary
+      const recentTransactions: any[] = []
+
       setData({
-        byCategory: categoryRes.slice(0, 10),
-        byMonth: monthRes.slice(0, 6),
-        recentTransactions: transactionsRes?.transactions?.slice(0, 5) || [],
-        savingsRate: savingsRes?.savings_rate || 0,
+        byCategory,
+        byMonth,
+        recentTransactions,
+        savingsRate: transactionsRes ? (transactionsRes.total_income - transactionsRes.total_expense) / transactionsRes.total_income * 100 : 0,
       })
     } catch {
       console.error('Failed to load analytics')

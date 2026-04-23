@@ -4,16 +4,16 @@
  */
 
 import type {
-  AccountData as _StoreAccount,
-  BalanceEntryData as _StoreBalance,
-  BudgetData as _StoreBudget,
-  CategoryData as _StoreCategory,
+  AccountData,
+  BalanceEntryData,
+  BudgetData,
+  CategoryData,
   DataStore,
-  GoalData as _StoreGoal,
-  LoanData as _StoreLoan,
-  ProfileData as _StoreProfile,
-  SettingsData as _StoreSettings,
-  TransactionData as _StoreTransaction} from '@/types/data'
+  GoalData,
+  LoanData,
+  ProfileData,
+  SettingsData,
+  TransactionData} from '@/types/data'
 import type {
   Account,
   BalanceEntry,

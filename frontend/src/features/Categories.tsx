@@ -266,54 +266,18 @@ export default function Categories() {
                 </div>
                 <div class="category-colors">
                   <span class="color-label">Color:</span>
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
-                  <button
-                    class={`color-btn ${category.color === color ? 'active' : ''}`}
-                    style={{ background: color }}
-                    onClick={() => updateColor(category.id, color)}
-                    title={color}
-                  />
+                  <div class="color-picker">
+                    {['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'].map((color) => (
+                      <button
+                        class={`color-btn ${category.color === color ? 'active' : ''}`}
+                        style={{ background: color }}
+                        onClick={() => updateColor(category.id, color)}
+                        title={color}
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )
@@ -370,14 +334,15 @@ export default function Categories() {
               <div class="form-group">
                 <label class="form-label">Color</label>
                 <div class="color-picker">
-                  {['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'].map((color, index) => (
+                  {['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'].map((color) => (
                     <button
                       class={`color-picker-btn ${formData().color === color ? 'active' : ''}`}
                       style={{ background: color }}
                       onClick={() => setFormData({ ...formData(), color })}
                       title={color}
-                      key={`picker-${index}-${color}`}
-                    />
+                    >
+                      {color}
+                    </button>
                   ))}
                 </div>
               </div>
