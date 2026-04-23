@@ -52,3 +52,81 @@
   justify-content: space-between;
   align-items: center;
 }
+
+/* Page subtitle */
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Card */
+.card-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.card-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.card-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Detail item */
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+/* Section title */
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+/* Retirement projections */
+.retirement-projections {
+  margin-bottom: 24px;
+}
+
+/* Form */
+.retirement-page .formGroup {
+  margin-bottom: 16px;
+}
+
+.retirement-page .formLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.retirement-page .formControl {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.retirement-page .formControl:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.retirement-page .formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}

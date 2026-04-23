@@ -237,7 +237,7 @@ export default function Retirement() {
   return (
     <div class={`page page-retirement page-enter ${styles.retirementPage}`}>
       <div class={styles.pageHeader}>
-        <div class="header-top">
+        <div class={styles.headerTop}>
           <h1>Retirement Planning</h1>
           <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,7 +246,7 @@ export default function Retirement() {
             Add Goal
           </button>
         </div>
-        <p class="page-subtitle">Plan your retirement and track your savings progress</p>
+        <p class={styles.pageSubtitle}>Plan your retirement and track your savings progress</p>
       </div>
 
       {/* Projection Cards */}
@@ -255,9 +255,9 @@ export default function Retirement() {
           <>
             <div class={styles.projectionRow}>
               <div class={`${styles.projectionCard} ${styles.primary}`}>
-                <div class="card-label">Projected Total</div>
-                <div class="card-value">{formatAmount(projection()!.projected_total)}</div>
-                <div class="card-sub">At age {projection()!.retirement_age}</div>
+                <div class={styles.cardLabel}>Projected Total</div>
+                <div class={styles.cardValue}>{formatAmount(projection()!.projected_total)}</div>
+                <div class={styles.cardSub}>At age {projection()!.retirement_age}</div>
               </div>
               <div class={styles.projectionCard}>
                 <div class={styles.cardLabel}>Years to Retire</div>
@@ -325,12 +325,12 @@ export default function Retirement() {
                       <span class={`badge ${getRetirementStatus(goal.retirement_age)}`}>Retire at {formatAge(goal.retirement_age)}</span>
                     </div>
                     <div class={styles.goalActions}>
-                      <button class="btn btn-sm btn-ghost" onClick={() => { editGoal(goal); }}>
+                      <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => { editGoal(goal); }}>
                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                      <button class="btn btn-sm btn-ghost" onClick={() => deleteGoal(goal.id)}>
+                      <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteGoal(goal.id)}>
                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
@@ -354,17 +354,17 @@ export default function Retirement() {
                     </div>
                   </div>
                   <div class={styles.goalDetails}>
-                    <div class="detail-item">
-                      <span class="detail-label">Monthly</span>
-                      <span class="detail-value">{formatAmount(goal.monthly_contribution)}</span>
+                    <div class={styles.detailItem}>
+                      <span class={styles.detailLabel}>Monthly</span>
+                      <span class={styles.detailValue}>{formatAmount(goal.monthly_contribution)}</span>
                     </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Expected Return</span>
-                      <span class="detail-value">{goal.expected_return_rate}%</span>
+                    <div class={styles.detailItem}>
+                      <span class={styles.detailLabel}>Expected Return</span>
+                      <span class={styles.detailValue}>{goal.expected_return_rate}%</span>
                     </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Target Date</span>
-                      <span class="detail-value">{formatDate(goal.target_date)}</span>
+                    <div class={styles.detailItem}>
+                      <span class={styles.detailLabel}>Target Date</span>
+                      <span class={styles.detailValue}>{formatDate(goal.target_date)}</span>
                     </div>
                   </div>
                 </div>
@@ -375,8 +375,8 @@ export default function Retirement() {
       </div>
 
       {/* Projections Section */}
-      <div class="retirement-projections">
-        <h2 class="section-title">Projected Balances Over Time</h2>
+      <div class={styles.retirementProjections}>
+        <h2 class={styles.sectionTitle}>Projected Balances Over Time</h2>
         {projection() ? (
           <Chart
             id="retirement-projection-chart"
@@ -457,36 +457,36 @@ export default function Retirement() {
               </button>
             </div>
             <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class="form-group">
-                <label class="form-label">Goal Name</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Goal Name</label>
                 <input
                   type="text"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="e.g., Full Retirement, Early Retirement"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Target Amount</label>
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Target Amount</label>
                   <input
                     type="number"
                     step="0.01"
-                    class="form-control"
+                    class={styles.formControl}
                     placeholder="1000000"
                     value={formData().target_amount}
                     oninput={(e) => setFormData({ ...formData(), target_amount: e.target.value })}
                     required
                   />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Current Amount</label>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Current Amount</label>
                   <input
                     type="number"
                     step="0.01"
-                    class="form-control"
+                    class={styles.formControl}
                     placeholder="50000"
                     value={formData().current_amount}
                     oninput={(e) => setFormData({ ...formData(), current_amount: e.target.value })}
@@ -494,27 +494,27 @@ export default function Retirement() {
                   />
                 </div>
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Current Age</label>
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Current Age</label>
                   <input
                     type="number"
                     min="18"
                     max="100"
-                    class="form-control"
+                    class={styles.formControl}
                     placeholder="30"
                     value={formData().current_age}
                     oninput={(e) => setFormData({ ...formData(), current_age: e.target.value })}
                     required
                   />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Retirement Age</label>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Retirement Age</label>
                   <input
                     type="number"
                     min="18"
                     max="100"
-                    class="form-control"
+                    class={styles.formControl}
                     placeholder="65"
                     value={formData().retirement_age}
                     oninput={(e) => setFormData({ ...formData(), retirement_age: e.target.value })}
@@ -522,23 +522,23 @@ export default function Retirement() {
                   />
                 </div>
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Target Date</label>
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Target Date</label>
                   <input
                     type="date"
-                    class="form-control"
+                    class={styles.formControl}
                     value={formData().target_date}
                     oninput={(e) => setFormData({ ...formData(), target_date: e.target.value })}
                     required
                   />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Monthly Contribution</label>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Monthly Contribution</label>
                   <input
                     type="number"
                     step="0.01"
-                    class="form-control"
+                    class={styles.formControl}
                     placeholder="500"
                     value={formData().monthly_contribution}
                     oninput={(e) => setFormData({ ...formData(), monthly_contribution: e.target.value })}
@@ -546,14 +546,14 @@ export default function Retirement() {
                   />
                 </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Expected Annual Return (%)</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Expected Annual Return (%)</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
                   max="20"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="7"
                   value={formData().expected_return_rate}
                   oninput={(e) => setFormData({ ...formData(), expected_return_rate: e.target.value })}
