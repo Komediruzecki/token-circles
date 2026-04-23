@@ -371,22 +371,22 @@ export default function Transactions() {
           }
         }}
       >
-        <div class="modal">
+        <div class={styles.modal}>
           <div class={styles.modalHeader}>
             <div class={styles.modalTitle} id="tx-modal-title">
               Add Transaction
             </div>
-            <button class="btn btn-ghost" onclick={_closeModals as any} aria-label="Close modal">
+            <button class={styles.btnGhost} onclick={_closeModals as any} aria-label="Close modal">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div class="modal-body">
+          <div class={styles.modalBody}>
             <form id="tx-form">
               <input type="hidden" id="tx-id" />
-              <div class="form-group">
-                <label class="form-label">Type</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Type</label>
                 <div class="type-selector" id="tx-type-selector">
                   <button
                     type="button"
@@ -414,18 +414,18 @@ export default function Transactions() {
                   </button>
                 </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Description</label>
-                <input type="text" class="form-control" id="tx-description" required />
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Description</label>
+                <input type="text" class={styles.formControl} id="tx-description" required />
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Amount</label>
-                  <input type="number" step="0.01" class="form-control" id="tx-amount" required />
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Amount</label>
+                  <input type="number" step="0.01" class={styles.formControl} id="tx-amount" required />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Currency</label>
-                  <select class="form-control" id="tx-currency">
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Currency</label>
+                  <select class={styles.formControl} id="tx-currency">
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
@@ -438,68 +438,68 @@ export default function Transactions() {
                   </select>
                 </div>
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Date</label>
-                  <input type="date" class="form-control" id="tx-date" required />
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Date</label>
+                  <input type="date" class={styles.formControl} id="tx-date" required />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Category</label>
-                  <select class="form-control" id="tx-category"></select>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Category</label>
+                  <select class={styles.formControl} id="tx-category"></select>
                 </div>
               </div>
               <div class="form-group tx-tag-selector">
-                <label class="form-label">Tags</label>
+                <label class={styles.formLabel}>Tags</label>
                 <div class="tx-tag-chips" id="tx-tag-chips"></div>
-                <div class="tx-tag-input-row">
+                <div class={styles.txTagInputRow}>
                   <input
                     type="text"
-                    class="tx-tag-new-input"
+                    class={styles.txTagNewInput}
                     id="tx-tag-new-input"
                     placeholder="Type tag name, press Enter to create..."
                     data-action="transactions:addTagFromInput"
                   />
                 </div>
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Beneficiary</label>
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Beneficiary</label>
                   <input
                     type="text"
-                    class="form-control"
+                    class={styles.formControl}
                     id="tx-beneficiary"
                     placeholder="Who you paid"
                   />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Payor</label>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Payor</label>
                   <input
                     type="text"
-                    class="form-control"
+                    class={styles.formControl}
                     id="tx-payor"
                     placeholder="Who paid you"
                   />
                 </div>
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Amount in Local Currency</label>
-                  <input type="number" step="0.01" class="form-control" id="tx-amount-local" />
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Amount in Local Currency</label>
+                  <input type="number" step="0.01" class={styles.formControl} id="tx-amount-local" />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Exchange Rate</label>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Exchange Rate</label>
                   <input
                     type="number"
                     step="0.0001"
-                    class="form-control"
+                    class={styles.formControl}
                     id="tx-exchange-rate"
                     value="1"
                   />
                 </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Means of Payment</label>
-                <select class="form-control" id="tx-means">
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Means of Payment</label>
+                <select class={styles.formControl} id="tx-means">
                   <option value="">Select...</option>
                   <option value="Cash">Cash</option>
                   <option value="Credit Card">Credit Card</option>
@@ -510,8 +510,8 @@ export default function Transactions() {
                   <option value="Wire Transfer">Wire Transfer</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">Receipt</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Receipt</label>
                 <div class="receipt-upload-container">
                   <label class="receipt-placeholder" for="tx-receipt" style="cursor: pointer">
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -589,9 +589,9 @@ export default function Transactions() {
                   )}
                 </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Notes</label>
-                <textarea class="form-control" id="tx-notes" rows="2"></textarea>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Notes</label>
+                <textarea class={styles.formControl} id="tx-notes" rows="2"></textarea>
               </div>
             </form>
           </div>
@@ -620,13 +620,13 @@ export default function Transactions() {
           <div class="modal modal-lg">
             <div class="modal-header">
               <div class="modal-title">Receipt</div>
-              <button class="btn btn-ghost" onclick={closeReceiptModal} aria-label="Close modal">
+              <button class={styles.btnGhost} onclick={closeReceiptModal} aria-label="Close modal">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div class="modal-body">
+            <div class={styles.modalBody}>
               <img
                 src={receiptPreviewUrl() || `/api/receipts/${selectedReceipt()!.id}/file`}
                 alt="Receipt"
