@@ -1,10 +1,9 @@
-import styles from '../components/BudgetsPage.module.css'
 /**
  * Budgets Component
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
-
-import { createSignal, createEffect, onMount, For } from 'solid-js'
+import { createEffect, createSignal, For,onMount } from 'solid-js'
+import styles from '../components/BudgetsPage.module.css'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 
@@ -184,7 +183,7 @@ export default function Budgets() {
   })
 
   return (
-    <div class="page page-budgets page-enter">
+    <div class={`page page-budgets page-enter ${styles.budgetsPage}`}>
       <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Budgets</h1>
@@ -409,7 +408,7 @@ export default function Budgets() {
               <tbody>
                 <For each={allocations()}>
                   {(item) => (
-                    <tr class={getStatusClass(item.status as AllocationStatus)}>
+                    <tr class={getStatusClass(item.status)}>
                       <td>
                         <div class="category-cell">
                           <div class="category-icon" style={`--bg-color: ${item.category_color}`}>
@@ -446,7 +445,7 @@ export default function Budgets() {
                         {item.can_allocate && !item.is_budgeted ? (
                           <button
                             class="btn btn-sm btn-ghost"
-                            onClick={() => openAllocateModal(item)}
+                            onClick={() => { openAllocateModal(item); }}
                           >
                             Allocate
                           </button>
@@ -471,7 +470,7 @@ export default function Budgets() {
             if (e.target === e.currentTarget) setShowAllocateModal(false)
           }}
         >
-          <div class="modal modal-small" onclick={(e) => e.stopPropagation()}>
+          <div class="modal modal-small" onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <h3>Allocate Budget</h3>
               <button

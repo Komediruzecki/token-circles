@@ -90,7 +90,7 @@ export function removeReceiptPreview(): void {
  */
 export async function deleteReceipt(receiptId: number): Promise<void> {
   try {
-    const api = await import('./api.js')
+    const { api } = await import('./api.js')
     await api.deleteReceipt(receiptId)
     const modal = document.getElementById('receipt-modal') as HTMLElement
     if (modal) {
@@ -180,7 +180,7 @@ export function handleModalAction(action: string, arg?: any): void {
   switch (action) {
     case 'modal:close':
       const closeModals = document.querySelectorAll('.modal-overlay.show')
-      closeModals.forEach((m) => m.classList.remove('show'))
+      closeModals.forEach((m) => { m.classList.remove('show'); })
       break
 
     case 'tx-modal:close':
@@ -205,7 +205,7 @@ export function handleModalAction(action: string, arg?: any): void {
         typeof window.transactionsSetType === 'function'
           ? window.transactionsSetType
           : (_newType: string) => {
-              const txComponent = document.querySelector('[data-page="transactions"]') as any
+              const txComponent = document.querySelector('[data-page="transactions"]')
               if (txComponent?.setType) {
                 txComponent.setType(_newType)
               }
@@ -275,20 +275,20 @@ export function escapeHtml(str: string): string {
 
 // Export window-compatible handlers for legacy code
 export const handlers = {
-  'receipt-modal': (arg: any) => handleModalAction('receipt-modal', arg),
-  'transactions:setType': (arg: string) => handleModalAction('transactions:setType', arg),
+  'receipt-modal': (arg: any) => { handleModalAction('receipt-modal', arg); },
+  'transactions:setType': (arg: string) => { handleModalAction('transactions:setType', arg); },
 }
 
 export const receipts = {
-  handleFileSelect: (event: Event) => handleReceiptFileSelect(event),
-  remove: () => removeReceiptPreview(),
+  handleFileSelect: (event: Event) => { handleReceiptFileSelect(event); },
+  remove: () => { removeReceiptPreview(); },
   delete: (receiptId: number) => deleteReceipt(receiptId),
 }
 
 export const transactions = {
-  handleReceiptFileSelect: (event: Event) => handleReceiptFileSelect(event),
-  openEditModal: (transactionId: number) => openTransactionModal(transactionId),
-  closeModal: () => closeTransactionModal(),
+  handleReceiptFileSelect: (event: Event) => { handleReceiptFileSelect(event); },
+  openEditModal: (transactionId: number) => { openTransactionModal(transactionId); },
+  closeModal: () => { closeTransactionModal(); },
   save: async () => {
     // Placeholder - would call actual save logic
     toast('Transaction saved', 'success')

@@ -1,10 +1,9 @@
-import styles from '../components/BillsPage.module.css'
 /**
  * Bills Component
  * Manages upcoming bills and payment tracking
  */
-
 import { createSignal, onMount } from 'solid-js'
+import styles from '../components/BillsPage.module.css'
 import { formatCurrency } from '../core/api'
 
 interface Bill {
@@ -45,7 +44,11 @@ export default function Bills() {
         fetch('/api/bills?paid=true').then(r => r.json()),
       ])
       setBills(allRes)
-      setUpcoming(upcomingRes)
+      // Handle upcoming bills which have next_due_date instead of due_date
+      setUpcoming(upcomingRes.map((b: any) => ({
+        ...b,
+        due_date: b.due_date || b.next_due_date || '2026-05-01'
+      })))
       setPaid(paidRes)
     } catch {
       console.error('Failed to load bills')
@@ -116,12 +119,19 @@ export default function Bills() {
   const isOverdue = (dateStr: string): boolean => {
     const target = new Date(dateStr)
     const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    target.setHours(0, 0, 0, 0)
     return target < today
   }
 
   // Format date
   const formatDate = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date:', dateStr, 'Date object:', date)
+      return 'Invalid Date'
+    }
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -133,24 +143,24 @@ export default function Bills() {
   })
 
   return (
-    <div class="page page-bills page-enter">
+    <div class={`page-bills page-enter ${styles.billsPage}`}>
       <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Bills</h1>
-          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Bill
           </button>
         </div>
-        <p class="page-subtitle">Track upcoming payments and never miss a due date</p>
+        <p class={styles.pageSubtitle}>Track upcoming payments and never miss a due date</p>
       </div>
 
       {/* Upcoming Section */}
       {upcoming().length > 0 && (
-        <div class="bills-section">
-          <h2 class="section-title">
+        <div class={styles.billsSection}>
+          <h2 class={styles.sectionTitle}>
             <span>🔔</span> Upcoming Bills
             <span class="section-subtitle">{upcoming().length} bills</span>
           </h2>
@@ -160,14 +170,14 @@ export default function Bills() {
                 <div class="bill-main">
                   <div class="bill-icon">{bill.autopay ? '🤖' : '📝'}</div>
                   <div class="bill-info">
-                    <h3 class="bill-name">{bill.name}</h3>
-                    <p class="bill-details">
+                    <h3 class={styles.billName}>{bill.name}</h3>
+                    <p class={styles.billDetails}>
                       {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
                     </p>
                   </div>
                 </div>
-                <div class="bill-amount ${isOverdue(bill.due_date) ? 'overdue' : ''}">
-                  <div class="amount-value">{formatCurrency(bill.amount)}</div>
+                <div class={`bill-amount ${isOverdue(bill.due_date) ? 'overdue' : ''}`}>
+                  <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   {!bill.paid && (
                     <button class="btn btn-sm btn-primary" onClick={() => markPaid(bill.id)}>
                       Mark Paid
@@ -182,8 +192,8 @@ export default function Bills() {
 
       {/* Paid Section */}
       {paid().length > 0 && (
-        <div class="bills-section">
-          <h2 class="section-title">
+        <div class={styles.billsSection}>
+          <h2 class={styles.sectionTitle}>
             <span>✅</span> Paid Bills
             <span class="section-subtitle">{paid().length} bills</span>
           </h2>
@@ -193,14 +203,14 @@ export default function Bills() {
                 <div class="bill-main">
                   <div class="bill-icon">✅</div>
                   <div class="bill-info">
-                    <h3 class="bill-name">{bill.name}</h3>
-                    <p class="bill-details">
+                    <h3 class={styles.billName}>{bill.name}</h3>
+                    <p class={styles.billDetails}>
                       Paid {formatDate(bill.due_date)}
                     </p>
                   </div>
                 </div>
                 <div class="bill-amount">
-                  <div class="amount-value">{formatCurrency(bill.amount)}</div>
+                  <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   <button class="btn btn-sm btn-ghost" onClick={() => deleteBill(bill.id)}>
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path d="M6 18L18 6M6 6l12 12" />
@@ -214,8 +224,8 @@ export default function Bills() {
       )}
 
       {/* All Bills Section */}
-      <div class="bills-section">
-        <h2 class="section-title">
+      <div class={styles.billsSection}>
+        <h2 class={styles.sectionTitle}>
           <span>📋</span> All Bills
           <span class="section-subtitle">{bills().length} total</span>
         </h2>
@@ -225,7 +235,7 @@ export default function Bills() {
           <div class={styles.emptyState}>
             <p>No bills yet</p>
             <p>Add your first bill to start tracking your payments.</p>
-            <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+            <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
               Add Bill
             </button>
           </div>
@@ -236,15 +246,15 @@ export default function Bills() {
                 <div class="bill-main">
                   <div class="bill-icon">{bill.autopay ? '🤖' : '📝'}</div>
                   <div class="bill-info">
-                    <h3 class="bill-name">{bill.name}</h3>
-                    <p class="bill-details">
+                    <h3 class={styles.billName}>{bill.name}</h3>
+                    <p class={styles.billDetails}>
                       {formatDate(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
-                      {bill.category && ` • {bill.category}`}
+                      {bill.category && ` • ${bill.category}`}
                     </p>
                   </div>
                 </div>
                 <div class="bill-amount">
-                  <div class="amount-value">{formatCurrency(bill.amount)}</div>
+                  <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   <div class="bill-actions">
                     {!bill.paid ? (
                       <button class="btn btn-sm btn-primary" onClick={() => markPaid(bill.id)}>
@@ -268,7 +278,7 @@ export default function Bills() {
       {/* Add Bill Modal */}
       {showAddModal() && (
         <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Bill</h3>
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>

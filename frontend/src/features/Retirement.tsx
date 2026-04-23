@@ -1,11 +1,10 @@
-import styles from '../components/RetirementPage.module.css'
 /**
  * Retirement Component
  * Tracks retirement savings, calculates projected growth, and sets retirement goals
  */
-
 import { createSignal, onMount } from 'solid-js'
-import { formatCurrency, api } from '../core/api'
+import styles from '../components/RetirementPage.module.css'
+import { formatCurrency } from '../core/api'
 
 interface RetirementGoal {
   id: number
@@ -60,7 +59,8 @@ export default function Retirement() {
   const loadGoals = async () => {
     setLoading(true)
     try {
-      const data = await api.getRetirementGoals?.() || await fetch('/api/retirement-goals').then(r => r.json())
+      const response = await fetch('/api/retirement-goals')
+      const data = await response.json()
       setGoals(data)
     } catch {
       console.error('Failed to load retirement goals')
@@ -79,7 +79,7 @@ export default function Retirement() {
       if (res) {
         const balances: ProjectedBalance[] = []
         let cumulative = res.current_amount
-        let age = res.current_age
+        const age = res.current_age
 
         for (let y = 0; y <= res.years_to_retire; y++) {
           const year = age + y
@@ -186,13 +186,13 @@ export default function Retirement() {
   // Get remaining to save
   const remainingToSave = (): number => {
     if (!projection()) return 0
-    return projection()!.projected_total - projection()!.current_amount
+    return (projection() as any).projected_total - (projection() as any).current_amount
   }
 
   // Calculate growth
   const calculateGrowth = (): number => {
     if (!projection()) return 0
-    return projection()!.projected_total - projection()!.current_amount - totalContributed()
+    return (projection() as any).projected_total - (projection() as any).current_amount - totalContributed()
   }
 
   // Get progress percentage
@@ -234,7 +234,7 @@ export default function Retirement() {
   })
 
   return (
-    <div class="page page-retirement page-enter">
+    <div class={`page page-retirement page-enter ${styles.retirementPage}`}>
       <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Retirement Planning</h1>
@@ -277,7 +277,7 @@ export default function Retirement() {
             <div class="projection-details">
               <div class="detail-row">
                 <span class="detail-label">Current Savings</span>
-                <span class="detail-value">{formatAmount(projection()!.current_amount)}</span>
+                <span class="detail-value">{formatAmount((projection() as any).current_amount)}</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Total Contributions</span>
@@ -324,7 +324,7 @@ export default function Retirement() {
                       <span class={`badge ${getRetirementStatus(goal.retirement_age)}`}>Retire at {formatAge(goal.retirement_age)}</span>
                     </div>
                     <div class="goal-actions">
-                      <button class="btn btn-sm btn-ghost" onClick={() => editGoal(goal)}>
+                      <button class="btn btn-sm btn-ghost" onClick={() => { editGoal(goal); }}>
                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
@@ -380,8 +380,6 @@ export default function Retirement() {
           <div class="projection-chart">
             <div class="projection-bars">
               {projectedBalances().slice(0, -1).map((pb) => {
-                // currentBalance calculated but not displayed in current projection UI
-                const _currentBalance = pb.balance
                 const projectedTotal = projection()!.projected_total
                 const barWidth = (pb.balance / projectedTotal) * 100
                 const isStartAge = pb.age === projection()!.current_age
@@ -420,7 +418,7 @@ export default function Retirement() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}}>
-          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>{editingGoal() ? 'Edit Goal' : 'Add Retirement Goal'}</h3>
               <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>

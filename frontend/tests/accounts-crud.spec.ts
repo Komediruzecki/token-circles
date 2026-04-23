@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect,test } from '@playwright/test'
 
 test.describe('Accounts CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,12 +7,12 @@ test.describe('Accounts CRUD Operations', () => {
   })
 
   test('should display accounts header', async ({ page }) => {
-    const header = page.locator('.pageHeader h1')
+    const header = page.locator('.accountsPage_accountsPage_pageHeader_h1 h1')
     await expect(header).toHaveText(/Accounts/i)
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.pageSubtitle')
+    const subtitle = page.locator('.accountsPage_accountsPage_pageSubtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/Manage bank accounts|track balances/i)
   })
@@ -26,7 +26,7 @@ test.describe('Accounts CRUD Operations', () => {
   test('should have summary cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const cards = page.locator('.accountsPage .summaryCard')
+    const cards = page.locator('.accountsPage_accountsPage .summaryCard:has-text("Total Balance")')
     const count = await cards.count()
 
     // Should have at least 4 summary cards
@@ -34,18 +34,18 @@ test.describe('Accounts CRUD Operations', () => {
 
     // Check for specific labels
     await expect(
-      page.locator('.accountsPage .summaryCard:has-text("Total Balance")')
+      page.locator('.accountsPage_accountsPage .summaryCard:has-text("Total Balance")')
     ).toBeVisible()
-    await expect(page.locator('.accountsPage .summaryCard:has-text("Accounts")')).toBeVisible()
-    await expect(page.locator('.accountsPage .summaryCard:has-text("Income")')).toBeVisible()
-    await expect(page.locator('.accountsPage .summaryCard:has-text("Expenses")')).toBeVisible()
+    await expect(page.locator('.accountsPage_accountsPage .summaryCard:has-text("Accounts")')).toBeVisible()
+    await expect(page.locator('.accountsPage_accountsPage .summaryCard:has-text("Income")')).toBeVisible()
+    await expect(page.locator('.accountsPage_accountsPage .summaryCard:has-text("Expenses")')).toBeVisible()
   })
 
   test('should display total balance', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const balance = page.locator(
-      '.accountsPage .summaryCard:has-text("Total Balance") .summaryValue'
+      '.accountsPage_accountsPage .summaryCard:has-text("Total Balance") .accountsPage_summaryValue'
     )
     await expect(balance).toBeVisible()
   })
@@ -54,7 +54,7 @@ test.describe('Accounts CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const count = page.locator(
-      '.accountsPage .summaryCard:has-text("Accounts") .summaryValue'
+      '.accountsPage_accountsPage .summaryCard:has-text("Accounts") .accountsPage_summaryValue'
     )
     await expect(count).toBeVisible()
   })
@@ -62,7 +62,7 @@ test.describe('Accounts CRUD Operations', () => {
   test('should display monthly income', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const income = page.locator('.accountsPage .summaryCard:has-text("Income") .summaryValue')
+    const income = page.locator('.accountsPage_accountsPage .summaryCard:has-text("Income") .accountsPage_summaryValue')
     await expect(income).toBeVisible()
   })
 

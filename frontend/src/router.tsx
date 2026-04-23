@@ -2,8 +2,6 @@
  * Router - Simplified routing for SolidJS
  */
 
-import type { PageName, PageComponent } from './types/models.js'
-
 // Page components
 import Accounts from './features/Accounts.js'
 import Analytics from './features/Analytics.js'
@@ -18,6 +16,7 @@ import Loans from './features/Loans.js'
 import Retirement from './features/Retirement.js'
 import Settings from './features/Settings.js'
 import Transactions from './features/Transactions.js'
+import type { PageComponent,PageName } from './types/models.js'
 
 export type { PageName, PageComponent }
 

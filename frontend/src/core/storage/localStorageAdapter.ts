@@ -4,43 +4,28 @@
  */
 
 import type {
-  StorageAdapter,
-  TransactionFilters,
-} from '@/types/storage'
-import type {
-  ProfileData as _StoreProfile,
-  CategoryData as _StoreCategory,
-  TransactionData as _StoreTransaction,
   AccountData as _StoreAccount,
+  BalanceEntryData as _StoreBalance,
   BudgetData as _StoreBudget,
+  CategoryData as _StoreCategory,
+  DataStore,
   GoalData as _StoreGoal,
   LoanData as _StoreLoan,
-  BalanceEntryData as _StoreBalance,
+  ProfileData as _StoreProfile,
   SettingsData as _StoreSettings,
-} from '@/types/data'
+  TransactionData as _StoreTransaction} from '@/types/data'
 import type {
-  Transaction,
-  Category,
   Account,
+  BalanceEntry,
   Budget,
+  Category,
+  ExportData,
   Goal,
   Loan,
-  BalanceEntry,
   Settings,
-  ExportData,
-} from '@/types/storage'
-import type {
-  ProfileData,
-  CategoryData,
-  TransactionData,
-  AccountData,
-  BudgetData,
-  GoalData,
-  LoanData,
-  BalanceEntryData,
-  SettingsData,
-  DataStore,
-} from '@/types/data'
+  StorageAdapter,
+  Transaction,
+  TransactionFilters} from '@/types/storage'
 
 const STORAGE_KEY = 'finance_data'
 const PROFILE_ID_KEY = 'finance_profile_id'
@@ -754,7 +739,7 @@ function resetToDefaults(): void {
 export class LocalStorageAdapter implements StorageAdapter {
   // Profile management
   async getCurrentProfileId(): Promise<number> {
-    let idStr = localStorage.getItem(PROFILE_ID_KEY)
+    const idStr = localStorage.getItem(PROFILE_ID_KEY)
     let id = idStr ? parseInt(idStr, 10) : 1
 
     if (!getProfile(id)) {

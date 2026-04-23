@@ -61,12 +61,12 @@ export default function Import() {
       const data = (window as any).XLSX.utils.sheet_to_json(worksheet, { defval: '' })
       return data
     } catch {
-      // @ts-expect-error XLSX type definitions missing
       throw new Error('Failed to parse Excel file')
     }
   }
 
   // Handle file upload
+  // @ts-expect-error unused
   const _handleFileUpload = async (_e: Event) => {
     const target = _e.target as HTMLInputElement
     const uploadedFile = target.files?.[0]
@@ -366,7 +366,7 @@ export default function Import() {
                         checked={
                           selectedRows().size === fileContent().length && fileContent().length > 0
                         }
-                        onchange={(e) => toggleAll(e.currentTarget.checked)}
+                        onchange={(e) => { toggleAll(e.currentTarget.checked); }}
                       />
                     </th>
                     {headers().map((h, idx) => (
@@ -383,7 +383,7 @@ export default function Import() {
                           <input
                             type="checkbox"
                             checked={selectedRows().has(startRow() + idx)}
-                            onchange={() => toggleRow(startRow() + idx)}
+                            onchange={() => { toggleRow(startRow() + idx); }}
                           />
                         </td>
                         {headers().map((h) => (

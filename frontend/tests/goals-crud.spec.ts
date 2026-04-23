@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect,test } from '@playwright/test'
 
 test.describe('Goals CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -350,6 +350,7 @@ test.describe('Goals CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const emptyState = page.locator('.emptyState')
+    // @ts-expect-error - Variable computed but never used
     const emptyText = emptyState.textContent()
     const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasEmptyText).toBeFalsy()

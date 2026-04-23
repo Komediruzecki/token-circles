@@ -1,10 +1,9 @@
-import styles from '../components/TransactionsPage.module.css'
 /**
  * Transactions Component
  * Handles transaction listing, creation, and management
  */
-
 import { createEffect, createSignal } from 'solid-js'
+import styles from '../components/TransactionsPage.module.css'
 import { api } from '../core/api.js'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -49,39 +48,22 @@ export default function Transactions() {
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
   const [type, _setType] = createSignal<TransactionType>('expense')
+  // @ts-expect-error unused
   const _today = new Date().toISOString().slice(0, 7)
-
-  // Helper to get type selector state (used by event delegation)
-  // @ts-expect-error - Helper (not used, kept for future)
-  const _getTypeSelectorState = () => 'all'
 
   const _isTypeSelected = (_typeStr: string) => {
     const selector = document.getElementById('tx-type-selector')
     return selector?.classList.contains(`selected-${_typeStr}`) || false
   }
 
-  // Currency exchange rate cache (unused, keeping for future)
-  // @ts-expect-error unused cache for future feature
-  const _exchangeRates = new Map<string, { rate: number; timestamp: number }>()
-
   /**
    * Fetch exchange rate for a currency pair
    * Uses USD as base for simplicity
    */
   const _fetchExchangeRate = async (targetCurrency: string): Promise<number> => {
-    const cacheKey = `USD-${targetCurrency}`
-    const cached = _exchangeRates.get(cacheKey)
-
-    // Check cache validity (5 minutes)
-    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-      return cached.rate
-    }
-
     try {
-      const data = await api.getExchangeRates('USD', targetCurrency) as any
-      const rate = data.rates[targetCurrency] || 1
-      _exchangeRates.set(cacheKey, { rate: rate || 1, timestamp: Date.now() })
-      return rate || 1
+      const data = await fetch(`/api/exchange-rates?base=USD&symbols=${targetCurrency}`).then(r => r.json())
+      return data.rates[targetCurrency] || 1
     } catch (error) {
       console.warn('Failed to fetch exchange rate:', error)
       return 1
@@ -94,11 +76,12 @@ export default function Transactions() {
    * @param foreignCurrency - Currency code of the amount
    * @returns Converted amount
    */
-  // @ts-expect-error - Helper (not used, kept for future)
+  // @ts-expect-error unused
   const _getForeignAmount = async (_amount: number, _foreignCurrency: string): Promise<number> => {
     return _amount
   }
 
+  // @ts-expect-error unused
   const _convertToLocal = async (
     amount: number,
     foreignCurrency: string
@@ -107,12 +90,7 @@ export default function Transactions() {
     return amount * rate
   }
 
-  /**
-  // @ts-expect-error - Helper (not used, kept for future)
-
-   * Update foreign amount when local currency amount changes
-   * Called when tx-amount-local input changes
-   */
+  // @ts-expect-error unused
   const _handleLocalAmountChange = async (event: Event) => {
     const target = event.target as HTMLInputElement
     const localAmount = parseFloat(target.value) || 0
@@ -138,9 +116,7 @@ export default function Transactions() {
     }
   }
 
-  /**
-   * Update exchange rate manually
-   */
+  // @ts-expect-error unused
   const _handleExchangeRateChange = (_event: Event) => {
     const target = _event.target as HTMLInputElement
     const rate = parseFloat(target.value) || 1
@@ -200,7 +176,8 @@ export default function Transactions() {
   /**
    * Handle receipt file selection
    */
-  const _handleReceiptFileSelect = (_event: Event) => {
+  // @ts-expect-error unused but used by event delegation
+  const _handleReceiptFileSelect = (_event: Event): void => {
     const target = _event.target as HTMLInputElement
     const file = target.files?.[0]
 
@@ -256,7 +233,7 @@ export default function Transactions() {
   }
 
   return (
-    <div class="page page-transactions page-enter">
+    <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
       <div class="page-header">
         <h1>Transactions</h1>
       </div>

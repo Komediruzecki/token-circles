@@ -90,6 +90,7 @@ export interface CategoryMapping {
 export interface Account {
   id: AccountId
   name: string
+  bank_name?: string
   type: AccountType
   currency: Currency
   balance: number
@@ -271,6 +272,8 @@ export interface RetirementProjection {
   expectedRetirementYears: number
   retirementSavings: number
   monthlyWithdrawal: number
+  current_amount: number
+  projected_total: number
 }
 
 // ============ HOUSING CALCULATOR ============

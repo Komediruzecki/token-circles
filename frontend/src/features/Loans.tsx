@@ -1,10 +1,9 @@
-import styles from '../components/LoansPage.module.css'
 /**
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
  */
-
 import { createSignal, onMount } from 'solid-js'
+import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
 
 interface Loan {
@@ -40,8 +39,20 @@ export default function Loans() {
   const loadLoans = async () => {
     setLoading(true)
     try {
-      const data = await _api.getLoans?.() || await fetch('/api/loans').then(r => r.json())
-      setLoans(data)
+      const response = await fetch('/api/loans')
+      const data = await response.json()
+      // Transform Loan data to include missing fields
+      setLoans(data.map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        principal: l.principal,
+        interest_rate: l.interest_rate,
+        term_months: l.term_months,
+        start_date: l.start_date,
+        status: 'active',
+        remaining_balance: l.principal,
+        total_paid: 0,
+      })))
     } catch {
       console.error('Failed to load loans')
     } finally {
@@ -165,7 +176,7 @@ export default function Loans() {
   const totalRemaining = () => loans().reduce((sum, l) => sum + calculateRemaining(l), 0)
 
   return (
-    <div class="page page-loans page-enter">
+    <div class={`page page-loans page-enter ${styles.loansPage}`}>
       <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Loans</h1>
@@ -225,7 +236,7 @@ export default function Loans() {
                     <span class={`badge ${getStatusBadge(loan.status)}`}>{getStatusLabel(loan.status)}</span>
                   </div>
                   <div class="loan-actions">
-                    <button class="btn btn-sm btn-ghost" onClick={() => editLoan(loan)}>
+                    <button class="btn btn-sm btn-ghost" onClick={() => { editLoan(loan); }}>
                       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
@@ -282,7 +293,7 @@ export default function Loans() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}}>
-          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>{editingLoan() ? 'Edit Loan' : 'Add Loan'}</h3>
               <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>

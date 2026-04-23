@@ -4,8 +4,8 @@
  */
 
 import { createSignal, onMount } from 'solid-js'
-import { formatCurrency } from '../core/api'
 import styles from '../components/AccountsPage.module.css'
+import { formatCurrency } from '../core/api'
 
 interface Account {
   id: number
@@ -26,6 +26,7 @@ export default function Accounts() {
   const [formData, setFormData] = createSignal({
     name: '',
     type: 'checking',
+    bank_name: '',
     balance: '',
     currency: 'USD',
   })
@@ -53,6 +54,7 @@ export default function Accounts() {
     const data = {
       name: formData().name,
       type: formData().type,
+      bank_name: formData().bank_name,
       initial_balance: parseFloat(formData().balance) || 0,
       currency: formData().currency,
     }
@@ -64,7 +66,7 @@ export default function Accounts() {
         body: JSON.stringify(data),
       })
       setShowAddModal(false)
-      setFormData({ name: '', type: 'checking', balance: '', currency: 'USD' })
+      setFormData({ name: '', type: 'checking', bank_name: '', balance: '', currency: 'USD' })
       loadData()
     } catch (error) {
       console.error('Failed to save account', error)
@@ -124,11 +126,11 @@ export default function Accounts() {
   }
 
   return (
-    <div class={styles.page}>
+    <div class={`page page-enter ${styles.accountsPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1>Accounts</h1>
-          <button class={styles.btn + ' ' + styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button class={`${styles.btn  } ${  styles.btnPrimary}`} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -150,14 +152,14 @@ export default function Accounts() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Income (this month)</div>
-          <div class={styles.summaryValue + ' ' + styles.positive}>+{formatAmount(accounts().reduce((s, a) => {
+          <div class={`${styles.summaryValue  } ${  styles.positive}`}>+{formatAmount(accounts().reduce((s, a) => {
             const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'income')
             return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
           }, 0))}</div>
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Expenses (this month)</div>
-          <div class={styles.summaryValue + ' ' + styles.negative}>-{formatAmount(accounts().reduce((s, a) => {
+          <div class={`${styles.summaryValue  } ${  styles.negative}`}>-{formatAmount(accounts().reduce((s, a) => {
             const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'expense')
             return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
           }, 0))}</div>
@@ -204,7 +206,7 @@ export default function Accounts() {
                 </div>
                 <div class="activity-list">
                   {getAccountTransactions(account.id).slice(0, 3).map((tx: any) => (
-                    <div class="activity-item" key={tx.id}>
+                    <div class="activity-item" >
                       <div class="activity-content">
                         <div class="activity-desc">{tx.description}</div>
                         <div class="activity-date">{new Date(tx.date).toLocaleDateString()}</div>
@@ -224,7 +226,7 @@ export default function Accounts() {
       {/* Add Account Modal */}
       {showAddModal() && (
         <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class="modal" onclick={(e) => e.stopPropagation()}>
+          <div class="modal" onclick={(e) => { e.stopPropagation(); }}>
             <div class="modal-header">
               <h3 class="modal-title">Add Account</h3>
               <button class="modal-close" onClick={() => setShowAddModal(false)}>

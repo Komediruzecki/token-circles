@@ -250,8 +250,14 @@ body {
   margin: 0 auto;
 }
 
+/* Base page styling - hidden by default */
 .page {
   display: none;
+}
+
+/* Page visibility - only pages with .active class are visible */
+.page.active {
+  display: block;
 }
 
 .page-enter {
@@ -269,9 +275,8 @@ body {
   }
 }
 
-/* Active page state for the page-content div */
-.page-active {
-  display: block;
+.page.page-enter {
+  animation: fadeIn 0.2s ease-out;
 }
 
 /* Individual pages */

@@ -3,9 +3,10 @@
  */
 
 import { createSignal, onMount } from 'solid-js'
+import { handlers, receipts, transactions } from './core/handlers.js'
 import { theme } from './core/theme.js'
 import { pages } from './router.tsx'
-import { receipts, transactions, handlers } from './core/handlers.js'
+import type { PageName } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -14,6 +15,7 @@ window.handlers = handlers
 
 export function App() {
   const [currentPage, setCurrentPage] = createSignal<PageName>('dashboard')
+  createSignal(Date.now())
 
   // Currency exchange rate cache - unused, keeping for future feature
   // @ts-expect-error - unused, keeping for future feature
@@ -61,51 +63,45 @@ export function App() {
         })
       })
 
-      if (firstLink && lastLink) {
-        firstLink.setAttribute('tabindex', '0')
-        firstLink.addEventListener('keydown', (e: Event) => {
-          if ((e as KeyboardEvent).key === 'ArrowUp') {
-            ;(e as KeyboardEvent).preventDefault()
-            lastLink.focus()
-          }
-        })
+      firstLink.setAttribute('tabindex', '0')
+      firstLink.addEventListener('keydown', (e: Event) => {
+        if ((e as KeyboardEvent).key === 'ArrowUp') {
+          ;(e as KeyboardEvent).preventDefault()
+          lastLink.focus()
+        }
+      })
 
-        lastLink.setAttribute('tabindex', '0')
-        lastLink.addEventListener('keydown', (e: Event) => {
-          if ((e as KeyboardEvent).key === 'ArrowDown') {
-            ;(e as KeyboardEvent).preventDefault()
-            firstLink.focus()
-          }
-        })
-      }
+      lastLink.setAttribute('tabindex', '0')
+      lastLink.addEventListener('keydown', (e: Event) => {
+        if ((e as KeyboardEvent).key === 'ArrowDown') {
+          ;(e as KeyboardEvent).preventDefault()
+          firstLink.focus()
+        }
+      })
     }
 
     setupKeyboardNavigation()
 
-    // Handle modal clicks for closing
     document.addEventListener('click', (e: Event) => {
-      const target = e.target as HTMLElement
-      const clickHandler = target.closest('[data-action]') as HTMLElement
+      const clickHandler = (e.target as HTMLElement).closest('[data-action]') as HTMLElement
       if (!clickHandler) return
       const action = clickHandler.dataset.action
       if (action === 'modal:close') {
         const modal = document.getElementById('tx-modal') as HTMLElement
-        if (modal) {
-          modal.classList.remove('show')
-        }
+        modal.classList.remove('show')
       }
     })
 
-    // Handle file input change
     document.addEventListener('change', (e: Event) => {
-      const target = e.target as HTMLInputElement
-      const changeHandler = target.closest('[data-action]') as HTMLElement
+      const changeHandler = (e.target as HTMLInputElement).closest('[data-action]') as HTMLElement
       if (!changeHandler) return
       const action = changeHandler.dataset.action
-      if (action === 'transaction:receiptFile') {
-        if (target.id === 'tx-receipt' && window.receipts) {
-          window.receipts.handleFileSelect(e)
-        }
+      if (
+        action === 'transaction:receiptFile' &&
+        (e.target as HTMLInputElement).id === 'tx-receipt' &&
+        window.receipts
+      ) {
+        window.receipts.handleFileSelect(e)
       }
     })
 
@@ -115,6 +111,8 @@ export function App() {
       const page = hash as PageName
       if (page in pages) {
         setCurrentPage(page)
+      } else {
+        setCurrentPage('dashboard')
       }
     }
 
@@ -375,10 +373,14 @@ export function App() {
 
         {/* Main Content */}
         <main class="main">
-          <div id="page-content" class="page-active">{pages[currentPage()]}</div>
+          <div
+            id="page-content"
+            class={`page ${currentPage() === 'bills' ? 'page-bills active' : 'page'}`}
+          >
+            {pages[currentPage()]}
+          </div>
         </main>
       </div>
     </div>
   )
 }
-

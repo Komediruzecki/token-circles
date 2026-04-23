@@ -1,10 +1,9 @@
-import styles from '../components/HousingPage.module.css'
 /**
  * Housing Component
  * Manages housing-related expenses and property information
  */
-
 import { createSignal, onMount } from 'solid-js'
+import styles from '../components/HousingPage.module.css'
 import { formatCurrency } from '../core/api'
 
 interface Housing {
@@ -126,7 +125,7 @@ export default function HousingForm() {
   })
 
   return (
-    <div class="page page-housing page-enter">
+    <div class={`page page-housing page-enter ${styles.housingPage}`}>
       <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Housing</h1>
@@ -215,7 +214,7 @@ export default function HousingForm() {
       {/* Add Housing Modal */}
       {showAddModal() && (
         <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Housing Expense</h3>
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>

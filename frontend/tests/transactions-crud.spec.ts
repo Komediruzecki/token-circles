@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect,test } from '@playwright/test'
 
 test.describe('Transactions CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -435,6 +435,7 @@ test.describe('Transactions CRUD Operations', () => {
       await page.waitForTimeout(500)
 
       // Check if transaction was added or modal closed
+      // @ts-expect-error - Variable assigned but never used
       const isModalOpen = await page
         .locator('#tx-modal')
         .isVisible({ timeout: 1000 })

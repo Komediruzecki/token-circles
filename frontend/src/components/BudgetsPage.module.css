@@ -1,59 +1,272 @@
-.budgetSummary { padding: 24px; }
-.budgetSummary .pageHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.budgetSummary .headerTop { display: flex; justify-content: space-between; align-items: center; }
-.budgetSummary h1 { font-size: 24px; font-weight: 700; }
-.budgetSummary .monthSelector { display: flex; align-items: center; gap: 8px; }
-.budgetSummary .monthDisplay { font-size: 14px; color: var(--text); }
-.budgetSummary .pageSubtitle { color: var(--text-secondary); font-size: 14px; }
-.budgetSummary .budgetSummary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.budgetSummary .summaryCard { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-.budgetSummary .summaryLabel { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
-.budgetSummary .summaryValue { font-size: 18px; font-weight: 700; margin-top: 4px; }
-.budgetSummary .summaryValue.positive { color: var(--income); }
-.budgetSummary .summaryValue.negative { color: var(--expense); }
-.budgetSummary .summaryValue.statusOk { color: var(--success); }
-.budgetSummary .forecastToggleSection { margin-bottom: 16px; }
-.budgetSummary .budgetForecast { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
-.budgetSummary .forecastHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.budgetSummary .forecastTitle { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
-.budgetSummary .forecastStats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
-.budgetSummary .statItem { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg); border-radius: var(--radius); }
-.budgetSummary .forecastChart { margin-top: 16px; }
-.budgetSummary .chartRow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 8px 0; }
-.budgetSummary .chartLabel { font-size: 12px; color: var(--text-secondary); text-align: center; }
-.budgetSummary .chartValue { font-size: 13px; text-align: center; }
-.budgetSummary .chartStatus { text-align: center; font-size: 12px; }
-.budgetSummary .chartStatus-ok { color: var(--success); }
-.budgetSummary .chartStatus-warning { color: var(--warning); }
-.budgetSummary .chartStatus-over { color: var(--danger); }
-.budgetSummary .budgetAllocations { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); }
-.budgetSummary .tableHeader { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); }
-.budgetSummary .tableHeader h2 { font-size: 16px; margin: 0; }
-.budgetSummary .tableContainer { overflow-x: auto; }
-.budgetSummary .dataTable { width: 100%; border-collapse: collapse; }
-.budgetSummary .dataTable th { text-align: left; padding: 12px 16px; font-size: 12px; color: var(--text-secondary); font-weight: 500; }
-.budgetSummary .dataTable td { padding: 12px 16px; border-top: 1px solid var(--border); }
-.budgetSummary .dataTable tr { transition: background 0.1s; }
-.budgetSummary .dataTable tr.status-ok { background: rgba(var(--success-rgb), 0.1); }
-.budgetSummary .dataTable tr.status-warning { background: rgba(var(--warning-rgb), 0.1); }
-.budgetSummary .dataTable tr.status-over { background: rgba(var(--danger-rgb), 0.1); }
-.budgetSummary .categoryCell { display: flex; align-items: center; gap: 8px; }
-.budgetSummary .categoryIcon { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--bg); }
-.budgetSummary .categoryName { font-size: 13px; }
-.budgetSummary .amountCol, .budgetSummary .percentCol, .budgetSummary .statusCol, .budgetSummary .actionsCol { text-align: right; }
-.budgetSummary .progressBar { display: flex; align-items: center; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; max-width: 100px; margin-right: 8px; }
-.budgetSummary .progressFill { height: 100%; border-radius: 3px; }
-.budgetSummary .percentValue { font-size: 12px; }
-.budgetSummary .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
-.budgetSummary .badge-ok { background: var(--success); color: #fff; }
-.budgetSummary .badge-warning { background: var(--warning); color: #fff; }
-.budgetSummary .badge-over { background: var(--danger); color: #fff; }
-.budgetSummary .budgetMessage { font-size: 12px; color: var(--text-secondary); }
-.budgetSummary .modalSmall { width: 100%; max-width: 350px; }
-.budgetSummary .modalText { margin-bottom: 16px; font-size: 14px; }
-.budgetSummary .modalText strong { color: var(--text); }
-.budgetSummary .formInput { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
-.budgetSummary .helpText { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
-.budgetSummary .budgetTraditional { margin-top: 24px; }
-.budgetSummary .emptyState { text-align: center; padding: 48px; color: var(--text-secondary); }
-.budgetSummary .emptyState p { margin: 8px 0; }
+.budgetSummary {
+  padding: 24px;
+}
+.budgetSummary .pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.budgetSummary .headerTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.budgetSummary h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+.budgetSummary .monthSelector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.budgetSummary .monthDisplay {
+  font-size: 14px;
+  color: var(--text);
+}
+.budgetSummary .pageSubtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.budgetSummary .budgetSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.budgetSummary .summaryCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.budgetSummary .summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.budgetSummary .summaryValue {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.budgetSummary .summaryValue.positive {
+  color: var(--income);
+}
+.budgetSummary .summaryValue.negative {
+  color: var(--expense);
+}
+.budgetSummary .summaryValue.statusOk {
+  color: var(--success);
+}
+.budgetSummary .forecastToggleSection {
+  margin-bottom: 16px;
+}
+.budgetSummary .budgetForecast {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.budgetSummary .forecastHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.budgetSummary .forecastTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.budgetSummary .forecastStats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.budgetSummary .statItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+.budgetSummary .forecastChart {
+  margin-top: 16px;
+}
+.budgetSummary .chartRow {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 8px 0;
+}
+.budgetSummary .chartLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.budgetSummary .chartValue {
+  font-size: 13px;
+  text-align: center;
+}
+.budgetSummary .chartStatus {
+  text-align: center;
+  font-size: 12px;
+}
+.budgetSummary .chartStatus-ok {
+  color: var(--success);
+}
+.budgetSummary .chartStatus-warning {
+  color: var(--warning);
+}
+.budgetSummary .chartStatus-over {
+  color: var(--danger);
+}
+.budgetSummary .budgetAllocations {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.budgetSummary .tableHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.budgetSummary .tableHeader h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.budgetSummary .tableContainer {
+  overflow-x: auto;
+}
+.budgetSummary .dataTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.budgetSummary .dataTable th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.budgetSummary .dataTable td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.budgetSummary .dataTable tr {
+  transition: background 0.1s;
+}
+.budgetSummary .dataTable tr.status-ok {
+  background: rgba(var(--success-rgb), 0.1);
+}
+.budgetSummary .dataTable tr.status-warning {
+  background: rgba(var(--warning-rgb), 0.1);
+}
+.budgetSummary .dataTable tr.status-over {
+  background: rgba(var(--danger-rgb), 0.1);
+}
+.budgetSummary .categoryCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.budgetSummary .categoryIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: var(--bg);
+}
+.budgetSummary .categoryName {
+  font-size: 13px;
+}
+.budgetSummary .amountCol,
+.budgetSummary .percentCol,
+.budgetSummary .statusCol,
+.budgetSummary .actionsCol {
+  text-align: right;
+}
+.budgetSummary .progressBar {
+  display: flex;
+  align-items: center;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+  max-width: 100px;
+  margin-right: 8px;
+}
+.budgetSummary .progressFill {
+  height: 100%;
+  border-radius: 3px;
+}
+.budgetSummary .percentValue {
+  font-size: 12px;
+}
+.budgetSummary .badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.budgetSummary .badge-ok {
+  background: var(--success);
+  color: #fff;
+}
+.budgetSummary .badge-warning {
+  background: var(--warning);
+  color: #fff;
+}
+.budgetSummary .badge-over {
+  background: var(--danger);
+  color: #fff;
+}
+.budgetSummary .budgetMessage {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.budgetSummary .modalSmall {
+  width: 100%;
+  max-width: 350px;
+}
+.budgetSummary .modalText {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.budgetSummary .modalText strong {
+  color: var(--text);
+}
+.budgetSummary .formInput {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.budgetSummary .helpText {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+.budgetSummary .budgetTraditional {
+  margin-top: 24px;
+}
+.budgetSummary .emptyState {
+  text-align: center;
+  padding: 48px;
+  color: var(--text-secondary);
+}
+.budgetSummary .emptyState p {
+  margin: 8px 0;
+}

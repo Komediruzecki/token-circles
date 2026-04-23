@@ -25,7 +25,7 @@ export const DashboardSettings: Component = () => {
       try {
         const parsed = JSON.parse(saved)
         parsed.visibleWidgets?.forEach((id: string) => {
-          setSelectedWidget((prev) => (prev ? prev + ',' + id : id))
+          setSelectedWidget((prev) => (prev ? `${prev  },${  id}` : id))
         })
       } catch (e) {
         console.error('Failed to load dashboard settings:', e)
@@ -75,7 +75,7 @@ export const DashboardSettings: Component = () => {
             <button
               class="widget-toggle"
               classList={{ active: selectedWidget()?.split(',').includes(widget.id) }}
-              onClick={() => toggleWidget(widget.id)}
+              onClick={() => { toggleWidget(widget.id); }}
             >
               <span class="widget-icon">{widget.icon}</span>
               <span class="widget-name">{widget.name}</span>

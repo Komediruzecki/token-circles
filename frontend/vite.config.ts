@@ -1,12 +1,14 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
+// @ts-expect-error - Bundle analyzer may not be installed
 import bundleAnalyzer from 'vite-bundle-analyzer'
+import { VitePWA } from 'vite-plugin-pwa'
 import solidPlugin from 'vite-plugin-solid'
 import solidSvg from 'vite-plugin-solid-svg'
 
-const ANALYZE_BUNDLE = Boolean(process.env.VITE_ANALYZE_BUNDLE)
+const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 
-const IS_PLAYWRIGHT = Boolean(process.env.mode === 'test')
+const _IS_PLAYWRIGHT = process.env.mode === 'test'
 
 export default defineConfig({
   base: './',
@@ -29,6 +31,57 @@ export default defineConfig({
     solidPlugin(),
     ANALYZE_BUNDLE ? bundleAnalyzer() : undefined,
     solidSvg({ defaultAsComponent: true }),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],
+      manifest: {
+        name: 'Finance Manager',
+        short_name: 'Finance',
+        description: 'Personal finance tracker',
+        display: 'standalone',
+        background_color: '#ffffff',
+        theme_color: '#3b82f6',
+        icons: [
+          {
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/finance-manager\.clodhost\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'finance-manager-cache',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'finance-manager-fonts',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 365 * 24 * 60 * 60
+              }
+            }
+          }
+        ]
+      }
+    })
   ],
   resolve: {
     alias: {
@@ -46,6 +99,11 @@ export default defineConfig({
       localsConvention: 'dashes',
     },
   },
+  cssPreprocessorOptions: {
+    scss: {
+      api: 'modern-compiler',
+    },
+  },
   // todo: was this used?
   // css: {
   //   postcss: './postcss.config.cjs',
@@ -54,7 +112,7 @@ export default defineConfig({
     port: 3800,
     proxy: {
       '/api': {
-        target: IS_PLAYWRIGHT ? 'http://localhost:3846' : 'http://localhost:3847',
+        target: 'http://localhost:3847',
         changeOrigin: true,
       },
     },

@@ -3,10 +3,12 @@
  * Supports theme, language, currency, and storage mode selection
  */
 
-import { createSignal, type Component, For } from 'solid-js'
-import { Modal } from './Modal.js'
+import {  createSignal, For } from 'solid-js'
 import { toast } from '../core/api.js'
-import { setStorageMode, StorageMode } from '../core/storage/storageFactory.js'
+import { setStorageMode } from '../core/storage/storageFactory.js'
+import { Modal } from './Modal.js'
+import type {Component} from 'solid-js';
+import type { StorageMode } from '../core/storage/storageFactory.js';
 
 interface SettingsDialogProps {
   isOpen: boolean

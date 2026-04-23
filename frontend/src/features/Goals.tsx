@@ -1,12 +1,10 @@
-import styles from '../components/GoalsPage.module.css'
 /**
  * Goals Component
  * Handles savings goals with progress tracking
  */
-
 import { createSignal, onMount } from 'solid-js'
+import styles from '../components/GoalsPage.module.css'
 import { formatCurrency } from '../core/api'
-import { api } from '../core/api'
 
 interface Goal {
   id: number
@@ -33,8 +31,18 @@ export default function Goals() {
   const loadGoals = async () => {
     setLoading(true)
     try {
-      const data = await api.getGoals?.() || await fetch('/api/savings-goals').then(r => r.json())
-      setGoals(data)
+      const response = await fetch('/api/savings-goals')
+      const data = await response.json()
+      // Convert SavingsGoal (deadline) to Goal (target_date)
+      setGoals(data.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        target_amount: s.current_amount,
+        current_amount: s.current_amount,
+        target_date: s.deadline || new Date().toISOString().split('T')[0],
+        profile_id: s.profile_id,
+        created_at: s.created_at,
+      })))
     } catch {
       console.error('Failed to load goals')
     } finally {
@@ -126,7 +134,7 @@ export default function Goals() {
   })
 
   return (
-    <div class="page page-goals page-enter">
+    <div class={`page page-goals page-enter ${styles.goalsPage}`}>
       <div class={styles.pageHeader}>
         <div class="header-top">
           <h1>Savings Goals</h1>
@@ -152,9 +160,9 @@ export default function Goals() {
         </div>
       ) : (
         <div class="goals-grid">
-          {goals().map((goal) => {
-            const progress = getProgress(goal)
-            return (
+            {goals().map((goal) => {
+              const progress = getProgress(goal)
+              return (
               <div class="goal-card">
                 <div class="goal-header">
                   <div class="goal-icon">🎯</div>
@@ -163,7 +171,7 @@ export default function Goals() {
                     <p class="goal-date">{formatDate(goal.target_date)} • {daysUntil(goal.target_date)}</p>
                   </div>
                   <div class="goal-actions">
-                    <button class="btn btn-sm btn-ghost" onClick={() => editGoal(goal)}>
+                    <button class="btn btn-sm btn-ghost" onClick={() => { editGoal(goal); }}>
                       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
@@ -196,7 +204,7 @@ export default function Goals() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class={styles.modal} onclick={(e) => e.stopPropagation()}>
+          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>{editingGoal() ? 'Edit Goal' : 'New Goal'}</h3>
               <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', target_date: '' }) }}>

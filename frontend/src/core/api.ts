@@ -672,7 +672,7 @@ export class ApiClient {
   async exportTransactions(params?: { date_from?: string; date_to?: string }): Promise<Blob> {
     const queryParams = new URLSearchParams()
     if (params?.date_from) queryParams.append('date_from', params.date_from)
-    if (params?.date_to) queryParams.append('date_to', params.date_to as string)
+    if (params?.date_to) queryParams.append('date_to', params.date_to)
 
     const response = await fetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
       headers: this.headers,
@@ -856,7 +856,8 @@ export const formatCurrency = (amount: number, currency: Models.Currency = 'EUR'
 }
 
 export const formatDate = (dateStr: string): string => {
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-US', {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

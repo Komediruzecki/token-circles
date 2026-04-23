@@ -542,7 +542,9 @@
   z-index: 9999;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
+  transition:
+    opacity 0.2s,
+    visibility 0.2s;
 }
 
 .accountsPage .modalOverlay.visible {

@@ -2,20 +2,20 @@
  * Storage Factory - Creates the appropriate storage adapter based on mode
  */
 
+import { LocalStorageAdapter } from './localStorageAdapter.js'
 import type {
-  StorageAdapter,
-  TransactionFilters,
-  Transaction,
-  Category,
   Account,
+  BalanceEntry,
   Budget,
+  Category,
+  ExportData,
   Goal,
   Loan,
-  BalanceEntry,
   Settings,
-  ExportData,
+  StorageAdapter,
+  Transaction,
+  TransactionFilters,
 } from '../../types/storage'
-import { LocalStorageAdapter } from './localStorageAdapter.js'
 
 // Storage modes
 export type StorageMode = 'serverless' | 'self-hosted'

@@ -3,7 +3,7 @@
  * Navigation sidebar with profile selector and user menu
  */
 
-import { createSignal, onMount, For } from 'solid-js'
+import { createSignal, For,onMount } from 'solid-js'
 import styles from '@/css/Sidebar.module.css'
 
 export default function Sidebar() {
@@ -49,7 +49,7 @@ export default function Sidebar() {
 
   const closeOnOutsideClick = (e: MouseEvent) => {
     const target = e.target as Element | null
-    const dropdown = (e.currentTarget as HTMLElement).querySelector('[data-component="profile-dropdown-menu"]') as HTMLElement | null
+    const dropdown = (e.currentTarget as HTMLElement).querySelector('[data-component="profile-dropdown-menu"]')
     if (dropdown && target && !dropdown.contains(target) && !target.closest('[data-component="profile-dropdown-btn"]')) {
       setIsProfileDropdownOpen(false)
     }

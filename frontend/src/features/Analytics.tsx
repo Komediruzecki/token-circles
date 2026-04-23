@@ -1,10 +1,9 @@
-import styles from '../components/AnalyticsPage.module.css'
 /**
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-
 import { createSignal, onMount } from 'solid-js'
+import styles from '../components/AnalyticsPage.module.css'
 import { formatCurrency } from '../core/api'
 
 interface AnalyticsData {
@@ -68,7 +67,7 @@ export default function Analytics() {
   })
 
   return (
-    <div class="page page-analytics page-enter">
+    <div class={`page page-analytics page-enter ${styles.analyticsPage}`}>
       <div class={styles.pageHeader}>
         <h1>Analytics</h1>
         <p class="page-subtitle">Visualize your financial data and track trends</p>
@@ -201,8 +200,8 @@ export default function Analytics() {
                             />
                           </div>
                           <div class="bar-legend">
-                            <span className="bar-income-label">{formatPercent(incomePercent)} Income</span>
-                            <span className="bar-expense-label">{formatPercent(expensePercent)} Expense</span>
+                            <span class="bar-income-label">{formatPercent(incomePercent)} Income</span>
+                            <span class="bar-expense-label">{formatPercent(expensePercent)} Expense</span>
                           </div>
                         </div>
                       )
@@ -224,19 +223,19 @@ export default function Analytics() {
                     <span class="rate-label">Savings Rate</span>
                   </div>
                   <div class="rate-info">
-                    <div className="rate-row">
+                    <div class="rate-row">
                       <span>Target: 20%</span>
-                      <span className={`rate-status ${data()!.savingsRate >= 20 ? 'good' : data()!.savingsRate >= 10 ? 'fair' : 'poor'}`}>
+                      <span class={`rate-status ${data()!.savingsRate >= 20 ? 'good' : data()!.savingsRate >= 10 ? 'fair' : 'poor'}`}>
                         {data()!.savingsRate >= 20 ? 'Good' : data()!.savingsRate >= 10 ? 'Fair' : 'Poor'}
                       </span>
                     </div>
-                    <div className="rate-row">
+                    <div class="rate-row">
                       <span>Projected Annual Savings</span>
                       <span>{formatAmount((totalIncome() - totalExpense()) * 12)}</span>
                     </div>
                   </div>
                 </div>
-                <div className="savings-tips">
+                <div class="savings-tips">
                   <h4>Tips to Improve Savings</h4>
                   <ul>
                     {data()!.savingsRate < 20 && (
@@ -288,7 +287,7 @@ export default function Analytics() {
                 </div>
               ))}
             </div>
-            <div className="view-all-link">
+            <div class="view-all-link">
               <a href="#transactions">View All Transactions →</a>
             </div>
           </div>

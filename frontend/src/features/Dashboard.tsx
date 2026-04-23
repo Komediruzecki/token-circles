@@ -2,11 +2,11 @@
  * Dashboard Component
  */
 
-import { createSignal, onMount, type JSX } from 'solid-js'
+import { createSignal, onMount } from 'solid-js'
+import styles from '../components/DashboardPage.module.css'
+import { DashboardSettings } from '../components/DashboardSettings'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type * as Models from '../types/models'
-import { DashboardSettings } from '../components/DashboardSettings'
-import styles from '../components/DashboardPage.module.css'
 
 export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
@@ -40,7 +40,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div class={styles.page}>
+    <div class={`page page-dashboard page-enter ${styles.dashboardPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.pageTitle}>
           <h2>Dashboard</h2>
@@ -81,12 +81,12 @@ export default function Dashboard() {
           <div class={styles.metricsGrid}>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Balance</div>
-              <div class={styles.metricValue + " " + styles.positive}>{formatCurrency(metrics()!.balance)}</div>
+              <div class={`${styles.metricValue  } ${  styles.positive}`}>{formatCurrency(metrics()!.balance)}</div>
               <div class={styles.metricSubtext}>Total available</div>
             </div>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Income</div>
-              <div class={styles.metricValue + " " + styles.positive}>{formatCurrency(metrics()!.totalIncome)}</div>
+              <div class={`${styles.metricValue  } ${  styles.positive}`}>{formatCurrency(metrics()!.totalIncome)}</div>
               <div class={styles.metricSubtext}>For this period</div>
             </div>
             <div class={styles.metricCard}>
@@ -184,7 +184,7 @@ export default function Dashboard() {
                           Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
                         </div>
                       </div>
-                      <div class={styles.transactionAmount + ' ' + styles.expense}>{formatCurrency(bill.amount)}</div>
+                      <div class={`${styles.transactionAmount  } ${  styles.expense}`}>{formatCurrency(bill.amount)}</div>
                     </div>
                   ))}
               </div>
@@ -193,7 +193,7 @@ export default function Dashboard() {
 
           {/* Widget Settings Modal */}
           <div class={styles.modalOverlay} id="dashboard-settings-modal">
-            <div class={styles.modal + ' ' + styles.modalMd}>
+            <div class={`${styles.modal  } ${  styles.modalMd}`}>
               <div class={styles.modalHeader}>
                 <div class={styles.modalTitle}>Dashboard Settings</div>
                 <button
@@ -231,27 +231,17 @@ export default function Dashboard() {
   )
 }
 
-function getIcon(type: 'income' | 'expense'): JSX.Element {
+function getIcon(type: 'income' | 'expense') {
   if (type === 'income') {
     return (
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M7 11l5-5m0 0l5 5m-5-5v12"
-        />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
       </svg>
     )
   }
   return (
     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        stroke-width="2"
-        d="M17 13l-5 5m0 0l-5-5m5 5V6"
-      />
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
     </svg>
   )
 }
