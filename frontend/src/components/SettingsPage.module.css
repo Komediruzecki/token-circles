@@ -7,3 +7,9 @@
 .settingsPage .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
 .settingsPage .settingsSection { margin-bottom: 16px; }
 .settingsPage .settingsSectionTitle { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+
+
+/* Legacy class mappings for Settings page */
+.page-content {
+  max-width: 800px;
+}

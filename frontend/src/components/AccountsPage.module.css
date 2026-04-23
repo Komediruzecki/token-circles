@@ -638,3 +638,31 @@
 .accountsPage .formControl::placeholder {
   color: var(--text-secondary);
 }
+
+
+/* Legacy class mappings for Accounts page */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.empty-state svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+
+.empty-state p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.empty-state button {
+  margin-top: 16px;
+}
