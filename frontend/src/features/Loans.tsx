@@ -5,6 +5,8 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
+import Chart from '../components/Chart'
+import type * as Models from '../types/models'
 
 interface Loan {
   id: number
@@ -287,6 +289,64 @@ export default function Loans() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Loan Amortization Chart */}
+      {loans().length > 0 && (
+        <div class="loan-amortization-section">
+          <h3>Loan Amortization Summary</h3>
+          <div class="amortization-chart-wrapper">
+            <Chart
+              id="loan-amortization-chart"
+              type="line"
+              data={{
+                labels: loans().map((l) => l.name),
+                datasets: [
+                  {
+                    label: 'Principal',
+                    data: loans().map((l) => l.principal),
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                  },
+                  {
+                    label: 'Remaining',
+                    data: loans().map((l) => calculateRemaining(l)),
+                    borderColor: '#dc2626',
+                    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                  }
+                ]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      callback: (value: any) => formatAmount(value)
+                    }
+                  }
+                },
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: {
+                      usePointStyle: true,
+                      padding: 15,
+                      font: { size: 12 }
+                    }
+                  }
+                }
+              }}
+              height={250}
+              width="100%"
+            />
+          </div>
         </div>
       )}
 
