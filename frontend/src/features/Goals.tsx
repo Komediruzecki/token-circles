@@ -5,6 +5,7 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/GoalsPage.module.css'
 import { formatCurrency } from '../core/api'
+import Chart from '../components/Chart'
 
 interface Goal {
   id: number
@@ -198,6 +199,58 @@ export default function Goals() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Goals Progress Chart */}
+      {goals().length > 0 && (
+        <div class="goals-chart-section">
+          <h3>Goals Progress</h3>
+          <div class="chart-wrapper">
+            <Chart
+              id="goals-progress-chart"
+              type="doughnut"
+              data={{
+                labels: goals().map((g) => g.name),
+                datasets: [{
+                  data: goals().map((g) => g.current_amount),
+                  backgroundColor: goals().map((g) => {
+                    const progress = g.current_amount / g.target_amount
+                    if (progress < 0.3) return '#dc2626'
+                    if (progress < 0.6) return '#eab308'
+                    if (progress < 0.9) return '#22c55e'
+                    return '#8b5cf6'
+                  }),
+                  borderWidth: 0
+                }]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'right',
+                    labels: {
+                      usePointStyle: true,
+                      padding: 15,
+                      font: { size: 12 }
+                    }
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (context: any) => {
+                        const goal = goals()[context.dataIndex]
+                        const progress = Math.round((goal.current_amount / goal.target_amount) * 100)
+                        return `${goal.name}: ${formatCurrency(goal.current_amount)} of ${formatCurrency(goal.target_amount)} (${progress}%)`
+                      }
+                    }
+                  }
+                }
+              }}
+              height={250}
+              width="100%"
+            />
+          </div>
         </div>
       )}
 

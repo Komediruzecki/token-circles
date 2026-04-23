@@ -5,6 +5,7 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/AnalyticsPage.module.css'
 import { formatCurrency } from '../core/api'
+import Chart from '../components/Chart'
 
 interface AnalyticsData {
   byCategory: Array<{ category_id: number; category_name: string; amount: number }>
@@ -182,28 +183,38 @@ export default function Analytics() {
                 {data()!.byCategory.length === 0 ? (
                   <div class={styles.emptyState}>No expense data</div>
                 ) : (
-                  <div class="category-bars">
-                    {data()!.byCategory.map((item) => {
-                      const percent = (item.amount / data()!.byCategory.reduce((s, x) => s + x.amount, 0)) * 100
-                      return (
-                        <div class="category-bar-item">
-                          <div class="bar-info">
-                            <span class="bar-name">{item.category_name}</span>
-                            <span class="bar-percent">{formatPercent(percent)}</span>
-                          </div>
-                          <div class="bar-track">
-                            <div
-                              class="bar-fill"
-                              style={{
-                                width: `${percent}%`,
-                              }}
-                            />
-                          </div>
-                          <span class="bar-amount">{formatAmount(item.amount)}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <Chart
+                    id="analytics-category-chart"
+                    type="doughnut"
+                    data={{
+                      labels: data()!.byCategory.map((item) => item.category_name),
+                      datasets: [{
+                        data: data()!.byCategory.map((item) => item.amount),
+                        backgroundColor: [
+                          '#dc2626', '#f97316', '#eab308', '#22c55e',
+                          '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
+                          '#6b7280', '#14b8a6'
+                        ],
+                        borderWidth: 0
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'right',
+                          labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 12 }
+                          }
+                        }
+                      }
+                    }}
+                    height={300}
+                    width="100%"
+                  />
                 )}
               </div>
             </div>
@@ -217,38 +228,55 @@ export default function Analytics() {
                 {data()!.byMonth.length === 0 ? (
                   <div class={styles.emptyState}>No data available</div>
                 ) : (
-                  <div class="trend-bars">
-                    {data()!.byMonth.map((item) => {
-                      const total = item.income + item.expense
-                      const incomePercent = total > 0 ? (item.income / total) * 100 : 0
-                      const expensePercent = total > 0 ? (item.expense / total) * 100 : 0
-                      return (
-                        <div class="trend-bar-item">
-                          <div class="bar-info">
-                            <span class="bar-name">{new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</span>
-                          </div>
-                          <div class="bar-track">
-                            <div
-                              class="bar-fill bar-income"
-                              style={{
-                                width: `${incomePercent}%`,
-                              }}
-                            />
-                            <div
-                              class="bar-fill bar-expense"
-                              style={{
-                                width: `${expensePercent}%`,
-                              }}
-                            />
-                          </div>
-                          <div class="bar-legend">
-                            <span class="bar-income-label">{formatPercent(incomePercent)} Income</span>
-                            <span class="bar-expense-label">{formatPercent(expensePercent)} Expense</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <Chart
+                    id="analytics-monthly-chart"
+                    type="line"
+                    data={{
+                      labels: data()!.byMonth.map((item) => new Date(item.month).toLocaleDateString('en-US', { month: 'short' })),
+                      datasets: [
+                        {
+                          label: 'Income',
+                          data: data()!.byMonth.map((item) => item.income),
+                          borderColor: '#22c55e',
+                          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                          fill: true,
+                          tension: 0.4
+                        },
+                        {
+                          label: 'Expense',
+                          data: data()!.byMonth.map((item) => item.expense),
+                          borderColor: '#dc2626',
+                          backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                          fill: true,
+                          tension: 0.4
+                        }
+                      ]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            callback: (value: any) => formatCurrency(value)
+                          }
+                        }
+                      },
+                      plugins: {
+                        legend: {
+                          position: 'top',
+                          labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: { size: 12 }
+                          }
+                        }
+                      }
+                    }}
+                    height={300}
+                    width="100%"
+                  />
                 )}
               </div>
             </div>

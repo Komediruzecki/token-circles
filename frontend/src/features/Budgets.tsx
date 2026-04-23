@@ -4,6 +4,8 @@
  */
 import { createEffect, createSignal, For,onMount } from 'solid-js'
 import styles from '../components/BudgetsPage.module.css'
+import Chart from '../components/Chart'
+import type * as Models from '../types/models'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 
@@ -251,6 +253,45 @@ export default function Budgets() {
         <div class="summary-card">
           <div class="summary-label">Unallocated</div>
           <div class="summary-value">{formatCurrency(summary()?.zero_based_remaining || 0)}</div>
+        </div>
+      </div>
+
+      {/* Category Allocation Chart */}
+      <div class="category-chart-section">
+        <h3>Category Allocation</h3>
+        <div class="chart-wrapper">
+          {allocations().length === 0 ? (
+            <div class={styles.emptyState}>No allocations for this month</div>
+          ) : (
+            <Chart
+              id="budget-category-chart"
+              type="doughnut"
+              data={{
+                labels: allocations().map((a) => a.category_name),
+                datasets: [{
+                  data: allocations().map((a) => a.allocated),
+                  backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
+                  borderWidth: 0
+                }]
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'right',
+                    labels: {
+                      usePointStyle: true,
+                      padding: 15,
+                      font: { size: 12 }
+                    }
+                  }
+                }
+              }}
+              height={250}
+              width="100%"
+            />
+          )}
         </div>
       </div>
 
