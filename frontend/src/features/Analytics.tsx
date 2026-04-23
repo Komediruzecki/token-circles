@@ -126,35 +126,35 @@ export default function Analytics() {
       ) : (
         <>
           {/* Summary Stats */}
-          <div class="analytics-stats">
-            <div class="stat-card">
-              <div class="stat-label">Savings Rate</div>
+          <div class={styles.analyticsStats}>
+            <div class={styles.statCard}>
+              <div class={styles.statLabel}>Savings Rate</div>
               <div class={`stat-value ${data()!.savingsRate >= 20 ? 'positive' : data()!.savingsRate >= 10 ? 'warning' : 'negative'}`}>
                 {formatPercent(data()!.savingsRate)}
               </div>
-              <div class="stat-desc">Recommended: 20%+</div>
+              <div class={styles.statDesc}>Recommended: 20%+</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-label">Total Income</div>
-              <div class="stat-value positive">{formatAmount(totalIncome())}</div>
-              <div class="stat-desc">Last 6 months</div>
+            <div class={styles.statCard}>
+              <div class={styles.statLabel}>Total Income</div>
+              <div class={`stat-value positive`}>{formatAmount(totalIncome())}</div>
+              <div class={styles.statDesc}>Last 6 months</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-label">Total Expense</div>
-              <div class="stat-value negative">{formatAmount(totalExpense())}</div>
-              <div class="stat-desc">Last 6 months</div>
+            <div class={styles.statCard}>
+              <div class={styles.statLabel}>Total Expense</div>
+              <div class={`stat-value negative`}>{formatAmount(totalExpense())}</div>
+              <div class={styles.statDesc}>Last 6 months</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-label">Net Savings</div>
-              <div class="stat-value positive">
+            <div class={styles.statCard}>
+              <div class={styles.statLabel}>Net Savings</div>
+              <div class={`stat-value positive`}>
                 {formatAmount(totalIncome() - totalExpense())}
               </div>
-              <div class="stat-desc">Income - Expenses</div>
+              <div class={styles.statDesc}>Income - Expenses</div>
             </div>
           </div>
 
           {/* Chart Tabs */}
-          <div class="analytics-tabs">
+          <div class={styles.analyticsTabs}>
             <button
               class={`tab ${selectedChart() === 'category' ? 'active' : ''}`}
               onClick={() => setSelectedChart('category')}
@@ -177,9 +177,9 @@ export default function Analytics() {
 
           {/* Category Chart */}
           {selectedChart() === 'category' && (
-            <div class="analytics-chart">
-              <h3 class="chart-title">Spending by Category</h3>
-              <div class="chart-container">
+            <div class={styles.analyticsChart}>
+              <h3 class={styles.chartTitle}>Spending by Category</h3>
+              <div class={styles.chartContainer}>
                 {data()!.byCategory.length === 0 ? (
                   <div class={styles.emptyState}>No expense data</div>
                 ) : (
@@ -284,28 +284,28 @@ export default function Analytics() {
 
           {/* Savings Rate Chart */}
           {selectedChart() === 'savings' && (
-            <div class="analytics-chart">
-              <h3 class="chart-title">Savings Rate History</h3>
-              <div class="chart-container">
-                <div class="savings-rate-display">
-                  <div class="rate-circle">
+            <div class={styles.analyticsChart}>
+              <h3 class={styles.chartTitle}>Savings Rate History</h3>
+              <div class={styles.chartContainer}>
+                <div class={styles.savingsRateDisplay}>
+                  <div class={styles.rateCircle}>
                     <span class="rate-value">{formatPercent(data()!.savingsRate)}</span>
-                    <span class="rate-label">Savings Rate</span>
+                    <span class={styles.rateLabel}>Savings Rate</span>
                   </div>
-                  <div class="rate-info">
-                    <div class="rate-row">
+                  <div class={styles.rateInfo}>
+                    <div class={styles.rateRow}>
                       <span>Target: 20%</span>
                       <span class={`rate-status ${data()!.savingsRate >= 20 ? 'good' : data()!.savingsRate >= 10 ? 'fair' : 'poor'}`}>
                         {data()!.savingsRate >= 20 ? 'Good' : data()!.savingsRate >= 10 ? 'Fair' : 'Poor'}
                       </span>
                     </div>
-                    <div class="rate-row">
+                    <div class={styles.rateRow}>
                       <span>Projected Annual Savings</span>
                       <span>{formatAmount((totalIncome() - totalExpense()) * 12)}</span>
                     </div>
                   </div>
                 </div>
-                <div class="savings-tips">
+                <div class={styles.savingsTips}>
                   <h4>Tips to Improve Savings</h4>
                   <ul>
                     {data()!.savingsRate < 20 && (
@@ -336,17 +336,17 @@ export default function Analytics() {
           )}
 
           {/* Recent Transactions */}
-          <div class="analytics-recent">
-            <h3 class="section-title">Recent Transactions</h3>
-            <div class="transaction-list">
+          <div class={styles.analyticsRecent}>
+            <h3 class={styles.sectionTitle}>Recent Transactions</h3>
+            <div class={styles.transactionList}>
               {data()!.recentTransactions.map((tx: any) => (
-                <div class="transaction-item">
-                  <div class="transaction-icon" style={{ background: tx.type === 'expense' ? 'var(--danger)' : 'var(--income)' }}>
+                <div class={styles.transactionItem}>
+                  <div class={styles.transactionIcon} style={{ background: tx.type === 'expense' ? 'var(--danger)' : 'var(--income)' }}>
                     {tx.type === 'expense' ? '↓' : '↑'}
                   </div>
-                  <div class="transaction-details">
-                    <div class="transaction-name">{tx.description}</div>
-                    <div class="transaction-meta">
+                  <div class={styles.transactionDetails}>
+                    <div class={styles.transactionName}>{tx.description}</div>
+                    <div class={styles.transactionMeta}>
                       {new Date(tx.date).toLocaleDateString()} • {tx.category_name || 'No category'}
                     </div>
                   </div>
@@ -357,7 +357,7 @@ export default function Analytics() {
                 </div>
               ))}
             </div>
-            <div class="view-all-link">
+            <div class={styles.viewAllLink}>
               <a href="#transactions">View All Transactions →</a>
             </div>
           </div>
