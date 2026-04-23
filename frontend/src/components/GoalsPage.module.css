@@ -113,3 +113,10 @@
   padding: 16px;
   margin-top: 16px;
 }
+
+
+/* Legacy class mappings for Goals page */
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+}

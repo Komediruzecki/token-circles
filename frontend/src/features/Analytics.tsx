@@ -113,7 +113,7 @@ export default function Analytics() {
     <div class={`page page-analytics page-enter ${styles.analyticsPage}`}>
       <div class={styles.pageHeader}>
         <h1>Analytics</h1>
-        <p class="page-subtitle">Visualize your financial data and track trends</p>
+        <p class={styles.pageSubtitle}>Visualize your financial data and track trends</p>
       </div>
 
       {loading() ? (
