@@ -1,0 +1,162 @@
+/* App Sidebar Styles */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg, #1e293b);
+  color: var(--sidebar-text, #cbd5e1);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  padding: 20px 0;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: var(--sidebar-text, #cbd5e1);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin: 4px 16px;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-link:hover {
+  background: var(--sidebar-active-bg, rgba(255, 255, 255, 0.1));
+  color: var(--text, #fff);
+}
+
+.sidebar-link.active {
+  background: var(--sidebar-active-bg, rgba(255, 255, 255, 0.1));
+  color: var(--sidebar-active-text, #fff);
+}
+
+/* Main Content Area */
+.main {
+  flex: 1;
+  margin-left: 240px;
+  padding: 0;
+  background: var(--bg, #0f172a);
+}
+
+/* App Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg, #0f172a);
+  color: var(--text, #e2e8f0);
+  font-family: var(--font-inter, 'Inter', system-ui, -apple-system, sans-serif);
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: var(--card-bg, #1e293b);
+  border-bottom: 1px solid var(--border, #334155);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary, #3b82f6);
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* App Body */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Buttons */
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #334155);
+  background: var(--card-bg, #1e293b);
+  color: var(--text, #e2e8f0);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--btn-ghost-hover, rgba(255, 255, 255, 0.05));
+}
+
+/* Page Content */
+.page {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@media (max-width: 1024px) {
+  .main {
+    margin-left: 0;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
