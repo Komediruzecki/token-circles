@@ -5716,6 +5716,84 @@ app.get("/api/housing", apiRateLimiter, (req, res) => {
   }
 });
 
+app.post("/api/housing", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { type, property_name, monthly_amount, due_day, due_month, autopay, notes } = req.body;
+
+    if (!type || !property_name || monthly_amount === undefined) {
+      return res.status(400).json({ error: 'Type, property name and monthly amount are required' });
+    }
+
+    // Calculate due_date from due_day and due_month
+    const due_date = `${due_month.toString().padStart(2, '0')}-${due_day.toString().padStart(2, '0')}`;
+
+    const info = db.prepare(`
+      INSERT INTO housings (profile_id, name, monthly_amount, due_date, autopay, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      pid,
+      property_name,
+      parseFloat(monthly_amount),
+      due_date,
+      autopay ? 1 : 0,
+      notes || '',
+    );
+
+    res.json({ id: info.lastInsertRowid });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/housing/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { type, property_name, monthly_amount, due_day, due_month, autopay, notes } = req.body;
+
+    const existing = db.prepare('SELECT id FROM housings WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    const due_date = `${due_month.toString().padStart(2, '0')}-${due_day.toString().padStart(2, '0')}`;
+
+    db.prepare(`
+      UPDATE housings SET name = ?, monthly_amount = ?, due_date = ?, autopay = ?, notes = ?
+      WHERE id = ? AND profile_id = ?
+    `).run(
+      property_name,
+      parseFloat(monthly_amount),
+      due_date,
+      autopay ? 1 : 0,
+      notes || '',
+      req.params.id,
+      pid,
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/housing/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const existing = db.prepare('SELECT id FROM housings WHERE id = ? AND profile_id = ?').get(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    db.prepare('DELETE FROM housings WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========================
 // STORAGE MODE MANAGEMENT (Serverless support)
 // ========================
