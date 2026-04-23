@@ -146,7 +146,7 @@ export default function Goals() {
             New Goal
           </button>
         </div>
-        <p class="page-subtitle">Track your savings progress towards financial goals</p>
+        <p class={styles.pageSubtitle}>Track your savings progress towards financial goals</p>
       </div>
 
       {loading() ? (
