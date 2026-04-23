@@ -39,8 +39,8 @@ export default function Analytics() {
       const monthMap = new Map<string, { income: number; expense: number }>()
 
       if (heatmapRes.dates) {
-        Object.entries(heatmapRes.dates).forEach(([date, amount]: [string, unknown]) => {
-          const numAmount = typeof amount === 'number' ? amount : 0
+        Object.entries(heatmapRes.dates).forEach(([date, amount]) => {
+          const numAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0
           if (numAmount > 0) {
             const monthKey = date.slice(0, 7)
             if (!monthMap.has(monthKey)) {
