@@ -90,7 +90,7 @@ pull_changes() {
 build_frontend() {
     log_info "Building frontend..."
     cd frontend
-    node build.mjs
+    npm run build
     cd ..
 
     # Copy docs if they exist
