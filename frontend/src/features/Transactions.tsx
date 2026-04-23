@@ -51,11 +51,6 @@ export default function Transactions() {
   // @ts-expect-error unused
   const _today = new Date().toISOString().slice(0, 7)
 
-  const _isTypeSelected = (_typeStr: string) => {
-    const selector = document.getElementById('tx-type-selector')
-    return selector?.classList.contains(`selected-${_typeStr}`) || false
-  }
-
   /**
    * Fetch exchange rate for a currency pair
    * Uses USD as base for simplicity

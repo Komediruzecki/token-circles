@@ -1,14 +1,12 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
-// @ts-expect-error - Bundle analyzer may not be installed
+// @ts-expect-error -- Bundle analyzer may not be installed
 import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
 import solidPlugin from 'vite-plugin-solid'
 import solidSvg from 'vite-plugin-solid-svg'
 
 const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
-
-const _IS_PLAYWRIGHT = process.env.mode === 'test'
 
 export default defineConfig({
   base: './',
@@ -97,11 +95,6 @@ export default defineConfig({
   css: {
     modules: {
       localsConvention: 'dashes',
-    },
-  },
-  cssPreprocessorOptions: {
-    scss: {
-      api: 'modern-compiler',
     },
   },
   // todo: was this used?

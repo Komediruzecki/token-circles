@@ -205,7 +205,7 @@ export function handleModalAction(action: string, arg?: any): void {
         typeof window.transactionsSetType === 'function'
           ? window.transactionsSetType
           : (_newType: string) => {
-              const txComponent = document.querySelector('[data-page="transactions"]')
+              const txComponent = document.querySelector('[data-page="transactions"]') as HTMLElement & { setType?: (type: string) => void }
               if (txComponent?.setType) {
                 txComponent.setType(_newType)
               }
