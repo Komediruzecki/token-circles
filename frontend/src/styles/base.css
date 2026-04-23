@@ -3,6 +3,14 @@
  * Copied from legacy index.html.ref styles
  */
 
+.page {
+  display: none;
+}
+
+.page-content {
+  display: block;
+}
+
 :root {
   --bg: #f8fafc;
   --sidebar-bg: #0f172a;
@@ -291,6 +299,7 @@ body {
 .page-retirement,
 .page-housing {
   animation: fadeIn 0.2s ease-out;
+  display: block;
 }
 
 /* Legacy page structure (for backward compatibility) */

@@ -126,8 +126,8 @@ export default function Accounts() {
   }
 
   return (
-    <div class={`page page-enter ${styles.accountsPage}`}>
-      <div class={styles.pageHeader}>
+    <div class={`page page-accounts page-enter ${styles.accountsPage}`}>
+      <div class={`${styles.accountsPage} ${styles.pageHeader}`}>
         <div class={styles.headerTop}>
           <h1>Accounts</h1>
           <button data-test-id="add-account-btn" class={`${styles.btn  } ${  styles.btnPrimary}`} onClick={() => setShowAddModal(true)}>

@@ -108,7 +108,7 @@ export default function Settings() {
       <div class={styles.pageHeader}>
         <h1>Settings</h1>
       </div>
-      <div class="page-content">
+      <div class="page page-settings page-content">
         <div class="settings-grid">
           <div class="settings-col">
             <div class={styles.card}>

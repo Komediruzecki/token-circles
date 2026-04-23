@@ -143,7 +143,7 @@ export default function Bills() {
   })
 
   return (
-    <div class={`page-bills page-enter ${styles.billsPage}`}>
+    <div class={`page page-bills page-enter ${styles.billsPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1>Bills</h1>
