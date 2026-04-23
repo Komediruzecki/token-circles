@@ -38,10 +38,81 @@
 }
 .analyticsPage .statValue {
   font-size: 24px;
-  font-weight: 700;
-  margin-top: 8px;
-  color: var(--text);
 }
+
+/* Analytics page specific classes */
+.analytics-chart {
+  margin-top: 24px;
+}
+
+.analytics-chart .chart-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.analytics-chart .chart-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.rates-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.rate-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.rate-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.rate-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.rate-change {
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.rate-change.positive {
+  color: var(--success);
+}
+
+.rate-change.negative {
+  color: var(--expense);
+}
+
+/* Legend classes */
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+/* Stat value variants */
 .analyticsPage .statValue.positive {
   color: var(--income);
 }

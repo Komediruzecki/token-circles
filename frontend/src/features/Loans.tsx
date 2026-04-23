@@ -189,14 +189,14 @@ export default function Loans() {
             Add Loan
           </button>
         </div>
-        <p class="page-subtitle">Track your loans and manage payments</p>
+        <p class={styles.pageSubtitle}>Track your loans and manage payments</p>
       </div>
 
       {/* Summary Cards */}
       <div class={styles.loansSummary}>
         <div class={styles.summaryCard} style={{ borderColor: 'var(--primary)' }}>
-          <div class="summary-label">Total Borrowed</div>
-          <div class="summary-value">{formatAmount(totalPrincipal())}</div>
+          <div class={styles.summaryLabel}>Total Borrowed</div>
+          <div class={styles.summaryValue}>{formatAmount(totalPrincipal())}</div>
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Remaining Balance</div>
@@ -232,13 +232,13 @@ export default function Loans() {
             return (
               <div class={styles.loanCard}>
                 <div class={styles.loanHeader}>
-                  <div class="loan-icon">🏦</div>
+                  <div class={styles.loanIcon}>🏦</div>
                   <div class={styles.loanInfo}>
                     <h3 class={styles.loanName}>{loan.name}</h3>
                     <span class={`badge ${getStatusBadge(loan.status)}`}>{getStatusLabel(loan.status)}</span>
                   </div>
                   <div class={styles.loanActions}>
-                    <button class="btn btn-sm btn-ghost" onClick={() => { editLoan(loan); }}>
+                    <button class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`} onClick={() => { editLoan(loan); }}>
                       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
@@ -363,66 +363,66 @@ export default function Loans() {
               </button>
             </div>
             <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class="form-group">
-                <label class="form-label">Loan Name</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Loan Name</label>
                 <input
                   type="text"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="e.g., Auto Loan, Student Loan"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Principal Amount</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Principal Amount</label>
                 <input
                   type="number"
                   step="0.01"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="15000.00"
                   value={formData().principal}
                   oninput={(e) => setFormData({ ...formData(), principal: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Interest Rate (%)</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Interest Rate (%)</label>
                 <input
                   type="number"
                   step="0.01"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="5.5"
                   value={formData().interest_rate}
                   oninput={(e) => setFormData({ ...formData(), interest_rate: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Term (months)</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Term (months)</label>
                 <input
                   type="number"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="60"
                   value={formData().term_months}
                   oninput={(e) => setFormData({ ...formData(), term_months: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Start Date</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Start Date</label>
                 <input
                   type="date"
-                  class="form-control"
+                  class={styles.formControl}
                   value={formData().start_date}
                   oninput={(e) => setFormData({ ...formData(), start_date: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Status</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Status</label>
                 <select
-                  class="form-control"
+                  class={styles.formControl}
                   value={formData().status}
                   oninput={(e) => setFormData({ ...formData(), status: e.target.value as Loan['status'] })}
                 >

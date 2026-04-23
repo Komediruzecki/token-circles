@@ -2,8 +2,25 @@
  * Budgets Component
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
-import { createEffect, createSignal, For,onMount } from 'solid-js'
-import styles from '../components/BudgetsPage.module.css'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
+import {
+  headerTop,
+  monthSelector,
+  monthDisplay,
+  pageSubtitle,
+  budgetSummary,
+  summaryCard,
+  summaryLabel,
+  summaryValue,
+  categoryChartSection,
+  chartWrapper,
+  forecastToggleSection,
+  budgetForecast,
+  forecastHeader,
+  forecastTitle,
+  btnOutline,
+  btnLarge
+} from '../components/BudgetsPage.module.css'
 import Chart from '../components/Chart'
 import type * as Models from '../types/models'
 
@@ -187,9 +204,9 @@ export default function Budgets() {
   return (
     <div class={`page page-budgets page-enter ${styles.budgetsPage}`}>
       <div class={styles.pageHeader}>
-        <div class="header-top">
+        <div class={styles.headerTop}>
           <h1>Budgets</h1>
-          <div class="month-selector">
+          <div class={styles.monthSelector}>
             <button
               class={styles.btnGhost}
               onclick={() => {
@@ -208,7 +225,7 @@ export default function Budgets() {
                 />
               </svg>
             </button>
-            <span class="month-display">{month()}</span>
+            <span class={styles.monthDisplay}>{month()}</span>
             <button
               class={styles.btnGhost}
               onclick={() => {
@@ -229,37 +246,37 @@ export default function Budgets() {
             </button>
           </div>
         </div>
-        <p class="page-subtitle">Zero-based budgeting: allocate every dollar to a category</p>
+        <p class={styles.pageSubtitle}>Zero-based budgeting: allocate every dollar to a category</p>
       </div>
 
       {/* Budget Summary Cards */}
-      <div class="budget-summary">
-        <div class="summary-card">
-          <div class="summary-label">Income</div>
+      <div class={styles.budgetSummary}>
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Income</div>
           <div class="summary-value positive">{formatCurrency(summary()?.income || 0)}</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Allocated</div>
-          <div class="summary-value">{formatCurrency(summary()?.total_budget || 0)}</div>
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Allocated</div>
+          <div class={styles.summaryValue}>{formatCurrency(summary()?.total_budget || 0)}</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Spent</div>
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Spent</div>
           <div class="summary-value negative">{formatCurrency(summary()?.total_spent || 0)}</div>
         </div>
         <div class="summary-card highlighted">
-          <div class="summary-label">Remaining</div>
+          <div class={styles.summaryLabel}>Remaining</div>
           <div class="summary-value status-ok">{formatCurrency(summary()?.remaining || 0)}</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Unallocated</div>
-          <div class="summary-value">{formatCurrency(summary()?.zero_based_remaining || 0)}</div>
+        <div class={styles.summaryCard}>
+          <div class={styles.summaryLabel}>Unallocated</div>
+          <div class={styles.summaryValue}>{formatCurrency(summary()?.zero_based_remaining || 0)}</div>
         </div>
       </div>
 
       {/* Category Allocation Chart */}
-      <div class="category-chart-section">
+      <div class={styles.categoryChartSection}>
         <h3>Category Allocation</h3>
-        <div class="chart-wrapper">
+        <div class={styles.chartWrapper}>
           {allocations().length === 0 ? (
             <div class={styles.emptyState}>No allocations for this month</div>
           ) : (
@@ -296,17 +313,17 @@ export default function Budgets() {
       </div>
 
       {/* Forecast Toggle Button */}
-      <div class="forecast-toggle-section">
-        <button class="btn btn-outline btn-lg" onClick={toggleForecast}>
+      <div class={styles.forecastToggleSection}>
+        <button class={`${styles.btnOutline} ${styles.btnLarge}`} onClick={toggleForecast}>
           {showForecast() ? 'Hide Budget Forecast' : 'Show Budget Forecast'}
         </button>
       </div>
 
       {/* Forecast Section */}
       {showForecast() && (
-        <div class="budget-forecast">
-          <div class="forecast-header">
-            <div class="forecast-title">
+        <div class={styles.budgetForecast}>
+          <div class={styles.forecastHeader}>
+            <div class={styles.forecastTitle}>
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"

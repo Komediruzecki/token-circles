@@ -23,6 +23,33 @@
 .housingPage .detailItem { display: flex; flex-direction: column; gap: 2px; }
 .housingPage .detailLabel { font-size: 11px; color: var(--text-secondary); }
 .housingPage .detailValue { font-weight: 500; }
+.housingPage .emptyState { padding: 48px; text-align: center; color: var(--text-secondary); }
+.housingPage .emptyState p { margin: 8px 0; }
+.housingPage .btnPrimary { background: var(--primary); color: #fff; border: none; padding: 10px 20px; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
+.housingPage .btnPrimary:hover { background: var(--primary-hover); }
+.housingPage .btnSecondary { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 10px 20px; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+.housingPage .btnSecondary:hover { background: var(--bg); }
+.housingPage .modalOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fadeIn 0.2s ease-out; }
+.housingPage .modal { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-lg); width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; animation: slideIn 0.2s ease-out; }
+.housingPage .modalHeader { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.housingPage .modalTitle { font-size: 18px; font-weight: 600; margin: 0; }
+.housingPage .modalClose { background: transparent; border: none; cursor: pointer; font-size: 24px; color: var(--text-secondary); padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); transition: background 0.2s; }
+.housingPage .modalClose:hover { background: var(--bg); }
+.housingPage .modalBody { padding: 20px; }
+.housingPage .modalFooter { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--border); }
+.housingPage .formGroup { margin-bottom: 16px; }
+.housingPage .formLabel { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+.housingPage .formControl { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 14px; }
+.housingPage .formControl:focus { outline: none; border-color: var(--primary); }
+.housingPage .formRow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.housingPage .toggleSwitch { display: flex; align-items: center; gap: 8px; }
+.housingPage .toggleSlider { width: 44px; height: 24px; background: var(--bg); border-radius: 12px; position: relative; transition: background 0.3s; border: 2px solid var(--border); }
+.housingPage .toggleSlider::before { content: ''; position: absolute; width: 20px; height: 20px; background: var(--text); border-radius: 50%; top: 2px; left: 2px; transition: transform 0.3s; }
+.housingPage .toggleSwitch input:checked + .toggleSlider { background: var(--primary); border-color: var(--primary); }
+.housingPage .toggleSwitch input:checked + .toggleSlider::before { transform: translateX(20px); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Legacy class mappings for Housing page */
 .header-top {

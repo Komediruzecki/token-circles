@@ -167,51 +167,51 @@ export default function Accounts() {
       </div>
 
       {loading() ? (
-        <div class="empty-state">Loading accounts...</div>
+        <div class={styles.emptyState}>Loading accounts...</div>
       ) : accounts().length === 0 ? (
-        <div class="empty-state">
+        <div class={styles.emptyState}>
           <p>No accounts yet</p>
           <p>Add your first account to start tracking your finances.</p>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setShowAddModal(true)}>
             Add Account
           </button>
         </div>
       ) : (
-        <div class="accounts-grid">
+        <div class={styles.accountsGrid}>
           {accounts().map((account) => (
-            <div class="account-card">
-              <div class="account-header">
-                <div class="account-icon">{getTypeIcon(account.type)}</div>
-                <div class="account-info">
-                  <h3 class="account-name">{account.name}</h3>
-                  <p class="account-bank">{account.bank_name || 'No bank listed'}</p>
+            <div class={styles.accountCard}>
+              <div class={styles.accountHeader}>
+                <div class={styles.accountIcon}>{getTypeIcon(account.type)}</div>
+                <div class={styles.accountInfo}>
+                  <h3 class={styles.accountName}>{account.name}</h3>
+                  <p class={styles.accountBank}>{account.bank_name || 'No bank listed'}</p>
                 </div>
-                <div class="account-actions">
-                  <span class={`badge ${getTypeBadge(account.type)}`}>{account.type}</span>
-                  <button class="btn btn-sm btn-ghost" onClick={() => deleteAccount(account.id)}>
+                <div class={styles.accountActions}>
+                  <span class={`${styles.badge} ${getTypeBadge(account.type)}`}>{account.type}</span>
+                  <button class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteAccount(account.id)}>
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
               </div>
-              <div class="account-balance">
-                <div class="balance-label">Current Balance</div>
-                <div class="balance-amount">{formatAmount(account.balance)}</div>
+              <div class={styles.accountBalance}>
+                <div class={styles.balanceLabel}>Current Balance</div>
+                <div class={styles.balanceAmount}>{formatAmount(account.balance)}</div>
               </div>
-              <div class="account-activity">
-                <div class="activity-header">
-                  <span class="activity-label">Recent Activity</span>
-                  <a href="#transactions" class="btn-link">View All →</a>
+              <div class={styles.accountActivity}>
+                <div class={styles.activityHeader}>
+                  <span class={styles.activityLabel}>Recent Activity</span>
+                  <a href="#transactions" class={styles.btnLink}>View All →</a>
                 </div>
-                <div class="activity-list">
+                <div class={styles.activityList}>
                   {getAccountTransactions(account.id).slice(0, 3).map((tx: any) => (
-                    <div class="activity-item" >
-                      <div class="activity-content">
-                        <div class="activity-desc">{tx.description}</div>
-                        <div class="activity-date">{new Date(tx.date).toLocaleDateString()}</div>
+                    <div class={styles.activityItem}>
+                      <div class={styles.activityContent}>
+                        <div class={styles.activityDesc}>{tx.description}</div>
+                        <div class={styles.activityDate}>{new Date(tx.date).toLocaleDateString()}</div>
                       </div>
-                      <div class={`activity-amount ${tx.type === 'expense' ? 'expense' : 'income'}`}>
+                      <div class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}>
                         {tx.type === 'expense' ? '-' : '+'}{formatAmount(tx.amount)}
                       </div>
                     </div>
@@ -225,32 +225,32 @@ export default function Accounts() {
 
       {/* Add Account Modal */}
       {showAddModal() && (
-        <div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class="modal" onclick={(e) => { e.stopPropagation(); }}>
-            <div class="modal-header">
-              <h3 class="modal-title">Add Account</h3>
-              <button class="modal-close" onClick={() => setShowAddModal(false)}>
+        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
+          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>Add Account</h3>
+              <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class="modal-body" onSubmit={handleSubmit}>
-              <div class="form-group">
-                <label class="form-label">Account Name</label>
+            <form class={styles.modalBody} onSubmit={handleSubmit}>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Account Name</label>
                 <input
                   type="text"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="e.g., Checking, Savings"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Account Type</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Account Type</label>
                 <select
-                  class="form-control"
+                  class={styles.formControl}
                   value={formData().type}
                   oninput={(e) => setFormData({ ...formData(), type: e.target.value as any })}
                 >
@@ -260,31 +260,31 @@ export default function Accounts() {
                   <option value="investment">Investment</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">Bank / Institution</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Bank / Institution</label>
                 <input
                   type="text"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="e.g., Chase, Bank of America"
                   value={formData().bank_name || ''}
                   oninput={(e) => setFormData({ ...formData(), bank_name: e.target.value })}
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Initial Balance</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Initial Balance</label>
                 <input
                   type="number"
                   step="0.01"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="0.00"
                   value={formData().balance}
                   oninput={(e) => setFormData({ ...formData(), balance: e.target.value })}
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Currency</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Currency</label>
                 <select
-                  class="form-control"
+                  class={styles.formControl}
                   value={formData().currency}
                   oninput={(e) => setFormData({ ...formData(), currency: e.target.value })}
                 >
@@ -295,11 +295,11 @@ export default function Accounts() {
                   <option value="CAD">CAD - Canadian Dollar</option>
                 </select>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+              <div class={styles.modalFooter}>
+                <button type="button" class={`${styles.btn} ${styles.btnSecondary}`} onClick={() => setShowAddModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class={`${styles.btn} ${styles.btnPrimary}`}>
                   Add Account
                 </button>
               </div>

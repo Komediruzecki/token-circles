@@ -26,6 +26,7 @@ export default function Goals() {
     name: '',
     target_amount: '',
     target_date: '',
+    monthly_contribution: '',
   })
 
   // Load goals
@@ -41,6 +42,7 @@ export default function Goals() {
         target_amount: s.current_amount,
         current_amount: s.current_amount,
         target_date: s.deadline || new Date().toISOString().split('T')[0],
+        monthly_contribution: s.monthly_contribution || '',
         profile_id: s.profile_id,
         created_at: s.created_at,
       })))
@@ -58,6 +60,7 @@ export default function Goals() {
       name: formData().name,
       target_amount: parseFloat(formData().target_amount),
       target_date: formData().target_date,
+      monthly_contribution: formData().monthly_contribution ? parseFloat(formData().monthly_contribution) : null,
     }
 
     try {
@@ -76,7 +79,7 @@ export default function Goals() {
       }
       setShowAddModal(false)
       setEditingGoal(null)
-      setFormData({ name: '', target_amount: '', target_date: '' })
+      setFormData({ name: '', target_amount: '', target_date: '', monthly_contribution: '' })
       loadGoals()
     } catch (error) {
       console.error('Failed to save goal', error)
@@ -101,6 +104,7 @@ export default function Goals() {
       name: goal.name,
       target_amount: goal.target_amount.toString(),
       target_date: goal.target_date.slice(0, 10),
+      monthly_contribution: goal.monthly_contribution ? goal.monthly_contribution.toString() : '',
     })
     setShowAddModal(true)
   }
@@ -298,6 +302,17 @@ export default function Goals() {
                   value={formData().target_date}
                   oninput={(e) => setFormData({ ...formData(), target_date: e.target.value })}
                   required
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Monthly Contribution</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  class="form-control"
+                  placeholder="e.g., 500.00"
+                  value={formData().monthly_contribution}
+                  oninput={(e) => setFormData({ ...formData(), monthly_contribution: e.target.value })}
                 />
               </div>
               <div class={styles.modalFooter}>

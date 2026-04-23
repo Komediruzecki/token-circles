@@ -222,9 +222,9 @@ export default function Analytics() {
 
           {/* Monthly Trend Chart */}
           {selectedChart() === 'monthly' && (
-            <div class="analytics-chart">
-              <h3 class="chart-title">Monthly Income vs Expense</h3>
-              <div class="chart-container">
+            <div class={styles.analyticsChart}>
+              <h3 class={styles.chartTitle}>Monthly Income vs Expense</h3>
+              <div class={styles.chartContainer}>
                 {data()!.byMonth.length === 0 ? (
                   <div class={styles.emptyState}>No data available</div>
                 ) : (
@@ -289,7 +289,7 @@ export default function Analytics() {
               <div class={styles.chartContainer}>
                 <div class={styles.savingsRateDisplay}>
                   <div class={styles.rateCircle}>
-                    <span class="rate-value">{formatPercent(data()!.savingsRate)}</span>
+                    <span class={styles.rateValue}>{formatPercent(data()!.savingsRate)}</span>
                     <span class={styles.rateLabel}>Savings Rate</span>
                   </div>
                   <div class={styles.rateInfo}>
