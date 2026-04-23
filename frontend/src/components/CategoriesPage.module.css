@@ -277,3 +277,9 @@
 .categoriesPage .emptyState p {
   font-size: 14px;
 }
+/* Legacy class mappings for Categories page */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

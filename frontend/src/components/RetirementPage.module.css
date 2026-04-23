@@ -45,3 +45,10 @@
 .retirementPage .legendDot { width: 12px; height: 12px; border-radius: 50%; }
 .retirementPage .legendDot.current { background: var(--success); }
 .retirementPage .legendDot.retirement { background: var(--warning); }
+
+/* Legacy class mappings for Retirement page */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

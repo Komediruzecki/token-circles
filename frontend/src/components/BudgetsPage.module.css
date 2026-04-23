@@ -270,3 +270,10 @@
 .budgetSummary .emptyState p {
   margin: 8px 0;
 }
+
+/* Legacy class mappings for Budgets page */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

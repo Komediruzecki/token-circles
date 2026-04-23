@@ -23,3 +23,10 @@
 .housingPage .detailItem { display: flex; flex-direction: column; gap: 2px; }
 .housingPage .detailLabel { font-size: 11px; color: var(--text-secondary); }
 .housingPage .detailValue { font-weight: 500; }
+
+/* Legacy class mappings for Housing page */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

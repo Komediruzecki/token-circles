@@ -173,3 +173,10 @@
 .billsPage .toggleSwitch input:checked + .toggleSlider::before {
   transform: translateX(20px);
 }
+
+/* Legacy class mappings for Bills page */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

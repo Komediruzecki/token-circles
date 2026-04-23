@@ -180,7 +180,7 @@ export default function Loans() {
   return (
     <div class={`page page-loans page-enter ${styles.loansPage}`}>
       <div class={styles.pageHeader}>
-        <div class="header-top">
+        <div class={styles.headerTop}>
           <h1>Loans</h1>
           <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
