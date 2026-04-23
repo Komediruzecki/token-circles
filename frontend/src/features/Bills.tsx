@@ -145,9 +145,9 @@ export default function Bills() {
   return (
     <div class={`page-bills page-enter ${styles.billsPage}`}>
       <div class={styles.pageHeader}>
-        <div class="header-top">
+        <div class={styles.headerTop}>
           <h1>Bills</h1>
-          <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -162,24 +162,24 @@ export default function Bills() {
         <div class={styles.billsSection}>
           <h2 class={styles.sectionTitle}>
             <span>🔔</span> Upcoming Bills
-            <span class="section-subtitle">{upcoming().length} bills</span>
+            <span class={styles.sectionSubtitle}>{upcoming().length} bills</span>
           </h2>
-          <div class="bills-list">
+          <div class={styles.billsList}>
             {upcoming().map((bill) => (
-              <div class={`bill-card ${isOverdue(bill.due_date) ? 'overdue' : ''}`}>
-                <div class="bill-main">
-                  <div class="bill-icon">{bill.autopay ? '🤖' : '📝'}</div>
-                  <div class="bill-info">
+              <div class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}>
+                <div class={styles.billMain}>
+                  <div class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
+                  <div class={styles.billInfo}>
                     <h3 class={styles.billName}>{bill.name}</h3>
                     <p class={styles.billDetails}>
                       {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
                     </p>
                   </div>
                 </div>
-                <div class={`bill-amount ${isOverdue(bill.due_date) ? 'overdue' : ''}`}>
+                <div class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}>
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   {!bill.paid && (
-                    <button class="btn btn-sm btn-primary" onClick={() => markPaid(bill.id)}>
+                    <button class={`${styles.btnPrimary} ${styles.btnSm}`} onClick={() => markPaid(bill.id)}>
                       Mark Paid
                     </button>
                   )}
@@ -195,23 +195,23 @@ export default function Bills() {
         <div class={styles.billsSection}>
           <h2 class={styles.sectionTitle}>
             <span>✅</span> Paid Bills
-            <span class="section-subtitle">{paid().length} bills</span>
+            <span class={styles.sectionSubtitle}>{paid().length} bills</span>
           </h2>
-          <div class="bills-list">
+          <div class={styles.billsList}>
             {paid().map((bill) => (
-              <div class="bill-card paid">
-                <div class="bill-main">
-                  <div class="bill-icon">✅</div>
-                  <div class="bill-info">
+              <div class={`${styles.billCard} ${styles.paid}`}>
+                <div class={styles.billMain}>
+                  <div class={styles.billIcon}>✅</div>
+                  <div class={styles.billInfo}>
                     <h3 class={styles.billName}>{bill.name}</h3>
                     <p class={styles.billDetails}>
                       Paid {formatDate(bill.due_date)}
                     </p>
                   </div>
                 </div>
-                <div class="bill-amount">
+                <div class={styles.billAmount}>
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                  <button class="btn btn-sm btn-ghost" onClick={() => deleteBill(bill.id)}>
+                  <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteBill(bill.id)}>
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -227,7 +227,7 @@ export default function Bills() {
       <div class={styles.billsSection}>
         <h2 class={styles.sectionTitle}>
           <span>📋</span> All Bills
-          <span class="section-subtitle">{bills().length} total</span>
+          <span class={styles.sectionSubtitle}>{bills().length} total</span>
         </h2>
         {loading() ? (
           <div class={styles.emptyState}>Loading bills...</div>
@@ -235,17 +235,17 @@ export default function Bills() {
           <div class={styles.emptyState}>
             <p>No bills yet</p>
             <p>Add your first bill to start tracking your payments.</p>
-            <button class="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
               Add Bill
             </button>
           </div>
         ) : (
-          <div class="bills-list">
+          <div class={styles.billsList}>
             {bills().map((bill) => (
-              <div class="bill-card">
-                <div class="bill-main">
-                  <div class="bill-icon">{bill.autopay ? '🤖' : '📝'}</div>
-                  <div class="bill-info">
+              <div class={styles.billCard}>
+                <div class={styles.billMain}>
+                  <div class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
+                  <div class={styles.billInfo}>
                     <h3 class={styles.billName}>{bill.name}</h3>
                     <p class={styles.billDetails}>
                       {formatDate(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
@@ -253,15 +253,15 @@ export default function Bills() {
                     </p>
                   </div>
                 </div>
-                <div class="bill-amount">
+                <div class={styles.billAmount}>
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   <div class="bill-actions">
                     {!bill.paid ? (
-                      <button class="btn btn-sm btn-primary" onClick={() => markPaid(bill.id)}>
+                      <button class={`${styles.btnPrimary} ${styles.btnSm}`} onClick={() => markPaid(bill.id)}>
                         {isOverdue(bill.due_date) ? 'Mark as Paid (Overdue)' : 'Mark Paid'}
                       </button>
                     ) : (
-                      <button class="btn btn-sm btn-ghost" onClick={() => deleteBill(bill.id)}>
+                      <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteBill(bill.id)}>
                         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -288,43 +288,43 @@ export default function Bills() {
               </button>
             </div>
             <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class="form-group">
-                <label class="form-label">Bill Name</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Bill Name</label>
                 <input
                   type="text"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="e.g., Rent, Electricity, Internet"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Amount</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Amount</label>
                 <input
                   type="number"
                   step="0.01"
-                  class="form-control"
+                  class={styles.formControl}
                   placeholder="500.00"
                   value={formData().amount}
                   oninput={(e) => setFormData({ ...formData(), amount: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Due Date</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Due Date</label>
                 <input
                   type="date"
-                  class="form-control"
+                  class={styles.formControl}
                   value={formData().due_date}
                   oninput={(e) => setFormData({ ...formData(), due_date: e.target.value })}
                   required
                 />
               </div>
-              <div class="form-group">
-                <label class="form-label">Frequency</label>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Frequency</label>
                 <select
-                  class="form-control"
+                  class={styles.formControl}
                   value={formData().frequency}
                   oninput={(e) => setFormData({ ...formData(), frequency: e.target.value as Bill['frequency'] })}
                 >
@@ -333,20 +333,20 @@ export default function Bills() {
                   <option value="biweekly">Biweekly</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>
                   <span>🤖 Autopay</span>
                   <span style="font-size: 14px; color: var(--text-secondary)">
                     Automatically pay this bill
                   </span>
                 </label>
-                <label class="toggle-switch">
+                <label class={styles.toggleSwitch}>
                   <input
                     type="checkbox"
                     checked={formData().autopay}
                     oninput={(e) => setFormData({ ...formData(), autopay: e.target.checked })}
                   />
-                  <span class="toggle-slider"></span>
+                  <span class={styles.toggleSlider}></span>
                 </label>
               </div>
               <div class={styles.modalFooter}>

@@ -88,6 +88,40 @@
   display: flex;
   gap: 4px;
 }
+.billsPage .btnPrimary {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+.billsPage .btnPrimary:hover {
+  background: var(--primary-hover);
+}
+.billsPage .btnSm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.billsPage .btnGhost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+.billsPage .btnGhost:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
 .billsPage .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -134,6 +168,7 @@
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 6px;
+  color: var(--text);
 }
 .billsPage .formControl {
   width: 100%;
@@ -142,6 +177,11 @@
   border-radius: 8px;
   background: var(--bg);
   color: var(--text);
+  font-size: 14px;
+}
+.billsPage .formControl:focus {
+  outline: none;
+  border-color: var(--primary);
 }
 .billsPage .toggleSwitch {
   display: flex;
@@ -155,6 +195,7 @@
   border-radius: 12px;
   position: relative;
   transition: background 0.3s;
+  border: 2px solid var(--border);
 }
 .billsPage .toggleSlider::before {
   content: '';
@@ -169,9 +210,30 @@
 }
 .billsPage .toggleSwitch input:checked + .toggleSlider {
   background: var(--primary);
+  border-color: var(--primary);
 }
 .billsPage .toggleSwitch input:checked + .toggleSlider::before {
   transform: translateX(20px);
+}
+
+/* Legacy class mappings for Bills page */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bills-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .bills-list {
@@ -218,91 +280,6 @@
   min-width: 0;
 }
 
-.billName {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-
-.billDetails {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.bill-amount {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.amount-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.bill-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.section-subtitle {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 400;
-  margin-left: auto;
-}
-
-/* Legacy class mappings for Bills page */
-.header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.bills-section {
-  margin-bottom: 24px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bills-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.bill-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-
-.bill-main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.bill-icon {
-  font-size: 24px;
-}
-
-.bill-info {
-  flex: 1;
-  min-width: 0;
-}
-
 .bill-name {
   font-size: 16px;
   font-weight: 600;
@@ -330,6 +307,13 @@
 .bill-actions {
   display: flex;
   gap: 4px;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: auto;
 }
 
 .modal-overlay {

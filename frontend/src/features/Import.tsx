@@ -4,6 +4,7 @@
  */
 
 import { createSignal } from 'solid-js'
+import styles from '../components/ImportPage.module.css'
 
 type ImportResult = {
   status: 'idle' | 'uploading' | 'previewing' | 'importing' | 'success' | 'error'
@@ -244,7 +245,7 @@ export default function Import() {
 
   return (
     <div class="page page-import page-enter">
-      <div class="page-header">
+      <div class={styles.pageHeader}>
         <h1>Import Transactions</h1>
         <p>Import transactions from CSV or Excel files</p>
       </div>
@@ -272,8 +273,8 @@ export default function Import() {
 
       {/* File Upload Section */}
       {!fileContent().length ? (
-        <div class="import-upload-section">
-          <div class="upload-dropzone" id="import-dropzone">
+        <div class={styles.importUploadSection}>
+          <div class={styles.uploadDropzone} id="import-dropzone">
             <input
               type="file"
               id="import-file-input"
@@ -281,40 +282,40 @@ export default function Import() {
               class="import-file-input"
               data-action="import:file"
             />
-            <label for="import-file-input" class="upload-label">
+            <label for="import-file-input" class={styles.uploadLabel}>
               <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p>Click or drag and drop your file here</p>
-              <p class="upload-hint">Supported formats: CSV, XLSX, XLS</p>
+              <p class={styles.uploadHint}>Supported formats: CSV, XLSX, XLS</p>
             </label>
           </div>
 
           {/* Sample Template */}
-          <div class="import-template">
+          <div class={styles.importTemplate}>
             <h3>Need a template?</h3>
             <p>Download a sample CSV file to get started:</p>
-            <a href="#" class="btn btn-outline" data-action="import:download-template">
+            <a href="#" class={styles.btnOutline} data-action="import:download-template">
               Download Sample Template
             </a>
           </div>
 
           {/* Import Options */}
-          <div class="import-options">
+          <div class={styles.importOptions}>
             <h3>Default Import Settings</h3>
-            <div class="form-group">
-              <label class="form-label">Default Date</label>
+            <div class={styles.formGroup}>
+              <label class={styles.formLabel}>Default Date</label>
               <input
                 type="date"
-                class="form-control"
+                class={styles.formControl}
                 value={formData().date}
                 oninput={(e) => setFormData({ ...formData(), date: e.target.value })}
               />
             </div>
-            <div class="form-group">
-              <label class="form-label">Default Type</label>
+            <div class={styles.formGroup}>
+              <label class={styles.formLabel}>Default Type</label>
               <select
-                class="form-control"
+                class={styles.formControl}
                 value={formData().type}
                 oninput={(e) => setFormData({ ...formData(), type: e.target.value as any })}
               >
@@ -329,8 +330,8 @@ export default function Import() {
         <>
           {/* Preview Section */}
           <div class="import-preview-section">
-            <div class="preview-header">
-              <div class="preview-stats">
+            <div class={styles.previewHeader}>
+              <div class={styles.previewStats}>
                 <div class="stat-item">
                   <span class="stat-label">Total Rows</span>
                   <span class="stat-value">{fileContent().length}</span>
@@ -340,27 +341,27 @@ export default function Import() {
                   <span class="stat-value">{selectedRows().size}</span>
                 </div>
               </div>
-              <div class="preview-actions">
-                <button class="btn btn-outline" data-action="import:select-all" data-arg="all">
+              <div class={styles.previewActions}>
+                <button class={styles.btnOutline} data-action="import:select-all" data-arg="all">
                   Select All
                 </button>
-                <button class="btn btn-outline" data-action="import:select-all" data-arg="none">
+                <button class={styles.btnOutline} data-action="import:select-all" data-arg="none">
                   Deselect All
                 </button>
-                <button class="btn btn-outline" data-action="import:select-page">
+                <button class={styles.btnOutline} data-action="import:select-page">
                   Select Page
                 </button>
-                <button class="btn btn-outline" data-action="import:preview-template">
+                <button class={styles.btnOutline} data-action="import:preview-template">
                   Change File
                 </button>
               </div>
             </div>
 
-            <div class="preview-table-container">
-              <table class="data-table">
+            <div class={styles.previewTableContainer}>
+              <table class={styles.dataTable}>
                 <thead>
                   <tr>
-                    <th class="select-col">
+                    <th class={styles.selectCol}>
                       <input
                         type="checkbox"
                         checked={
@@ -379,7 +380,7 @@ export default function Import() {
                     .slice(startRow(), endRow())
                     .map((row, idx) => (
                       <tr data-index={startRow() + idx} class={selectedRows().has(startRow() + idx) ? 'selected' : ''}>
-                        <td class="select-col">
+                        <td class={styles.selectCol}>
                           <input
                             type="checkbox"
                             checked={selectedRows().has(startRow() + idx)}
@@ -397,20 +398,20 @@ export default function Import() {
 
             {/* Pagination */}
             {fileContent().length > rowsPerPage() && (
-              <div class="pagination">
+              <div class={styles.pagination}>
                 <button
-                  class="btn btn-sm btn-ghost"
+                  class={`${styles.btnSm} ${styles.btnGhost}`}
                   disabled={currentPage() === 1}
                   data-action="import:page"
                   data-arg="prev"
                 >
                   Previous
                 </button>
-                <span class="page-info">
+                <span class={styles.pageInfo}>
                   Page {currentPage()} of {totalPages()}
                 </span>
                 <button
-                  class="btn btn-sm btn-ghost"
+                  class={`${styles.btnSm} ${styles.btnGhost}`}
                   disabled={currentPage() === totalPages()}
                   data-action="import:page"
                   data-arg="next"
@@ -434,11 +435,11 @@ export default function Import() {
             )}
 
             {/* Import Actions */}
-            <div class="import-actions">
-              <button class="btn btn-outline" data-action="import:reset">
+            <div class={styles.importActions}>
+              <button class={styles.btnOutline} data-action="import:reset">
                 Cancel
               </button>
-              <button class="btn btn-primary" data-action="import:start">
+              <button class={styles.btnPrimary} data-action="import:start">
                 Import {selectedRows().size} Transaction{selectedRows().size !== 1 ? 's' : ''}
               </button>
             </div>
