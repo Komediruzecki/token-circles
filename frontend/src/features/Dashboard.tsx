@@ -7,6 +7,7 @@ import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type * as Models from '../types/models'
+import Chart from '../components/Chart'
 
 export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
@@ -81,12 +82,12 @@ export default function Dashboard() {
           <div class={styles.metricsGrid}>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Balance</div>
-              <div class={`${styles.metricValue  } ${  styles.positive}`}>{formatCurrency(metrics()!.balance)}</div>
+              <div class={`${styles.metricValue} ${styles.positive}`}>{formatCurrency(metrics()!.balance)}</div>
               <div class={styles.metricSubtext}>Total available</div>
             </div>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Income</div>
-              <div class={`${styles.metricValue  } ${  styles.positive}`}>{formatCurrency(metrics()!.totalIncome)}</div>
+              <div class={`${styles.metricValue} ${styles.positive}`}>{formatCurrency(metrics()!.totalIncome)}</div>
               <div class={styles.metricSubtext}>For this period</div>
             </div>
             <div class={styles.metricCard}>
@@ -102,12 +103,92 @@ export default function Dashboard() {
               <div class={styles.cardTitle}>Spending by Category</div>
             </div>
             <div class={styles.chartContainer}>
-              <canvas id="expense-category-chart" />
-            </div>
-            {!metrics()!.expenseByCategory ||
-              (metrics()!.expenseByCategory.length === 0 && (
+              {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
+                <Chart
+                  id="expense-category-chart"
+                  type="doughnut"
+                  data={{
+                    labels: metrics()!.expenseByCategory.map((item: any) => item.category_name || 'Uncategorized'),
+                    datasets: [{
+                      data: metrics()!.expenseByCategory.map((item: any) => item.total),
+                      backgroundColor: [
+                        '#dc2626',
+                        '#f97316',
+                        '#eab308',
+                        '#22c55e',
+                        '#06b6d4',
+                        '#3b82f6',
+                        '#8b5cf6',
+                        '#ec4899',
+                        '#6b7280',
+                        '#14b8a6'
+                      ],
+                      borderWidth: 0
+                    }]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'right',
+                        labels: {
+                          usePointStyle: true,
+                          padding: 15,
+                          font: { size: 12 }
+                        }
+                      }
+                    }
+                  }}
+                  height={300}
+                  width="100%"
+                />
+              ) : (
                 <div class={styles.emptyState}>No expense data to display</div>
-              ))}
+              )}
+            </div>
+          </div>
+
+          {/* Income vs Expenses Chart */}
+          <div class={styles.card}>
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Income vs Expenses</div>
+            </div>
+            <div class={styles.chartContainer}>
+              <Chart
+                id="income-expense-chart"
+                type="bar"
+                data={{
+                  labels: ['Income', 'Expenses', 'Net'],
+                  datasets: [{
+                    data: [
+                      metrics()!.totalIncome || 0,
+                      metrics()!.totalExpenses || 0,
+                      (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0)
+                    ],
+                    backgroundColor: ['#22c55e', '#dc2626', (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0 ? '#22c55e' : '#dc2626'],
+                    borderRadius: 8
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        callback: (value: any) => formatCurrency(value)
+                      }
+                    }
+                  },
+                  plugins: {
+                    legend: { display: false }
+                  }
+                }}
+                height={250}
+                width="100%"
+              />
+            </div>
           </div>
 
           {/* Recent Transactions */}
@@ -166,8 +247,7 @@ export default function Dashboard() {
                         <svg
                           width="16"
                           height="16"
-                          fill="none"
-                          stroke="currentColor"
+                          fill="none" stroke="currentColor"
                           viewBox="0 0 24 24"
                         >
                           <path
@@ -184,7 +264,7 @@ export default function Dashboard() {
                           Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
                         </div>
                       </div>
-                      <div class={`${styles.transactionAmount  } ${  styles.expense}`}>{formatCurrency(bill.amount)}</div>
+                      <div class={`${styles.transactionAmount} ${styles.expense}`}>{formatCurrency(bill.amount)}</div>
                     </div>
                   ))}
               </div>
@@ -193,7 +273,7 @@ export default function Dashboard() {
 
           {/* Widget Settings Modal */}
           <div class={styles.modalOverlay} id="dashboard-settings-modal">
-            <div class={`${styles.modal  } ${  styles.modalMd}`}>
+            <div class={`${styles.modal} ${styles.modalMd}`}>
               <div class={styles.modalHeader}>
                 <div class={styles.modalTitle}>Dashboard Settings</div>
                 <button
