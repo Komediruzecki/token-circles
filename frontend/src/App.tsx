@@ -7,6 +7,7 @@ import { handlers, receipts, transactions } from './core/handlers.js'
 import { theme } from './core/theme.js'
 import { pages } from './router.tsx'
 import type { PageName } from './router.tsx'
+import styles from './styles/AppSidebar.module.css'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -121,11 +122,11 @@ export function App() {
   })
 
   return (
-    <div class="app">
+    <div class={styles.app}>
       {/* Header */}
-      <header class="app-header">
-        <div class="header-left">
-          <h1 class="app-title">
+      <header class={styles.appHeader}>
+        <div class={styles.headerLeft}>
+          <h1 class={styles.appTitle}>
             <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
@@ -137,8 +138,8 @@ export function App() {
             Finance Manager
           </h1>
         </div>
-        <div class="header-right">
-          <button class="btn-icon" data-action="app:settings" aria-label="Settings">
+        <div class={styles.headerRight}>
+          <button class={styles.btnIcon} data-action="app:settings" aria-label="Settings">
             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
@@ -157,12 +158,12 @@ export function App() {
         </div>
       </header>
 
-      <div class="app-body">
+      <div class={styles.appBody}>
         {/* Sidebar */}
-        <aside class="sidebar">
-          <nav class="sidebar-nav">
+        <aside class={styles.sidebar}>
+          <nav class={styles.sidebarNav}>
             <a
-              class={`sidebar-link ${currentPage() === 'dashboard' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'dashboard' ? styles.active : ''}`}
               href="#dashboard"
               data-page="dashboard"
             >
@@ -177,7 +178,7 @@ export function App() {
               Dashboard
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'transactions' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'transactions' ? styles.active : ''}`}
               href="#transactions"
               data-page="transactions"
             >
@@ -192,7 +193,7 @@ export function App() {
               Transactions
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'accounts' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'accounts' ? styles.active : ''}`}
               href="#accounts"
               data-page="accounts"
             >
@@ -207,7 +208,7 @@ export function App() {
               Accounts
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'categories' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'categories' ? styles.active : ''}`}
               href="#categories"
               data-page="categories"
             >
@@ -222,7 +223,7 @@ export function App() {
               Categories
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'budgets' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'budgets' ? styles.active : ''}`}
               href="#budgets"
               data-page="budgets"
             >
@@ -243,7 +244,7 @@ export function App() {
               Budgets
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'goals' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'goals' ? styles.active : ''}`}
               href="#goals"
               data-page="goals"
             >
@@ -258,7 +259,7 @@ export function App() {
               Goals
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'loans' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'loans' ? styles.active : ''}`}
               href="#loans"
               data-page="loans"
             >
@@ -273,7 +274,7 @@ export function App() {
               Loans
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'bills' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'bills' ? styles.active : ''}`}
               href="#bills"
               data-page="bills"
             >
@@ -288,7 +289,7 @@ export function App() {
               Bills
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'retirement' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'retirement' ? styles.active : ''}`}
               href="#retirement"
               data-page="retirement"
             >
@@ -303,7 +304,7 @@ export function App() {
               Retirement
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'housing' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'housing' ? styles.active : ''}`}
               href="#housing"
               data-page="housing"
             >
@@ -318,7 +319,7 @@ export function App() {
               Housing
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'analytics' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'analytics' ? styles.active : ''}`}
               href="#analytics"
               data-page="analytics"
             >
@@ -333,7 +334,7 @@ export function App() {
               Analytics
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'import' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'import' ? styles.active : ''}`}
               href="#import"
               data-page="import"
             >
@@ -348,7 +349,7 @@ export function App() {
               Import
             </a>
             <a
-              class={`sidebar-link ${currentPage() === 'settings' ? 'active' : ''}`}
+              class={`${styles.sidebarLink} ${currentPage() === 'settings' ? styles.active : ''}`}
               href="#settings"
               data-page="settings"
             >
@@ -372,10 +373,10 @@ export function App() {
         </aside>
 
         {/* Main Content */}
-        <main class="main">
+        <main class={styles.main}>
           <div
             id="page-content"
-            class={`page ${currentPage() === 'bills' ? 'page-bills active' : 'page'}`}
+            class={styles.page}
           >
             {pages[currentPage()]}
           </div>
