@@ -1,23 +1,49 @@
-/**
- * Pagination CSS Module
- * Pagination controls for tables
- */
-
 .pagination {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.paginationInfo {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.paginationControls {
-  display: flex;
+  justify-content: center;
   gap: 4px;
+  padding: 16px 0;
+}
+
+.pageBtn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pageBtn:hover:not(:disabled):not(.pageBtnActive) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pageBtnActive {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.pageBtnPrev,
+.pageBtnNext {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ellipsis {
+  padding: 0 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }

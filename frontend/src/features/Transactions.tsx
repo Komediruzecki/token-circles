@@ -1,10 +1,13 @@
 /**
  * Transactions Component
- * Handles transaction listing, creation, and management
+ * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, For } from 'solid-js'
 import styles from '../components/TransactionsPage.module.css'
 import { api } from '../core/api.js'
+import TransactionTable from '../components/TransactionTable'
+import FilterBar from '../components/FilterBar'
+import Pagination from '../components/Pagination'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -28,112 +31,38 @@ interface Transaction {
   currency: string
   type: TransactionType
   category_name: string
+  category_id?: number
   beneficiary?: string
   payor?: string
   reconciled: boolean
   receipt_id: number | null
   receipt_name: string
+  tags?: Array<{ id: number; name: string; color: string }>
+  means_of_payment?: string
+  notes?: string
 }
 
 export default function Transactions() {
-  const [_transactions, setTransactions] = createSignal<Transaction[]>([])
-  const [_loading, setLoading] = createSignal(true)
-  const [_selectedTransactions, _setSelectedTransactions] = createSignal<number[]>([])
-  const [_filterType, _setFilterType] = createSignal<string>('all')
-  const [_filterMonth, _setFilterMonth] = createSignal<string>('')
-  const [_searchTerm, _setSearchTerm] = createSignal('')
+  const [transactions, setTransactions] = createSignal<Transaction[]>([])
+  const [loading, setLoading] = createSignal(true)
+  const [selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
-  const [isTransactionModalOpen, _setTransactionModalOpen] = createSignal(false)
+  const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
-  const [type, _setType] = createSignal<TransactionType>('expense')
-  // @ts-expect-error unused
-  const _today = new Date().toISOString().slice(0, 7)
-
-  /**
-   * Fetch exchange rate for a currency pair
-   * Uses USD as base for simplicity
-   */
-  const _fetchExchangeRate = async (targetCurrency: string): Promise<number> => {
-    try {
-      const data = await fetch(`/api/exchange-rates?base=USD&symbols=${targetCurrency}`).then(r => r.json())
-      return data.rates[targetCurrency] || 1
-    } catch (error) {
-      console.warn('Failed to fetch exchange rate:', error)
-      return 1
-    }
-  }
-
-  /**
-   * Convert amount from foreign currency to local currency
-   * @param amount - Amount in foreign currency
-   * @param foreignCurrency - Currency code of the amount
-   * @returns Converted amount
-   */
-  // @ts-expect-error unused
-  const _getForeignAmount = async (_amount: number, _foreignCurrency: string): Promise<number> => {
-    return _amount
-  }
-
-  // @ts-expect-error unused
-  const _convertToLocal = async (
-    amount: number,
-    foreignCurrency: string
-  ): Promise<number> => {
-    const rate = await _fetchExchangeRate(foreignCurrency)
-    return amount * rate
-  }
-
-  // @ts-expect-error unused
-  const _handleLocalAmountChange = async (event: Event) => {
-    const target = event.target as HTMLInputElement
-    const localAmount = parseFloat(target.value) || 0
-
-    const foreignCurrencyInput = document.getElementById('tx-currency') as HTMLSelectElement
-    const amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const exchangeRateInput = document.getElementById('tx-exchange-rate') as HTMLInputElement
-
-    if (!foreignCurrencyInput || !amountInput || !exchangeRateInput) return
-
-    const foreignCurrency = foreignCurrencyInput.value
-
-    // Fetch exchange rate
-    const rate = await _fetchExchangeRate(foreignCurrency)
-    if (exchangeRateInput) {
-      exchangeRateInput.value = rate.toString()
-    }
-
-    // Convert local amount back to foreign currency
-    const foreignAmount = localAmount / rate
-    if (amountInput) {
-      amountInput.value = foreignAmount.toFixed(2)
-    }
-  }
-
-  // @ts-expect-error unused
-  const _handleExchangeRateChange = (_event: Event) => {
-    const target = _event.target as HTMLInputElement
-    const rate = parseFloat(target.value) || 1
-
-    const amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const localAmountInput = document.getElementById('tx-amount-local') as HTMLInputElement
-
-    if (!amountInput || !localAmountInput) return
-
-    const amount = parseFloat(amountInput.value) || 0
-    const localAmount = amount * rate
-    if (localAmountInput) {
-      localAmountInput.value = localAmount.toFixed(2)
-    }
-  }
-
-  // Refresh transactions when selected transaction changes
-  createEffect(() => {
-    if (selectedReceipt() && isReceiptModalOpen()) {
-      _loadTransactionReceipt()
-    }
-  })
+  const [type, setType] = createSignal<TransactionType>('expense')
+  const [categories, setCategories] = createSignal<Array<{ id: number; name: string; color: string }>>([])
+  const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
+  const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
+  const [selectedTags, setSelectedTags] = createSignal<number[]>([])
+  const [dateRange, setDateRange] = createSignal<{ from: string; to: string }>({ from: '', to: '' })
+  const [selectedPreset, setSelectedPreset] = createSignal<string>('month')
+  const [currentPage, setCurrentPage] = createSignal(1)
+  const [itemsPerPage] = createSignal(10)
+  const [sortField, setSortField] = createSignal<string>('date')
+  const [sortOrder, setSortOrder] = createSignal<'asc' | 'desc'>('desc')
+  const today = new Date().toISOString().slice(0, 7)
 
   // Load transactions function (exposed to window)
   // @ts-expect-error - Used via event delegation
@@ -142,6 +71,32 @@ export default function Transactions() {
       setLoading(true)
       const data = await api.getTransactions() as any
       setTransactions(data as Transaction[])
+
+      // Extract unique categories and tags for filter bar
+      const categoriesSet = new Map<number, { name: string; color: string }>()
+      const tagsSet = new Map<number, { name: string; color: string }>()
+
+      (data as Transaction[]).forEach(tx => {
+        if (tx.category_name) {
+          if (!categoriesSet.has(tx.category_id || 0)) {
+            const categoryNames = tx.category_name.split('|')
+            categoriesSet.set(tx.category_id || 0, {
+              name: categoryNames[categoryNames.length - 1].trim(),
+              color: '#666666'
+            })
+          }
+        }
+        if (tx.tags && tx.tags.length > 0) {
+          tx.tags.forEach(tag => {
+            if (!tagsSet.has(tag.id)) {
+              tagsSet.set(tag.id, { name: tag.name, color: tag.color })
+            }
+          })
+        }
+      })
+
+      setCategories(Array.from(categoriesSet.values()))
+      setTags(Array.from(tagsSet.values()))
     } catch (error) {
       console.error('Failed to load transactions:', error)
     } finally {
@@ -194,10 +149,9 @@ export default function Transactions() {
     }
   }
 
-  /**
-   * Close all modals
-   */
+  // Close all modals
   const _closeModals = () => {
+    setTransactionModalOpen(false)
     const modal = document.getElementById('tx-modal') as HTMLElement
     if (modal) modal.classList.remove('show')
     const modal2 = document.getElementById('quickadd-modal') as HTMLElement
@@ -227,10 +181,183 @@ export default function Transactions() {
     }
   }
 
+  // Handle selection changes
+  const handleSelectionChange = (ids: number[]) => {
+    setSelectedTransactions(ids)
+  }
+
+  // Handle sort changes
+  const handleSortChange = (field: string) => {
+    if (sortField() === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+  }
+
+  // Handle filter changes
+  const handleFilterChange = (filters: any) => {
+    setSelectedCategories(filters.selectedCategories || [])
+    setSelectedTags(filters.selectedTags || [])
+    setDateRange(filters.dateRange || { from: '', to: '' })
+    setSelectedPreset(filters.selectedPreset || 'month')
+    setCurrentPage(1)
+  }
+
+  // Handle pagination changes
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  // Calculate paginated results
+  const paginatedTransactions = () => {
+    const allTransactions = transactions()
+    const filtered = allTransactions.filter(tx => {
+      // Filter by type
+      if (filterType() !== 'all' && tx.type !== filterType()) {
+        return false
+      }
+      
+      // Filter by month
+      if (filterMonth() && !tx.date.startsWith(filterMonth())) {
+        return false
+      }
+
+      // Filter by search term
+      const search = searchTerm().toLowerCase()
+      if (search && !tx.description.toLowerCase().includes(search) && !tx.beneficiary?.toLowerCase().includes(search)) {
+        return false
+      }
+
+      // Filter by category
+      if (selectedCategories().length > 0 && !selectedCategories().includes(tx.category_id || 0)) {
+        return false
+      }
+
+      // Filter by tag
+      if (selectedTags().length > 0 && (!tx.tags || !selectedTags().some(id => tx.tags?.some(t => t.id === id)))) {
+        return false
+      }
+
+      // Filter by date range
+      if (dateRange().from && tx.date < dateRange().from) {
+        return false
+      }
+      if (dateRange().to && tx.date > dateRange().to) {
+        return false
+      }
+
+      return true
+    })
+
+    const start = (currentPage() - 1) * itemsPerPage()
+    return filtered.slice(start, start + itemsPerPage())
+  }
+
+  const totalPages = () => Math.ceil(paginatedTransactions().length / itemsPerPage())
+
+  // Date presets
+  const applyDatePreset = (preset: string) => {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+
+    const formatDate = (date: Date) => date.toISOString().slice(0, 7)
+
+    switch (preset) {
+      case 'month':
+        setDateRange({ from: formatDate(startOfMonth), to: formatDate(endOfMonth) })
+        break
+      case 'lastMonth':
+        setDateRange({ from: formatDate(startOfLastMonth), to: formatDate(endOfLastMonth) })
+        break
+      case 'year':
+        setDateRange({ from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })
+        break
+      case 'custom':
+        // Keep current range
+        break
+    }
+    setSelectedPreset(preset)
+    setCurrentPage(1)
+  }
+
+  // Initial load
+  createEffect(() => {
+    _loadTransactions()
+  })
+
   return (
     <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
       <div class="page-header">
         <h1>Transactions</h1>
+      </div>
+
+      {/* Filter Bar */}
+      <div class={styles.filterSection}>
+        <FilterBar
+          categories={categories()}
+          tags={tags()}
+          selectedCategories={selectedCategories()}
+          selectedTags={selectedTags()}
+          dateRange={dateRange()}
+          selectedPreset={selectedPreset()}
+          onChange={handleFilterChange}
+        />
+      </div>
+
+      {/* Search */}
+      <div class={styles.searchSection}>
+        <input
+          type="text"
+          class={styles.searchInput}
+          placeholder="Search transactions..."
+          value={searchTerm()}
+          onInput={(e) => setSearchTerm((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      {/* Type Filter */}
+      <div class={styles.typeFilters}>
+        <button
+          class={`${styles.typeBtn} ${filterType() === 'all' ? styles.typeBtnActive : ''}`}
+          onClick={() => {
+            setFilterType('all')
+            setCurrentPage(1)
+          }}
+        >
+          All
+        </button>
+        <button
+          class={`${styles.typeBtn} ${filterType() === 'income' ? styles.typeBtnActive : ''}`}
+          onClick={() => {
+            setFilterType('income')
+            setCurrentPage(1)
+          }}
+        >
+          Income
+        </button>
+        <button
+          class={`${styles.typeBtn} ${filterType() === 'expense' ? styles.typeBtnActive : ''}`}
+          onClick={() => {
+            setFilterType('expense')
+            setCurrentPage(1)
+          }}
+        >
+          Expense
+        </button>
+        <button
+          class={`${styles.typeBtn} ${filterType() === 'transfer' ? styles.typeBtnActive : ''}`}
+          onClick={() => {
+            setFilterType('transfer')
+            setCurrentPage(1)
+          }}
+        >
+          Transfer
+        </button>
       </div>
 
       {/* Transaction Modal */}
@@ -566,6 +693,31 @@ export default function Transactions() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Transactions Table */}
+      {loading() ? (
+        <div class={styles.loading}>Loading transactions...</div>
+      ) : (
+        <>
+          <TransactionTable
+            transactions={paginatedTransactions()}
+            selectedTransactions={selectedTransactions()}
+            onSelectionChange={handleSelectionChange}
+            onSort={handleSortChange}
+            sortField={sortField()}
+            sortOrder={sortOrder()}
+          />
+          {totalPages() > 1 && (
+            <Pagination
+              currentPage={currentPage()}
+              totalPages={totalPages()}
+              itemsPerPage={itemsPerPage()}
+              totalItems={transactions().length}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </>
       )}
     </div>
   )

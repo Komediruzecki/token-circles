@@ -1,0 +1,189 @@
+.transactionTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.transactionTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transactionTable th,
+.transactionTable td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.transactionTable th {
+  background: var(--table-header-bg);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.transactionTable tbody tr {
+  transition: background-color 0.15s;
+}
+
+.transactionTable tbody tr:hover {
+  background-color: var(--table-hover);
+}
+
+.checkboxCol {
+  width: 44px;
+  text-align: center;
+}
+
+.checkboxCol .checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.dateCol {
+  width: 110px;
+  font-size: 13px;
+}
+
+.descriptionCol {
+  min-width: 200px;
+}
+
+.description {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.beneficiary {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.payor {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.paymentMethod {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.categoryCol {
+  min-width: 150px;
+}
+
+.categoryName {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.tagCount {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.amountCol {
+  width: 130px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount {
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.typeCol {
+  width: 80px;
+  text-align: center;
+}
+
+.typeBadge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.actionsCol {
+  width: 60px;
+  text-align: center;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.actionBtn:hover {
+  background: var(--table-hover);
+  color: var(--primary);
+}
+
+.emptyState {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.amount.income {
+  color: var(--income);
+}
+
+.amount.expense {
+  color: var(--expense);
+}
+
+.amount.transfer {
+  color: var(--transfer);
+}
+
+.typeBadge.income {
+  background: var(--badge-income-bg);
+  color: var(--badge-income-text);
+}
+
+.typeBadge.expense {
+  background: var(--badge-expense-bg);
+  color: var(--badge-expense-text);
+}
+
+.typeBadge.transfer {
+  background: var(--badge-transfer-bg);
+  color: var(--badge-transfer-text);
+}

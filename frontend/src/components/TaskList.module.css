@@ -1,0 +1,105 @@
+.taskList {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.taskListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--table-header-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.selectAllCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.selectAllCheckbox .checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.selectedCount {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.taskListBody {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.taskListItem {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s;
+}
+
+.taskListItem:last-child {
+  border-bottom: none;
+}
+
+.taskListItem:hover {
+  background-color: var(--table-hover);
+}
+
+.taskItemCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.taskItemCheckbox .checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.checkboxCustom {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.taskItemCheckbox:hover .checkboxCustom {
+  border-color: var(--primary);
+}
+
+.taskItemCheckbox input[type='checkbox']:checked + .checkboxCustom {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.taskItemCheckbox input[type='checkbox']:checked + .checkboxCustom::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 3px;
+  height: 7px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.emptyState {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
