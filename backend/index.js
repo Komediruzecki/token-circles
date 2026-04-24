@@ -160,21 +160,28 @@ function parseDateString(dateStr) {
   return new Date().toISOString().split("T")[0];
 }
 
-// Session secret: require env var in production, use crypto random in dev
-const SESSION_SECRET = process.env.SESSION_SECRET || require('crypto').randomBytes(32).toString('hex');
-if (!process.env.SESSION_SECRET) {
-  console.warn('WARNING: Using randomly generated SESSION_SECRET. Set SESSION_SECRET env var for production!');
+// Session secret: require env var in production
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === 'production' && !SESSION_SECRET) {
+  console.error('ERROR: SESSION_SECRET environment variable is REQUIRED in production!');
+  process.exit(1);
 }
+if (!SESSION_SECRET) {
+  console.warn('WARNING: SESSION_SECRET not set, using development secret');
+}
+const sessionSecret = SESSION_SECRET || require('crypto').randomBytes(32).toString('hex');
 
 // Session middleware
+const isProduction = process.env.NODE_ENV === 'production';
 app.use(
   session({
-    secret: SESSION_SECRET,
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // Set to true if using HTTPS
+      secure: isProduction, // Require HTTPS in production
       httpOnly: true,
+      sameSite: 'strict', // CSRF protection
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
     store: new SQLiteStore({

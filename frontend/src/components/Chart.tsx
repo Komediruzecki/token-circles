@@ -3,11 +3,12 @@
  * Wrapper for Chart.js integration with SolidJS
  */
 import { createEffect, createSignal, onCleanup } from 'solid-js'
+import type * as Chart from 'chart.js/auto'
 
 export interface ChartProps {
   type: 'line' | 'bar' | 'doughnut' | 'pie' | 'polarArea' | 'radar' | 'bubble' | 'scatter'
-  data: any
-  options?: any
+  data: Chart.Data
+  options?: Chart.Options
   height?: number
   width?: string
 }
@@ -39,6 +40,8 @@ export default function Chart(props: ChartProps) {
           ...props.options,
         },
       })
+    }).catch((err) => {
+      console.error('Failed to load Chart.js:', err)
     })
 
     onCleanup(() => {
