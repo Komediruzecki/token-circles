@@ -84,7 +84,7 @@ select.formControl {
   padding-right: 30px;
 }
 
-input[type="color"] {
+input[type='color'] {
   padding: 2px;
   height: 36px;
   cursor: pointer;

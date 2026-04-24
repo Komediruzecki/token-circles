@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Budgets CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -87,9 +87,7 @@ test.describe('Budgets CRUD Operations', () => {
   })
 
   test('should show unallocated budget message', async ({ page }) => {
-    const message = page
-      .locator('.pageSubtitle, .pageHeader p')
-      .filter({ hasText: /unallocated/i })
+    const message = page.locator('.pageSubtitle, .pageHeader p').filter({ hasText: /unallocated/i })
     const isVisible = await message.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeFalsy() // May not show if all allocated
   })

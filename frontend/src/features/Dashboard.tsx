@@ -82,12 +82,16 @@ export default function Dashboard() {
           <div class={styles.metricsGrid}>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Balance</div>
-              <div class={`${styles.metricValue} ${styles.positive}`}>{formatCurrency(metrics()!.balance)}</div>
+              <div class={`${styles.metricValue} ${styles.positive}`}>
+                {formatCurrency(metrics()!.balance)}
+              </div>
               <div class={styles.metricSubtext}>Total available</div>
             </div>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Income</div>
-              <div class={`${styles.metricValue} ${styles.positive}`}>{formatCurrency(metrics()!.totalIncome)}</div>
+              <div class={`${styles.metricValue} ${styles.positive}`}>
+                {formatCurrency(metrics()!.totalIncome)}
+              </div>
               <div class={styles.metricSubtext}>For this period</div>
             </div>
             <div class={styles.metricCard}>
@@ -108,23 +112,27 @@ export default function Dashboard() {
                   id="expense-category-chart"
                   type="doughnut"
                   data={{
-                    labels: metrics()!.expenseByCategory.map((item: any) => item.category_name || 'Uncategorized'),
-                    datasets: [{
-                      data: metrics()!.expenseByCategory.map((item: any) => item.total),
-                      backgroundColor: [
-                        '#dc2626',
-                        '#f97316',
-                        '#eab308',
-                        '#22c55e',
-                        '#06b6d4',
-                        '#3b82f6',
-                        '#8b5cf6',
-                        '#ec4899',
-                        '#6b7280',
-                        '#14b8a6'
-                      ],
-                      borderWidth: 0
-                    }]
+                    labels: metrics()!.expenseByCategory.map(
+                      (item: any) => item.category_name || 'Uncategorized'
+                    ),
+                    datasets: [
+                      {
+                        data: metrics()!.expenseByCategory.map((item: any) => item.total),
+                        backgroundColor: [
+                          '#dc2626',
+                          '#f97316',
+                          '#eab308',
+                          '#22c55e',
+                          '#06b6d4',
+                          '#3b82f6',
+                          '#8b5cf6',
+                          '#ec4899',
+                          '#6b7280',
+                          '#14b8a6',
+                        ],
+                        borderWidth: 0,
+                      },
+                    ],
                   }}
                   options={{
                     responsive: true,
@@ -135,10 +143,10 @@ export default function Dashboard() {
                         labels: {
                           usePointStyle: true,
                           padding: 15,
-                          font: { size: 12 }
-                        }
-                      }
-                    }
+                          font: { size: 12 },
+                        },
+                      },
+                    },
                   }}
                   height={300}
                   width="100%"
@@ -160,15 +168,23 @@ export default function Dashboard() {
                 type="bar"
                 data={{
                   labels: ['Income', 'Expenses', 'Net'],
-                  datasets: [{
-                    data: [
-                      metrics()!.totalIncome || 0,
-                      metrics()!.totalExpenses || 0,
-                      (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0)
-                    ],
-                    backgroundColor: ['#22c55e', '#dc2626', (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0 ? '#22c55e' : '#dc2626'],
-                    borderRadius: 8
-                  }]
+                  datasets: [
+                    {
+                      data: [
+                        metrics()!.totalIncome || 0,
+                        metrics()!.totalExpenses || 0,
+                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
+                      ],
+                      backgroundColor: [
+                        '#22c55e',
+                        '#dc2626',
+                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
+                          ? '#22c55e'
+                          : '#dc2626',
+                      ],
+                      borderRadius: 8,
+                    },
+                  ],
                 }}
                 options={{
                   responsive: true,
@@ -177,13 +193,13 @@ export default function Dashboard() {
                     y: {
                       beginAtZero: true,
                       ticks: {
-                        callback: (value: any) => formatCurrency(value)
-                      }
-                    }
+                        callback: (value: any) => formatCurrency(value),
+                      },
+                    },
                   },
                   plugins: {
-                    legend: { display: false }
-                  }
+                    legend: { display: false },
+                  },
                 }}
                 height={250}
                 width="100%"
@@ -205,7 +221,10 @@ export default function Dashboard() {
                   .recentTransactions.slice(0, 5)
                   .map((tx) => (
                     <div class={styles.transactionItem}>
-                      <div class={styles.transactionIcon} style={{ background: getIconColor(tx.type) }}>
+                      <div
+                        class={styles.transactionIcon}
+                        style={{ background: getIconColor(tx.type) }}
+                      >
                         {getIcon(tx.type)}
                       </div>
                       <div class={styles.transactionDetails}>
@@ -243,11 +262,15 @@ export default function Dashboard() {
                   .upcomingBills.slice(0, 5)
                   .map((bill: any) => (
                     <div class={styles.transactionItem}>
-                      <div class={styles.transactionIcon} style={{ background: getIconColor('expense') }}>
+                      <div
+                        class={styles.transactionIcon}
+                        style={{ background: getIconColor('expense') }}
+                      >
                         <svg
                           width="16"
                           height="16"
-                          fill="none" stroke="currentColor"
+                          fill="none"
+                          stroke="currentColor"
                           viewBox="0 0 24 24"
                         >
                           <path
@@ -264,7 +287,9 @@ export default function Dashboard() {
                           Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
                         </div>
                       </div>
-                      <div class={`${styles.transactionAmount} ${styles.expense}`}>{formatCurrency(bill.amount)}</div>
+                      <div class={`${styles.transactionAmount} ${styles.expense}`}>
+                        {formatCurrency(bill.amount)}
+                      </div>
                     </div>
                   ))}
               </div>
@@ -315,13 +340,23 @@ function getIcon(type: 'income' | 'expense') {
   if (type === 'income') {
     return (
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M7 11l5-5m0 0l5 5m-5-5v12"
+        />
       </svg>
     )
   }
   return (
     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M17 13l-5 5m0 0l-5-5m5 5V6"
+      />
     </svg>
   )
 }

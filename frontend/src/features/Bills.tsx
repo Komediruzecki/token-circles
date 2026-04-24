@@ -39,16 +39,18 @@ export default function Bills() {
     setLoading(true)
     try {
       const [allRes, upcomingRes, paidRes] = await Promise.all([
-        fetch('/api/bills').then(r => r.json()),
-        fetch('/api/bills/upcoming').then(r => r.json()),
-        fetch('/api/bills?paid=true').then(r => r.json()),
+        fetch('/api/bills').then((r) => r.json()),
+        fetch('/api/bills/upcoming').then((r) => r.json()),
+        fetch('/api/bills?paid=true').then((r) => r.json()),
       ])
       setBills(allRes)
       // Handle upcoming bills which have next_due_date instead of due_date
-      setUpcoming(upcomingRes.map((b: any) => ({
-        ...b,
-        due_date: b.due_date || b.next_due_date || '2026-05-01'
-      })))
+      setUpcoming(
+        upcomingRes.map((b: any) => ({
+          ...b,
+          due_date: b.due_date || b.next_due_date || '2026-05-01',
+        }))
+      )
       setPaid(paidRes)
     } catch {
       console.error('Failed to load bills')
@@ -172,14 +174,24 @@ export default function Bills() {
                   <div class={styles.billInfo}>
                     <h3 class={styles.billName}>{bill.name}</h3>
                     <p class={styles.billDetails}>
-                      {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
+                      {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
+                      {bill.frequency === 'monthly'
+                        ? 'Monthly'
+                        : bill.frequency === 'weekly'
+                          ? 'Weekly'
+                          : 'Biweekly'}
                     </p>
                   </div>
                 </div>
-                <div class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}>
+                <div
+                  class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                >
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   {!bill.paid && (
-                    <button class={`${styles.btnPrimary} ${styles.btnSm}`} onClick={() => markPaid(bill.id)}>
+                    <button
+                      class={`${styles.btnPrimary} ${styles.btnSm}`}
+                      onClick={() => markPaid(bill.id)}
+                    >
                       Mark Paid
                     </button>
                   )}
@@ -204,15 +216,22 @@ export default function Bills() {
                   <div class={styles.billIcon}>✅</div>
                   <div class={styles.billInfo}>
                     <h3 class={styles.billName}>{bill.name}</h3>
-                    <p class={styles.billDetails}>
-                      Paid {formatDate(bill.due_date)}
-                    </p>
+                    <p class={styles.billDetails}>Paid {formatDate(bill.due_date)}</p>
                   </div>
                 </div>
                 <div class={styles.billAmount}>
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                  <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteBill(bill.id)}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <button
+                    class={`${styles.btnSm} ${styles.btnGhost}`}
+                    onClick={() => deleteBill(bill.id)}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -248,7 +267,12 @@ export default function Bills() {
                   <div class={styles.billInfo}>
                     <h3 class={styles.billName}>{bill.name}</h3>
                     <p class={styles.billDetails}>
-                      {formatDate(bill.due_date)} • {bill.frequency === 'monthly' ? 'Monthly' : bill.frequency === 'weekly' ? 'Weekly' : 'Biweekly'}
+                      {formatDate(bill.due_date)} •{' '}
+                      {bill.frequency === 'monthly'
+                        ? 'Monthly'
+                        : bill.frequency === 'weekly'
+                          ? 'Weekly'
+                          : 'Biweekly'}
                       {bill.category && ` • ${bill.category}`}
                     </p>
                   </div>
@@ -257,12 +281,24 @@ export default function Bills() {
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   <div class="bill-actions">
                     {!bill.paid ? (
-                      <button class={`${styles.btnPrimary} ${styles.btnSm}`} onClick={() => markPaid(bill.id)}>
+                      <button
+                        class={`${styles.btnPrimary} ${styles.btnSm}`}
+                        onClick={() => markPaid(bill.id)}
+                      >
                         {isOverdue(bill.due_date) ? 'Mark as Paid (Overdue)' : 'Mark Paid'}
                       </button>
                     ) : (
-                      <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteBill(bill.id)}>
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <button
+                        class={`${styles.btnSm} ${styles.btnGhost}`}
+                        onClick={() => deleteBill(bill.id)}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
                           <path d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -277,8 +313,18 @@ export default function Bills() {
 
       {/* Add Bill Modal */}
       {showAddModal() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Bill</h3>
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
@@ -326,7 +372,9 @@ export default function Bills() {
                 <select
                   class={styles.formControl}
                   value={formData().frequency}
-                  oninput={(e) => setFormData({ ...formData(), frequency: e.target.value as Bill['frequency'] })}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), frequency: e.target.value as Bill['frequency'] })
+                  }
                 >
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
@@ -350,7 +398,11 @@ export default function Bills() {
                 </label>
               </div>
               <div class={styles.modalFooter}>
-                <button type="button" class={styles.btnSecondary} onClick={() => setShowAddModal(false)}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onClick={() => setShowAddModal(false)}
+                >
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>

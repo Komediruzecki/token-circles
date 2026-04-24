@@ -367,7 +367,9 @@ export default function Import() {
                         checked={
                           selectedRows().size === fileContent().length && fileContent().length > 0
                         }
-                        onchange={(e) => { toggleAll(e.currentTarget.checked); }}
+                        onchange={(e) => {
+                          toggleAll(e.currentTarget.checked)
+                        }}
                       />
                     </th>
                     {headers().map((h, idx) => (
@@ -379,12 +381,17 @@ export default function Import() {
                   {fileContent()
                     .slice(startRow(), endRow())
                     .map((row, idx) => (
-                      <tr data-index={startRow() + idx} class={selectedRows().has(startRow() + idx) ? 'selected' : ''}>
+                      <tr
+                        data-index={startRow() + idx}
+                        class={selectedRows().has(startRow() + idx) ? 'selected' : ''}
+                      >
                         <td class={styles.selectCol}>
                           <input
                             type="checkbox"
                             checked={selectedRows().has(startRow() + idx)}
-                            onchange={() => { toggleRow(startRow() + idx); }}
+                            onchange={() => {
+                              toggleRow(startRow() + idx)
+                            }}
                           />
                         </td>
                         {headers().map((h) => (

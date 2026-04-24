@@ -43,14 +43,14 @@ export default defineConfig({
           {
             src: 'icon-192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
           },
           {
             src: 'icon-512.png',
             sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
+            type: 'image/png',
+          },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
@@ -62,9 +62,9 @@ export default defineConfig({
               cacheName: 'finance-manager-cache',
               expiration: {
                 maxEntries: 60,
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
-              }
-            }
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+              },
+            },
           },
           {
             urlPattern: /^https:\/\/fonts.googleapis\.com\/.*/i,
@@ -73,13 +73,13 @@ export default defineConfig({
               cacheName: 'finance-manager-fonts',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 365 * 24 * 60 * 60
-              }
-            }
-          }
-        ]
-      }
-    })
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+        ],
+      },
+    }),
   ],
   resolve: {
     alias: {

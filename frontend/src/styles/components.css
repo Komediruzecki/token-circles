@@ -139,10 +139,19 @@
   font-size: 20px;
   font-weight: 600;
 }
-.tx-summary-bar .summary-value.income { color: var(--income); }
-.tx-summary-bar .summary-value.expense { color: var(--expense); }
-.tx-summary-bar .summary-value.total { color: var(--primary); }
-.tx-summary-bar .summary-value.count { color: var(--text); font-size: 16px; }
+.tx-summary-bar .summary-value.income {
+  color: var(--income);
+}
+.tx-summary-bar .summary-value.expense {
+  color: var(--expense);
+}
+.tx-summary-bar .summary-value.total {
+  color: var(--primary);
+}
+.tx-summary-bar .summary-value.count {
+  color: var(--text);
+  font-size: 16px;
+}
 .tx-summary-bar .summary-divider {
   width: 1px;
   background: var(--border);
@@ -986,7 +995,7 @@
   flex-wrap: wrap;
 }
 
-[data-theme="dark"] .bulk-action-bar {
+[data-theme='dark'] .bulk-action-bar {
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
 }
 
@@ -1002,8 +1011,8 @@
   text-align: center;
 }
 
-.th-checkbox input[type="checkbox"],
-.td-checkbox input[type="checkbox"] {
+.th-checkbox input[type='checkbox'],
+.td-checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;

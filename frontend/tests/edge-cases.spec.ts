@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Edge Cases & Error Handling', () => {
   test.beforeEach(async ({ page }) => {
@@ -27,11 +27,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle loading states', async ({ page }) => {
     await page.reload()
 
-    const loadingSelectors = [
-      '.loading',
-      '[data-test-id="loading"]',
-      '[class*="loading"]',
-    ]
+    const loadingSelectors = ['.loading', '[data-test-id="loading"]', '[class*="loading"]']
 
     for (const selector of loadingSelectors) {
       const element = page.locator(selector)
@@ -288,11 +284,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await page.waitForLoadState('networkidle')
 
     // Trigger multiple navigation actions concurrently
-    const promises = [
-      page.goto('#transactions'),
-      page.goto('#accounts'),
-      page.goto('#budgets'),
-    ]
+    const promises = [page.goto('#transactions'), page.goto('#accounts'), page.goto('#budgets')]
 
     await Promise.all(promises)
     await page.waitForLoadState('networkidle')

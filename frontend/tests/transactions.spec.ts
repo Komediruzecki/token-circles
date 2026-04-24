@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Transactions', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,7 +24,9 @@ test.describe('Transactions', () => {
   test('should display transaction summary cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const summaryCards = page.getByText(/Total Transactions|This Month|Income|Expenses/i, { exact: false })
+    const summaryCards = page.getByText(/Total Transactions|This Month|Income|Expenses/i, {
+      exact: false,
+    })
     const count = await summaryCards.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
@@ -128,7 +130,7 @@ test.describe('Transactions', () => {
     await page.waitForTimeout(500)
 
     const categorySelect = page.getByRole('combobox', { name: /category/i })
-    if (await categorySelect.count() > 0) {
+    if ((await categorySelect.count()) > 0) {
       await categorySelect.selectOption({ index: 1 })
       await page.waitForTimeout(500)
 
@@ -142,7 +144,7 @@ test.describe('Transactions', () => {
     await page.waitForTimeout(500)
 
     const rows = page.getByRole('row')
-    if (await rows.count() > 0) {
+    if ((await rows.count()) > 0) {
       await rows.first().click()
       await page.waitForTimeout(500)
 

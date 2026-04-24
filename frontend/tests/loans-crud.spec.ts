@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Loans CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -39,9 +39,7 @@ test.describe('Loans CRUD Operations', () => {
     await expect(
       page.locator('.loans-summary .summaryCard:has-text("Remaining Balance")')
     ).toBeVisible()
-    await expect(
-      page.locator('.loans-summary .summaryCard:has-text("Active Loans")')
-    ).toBeVisible()
+    await expect(page.locator('.loans-summary .summaryCard:has-text("Active Loans")')).toBeVisible()
     await expect(page.locator('.loans-summary .summaryCard:has-text("Paid Off")')).toBeVisible()
   })
 

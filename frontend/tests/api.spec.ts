@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('API Endpoint Verification', () => {
   test.beforeEach(async ({ request }) => {
@@ -24,7 +24,7 @@ test.describe('API Endpoint Verification', () => {
         name: 'Test Account',
         type: 'checking',
         bank_name: 'Test Bank',
-        initial_balance: 1000.00,
+        initial_balance: 1000.0,
         currency: 'USD',
       },
     })
@@ -77,7 +77,9 @@ test.describe('API Endpoint Verification', () => {
   })
 
   test('verify transactions filter by date', async ({ request }) => {
-    const response = await request.get('http://localhost:3847/api/transactions?start_date=2026-01-01')
+    const response = await request.get(
+      'http://localhost:3847/api/transactions?start_date=2026-01-01'
+    )
     expect(response.status()).toBe(200)
 
     const data = await response.json()

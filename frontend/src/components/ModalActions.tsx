@@ -11,9 +11,5 @@ interface ModalActionsProps {
 }
 
 export default function ModalActions(props: ModalActionsProps) {
-  return (
-    <div class={`${styles.modalActions} ${props.className || ''}`}>
-      {props.children}
-    </div>
-  )
+  return <div class={`${styles.modalActions} ${props.className || ''}`}>{props.children}</div>
 }

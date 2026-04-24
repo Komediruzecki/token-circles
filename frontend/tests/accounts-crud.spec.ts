@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Accounts CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -102,7 +102,7 @@ test.describe('Accounts CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const icons = page.getByTestId('account-icon')
-    const hasChecking = await icons.count() > 0 // At least one icon should be present
+    const hasChecking = (await icons.count()) > 0 // At least one icon should be present
     expect(hasChecking).toBeTruthy()
   })
 

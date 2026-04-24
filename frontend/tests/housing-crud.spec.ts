@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Housing CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -553,4 +553,3 @@ test.describe('Housing CRUD Operations', () => {
     await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
 })
-

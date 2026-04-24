@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Transactions CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -492,4 +492,3 @@ test.describe('Transactions CRUD Operations', () => {
     await expect(modalFooter).toBeVisible()
   })
 })
-

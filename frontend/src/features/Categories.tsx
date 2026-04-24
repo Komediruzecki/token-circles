@@ -41,8 +41,8 @@ export default function Categories() {
     setLoading(true)
     try {
       const [allRes, _expenseRes] = await Promise.all([
-        fetch('/api/categories').then(r => r.json()),
-        fetch('/api/categories?type=expense').then(r => r.json()),
+        fetch('/api/categories').then((r) => r.json()),
+        fetch('/api/categories?type=expense').then((r) => r.json()),
       ])
       setCategories(allRes)
     } catch {
@@ -173,16 +173,24 @@ export default function Categories() {
             Add Category
           </button>
         </div>
-        <p class={styles.pageSubtitle}>Organize your transactions with expense and income categories</p>
+        <p class={styles.pageSubtitle}>
+          Organize your transactions with expense and income categories
+        </p>
       </div>
 
       <div class={styles.categoriesTabs}>
-        <button class={`${styles.tab} ${categories().filter(c => c.type === 'expense').length === 0 ? styles.active : ''}`} onClick={() => loadCategories()}>
+        <button
+          class={`${styles.tab} ${categories().filter((c) => c.type === 'expense').length === 0 ? styles.active : ''}`}
+          onClick={() => loadCategories()}
+        >
           Expenses
         </button>
-        <button class={`${styles.tab} ${categories().filter(c => c.type === 'income').length === 0 ? styles.active : ''}`} onClick={() => {
-          setCategories(categories().filter(c => c.type === 'income'))
-        }}>
+        <button
+          class={`${styles.tab} ${categories().filter((c) => c.type === 'income').length === 0 ? styles.active : ''}`}
+          onClick={() => {
+            setCategories(categories().filter((c) => c.type === 'income'))
+          }}
+        >
           Income
         </button>
       </div>
@@ -203,34 +211,63 @@ export default function Categories() {
             const iconClass = getIconClass(category.color)
             const spent = (category as ExpenseCategory).spent || 0
             const budget = (category as ExpenseCategory).budget || 0
-            const remaining = (category as ExpenseCategory).remaining ?? (budget - spent)
+            const remaining = (category as ExpenseCategory).remaining ?? budget - spent
             const percentUsed = (category as ExpenseCategory).percent_used || 0
             const isOverBudget = percentUsed > 100
 
             return (
               <div class={styles.categoryCard}>
                 <div class={styles.categoryHeader}>
-                  <div class={`${styles.categoryIcon} ${iconClass}`}>
-                    {category.icon || '📝'}
-                  </div>
+                  <div class={`${styles.categoryIcon} ${iconClass}`}>{category.icon || '📝'}</div>
                   <div class={styles.categoryInfo}>
                     <h3 class={styles.categoryName}>{category.name}</h3>
                     <span class={styles.categoryType}>{category.type}</span>
                   </div>
                   <div class={styles.categoryActions}>
-                    <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => { openBudgetModal(category); }}>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button
+                      class={`${styles.btnSm} ${styles.btnGhost}`}
+                      onClick={() => {
+                        openBudgetModal(category)
+                      }}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       Budget
                     </button>
-                    <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => { editCategory(category); }}>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button
+                      class={`${styles.btnSm} ${styles.btnGhost}`}
+                      onClick={() => {
+                        editCategory(category)
+                      }}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteCategory(category.id)}>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button
+                      class={`${styles.btnSm} ${styles.btnGhost}`}
+                      onClick={() => deleteCategory(category.id)}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
@@ -253,7 +290,9 @@ export default function Categories() {
                       </div>
                       <div class={styles.spendingFooter}>
                         <span class={styles.budgetLimits}>{formatCurrency(budget)} limit</span>
-                        <span class={`${styles.remainingAmount} ${isOverBudget ? styles.over : ''}`}>
+                        <span
+                          class={`${styles.remainingAmount} ${isOverBudget ? styles.over : ''}`}
+                        >
                           {formatCurrency(remaining)} remaining
                         </span>
                       </div>
@@ -263,7 +302,16 @@ export default function Categories() {
                 <div class={styles.categoryColors}>
                   <span class={styles.colorLabel}>Color:</span>
                   <div class={styles.colorPicker}>
-                    {['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'].map((color) => (
+                    {[
+                      '#ef4444',
+                      '#f97316',
+                      '#eab308',
+                      '#22c55e',
+                      '#3b82f6',
+                      '#8b5cf6',
+                      '#ec4899',
+                      '#6b7280',
+                    ].map((color) => (
                       <button
                         class={`${styles.colorBtn} ${category.color === color ? styles.active : ''}`}
                         style={{ background: color }}
@@ -283,11 +331,34 @@ export default function Categories() {
 
       {/* Add/Edit Modal */}
       {showAddModal() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddModal(false)
+              setEditingCategory(null)
+              setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+            }
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>{editingCategory() ? 'Edit Category' : 'Add Category'}</h3>
-              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}>
+              <h3 class={styles.modalTitle}>
+                {editingCategory() ? 'Edit Category' : 'Add Category'}
+              </h3>
+              <button
+                class={styles.modalClose}
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingCategory(null)
+                  setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+                }}
+              >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -330,7 +401,16 @@ export default function Categories() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.colorPicker}>
-                  {['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280'].map((color) => (
+                  {[
+                    '#ef4444',
+                    '#f97316',
+                    '#eab308',
+                    '#22c55e',
+                    '#3b82f6',
+                    '#8b5cf6',
+                    '#ec4899',
+                    '#6b7280',
+                  ].map((color) => (
                     <button
                       class={`${styles.colorPickerBtn} ${formData().color === color ? styles.active : ''}`}
                       style={{ background: color }}
@@ -343,7 +423,15 @@ export default function Categories() {
                 </div>
               </div>
               <div class={styles.modalFooter}>
-                <button type="button" class={styles.btnSecondary} onClick={() => { setShowAddModal(false); setEditingCategory(null); setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' }) }}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onClick={() => {
+                    setShowAddModal(false)
+                    setEditingCategory(null)
+                    setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+                  }}
+                >
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
@@ -357,8 +445,18 @@ export default function Categories() {
 
       {/* Budget Modal */}
       {showBudgetModal() && selectedCategory() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowBudgetModal(false) }}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowBudgetModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Set Budget</h3>
               <button class={styles.modalClose} onClick={() => setShowBudgetModal(false)}>
@@ -368,7 +466,9 @@ export default function Categories() {
               </button>
             </div>
             <div class={styles.modalBody}>
-              <p class={styles.modalText}>Set a monthly budget for <strong>{selectedCategory()!.name}</strong></p>
+              <p class={styles.modalText}>
+                Set a monthly budget for <strong>{selectedCategory()!.name}</strong>
+              </p>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Monthly Budget Amount</label>
                 <input
@@ -384,10 +484,13 @@ export default function Categories() {
               <button class={styles.btnSecondary} onClick={() => setShowBudgetModal(false)}>
                 Cancel
               </button>
-              <button class={styles.btnPrimary} onClick={() => {
-                const input = document.getElementById('budget-input') as HTMLInputElement
-                updateBudget(parseFloat(input?.value) || 0)
-              }}>
+              <button
+                class={styles.btnPrimary}
+                onClick={() => {
+                  const input = document.getElementById('budget-input') as HTMLInputElement
+                  updateBudget(parseFloat(input?.value) || 0)
+                }}
+              >
                 Save Budget
               </button>
             </div>

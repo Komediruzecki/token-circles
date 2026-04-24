@@ -75,7 +75,7 @@
   --income-text: #166534;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   --bg: #0f172a;
   --sidebar-bg: #020617;
   --sidebar-text: #94a3b8;
@@ -1216,7 +1216,9 @@ th[data-sort].sorted .sortArrow {
   font-size: 12px;
   cursor: pointer;
   border: 1.5px solid transparent;
-  transition: opacity 0.15s, border-color 0.15s;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
   user-select: none;
 }
 
@@ -2006,7 +2008,9 @@ th[data-sort].sorted .sortArrow {
 
 .colorSwatch.selected {
   border-color: var(--text);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--primary);
 }
 
 /* Profile dropdown */

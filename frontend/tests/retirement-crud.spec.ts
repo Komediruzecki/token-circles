@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Retirement Planning CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -571,4 +571,3 @@ test.describe('Retirement Planning CRUD Operations', () => {
     expect(hasBadges).toBeTruthy()
   })
 })
-

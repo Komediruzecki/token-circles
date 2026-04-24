@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Goals CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -480,4 +480,3 @@ test.describe('Goals CRUD Operations', () => {
     expect(hasCurrency).toBeFalsy() // Currency exists but may not be visible
   })
 })
-

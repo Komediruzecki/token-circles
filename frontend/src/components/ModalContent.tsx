@@ -11,9 +11,5 @@ interface ModalContentProps {
 }
 
 export default function ModalContent(props: ModalContentProps) {
-  return (
-    <div class={`${styles.modalContent} ${props.className || ''}`}>
-      {props.children}
-    </div>
-  )
+  return <div class={`${styles.modalContent} ${props.className || ''}`}>{props.children}</div>
 }

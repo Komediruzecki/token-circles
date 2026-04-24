@@ -44,17 +44,19 @@ export default function Loans() {
       const response = await fetch('/api/loans')
       const data = await response.json()
       // Transform Loan data to include missing fields
-      setLoans(data.map((l: any) => ({
-        id: l.id,
-        name: l.name,
-        principal: l.principal,
-        interest_rate: l.interest_rate,
-        term_months: l.term_months,
-        start_date: l.start_date,
-        status: 'active',
-        remaining_balance: l.principal,
-        total_paid: 0,
-      })))
+      setLoans(
+        data.map((l: any) => ({
+          id: l.id,
+          name: l.name,
+          principal: l.principal,
+          interest_rate: l.interest_rate,
+          term_months: l.term_months,
+          start_date: l.start_date,
+          status: 'active',
+          remaining_balance: l.principal,
+          total_paid: 0,
+        }))
+      )
     } catch {
       console.error('Failed to load loans')
     } finally {
@@ -82,7 +84,14 @@ export default function Loans() {
       })
       setShowAddModal(false)
       setEditingLoan(null)
-      setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' })
+      setFormData({
+        name: '',
+        principal: '',
+        interest_rate: '',
+        term_months: '',
+        start_date: '',
+        status: 'active',
+      })
       loadLoans()
     } catch (error) {
       console.error('Failed to save loan', error)
@@ -101,10 +110,17 @@ export default function Loans() {
   }
 
   // Calculate estimated monthly payment
-  const calculateMonthlyPayment = (principal: number, interestRate: number, termMonths: number): number => {
+  const calculateMonthlyPayment = (
+    principal: number,
+    interestRate: number,
+    termMonths: number
+  ): number => {
     if (interestRate === 0) return principal / termMonths
     const monthlyRate = interestRate / 100 / 12
-    return (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / (Math.pow(1 + monthlyRate, termMonths) - 1)
+    return (
+      (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) /
+      (Math.pow(1 + monthlyRate, termMonths) - 1)
+    )
   }
 
   // Open edit modal
@@ -123,10 +139,14 @@ export default function Loans() {
 
   // Calculate remaining balance
   const calculateRemaining = (loan: Loan): number => {
-    const monthly = loan.monthly_payment || calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
-    const monthsPassed = Math.floor((new Date().getTime() - new Date(loan.start_date).getTime()) / (1000 * 60 * 60 * 24 * 30))
+    const monthly =
+      loan.monthly_payment ||
+      calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
+    const monthsPassed = Math.floor(
+      (new Date().getTime() - new Date(loan.start_date).getTime()) / (1000 * 60 * 60 * 24 * 30)
+    )
     const paidMonths = Math.min(monthsPassed, loan.term_months)
-    return Math.max(0, loan.principal - (paidMonths * monthly))
+    return Math.max(0, loan.principal - paidMonths * monthly)
   }
 
   // Progress percentage
@@ -204,11 +224,13 @@ export default function Loans() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Active Loans</div>
-          <div class={styles.summaryValue}>{loans().filter(l => l.status === 'active').length}</div>
+          <div class={styles.summaryValue}>
+            {loans().filter((l) => l.status === 'active').length}
+          </div>
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Paid Off</div>
-          <div class={styles.summaryValue}>{loans().filter(l => l.status === 'paid').length}</div>
+          <div class={styles.summaryValue}>{loans().filter((l) => l.status === 'paid').length}</div>
         </div>
       </div>
 
@@ -226,7 +248,9 @@ export default function Loans() {
         <div class={styles.loansGrid}>
           {loans().map((loan) => {
             const remaining = calculateRemaining(loan)
-            const monthly = loan.monthly_payment || calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
+            const monthly =
+              loan.monthly_payment ||
+              calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
             const progress = getProgress(loan)
 
             return (
@@ -235,16 +259,35 @@ export default function Loans() {
                   <div class={styles.loanIcon}>🏦</div>
                   <div class={styles.loanInfo}>
                     <h3 class={styles.loanName}>{loan.name}</h3>
-                    <span class={`badge ${getStatusBadge(loan.status)}`}>{getStatusLabel(loan.status)}</span>
+                    <span class={`badge ${getStatusBadge(loan.status)}`}>
+                      {getStatusLabel(loan.status)}
+                    </span>
                   </div>
                   <div class={styles.loanActions}>
-                    <button class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`} onClick={() => { editLoan(loan); }}>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button
+                      class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                      onClick={() => {
+                        editLoan(loan)
+                      }}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button class="btn btn-sm btn-ghost" onClick={() => deleteLoan(loan.id)}>
-                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
@@ -276,10 +319,7 @@ export default function Loans() {
                 </div>
                 <div class={styles.loanProgress}>
                   <div class={styles.progressBar}>
-                    <div
-                      class={styles.progressFill}
-                      style={{ width: `${progress}%` }}
-                    />
+                    <div class={styles.progressFill} style={{ width: `${progress}%` }} />
                   </div>
                   <div class={styles.progressStats}>
                     <span class={styles.progressPercent}>{progress}% paid</span>
@@ -309,7 +349,7 @@ export default function Loans() {
                     borderColor: '#22c55e',
                     backgroundColor: 'rgba(34, 197, 94, 0.1)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
                   },
                   {
                     label: 'Remaining',
@@ -317,9 +357,9 @@ export default function Loans() {
                     borderColor: '#dc2626',
                     backgroundColor: 'rgba(220, 38, 38, 0.1)',
                     fill: true,
-                    tension: 0.4
-                  }
-                ]
+                    tension: 0.4,
+                  },
+                ],
               }}
               options={{
                 responsive: true,
@@ -328,9 +368,9 @@ export default function Loans() {
                   y: {
                     beginAtZero: true,
                     ticks: {
-                      callback: (value: any) => formatAmount(value)
-                    }
-                  }
+                      callback: (value: any) => formatAmount(value),
+                    },
+                  },
                 },
                 plugins: {
                   legend: {
@@ -338,10 +378,10 @@ export default function Loans() {
                     labels: {
                       usePointStyle: true,
                       padding: 15,
-                      font: { size: 12 }
-                    }
-                  }
-                }
+                      font: { size: 12 },
+                    },
+                  },
+                },
               }}
               height={250}
               width="100%"
@@ -352,11 +392,46 @@ export default function Loans() {
 
       {/* Add/Edit Modal */}
       {showAddModal() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddModal(false)
+              setEditingLoan(null)
+              setFormData({
+                name: '',
+                principal: '',
+                interest_rate: '',
+                term_months: '',
+                start_date: '',
+                status: 'active',
+              })
+            }
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>{editingLoan() ? 'Edit Loan' : 'Add Loan'}</h3>
-              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>
+              <button
+                class={styles.modalClose}
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingLoan(null)
+                  setFormData({
+                    name: '',
+                    principal: '',
+                    interest_rate: '',
+                    term_months: '',
+                    start_date: '',
+                    status: 'active',
+                  })
+                }}
+              >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -424,7 +499,9 @@ export default function Loans() {
                 <select
                   class={styles.formControl}
                   value={formData().status}
-                  oninput={(e) => setFormData({ ...formData(), status: e.target.value as Loan['status'] })}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), status: e.target.value as Loan['status'] })
+                  }
                 >
                   <option value="active">Active</option>
                   <option value="deferred">Deferred</option>
@@ -432,7 +509,22 @@ export default function Loans() {
                 </select>
               </div>
               <div class={styles.modalFooter}>
-                <button type="button" class={styles.btnSecondary} onClick={() => { setShowAddModal(false); setEditingLoan(null); setFormData({ name: '', principal: '', interest_rate: '', term_months: '', start_date: '', status: 'active' }) }}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onClick={() => {
+                    setShowAddModal(false)
+                    setEditingLoan(null)
+                    setFormData({
+                      name: '',
+                      principal: '',
+                      interest_rate: '',
+                      term_months: '',
+                      start_date: '',
+                      status: 'active',
+                    })
+                  }}
+                >
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
