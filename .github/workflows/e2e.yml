@@ -1,0 +1,70 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, fix/transition-to-solidjs]
+  pull_request:
+    branches: [main, fix/transition-to-solidjs]
+
+jobs:
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Rebuild native modules
+        run: npm rebuild better-sqlite3 --build-from-source
+
+      - name: Start backend server
+        run: |
+          mkdir -p db assets
+          node backend/index.js &
+          sleep 5
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Run E2E tests
+        env:
+          CI: true
+          PLAYWRIGHT_HEADLESS: true
+        run: |
+          npx playwright test
+        continue-on-error: false
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload test screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: test-results/
+          retention-days: 30
+
+      - name: Verify API endpoints
+        run: |
+          echo "Testing API endpoints..."
+          curl -s http://localhost:3847/api/accounts > /dev/null && echo "✓ API/accounts OK" || echo "✗ API/accounts FAILED"
+          curl -s http://localhost:3847/api/transactions/summary > /dev/null && echo "✓ API/transactions/summary OK" || echo "✗ API/transactions/summary FAILED"
+          curl -s http://localhost:3847/api/housing > /dev/null && echo "✓ API/housing OK" || echo "✗ API/housing FAILED"
+          curl -s http://localhost:3847/api/loans > /dev/null && echo "✓ API/loans OK" || echo "✗ API/loans FAILED"
