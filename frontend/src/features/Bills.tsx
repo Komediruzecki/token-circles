@@ -156,19 +156,24 @@ export default function Bills() {
             Add Bill
           </button>
         </div>
-        <p class={styles.pageSubtitle}>Track upcoming payments and never miss a due date</p>
+        <p class={styles.pageSubtitle} data-test-id="bills-subtitle">
+          Track upcoming payments and never miss a due date
+        </p>
       </div>
 
       {/* Upcoming Section */}
       {upcoming().length > 0 && (
-        <div class={styles.billsSection}>
+        <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
           <h2 class={styles.sectionTitle}>
             <span>🔔</span> Upcoming Bills
             <span class={styles.sectionSubtitle}>{upcoming().length} bills</span>
           </h2>
-          <div class={styles.billsList}>
+          <div data-test-id="bills-list" class={styles.billsList}>
             {upcoming().map((bill) => (
-              <div class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}>
+              <div
+                data-test-id="bill-card"
+                class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`
+              }>
                 <div class={styles.billMain}>
                   <div class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
                   <div class={styles.billInfo}>
@@ -189,6 +194,7 @@ export default function Bills() {
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   {!bill.paid && (
                     <button
+                      data-test-id="mark-paid-btn"
                       class={`${styles.btnPrimary} ${styles.btnSm}`}
                       onClick={() => markPaid(bill.id)}
                     >
@@ -204,14 +210,14 @@ export default function Bills() {
 
       {/* Paid Section */}
       {paid().length > 0 && (
-        <div class={styles.billsSection}>
+        <div data-test-id="bills-paid-section" class={styles.billsSection}>
           <h2 class={styles.sectionTitle}>
             <span>✅</span> Paid Bills
             <span class={styles.sectionSubtitle}>{paid().length} bills</span>
           </h2>
-          <div class={styles.billsList}>
+          <div data-test-id="bills-list" class={styles.billsList}>
             {paid().map((bill) => (
-              <div class={`${styles.billCard} ${styles.paid}`}>
+              <div data-test-id="bill-card" class={`${styles.billCard} ${styles.paid}`}>
                 <div class={styles.billMain}>
                   <div class={styles.billIcon}>✅</div>
                   <div class={styles.billInfo}>
@@ -243,18 +249,24 @@ export default function Bills() {
       )}
 
       {/* All Bills Section */}
-      <div class={styles.billsSection}>
+      <div data-test-id="bills-all-section" class={styles.billsSection}>
         <h2 class={styles.sectionTitle}>
           <span>📋</span> All Bills
           <span class={styles.sectionSubtitle}>{bills().length} total</span>
         </h2>
         {loading() ? (
-          <div class={styles.emptyState}>Loading bills...</div>
+          <div data-test-id="bills-loading" class={styles.emptyState}>
+            Loading bills...
+          </div>
         ) : bills().length === 0 ? (
-          <div class={styles.emptyState}>
+          <div data-test-id="bills-empty" class={styles.emptyState}>
             <p>No bills yet</p>
             <p>Add your first bill to start tracking your payments.</p>
-            <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+            <button
+              data-test-id="add-bill-btn-empty"
+              class={styles.btnPrimary}
+              onClick={() => setShowAddModal(true)}
+            >
               Add Bill
             </button>
           </div>
@@ -282,6 +294,7 @@ export default function Bills() {
                   <div class="bill-actions">
                     {!bill.paid ? (
                       <button
+                        data-test-id="mark-paid-btn"
                         class={`${styles.btnPrimary} ${styles.btnSm}`}
                         onClick={() => markPaid(bill.id)}
                       >
@@ -289,6 +302,7 @@ export default function Bills() {
                       </button>
                     ) : (
                       <button
+                        data-test-id="delete-bill-btn"
                         class={`${styles.btnSm} ${styles.btnGhost}`}
                         onClick={() => deleteBill(bill.id)}
                       >

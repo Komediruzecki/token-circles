@@ -76,13 +76,13 @@ export default function Transactions() {
     try {
       setLoading(true)
       const data = (await api.getTransactions()) as any
-      setTransactions(data as Transaction[])
+      const transactionsData = Array.isArray(data) ? data : []
+      setTransactions(transactionsData as Transaction[])
 
       // Extract unique categories and tags for filter bar
       const categoriesSet = new Map<number, { name: string; color: string }>()
-      const tagsSet = new Map<number, { name: string; color: string }>()(
-        data as Transaction[]
-      ).forEach((tx) => {
+      const tagsSet = new Map<number, { name: string; color: string }>()
+      transactionsData.forEach((tx: any) => {
         if (tx.category_name) {
           if (!categoriesSet.has(tx.category_id || 0)) {
             const categoryNames = tx.category_name.split('|')
@@ -93,7 +93,7 @@ export default function Transactions() {
           }
         }
         if (tx.tags && tx.tags.length > 0) {
-          tx.tags.forEach((tag) => {
+          tx.tags.forEach((tag: any) => {
             if (!tagsSet.has(tag.id)) {
               tagsSet.set(tag.id, { name: tag.name, color: tag.color })
             }
@@ -177,10 +177,11 @@ export default function Transactions() {
     if (!receipt) return
 
     try {
-      ;(await api.deleteReceipt(receipt.id)) as any
+      await api.deleteReceipt(receipt.id)
       // Reload transactions to remove the deleted receipt reference
-      const data = (await api.getTransactions()) as any
-      setTransactions(data as Transaction[])
+      const data = await api.getTransactions()
+      const transactionsData = Array.isArray(data) ? data : []
+      setTransactions(transactionsData as Transaction[])
       closeReceiptModal()
     } catch (error) {
       console.error('Failed to delete receipt:', error)
