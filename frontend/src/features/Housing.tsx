@@ -67,7 +67,15 @@ export default function HousingForm() {
         body: JSON.stringify(data),
       })
       setShowAddModal(false)
-      setFormData({ type: 'rent', property_name: '', monthly_amount: '', due_day: 1, due_month: new Date().getMonth() + 1, autopay: false, notes: '' })
+      setFormData({
+        type: 'rent',
+        property_name: '',
+        monthly_amount: '',
+        due_day: 1,
+        due_month: new Date().getMonth() + 1,
+        autopay: false,
+        notes: '',
+      })
       loadHousings()
     } catch (error) {
       console.error('Failed to save housing expense', error)
@@ -152,9 +160,7 @@ export default function HousingForm() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Autopay Enabled</div>
-          <div class={styles.summaryValue}>
-            {housings().filter(h => h.autopay).length}
-          </div>
+          <div class={styles.summaryValue}>{housings().filter((h) => h.autopay).length}</div>
         </div>
       </div>
 
@@ -170,52 +176,69 @@ export default function HousingForm() {
         </div>
       ) : (
         <div class={styles.housingList}>
-          {Array.isArray(housings()) && housings().map((housing) => (
-            <div class={styles.housingCard}>
-              <div class={styles.housingHeader}>
-                <div class={styles.housingIcon}>{getTypeIcon(housing.type)}</div>
-                <div class={styles.housingInfo}>
-                  <h3 class={styles.housingName}>{housing.property_name}</h3>
-                  <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
-                </div>
-                <div class={styles.housingActions}>
-                  <span class={`badge ${housing.autopay ? 'badge-success' : 'badge-default'}`}>
-                    {housing.autopay ? '🔄 Autopay' : 'Manual'}
-                  </span>
-                  <button class="btn btn-sm btn-ghost" onClick={() => deleteHousing(housing.id)}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div class={styles.housingAmount}>
-                <div class={styles.amountLabel}>Monthly Cost</div>
-                <div class={styles.amountValue}>{formatAmount(housing.monthly_amount)}</div>
-              </div>
-              <div class={styles.housingDetails}>
-                <div class={styles.detailItem}>
-                  <span class={styles.detailLabel}>Due</span>
-                  <span class={styles.detailValue}>
-                    {housing.due_month} / {housing.due_day}
-                  </span>
-                </div>
-                {housing.notes && (
-                  <div class={styles.detailItem}>
-                    <span class={styles.detailLabel}>Notes</span>
-                    <span class={styles.detailValue}>{housing.notes}</span>
+          {Array.isArray(housings()) &&
+            housings().map((housing) => (
+              <div class={styles.housingCard}>
+                <div class={styles.housingHeader}>
+                  <div class={styles.housingIcon}>{getTypeIcon(housing.type)}</div>
+                  <div class={styles.housingInfo}>
+                    <h3 class={styles.housingName}>{housing.property_name}</h3>
+                    <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
                   </div>
-                )}
+                  <div class={styles.housingActions}>
+                    <span class={`badge ${housing.autopay ? 'badge-success' : 'badge-default'}`}>
+                      {housing.autopay ? '🔄 Autopay' : 'Manual'}
+                    </span>
+                    <button class="btn btn-sm btn-ghost" onClick={() => deleteHousing(housing.id)}>
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class={styles.housingAmount}>
+                  <div class={styles.amountLabel}>Monthly Cost</div>
+                  <div class={styles.amountValue}>{formatAmount(housing.monthly_amount)}</div>
+                </div>
+                <div class={styles.housingDetails}>
+                  <div class={styles.detailItem}>
+                    <span class={styles.detailLabel}>Due</span>
+                    <span class={styles.detailValue}>
+                      {housing.due_month} / {housing.due_day}
+                    </span>
+                  </div>
+                  {housing.notes && (
+                    <div class={styles.detailItem}>
+                      <span class={styles.detailLabel}>Notes</span>
+                      <span class={styles.detailValue}>{housing.notes}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       )}
 
       {/* Add Housing Modal */}
       {showAddModal() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Housing Expense</h3>
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
@@ -230,7 +253,9 @@ export default function HousingForm() {
                 <select
                   class={styles.formControl}
                   value={formData().type}
-                  oninput={(e) => setFormData({ ...formData(), type: e.target.value as Housing['type'] })}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), type: e.target.value as Housing['type'] })
+                  }
                 >
                   <option value="rent">Rent</option>
                   <option value="mortgage">Mortgage</option>
@@ -269,10 +294,14 @@ export default function HousingForm() {
                   <select
                     class={styles.formControl}
                     value={formData().due_month}
-                    oninput={(e) => setFormData({ ...formData(), due_month: parseInt(e.target.value) })}
+                    oninput={(e) =>
+                      setFormData({ ...formData(), due_month: parseInt(e.target.value) })
+                    }
                   >
                     {Array.from({ length: 12 }, (_, i) => (
-                      <option value={i + 1}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
+                      <option value={i + 1}>
+                        {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -285,7 +314,9 @@ export default function HousingForm() {
                     class={styles.formControl}
                     placeholder="1"
                     value={formData().due_day}
-                    oninput={(e) => setFormData({ ...formData(), due_day: parseInt(e.target.value) || 1 })}
+                    oninput={(e) =>
+                      setFormData({ ...formData(), due_day: parseInt(e.target.value) || 1 })
+                    }
                   />
                 </div>
               </div>
@@ -316,7 +347,11 @@ export default function HousingForm() {
                 />
               </div>
               <div class={styles.modalFooter}>
-                <button type="button" class={styles.btnSecondary} onClick={() => setShowAddModal(false)}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onClick={() => setShowAddModal(false)}
+                >
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>

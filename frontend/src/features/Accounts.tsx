@@ -36,8 +36,8 @@ export default function Accounts() {
     setLoading(true)
     try {
       const [accountsRes, txRes] = await Promise.all([
-        fetch('/api/accounts').then(r => r.json()),
-        fetch('/api/transactions/summary').then(r => r.json()),
+        fetch('/api/accounts').then((r) => r.json()),
+        fetch('/api/transactions/summary').then((r) => r.json()),
       ])
       setAccounts(accountsRes)
       setTransactions(txRes?.transactions || [])
@@ -75,7 +75,12 @@ export default function Accounts() {
 
   // Delete account
   const deleteAccount = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this account? All associated transactions will be lost.')) return
+    if (
+      !confirm(
+        'Are you sure you want to delete this account? All associated transactions will be lost.'
+      )
+    )
+      return
     try {
       await fetch(`/api/accounts/${id}`, { method: 'DELETE' })
       loadData()
@@ -130,39 +135,65 @@ export default function Accounts() {
       <div class={`${styles.accountsPage} ${styles.pageHeader}`}>
         <div class={styles.headerTop}>
           <h1>Accounts</h1>
-          <button data-test-id="add-account-btn" class={`${styles.btn  } ${  styles.btnPrimary}`} onClick={() => setShowAddModal(true)}>
+          <button
+            data-test-id="add-account-btn"
+            class={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={() => setShowAddModal(true)}
+          >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Account
           </button>
         </div>
-        <p data-test-id="accounts-subtitle" class={styles.pageSubtitle}>Manage your bank accounts and track balances</p>
+        <p data-test-id="accounts-subtitle" class={styles.pageSubtitle}>
+          Manage your bank accounts and track balances
+        </p>
       </div>
 
       {/* Summary Cards */}
       <div data-test-id="accounts-summary" class={styles.accountsSummary}>
         <div data-test-id="summary-total-balance" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Total Balance</div>
-          <div data-test-id="summary-balance-value" class={styles.summaryValue}>{formatAmount(totalBalance())}</div>
+          <div data-test-id="summary-balance-value" class={styles.summaryValue}>
+            {formatAmount(totalBalance())}
+          </div>
         </div>
         <div data-test-id="summary-accounts-count" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Accounts</div>
-          <div data-test-id="summary-accounts-value" class={styles.summaryValue}>{accounts().length}</div>
+          <div data-test-id="summary-accounts-value" class={styles.summaryValue}>
+            {accounts().length}
+          </div>
         </div>
         <div data-test-id="summary-income" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Income (this month)</div>
-          <div data-test-id="summary-income-value" class={`${styles.summaryValue  } ${  styles.positive}`}>+{formatAmount(accounts().reduce((s, a) => {
-            const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'income')
-            return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
-          }, 0))}</div>
+          <div
+            data-test-id="summary-income-value"
+            class={`${styles.summaryValue} ${styles.positive}`}
+          >
+            +
+            {formatAmount(
+              accounts().reduce((s, a) => {
+                const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'income')
+                return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
+              }, 0)
+            )}
+          </div>
         </div>
         <div data-test-id="summary-expenses" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Expenses (this month)</div>
-          <div data-test-id="summary-expenses-value" class={`${styles.summaryValue  } ${  styles.negative}`}>-{formatAmount(accounts().reduce((s, a) => {
-            const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'expense')
-            return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
-          }, 0))}</div>
+          <div
+            data-test-id="summary-expenses-value"
+            class={`${styles.summaryValue} ${styles.negative}`}
+          >
+            -
+            {formatAmount(
+              accounts().reduce((s, a) => {
+                const accTxs = getAccountTransactions(a.id).filter((t: any) => t.type === 'expense')
+                return s + accTxs.reduce((ts, tx) => ts + tx.amount, 0)
+              }, 0)
+            )}
+          </div>
         </div>
       </div>
 
@@ -172,7 +203,10 @@ export default function Accounts() {
         <div class={styles.emptyState}>
           <p>No accounts yet</p>
           <p>Add your first account to start tracking your finances.</p>
-          <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={() => setShowAddModal(true)}>
+          <button
+            class={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={() => setShowAddModal(true)}
+          >
             Add Account
           </button>
         </div>
@@ -181,15 +215,35 @@ export default function Accounts() {
           {accounts().map((account) => (
             <div data-test-id="account-card" class={styles.accountCard}>
               <div class={styles.accountHeader}>
-                <div data-test-id="account-icon" class={styles.accountIcon}>{getTypeIcon(account.type)}</div>
+                <div data-test-id="account-icon" class={styles.accountIcon}>
+                  {getTypeIcon(account.type)}
+                </div>
                 <div class={styles.accountInfo}>
-                  <h3 data-test-id="account-name" class={styles.accountName}>{account.name}</h3>
-                  <p data-test-id="account-bank" class={styles.accountBank}>{account.bank_name || 'No bank listed'}</p>
+                  <h3 data-test-id="account-name" class={styles.accountName}>
+                    {account.name}
+                  </h3>
+                  <p data-test-id="account-bank" class={styles.accountBank}>
+                    {account.bank_name || 'No bank listed'}
+                  </p>
                 </div>
                 <div class={styles.accountActions}>
-                  <span data-test-id="account-type" class={`${styles.badge} ${getTypeBadge(account.type)}`}>{account.type}</span>
-                  <button class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteAccount(account.id)}>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span
+                    data-test-id="account-type"
+                    class={`${styles.badge} ${getTypeBadge(account.type)}`}
+                  >
+                    {account.type}
+                  </span>
+                  <button
+                    class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                    onClick={() => deleteAccount(account.id)}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
@@ -197,25 +251,39 @@ export default function Accounts() {
               </div>
               <div class={styles.accountBalance}>
                 <div class={styles.balanceLabel}>Current Balance</div>
-                <div data-test-id="account-balance" class={styles.balanceAmount}>{formatAmount(account.balance)}</div>
+                <div data-test-id="account-balance" class={styles.balanceAmount}>
+                  {formatAmount(account.balance)}
+                </div>
               </div>
               <div data-test-id="activity-section" class={styles.accountActivity}>
                 <div class={styles.activityHeader}>
                   <span class={styles.activityLabel}>Recent Activity</span>
-                  <a href="#transactions" class={styles.btnLink}>View All →</a>
+                  <a href="#transactions" class={styles.btnLink}>
+                    View All →
+                  </a>
                 </div>
                 <div data-test-id="activity-list" class={styles.activityList}>
-                  {getAccountTransactions(account.id).slice(0, 3).map((tx: any) => (
-                    <div data-test-id="activity-item" class={styles.activityItem}>
-                      <div data-test-id="activity-description" class={styles.activityContent}>
-                        <div data-test-id="activity-desc" class={styles.activityDesc}>{tx.description}</div>
-                        <div data-test-id="activity-date" class={styles.activityDate}>{new Date(tx.date).toLocaleDateString()}</div>
+                  {getAccountTransactions(account.id)
+                    .slice(0, 3)
+                    .map((tx: any) => (
+                      <div data-test-id="activity-item" class={styles.activityItem}>
+                        <div data-test-id="activity-description" class={styles.activityContent}>
+                          <div data-test-id="activity-desc" class={styles.activityDesc}>
+                            {tx.description}
+                          </div>
+                          <div data-test-id="activity-date" class={styles.activityDate}>
+                            {new Date(tx.date).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div
+                          data-test-id="activity-amount"
+                          class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                        >
+                          {tx.type === 'expense' ? '-' : '+'}
+                          {formatAmount(tx.amount)}
+                        </div>
                       </div>
-                      <div data-test-id="activity-amount" class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}>
-                        {tx.type === 'expense' ? '-' : '+'}{formatAmount(tx.amount)}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             </div>
@@ -225,8 +293,18 @@ export default function Accounts() {
 
       {/* Add Account Modal */}
       {showAddModal() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false) }}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowAddModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Account</h3>
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
@@ -296,7 +374,11 @@ export default function Accounts() {
                 </select>
               </div>
               <div class={styles.modalFooter}>
-                <button type="button" class={`${styles.btn} ${styles.btnSecondary}`} onClick={() => setShowAddModal(false)}>
+                <button
+                  type="button"
+                  class={`${styles.btn} ${styles.btnSecondary}`}
+                  onClick={() => setShowAddModal(false)}
+                >
                   Cancel
                 </button>
                 <button type="submit" class={`${styles.btn} ${styles.btnPrimary}`}>

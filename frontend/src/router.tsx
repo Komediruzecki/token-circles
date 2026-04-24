@@ -16,7 +16,7 @@ import Loans from './features/Loans.js'
 import Retirement from './features/Retirement.js'
 import Settings from './features/Settings.js'
 import Transactions from './features/Transactions.js'
-import type { PageComponent,PageName } from './types/models.js'
+import type { PageComponent, PageName } from './types/models.js'
 
 export type { PageName, PageComponent }
 

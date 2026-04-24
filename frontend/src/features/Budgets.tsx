@@ -19,7 +19,7 @@ import {
   forecastHeader,
   forecastTitle,
   btnOutline,
-  btnLarge
+  btnLarge,
 } from '../components/BudgetsPage.module.css'
 import Chart from '../components/Chart'
 import type * as Models from '../types/models'
@@ -269,7 +269,9 @@ export default function Budgets() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Unallocated</div>
-          <div class={styles.summaryValue}>{formatCurrency(summary()?.zero_based_remaining || 0)}</div>
+          <div class={styles.summaryValue}>
+            {formatCurrency(summary()?.zero_based_remaining || 0)}
+          </div>
         </div>
       </div>
 
@@ -285,11 +287,13 @@ export default function Budgets() {
               type="doughnut"
               data={{
                 labels: allocations().map((a) => a.category_name),
-                datasets: [{
-                  data: allocations().map((a) => a.allocated),
-                  backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
-                  borderWidth: 0
-                }]
+                datasets: [
+                  {
+                    data: allocations().map((a) => a.allocated),
+                    backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
+                    borderWidth: 0,
+                  },
+                ],
               }}
               options={{
                 responsive: true,
@@ -300,10 +304,10 @@ export default function Budgets() {
                     labels: {
                       usePointStyle: true,
                       padding: 15,
-                      font: { size: 12 }
-                    }
-                  }
-                }
+                      font: { size: 12 },
+                    },
+                  },
+                },
               }}
               height={250}
               width="100%"
@@ -503,7 +507,9 @@ export default function Budgets() {
                         {item.can_allocate && !item.is_budgeted ? (
                           <button
                             class="btn btn-sm btn-ghost"
-                            onClick={() => { openAllocateModal(item); }}
+                            onClick={() => {
+                              openAllocateModal(item)
+                            }}
                           >
                             Allocate
                           </button>
@@ -528,7 +534,12 @@ export default function Budgets() {
             if (e.target === e.currentTarget) setShowAllocateModal(false)
           }}
         >
-          <div class="modal modal-small" onclick={(e) => { e.stopPropagation(); }}>
+          <div
+            class="modal modal-small"
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3>Allocate Budget</h3>
               <button

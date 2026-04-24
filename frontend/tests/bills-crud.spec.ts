@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Bills CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -93,7 +93,11 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check if there are unpaid bills in the upcoming section
     const upcomingSection = page.locator('h2:has-text("Upcoming Bills")')
-    const upcomingBillsCount = await upcomingSection.locator('..').locator('.bill-card').count().catch(() => 0)
+    const upcomingBillsCount = await upcomingSection
+      .locator('..')
+      .locator('.bill-card')
+      .count()
+      .catch(() => 0)
 
     if (upcomingBillsCount === 0) {
       test.skip() // No unpaid bills to display
@@ -110,7 +114,11 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check if there are unpaid bills in the upcoming section
     const upcomingSection = page.locator('h2:has-text("Upcoming Bills")')
-    const upcomingBillsCount = await upcomingSection.locator('..').locator('.bill-card').count().catch(() => 0)
+    const upcomingBillsCount = await upcomingSection
+      .locator('..')
+      .locator('.bill-card')
+      .count()
+      .catch(() => 0)
 
     if (upcomingBillsCount === 0) {
       test.skip() // No unpaid bills to display
@@ -127,7 +135,11 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check if there are unpaid bills in the upcoming section
     const upcomingSection = page.locator('h2:has-text("Upcoming Bills")')
-    const upcomingBillsCount = await upcomingSection.locator('..').locator('.bill-card').count().catch(() => 0)
+    const upcomingBillsCount = await upcomingSection
+      .locator('..')
+      .locator('.bill-card')
+      .count()
+      .catch(() => 0)
 
     if (upcomingBillsCount === 0) {
       test.skip() // No unpaid bills to display
@@ -157,14 +169,21 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check if there are unpaid bills in the upcoming section
     const upcomingSection = page.locator('h2:has-text("Upcoming Bills")')
-    const upcomingBillsCount = await upcomingSection.locator('..').locator('.bill-card').count().catch(() => 0)
+    const upcomingBillsCount = await upcomingSection
+      .locator('..')
+      .locator('.bill-card')
+      .count()
+      .catch(() => 0)
 
     if (upcomingBillsCount === 0) {
       test.skip() // No unpaid bills to display
       return
     }
 
-    const frequencyText = page.locator('.bill-card').first().locator('text=/Monthly|Weekly|Biweekly/i')
+    const frequencyText = page
+      .locator('.bill-card')
+      .first()
+      .locator('text=/Monthly|Weekly|Biweekly/i')
     await expect(frequencyText).toBeVisible({ timeout: 2000 })
   })
 
@@ -173,7 +192,11 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check if there are unpaid bills in the upcoming section
     const upcomingSection = page.locator('h2:has-text("Upcoming Bills")')
-    const upcomingBillsCount = await upcomingSection.locator('..').locator('.bill-card').count().catch(() => 0)
+    const upcomingBillsCount = await upcomingSection
+      .locator('..')
+      .locator('.bill-card')
+      .count()
+      .catch(() => 0)
 
     if (upcomingBillsCount === 0) {
       test.skip() // No unpaid bills to display
@@ -190,14 +213,21 @@ test.describe('Bills CRUD Operations', () => {
 
     // Check if there are unpaid bills in the upcoming section
     const upcomingSection = page.locator('h2:has-text("Upcoming Bills")')
-    const upcomingBillsCount = await upcomingSection.locator('..').locator('.bill-card').count().catch(() => 0)
+    const upcomingBillsCount = await upcomingSection
+      .locator('..')
+      .locator('.bill-card')
+      .count()
+      .catch(() => 0)
 
     if (upcomingBillsCount === 0) {
       test.skip() // No unpaid bills to display
       return
     }
 
-    const daysText = page.locator('.bill-card').first().locator('text=/Due (tomorrow|today|overdue|in \\d+ days)/i')
+    const daysText = page
+      .locator('.bill-card')
+      .first()
+      .locator('text=/Due (tomorrow|today|overdue|in \\d+ days)/i')
     await expect(daysText).toBeVisible({ timeout: 2000 })
   })
 
@@ -344,7 +374,7 @@ test.describe('Bills CRUD Operations', () => {
     await expect(addBtn).toBeVisible()
   })
 
-    test('should close modal when clicking outside modal content', async ({ page }) => {
+  test('should close modal when clicking outside modal content', async ({ page }) => {
     await page.locator('button:has-text("Add Bill")').first().click()
     await page.waitForTimeout(500)
 
@@ -353,7 +383,10 @@ test.describe('Bills CRUD Operations', () => {
     await closeBtn.click()
     await page.waitForTimeout(500)
 
-    const isClosed = await page.locator('form:has-text("Bill Name")').isVisible({ timeout: 500 }).catch(() => false)
+    const isClosed = await page
+      .locator('form:has-text("Bill Name")')
+      .isVisible({ timeout: 500 })
+      .catch(() => false)
     expect(isClosed).toBeFalsy()
   })
 
@@ -362,7 +395,10 @@ test.describe('Bills CRUD Operations', () => {
     await page.waitForTimeout(1000)
 
     const modal = page.locator('[class*="modal"]').first()
-    await modal.locator('button', { hasText: /cancel/i }).first().click()
+    await modal
+      .locator('button', { hasText: /cancel/i })
+      .first()
+      .click()
     await page.waitForTimeout(500)
 
     const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -374,14 +410,21 @@ test.describe('Bills CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Skip if bills exist in database
-    const hasBills = await page.locator('.bill-card').count().then(count => count > 0).catch(() => false)
+    const hasBills = await page
+      .locator('.bill-card')
+      .count()
+      .then((count) => count > 0)
+      .catch(() => false)
     if (hasBills) {
       test.skip() // Test only makes sense when there are no bills
       return
     }
 
     const emptyState = page.locator('.emptyState').first()
-    const hasEmptyText = await emptyState.first().isVisible({ timeout: 2000 }).catch(() => false)
+    const hasEmptyText = await emptyState
+      .first()
+      .isVisible({ timeout: 2000 })
+      .catch(() => false)
     expect(hasEmptyText).toBeTruthy()
   })
 
@@ -390,14 +433,21 @@ test.describe('Bills CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Skip if bills exist in database
-    const hasBills = await page.locator('.bill-card').count().then(count => count > 0).catch(() => false)
+    const hasBills = await page
+      .locator('.bill-card')
+      .count()
+      .then((count) => count > 0)
+      .catch(() => false)
     if (hasBills) {
       test.skip() // Test only makes sense when there are no bills
       return
     }
 
     const emptyState = page.locator('.emptyState')
-    const hasEmptyText = await emptyState.first().isVisible({ timeout: 2000 }).catch(() => false)
+    const hasEmptyText = await emptyState
+      .first()
+      .isVisible({ timeout: 2000 })
+      .catch(() => false)
     expect(hasEmptyText).toBeTruthy()
   })
 
@@ -480,7 +530,9 @@ test.describe('Bills CRUD Operations', () => {
   test('should format date correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const dateText = page.locator('text=/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \\d+,? \\d{4}/i').first()
+    const dateText = page
+      .locator('text=/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \\d+,? \\d{4}/i')
+      .first()
     const hasDate = await dateText.isVisible({ timeout: 2000 }).catch(() => false)
     expect(hasDate).toBeTruthy()
   })

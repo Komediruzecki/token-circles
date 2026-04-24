@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Budgets', () => {
   test.beforeEach(async ({ page }) => {

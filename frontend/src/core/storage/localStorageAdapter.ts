@@ -13,7 +13,8 @@ import type {
   LoanData,
   ProfileData,
   SettingsData,
-  TransactionData} from '@/types/data'
+  TransactionData,
+} from '@/types/data'
 import type {
   Account,
   BalanceEntry,
@@ -25,7 +26,8 @@ import type {
   Settings,
   StorageAdapter,
   Transaction,
-  TransactionFilters} from '@/types/storage'
+  TransactionFilters,
+} from '@/types/storage'
 
 const STORAGE_KEY = 'finance_data'
 const PROFILE_ID_KEY = 'finance_profile_id'

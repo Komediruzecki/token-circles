@@ -36,8 +36,8 @@ export default function Chart(props: ChartProps) {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          ...props.options
-        }
+          ...props.options,
+        },
       })
     })
 
@@ -52,7 +52,7 @@ export default function Chart(props: ChartProps) {
 
   return (
     <canvas
-      ref={canvas => {
+      ref={(canvas) => {
         canvasRef = canvas
       }}
       height={props.height}

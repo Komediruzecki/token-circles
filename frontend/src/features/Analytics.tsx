@@ -17,16 +17,18 @@ interface AnalyticsData {
 export default function Analytics() {
   const [data, setData] = createSignal<AnalyticsData | null>(null)
   const [loading, setLoading] = createSignal(true)
-  const [selectedChart, setSelectedChart] = createSignal<'category' | 'monthly' | 'savings'>('category')
+  const [selectedChart, setSelectedChart] = createSignal<'category' | 'monthly' | 'savings'>(
+    'category'
+  )
 
   // Load analytics data
   const loadData = async () => {
     setLoading(true)
     try {
       const [categoryRes, heatmapRes, transactionsRes] = await Promise.all([
-        fetch('/api/analytics/category-trends').then(r => r.json()),
-        fetch('/api/analytics/daily-heatmap?year=2026').then(r => r.json()),
-        fetch('/api/transactions/summary').then(r => r.json()),
+        fetch('/api/analytics/category-trends').then((r) => r.json()),
+        fetch('/api/analytics/daily-heatmap?year=2026').then((r) => r.json()),
+        fetch('/api/transactions/summary').then((r) => r.json()),
       ])
 
       // Transform category-trends response
@@ -76,7 +78,11 @@ export default function Analytics() {
         byCategory,
         byMonth,
         recentTransactions,
-        savingsRate: transactionsRes ? (transactionsRes.total_income - transactionsRes.total_expense) / transactionsRes.total_income * 100 : 0,
+        savingsRate: transactionsRes
+          ? ((transactionsRes.total_income - transactionsRes.total_expense) /
+              transactionsRes.total_income) *
+            100
+          : 0,
       })
     } catch {
       console.error('Failed to load analytics')
@@ -129,7 +135,9 @@ export default function Analytics() {
           <div class={styles.analyticsStats}>
             <div class={styles.statCard}>
               <div class={styles.statLabel}>Savings Rate</div>
-              <div class={`stat-value ${data()!.savingsRate >= 20 ? 'positive' : data()!.savingsRate >= 10 ? 'warning' : 'negative'}`}>
+              <div
+                class={`stat-value ${data()!.savingsRate >= 20 ? 'positive' : data()!.savingsRate >= 10 ? 'warning' : 'negative'}`}
+              >
                 {formatPercent(data()!.savingsRate)}
               </div>
               <div class={styles.statDesc}>Recommended: 20%+</div>
@@ -188,15 +196,24 @@ export default function Analytics() {
                     type="doughnut"
                     data={{
                       labels: data()!.byCategory.map((item) => item.category_name),
-                      datasets: [{
-                        data: data()!.byCategory.map((item) => item.amount),
-                        backgroundColor: [
-                          '#dc2626', '#f97316', '#eab308', '#22c55e',
-                          '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899',
-                          '#6b7280', '#14b8a6'
-                        ],
-                        borderWidth: 0
-                      }]
+                      datasets: [
+                        {
+                          data: data()!.byCategory.map((item) => item.amount),
+                          backgroundColor: [
+                            '#dc2626',
+                            '#f97316',
+                            '#eab308',
+                            '#22c55e',
+                            '#06b6d4',
+                            '#3b82f6',
+                            '#8b5cf6',
+                            '#ec4899',
+                            '#6b7280',
+                            '#14b8a6',
+                          ],
+                          borderWidth: 0,
+                        },
+                      ],
                     }}
                     options={{
                       responsive: true,
@@ -207,10 +224,10 @@ export default function Analytics() {
                           labels: {
                             usePointStyle: true,
                             padding: 15,
-                            font: { size: 12 }
-                          }
-                        }
-                      }
+                            font: { size: 12 },
+                          },
+                        },
+                      },
                     }}
                     height={300}
                     width="100%"
@@ -232,7 +249,9 @@ export default function Analytics() {
                     id="analytics-monthly-chart"
                     type="line"
                     data={{
-                      labels: data()!.byMonth.map((item) => new Date(item.month).toLocaleDateString('en-US', { month: 'short' })),
+                      labels: data()!.byMonth.map((item) =>
+                        new Date(item.month).toLocaleDateString('en-US', { month: 'short' })
+                      ),
                       datasets: [
                         {
                           label: 'Income',
@@ -240,7 +259,7 @@ export default function Analytics() {
                           borderColor: '#22c55e',
                           backgroundColor: 'rgba(34, 197, 94, 0.1)',
                           fill: true,
-                          tension: 0.4
+                          tension: 0.4,
                         },
                         {
                           label: 'Expense',
@@ -248,9 +267,9 @@ export default function Analytics() {
                           borderColor: '#dc2626',
                           backgroundColor: 'rgba(220, 38, 38, 0.1)',
                           fill: true,
-                          tension: 0.4
-                        }
-                      ]
+                          tension: 0.4,
+                        },
+                      ],
                     }}
                     options={{
                       responsive: true,
@@ -259,9 +278,9 @@ export default function Analytics() {
                         y: {
                           beginAtZero: true,
                           ticks: {
-                            callback: (value: any) => formatCurrency(value)
-                          }
-                        }
+                            callback: (value: any) => formatCurrency(value),
+                          },
+                        },
                       },
                       plugins: {
                         legend: {
@@ -269,10 +288,10 @@ export default function Analytics() {
                           labels: {
                             usePointStyle: true,
                             padding: 15,
-                            font: { size: 12 }
-                          }
-                        }
-                      }
+                            font: { size: 12 },
+                          },
+                        },
+                      },
                     }}
                     height={300}
                     width="100%"
@@ -295,8 +314,14 @@ export default function Analytics() {
                   <div class={styles.rateInfo}>
                     <div class={styles.rateRow}>
                       <span>Target: 20%</span>
-                      <span class={`rate-status ${data()!.savingsRate >= 20 ? 'good' : data()!.savingsRate >= 10 ? 'fair' : 'poor'}`}>
-                        {data()!.savingsRate >= 20 ? 'Good' : data()!.savingsRate >= 10 ? 'Fair' : 'Poor'}
+                      <span
+                        class={`rate-status ${data()!.savingsRate >= 20 ? 'good' : data()!.savingsRate >= 10 ? 'fair' : 'poor'}`}
+                      >
+                        {data()!.savingsRate >= 20
+                          ? 'Good'
+                          : data()!.savingsRate >= 10
+                            ? 'Fair'
+                            : 'Poor'}
                       </span>
                     </div>
                     <div class={styles.rateRow}>
@@ -310,7 +335,8 @@ export default function Analytics() {
                   <ul>
                     {data()!.savingsRate < 20 && (
                       <li>
-                        <strong>Reduce discretionary spending:</strong> Review subscriptions and optional expenses
+                        <strong>Reduce discretionary spending:</strong> Review subscriptions and
+                        optional expenses
                       </li>
                     )}
                     {data()!.savingsRate < 10 && (
@@ -319,7 +345,8 @@ export default function Analytics() {
                           <strong>Increase income:</strong> Consider side gigs or ask for a raise
                         </li>
                         <li>
-                          <strong>Lower bills:</strong> Compare insurance rates and reduce energy usage
+                          <strong>Lower bills:</strong> Compare insurance rates and reduce energy
+                          usage
                         </li>
                       </>
                     )}
@@ -341,7 +368,12 @@ export default function Analytics() {
             <div class={styles.transactionList}>
               {data()!.recentTransactions.map((tx: any) => (
                 <div class={styles.transactionItem}>
-                  <div class={styles.transactionIcon} style={{ background: tx.type === 'expense' ? 'var(--danger)' : 'var(--income)' }}>
+                  <div
+                    class={styles.transactionIcon}
+                    style={{
+                      background: tx.type === 'expense' ? 'var(--danger)' : 'var(--income)',
+                    }}
+                  >
                     {tx.type === 'expense' ? '↓' : '↑'}
                   </div>
                   <div class={styles.transactionDetails}>

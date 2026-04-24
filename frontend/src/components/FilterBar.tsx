@@ -34,12 +34,12 @@ export default function FilterBar(props: FilterBarProps) {
     if (idx >= 0) {
       props.onChange({
         ...props,
-        selectedCategories: props.selectedCategories.filter(id => id !== categoryId)
+        selectedCategories: props.selectedCategories.filter((id) => id !== categoryId),
       })
     } else {
       props.onChange({
         ...props,
-        selectedCategories: [...props.selectedCategories, categoryId]
+        selectedCategories: [...props.selectedCategories, categoryId],
       })
     }
   }
@@ -49,12 +49,12 @@ export default function FilterBar(props: FilterBarProps) {
     if (idx >= 0) {
       props.onChange({
         ...props,
-        selectedTags: props.selectedTags.filter(id => id !== tagId)
+        selectedTags: props.selectedTags.filter((id) => id !== tagId),
       })
     } else {
       props.onChange({
         ...props,
-        selectedTags: [...props.selectedTags, tagId]
+        selectedTags: [...props.selectedTags, tagId],
       })
     }
   }
@@ -65,7 +65,7 @@ export default function FilterBar(props: FilterBarProps) {
       selectedCategories: [],
       selectedTags: [],
       dateRange: { from: '', to: '' },
-      selectedPreset: 'month'
+      selectedPreset: 'month',
     })
   }
 
@@ -82,7 +82,7 @@ export default function FilterBar(props: FilterBarProps) {
   const handlePresetClick = (preset: string) => {
     props.onChange({
       ...props,
-      selectedPreset: preset
+      selectedPreset: preset,
     })
   }
 
@@ -92,8 +92,8 @@ export default function FilterBar(props: FilterBarProps) {
       ...props,
       dateRange: {
         ...props.dateRange,
-        [field]: target.value
-      }
+        [field]: target.value,
+      },
     })
   }
 
@@ -104,7 +104,14 @@ export default function FilterBar(props: FilterBarProps) {
           <div class={styles.filterDropdown}>
             <button class={styles.filterBtn} onClick={toggleCategoryDropdown}>
               <span class={styles.filterLabel}>{categoryLabel()}</span>
-              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
                 <path d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -121,7 +128,7 @@ export default function FilterBar(props: FilterBarProps) {
                   </label>
                 </div>
                 <div class={styles.filterOptionList}>
-                  {props.categories.map(cat => (
+                  {props.categories.map((cat) => (
                     <label class={styles.checkboxLabel}>
                       <input
                         type="checkbox"
@@ -140,7 +147,14 @@ export default function FilterBar(props: FilterBarProps) {
           <div class={styles.filterDropdown}>
             <button class={styles.filterBtn} onClick={toggleTagDropdown}>
               <span class={styles.filterLabel}>{tagLabel()}</span>
-              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
                 <path d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -157,7 +171,7 @@ export default function FilterBar(props: FilterBarProps) {
                   </label>
                 </div>
                 <div class={styles.filterOptionList}>
-                  {props.tags.map(tag => (
+                  {props.tags.map((tag) => (
                     <label class={styles.checkboxLabel}>
                       <input
                         type="checkbox"

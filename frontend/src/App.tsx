@@ -381,10 +381,7 @@ export function App() {
 
         {/* Main Content */}
         <main class={sidebar.main}>
-          <div
-            id="page-content"
-            class="page page-content"
-          >
+          <div id="page-content" class="page page-content">
             {pages[currentPage()]}
           </div>
         </main>

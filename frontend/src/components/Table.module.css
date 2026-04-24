@@ -67,7 +67,7 @@
   text-align: center;
 }
 
-.thCheckbox input[type="checkbox"] {
+.thCheckbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -79,7 +79,7 @@
   width: 40px;
 }
 
-.tdCheckbox input[type="checkbox"] {
+.tdCheckbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;

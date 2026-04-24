@@ -1,4 +1,4 @@
-import { expect,test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 test.describe('Categories CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -40,7 +40,9 @@ test.describe('Categories CRUD Operations', () => {
     const incomeTab = tabs.filter({ hasText: 'Income' }).first()
 
     // At least one tab should be active
-    const hasActive = await expenseTab.isVisible({ timeout: 2000 }).catch(() => false) || await incomeTab.isVisible({ timeout: 2000 }).catch(() => false)
+    const hasActive =
+      (await expenseTab.isVisible({ timeout: 2000 }).catch(() => false)) ||
+      (await incomeTab.isVisible({ timeout: 2000 }).catch(() => false))
     expect(hasActive).toBeTruthy()
   })
 
@@ -531,4 +533,3 @@ test.describe('Categories CRUD Operations', () => {
     expect(count).toBeGreaterThanOrEqual(0)
   })
 })
-

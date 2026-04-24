@@ -62,7 +62,7 @@ export default function Settings() {
   const handleStorageTypeChange = (event: Event) => {
     const target = event.target as HTMLSelectElement
     const newStorageType = target.value as 'sqlite' | 'postgresql'
-    
+
     if (newStorageType === 'postgresql') {
       setShowStorageWarning(true)
     } else {
@@ -79,9 +79,9 @@ export default function Settings() {
         const response = await fetch('/api/settings/set-storage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'postgresql' })
+          body: JSON.stringify({ type: 'postgresql' }),
         })
-        
+
         if (response.ok) {
           localStorage.setItem('storageType', 'postgresql')
           setShowStorageWarning(false)
@@ -130,8 +130,8 @@ export default function Settings() {
                   <div class={styles.warningBox}>
                     <strong>PostgreSQL is required for the deployment version.</strong>
                     <p style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
-                      To use PostgreSQL, ensure it is properly configured in the backend. 
-                      Restart the application after switching storage types.
+                      To use PostgreSQL, ensure it is properly configured in the backend. Restart
+                      the application after switching storage types.
                     </p>
                     <button
                       class="btn btn-primary"

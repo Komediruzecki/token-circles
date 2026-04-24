@@ -57,10 +57,7 @@ export default function Pagination(props: PaginationProps) {
 
       {visiblePages[0] > 1 && (
         <>
-          <button
-            class={styles.pageBtn}
-            onClick={() => goToPage(1)}
-          >
+          <button class={styles.pageBtn} onClick={() => goToPage(1)}>
             1
           </button>
           {visiblePages[0] > 2 && <span class={styles.ellipsis}>...</span>}
@@ -82,10 +79,7 @@ export default function Pagination(props: PaginationProps) {
           {visiblePages[visiblePages.length - 1] < props.totalPages - 1 && (
             <span class={styles.ellipsis}>...</span>
           )}
-          <button
-            class={styles.pageBtn}
-            onClick={() => goToPage(props.totalPages)}
-          >
+          <button class={styles.pageBtn} onClick={() => goToPage(props.totalPages)}>
             {props.totalPages}
           </button>
         </>

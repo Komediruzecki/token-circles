@@ -1,4 +1,4 @@
-// todo: see why do we need this? 
+// todo: see why do we need this?
 {
   "compilerOptions": {
     "composite": true,

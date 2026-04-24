@@ -185,9 +185,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Transaction management
-  async listTransactions(
-    filters?: TransactionFilters
-  ): Promise<Transaction[]> {
+  async listTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
     const params = new URLSearchParams()
     if (filters?.date_from) params.append('date_from', filters.date_from)
     if (filters?.date_to) params.append('date_to', filters.date_to)
@@ -250,9 +248,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Category management
-  async listCategories(
-    type?: 'income' | 'expense'
-  ): Promise<Category[]> {
+  async listCategories(type?: 'income' | 'expense'): Promise<Category[]> {
     const params = type ? `?type=${type}` : ''
     const response = await fetch(`/api/categories${params}`, {
       method: 'GET',
@@ -499,9 +495,7 @@ class SelfHostedAdapter implements StorageAdapter {
   }
 
   // Transaction history
-  async getBalanceHistory(
-    accountId: number
-  ): Promise<BalanceEntry[]> {
+  async getBalanceHistory(accountId: number): Promise<BalanceEntry[]> {
     const response = await fetch(`/api/accounts/${accountId}/history`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },

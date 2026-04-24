@@ -73,7 +73,7 @@ export default function Retirement() {
   // Load projection
   const loadProjection = async () => {
     try {
-      const res = await fetch('/api/retirement/projection').then(r => r.json())
+      const res = await fetch('/api/retirement/projection').then((r) => r.json())
       setProjection(res)
 
       // Calculate detailed projection
@@ -193,7 +193,11 @@ export default function Retirement() {
   // Calculate growth
   const calculateGrowth = (): number => {
     if (!projection()) return 0
-    return (projection() as any).projected_total - (projection() as any).current_amount - totalContributed()
+    return (
+      (projection() as any).projected_total -
+      (projection() as any).current_amount -
+      totalContributed()
+    )
   }
 
   // Get progress percentage
@@ -266,7 +270,9 @@ export default function Retirement() {
               </div>
               <div class={styles.projectionCard}>
                 <div class={styles.cardLabel}>Monthly Contribution</div>
-                <div class={styles.cardValue}>{formatAmount(projection()!.annual_contribution / 12)}</div>
+                <div class={styles.cardValue}>
+                  {formatAmount(projection()!.annual_contribution / 12)}
+                </div>
                 <div class={styles.cardSub}>${projection()!.annual_contribution}/year</div>
               </div>
               <div class={styles.projectionCard}>
@@ -278,7 +284,9 @@ export default function Retirement() {
             <div class={styles.projectionDetails}>
               <div class={styles.detailRow}>
                 <span class={styles.detailLabel}>Current Savings</span>
-                <span class={styles.detailValue}>{formatAmount((projection() as any).current_amount)}</span>
+                <span class={styles.detailValue}>
+                  {formatAmount((projection() as any).current_amount)}
+                </span>
               </div>
               <div class={styles.detailRow}>
                 <span class={styles.detailLabel}>Total Contributions</span>
@@ -286,7 +294,9 @@ export default function Retirement() {
               </div>
               <div class={styles.detailRow}>
                 <span class={styles.detailLabel}>Investment Growth</span>
-                <span class={`${styles.detailValue} ${styles.positive}`}>{formatAmount(calculateGrowth())}</span>
+                <span class={`${styles.detailValue} ${styles.positive}`}>
+                  {formatAmount(calculateGrowth())}
+                </span>
               </div>
               <div class={styles.detailRow}>
                 <span class={styles.detailLabel}>Remaining to Save</span>
@@ -314,62 +324,86 @@ export default function Retirement() {
           </div>
         ) : (
           <div class={styles.goalsGrid}>
-            {Array.isArray(goals()) && goals().map((goal) => {
-              const progress = getProgress(goal)
-              return (
-                <div class={styles.goalCard}>
-                  <div class={styles.goalHeader}>
-                    <div class={styles.goalIcon}>🎯</div>
-                    <div class={styles.goalInfo}>
-                      <h3 class={styles.goalName}>{goal.name}</h3>
-                      <span class={`badge ${getRetirementStatus(goal.retirement_age)}`}>Retire at {formatAge(goal.retirement_age)}</span>
+            {Array.isArray(goals()) &&
+              goals().map((goal) => {
+                const progress = getProgress(goal)
+                return (
+                  <div class={styles.goalCard}>
+                    <div class={styles.goalHeader}>
+                      <div class={styles.goalIcon}>🎯</div>
+                      <div class={styles.goalInfo}>
+                        <h3 class={styles.goalName}>{goal.name}</h3>
+                        <span class={`badge ${getRetirementStatus(goal.retirement_age)}`}>
+                          Retire at {formatAge(goal.retirement_age)}
+                        </span>
+                      </div>
+                      <div class={styles.goalActions}>
+                        <button
+                          class={`${styles.btnSm} ${styles.btnGhost}`}
+                          onClick={() => {
+                            editGoal(goal)
+                          }}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          class={`${styles.btnSm} ${styles.btnGhost}`}
+                          onClick={() => deleteGoal(goal.id)}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    <div class={styles.goalActions}>
-                      <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => { editGoal(goal); }}>
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button class={`${styles.btnSm} ${styles.btnGhost}`} onClick={() => deleteGoal(goal.id)}>
-                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                    <div class={styles.goalBalance}>
+                      <div class={styles.balanceLabel}>Current Amount</div>
+                      <div class={styles.balanceValue}>{formatAmount(goal.current_amount)}</div>
+                    </div>
+                    <div class={styles.goalProgress}>
+                      <div class={styles.progressBar}>
+                        <div class={styles.progressFill} style={{ width: `${progress}%` }} />
+                      </div>
+                      <div class={styles.progressStats}>
+                        <span class={styles.progressPercent}>{progress}%</span>
+                        <span class={styles.progressTarget}>
+                          {formatAmount(goal.target_amount)} target
+                        </span>
+                      </div>
+                    </div>
+                    <div class={styles.goalDetails}>
+                      <div class={styles.detailItem}>
+                        <span class={styles.detailLabel}>Monthly</span>
+                        <span class={styles.detailValue}>
+                          {formatAmount(goal.monthly_contribution)}
+                        </span>
+                      </div>
+                      <div class={styles.detailItem}>
+                        <span class={styles.detailLabel}>Expected Return</span>
+                        <span class={styles.detailValue}>{goal.expected_return_rate}%</span>
+                      </div>
+                      <div class={styles.detailItem}>
+                        <span class={styles.detailLabel}>Target Date</span>
+                        <span class={styles.detailValue}>{formatDate(goal.target_date)}</span>
+                      </div>
                     </div>
                   </div>
-                  <div class={styles.goalBalance}>
-                    <div class={styles.balanceLabel}>Current Amount</div>
-                    <div class={styles.balanceValue}>{formatAmount(goal.current_amount)}</div>
-                  </div>
-                  <div class={styles.goalProgress}>
-                    <div class={styles.progressBar}>
-                      <div
-                        class={styles.progressFill}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                    <div class={styles.progressStats}>
-                      <span class={styles.progressPercent}>{progress}%</span>
-                      <span class={styles.progressTarget}>{formatAmount(goal.target_amount)} target</span>
-                    </div>
-                  </div>
-                  <div class={styles.goalDetails}>
-                    <div class={styles.detailItem}>
-                      <span class={styles.detailLabel}>Monthly</span>
-                      <span class={styles.detailValue}>{formatAmount(goal.monthly_contribution)}</span>
-                    </div>
-                    <div class={styles.detailItem}>
-                      <span class={styles.detailLabel}>Expected Return</span>
-                      <span class={styles.detailValue}>{goal.expected_return_rate}%</span>
-                    </div>
-                    <div class={styles.detailItem}>
-                      <span class={styles.detailLabel}>Target Date</span>
-                      <span class={styles.detailValue}>{formatDate(goal.target_date)}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })}
           </div>
         )}
       </div>
@@ -383,16 +417,18 @@ export default function Retirement() {
             type="line"
             data={{
               labels: projectedBalances().map((pb) => pb.age.toString()),
-              datasets: [{
-                label: 'Projected Balance',
-                data: projectedBalances().map((pb) => pb.balance),
-                borderColor: '#22c55e',
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-                pointHoverRadius: 6
-              }]
+              datasets: [
+                {
+                  label: 'Projected Balance',
+                  data: projectedBalances().map((pb) => pb.balance),
+                  borderColor: '#22c55e',
+                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                  fill: true,
+                  tension: 0.4,
+                  pointRadius: 4,
+                  pointHoverRadius: 6,
+                },
+              ],
             }}
             options={{
               responsive: true,
@@ -401,18 +437,18 @@ export default function Retirement() {
                 x: {
                   title: {
                     display: true,
-                    text: 'Age'
+                    text: 'Age',
                   },
                   ticks: {
-                    stepSize: 5
-                  }
+                    stepSize: 5,
+                  },
                 },
                 y: {
                   beginAtZero: true,
                   ticks: {
-                    callback: (value: any) => formatAmount(value)
-                  }
-                }
+                    callback: (value: any) => formatAmount(value),
+                  },
+                },
               },
               plugins: {
                 legend: {
@@ -420,8 +456,8 @@ export default function Retirement() {
                   labels: {
                     usePointStyle: true,
                     padding: 15,
-                    font: { size: 12 }
-                  }
+                    font: { size: 12 },
+                  },
                 },
                 tooltip: {
                   mode: 'index',
@@ -431,10 +467,10 @@ export default function Retirement() {
                       const age = context.label
                       const balance = formatAmount(context.raw)
                       return `${age} years: ${balance}`
-                    }
-                  }
-                }
-              }
+                    },
+                  },
+                },
+              },
             }}
             height={250}
             width="100%"
@@ -446,11 +482,52 @@ export default function Retirement() {
 
       {/* Add/Edit Modal */}
       {showAddModal() && (
-        <div class={styles.modalOverlay} onclick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}}>
-          <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modalOverlay}
+          onclick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddModal(false)
+              setEditingGoal(null)
+              setFormData({
+                name: '',
+                target_amount: '',
+                current_amount: '',
+                target_date: '',
+                monthly_contribution: '',
+                expected_return_rate: '',
+                current_age: '',
+                retirement_age: '',
+              })
+            }
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>{editingGoal() ? 'Edit Goal' : 'Add Retirement Goal'}</h3>
-              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>
+              <h3 class={styles.modalTitle}>
+                {editingGoal() ? 'Edit Goal' : 'Add Retirement Goal'}
+              </h3>
+              <button
+                class={styles.modalClose}
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingGoal(null)
+                  setFormData({
+                    name: '',
+                    target_amount: '',
+                    current_amount: '',
+                    target_date: '',
+                    monthly_contribution: '',
+                    expected_return_rate: '',
+                    current_age: '',
+                    retirement_age: '',
+                  })
+                }}
+              >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -541,7 +618,9 @@ export default function Retirement() {
                     class={styles.formControl}
                     placeholder="500"
                     value={formData().monthly_contribution}
-                    oninput={(e) => setFormData({ ...formData(), monthly_contribution: e.target.value })}
+                    oninput={(e) =>
+                      setFormData({ ...formData(), monthly_contribution: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -556,12 +635,31 @@ export default function Retirement() {
                   class={styles.formControl}
                   placeholder="7"
                   value={formData().expected_return_rate}
-                  oninput={(e) => setFormData({ ...formData(), expected_return_rate: e.target.value })}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), expected_return_rate: e.target.value })
+                  }
                   required
                 />
               </div>
               <div class={styles.modalFooter}>
-                <button type="button" class={styles.btnSecondary} onClick={() => { setShowAddModal(false); setEditingGoal(null); setFormData({ name: '', target_amount: '', current_amount: '', target_date: '', monthly_contribution: '', expected_return_rate: '', current_age: '', retirement_age: '' }) }}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onClick={() => {
+                    setShowAddModal(false)
+                    setEditingGoal(null)
+                    setFormData({
+                      name: '',
+                      target_amount: '',
+                      current_amount: '',
+                      target_date: '',
+                      monthly_contribution: '',
+                      expected_return_rate: '',
+                      current_age: '',
+                      retirement_age: '',
+                    })
+                  }}
+                >
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>

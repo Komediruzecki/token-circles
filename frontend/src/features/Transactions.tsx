@@ -53,7 +53,9 @@ export default function Transactions() {
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
   const [type, setType] = createSignal<TransactionType>('expense')
-  const [categories, setCategories] = createSignal<Array<{ id: number; name: string; color: string }>>([])
+  const [categories, setCategories] = createSignal<
+    Array<{ id: number; name: string; color: string }>
+  >([])
   const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
@@ -73,25 +75,25 @@ export default function Transactions() {
   const _loadTransactions = async () => {
     try {
       setLoading(true)
-      const data = await api.getTransactions() as any
+      const data = (await api.getTransactions()) as any
       setTransactions(data as Transaction[])
 
       // Extract unique categories and tags for filter bar
       const categoriesSet = new Map<number, { name: string; color: string }>()
-      const tagsSet = new Map<number, { name: string; color: string }>()
-
-      (data as Transaction[]).forEach(tx => {
+      const tagsSet = new Map<number, { name: string; color: string }>()(
+        data as Transaction[]
+      ).forEach((tx) => {
         if (tx.category_name) {
           if (!categoriesSet.has(tx.category_id || 0)) {
             const categoryNames = tx.category_name.split('|')
             categoriesSet.set(tx.category_id || 0, {
               name: categoryNames[categoryNames.length - 1].trim(),
-              color: '#666666'
+              color: '#666666',
             })
           }
         }
         if (tx.tags && tx.tags.length > 0) {
-          tx.tags.forEach(tag => {
+          tx.tags.forEach((tag) => {
             if (!tagsSet.has(tag.id)) {
               tagsSet.set(tag.id, { name: tag.name, color: tag.color })
             }
@@ -114,10 +116,10 @@ export default function Transactions() {
     if (!receipt || !receipt.transaction_id) return
 
     try {
-      const receipts = await api.getReceiptsForTransaction(receipt.transaction_id) as any
+      const receipts = (await api.getReceiptsForTransaction(receipt.transaction_id)) as any
       if (receipts && receipts.length > 0) {
         // Download the receipt file
-        const blob = await api.getReceiptFile(receipts[0].id) as any
+        const blob = (await api.getReceiptFile(receipts[0].id)) as any
         const url = URL.createObjectURL(blob)
         setReceiptPreviewUrl(url)
         setIsReceiptModalOpen(true)
@@ -175,9 +177,9 @@ export default function Transactions() {
     if (!receipt) return
 
     try {
-      await api.deleteReceipt(receipt.id) as any
+      ;(await api.deleteReceipt(receipt.id)) as any
       // Reload transactions to remove the deleted receipt reference
-      const data = await api.getTransactions() as any
+      const data = (await api.getTransactions()) as any
       setTransactions(data as Transaction[])
       closeReceiptModal()
     } catch (error) {
@@ -193,7 +195,7 @@ export default function Transactions() {
   // Handle sort changes
   const handleSortChange = (field: string) => {
     if (sortField() === field) {
-      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortField(field)
       setSortOrder('asc')
@@ -217,12 +219,12 @@ export default function Transactions() {
   // Calculate paginated results
   const paginatedTransactions = () => {
     const allTransactions = transactions()
-    const filtered = allTransactions.filter(tx => {
+    const filtered = allTransactions.filter((tx) => {
       // Filter by type
       if (filterType() !== 'all' && tx.type !== filterType()) {
         return false
       }
-      
+
       // Filter by month
       if (filterMonth() && !tx.date.startsWith(filterMonth())) {
         return false
@@ -230,7 +232,11 @@ export default function Transactions() {
 
       // Filter by search term
       const search = searchTerm().toLowerCase()
-      if (search && !tx.description.toLowerCase().includes(search) && !tx.beneficiary?.toLowerCase().includes(search)) {
+      if (
+        search &&
+        !tx.description.toLowerCase().includes(search) &&
+        !tx.beneficiary?.toLowerCase().includes(search)
+      ) {
         return false
       }
 
@@ -240,7 +246,10 @@ export default function Transactions() {
       }
 
       // Filter by tag
-      if (selectedTags().length > 0 && (!tx.tags || !selectedTags().some(id => tx.tags?.some(t => t.id === id)))) {
+      if (
+        selectedTags().length > 0 &&
+        (!tx.tags || !selectedTags().some((id) => tx.tags?.some((t) => t.id === id)))
+      ) {
         return false
       }
 
@@ -424,7 +433,13 @@ export default function Transactions() {
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Amount</label>
-                  <input type="number" step="0.01" class={styles.formControl} id="tx-amount" required />
+                  <input
+                    type="number"
+                    step="0.01"
+                    class={styles.formControl}
+                    id="tx-amount"
+                    required
+                  />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Currency</label>
@@ -487,7 +502,12 @@ export default function Transactions() {
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Amount in Local Currency</label>
-                  <input type="number" step="0.01" class={styles.formControl} id="tx-amount-local" />
+                  <input
+                    type="number"
+                    step="0.01"
+                    class={styles.formControl}
+                    id="tx-amount-local"
+                  />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Exchange Rate</label>
