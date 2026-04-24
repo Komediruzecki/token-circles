@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -288,8 +289,49 @@ const authRateLimiter = (() => {
 })();
 
 // ==================== MIDDLEWARE ====================
-// Middleware
-app.use(cors());
+// Security headers with Helmet
+app.use(helmet());
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"], // Required for Vite HMR
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:", "blob:"],
+    connectSrc: ["'self'"],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    mediaSrc: ["'self'"],
+    frameSrc: ["'none'"],
+  },
+}));
+app.use(helmet.referrerPolicy({ policy: 'strict-origin-when-cross-origin' }));
+app.use(helmet.xssFilter());
+app.use(helmet.noSniff());
+app.use(helmet.ieNoOpen());
+
+// CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      // In production, reject unknown origins
+      if (process.env.NODE_ENV === 'production') {
+        return callback(new Error('Not allowed by CORS'));
+      }
+      // In development, allow all origins but log it
+      console.warn(`CORS warning: Unknown origin ${origin} allowed in development mode`);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+}));
+
+// Body parsing
 app.use(express.json({ limit: "50mb" }));
 
 function logError(level, source, error, request) {
@@ -391,7 +433,61 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
   },
 });
+
+// Allowed MIME types for receipts (images only)
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+// Allowed MIME types for imports (spreadsheets only)
+const ALLOWED_IMPORT_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+  'text/csv', // .csv
+  'application/csv',
+];
+
+// File filter for receipt uploads (images only)
+function imageFileFilter(req, file, cb) {
+  if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Invalid file type. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`), false);
+  }
+}
+
+// File filter for import uploads (spreadsheets only)
+function importFileFilter(req, file, cb) {
+  if (ALLOWED_IMPORT_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Invalid file type. Allowed: ${ALLOWED_IMPORT_TYPES.join(', ')}`), false);
+  }
+}
+
+// General upload for other purposes
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Dedicated upload middleware for receipt images
+const uploadReceipt = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const receiptsDir = path.join(uploadsDir, 'receipts');
+      if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
+      cb(null, receiptsDir);
+    },
+    filename: (req, file, cb) => {
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for images
+  fileFilter: imageFileFilter,
+});
+
+// Dedicated upload middleware for spreadsheet imports
+const uploadImport = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: importFileFilter,
+});
 
 // Helper: get profile ID from request (header first, then query param, then 1)
 function getProfileId(req) {
@@ -1919,7 +2015,7 @@ app.put("/api/transactions/reconcile-batch", apiRateLimiter, (req, res) => {
 // ========================
 
 // Upload receipt for a transaction
-app.post("/api/receipts/upload", apiRateLimiter, upload.single('receipt'), (req, res) => {
+app.post("/api/receipts/upload", apiRateLimiter, uploadReceipt.single('receipt'), (req, res) => {
   try {
     const pid = getProfileId(req);
 
@@ -1982,9 +2078,23 @@ app.post("/api/receipts/upload", apiRateLimiter, upload.single('receipt'), (req,
     if (err.code === 'ENOENT' || err.code === 'EACCES') {
       res.status(500).json({ error: "Upload directory not accessible" });
     } else {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Upload failed. Please try again." });
     }
   }
+});
+
+// Error handler middleware for receipt upload
+app.use("/api/receipts/upload", (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: "File too large. Maximum size is 10MB." });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err.message && err.message.includes('Invalid file type')) {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
 });
 
 // Get receipt by ID
@@ -3755,7 +3865,7 @@ app.get("/api/dashboard/net-worth", apiRateLimiter, (req, res) => {
 // ========================
 const importFiles = {}; // temp storage for reloading specific sheets
 
-app.post("/api/import/upload", apiRateLimiter, upload.single("file"), (req, res) => {
+app.post("/api/import/upload", apiRateLimiter, uploadImport.single("file"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     const workbook = XLSX.readFile(req.file.path);
@@ -3798,8 +3908,29 @@ app.post("/api/import/upload", apiRateLimiter, upload.single("file"), (req, res)
   } catch (err) {
     console.error(err.message);
     logError("error", err);
-    res.status(500).json({ error: err.message });
+    // Check if error is related to invalid file type
+    if (err.message && err.message.includes('Invalid file type')) {
+      res.status(400).json({ error: err.message });
+    } else if (err.message && err.message.includes('Cannot read')) {
+      res.status(400).json({ error: "Invalid file format. Please upload a valid spreadsheet file." });
+    } else {
+      res.status(500).json({ error: "Import failed. Please try again." });
+    }
   }
+});
+
+// Error handler middleware for import upload
+app.use("/api/import/upload", (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: "File too large. Maximum size is 50MB." });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err.message && err.message.includes('Invalid file type')) {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
 });
 
 app.post("/api/import/file-sheet", apiRateLimiter, (req, res) => {
