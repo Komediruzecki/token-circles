@@ -3,10 +3,11 @@
  * Wrapper for modal action buttons
  */
 
+import { JSX } from 'solid-js'
 import styles from './ModalActions.module.css'
 
 interface ModalActionsProps {
-  children: any
+  children: JSX.Element
   className?: string
 }
 

@@ -5,14 +5,29 @@
 import { createSignal } from 'solid-js'
 import styles from './FilterBar.module.css'
 
-interface FilterBarProps {
-  categories: Array<{ id: number; name: string; color: string }>
-  tags: Array<{ id: number; name: string; color: string }>
+interface FilterOption {
+  id: number
+  name: string
+  color: string
+}
+
+interface FilterState {
+  categories: FilterOption[]
+  tags: FilterOption[]
   selectedCategories: number[]
   selectedTags: number[]
   dateRange: { from: string; to: string }
   selectedPreset: string
-  onChange: (filters: any) => void
+}
+
+interface FilterBarProps {
+  categories: FilterOption[]
+  tags: FilterOption[]
+  selectedCategories: number[]
+  selectedTags: number[]
+  dateRange: { from: string; to: string }
+  selectedPreset: string
+  onChange: (filters: FilterState) => void
 }
 
 export default function FilterBar(props: FilterBarProps) {

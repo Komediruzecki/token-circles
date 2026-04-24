@@ -2,11 +2,11 @@
  * Badge Component - Reusable badge component with status variants
  */
 
-import { mergeProps } from 'solid-js'
+import { JSX, mergeProps } from 'solid-js'
 
 interface BadgeProps {
   status?: 'ok' | 'warning' | 'over' | 'income' | 'expense' | 'transfer' | 'default'
-  children: any
+  children: JSX.Element
   class?: string
 }
 
