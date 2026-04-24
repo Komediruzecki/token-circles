@@ -2,7 +2,7 @@
  * Chart Component
  * Wrapper for Chart.js integration with SolidJS
  */
-import { createSignal, onCleanup } from 'solid-js'
+import { createEffect, createSignal, onCleanup } from 'solid-js'
 
 export interface ChartProps {
   type: 'line' | 'bar' | 'doughnut' | 'pie' | 'polarArea' | 'radar' | 'bubble' | 'scatter'
