@@ -3,12 +3,12 @@
  * Wrapper for Chart.js integration with SolidJS
  */
 import { createEffect, createSignal, onCleanup } from 'solid-js'
-import type * as Chart from 'chart.js/auto'
+import type * as ChartJS from 'chart.js/auto'
 
 export interface ChartProps {
   type: 'line' | 'bar' | 'doughnut' | 'pie' | 'polarArea' | 'radar' | 'bubble' | 'scatter'
-  data: Chart.Data
-  options?: Chart.Options
+  data: ChartJS.ChartData
+  options?: ChartJS.ChartOptions
   height?: number
   width?: string
 }
@@ -20,7 +20,7 @@ export default function Chart(props: ChartProps) {
     if (!canvasRef) return
 
     // Lazy load Chart.js to avoid import issues
-    import('chart.js/auto').then(({ default: Chart }) => {
+    import('chart.js/auto').then(({ default: ChartJS }) => {
       // Destroy existing chart
       const existingChart = canvasRef.chartInstance
       if (existingChart) {
@@ -31,7 +31,7 @@ export default function Chart(props: ChartProps) {
       const ctx = canvasRef.getContext('2d')
       if (!ctx) return
 
-      canvasRef.chartInstance = new Chart(ctx, {
+      canvasRef.chartInstance = new ChartJS(ctx, {
         type: props.type,
         data: props.data,
         options: {
