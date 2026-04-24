@@ -28,13 +28,13 @@ export default function Sidebar() {
 
   const handleClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement
-    const actionTrigger = target.closest('[data-action]') as HTMLElement
-    if (!actionTrigger) return
+    const actionTrigger = target.closest('[data-action]')
+    if (actionTrigger === null) return
 
     const action = actionTrigger.dataset.action
     if (action === 'toggleSidebar') {
       setIsMobileOpen(!isMobileOpen())
-    } else if (action?.startsWith('profile:toggleDropdown')) {
+    } else if (action !== undefined && action.startsWith('profile:toggleDropdown')) {
       setIsProfileDropdownOpen(!isProfileDropdownOpen())
     } else if (action === 'auth:logout') {
       handleLogout()
@@ -43,7 +43,7 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     // Handle logout action
-    console.log('Logout clicked')
+    console.info('Logout clicked')
     setIsProfileDropdownOpen(false)
   }
 
@@ -53,8 +53,8 @@ export default function Sidebar() {
       '[data-component="profile-dropdown-menu"]'
     )
     if (
-      dropdown &&
-      target &&
+      dropdown !== null &&
+      target !== null &&
       !dropdown.contains(target) &&
       !target.closest('[data-component="profile-dropdown-btn"]')
     ) {

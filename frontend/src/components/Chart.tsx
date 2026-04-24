@@ -2,7 +2,7 @@
  * Chart Component
  * Wrapper for Chart.js integration with SolidJS
  */
-import { createEffect, createSignal, onCleanup } from 'solid-js'
+import { createEffect, onCleanup } from 'solid-js'
 import type * as ChartJS from 'chart.js/auto'
 
 export interface ChartProps {
@@ -17,21 +17,21 @@ export default function Chart(props: ChartProps) {
   let canvasRef: HTMLCanvasElement | null = null
 
   createEffect(() => {
-    if (!canvasRef) return
+    if (canvasRef === null) return
 
     // Lazy load Chart.js to avoid import issues
     import('chart.js/auto').then(({ default: ChartJS }) => {
       // Destroy existing chart
-      const existingChart = canvasRef.chartInstance
-      if (existingChart) {
+      const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance
+      if (existingChart !== undefined) {
         existingChart.destroy()
       }
 
       // Create new chart
       const ctx = canvasRef.getContext('2d')
-      if (!ctx) return
+      if (ctx === null) return
 
-      canvasRef.chartInstance = new ChartJS(ctx, {
+      ;(canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance = new ChartJS(ctx, {
         type: props.type,
         data: props.data,
         options: {
@@ -40,24 +40,22 @@ export default function Chart(props: ChartProps) {
           ...props.options,
         },
       })
-    }).catch((err) => {
-      console.error('Failed to load Chart.js:', err)
+    }).catch((_err: unknown) => {
+      console.error('Failed to load Chart.js')
     })
 
     onCleanup(() => {
-      const existingChart = canvasRef?.chartInstance
-      if (existingChart) {
+      const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance
+      if (existingChart !== undefined) {
         existingChart.destroy()
-        delete canvasRef!.chartInstance
+        delete (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance
       }
     })
   })
 
   return (
     <canvas
-      ref={(canvas) => {
-        canvasRef = canvas
-      }}
+      ref={(canvas: HTMLCanvasElement) => { canvasRef = canvas }}
       height={props.height}
       width={props.width}
     />

@@ -41,8 +41,6 @@
         }
       }
     ]
-  }
-  // todo: what does this do?
-  // "include": ["src", "css-modules.d.ts", "src/css/**/*.d.ts"],
-  // "references": [{ "path": "./tsconfig.node.json" }],
+  },
+  "include": ["src/**/*", "css-modules.d.ts"]
 }

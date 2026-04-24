@@ -16,7 +16,7 @@ const SELECTED_PROFILE_IDS_KEY = 'selectedProfileIds'
  * API Client class for making authenticated requests
  */
 export class ApiClient {
-  private headers: any = {}
+  private headers: Record<string, string> = {}
 
   constructor() {
     this.updateHeaders()
@@ -42,19 +42,29 @@ export class ApiClient {
 
   private getCurrentProfileId(): number {
     const stored = localStorage.getItem(CURRENT_PROFILE_ID_KEY)
-    const parsed = stored ? parseInt(stored, 10) : undefined
-    return parsed ?? 1
+    if (stored !== null) {
+      const parsed = parseInt(stored, 10)
+      if (!isNaN(parsed)) {
+        return parsed
+      }
+    }
+    return 1
   }
 
   private getSelectedProfileIds(): number[] {
     const ids = localStorage.getItem(SELECTED_PROFILE_IDS_KEY)
-    const parsed = ids ? JSON.parse(ids) : undefined
-    return parsed ? parsed : [this.getCurrentProfileId()]
+    if (ids !== null) {
+      try {
+        const parsed = JSON.parse(ids)
+        if (Array.isArray(parsed)) {
+          return parsed
+        }
+      } catch {
+        // ignore parse error
+      }
+    }
+    return [this.getCurrentProfileId()]
   }
-
-  // private setProfileIds(profileIds: number[]) {
-  //   localStorage.setItem(SELECTED_PROFILE_IDS_KEY, JSON.stringify(profileIds));
-  // }
 
   /**
    * Make an HTTP request to the API
@@ -73,7 +83,7 @@ export class ApiClient {
     }
 
     // Prepare request options with explicit body type
-    const requestOptions: any = {
+    const requestOptions: RequestInit = {
       method,
       headers: this.headers,
       credentials: 'include',
@@ -116,8 +126,8 @@ export class ApiClient {
   /**
    * Login with username and password
    */
-  async login(username: string, password: string): Promise<void> {
-    void this.request<void>('/auth/login', {
+  login(username: string, password: string): Promise<void> {
+    return this.request<void>('/auth/login', {
       method: 'POST',
       body: { username, password },
     })
@@ -199,10 +209,10 @@ export class ApiClient {
    */
   async getTransactions(params?: ApiTypes.TransactionListParams): Promise<Models.Transaction[]> {
     const queryParams = new URLSearchParams()
-    if (params?.date_from) queryParams.append('date_from', params.date_from)
-    if (params?.date_to) queryParams.append('date_to', params.date_to)
-    if (params?.category_id) queryParams.append('category_id', params.category_id.toString())
-    if (params?.search) queryParams.append('search', params.search)
+    if (params?.date_from !== undefined) queryParams.append('date_from', params.date_from)
+    if (params?.date_to !== undefined) queryParams.append('date_to', params.date_to)
+    if (params?.category_id !== undefined) queryParams.append('category_id', params.category_id.toString())
+    if (params?.search !== undefined) queryParams.append('search', params.search)
     if (params?.type !== undefined) {
       queryParams.append('type', params.type)
     }
@@ -671,8 +681,8 @@ export class ApiClient {
    */
   async exportTransactions(params?: { date_from?: string; date_to?: string }): Promise<Blob> {
     const queryParams = new URLSearchParams()
-    if (params?.date_from) queryParams.append('date_from', params.date_from)
-    if (params?.date_to) queryParams.append('date_to', params.date_to)
+    if (params?.date_from !== undefined) queryParams.append('date_from', params.date_from)
+    if (params?.date_to !== undefined) queryParams.append('date_to', params.date_to)
 
     const response = await fetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
       headers: this.headers,
@@ -757,8 +767,8 @@ export class ApiClient {
     last_updated: string
   }> {
     const queryParams = new URLSearchParams()
-    if (base) queryParams.append('base', base)
-    if (symbols) queryParams.append('symbols', symbols)
+    if (base !== undefined) queryParams.append('base', base)
+    if (symbols !== undefined) queryParams.append('symbols', symbols)
 
     return this.request<{
       base: string
@@ -802,7 +812,8 @@ export class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
-      throw new Error((errorData.error || errorData.message) ?? `Failed to upload receipt`)
+      const errorMsg = errorData.error ?? errorData.message
+      throw new Error(errorMsg !== undefined ? errorMsg : 'Failed to upload receipt')
     }
 
     return await response.json()

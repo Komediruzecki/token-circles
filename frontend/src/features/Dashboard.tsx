@@ -3,11 +3,11 @@
  */
 
 import { createSignal, onMount } from 'solid-js'
+import Chart from '../components/Chart'
 import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type * as Models from '../types/models'
-import Chart from '../components/Chart'
 
 export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)

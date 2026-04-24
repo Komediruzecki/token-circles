@@ -36,7 +36,7 @@ export function handleReceiptFileSelect(event: Event): void {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
 
-  if (!file) return
+  if (file === undefined) return
 
   // Check file size (max 5MB)
   if (file.size > 5 * 1024 * 1024) {
@@ -48,18 +48,18 @@ export function handleReceiptFileSelect(event: Event): void {
   // Create preview URL for images
   if (file.type.startsWith('image/')) {
     const url = URL.createObjectURL(file)
-    const preview = document.getElementById('receipt-thumbnail') as HTMLImageElement
-    const placeholder = document.getElementById('receipt-placeholder') as HTMLElement
-    const actions = document.getElementById('receipt-actions') as HTMLElement
+    const preview = document.getElementById('receipt-thumbnail') as HTMLImageElement | null
+    const placeholder = document.getElementById('receipt-placeholder')
+    const actions = document.getElementById('receipt-actions')
 
-    if (preview) {
+    if (preview !== null) {
       preview.src = url
       preview.style.display = 'block'
     }
-    if (placeholder) {
+    if (placeholder !== null) {
       placeholder.style.display = 'none'
     }
-    if (actions) {
+    if (actions !== null) {
       actions.style.display = 'flex'
     }
   }
@@ -69,22 +69,22 @@ export function handleReceiptFileSelect(event: Event): void {
  * Remove receipt preview
  */
 export function removeReceiptPreview(): void {
-  const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
-  const preview = document.getElementById('receipt-thumbnail') as HTMLImageElement
-  const placeholder = document.getElementById('receipt-placeholder') as HTMLElement
-  const actions = document.getElementById('receipt-actions') as HTMLElement
+  const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement | null
+  const preview = document.getElementById('receipt-thumbnail') as HTMLImageElement | null
+  const placeholder = document.getElementById('receipt-placeholder')
+  const actions = document.getElementById('receipt-actions')
 
-  if (receiptInput) {
+  if (receiptInput !== null) {
     receiptInput.value = ''
   }
-  if (preview) {
+  if (preview !== null) {
     preview.src = ''
     preview.style.display = 'none'
   }
-  if (placeholder) {
+  if (placeholder !== null) {
     placeholder.style.display = 'flex'
   }
-  if (actions) {
+  if (actions !== null) {
     actions.style.display = 'none'
   }
 }
@@ -96,8 +96,8 @@ export async function deleteReceipt(receiptId: number): Promise<void> {
   try {
     const { api } = await import('./api.js')
     await api.deleteReceipt(receiptId)
-    const modal = document.getElementById('receipt-modal') as HTMLElement
-    if (modal) {
+    const modal = document.getElementById('receipt-modal')
+    if (modal !== null) {
       modal.classList.remove('show')
     }
     toast('Receipt deleted', 'success')
@@ -114,33 +114,34 @@ export function openTransactionModal(transactionId: number): void {
   import('./api.js').then(async ({ api }) => {
     const transactions = await api.getTransactions()
     const tx = transactions.find((t) => t.id === transactionId)
-    if (!tx) return
+    if (tx === undefined) return
 
-    const modal = document.getElementById('tx-modal') as HTMLElement
-    const title = document.getElementById('tx-modal-title') as HTMLElement
-    const descInput = document.getElementById('tx-description') as HTMLInputElement
-    const amountInput = document.getElementById('tx-amount') as HTMLInputElement
-    const dateInput = document.getElementById('tx-date') as HTMLInputElement
-    const categoryInput = document.getElementById('tx-category') as HTMLSelectElement
-    const meansInput = document.getElementById('tx-means') as HTMLSelectElement
-    const notesInput = document.getElementById('tx-notes') as HTMLInputElement
-    const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement
-    const idInput = document.getElementById('tx-id') as HTMLInputElement
-    const typeSelector = document.getElementById('tx-type-selector') as HTMLElement
+    const modal = document.getElementById('tx-modal')
+    const title = document.getElementById('tx-modal-title')
+    const descInput = document.getElementById('tx-description') as HTMLInputElement | null
+    const amountInput = document.getElementById('tx-amount') as HTMLInputElement | null
+    const dateInput = document.getElementById('tx-date') as HTMLInputElement | null
+    const categoryInput = document.getElementById('tx-category') as HTMLSelectElement | null
+    const meansInput = document.getElementById('tx-means') as HTMLSelectElement | null
+    const notesInput = document.getElementById('tx-notes') as HTMLInputElement | null
+    const receiptInput = document.getElementById('tx-receipt') as HTMLInputElement | null
+    const idInput = document.getElementById('tx-id') as HTMLInputElement | null
+    const typeSelector = document.getElementById('tx-type-selector')
 
     if (
-      !modal ||
-      !title ||
-      !descInput ||
-      !amountInput ||
-      !dateInput ||
-      !categoryInput ||
-      !typeSelector
-    )
+      modal === null ||
+      title === null ||
+      descInput === null ||
+      amountInput === null ||
+      dateInput === null ||
+      categoryInput === null ||
+      typeSelector === null
+    ) {
       return
+    }
 
     title.textContent = 'Edit Transaction'
-    idInput.value = tx.id.toString()
+    idInput!.value = tx.id.toString()
     descInput.value = tx.description
     amountInput.value = tx.amount.toString()
     dateInput.value = tx.date
@@ -159,9 +160,9 @@ export function openTransactionModal(transactionId: number): void {
       }
     })
 
-    if (meansInput) meansInput.value = tx.beneficiary || tx.payor || ''
-    if (notesInput) notesInput.value = ''
-    if (receiptInput) receiptInput.value = ''
+    if (meansInput !== null) meansInput.value = tx.beneficiary ?? tx.payor ?? ''
+    if (notesInput !== null) notesInput.value = ''
+    if (receiptInput !== null) receiptInput.value = ''
 
     modal.classList.add('show')
   })
@@ -171,8 +172,8 @@ export function openTransactionModal(transactionId: number): void {
  * Close transaction modal
  */
 export function closeTransactionModal(): void {
-  const modal = document.getElementById('tx-modal') as HTMLElement
-  if (modal) {
+  const modal = document.getElementById('tx-modal')
+  if (modal !== null) {
     modal.classList.remove('show')
   }
 }
@@ -180,46 +181,49 @@ export function closeTransactionModal(): void {
 /**
  * Handle modal action for event delegation
  */
-export function handleModalAction(action: string, arg?: any): void {
+export function handleModalAction(action: string, arg?: unknown): void {
   switch (action) {
-    case 'modal:close':
+    case 'modal:close': {
       const closeModals = document.querySelectorAll('.modal-overlay.show')
       closeModals.forEach((m) => {
         m.classList.remove('show')
       })
       break
+    }
 
     case 'tx-modal:close':
       closeTransactionModal()
       break
 
-    case 'receipt-modal:close':
-      const receiptModal = document.getElementById('receipt-modal') as HTMLElement
-      if (receiptModal) {
+    case 'receipt-modal:close': {
+      const receiptModal = document.getElementById('receipt-modal')
+      if (receiptModal !== null) {
         receiptModal.classList.remove('show')
       }
       break
+    }
 
     case 'receipt-modal':
-      if (arg && typeof arg === 'object') {
-        openReceiptModal(arg)
+      if (arg !== null && typeof arg === 'object') {
+        openReceiptModal(arg as ReceiptData)
       }
       break
 
-    case 'transactions:setType':
+    case 'transactions:setType': {
       const setType =
         typeof window.transactionsSetType === 'function'
           ? window.transactionsSetType
           : (_newType: string) => {
               const txComponent = document.querySelector(
                 '[data-page="transactions"]'
-              ) as HTMLElement & { setType?: (type: string) => void }
-              if (txComponent?.setType) {
+              )
+              if (txComponent !== null && txComponent.setType !== undefined) {
                 txComponent.setType(_newType)
               }
             }
       setType(arg as string)
       break
+    }
   }
 }
 
@@ -227,12 +231,12 @@ export function handleModalAction(action: string, arg?: any): void {
  * Open receipt modal with data
  */
 export function openReceiptModal(receipt: ReceiptData): void {
-  const modal = document.getElementById('receipt-modal') as HTMLElement
-  const img = document.getElementById('receipt-view-image') as HTMLImageElement
-  const meta = document.getElementById('receipt-meta') as HTMLElement
-  const downloadLink = document.getElementById('receipt-download-link') as HTMLAnchorElement
+  const modal = document.getElementById('receipt-modal')
+  const img = document.getElementById('receipt-view-image') as HTMLImageElement | null
+  const meta = document.getElementById('receipt-meta')
+  const downloadLink = document.getElementById('receipt-download-link') as HTMLAnchorElement | null
 
-  if (modal && img && meta && receipt.id) {
+  if (modal !== null && img !== null && meta !== null && receipt.id !== 0) {
     // Set image src
     img.src = `/api/receipts/${receipt.id}/file`
 
@@ -257,7 +261,7 @@ export function openReceiptModal(receipt: ReceiptData): void {
     `
 
     // Set download link
-    if (downloadLink) {
+    if (downloadLink !== null) {
       downloadLink.href = `/api/receipts/${receipt.id}/file`
       downloadLink.download = receipt.original_name
     }
@@ -283,7 +287,7 @@ export function escapeHtml(str: string): string {
 
 // Export window-compatible handlers for legacy code
 export const handlers = {
-  'receipt-modal': (arg: any) => {
+  'receipt-modal': (arg: unknown) => {
     handleModalAction('receipt-modal', arg)
   },
   'transactions:setType': (arg: string) => {
@@ -316,7 +320,7 @@ export const transactions = {
     toast('Transaction saved', 'success')
   },
   setType: (type: string) => {
-    console.log(`Set type to: ${type}`)
+    console.info(`Set type to: ${type}`)
   },
   removeReceipt: () => {
     removeReceiptPreview()

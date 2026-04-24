@@ -55,7 +55,7 @@ export function getStorageMode(): StorageMode {
 
   // Check localStorage for stored preference
   const stored = localStorage.getItem('finance_storage_mode')
-  if (stored) {
+  if (stored !== null && stored !== '') {
     const mode = stored as StorageMode
     if (mode === 'serverless' || mode === 'self-hosted') {
       return mode

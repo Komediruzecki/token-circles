@@ -3,7 +3,7 @@
  * Tests that pages have proper animation transitions
  */
 
-import { test, expect } from '@playwright/test'
+import { expect,test } from '@playwright/test'
 
 test.describe('Page Animations', () => {
   test.beforeEach(async ({ page }) => {

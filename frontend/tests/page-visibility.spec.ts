@@ -3,7 +3,7 @@
  * Tests that all pages are visible with the correct CSS classes
  */
 
-import { test, expect } from '@playwright/test'
+import { expect,test } from '@playwright/test'
 
 test.describe('Page Visibility', () => {
   test.beforeEach(async ({ page }) => {

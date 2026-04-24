@@ -5,7 +5,7 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/HousingPage.module.css'
 import { formatCurrency } from '../core/api'
-import { apiGet, apiPost, apiDelete, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
 interface Housing {
   id: number

@@ -5,7 +5,7 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/BillsPage.module.css'
 import { formatCurrency } from '../core/api'
-import { apiGet, apiPost, apiDelete, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
 interface Bill {
   id: number

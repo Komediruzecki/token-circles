@@ -4,8 +4,8 @@
  */
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/AnalyticsPage.module.css'
-import { formatCurrency } from '../core/api'
 import Chart from '../components/Chart'
+import { formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../utils/api'
 
 interface AnalyticsData {

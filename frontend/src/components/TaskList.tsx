@@ -4,10 +4,11 @@
  */
 import { For } from 'solid-js'
 import styles from './TaskList.module.css'
+import type { JSX } from 'solid-js'
 
 interface TaskItem {
   id: number
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface TaskListProps {
@@ -32,10 +33,6 @@ export default function TaskList(props: TaskListProps) {
     return props.selectedItems.length === props.items.length && props.items.length > 0
   }
 
-  const someSelected = () => {
-    return props.selectedItems.length > 0 && props.selectedItems.length < props.items.length
-  }
-
   const selectAll = () => {
     if (allSelected()) {
       props.onSelectItem(-1, false) // Clear all
@@ -47,16 +44,16 @@ export default function TaskList(props: TaskListProps) {
   return (
     <div class={styles.taskList}>
       {props.items.length === 0 ? (
-        <div class={styles.emptyState}>{props.emptyMessage || 'No items'}</div>
+        <div class={styles.emptyState}>{props.emptyMessage !== undefined ? props.emptyMessage : 'No items'}</div>
       ) : (
         <>
           <div class={styles.taskListHeader}>
             <label class={styles.selectAllCheckbox}>
               <input
-                type="checkbox"
+                type='checkbox'
                 checked={allSelected()}
                 class={styles.checkbox}
-                onChange={selectAll}
+                onChange={() => { selectAll() }}
               />
               <span>Select All</span>
             </label>
@@ -68,10 +65,10 @@ export default function TaskList(props: TaskListProps) {
                 <div class={styles.taskListItem}>
                   <label class={styles.taskItemCheckbox}>
                     <input
-                      type="checkbox"
+                      type='checkbox'
                       checked={props.selectedItems.includes(item.id)}
                       class={styles.checkbox}
-                      onChange={() => toggleSelect(item)}
+                      onChange={() => { toggleSelect(item) }}
                     />
                     <span class={styles.checkboxCustom} />
                   </label>

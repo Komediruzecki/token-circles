@@ -3,8 +3,8 @@
  * Wrapper for modal action buttons
  */
 
-import { JSX } from 'solid-js'
 import styles from './ModalActions.module.css'
+import type { JSX } from 'solid-js'
 
 interface ModalActionsProps {
   children: JSX.Element
@@ -12,5 +12,5 @@ interface ModalActionsProps {
 }
 
 export default function ModalActions(props: ModalActionsProps) {
-  return <div class={`${styles.modalActions} ${props.className || ''}`}>{props.children}</div>
+  return <div class={`${styles.modalActions} ${props.className ?? ''}`}>{props.children}</div>
 }

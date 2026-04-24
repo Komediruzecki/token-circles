@@ -118,14 +118,14 @@ export default function FilterBar(props: FilterBarProps) {
             <button class={styles.filterBtn} onClick={toggleCategoryDropdown}>
               <span class={styles.filterLabel}>{categoryLabel()}</span>
               <svg
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
+                width='12'
+                height='12'
+                fill='none'
+                stroke='currentColor'
                 strokeWidth={2}
-                viewBox="0 0 24 24"
+                viewBox='0 0 24 24'
               >
-                <path d="M19 9l-7 7-7-7" />
+                <path d='M19 9l-7 7-7-7' />
               </svg>
             </button>
             {isCategoryDropdownOpen() && (
@@ -133,9 +133,9 @@ export default function FilterBar(props: FilterBarProps) {
                 <div class={styles.filterOption}>
                   <label class={styles.checkboxLabel}>
                     <input
-                      type="checkbox"
+                      type='checkbox'
                       checked={props.selectedCategories.length === 0}
-                      onChange={() => clearFilters()}
+                      onChange={() => { clearFilters() }}
                     />
                     All Categories
                   </label>
@@ -144,9 +144,9 @@ export default function FilterBar(props: FilterBarProps) {
                   {props.categories.map((cat) => (
                     <label class={styles.checkboxLabel}>
                       <input
-                        type="checkbox"
+                        type='checkbox'
                         checked={props.selectedCategories.includes(cat.id)}
-                        onChange={() => toggleCategory(cat.id)}
+                        onChange={() => { toggleCategory(cat.id) }}
                       />
                       <span class={styles.catDot} style={{ background: `#${cat.color}` }} />
                       <span>{cat.name}</span>
@@ -161,14 +161,14 @@ export default function FilterBar(props: FilterBarProps) {
             <button class={styles.filterBtn} onClick={toggleTagDropdown}>
               <span class={styles.filterLabel}>{tagLabel()}</span>
               <svg
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
+                width='12'
+                height='12'
+                fill='none'
+                stroke='currentColor'
                 strokeWidth={2}
-                viewBox="0 0 24 24"
+                viewBox='0 0 24 24'
               >
-                <path d="M19 9l-7 7-7-7" />
+                <path d='M19 9l-7 7-7-7' />
               </svg>
             </button>
             {isTagDropdownOpen() && (
@@ -176,9 +176,9 @@ export default function FilterBar(props: FilterBarProps) {
                 <div class={styles.filterOption}>
                   <label class={styles.checkboxLabel}>
                     <input
-                      type="checkbox"
+                      type='checkbox'
                       checked={props.selectedTags.length === 0}
-                      onChange={() => clearFilters()}
+                      onChange={() => { clearFilters() }}
                     />
                     All Tags
                   </label>
@@ -187,9 +187,9 @@ export default function FilterBar(props: FilterBarProps) {
                   {props.tags.map((tag) => (
                     <label class={styles.checkboxLabel}>
                       <input
-                        type="checkbox"
+                        type='checkbox'
                         checked={props.selectedTags.includes(tag.id)}
-                        onChange={() => toggleTag(tag.id)}
+                        onChange={() => { toggleTag(tag.id) }}
                       />
                       <span class={styles.tagDot} style={{ background: `#${tag.color}` }} />
                       <span>{tag.name}</span>
@@ -206,7 +206,7 @@ export default function FilterBar(props: FilterBarProps) {
             class={`${styles.presetBtn} ${
               props.selectedPreset === 'month' ? styles.presetBtnActive : ''
             }`}
-            onClick={() => handlePresetClick('month')}
+            onClick={() => { handlePresetClick('month') }}
           >
             This Month
           </button>
@@ -214,7 +214,7 @@ export default function FilterBar(props: FilterBarProps) {
             class={`${styles.presetBtn} ${
               props.selectedPreset === 'lastMonth' ? styles.presetBtnActive : ''
             }`}
-            onClick={() => handlePresetClick('lastMonth')}
+            onClick={() => { handlePresetClick('lastMonth') }}
           >
             Last Month
           </button>
@@ -222,7 +222,7 @@ export default function FilterBar(props: FilterBarProps) {
             class={`${styles.presetBtn} ${
               props.selectedPreset === 'year' ? styles.presetBtnActive : ''
             }`}
-            onClick={() => handlePresetClick('year')}
+            onClick={() => { handlePresetClick('year') }}
           >
             This Year
           </button>
@@ -230,7 +230,7 @@ export default function FilterBar(props: FilterBarProps) {
             class={`${styles.presetBtn} ${
               props.selectedPreset === 'custom' ? styles.presetBtnActive : ''
             }`}
-            onClick={() => handlePresetClick('custom')}
+            onClick={() => { handlePresetClick('custom') }}
           >
             Custom
           </button>
@@ -241,7 +241,7 @@ export default function FilterBar(props: FilterBarProps) {
             <div class={styles.dateInput}>
               <label class={styles.inputLabel}>From</label>
               <input
-                type="date"
+                type='date'
                 class={styles.input}
                 value={props.dateRange.from}
                 onInput={handleDateChange('from')}
@@ -250,7 +250,7 @@ export default function FilterBar(props: FilterBarProps) {
             <div class={styles.dateInput}>
               <label class={styles.inputLabel}>To</label>
               <input
-                type="date"
+                type='date'
                 class={styles.input}
                 value={props.dateRange.to}
                 onInput={handleDateChange('to')}

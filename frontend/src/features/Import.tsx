@@ -30,23 +30,23 @@ export default function Import() {
   })
 
   // Parse CSV content
-  const parseCSV = (text: string): any[] => {
+  const parseCSV = (text: string): Record<string, unknown>[] => {
     const lines = text.trim().split('\n')
     if (lines.length < 2) return []
 
     const headers = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''))
-    const result: any[] = []
+    const result: Record<string, unknown>[] = []
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map((v) => v.trim().replace(/"/g, ''))
-      const row: any = {}
+      const row: Record<string, unknown> = {}
       headers.forEach((header, index) => {
         let val = values[index] || ''
         // Try to parse numbers
         if (!isNaN(parseFloat(val))) {
-          val = parseFloat(val) as any
+          val = parseFloat(val) as unknown
         }
-        row[header] = val as any
+        row[header] = val as unknown
       })
       result.push(row)
     }
@@ -55,12 +55,12 @@ export default function Import() {
   }
 
   // Parse Excel content
-  const parseExcel = async (binary: ArrayBuffer): Promise<any[]> => {
+  const parseExcel = async (binary: ArrayBuffer): Promise<Record<string, unknown>[]> => {
     try {
-      const workbook = (window as any).XLSX.read(binary, { type: 'array' })
+      const workbook = (window as Record<string, unknown>).XLSX.read(binary, { type: 'array' })
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
-      const data = (window as any).XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+      const data = (window as Record<string, unknown>).XLSX.utils.sheet_to_json(worksheet, { defval: '' })
       return data
     } catch {
       throw new Error('Failed to parse Excel file')
@@ -68,7 +68,7 @@ export default function Import() {
   }
 
   // Handle file upload
-  // @ts-expect-error unused
+  // @ts-expect-error unused handler function
   const _handleFileUpload = async (_e: Event) => {
     const target = _e.target as HTMLInputElement
     const uploadedFile = target.files?.[0]
@@ -79,7 +79,7 @@ export default function Import() {
 
     try {
       const text = await uploadedFile.text()
-      let data: any[]
+      let data: Record<string, unknown>[]
 
       const ext = uploadedFile.name.toLowerCase().split('.').pop()
       if (ext === 'csv') {
@@ -110,11 +110,10 @@ export default function Import() {
   // Show/hide row toggle
   const toggleRow = (index: number) => {
     const newSelected = new Set<number>(selectedRows())
-    const numberIndex = Number(index)
-    if (newSelected.has(numberIndex)) {
-      newSelected.delete(numberIndex)
+    if (newSelected.has(index)) {
+      newSelected.delete(index)
     } else {
-      newSelected.add(numberIndex)
+      newSelected.add(index)
     }
     setSelectedRows(newSelected)
   }
@@ -122,7 +121,7 @@ export default function Import() {
   // Select/deselect all rows
   const toggleAll = (select: boolean) => {
     if (select) {
-      setSelectedRows(new Set<number>(fileContent().map((_, i) => Number(i))))
+      setSelectedRows(new Set<number>(fileContent().map((_, i) => i)))
     } else {
       setSelectedRows(new Set<number>())
     }
@@ -136,7 +135,7 @@ export default function Import() {
 
     try {
       // Get selected rows
-      const rowsToImport = fileContent().filter((_, i) => selectedRows().has(Number(i)))
+      const rowsToImport = fileContent().filter((_, i) => selectedRows().has(i))
 
       if (rowsToImport.length === 0) {
         setImportResult({ status: 'error', message: 'No rows selected for import' })
@@ -302,7 +301,7 @@ export default function Import() {
               <select
                 class={styles.formControl}
                 value={formData().type}
-                oninput={(e) => setFormData({ ...formData(), type: e.target.value as any })}
+                oninput={(e) => setFormData({ ...formData(), type: e.target.value as "income" | "expense" | "transfer" })}
               >
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>

@@ -334,45 +334,6 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: "50mb" }));
 
-function logError(level, source, error, request) {
-  const timestamp = new Date().toISOString();
-  const logEntry = {
-    timestamp,
-    level,
-    source,
-    error: error?.message || String(error),
-    stack: error?.stack || null,
-    request: request ? {
-      method: request.method,
-      path: request.path,
-      query: request.query,
-      ip: request.ip,
-      userAgent: request.get("user-agent")
-    } : null
-  };
-
-  let logs = { version: "1.0", max_entries: 500, entries: [] };
-  try {
-    if (fs.existsSync(LOGS_FILE)) {
-      const data = fs.readFileSync(LOGS_FILE, "utf-8");
-      logs = JSON.parse(data);
-    }
-  } catch (e) {
-    console.warn("Failed to read logs:", e.message);
-  }
-
-  logs.entries.unshift(logEntry);
-  if (logs.entries.length > logs.max_entries) {
-    logs.entries = logs.entries.slice(0, logs.max_entries);
-  }
-
-  try {
-    fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
-  } catch (e) {
-    console.error("Failed to write logs:", e.message);
-  }
-}
-
 // ==================== LOGS API ====================
 app.get("/api/logs", (req, res) => {
   try {

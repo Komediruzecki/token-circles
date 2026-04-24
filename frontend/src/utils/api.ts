@@ -35,12 +35,13 @@ function checkResponseStatus(response: Response): void {
  */
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type')
-  if (contentType?.includes('application/json')) {
-    const data = await response.json()
+  if (contentType !== null && contentType.includes('application/json')) {
+    const data = await response.json() as T
     if (!response.ok) {
-      throw new Error(data.error || `Request failed with status ${response.status}`)
+      const errorData = data as ApiError | undefined
+      throw new Error((errorData?.error ?? '') !== '' ? errorData?.error : `Request failed with status ${response.status}`)
     }
-    return data as T
+    return data
   }
   throw new Error('Invalid response format')
 }
@@ -109,7 +110,7 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
  * Generic API request with error handling
  * Returns result object with success flag for easier error handling
  */
-export async function apiRequest<T = unknown>(
+export async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
@@ -120,18 +121,18 @@ export async function apiRequest<T = unknown>(
     })
 
     const contentType = response.headers.get('content-type')
-    let data: unknown
+    let data: T | undefined
 
-    if (contentType?.includes('application/json')) {
-      data = await response.json()
+    if (contentType !== null && contentType.includes('application/json')) {
+      data = await response.json() as T
     }
 
     if (!response.ok) {
-      const errorMsg = (data as ApiError)?.error || `Request failed (${response.status})`
+      const errorMsg = data !== undefined && 'error' in data ? (data as ApiError).error : `Request failed (${response.status})`
       return { success: false, error: errorMsg }
     }
 
-    return { success: true, data: data as T }
+    return { success: true, data }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Network error occurred'
     console.error('API request failed:', message)
@@ -146,7 +147,7 @@ let toastTimeout: ReturnType<typeof setTimeout> | null = null
 export function showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
   // Remove existing toast
   const existing = document.querySelector('.toast-notification')
-  if (existing) existing.remove()
+  if (existing !== null) existing.remove()
 
   // Create toast element
   const toast = document.createElement('div')
@@ -168,9 +169,9 @@ export function showToast(message: string, type: 'success' | 'error' | 'info' = 
   document.body.appendChild(toast)
 
   // Auto-remove after 4 seconds
-  if (toastTimeout) clearTimeout(toastTimeout)
+  if (toastTimeout !== null) clearTimeout(toastTimeout)
   toastTimeout = setTimeout(() => {
     toast.style.animation = 'toastSlideOut 0.3s ease-out'
-    setTimeout(() => toast.remove(), 300)
+    setTimeout(() => { toast.remove(); }, 300)
   }, 4000)
 }

@@ -6,8 +6,8 @@ import { createSignal, onMount, Suspense } from 'solid-js'
 import { handlers, receipts, transactions } from './core/handlers.js'
 import { theme } from './core/theme.js'
 import { pages } from './router.tsx'
-import type { PageName } from './router.tsx'
 import { sidebar } from './styles/AppSidebar.module.css'
+import type { PageName } from './router.tsx'
 
 // Loading spinner for lazy-loaded pages
 function PageLoader() {
@@ -59,10 +59,10 @@ export function App() {
       )
 
       // Get first and last link for boundary handling
-      const firstLink = navLinks[0] as HTMLElement
-      const lastLink = navLinks[navLinks.length - 1] as HTMLElement
+      const firstLink = navLinks[0] as HTMLElement | null
+      const lastLink = navLinks[navLinks.length - 1] as HTMLElement | null
 
-      if (!firstLink || !lastLink) return
+      if (firstLink === null || lastLink === null) return
 
       // Add tabindex for keyboard navigation
       navLinks.forEach((link) => {
@@ -118,23 +118,25 @@ export function App() {
     setupKeyboardNavigation()
 
     document.addEventListener('click', (e: Event) => {
-      const clickHandler = (e.target as HTMLElement).closest('[data-action]') as HTMLElement
-      if (!clickHandler) return
+      const clickHandler = (e.target as HTMLElement).closest('[data-action]')
+      if (clickHandler === null) return
       const action = clickHandler.dataset.action
       if (action === 'modal:close') {
-        const modal = document.getElementById('tx-modal') as HTMLElement
-        modal.classList.remove('show')
+        const modal = document.getElementById('tx-modal')
+        if (modal !== null) {
+          modal.classList.remove('show')
+        }
       }
     })
 
     document.addEventListener('change', (e: Event) => {
-      const changeHandler = (e.target as HTMLInputElement).closest('[data-action]') as HTMLElement
-      if (!changeHandler) return
+      const changeHandler = (e.target as HTMLInputElement).closest('[data-action]')
+      if (changeHandler === null) return
       const action = changeHandler.dataset.action
       if (
         action === 'transaction:receiptFile' &&
         (e.target as HTMLInputElement).id === 'tx-receipt' &&
-        window.receipts
+        typeof window.receipts !== 'undefined' && window.receipts !== null
       ) {
         window.receipts.handleFileSelect(e)
       }
