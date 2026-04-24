@@ -7212,6 +7212,28 @@ app.get("/api/reports/annual-pdf", apiRateLimiter, async (req, res) => {
   }
 });
 
+// Global error handler middleware
+// Sanitizes error messages before sending to client
+app.use((err, req, res, next) => {
+  console.error(err.message);
+  logError("error", err);
+
+  // Check if this is a known/safe error type
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: "Invalid JSON in request body" });
+  }
+
+  // Log unexpected errors but don't expose details to client
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    // Generic error message in production
+    res.status(500).json({ error: "An unexpected error occurred. Please try again later." });
+  } else {
+    // More details in development for debugging
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
 // Catch-all: serve index.html for SPA
 // Test-only endpoint to reset rate limit store (used between test files)
 if (process.env.NODE_ENV === 'test') {
