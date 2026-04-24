@@ -63,6 +63,9 @@ export default function Transactions() {
   const [itemsPerPage] = createSignal(10)
   const [sortField, setSortField] = createSignal<string>('date')
   const [sortOrder, setSortOrder] = createSignal<'asc' | 'desc'>('desc')
+  const [filterType, setFilterType] = createSignal<string>('all')
+  const [filterMonth, setFilterMonth] = createSignal<string | null>(null)
+  const [searchTerm, setSearchTerm] = createSignal<string>('')
   const today = new Date().toISOString().slice(0, 7)
 
   // Load transactions function (exposed to window)
