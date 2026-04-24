@@ -2,7 +2,7 @@
  * Modal Component - Generic modal dialog
  */
 
-import { createSignal, onCleanup, onMount } from 'solid-js'
+import { createSignal, JSX, onCleanup, onMount } from 'solid-js'
 import styles from './Modal.module.css'
 
 interface ModalProps {
@@ -10,7 +10,7 @@ interface ModalProps {
   onClose: () => void
   title?: string
   width?: 'small' | 'medium' | 'large'
-  children?: any
+  children?: JSX.Element
 }
 
 export function Modal(props: ModalProps) {

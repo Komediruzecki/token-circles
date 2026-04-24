@@ -3,10 +3,11 @@
  * Wrapper for form content in modals
  */
 
+import { JSX } from 'solid-js'
 import styles from './ModalContent.module.css'
 
 interface ModalContentProps {
-  children: any
+  children: JSX.Element
   className?: string
 }
 

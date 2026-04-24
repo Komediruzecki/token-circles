@@ -2,12 +2,12 @@
  * Button Component - Reusable button component with multiple variants
  */
 
-import { mergeProps } from 'solid-js'
+import { JSX, mergeProps } from 'solid-js'
 
 interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link'
   size?: 'sm' | 'md' | 'lg'
-  children: any
+  children: JSX.Element
   class?: string
   onClick?: () => void
   disabled?: boolean
