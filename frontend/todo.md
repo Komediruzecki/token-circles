@@ -4,27 +4,27 @@
 1. [x] Fix Budgets.tsx runtime error with allocations().map() - FIXED
 2. [x] Investigate Settings.tsx duplicate .page-settings elements - FIXED
 3. [x] Add missing page-specific CSS classes (.page-goals, .page-loans, etc.) - FIXED
-4. [ ] Add file type validation for uploads (Critical security)
-5. [ ] Enforce SESSION_SECRET environment variable (Critical security)
+4. [x] Add file type validation for uploads - FIXED (MIME type whitelisting)
+5. [x] Enforce SESSION_SECRET environment variable - FIXED (required in production)
 
 ## Security Issues (Audit Complete)
 6. [x] Check for SQL injection vulnerabilities - MITIGATED (Parameterized queries used)
 7. [x] Review XSS vulnerabilities in import functionality - MITIGATED (escapeHtml used)
 8. [x] Review localStorage usage for sensitive data - Documented
-9. [ ] Check CSP headers and security middleware - Missing
-10. [ ] Add file upload content-type validation
-11. [ ] Enable secure flag in session cookies
-12. [ ] Remove error message exposure to clients
-13. [ ] Add CORS origin whitelist
+9. [x] Check CSP headers and security middleware - FIXED (Helmet added)
+10. [x] Add file upload content-type validation - FIXED
+11. [x] Enable secure flag in session cookies - FIXED
+12. [x] Remove error message exposure to clients - FIXED (Global error handler)
+13. [x] Add CORS origin whitelist - FIXED
 
 ## Code Quality
 14. [x] Remove unused CSS modules and dead code - FIXED
-15. [x] Fix TypeScript type safety issues - Partially FIXED (Chart component)
-16. [ ] Add proper error boundaries
-17. [ ] Consolidate duplicate code patterns
-18. [ ] Remove commented-out legacy code
-19. [ ] Fix implicit any types (Badge, Button components)
-20. [ ] Add error handling to fetch calls (10+ locations)
+15. [x] Fix TypeScript type safety issues - FIXED (Chart component, api.ts)
+16. [x] Add proper error boundaries - FIXED (ErrorBoundary component)
+17. [x] Add error handling to fetch calls - FIXED (Goals, Loans, Housing, Bills, Categories)
+18. [ ] Consolidate duplicate code patterns
+19. [ ] Remove commented-out legacy code
+20. [ ] Fix implicit any types (Badge, Button components)
 
 ## Testing
 21. [ ] Fix remaining animation test failures
@@ -35,15 +35,15 @@
 
 ## Performance
 26. [ ] Optimize large CSS bundles
-27. [ ] Implement lazy loading for pages
+27. [x] Implement lazy loading for pages - FIXED (code splitting working)
 28. [ ] Add bundle size optimization
 29. [ ] Review database query performance
 30. [ ] Replace in-memory rate limiting with Redis (production only)
 
 ## Refactoring
 31. [ ] Create shared UI component library
-32. [ ] Centralize common patterns
-33. [ ] Extract API client configuration
+32. [x] Centralize common patterns - FIXED (utils/api.ts)
+33. [x] Extract API client configuration - FIXED
 34. [ ] Consolidate delete operation patterns (10+ instances)
 35. [ ] Add proper TypeScript types for all props
 
