@@ -3,11 +3,10 @@
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
 import { createEffect, createSignal, For, onMount } from 'solid-js'
-import styles from '../components/BudgetsPage.module.css'
 import Badge from '../components/Badge'
+import styles from '../components/BudgetsPage.module.css'
 import Button from '../components/Button'
 import Chart from '../components/Chart'
-import type * as Models from '../types/models'
 import { apiGet, apiPost, showToast } from '../utils/api'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
@@ -24,7 +23,7 @@ interface ForecastMonth {
 
 interface ForecastData {
   period: string
-  history: any[]
+  history: unknown[]
   forecast: ForecastMonth[]
   total_budget: number
   avg_adherence: number
@@ -224,7 +223,7 @@ export default function Budgets() {
       <div class={styles.budgetSummary}>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Income</div>
-          <div class="summary-value positive">{formatCurrency(summary()?.income || 0)}</div>
+          <div class="summary-value positive">{formatCurrency((summary()?.income) ?? 0)}</div>
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Allocated</div>
@@ -260,7 +259,7 @@ export default function Budgets() {
                 labels: allocations().map((a) => a.category_name),
                 datasets: [
                   {
-                    data: allocations().map((a) => a.budgeted),
+                    data: allocations().map((a) => a.allocated),
                     backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
                     borderWidth: 0,
                   },
@@ -469,7 +468,7 @@ export default function Budgets() {
                       </td>
                       <td class="actions-col">
                         {item.can_allocate && !item.is_budgeted ? (
-                          <Button variant="ghost" size="sm" onClick={() => openAllocateModal(item)}>
+                          <Button variant="ghost" size="sm" onClick={() => { openAllocateModal(item); }}>
                             Allocate
                           </Button>
                         ) : (

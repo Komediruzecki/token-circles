@@ -3,11 +3,10 @@
  * Manages loans, tracks payments, and calculates remaining balance
  */
 import { createSignal, onMount } from 'solid-js'
+import Chart from '../components/Chart'
 import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
-import Chart from '../components/Chart'
-import type * as Models from '../types/models'
-import { apiGet, apiPost, apiDelete, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
 interface Loan {
   id: number

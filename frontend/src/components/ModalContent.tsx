@@ -3,8 +3,8 @@
  * Wrapper for form content in modals
  */
 
-import { JSX } from 'solid-js'
 import styles from './ModalContent.module.css'
+import type { JSX } from 'solid-js'
 
 interface ModalContentProps {
   children: JSX.Element
@@ -12,5 +12,5 @@ interface ModalContentProps {
 }
 
 export default function ModalContent(props: ModalContentProps) {
-  return <div class={`${styles.modalContent} ${props.className || ''}`}>{props.children}</div>
+  return <div class={`${styles.modalContent} ${props.className ?? ''}`}>{props.children}</div>
 }

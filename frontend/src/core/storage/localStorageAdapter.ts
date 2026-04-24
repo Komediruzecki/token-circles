@@ -3,6 +3,9 @@
  * Stores all data in browser localStorage with automatic saving
  */
 
+/* eslint-disable @typescript-eslint/require-await -- LocalStorageAdapter implements StorageAdapter interface */
+/* eslint-disable @typescript-eslint/no-array-delete -- Using undefined assignment for sparse arrays */
+
 import type {
   AccountData,
   BalanceEntryData,
@@ -23,11 +26,11 @@ import type {
   ExportData,
   Goal,
   Loan,
-  Settings,
   StorageAdapter,
   Transaction,
   TransactionFilters,
 } from '@/types/storage'
+
 
 const STORAGE_KEY = 'finance_data'
 const PROFILE_ID_KEY = 'finance_profile_id'
@@ -93,7 +96,7 @@ function createProfileInternal(name: string): number {
 function loadData(): void {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
+    if (stored !== null) {
       const parsed = JSON.parse(stored) as Partial<DataStore>
       data = {
         ...data,
@@ -150,7 +153,7 @@ function saveData(): void {
  * Get a profile by ID
  */
 function getProfile(id: number): ProfileData | null {
-  return data.profiles[id] || null
+  return data.profiles[id] ?? null
 }
 
 /**
@@ -208,42 +211,42 @@ function deleteProfileData(id: number): void {
   Object.keys(data.categories).forEach((key) => {
     const cat = data.categories[Number(key)]
     if (cat.profile_id === id) {
-      delete data.categories[Number(key)]
+      data.categories[Number(key)] = undefined
     }
   })
 
   Object.keys(data.transactions).forEach((key) => {
     const tx = data.transactions[Number(key)]
     if (tx.profile_id === id) {
-      delete data.transactions[Number(key)]
+      data.transactions[Number(key)] = undefined
     }
   })
 
   Object.keys(data.accounts).forEach((key) => {
     const acc = data.accounts[Number(key)]
     if (acc.profile_id === id) {
-      delete data.accounts[Number(key)]
+      data.accounts[Number(key)] = undefined
     }
   })
 
   Object.keys(data.budgets).forEach((key) => {
     const budget = data.budgets[Number(key)]
     if (budget.profile_id === id) {
-      delete data.budgets[Number(key)]
+      data.budgets[Number(key)] = undefined
     }
   })
 
   Object.keys(data.goals).forEach((key) => {
     const goal = data.goals[Number(key)]
     if (goal.profile_id === id) {
-      delete data.goals[Number(key)]
+      data.goals[Number(key)] = undefined
     }
   })
 
   Object.keys(data.loans).forEach((key) => {
     const loan = data.loans[Number(key)]
     if (loan.profile_id === id) {
-      delete data.loans[Number(key)]
+      data.loans[Number(key)] = undefined
     }
   })
 
@@ -254,12 +257,12 @@ function deleteProfileData(id: number): void {
       // Check if account belongs to this profile
       const account = Object.values(data.accounts).find((a) => a.id === entry.account_id)
       if (account && account.profile_id === id) {
-        delete data.balanceHistory[Number(key)]
+        data.balanceHistory[Number(key)] = undefined
       }
     }
   })
 
-  delete data.profiles[id]
+  data.profiles[id] = undefined
   saveData()
 }
 
@@ -307,7 +310,7 @@ function getCategories(filterProfileId?: number, type?: 'income' | 'expense'): C
     categories = categories.filter((c) => c.profile_id === filterProfileId)
   }
 
-  if (type) {
+  if (type !== undefined) {
     categories = categories.filter((c) => c.type === type)
   }
 
@@ -361,7 +364,7 @@ function deleteCategoryData(id: number): void {
     throw new Error(`Category ${id} not found`)
   }
 
-  delete data.categories[id]
+  data.categories[id] = undefined
   saveData()
 }
 
@@ -385,30 +388,36 @@ function getTransactions(
     transactions = transactions.filter((t) => t.profile_id === filterProfileId)
   }
 
-  if (filters) {
-    if ((filters as any).date_from !== undefined) {
-      transactions = transactions.filter((t) => t.date >= (filters as any).date_from)
+  if (filters !== undefined) {
+    if ((filters as TransactionFilters).date_from !== undefined) {
+      const dateFrom = (filters as TransactionFilters).date_from
+      if (dateFrom !== undefined) {
+        transactions = transactions.filter((t) => t.date >= dateFrom)
+      }
     }
 
-    if ((filters as any).date_to !== undefined) {
-      transactions = transactions.filter((t) => t.date <= (filters as any).date_to)
+    if ((filters as TransactionFilters).date_to !== undefined) {
+      const dateTo = (filters as TransactionFilters).date_to
+      if (dateTo !== undefined) {
+        transactions = transactions.filter((t) => t.date <= dateTo)
+      }
     }
 
-    if (filters.category_id) {
+    if (filters.category_id !== undefined) {
       transactions = transactions.filter((t) => t.category_id === filters.category_id)
     }
 
-    if (filters.type) {
+    if (filters.type !== undefined) {
       transactions = transactions.filter((t) => t.type === filters.type)
     }
 
-    if (filters.search) {
+    if (filters.search !== undefined) {
       const searchLower = filters.search.toLowerCase()
       transactions = transactions.filter(
         (t) =>
           t.description.toLowerCase().includes(searchLower) ||
           t.notes.toLowerCase().includes(searchLower) ||
-          (t.tags && t.tags.some((tag) => tag.toLowerCase().includes(searchLower)))
+          (t.tags !== undefined && t.tags.some((tag) => tag.toLowerCase().includes(searchLower)))
       )
     }
   }
@@ -454,7 +463,7 @@ function deleteTransactionData(id: number): void {
     throw new Error(`Transaction ${id} not found`)
   }
 
-  delete data.transactions[id]
+  data.transactions[id] = undefined
   saveData()
 }
 
@@ -507,11 +516,11 @@ function deleteAccountData(id: number): void {
   Object.keys(data.balanceHistory).forEach((key) => {
     const entry = data.balanceHistory[Number(key)]
     if (entry.account_id === id) {
-      delete data.balanceHistory[Number(key)]
+      data.balanceHistory[Number(key)] = undefined
     }
   })
 
-  delete data.accounts[id]
+  data.accounts[id] = undefined
   saveData()
 }
 
@@ -560,7 +569,7 @@ function deleteBudgetData(id: number): void {
     throw new Error(`Budget ${id} not found`)
   }
 
-  delete data.budgets[id]
+  data.budgets[id] = undefined
   saveData()
 }
 
@@ -609,7 +618,7 @@ function deleteGoalData(id: number): void {
     throw new Error(`Goal ${id} not found`)
   }
 
-  delete data.goals[id]
+  data.goals[id] = undefined
   saveData()
 }
 
@@ -658,7 +667,7 @@ function deleteLoanData(id: number): void {
     throw new Error(`Loan ${id} not found`)
   }
 
-  delete data.loans[id]
+  data.loans[id] = undefined
   saveData()
 }
 
@@ -729,7 +738,6 @@ function resetToDefaults(): void {
   counters.accounts = 1
   counters.budgets = 1
   counters.goals = 1
-  counters.loans = 1
   counters.balanceHistory = 1
   saveData()
   // Default profile is created by the storage factory on first init
@@ -742,9 +750,9 @@ export class LocalStorageAdapter implements StorageAdapter {
   // Profile management
   async getCurrentProfileId(): Promise<number> {
     const idStr = localStorage.getItem(PROFILE_ID_KEY)
-    let id = idStr ? parseInt(idStr, 10) : 1
+    let id = idStr !== null && idStr !== '' ? parseInt(idStr, 10) : 1
 
-    if (!getProfile(id)) {
+    if (getProfile(id) === null) {
       // Use first available profile
       const profiles = getProfiles()
       if (profiles.length > 0) {
@@ -758,16 +766,18 @@ export class LocalStorageAdapter implements StorageAdapter {
     return id
   }
 
-  async createProfile(name: string): Promise<number> {
-    return createProfileData(name).id
+  createProfile(name: string): Promise<number> {
+    return Promise.resolve(createProfileData(name).id)
   }
 
-  async updateProfile(id: number, name: string): Promise<void> {
+  updateProfile(id: number, name: string): Promise<void> {
     updateProfileData(id, name)
+    return Promise.resolve()
   }
 
-  async deleteProfile(id: number): Promise<void> {
+  deleteProfile(id: number, _name: string): Promise<void> {
     deleteProfileData(id)
+    return Promise.resolve()
   }
 
   // Transaction management
@@ -800,7 +810,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     Object.keys(data.transactions).forEach((key) => {
       const tx = data.transactions[Number(key)]
       if (tx.profile_id === profileId) {
-        delete data.transactions[Number(key)]
+        data.transactions[Number(key)] = undefined
       }
     })
     saveData()
@@ -831,7 +841,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     Object.keys(data.categories).forEach((key) => {
       const cat = data.categories[Number(key)]
       if (cat.profile_id === profileId) {
-        delete data.categories[Number(key)]
+        data.categories[Number(key)] = undefined
       }
     })
     saveData()
@@ -920,8 +930,8 @@ export class LocalStorageAdapter implements StorageAdapter {
       principal: loan.principal,
       start_date: loan.start_date,
       term_months: loan.term_months,
-      rate_periods: (loan as any).rate_periods || [],
-      prepayments: (loan as any).prepayments || [],
+      rate_periods: loan.rate_periods || [],
+      prepayments: loan.prepayments || [],
     }
     return createLoanData(loanData).id
   }
@@ -1069,98 +1079,99 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
   }
 
-  async importData(data: ExportData): Promise<void> {
+  async importData(importData: ExportData): Promise<void> {
     // Clear current data for the profile
     const currentProfileId = await this.getCurrentProfileId()
 
     // Delete all data for current profile
-    Object.keys(data.profiles).forEach((key) => {
+    Object.keys(importData.profiles).forEach((key) => {
       const id = Number(key)
       if (id === currentProfileId) {
-        delete data.profiles[id]
-        Object.keys(data.categories).forEach((cKey) => {
-          const cat = data.categories[Number(cKey)]
+        importData.profiles[id] = undefined
+        Object.keys(importData.categories).forEach((cKey) => {
+          const cat = importData.categories[Number(cKey)]
           if (cat.profile_id === currentProfileId) {
-            delete data.categories[Number(cKey)]
+            importData.categories[Number(cKey)] = undefined
           }
         })
 
-        Object.keys(data.transactions).forEach((tKey) => {
-          const tx = data.transactions[Number(tKey)]
+        Object.keys(importData.transactions).forEach((tKey) => {
+          const tx = importData.transactions[Number(tKey)]
           if (tx.profile_id === currentProfileId) {
-            delete data.transactions[Number(tKey)]
+            importData.transactions[Number(tKey)] = undefined
           }
         })
 
-        Object.keys(data.accounts).forEach((aKey) => {
-          const acc = data.accounts[Number(aKey)]
+        Object.keys(importData.accounts).forEach((aKey) => {
+          const acc = importData.accounts[Number(aKey)]
           if (acc.profile_id === currentProfileId) {
-            delete data.accounts[Number(aKey)]
+            importData.accounts[Number(aKey)] = undefined
           }
         })
 
-        Object.keys(data.budgets).forEach((bKey) => {
-          const budget = data.budgets[Number(bKey)]
+        Object.keys(importData.budgets).forEach((bKey) => {
+          const budget = importData.budgets[Number(bKey)]
           if (budget.profile_id === currentProfileId) {
-            delete data.budgets[Number(bKey)]
+            importData.budgets[Number(bKey)] = undefined
           }
         })
 
-        Object.keys(data.goals).forEach((gKey) => {
-          const goal = data.goals[Number(gKey)]
+        Object.keys(importData.goals).forEach((gKey) => {
+          const goal = importData.goals[Number(gKey)]
           if (goal.profile_id === currentProfileId) {
-            delete data.goals[Number(gKey)]
+            importData.goals[Number(gKey)] = undefined
           }
         })
 
-        Object.keys(data.loans).forEach((lKey) => {
-          const loan = data.loans[Number(lKey)]
+        Object.keys(importData.loans).forEach((lKey) => {
+          const loan = importData.loans[Number(lKey)]
           if (loan.profile_id === currentProfileId) {
-            delete data.loans[Number(lKey)]
+            importData.loans[Number(lKey)] = undefined
           }
         })
 
-        Object.keys(data.balanceHistory || {}).forEach((bhKey) => {
-          const entry = (data.balanceHistory || {})[Number(bhKey)]
-          if (entry && entry.account_id) {
-            const account = Object.values(data.accounts).find((a) => a.id === entry.account_id)
-            if (account && account.profile_id === currentProfileId) {
-              const key = Number(bhKey)
-              if (data.balanceHistory) {
-                delete data.balanceHistory[key]
+        const balanceHistory = importData.balanceHistory
+        if (balanceHistory !== undefined) {
+          Object.keys(balanceHistory).forEach((bhKey) => {
+            const entry = balanceHistory[Number(bhKey)]
+            if (entry !== undefined && entry.account_id !== undefined) {
+              const account = Object.values(importData.accounts).find((a) => a.id === entry.account_id)
+              if (account !== undefined && account.profile_id === currentProfileId) {
+                const key = Number(bhKey)
+                balanceHistory[key] = undefined
               }
             }
-          }
-        })
+          })
+        }
       }
     })
 
     // Save exported data
-    data.profiles.forEach((profile) => {
+    importData.profiles.forEach((profile) => {
       data.profiles[profile.id] = profile
     })
 
-    data.categories.forEach((cat) => {
+    importData.categories.forEach((cat) => {
       data.categories[cat.id] = cat
     })
 
-    data.transactions.forEach((tx) => {
+    importData.transactions.forEach((tx) => {
       data.transactions[tx.id] = tx
     })
 
-    data.accounts.forEach((acc) => {
+    importData.accounts.forEach((acc) => {
       data.accounts[acc.id] = acc
     })
 
-    data.budgets.forEach((budget) => {
+    importData.budgets.forEach((budget) => {
       data.budgets[budget.id] = budget
     })
 
-    data.goals.forEach((goal) => {
+    importData.goals.forEach((goal) => {
       data.goals[goal.id] = goal
     })
 
-    data.loans.forEach((loan) => {
+    importData.loans.forEach((loan) => {
       data.loans[loan.id] = loan
     })
 
@@ -1177,58 +1188,76 @@ export class LocalStorageAdapter implements StorageAdapter {
       idMap.set(original.id, newId)
 
       data.profiles[newId] = { ...original, id: newId }
-      delete data.profiles[original.id]
+      data.profiles[original.id] = undefined
     })
 
     // Fix references
     Object.keys(data.categories).forEach((key) => {
       const cat = data.categories[Number(key)]
-      cat.profile_id = idMap.get(cat.profile_id)!
+      const mappedId = idMap.get(cat.profile_id)
+      if (mappedId !== undefined) {
+        cat.profile_id = mappedId
+      }
       data.categories[cat.id] = cat
-      delete data.categories[Number(key)]
+      data.categories[Number(key)] = undefined
     })
 
     Object.keys(data.transactions).forEach((key) => {
       const tx = data.transactions[Number(key)]
-      tx.profile_id = idMap.get(tx.profile_id)!
-      if (tx.category_id) {
+      const mappedId = idMap.get(tx.profile_id)
+      if (mappedId !== undefined) {
+        tx.profile_id = mappedId
+      }
+      if (tx.category_id !== undefined) {
         const newCatId = Object.values(data.categories).find(
           (c) => c.name === tx.description && c.type === tx.type
         )?.id
-        if (newCatId) tx.category_id = newCatId
+        if (newCatId !== undefined) tx.category_id = newCatId
       }
       data.transactions[tx.id] = tx
-      delete data.transactions[Number(key)]
+      data.transactions[Number(key)] = undefined
     })
 
     Object.keys(data.accounts).forEach((key) => {
       const acc = data.accounts[Number(key)]
-      acc.profile_id = idMap.get(acc.profile_id)!
+      const mappedId = idMap.get(acc.profile_id)
+      if (mappedId !== undefined) {
+        acc.profile_id = mappedId
+      }
       data.accounts[acc.id] = acc
-      delete data.accounts[Number(key)]
+      data.accounts[Number(key)] = undefined
     })
 
     Object.keys(data.budgets).forEach((key) => {
       const budget = data.budgets[Number(key)]
-      budget.profile_id = idMap.get(budget.profile_id)!
+      const mappedId = idMap.get(budget.profile_id)
+      if (mappedId !== undefined) {
+        budget.profile_id = mappedId
+      }
       budget.category_id =
         Object.values(data.categories).find((c) => c.id === budget.category_id)?.id || 1
       data.budgets[budget.id] = budget
-      delete data.budgets[Number(key)]
+      data.budgets[Number(key)] = undefined
     })
 
     Object.keys(data.goals).forEach((key) => {
       const goal = data.goals[Number(key)]
-      goal.profile_id = idMap.get(goal.profile_id)!
+      const mappedId = idMap.get(goal.profile_id)
+      if (mappedId !== undefined) {
+        goal.profile_id = mappedId
+      }
       data.goals[goal.id] = goal
-      delete data.goals[Number(key)]
+      data.goals[Number(key)] = undefined
     })
 
     Object.keys(data.loans).forEach((key) => {
       const loan = data.loans[Number(key)]
-      loan.profile_id = idMap.get(loan.profile_id)!
+      const mappedId = idMap.get(loan.profile_id)
+      if (mappedId !== undefined) {
+        loan.profile_id = mappedId
+      }
       data.loans[loan.id] = loan
-      delete data.loans[Number(key)]
+      data.loans[Number(key)] = undefined
     })
 
     // Rebuild counter

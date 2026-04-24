@@ -7,7 +7,7 @@ export default defineConfig({
   timeout: 60000,
   testDir: './tests',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: process.env.CI !== undefined,
   retries: 0,
   workers: 1,
   reporter: 'list',

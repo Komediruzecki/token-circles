@@ -26,7 +26,7 @@ export function createApiStore() {
 
       // Get profile IDs from localStorage
       const selectedIds = localStorage.getItem('selectedProfileIds')
-      const profileIds = selectedIds ? JSON.parse(selectedIds) : [1]
+      const profileIds = selectedIds !== null ? JSON.parse(selectedIds) : [1]
 
       if (profileIds.length > 1) {
         headers['X-Profile-Ids'] = JSON.stringify(profileIds)
@@ -85,15 +85,15 @@ export function createProfileStore() {
     }
   }
 
-  const switchTo = async (id: number) => {
+  const switchTo = (id: number) => {
     setCurrentProfileId(id)
     setSelectedProfileIds([id])
     localStorage.setItem('currentProfileId', id.toString())
-    await loadProfiles()
+    void loadProfiles()
     window.location.reload()
   }
 
-  const toggleProfile = async (id: number) => {
+  const toggleProfile = (id: number) => {
     const idx = selectedProfileIds().indexOf(id)
     let newIds: number[]
     if (idx !== -1) {
@@ -109,10 +109,10 @@ export function createProfileStore() {
     window.location.reload()
   }
 
-  const selectAllProfiles = async () => {
+  const selectAllProfiles = () => {
     const all = profiles()
     setSelectedProfileIds(all.map((p) => p.id))
-    await loadProfiles()
+    void loadProfiles()
     window.location.reload()
   }
 

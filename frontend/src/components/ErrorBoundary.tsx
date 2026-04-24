@@ -2,7 +2,8 @@
  * Error Boundary Component
  * Catches React/Solid errors and displays fallback UI
  */
-import { Component, JSX, createSignal } from 'solid-js'
+import { createSignal } from 'solid-js'
+import type { Component, JSX } from 'solid-js'
 
 interface ErrorBoundaryProps {
   children: JSX.Element
@@ -35,7 +36,7 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
     }}>
       <h2 style={{ color: '#dc3545', 'margin-bottom': '16px' }}>Something went wrong</h2>
       <p style={{ color: '#666', 'margin-bottom': '20px' }}>
-        {state().error?.message || 'An unexpected error occurred'}
+        {state().error?.message ?? 'An unexpected error occurred'}
       </p>
       <button
         onClick={reset}

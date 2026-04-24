@@ -5,7 +5,7 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/CategoriesPage.module.css'
 import { formatCurrency } from '../core/api'
-import { apiGet, apiPost, apiPut, apiDelete, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 
 interface Category {
   id: number

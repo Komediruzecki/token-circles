@@ -2,8 +2,9 @@
  * Modal Component - Generic modal dialog
  */
 
-import { createSignal, JSX, onCleanup, onMount } from 'solid-js'
+import { createSignal, onCleanup, onMount } from 'solid-js'
 import styles from './Modal.module.css'
+import type { JSX } from 'solid-js'
 
 interface ModalProps {
   isOpen: boolean
@@ -71,7 +72,7 @@ export function Modal(props: ModalProps) {
 
         {/* Modal Footer */}
         <div class={styles.modalFooter}>
-          {!props.title?.includes('Settings') && (
+          {props.title !== undefined && !props.title.includes('Settings') && (
             <button class={styles.modalFooterButton} onClick={handleClose}>
               Close
             </button>

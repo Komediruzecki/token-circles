@@ -2,7 +2,8 @@
  * Button Component - Reusable button component with multiple variants
  */
 
-import { JSX, mergeProps } from 'solid-js'
+import { mergeProps } from 'solid-js'
+import type { JSX } from 'solid-js'
 
 interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'link'
@@ -24,7 +25,7 @@ export default function Button(props: ButtonProps) {
   return (
     <button
       type={merged.type}
-      class={`${baseClass} ${variantClass} ${sizeClass} ${merged.class || ''}`.trim()}
+      class={`${baseClass} ${variantClass} ${sizeClass} ${merged.class ?? ''}`.trim()}
       onClick={merged.onClick}
       disabled={merged.disabled}
     >

@@ -21,12 +21,14 @@ export const DashboardSettings: Component = () => {
   // Load saved preferences
   onMount(() => {
     const saved = localStorage.getItem('dashboard_widgets')
-    if (saved) {
+    if (saved !== null) {
       try {
         const parsed = JSON.parse(saved)
-        parsed.visibleWidgets?.forEach((id: string) => {
-          setSelectedWidget((prev) => (prev ? `${prev},${id}` : id))
-        })
+        if (parsed.visibleWidgets !== undefined) {
+          parsed.visibleWidgets.forEach((id: string) => {
+            setSelectedWidget((prev) => (prev ? `${prev},${id}` : id))
+          })
+        }
       } catch (e) {
         console.error('Failed to load dashboard settings:', e)
       }
@@ -36,10 +38,10 @@ export const DashboardSettings: Component = () => {
   // Toggle widget visibility
   const toggleWidget = (widgetId: string) => {
     const current = selectedWidget()
-    if (current?.split(',').includes(widgetId)) {
+    if (current !== null && current.split(',').includes(widgetId)) {
       setSelectedWidget(current.replace(new RegExp(`(^|,)${widgetId}(,|$)`), '$1$2'))
     } else {
-      setSelectedWidget(current ? `${current},${widgetId}` : widgetId)
+      setSelectedWidget(current !== null ? `${current},${widgetId}` : widgetId)
     }
   }
 
@@ -49,7 +51,7 @@ export const DashboardSettings: Component = () => {
     localStorage.setItem(
       'dashboard_widgets',
       JSON.stringify({
-        visibleWidgets: current ? current.split(',') : [],
+        visibleWidgets: current !== null ? current.split(',') : [],
         widgetOrder: [], // Can add ordering in future
       })
     )
@@ -74,7 +76,7 @@ export const DashboardSettings: Component = () => {
           <div class="setting-item">
             <button
               class="widget-toggle"
-              classList={{ active: selectedWidget()?.split(',').includes(widget.id) }}
+              classList={{ active: selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id) }}
               onClick={() => {
                 toggleWidget(widget.id)
               }}
@@ -82,7 +84,7 @@ export const DashboardSettings: Component = () => {
               <span class="widget-icon">{widget.icon}</span>
               <span class="widget-name">{widget.name}</span>
               <span class="widget-status">
-                {selectedWidget()?.split(',').includes(widget.id) ? 'Visible' : 'Hidden'}
+                {selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id) ? 'Visible' : 'Hidden'}
               </span>
             </button>
           </div>

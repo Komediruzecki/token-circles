@@ -47,17 +47,17 @@ export default function Pagination(props: PaginationProps) {
     <div class={styles.pagination}>
       <button
         class={`${styles.pageBtn} ${styles.pageBtnPrev}`}
-        onClick={() => goToPage(props.currentPage - 1)}
+        onClick={() => { goToPage(props.currentPage - 1) }}
         disabled={props.currentPage === 1}
       >
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path d="M15 19l-7-7 7-7" />
+        <svg width='12' height='12' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path d='M15 19l-7-7 7-7' />
         </svg>
       </button>
 
       {visiblePages[0] > 1 && (
         <>
-          <button class={styles.pageBtn} onClick={() => goToPage(1)}>
+          <button class={styles.pageBtn} onClick={() => { goToPage(1) }}>
             1
           </button>
           {visiblePages[0] > 2 && <span class={styles.ellipsis}>...</span>}
@@ -68,7 +68,7 @@ export default function Pagination(props: PaginationProps) {
         <button
           key={page}
           class={`${styles.pageBtn} ${page === props.currentPage ? styles.pageBtnActive : ''}`}
-          onClick={() => goToPage(page)}
+          onClick={() => { goToPage(page) }}
         >
           {page}
         </button>
@@ -79,7 +79,7 @@ export default function Pagination(props: PaginationProps) {
           {visiblePages[visiblePages.length - 1] < props.totalPages - 1 && (
             <span class={styles.ellipsis}>...</span>
           )}
-          <button class={styles.pageBtn} onClick={() => goToPage(props.totalPages)}>
+          <button class={styles.pageBtn} onClick={() => { goToPage(props.totalPages) }}>
             {props.totalPages}
           </button>
         </>
@@ -87,11 +87,11 @@ export default function Pagination(props: PaginationProps) {
 
       <button
         class={`${styles.pageBtn} ${styles.pageBtnNext}`}
-        onClick={() => goToPage(props.currentPage + 1)}
+        onClick={() => { goToPage(props.currentPage + 1) }}
         disabled={props.currentPage === props.totalPages}
       >
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path d="M9 5l7 7-7 7" />
+        <svg width='12' height='12' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path d='M9 5l7 7-7 7' />
         </svg>
       </button>
     </div>

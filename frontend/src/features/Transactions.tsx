@@ -2,13 +2,12 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal, For } from 'solid-js'
-import styles from '../components/TransactionsPage.module.css'
-import { api } from '../core/api.js'
-import TransactionTable from '../components/TransactionTable'
+import { createEffect, createSignal } from 'solid-js'
 import FilterBar from '../components/FilterBar'
 import Pagination from '../components/Pagination'
-import type * as Models from '../types/models'
+import styles from '../components/TransactionsPage.module.css'
+import TransactionTable from '../components/TransactionTable'
+import { api } from '../core/api.js'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -52,7 +51,7 @@ export default function Transactions() {
   const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
-  const [type, setType] = createSignal<TransactionType>('expense')
+  const [type, _setType] = createSignal<TransactionType>('expense')
   const [categories, setCategories] = createSignal<
     Array<{ id: number; name: string; color: string }>
   >([])
@@ -66,9 +65,9 @@ export default function Transactions() {
   const [sortField, setSortField] = createSignal<string>('date')
   const [sortOrder, setSortOrder] = createSignal<'asc' | 'desc'>('desc')
   const [filterType, setFilterType] = createSignal<string>('all')
-  const [filterMonth, setFilterMonth] = createSignal<string | null>(null)
+  const [filterMonth, _setFilterMonth] = createSignal<string | null>(null)
   const [searchTerm, setSearchTerm] = createSignal<string>('')
-  const today = new Date().toISOString().slice(0, 7)
+  const _today = new Date().toISOString().slice(0, 7)
 
   // Load transactions function (exposed to window)
   // @ts-expect-error - Used via event delegation
@@ -84,7 +83,7 @@ export default function Transactions() {
       const tagsSet = new Map<number, { name: string; color: string }>()
       transactionsData.forEach((tx: any) => {
         if (tx.category_name) {
-          if (!categoriesSet.has(tx.category_id || 0)) {
+          if (!categoriesSet.has(tx.category_id !== undefined ? tx.category_id : 0)) {
             const categoryNames = tx.category_name.split('|')
             categoriesSet.set(tx.category_id || 0, {
               name: categoryNames[categoryNames.length - 1].trim(),
@@ -92,7 +91,7 @@ export default function Transactions() {
             })
           }
         }
-        if (tx.tags && tx.tags.length > 0) {
+        if (tx.tags !== undefined && tx.tags.length > 0) {
           tx.tags.forEach((tag: any) => {
             if (!tagsSet.has(tag.id)) {
               tagsSet.set(tag.id, { name: tag.name, color: tag.color })
@@ -117,7 +116,7 @@ export default function Transactions() {
 
     try {
       const receipts = (await api.getReceiptsForTransaction(receipt.transaction_id)) as any
-      if (receipts && receipts.length > 0) {
+      if (receipts !== undefined && Array.isArray(receipts) && receipts.length > 0) {
         // Download the receipt file
         const blob = (await api.getReceiptFile(receipts[0].id)) as any
         const url = URL.createObjectURL(blob)
@@ -272,7 +271,7 @@ export default function Transactions() {
   const totalPages = () => Math.ceil(paginatedTransactions().length / itemsPerPage())
 
   // Date presets
-  const applyDatePreset = (preset: string) => {
+  const _applyDatePreset = (preset: string) => {
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)

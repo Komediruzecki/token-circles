@@ -2,7 +2,8 @@
  * Badge Component - Reusable badge component with status variants
  */
 
-import { JSX, mergeProps } from 'solid-js'
+import { mergeProps } from 'solid-js'
+import type { JSX } from 'solid-js'
 
 interface BadgeProps {
   status?: 'ok' | 'warning' | 'over' | 'income' | 'expense' | 'transfer' | 'default'
@@ -17,7 +18,7 @@ export default function Badge(props: BadgeProps) {
   const statusClass = merged.status !== 'default' ? `badge-${merged.status}` : ''
 
   return (
-    <span class={`${baseClass} ${statusClass} ${merged.class || ''}`.trim()}>
+    <span class={`${baseClass} ${statusClass} ${merged.class ?? ''}`.trim()}>
       {merged.children}
     </span>
   )

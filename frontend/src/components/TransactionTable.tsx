@@ -2,10 +2,8 @@
  * TransactionTable Component
  * Renders transaction list with sorting, filtering, and pagination
  */
-import { createEffect, For } from 'solid-js'
+import { createEffect, createSignal, For } from 'solid-js'
 import styles from './TransactionTable.module.css'
-import { api } from '../core/api.js'
-import { createSignal } from 'solid-js'
 
 export interface Transaction {
   id: number
@@ -43,20 +41,20 @@ export default function TransactionTable(props: TransactionTableProps) {
 
   // Initialize sort config from props
   createEffect(() => {
-    if (props.sortField) {
-      setSortConfig({ field: props.sortField, direction: props.sortOrder || 'desc' })
+    if (props.sortField !== undefined) {
+      setSortConfig({ field: props.sortField, direction: props.sortOrder !== undefined ? props.sortOrder : 'desc' })
     }
   })
 
   // Apply filters based on sort and any global filters
   createEffect(() => {
-    let items = [...props.transactions]
+    const items = [...props.transactions]
 
     // Apply sorting
     const { field, direction } = sortConfig()
     items.sort((a, b) => {
-      let valA: any
-      let valB: any
+      let valA: string | number | undefined
+      let valB: string | number | undefined
 
       switch (field) {
         case 'date':
@@ -75,15 +73,21 @@ export default function TransactionTable(props: TransactionTableProps) {
           valA = a.category_name
           valB = b.category_name
           break
-        default:
-          valA = a[field]
-          valB = b[field]
+        default: {
+          const defaultValA = a[field as keyof Transaction]
+          const defaultValB = b[field as keyof Transaction]
+          valA = typeof defaultValA === 'string' || typeof defaultValA === 'number' ? defaultValA : undefined
+          valB = typeof defaultValB === 'string' || typeof defaultValB === 'number' ? defaultValB : undefined
+        }
       }
 
-      if (typeof valA === 'string') {
-        return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA)
+      if (valA !== undefined && valB !== undefined) {
+        if (typeof valA === 'string') {
+          return direction === 'asc' ? valA.localeCompare(valB as string) : (valB as string).localeCompare(valA)
+        }
+        return direction === 'asc' ? (valA > valB ? 1 : -1) : (valB > valA ? 1 : -1)
       }
-      return direction === 'asc' ? (valA > valB ? 1 : -1) : valB > valA ? 1 : -1
+      return 0
     })
 
     setFiltered(items)
@@ -112,7 +116,7 @@ export default function TransactionTable(props: TransactionTableProps) {
           <tr>
             <th class={styles.checkboxCol}>
               <input
-                type="checkbox"
+                type='checkbox'
                 class={styles.checkbox}
                 checked={
                   props.selectedTransactions.length === filtered().length && filtered().length > 0
@@ -127,19 +131,19 @@ export default function TransactionTable(props: TransactionTableProps) {
                 }}
               />
             </th>
-            <th class={`${styles.col} ${styles.dateCol}`} onClick={() => handleSort('date')}>
+            <th class={`${styles.col} ${styles.dateCol}`} onClick={() => { handleSort('date') }}>
               Date {sortConfig().field === 'date' && (sortConfig().direction === 'asc' ? '↑' : '↓')}
             </th>
             <th
               class={`${styles.col} ${styles.descriptionCol}`}
-              onClick={() => handleSort('description')}
+              onClick={() => { handleSort('description') }}
             >
               Description{' '}
               {sortConfig().field === 'description' &&
                 (sortConfig().direction === 'asc' ? '↑' : '↓')}
             </th>
             <th class={`${styles.col} ${styles.categoryCol}`}>Category</th>
-            <th class={`${styles.col} ${styles.amountCol}`} onClick={() => handleSort('amount')}>
+            <th class={`${styles.col} ${styles.amountCol}`} onClick={() => { handleSort('amount') }}>
               Amount{' '}
               {sortConfig().field === 'amount' && (sortConfig().direction === 'asc' ? '↑' : '↓')}
             </th>
@@ -153,7 +157,7 @@ export default function TransactionTable(props: TransactionTableProps) {
               <tr>
                 <td class={styles.checkboxCol}>
                   <input
-                    type="checkbox"
+                    type='checkbox'
                     class={styles.checkbox}
                     checked={props.selectedTransactions.includes(transaction.id)}
                     onChange={(e) => {
@@ -171,17 +175,17 @@ export default function TransactionTable(props: TransactionTableProps) {
                 <td class={styles.dateCol}>{new Date(transaction.date).toLocaleDateString()}</td>
                 <td class={styles.descriptionCol}>
                   <div class={styles.description}>{transaction.description}</div>
-                  {transaction.beneficiary && (
+                  {transaction.beneficiary !== undefined && transaction.beneficiary !== '' && (
                     <div class={styles.beneficiary}>Pay to: {transaction.beneficiary}</div>
                   )}
-                  {transaction.payor && <div class={styles.payor}>From: {transaction.payor}</div>}
-                  {transaction.means_of_payment && (
+                  {transaction.payor !== undefined && transaction.payor !== '' && <div class={styles.payor}>From: {transaction.payor}</div>}
+                  {transaction.means_of_payment !== undefined && transaction.means_of_payment !== '' && (
                     <div class={styles.paymentMethod}>{transaction.means_of_payment}</div>
                   )}
                 </td>
                 <td class={styles.categoryCol}>
                   <div class={styles.categoryName}>{transaction.category_name}</div>
-                  {transaction.tags && transaction.tags.length > 0 && (
+                  {transaction.tags !== undefined && transaction.tags.length > 0 && (
                     <div class={styles.tags}>
                       <For each={transaction.tags.slice(0, 2)}>
                         {(tag) => (
@@ -213,17 +217,17 @@ export default function TransactionTable(props: TransactionTableProps) {
                     data-action={`transaction:edit:${transaction.id}`}
                   >
                     <svg
-                      width="14"
-                      height="14"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                      width='14'
+                      height='14'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
                     >
                       <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
                         strokeWidth={2}
-                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                        d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'
                       />
                     </svg>
                   </button>
@@ -233,7 +237,7 @@ export default function TransactionTable(props: TransactionTableProps) {
           </For>
         </tbody>
       </table>
-      {props.transactions.length === 0 && !props.loading && (
+      {props.transactions.length === 0 && (props.loading === undefined || !props.loading) && (
         <div class={styles.emptyState}>No transactions found</div>
       )}
     </div>
