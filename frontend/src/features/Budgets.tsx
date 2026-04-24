@@ -274,7 +274,7 @@ export default function Budgets() {
                 labels: allocations().map((a) => a.category_name),
                 datasets: [
                   {
-                    data: allocations().map((a) => a.allocated),
+                    data: allocations().map((a) => a.budgeted),
                     backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
                     borderWidth: 0,
                   },

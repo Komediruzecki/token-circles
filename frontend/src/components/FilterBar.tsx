@@ -15,8 +15,6 @@ interface FilterBarProps {
   onChange: (filters: any) => void
 }
 
-const PRESETS = ['month', 'lastMonth', 'year', 'custom']
-
 export default function FilterBar(props: FilterBarProps) {
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = createSignal(false)
   const [isTagDropdownOpen, setIsTagDropdownOpen] = createSignal(false)
