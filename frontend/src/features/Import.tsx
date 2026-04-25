@@ -236,7 +236,7 @@ export default function Import() {
 
       {/* Import Result */}
       {(importResult().status === 'success' || importResult().status === 'error') && (
-        <div class={`toast toast-${importResult().status === 'success' ? 'success' : 'error'}`}>
+        <div class={importResult().status === 'success' ? styles.toastSuccess : styles.toastError}>
           {importResult().message}
           {(() => {
             const errors = importResult().errors
@@ -263,7 +263,7 @@ export default function Import() {
               type="file"
               id="import-file-input"
               accept=".csv,.xlsx,.xls"
-              class="import-file-input"
+              class={styles.importFileInput}
               data-action="import:file"
             />
             <label for="import-file-input" class={styles.uploadLabel}>

@@ -399,7 +399,7 @@ export default function Transactions() {
               <input type="hidden" id="tx-id" />
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Type</label>
-                <div class="type-selector" id="tx-type-selector">
+                <div class={styles.typeSelector} id="tx-type-selector">
                   <button
                     type="button"
                     class={`expense ${type() === 'expense' ? 'active' : ''}`}
@@ -468,7 +468,7 @@ export default function Transactions() {
               </div>
               <div class={`${styles.formGroup} ${styles.txTagSelector}`}>
                 <label class={styles.formLabel}>Tags</label>
-                <div class="tx-tag-chips" id="tx-tag-chips"></div>
+                <div class={styles.txTagChips} id="tx-tag-chips"></div>
                 <div class={styles.txTagInputRow}>
                   <input
                     type="text"
@@ -535,17 +535,17 @@ export default function Transactions() {
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Receipt</label>
-                <div class="receipt-upload-container">
-                  <label class="receipt-placeholder" for="tx-receipt" style="cursor: pointer">
+                <div class={styles.receiptUploadContainer}>
+                  <label class={styles.receiptPlaceholder} for="tx-receipt" style="cursor: pointer">
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
-                    <span class="receipt-text">Click to upload receipt</span>
+                    <span class={styles.receiptText}>Click to upload receipt</span>
                   </label>
                   <input
                     type="file"
                     id="tx-receipt"
-                    class="receipt-input"
+                    class={styles.receiptInput}
                     accept="image/*,.pdf"
                     data-action="transactions:handleReceiptFileSelect"
                   />
@@ -555,7 +555,7 @@ export default function Transactions() {
                         <img
                           src={receiptPreviewUrl()!}
                           alt="Receipt preview"
-                          class="receipt-thumbnail"
+                          class={styles.receiptThumbnail}
                         />
                       ) : (
                         <div
@@ -589,7 +589,7 @@ export default function Transactions() {
                           </div>
                         </div>
                       )}
-                      <div class="receipt-actions">
+                      <div class={styles.receiptActions}>
                         <button
                           type="button"
                           class={`${styles.btnGhost} ${styles.btnSm}`}
@@ -632,7 +632,7 @@ export default function Transactions() {
       {/* Receipt View Modal */}
       {isReceiptModalOpen() && selectedReceipt() && (
         <div
-          class={`modal-overlay show receipt-modal`}
+          class={`modal-overlay show ${styles.receiptModal}`}
           id="receipt-modal"
           onclick={(e) => {
             if ((e.target as HTMLElement).classList.contains('modal-overlay')) {

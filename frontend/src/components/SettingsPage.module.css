@@ -71,13 +71,13 @@
   margin-bottom: 12px;
 }
 
-.toggle-switch {
+.toggleSwitch {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.toggle-slider {
+.toggleSlider {
   width: 44px;
   height: 24px;
   background: var(--bg);
@@ -87,7 +87,7 @@
   border: 2px solid var(--border);
 }
 
-.toggle-slider::before {
+.toggleSlider::before {
   content: '';
   position: absolute;
   width: 20px;
@@ -99,12 +99,12 @@
   transition: transform 0.3s;
 }
 
-.toggle-switch input:checked + .toggle-slider {
+.toggleSwitch input:checked + .toggleSlider {
   background: var(--primary);
   border-color: var(--primary);
 }
 
-.toggle-switch input:checked + .toggle-slider::before {
+.toggleSwitch input:checked + .toggleSlider::before {
   transform: translateX(20px);
 }
 

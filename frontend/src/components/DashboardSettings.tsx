@@ -4,6 +4,7 @@
 
 import { createSignal, onMount } from 'solid-js'
 import type { Component } from 'solid-js'
+import styles from './DashboardSettings.module.css'
 
 export const DashboardSettings: Component = () => {
   const [selectedWidget, setSelectedWidget] = createSignal<string | null>(null)
@@ -64,34 +65,34 @@ export const DashboardSettings: Component = () => {
   }
 
   return (
-    <div class="dashboard-settings">
-      <div class="settings-header">
+    <div class={styles.dashboardSettings}>
+      <div class={styles.settingsHeader}>
         <h3>Dashboard Settings</h3>
-        <button class="btn btn-sm btn-secondary" onClick={resetSettings}>
+        <button class={`${styles.btnSm} ${styles.btnSecondary}`} onClick={resetSettings}>
           Reset Default
         </button>
       </div>
-      <div class="settings-list">
+      <div class={styles.settingsList}>
         {widgets.map((widget) => (
-          <div class="setting-item">
+          <div class={styles.settingItem}>
             <button
-              class="widget-toggle"
-              classList={{ active: selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id) }}
+              class={styles.widgetToggle}
+              classList={{ [styles.active]: selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id) }}
               onClick={() => {
                 toggleWidget(widget.id)
               }}
             >
-              <span class="widget-icon">{widget.icon}</span>
-              <span class="widget-name">{widget.name}</span>
-              <span class="widget-status">
+              <span class={styles.widgetIcon}>{widget.icon}</span>
+              <span class={styles.widgetName}>{widget.name}</span>
+              <span class={styles.widgetStatus}>
                 {selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id) ? 'Visible' : 'Hidden'}
               </span>
             </button>
           </div>
         ))}
       </div>
-      <div class="settings-footer">
-        <button class="btn btn-primary" onClick={saveSettings}>
+      <div class={styles.settingsFooter}>
+        <button class={`${styles.btnSm} ${styles.btnPrimary}`} onClick={saveSettings}>
           Save Settings
         </button>
       </div>

@@ -99,11 +99,11 @@ export default function Settings() {
       <div class={styles.pageHeader}>
         <h1>Settings</h1>
       </div>
-      <div class="page page-settings page-content">
-        <div class="settings-grid">
-          <div class="settings-col">
+      <div class={styles.pageContent}>
+        <div class={styles.settingsGrid}>
+          <div class={styles.settingsCol}>
             <div class={styles.card}>
-              <div class="settings-section">
+              <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Database Storage</div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Storage Type</label>
@@ -137,9 +137,9 @@ export default function Settings() {
             </div>
           </div>
 
-          <div class="settings-col">
+          <div class={styles.settingsCol}>
             <div class={styles.card}>
-              <div class="settings-section">
+              <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>General</div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Local Currency</label>
@@ -174,20 +174,20 @@ export default function Settings() {
               </div>
             </div>
             <div class={styles.card}>
-              <div class="settings-section">
+              <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Appearance</div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Theme</label>
                   <div style="display: flex; align-items: center; gap: 12px;">
                     <span style="font-size: 14px; color: var(--text-secondary);">Light</span>
-                    <label class="toggle-switch">
+                    <label class={styles.toggleSwitch}>
                       <input
                         type="checkbox"
                         id="setting-dark-mode"
                         checked={darkMode()}
                         onchange={handleDarkModeToggle}
                       />
-                      <span class="toggle-slider"></span>
+                      <span class={styles.toggleSlider}></span>
                     </label>
                     <span style="font-size: 14px; color: var(--text-secondary);">Dark</span>
                   </div>
