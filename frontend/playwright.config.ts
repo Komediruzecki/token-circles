@@ -12,8 +12,10 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:3800',
+    baseURL: 'http://localhost:3801',
     trace: 'retain-on-failure',
+    headless: true,
+    testIdAttribute: 'data-test-id',
   },
 
   projects: [

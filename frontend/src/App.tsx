@@ -2,44 +2,13 @@
  * Main App Component - Root component for the application
  */
 
-import { createSignal, onMount, Suspense } from 'solid-js'
+import { createSignal, onMount, Suspense, createMemo } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 import { handlers, receipts, transactions } from './core/handlers.js'
 import { theme } from './core/theme.js'
-import { pages } from './router.tsx'
 import { sidebar } from './styles/AppSidebar.module.css'
-import type { PageName } from './router.tsx'
-
-// Loading spinner for lazy-loaded pages
-function PageLoader() {
-  return (
-    <div
-      class="page-loader"
-      style={{
-        display: 'flex',
-        'justify-content': 'center',
-        'align-items': 'center',
-        'min-height': '400px',
-      }}
-    >
-      <div
-        style={{
-          width: '40px',
-          height: '40px',
-          border: '3px solid #f3f3f3',
-          'border-top': '3px solid #007bff',
-          'border-radius': '50%',
-          animation: 'spin 1s linear infinite',
-        }}
-      />
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
-  )
-}
+import type { PageName, PageComponent } from './router.tsx'
+import { pages as allPages } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -48,80 +17,40 @@ window.handlers = handlers
 
 export function App() {
   const [currentPage, setCurrentPage] = createSignal<PageName>('dashboard')
-  createSignal(Date.now())
 
-  // Currency exchange rate cache - unused, keeping for future feature
-  // @ts-expect-error - unused, keeping for future feature
-  const _exchangeRates = new Map<string, { rate: number; timestamp: number }>()
+  // Reactive component lookup
+  const currentComponent = createMemo(() => {
+    const page = currentPage()
+    return allPages[page] || allPages.dashboard
+  })
+
+  // Expose signals for debugging
+  window._currentPage = () => currentPage()
+  window._currentComponent = () => currentComponent()
 
   onMount(() => {
     theme.init()
 
-    // Add keyboard navigation to sidebar
-    const setupKeyboardNavigation = () => {
-      const navLinks = document.querySelectorAll(
-        '.sidebar-nav a[data-page], .nav-links a[data-page]'
-      )
+    // Handle hash changes for routing
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1) || 'dashboard'
+      const page = hash as PageName
+      console.log('[Router] Hash changed to:', page)
 
-      // Get first and last link for boundary handling
-      const firstLink = navLinks[0] as HTMLElement | null
-      const lastLink = navLinks[navLinks.length - 1] as HTMLElement | null
-
-      if (firstLink === null || lastLink === null) return
-
-      // Add tabindex for keyboard navigation
-      navLinks.forEach((link) => {
-        link.setAttribute('tabindex', '0')
-        link.setAttribute('role', 'link')
-      })
-
-      // Set up first link's boundary behavior (wraps to last)
-      firstLink.setAttribute('tabindex', '0')
-      firstLink.addEventListener('keydown', (e: Event) => {
-        if ((e as KeyboardEvent).key === 'ArrowUp') {
-          ;(e as KeyboardEvent).preventDefault()
-          lastLink.focus()
-        }
-      })
-
-      // Set up last link's boundary behavior (wraps to first)
-      lastLink.setAttribute('tabindex', '0')
-      lastLink.addEventListener('keydown', (e: Event) => {
-        if ((e as KeyboardEvent).key === 'ArrowDown') {
-          ;(e as KeyboardEvent).preventDefault()
-          firstLink.focus()
-        }
-      })
-
-      // Add arrow key navigation for all links
-      navLinks.forEach((link) => {
-        const currentLink = link as HTMLElement
-        currentLink.addEventListener('keydown', (e: Event) => {
-          const key = (e as KeyboardEvent).key
-          if (key === 'ArrowDown' || key === 'ArrowRight') {
-            const currentIndex = Array.from(navLinks).indexOf(currentLink)
-            const nextIndex = Math.min(currentIndex + 1, navLinks.length - 1)
-            if (nextIndex !== currentIndex) {
-              const nextLink = navLinks[nextIndex] as HTMLElement
-              nextLink.focus()
-            }
-          } else if (key === 'ArrowUp' || key === 'ArrowLeft') {
-            const currentIndex = Array.from(navLinks).indexOf(currentLink)
-            const prevIndex = Math.max(currentIndex - 1, 0)
-            if (prevIndex !== currentIndex) {
-              const prevLink = navLinks[prevIndex] as HTMLElement
-              prevLink.focus()
-            }
-          } else if (key === 'Enter' || key === ' ') {
-            ;(e as KeyboardEvent).preventDefault()
-            currentLink.click()
-          }
-        })
-      })
+      if (page in allPages) {
+        setCurrentPage(page)
+      } else {
+        setCurrentPage('dashboard')
+      }
     }
 
-    setupKeyboardNavigation()
+    // Attach event listener immediately
+    window.addEventListener('hashchange', handleHashChange)
 
+    // Handle initial hash
+    handleHashChange()
+
+    // Event listeners for legacy code compatibility
     document.addEventListener('click', (e: Event) => {
       const clickHandler = (e.target as HTMLElement).closest('[data-action]')
       if (clickHandler === null) return
@@ -147,20 +76,6 @@ export function App() {
         window.receipts.handleFileSelect(e)
       }
     })
-
-    // Handle hash changes for routing
-    const handleHashChange = () => {
-      const hash = window.location.hash.slice(1) || 'dashboard'
-      const page = hash as PageName
-      if (page in pages) {
-        setCurrentPage(page)
-      } else {
-        setCurrentPage('dashboard')
-      }
-    }
-
-    window.addEventListener('hashchange', handleHashChange)
-    handleHashChange()
   })
 
   return (
@@ -207,7 +122,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'dashboard' ? sidebar.active : ''}`}
               href="#dashboard"
-              data-page="dashboard"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -222,7 +136,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'transactions' ? sidebar.active : ''}`}
               href="#transactions"
-              data-page="transactions"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -237,7 +150,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'accounts' ? sidebar.active : ''}`}
               href="#accounts"
-              data-page="accounts"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -252,7 +164,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'categories' ? sidebar.active : ''}`}
               href="#categories"
-              data-page="categories"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -267,7 +178,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'budgets' ? sidebar.active : ''}`}
               href="#budgets"
-              data-page="budgets"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -288,7 +198,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'goals' ? sidebar.active : ''}`}
               href="#goals"
-              data-page="goals"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -303,7 +212,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'loans' ? sidebar.active : ''}`}
               href="#loans"
-              data-page="loans"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -318,7 +226,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'bills' ? sidebar.active : ''}`}
               href="#bills"
-              data-page="bills"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -333,7 +240,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'rentBuy' ? sidebar.active : ''}`}
               href="#rentBuy"
-              data-page="rentBuy"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -348,7 +254,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'compound' ? sidebar.active : ''}`}
               href="#compound"
-              data-page="compound"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -363,7 +268,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'emergency' ? sidebar.active : ''}`}
               href="#emergency"
-              data-page="emergency"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -378,7 +282,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'retirement' ? sidebar.active : ''}`}
               href="#retirement"
-              data-page="retirement"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -393,7 +296,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'housing' ? sidebar.active : ''}`}
               href="#housing"
-              data-page="housing"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -408,7 +310,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'analytics' ? sidebar.active : ''}`}
               href="#analytics"
-              data-page="analytics"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -423,7 +324,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'import' ? sidebar.active : ''}`}
               href="#import"
-              data-page="import"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -438,7 +338,6 @@ export function App() {
             <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'settings' ? sidebar.active : ''}`}
               href="#settings"
-              data-page="settings"
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -462,10 +361,15 @@ export function App() {
         {/* Main Content */}
         <main class={sidebar.main}>
           <div id="page-content" class="page page-content">
-            <Suspense fallback={<PageLoader />}>{pages[currentPage()]}</Suspense>
+            <div data-test-id="current-page-name">{currentPage()}</div>
+            <div id="app-debug"></div>
+            <Suspense fallback={<PageLoader />}>
+              <Dynamic component={currentComponent()} />
+            </Suspense>
           </div>
         </main>
       </div>
     </div>
   )
 }
+

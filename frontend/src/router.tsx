@@ -1,30 +1,42 @@
 /**
- * Router - Simplified routing for SolidJS with lazy loading
+ * Router - Simplified routing for SolidJS with eager loading for debugging
  */
-import { lazy } from 'solid-js'
 import type { PageComponent, PageName } from './types/models.js'
+import Dashboard from './features/Dashboard.js'
+import Transactions from './features/Transactions.js'
+import Budgets from './features/Budgets.js'
+import Loans from './features/Loans.js'
+import Goals from './features/Goals.js'
+import Bills from './features/Bills.js'
+import RentBuyCalculator from './features/RentBuyCalculator.js'
+import CompoundInterestCalculator from './features/CompoundInterestCalculator.js'
+import EmergencyFundCalculator from './features/EmergencyFundCalculator.js'
+import Import from './features/Import.js'
+import Accounts from './features/Accounts.js'
+import Categories from './features/Categories.js'
+import Settings from './features/Settings.js'
+import Retirement from './features/Retirement.js'
+import Housing from './features/Housing.js'
+import Analytics from './features/Analytics.js'
 
 export type { PageName, PageComponent }
 
-// Lazy-loaded page components for code-splitting
-// Dashboard is kept as eager load since it's the landing page
-const Dashboard = lazy(() => import('./features/Dashboard.js'))
-
+// Eager-loaded page components for debugging
 export const pages: Record<PageName, PageComponent> = {
   dashboard: Dashboard,
-  transactions: lazy(() => import('./features/Transactions.js')),
-  budgets: lazy(() => import('./features/Budgets.js')),
-  loans: lazy(() => import('./features/Loans.js')),
-  goals: lazy(() => import('./features/Goals.js')),
-  bills: lazy(() => import('./features/Bills.js')),
-  rentBuy: lazy(() => import('./features/RentBuyCalculator.js')),
-  compound: lazy(() => import('./features/CompoundInterestCalculator.js')),
-  emergency: lazy(() => import('./features/EmergencyFundCalculator.js')),
-  import: lazy(() => import('./features/Import.js')),
-  accounts: lazy(() => import('./features/Accounts.js')),
-  categories: lazy(() => import('./features/Categories.js')),
-  settings: lazy(() => import('./features/Settings.js')),
-  retirement: lazy(() => import('./features/Retirement.js')),
-  housing: lazy(() => import('./features/Housing.js')),
-  analytics: lazy(() => import('./features/Analytics.js')),
+  transactions: Transactions,
+  budgets: Budgets,
+  loans: Loans,
+  goals: Goals,
+  bills: Bills,
+  rentBuy: RentBuyCalculator,
+  compound: CompoundInterestCalculator,
+  emergency: EmergencyFundCalculator,
+  import: Import,
+  accounts: Accounts,
+  categories: Categories,
+  settings: Settings,
+  retirement: Retirement,
+  housing: Housing,
+  analytics: Analytics,
 }
