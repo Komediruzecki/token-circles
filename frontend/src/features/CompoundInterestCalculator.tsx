@@ -5,8 +5,8 @@
 import { createSignal } from 'solid-js'
 import Chart from '../components/Chart'
 import { formatCurrency } from '../core/api'
-import styles from './CompoundInterestCalculator.module.css'
 import { apiPost, showToast } from '../utils/api'
+import styles from './CompoundInterestCalculator.module.css'
 
 interface CompoundInterestResult {
   projection: Array<{ year: number; balance: number; contributions: number; interest: number }>
@@ -109,7 +109,7 @@ export default function CompoundInterestCalculator() {
                 type="number"
                 step="100"
                 value={form().principal}
-                oninput={(e) => updateForm('principal', Number(e.target.value))}
+                oninput={(e) => { updateForm('principal', Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -118,7 +118,7 @@ export default function CompoundInterestCalculator() {
                 type="number"
                 step="100"
                 value={form().monthlyContribution}
-                oninput={(e) => updateForm('monthlyContribution', Number(e.target.value))}
+                oninput={(e) => { updateForm('monthlyContribution', Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -127,7 +127,7 @@ export default function CompoundInterestCalculator() {
                 type="number"
                 step="0.1"
                 value={form().annualReturn}
-                oninput={(e) => updateForm('annualReturn', Number(e.target.value))}
+                oninput={(e) => { updateForm('annualReturn', Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -137,7 +137,7 @@ export default function CompoundInterestCalculator() {
                 min="1"
                 max="50"
                 value={form().years}
-                oninput={(e) => updateForm('years', Number(e.target.value))}
+                oninput={(e) => { updateForm('years', Number(e.target.value)); }}
               />
             </div>
           </div>
@@ -195,7 +195,7 @@ export default function CompoundInterestCalculator() {
                   {
                     label: 'Final Balance',
                     data: summary()?.scenarios.map((s) => s.finalBalance) || [],
-                    backgroundColor: summary()?.scenarios.map((s) => s.color + 'cc') || [],
+                    backgroundColor: summary()?.scenarios.map((s) => `${s.color  }cc`) || [],
                     borderColor: summary()?.scenarios.map((s) => s.color) || [],
                     borderWidth: 2,
                   },
@@ -307,7 +307,7 @@ export default function CompoundInterestCalculator() {
             <h3 class={styles.scenariosTitle}>Scenario Details</h3>
             <div class={styles.scenariosGrid}>
               {summary()?.scenarios.map((s) => (
-                <div class={styles.scenarioCard} style={'--color: ' + (s.color || '#6366f1') + ';' as any}>
+                <div class={styles.scenarioCard} style={`--color: ${  s.color || '#6366f1'  };` as any}>
                   <div class={styles.scenarioName}>{s.name}</div>
                   <div class={styles.scenarioStats}>
                     <div class={styles.stat}>

@@ -50,7 +50,7 @@ export default function RentBuyCalculator(props: Props) {
     if (saved) {
       try {
         setFormData({ ...formData(), ...JSON.parse(saved) })
-      } catch (e) {
+      } catch (_e) {
         console.error('Failed to load calculator settings')
       }
     }
@@ -61,7 +61,7 @@ export default function RentBuyCalculator(props: Props) {
 
   const scheduleUpdate = () => {
     if (debounceTimer) clearTimeout(debounceTimer)
-    debounceTimer = window.setTimeout(() => calculate(), 400)
+    debounceTimer = window.setTimeout(() => { calculate(); }, 400)
   }
 
   function handleInput(field: keyof typeof formData, value: number | string) {
@@ -109,7 +109,7 @@ export default function RentBuyCalculator(props: Props) {
       let cumulativeBuyCost = 0
       let investmentBalance = downPayment
       let cumulativePrincipal = downPayment
-      let cumulativeInterest = 0
+      let _cumulativeInterest = 0
       let principalBalance = homePrice - downPayment
 
       const resultData: Result[] = []
@@ -120,10 +120,10 @@ export default function RentBuyCalculator(props: Props) {
         // Calculate mortgage details for this year
         let yearPrincipal = 0
         let yearInterest = 0
-        let yearTax = propertyTax
-        let yearInsurance = insurance
-        let yearMaintenance = homePrice * maintenancePct
-        let yearHOA = hoa * 12
+        const yearTax = propertyTax
+        const yearInsurance = insurance
+        const yearMaintenance = homePrice * maintenancePct
+        const yearHOA = hoa * 12
 
         // Calculate mortgage principal/interest for each month of this year
         for (let month = 1; month <= 12; month++) {
@@ -140,7 +140,7 @@ export default function RentBuyCalculator(props: Props) {
         cumulativeRent += yearRent
         cumulativeBuyCost += monthlyPayment * 12 + yearTax + yearInsurance + yearMaintenance + yearHOA
         cumulativePrincipal += yearPrincipal
-        cumulativeInterest += yearInterest
+        _cumulativeInterest += yearInterest
 
         // Investment growth
         investmentBalance *= (1 + investReturn)
@@ -223,7 +223,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().rentMonthly}
-                oninput={(e) => handleInput('rentMonthly' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('rentMonthly' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -232,7 +232,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.1"
                 value={formData().rentIncrease}
-                oninput={(e) => handleInput('rentIncrease' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('rentIncrease' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -241,7 +241,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.1"
                 value={formData().investReturn}
-                oninput={(e) => handleInput('investReturn' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('investReturn' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
           </div>
@@ -257,7 +257,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().homePrice}
-                oninput={(e) => handleInput('homePrice' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('homePrice' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -266,7 +266,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().downPayment}
-                oninput={(e) => handleInput('downPayment' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('downPayment' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -274,7 +274,7 @@ export default function RentBuyCalculator(props: Props) {
               <input
                 type="number"
                 value={formData().loanTerm}
-                oninput={(e) => handleInput('loanTerm' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('loanTerm' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -283,7 +283,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().interestRate}
-                oninput={(e) => handleInput('interestRate' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('interestRate' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -292,7 +292,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().propertyTax}
-                oninput={(e) => handleInput('propertyTax' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('propertyTax' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -301,7 +301,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().insurance}
-                oninput={(e) => handleInput('insurance' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('insurance' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -310,7 +310,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.1"
                 value={formData().maintenance}
-                oninput={(e) => handleInput('maintenance' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('maintenance' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -319,7 +319,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().hoa}
-                oninput={(e) => handleInput('hoa' as keyof typeof formData, Number(e.target.value))}
+                oninput={(e) => { handleInput('hoa' as keyof typeof formData, Number(e.target.value)); }}
               />
             </div>
           </div>

@@ -3555,6 +3555,86 @@ app.post("/api/loans/:id/calculate", apiRateLimiter, (req, res) => {
 });
 
 // ========================
+// DASHBOARD (aggregated endpoint)
+// ========================
+app.get("/api/dashboard", apiRateLimiter, async (req, res) => {
+  try {
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
+
+    // Get settings for currency
+    const currencyRow = db
+      .prepare(
+        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+      )
+      .get(...pids);
+    const currency = currencyRow ? currencyRow.value : 'EUR';
+
+    // Get summary (income, expenses, balance, recent transactions)
+    const year = new Date().getFullYear();
+    const monthPart = null;
+    const startDate = `${year}-01-01`;
+    const endDate = `${year + 1}-01-01`;
+
+    const monthly = db
+      .prepare(
+        `SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? GROUP BY type`,
+      )
+      .all(...pids, startDate, endDate);
+
+    const summary = { income: 0, expense: 0, balance: 0 };
+    for (const r of monthly) {
+      if (r.type === 'income') summary.income = r.total;
+      else if (r.type === 'expense') summary.expense = r.total;
+      else if (r.type === 'transfer') summary.balance += r.total;
+    }
+
+    const recent = db
+      .prepare(
+        `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date < ? ORDER BY t.date DESC, t.id DESC LIMIT 10`,
+      )
+      .all(...pids, startDate, endDate);
+
+    // Get category breakdown for expenses
+    const expenseByCategory = db
+      .prepare(
+        `SELECT c.name as category_name, c.color as category_color, SUM(COALESCE(t.amount_local, t.amount)) as total FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date < ? GROUP BY c.id, c.name, c.color ORDER BY total DESC`,
+      )
+      .all(...pids, startDate, endDate);
+
+    // Get account balances
+    const accounts = db
+      .prepare(
+        `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id IN (${inClause})`,
+      )
+      .all(...pids);
+    const balance = accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+
+    // Get upcoming bills
+    const today = new Date();
+    const upcomingBills = db
+      .prepare(
+        `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`,
+      )
+      .all(...pids, today.toISOString().split('T')[0], new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+
+    res.json({
+      totalIncome: summary.income,
+      totalExpenses: summary.expense,
+      balance,
+      incomeByCategory: [],
+      expenseByCategory,
+      recentTransactions: recent,
+      upcomingBills,
+    });
+  } catch (err) {
+    console.error(err.message);
+    logError('error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
 // DASHBOARD (per-profile, multi-profile for combined view)
 // ========================
 app.get("/api/dashboard/summary", apiRateLimiter, (req, res) => {

@@ -25,6 +25,8 @@
   },
   "rules": {
     "no-unused-vars": "warn",
-    "no-undef": "warn"
+    "no-undef": "warn",
+    "@typescript-eslint/namespace": "off",
+    "@typescript-eslint/no-unused-vars": "warn"
   }
 }

@@ -5,6 +5,7 @@ import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
 import solidPlugin from 'vite-plugin-solid'
 import solidSvg from 'vite-plugin-solid-svg'
+import { devtoolsPlugin as devtools } from 'solid-devtools/vite'
 
 const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 
@@ -29,6 +30,9 @@ export default defineConfig({
     solidPlugin(),
     ANALYZE_BUNDLE ? bundleAnalyzer() : undefined,
     solidSvg({ defaultAsComponent: true }),
+    devtools({
+      targetOrigin: 'auto',
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],

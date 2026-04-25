@@ -128,7 +128,7 @@ export default function Accounts() {
   }
 
   // Filter transactions by account (now just returns empty array if non-array)
-  const getAccountTransactions = (accountId: number) => {
+  const getAccountTransactions = (_accountId: number) => {
     const txs = transactions()
     return Array.isArray(txs) ? txs : []
   }

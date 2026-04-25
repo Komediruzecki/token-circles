@@ -2,13 +2,12 @@
  * Main App Component - Root component for the application
  */
 
-import { createSignal, onMount, Suspense, createMemo } from 'solid-js'
+import { createMemo,createSignal, onMount, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import { handlers, receipts, transactions } from './core/handlers.js'
 import { theme } from './core/theme.js'
-import { sidebar } from './styles/AppSidebar.module.css'
-import type { PageName, PageComponent } from './router.tsx'
 import { pages as allPages } from './router.tsx'
+import { sidebar } from './styles/AppSidebar.module.css'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -35,7 +34,6 @@ export function App() {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1) || 'dashboard'
       const page = hash as PageName
-      console.log('[Router] Hash changed to:', page)
 
       if (page in allPages) {
         setCurrentPage(page)

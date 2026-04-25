@@ -5,8 +5,8 @@
 import { createSignal, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import { formatCurrency } from '../core/api'
-import styles from './EmergencyFundCalculator.module.css'
 import { apiGet, showToast } from '../utils/api'
+import styles from './EmergencyFundCalculator.module.css'
 
 export default function EmergencyFundCalculator() {
   const [monthlyExpenses, setMonthlyExpenses] = createSignal(0)
@@ -35,7 +35,7 @@ export default function EmergencyFundCalculator() {
     }
   }
 
-  const coverageData = () => {
+  const _coverageData = () => {
     return coverage().map((c) => ({
       x: c.months,
       y: c.coveragePct,

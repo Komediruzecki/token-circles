@@ -103,10 +103,10 @@ export default function Bills() {
   }
 
   // Delete category
-  const deleteCategory = async (id: number) => {
+  const _deleteCategory = async (_id: number) => {
     if (!confirm('Delete this category? Bills linked to this category will be unaffected.')) return
     try {
-      await apiDelete(`/api/categories/${id}`)
+      await apiDelete(`/api/categories/${_id}`)
       showToast('Category deleted', 'success')
       loadCategories()
     } catch (err) {
