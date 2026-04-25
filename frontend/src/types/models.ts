@@ -31,6 +31,8 @@ export type PageName =
   | 'retirement'
   | 'housing'
   | 'analytics'
+  | 'compound'
+  | 'emergency'
 
 // ============ PROFILE ============
 export interface Profile {
