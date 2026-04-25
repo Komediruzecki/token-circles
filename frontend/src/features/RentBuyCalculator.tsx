@@ -342,7 +342,7 @@ export default function RentBuyCalculator(props: Props) {
                 <span>Investment Value</span>
                 <span class={styles.summaryValue}>{formatCurrency(summary.rentInvestmentValue, currency)}</span>
               </div>
-              <div class={styles.summaryRow highlight}>
+              <div class={`${styles.summaryRow} highlight`}>
                 <span>Net Cost</span>
                 <span class={styles.summaryValue}>{formatCurrency(summary.rentNetCost, currency)}</span>
               </div>
@@ -357,12 +357,12 @@ export default function RentBuyCalculator(props: Props) {
                 <span>Home Equity</span>
                 <span class={styles.summaryValue}>{formatCurrency(summary.buyEquity, currency)}</span>
               </div>
-              <div class={styles.summaryRow highlight}>
+              <div class={`${styles.summaryRow} highlight`}>
                 <span>Net Cost</span>
                 <span class={styles.summaryValue}>{formatCurrency(summary.buyNetCost, currency)}</span>
               </div>
             </div>
-            <div class={styles.summaryCard verdict}>
+            <div class={`${styles.summaryCard} verdict`}>
               <div class={styles.summaryTitle}>Comparison</div>
               <div class={styles.summaryRow}>
                 <span>Winner</span>
@@ -374,7 +374,7 @@ export default function RentBuyCalculator(props: Props) {
                 <span>Savings</span>
                 <span class={styles.summaryValue}>{formatCurrency(Math.abs(summary.savings), currency)}</span>
               </div>
-              <div class={styles.summaryRow highlight}>
+              <div class={`${styles.summaryRow} highlight`}>
                 <span>Break-even</span>
                 <span class={styles.summaryValue}>
                   {summary.breakEven ? `Year ${summary.breakEven}` : 'Not reached'}

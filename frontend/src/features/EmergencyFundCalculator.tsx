@@ -1,0 +1,177 @@
+/**
+ * Emergency Fund Tracker Component
+ * Calculates monthly expenses and compares against savings account balances
+ */
+import { createSignal, onMount } from 'solid-js'
+import Chart from '../components/Chart'
+import { formatCurrency } from '../core/api'
+import styles from './EmergencyFundCalculator.module.css'
+import { apiGet, showToast } from '../utils/api'
+
+export default function EmergencyFundCalculator() {
+  const [monthlyExpenses, setMonthlyExpenses] = createSignal(0)
+  const [totalEmergencyFund, setTotalEmergencyFund] = createSignal(0)
+  const [monthsWithData, setMonthsWithData] = createSignal(0)
+  const [coverage, setCoverage] = createSignal<any[]>([])
+  const [loading, setLoading] = createSignal(false)
+  const [showDetails, setShowDetails] = createSignal(false)
+
+  onMount(() => {
+    loadEmergencyFund()
+  })
+
+  const loadEmergencyFund = async () => {
+    setLoading(true)
+    try {
+      const data = await apiGet('/calculator/emergency-fund')
+      setMonthlyExpenses(data.avgMonthlyExpenses || 0)
+      setTotalEmergencyFund(data.totalEmergencyFund || 0)
+      setMonthsWithData(data.monthsWithData || 0)
+      setCoverage(data.coverage || [])
+    } catch (e: any) {
+      showToast(e.message || 'Failed to load emergency fund data', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const coverageData = () => {
+    return coverage().map((c) => ({
+      x: c.months,
+      y: c.coveragePct,
+      status: c.status,
+      required: c.required,
+      current: c.current,
+    }))
+  }
+
+  const downloadChart = () => {
+    const canvas = document.getElementById('emergencyFundChart') as HTMLCanvasElement
+    if (!canvas) return
+    const url = canvas.toDataURL('image/png')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'emergency-fund-chart.png'
+    a.click()
+  }
+
+  return (
+    <div class={styles.page}>
+      <div class={styles.pageHeader}>
+        <h1>💰 Emergency Fund Tracker</h1>
+        <p>Calculate coverage based on monthly expenses</p>
+      </div>
+
+      {loading() ? (
+        <div class={styles.loading}>Loading...</div>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div class={styles.summaryGrid}>
+            <div class={styles.summaryCard}>
+              <div class={styles.summaryTitle}>Based on</div>
+              <div class={styles.summaryValue}>{monthsWithData()} months</div>
+              <div class={styles.summarySubtitle}>
+                of transaction history
+              </div>
+            </div>
+            <div class={styles.summaryCard}>
+              <div class={styles.summaryTitle}>Average Monthly Expenses</div>
+              <div class={styles.summaryValue}>{formatCurrency(monthlyExpenses(), 'EUR')}</div>
+            </div>
+            <div class={styles.summaryCard}>
+              <div class={styles.summaryTitle}>Total Emergency Fund</div>
+              <div class={styles.summaryValue}>{formatCurrency(totalEmergencyFund(), 'EUR')}</div>
+            </div>
+          </div>
+
+          {/* Coverage Visualization */}
+          <div class={styles.chartSection}>
+            <Chart
+              id="emergencyFundChart"
+              type="bar"
+              data={{
+                labels: coverage().map((c) => c.label),
+                datasets: [
+                  {
+                    label: 'Coverage',
+                    data: coverage().map((c) => c.coveragePct),
+                    backgroundColor: coverage().map((c) => {
+                      if (c.status === 'complete') return 'rgba(16, 185, 129, 0.8)'
+                      if (c.status === 'partial') return 'rgba(245, 158, 11, 0.8)'
+                      return 'rgba(239, 68, 68, 0.8)'
+                    }),
+                    borderColor: coverage().map((c) => {
+                      if (c.status === 'complete') return 'rgb(16, 185, 129)'
+                      if (c.status === 'partial') return 'rgb(245, 158, 11)'
+                      return 'rgb(239, 68, 68)'
+                    }),
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { color: 'var(--text)' },
+                    grid: { color: 'var(--border)' },
+                    title: { display: true, text: 'Coverage %', color: 'var(--text)' },
+                  },
+                  x: {
+                    ticks: { color: 'var(--text)' },
+                    grid: { color: 'var(--border)' },
+                  },
+                },
+                plugins: {
+                  legend: { display: false },
+                },
+              }}
+              height={300}
+              width="100%"
+            />
+            <button class={styles.btnSecondary} onClick={downloadChart}>
+              Download Chart
+            </button>
+          </div>
+
+          {/* Coverage Details */}
+          <div class={styles.detailsSection}>
+            <div class={styles.detailsHeader}>
+              <h3>Coverage Levels</h3>
+              <button class={styles.toggleBtn} onClick={() => setShowDetails(!showDetails())}>
+                {showDetails() ? 'Hide' : 'Show'} Details
+              </button>
+            </div>
+
+            {showDetails() && (
+              <div class={styles.coverageGrid}>
+                {coverage().map((c) => (
+                  <div class={`coverage-item ${c.status}`}>
+                    <div class={styles.coverageTitle}>{c.label} Fund</div>
+                    <div class={styles.coverageBars}>
+                      <div class={styles.progressBar}>
+                        <div
+                          class={styles.progressFill}
+                          style={{ width: `${c.coveragePct}%` }}
+                        ></div>
+                      </div>
+                      <div class={styles.progressStats}>
+                        <span>{formatCurrency(c.current, 'EUR')}</span>
+                        <span>of {formatCurrency(c.required, 'EUR')}</span>
+                      </div>
+                    </div>
+                    <div class={styles.coverageStatus}>{c.status}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

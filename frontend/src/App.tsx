@@ -331,6 +331,51 @@ export function App() {
               Bills
             </a>
             <a
+              class={`${sidebar.sidebarLink} ${currentPage() === 'rentBuy' ? sidebar.active : ''}`}
+              href="#rentBuy"
+              data-page="rentBuy"
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                />
+              </svg>
+              Rent vs Buy
+            </a>
+            <a
+              class={`${sidebar.sidebarLink} ${currentPage() === 'compound' ? sidebar.active : ''}`}
+              href="#compound"
+              data-page="compound"
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                />
+              </svg>
+              Compound Interest
+            </a>
+            <a
+              class={`${sidebar.sidebarLink} ${currentPage() === 'emergency' ? sidebar.active : ''}`}
+              href="#emergency"
+              data-page="emergency"
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                />
+              </svg>
+              Emergency Fund
+            </a>
+            <a
               class={`${sidebar.sidebarLink} ${currentPage() === 'retirement' ? sidebar.active : ''}`}
               href="#retirement"
               data-page="retirement"
