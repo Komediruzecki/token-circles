@@ -2,12 +2,13 @@
  * Main App Component - Root component for the application
  */
 
-import { createMemo,createSignal, onMount, Suspense } from 'solid-js'
+import { createMemo, createSignal, onMount, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import { handlers, receipts, transactions } from './core/handlers.js'
 import { theme } from './core/theme.js'
 import { pages as allPages } from './router.tsx'
 import { sidebar } from './styles/AppSidebar.module.css'
+import { PageLoader } from './components/PageLoader'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts

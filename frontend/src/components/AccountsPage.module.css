@@ -226,19 +226,7 @@
   font-size: 14px;
 }
 
-/* Page structure classes (from base.css) */
-.accountsPage .page {
-  display: block;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.accountsPage .page-enter {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.accountsPage .page-accounts {
-  display: block;
-}
+/* Note: page structure classes are handled by base.css directly on the element */
 
 /* Page Header */
 .accountsPage .pageHeader {
