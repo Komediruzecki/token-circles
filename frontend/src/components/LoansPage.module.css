@@ -156,6 +156,92 @@
   padding: 16px;
 }
 
+.amort-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.amort-table th,
+.amort-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.amort-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.amort-table td {
+  color: var(--text);
+}
+
+.amort-table td.income {
+  color: var(--income);
+}
+
+.amort-table td.expense {
+  color: var(--expense);
+}
+
+.amort-table td.td-amount {
+  text-align: right;
+  font-weight: 500;
+}
+
+.amort-detailed-wrap {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.amort-detailed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.amort-detailed-table th,
+.amort-detailed-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.amort-detailed-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.amort-detailed-table td {
+  color: var(--text);
+}
+
+.amort-detailed-table td.td-amount {
+  text-align: right;
+  font-weight: 500;
+}
+
+.prepayment-row {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.rate-change-row {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.year-marker {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.totals-row {
+  background: var(--bg);
+  font-weight: 600;
+}
+
 /* Legacy class mappings for Loans page */
 .loans-summary {
   display: grid;
@@ -418,6 +504,92 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+}
+
+.amort-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.amort-table th,
+.amort-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.amort-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.amort-table td {
+  color: var(--text);
+}
+
+.amort-table td.income {
+  color: var(--income);
+}
+
+.amort-table td.expense {
+  color: var(--expense);
+}
+
+.amort-table td.td-amount {
+  text-align: right;
+  font-weight: 500;
+}
+
+.amort-detailed-wrap {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.amort-detailed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.amort-detailed-table th,
+.amort-detailed-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.amort-detailed-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.amort-detailed-table td {
+  color: var(--text);
+}
+
+.amort-detailed-table td.td-amount {
+  text-align: right;
+  font-weight: 500;
+}
+
+.prepayment-row {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.rate-change-row {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.year-marker {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.totals-row {
+  background: var(--bg);
+  font-weight: 600;
 }
 
 .formGroup {

@@ -1,131 +1,61 @@
-# Finance Manager
+# Finance Manager - Personal Finance Tracker
 
-A personal finance tracking web application with transaction management, budgeting, loan amortization calculations, and data import/export capabilities.
+A comprehensive personal finance management application built with SolidJS for the frontend and Express for the backend.
 
 ## Tech Stack
 
-- **Frontend**: Vanilla JavaScript SPA served as static files (modular architecture)
+- **Frontend**: SolidJS + TypeScript + Vite
 - **Backend**: Node.js + Express REST API
-- **Database**: SQLite (better-sqlite3) with WAL mode
+- **Database**: SQLite (better-sqlite3) with WAL mode - also supports PostgreSQL
 - **Charts**: Chart.js
 - **PDF Generation**: PDFKit (fallback) and Puppeteer (charts)
-- **Data Import**: XLSX (Excel) and Google Sheets
+- **Data Import**: XLSX (Excel)
 
 ## Project Structure
 
 ```
-/
-├── frontend/          # Static HTML/JS/CSS served by Apache
-│   ├── index.html     # Combined SPA output (all modules included)
-│   ├── css/           # Modular stylesheets
-│   │   ├── base.css       # Reset, variables, theme, layout, cards, forms, tables
-│   │   └── components.css # Modal, tabs, filters, pagination, toasts, toggles
-│   ├── js/            # Modular JavaScript
-│   │   ├── core/           # api(), auth, router, theme, modal helpers
-│   │   ├── features/       # dashboard, transactions, budgets, loans, analytics, etc.
-│   │   └── app.js          # Bootstrap/initialization
-│   └── templates/     # HTML fragments (sidebar, modals, page sections)
-├── backend/           # Express API server
-│   ├── index.js       # API routes and server setup
-│   └── database.js    # SQLite schema, migrations, and seed data
-├── db/                # SQLite database files (created on first run)
-├── assets/            # User-uploaded assets
-├── test/              # Jest test suites
-├── deploy.sh          # Server deployment script
-└── package.json       # Node.js dependencies
+finance-manager/
+├── .github/           # GitHub workflows and CI/CD configuration
+├── .claude/           # Claude Code project settings
+├── backend/           # Node.js/Express backend API
+│   ├── index.js       # Main server entry point
+│   ├── database.js    # SQLite schema, migrations, and seed data
+│   ├── models/        # Business logic
+│   └── package.json   # Backend dependencies
+├── frontend/          # SolidJS + TypeScript frontend
+│   ├── src/           # Source code (components, features, core)
+│   ├── package.json   # Frontend dependencies
+│   ├── vite.config.js # Vite configuration
+│   └── index.html     # Production build output
+├── docs/              # Documentation and migration reports
+├── db/                # SQLite database files
+├── logs/              # Application logs
+└── test/              # E2E tests
 ```
 
-## Setup
+## Installation
 
-### Prerequisites
+```bash
+# Install all dependencies (backend and frontend)
+npm install
+```
 
-- Node.js 20+
-- npm
-- Apache2 (for production deployment)
+## Development
 
-### Local Development
+```bash
+# Start frontend development server
+npm run dev
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+# Start backend server
+npm run start
+```
 
-2. **Build the frontend:**
-   ```bash
-   npm run build
-   ```
-   This bundles all JS/CSS modules into `frontend/index.html` using esbuild. Re-run after making frontend changes.
+## Building
 
-3. **Start the backend server:**
-   ```bash
-   npm start
-   ```
-   The server runs on `http://localhost:3847` by default. Set `PORT` env var to change.
-
-4. **Serve the frontend:**
-   The frontend is a static SPA. For local development, you can:
-   - Open `frontend/index.html` directly in a browser, or
-   - Use any static file server:
-     ```bash
-     npx serve frontend
-     ```
-
-   Note: When serving locally (not through Apache), update the `API` constant in `frontend/index.html` to point to your backend URL:
-   ```javascript
-   const API = 'http://localhost:3847/api/';
-   ```
-
-### Production Deployment
-
-1. Clone the repository on the server:
-   ```bash
-   git clone https://github.com/Komediruzecki/finance-manager.git
-   cd finance-manager
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Build the frontend:
-   ```bash
-   npm run build
-   ```
-
-4. Run the deployment script:
-   ```bash
-   ./deploy.sh
-   ```
-
-4. Configure Apache to proxy API requests and serve static files. Example config:
-   ```apache
-   <VirtualHost *:443>
-       ServerName your-domain.com
-       DocumentRoot /path/to/finance-manager/frontend
-
-       # Proxy API to Node backend
-       ProxyPreserveHost On
-       ProxyPass /api/ http://127.0.0.1:3847/api/
-       ProxyPassReverse /api/ http://127.0.0.1:3847/api/
-
-       <Directory /path/to/finance-manager/frontend>
-           Options Indexes FollowSymLinks
-           AllowOverride All
-           Require all granted
-       </Directory>
-   </VirtualHost>
-   ```
-
-5. Start the backend:
-   ```bash
-   cd backend && NODE_PATH=../node_modules node index.js &
-   ```
-
-5. Reload Apache:
-   ```bash
-   sudo systemctl reload apache2
-   ```
+```bash
+# Build frontend for production
+npm run build
+```
 
 ## Features
 

@@ -1,5 +1,6 @@
 // Jest setup for finance-manager tests
 // Suppress console output during tests unless there's a failure
+/* eslint-disable no-undef */
 if (process.env.NODE_ENV === 'test') {
   global.console = {
     ...console,

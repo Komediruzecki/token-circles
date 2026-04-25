@@ -2,7 +2,7 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createSignal, onMount } from 'solid-js'
+import { createEffect,createSignal, onMount } from 'solid-js'
 import styles from '../components/AnalyticsPage.module.css'
 import Chart from '../components/Chart'
 import { formatCurrency } from '../core/api'
@@ -18,17 +18,19 @@ interface AnalyticsData {
 export default function Analytics() {
   const [data, setData] = createSignal<AnalyticsData | null>(null)
   const [loading, setLoading] = createSignal(true)
-  const [selectedChart, setSelectedChart] = createSignal<'category' | 'monthly' | 'savings'>(
+  const [selectedChart, setSelectedChart] = createSignal<'category' | 'monthly' | 'savings' | 'heatmap'>(
     'category'
   )
+  const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
+  const [heatmapType, setHeatmapType] = createSignal<'income' | 'expense'>('expense')
+  const [heatmapData, setHeatmapData] = createSignal<Map<string, number>>(new Map())
 
   // Load analytics data
   const loadData = async () => {
     setLoading(true)
     try {
-      const [categoryRes, heatmapRes, transactionsRes] = await Promise.all([
+      const [categoryRes, transactionsRes] = await Promise.all([
         apiGet<any>('/api/analytics/category-trends'),
-        apiGet<any>('/api/analytics/daily-heatmap?year=2026'),
         apiGet<any>('/api/transactions/summary'),
       ])
 
@@ -39,45 +41,12 @@ export default function Analytics() {
         amount: d.data[d.data.length - 1] || 0,
       }))
 
-      // Transform heatmap to monthly data (last 6 months)
-      const monthMap = new Map<string, { income: number; expense: number }>()
-
-      if (heatmapRes.dates) {
-        Object.entries(heatmapRes.dates).forEach(([date, amount]) => {
-          const numAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0
-          if (numAmount > 0) {
-            const monthKey = date.slice(0, 7)
-            if (!monthMap.has(monthKey)) {
-              monthMap.set(monthKey, { income: 0, expense: 0 })
-            }
-            monthMap.get(monthKey)!.expense += numAmount
-          }
-        })
-      }
-
-      // Add current month if no data
-      const now = new Date()
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      if (!monthMap.has(currentMonth)) {
-        monthMap.set(currentMonth, { income: 0, expense: 0 })
-      }
-
-      // Get last 6 months sorted by month key
-      const byMonth = Array.from(monthMap.entries())
-        .slice(-6)
-        .map(([month, values]) => ({
-          month,
-          income: values.income,
-          expense: values.expense,
-        }))
-        .sort((a, b) => b.month.localeCompare(a.month))
-
       // Recent transactions from summary
       const recentTransactions: any[] = []
 
       setData({
         byCategory,
-        byMonth,
+        byMonth: [],
         recentTransactions,
         savingsRate: transactionsRes
           ? ((transactionsRes.total_income - transactionsRes.total_expense) /
@@ -90,6 +59,25 @@ export default function Analytics() {
       showToast('Failed to load analytics data', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Load heatmap data
+  const loadHeatmapData = async () => {
+    try {
+      const res = await apiGet<any>(`/api/analytics/daily-heatmap?year=${heatmapYear()}&type=${heatmapType()}`)
+      const dataMap = new Map<string, number>()
+      if (res.dates) {
+        Object.entries(res.dates).forEach(([date, amount]) => {
+          const numAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0
+          if (numAmount > 0) {
+            dataMap.set(date, numAmount)
+          }
+        })
+      }
+      setHeatmapData(dataMap)
+    } catch (err) {
+      console.error('Failed to load heatmap', err)
     }
   }
 
@@ -115,6 +103,16 @@ export default function Analytics() {
 
   onMount(() => {
     loadData()
+    // Load heatmap data on initial load
+    loadHeatmapData()
+  })
+
+  // Load heatmap data when year or type changes
+  const Effect = createEffect as any
+  Effect(() => {
+    if (selectedChart() === 'heatmap') {
+      loadHeatmapData()
+    }
   })
 
   return (
@@ -182,6 +180,12 @@ export default function Analytics() {
               onClick={() => setSelectedChart('savings')}
             >
               Savings Rate
+            </button>
+            <button
+              class={`tab ${selectedChart() === 'heatmap' ? 'active' : ''}`}
+              onClick={() => setSelectedChart('heatmap')}
+            >
+              Spending Heatmap
             </button>
           </div>
 
@@ -360,6 +364,129 @@ export default function Analytics() {
                     </li>
                   </ul>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Heatmap Chart */}
+          {selectedChart() === 'heatmap' && (
+            <div class={styles.analyticsChart}>
+              <div class={styles.heatmapHeader}>
+                <h3 class={styles.chartTitle}>Spending Heatmap</h3>
+                <div class={styles.heatmapControls}>
+                  <select
+                    class={styles.heatmapYearSelect}
+                    value={heatmapYear()}
+                    onchange={(e) => setHeatmapYear(Number(e.currentTarget.value))}
+                  >
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const year = heatmapYear() - 2 + i
+                      return <option value={year}>{year}</option>
+                    })}
+                  </select>
+                  <select
+                    class={styles.heatmapTypeSelect}
+                    value={heatmapType()}
+                    onchange={(e) => setHeatmapType(e.currentTarget.value as 'income' | 'expense')}
+                  >
+                    <option value="expense">Expenses</option>
+                    <option value="income">Income</option>
+                  </select>
+                </div>
+              </div>
+              <div class={styles.chartContainer}>
+                {heatmapData().size === 0 ? (
+                  <div class={styles.emptyState}>No data available for this year</div>
+                ) : (
+                  <>
+                    <div class={styles.heatmapContainer}>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}>Mon</div>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}>Wed</div>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}>Fri</div>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
+                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
+
+                      {/* Week container */}
+                      <div class={styles.heatmapWeeks}>
+                        {Array.from({ length: 52 }, (_, weekIndex) => {
+                          const weekCells: Array<{
+                            day: number
+                            date: Date
+                            amount: number
+                          }> = []
+                          for (let d = 0; d < 7; d++) {
+                            const date = new Date(heatmapYear(), 0, 1)
+                            date.setDate(date.getDate() + weekIndex * 7 + d + 1)
+                            const dateStr = date.toISOString().split('T')[0]
+                            const amount = heatmapData().get(dateStr) || 0
+                            if (date.getFullYear() === heatmapYear()) {
+                              weekCells.push({ day: d, date, amount })
+                            }
+                          }
+                          if (weekCells.length === 0) return null
+
+                          return (
+                            <div class={styles.heatmapWeek}>
+                              {weekCells.map((cell) => {
+                                const maxAmount = Math.max(...Array.from(heatmapData().values()), 0)
+                                const cellSize = 14
+                                const intensity =
+                                  maxAmount > 0 && cell.amount > 0
+                                    ? Math.round((cell.amount / maxAmount) * 100)
+                                    : 0
+                                const bgColor =
+                                  heatmapType() === 'income'
+                                    ? `rgba(74, 222, 128, ${0.1 + intensity / 400})`
+                                    : intensity > 0
+                                      ? `rgba(34, 197, 94, ${0.1 + intensity / 400})`
+                                      : 'rgba(239, 68, 68, 0.1)'
+                                return (
+                                  <div
+                                    class={styles.heatmapCell}
+                                    style={{
+                                      width: `${cellSize}px`,
+                                      height: `${cellSize}px`,
+                                      backgroundColor: bgColor,
+                                    }}
+                                    title={`${cell.date.toLocaleDateString()}: ${formatCurrency(cell.amount)}`}
+                                  />
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Month labels */}
+                      <div class={styles.monthLabel}></div>
+                    </div>
+
+                    {/* Legend */}
+                    <div class={styles.heatmapLegend}>
+                      <span class={styles.heatmapLegendLabel}>{heatmapType()} Amount</span>
+                      <div class={styles.heatmapScale}>
+                        <span
+                          class={styles.heatmapScaleColor}
+                          style={{ backgroundColor: heatmapType() === 'income' ? 'rgba(74, 222, 128, 0.1)' : 'rgba(34, 197, 94, 0.1)' }}
+                        />
+                        <span
+                          class={styles.heatmapScaleColor}
+                          style={{ backgroundColor: heatmapType() === 'income' ? 'rgba(74, 222, 128, 0.4)' : 'rgba(34, 197, 94, 0.4)' }}
+                        />
+                        <span
+                          class={styles.heatmapScaleColor}
+                          style={{ backgroundColor: heatmapType() === 'income' ? 'rgba(74, 222, 128, 0.7)' : 'rgba(34, 197, 94, 0.7)' }}
+                        />
+                        <span
+                          class={styles.heatmapScaleColor}
+                          style={{ backgroundColor: heatmapType() === 'income' ? 'rgba(74, 222, 128, 1)' : 'rgba(34, 197, 94, 1)' }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

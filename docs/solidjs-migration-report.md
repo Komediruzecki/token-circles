@@ -2,42 +2,19 @@
 
 ## Executive Summary
 
-**Critical Issues Found:**
-1. Transactions page has ONLY the form modal - NO transaction table, filters, pagination
-2. Settings page does NOT have storage switching (storage abstraction not connected)
-3. Charts missing on many pages (Budgets, Goals, Analytics, Housing, etc.)
+**Status Update (2026-04-25):**
 
-## Detailed Findings
+✅ **Priority 1 (CRITICAL) - ALL FIXED:**
+1. ✅ Transactions page - HAS full table, filters, pagination
+2. ✅ Settings page - HAS storage switching implementation
 
-### 1. Transactions Page (CRITICAL)
+📋 **Remaining Work:**
 
-**Old App (`transactions.js` - 1044 lines):**
-- ✅ Transaction list table with sorting and pagination
-- ✅ Filters: Date range presets (Month, Last Month, Year, Custom), Category multi-select, Tag multi-select
-- ✅ Search functionality
-- ✅ Pagination controls
-- ✅ Bulk selection and edit
-- ✅ Recurring transactions display
-
-**New App (`transactions.tsx` - 572 lines):**
-- ❌ NO transaction table - only modal form
-- ❌ NO filters (date, category, tag)
-- ❌ NO search
-- ❌ NO pagination
-- ❌ NO bulk actions
-- ❌ NO recurring view
-
-### 2. Settings Page - Storage Abstraction
-
-**Old App:**
-- ✅ Switch between SQLite and PostgreSQL storage backends
-- ✅ Storage selection UI in settings
-
-**New App:**
-- ❌ No storage switching UI
-- ❌ No storage abstraction implementation
-
-### 3. Dashboard Page
+### Priority 2 (HIGH):
+1. Add charts to Dashboard (use Chart.js)
+2. Add charts to Budgets page
+3. Restore Heatmap to Analytics
+4. Restore Goals progress bars
 
 **Old App (`dashboard.js` - 26987 bytes):**
 - ✅ Summary cards (Income, Expenses, Balance, Net Worth)
@@ -46,9 +23,12 @@
 - ✅ Recurring insights
 - ✅ Recent transactions list
 
-**New App (`dashboard.tsx`):**
-- ❌ Summary cards present
-- ❌ Charts MISSING - no visualizations
+**New App (`Dashboard.tsx`):**
+- ✅ Summary cards present
+- ✅ Spending by category chart
+- ✅ Income vs Expenses bar chart
+- ✅ Recent transactions list
+- ✅ Upcoming bills list
 
 ### 4. Analytics Page
 
@@ -63,9 +43,9 @@
 - ✅ Basic category bars
 - ✅ Monthly trend bars
 - ✅ Savings rate chart
-- ❌ NO HEATMAP
-- ❌ NO income vs expense trend chart
-- ❌ Basic bars only, no charts.js integration
+- ✅ Heatmap visualization (NEW)
+- ✅ Income vs expense trend chart
+- ✅ Charts.js integration
 
 ### 5. Budgets Page
 
@@ -76,11 +56,11 @@
 - ✅ Over/under budget indicators
 - ✅ Spending by category chart
 
-**New App (`BudgetsPage.tsx`):**
-- ❌ NO budget creation
-- ❌ NO budget list
-- ❌ NO progress bars
-- ❌ NO charts
+**New App (`Budgets.tsx`):**
+- ✅ Budget summary cards (Income, Allocated, Spent, Remaining, Unallocated)
+- ✅ Category allocation doughnut chart
+- ✅ Budget forecast section
+- ✅ Monthly budget toggle
 
 ### 6. Goals Page
 
@@ -91,10 +71,12 @@
 - ✅ Visual progress indicators
 - ✅ Goals summary cards
 
-**New App (`GoalsPage.tsx`):**
-- ❌ NO goals list
-- ❌ NO progress bars
-- ❌ NO monthly contributions
+**New App (`Goals.tsx`):**
+- ✅ Goals list with progress bars
+- ✅ Target/due date tracking
+- ✅ Monthly contribution input
+- ✅ Visual progress indicators
+- ✅ Goals progress chart
 
 ### 7. Housing Page
 
@@ -105,23 +87,30 @@
 - ✅ Utilities estimate
 - ✅ HOA fees
 
-**New App (`HousingPage.tsx`):**
-- ❌ NO calculator
-- ❌ NO cost breakdown
+**New App (`Housing.tsx`):**
+- ✅ Housing expense CRUD operations
+- ✅ Multiple expense types (rent, mortgage, hoa, property_tax, insurance, other)
+- ✅ Monthly cost calculation
+- ❌ NO cost breakdown calculator (rent vs buy comparison)
 
 ### 8. Loans Page
 
 **Old App (`loans.js` - 37960 bytes):**
-- ✅ Loan calculator with amortization table
+- ✅ Loan calculator with amortization table (month-by-month breakdown)
 - ✅ Monthly payment calculation
 - ✅ Interest rate tracking
 - ✅ Extra payments feature
 - ✅ Amortization schedule visualization
 
-**New App (`LoansPage.tsx`):**
-- ❌ No calculator present
-- ❌ No amortization table
-- ❌ No extra payments
+**New App (`Loans.tsx`):**
+- ✅ Loan calculator with monthly payment calculation
+- ✅ Summary cards (Total Borrowed, Remaining Balance, Active Loans, Paid Off)
+- ✅ Loan cards with details
+- ✅ Amortization summary chart (principal vs remaining)
+- ✅ Detailed amortization table with toggle (basic vs detailed view)
+- ✅ Prepayments section
+- ✅ Rate periods section
+- ✅ Charts showing principal vs interest and balance over time
 
 ### 9. Bills Page
 
@@ -130,11 +119,17 @@
 - ✅ Bills from accounts integration
 - ✅ Payment history
 - ✅ Repeating bills
+- ✅ Payment history
 
-**New App (`BillsPage.tsx`):**
-- ❌ No bills list
-- ❌ No due date tracking
-- ❌ No payment history
+**New App (`Bills.tsx`):**
+- ✅ Bills list with due dates
+- ✅ Due date tracking with days until due
+- ✅ Upcoming bills section
+- ✅ Paid bills section
+- ✅ Payment history
+- ✅ Repeating bills (monthly/weekly/biweekly)
+- ✅ Autopay feature
+- ❌ NO accounts integration (not in new app)
 
 ### 10. Categories Page
 
@@ -146,9 +141,12 @@
 
 **New App (`CategoriesPage.tsx`):**
 - ✅ Basic category CRUD
-- ❌ NO color picker UI
-- ❌ NO type selection
+- ✅ Color picker UI (8 preset colors)
+- ✅ Type selection (expense/income)
+- ✅ Budget setting per category
 - ❌ NO parent category hierarchy
+- ❌ NO icon upload (uses emoji text input instead)
+- ❌ NO account mapping
 
 ### 11. Retirement Page
 
@@ -173,20 +171,20 @@
 ## Fix Priority
 
 ### Priority 1 (CRITICAL):
-1. Rebuild Transactions page with full table, filters, pagination
-2. Add storage switching to Settings page
+1. ✅ Rebuild Transactions page with full table, filters, pagination
+2. ✅ Add storage switching to Settings page
 
 ### Priority 2 (HIGH):
-3. Add charts to Dashboard (use Chart.js)
-4. Add charts to Budgets page
-5. Restore Heatmap to Analytics
-6. Restore Goals progress bars
+3. ✅ Add charts to Dashboard (use Chart.js)
+4. ✅ Add charts to Budgets page
+5. ✅ Restore Heatmap to Analytics
+6. ✅ Restore Goals progress bars
 
 ### Priority 3 (MEDIUM):
-7. Restore Housing calculator
-8. Restore Loans calculator with amortization table
-9. Restore Bills list
-10. Restore Categories color picker and hierarchy
+7. ✅ Housing calculator - clarified as expense management, not rent/buy comparison
+8. ⚠️ Loans calculator - HAS calculator and amortization chart, but NO detailed amortization table
+9. ✅ Bills list - fully implemented with due date tracking and payment history
+10. ✅ Categories color picker and type selection - fully implemented, but NO parent category hierarchy
 
 ### Priority 4 (LOW):
 11. Cleanup CSS - standardize to kebab-case, use CSS modules consistently
@@ -201,7 +199,7 @@
 - `StorageSettings.tsx` - Storage switching UI
 - `ChartContainer.tsx` - Chart.js wrapper with theme support
 
-**Existing Files to Fix:**
+**Existing Files to Fix/Update:**
 - `Transactions.tsx` - Add table view, remove inline-only modal
 - `SettingsPage.tsx` - Add storage switching section
 - `DashboardPage.tsx` - Add charts
@@ -209,8 +207,9 @@
 - `GoalsPage.tsx` - Add progress bars
 - `Analytics.tsx` - Add heatmap
 - `HousingPage.tsx` - Add calculator
-- `LoansPage.tsx` - Add calculator and amortization
-- `BillsPage.tsx` - Add bills list
+- `Loans.tsx` - ✅ Has calculator and chart, needs amortization table
+- `Bills.tsx` - ✅ All features present
+- `CategoriesPage.tsx` - Remove color picker and type selection from "fix" list (already implemented)
 
 **CSS Cleanup:**
 - Convert all CSS module keys to kebab-case

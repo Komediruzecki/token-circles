@@ -369,6 +369,107 @@
   color: var(--expense);
 }
 
+.heatmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.heatmap-header .chart-title {
+  margin-bottom: 0;
+}
+
+.heatmapControls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.heatmapYearSelect,
+.heatmapTypeSelect {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.heatmapYearSelect:focus,
+.heatmapTypeSelect:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.heatmapContainer {
+  position: relative;
+  min-width: 800px;
+}
+
+.dayLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.heatmapWeeks {
+  display: grid;
+  gap: 2px;
+}
+
+.heatmapWeek {
+  display: flex;
+  gap: 2px;
+}
+
+.heatmapCell {
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.heatmapCell:hover {
+  opacity: 0.8;
+}
+
+.monthLabel {
+  height: 20px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.heatmapLegend {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+}
+
+.heatmapLegendLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.heatmapScale {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.heatmapScaleColor {
+  width: 20px;
+  height: 8px;
+  border-radius: 2px;
+}
+
 /* Legacy class mappings for Analytics page */
 .analytics-stats {
   display: grid;

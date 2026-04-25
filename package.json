@@ -1,21 +1,26 @@
 {
   "name": "finance-manager",
   "version": "1.1.0",
-  "description": "Personal Finance Tracker - Monorepo",
+  "description": "Personal Finance Tracker - Monorepo Root",
   "private": true,
   "workspaces": [
     "frontend",
     "backend"
   ],
   "scripts": {
+    "install": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
     "dev": "cd frontend && npm run dev",
     "start": "cd backend && npm run start",
     "build": "cd frontend && npm run build",
     "lint": "cd frontend && npm run lint",
     "lint:backend": "cd backend && npm run lint",
+    "format": "cd frontend && npm run format",
     "test": "cd frontend && npm run test",
-    "test:backend": "NODE_ENV=test node_modules/.bin/jest --testPathPattern test/backend",
-    "test:ci": "NODE_ENV=test node_modules/.bin/jest --coverage --testPathPattern test/backend",
-    "format": "cd frontend && npm run format"
+    "test:backend": "cd backend && npm run test"
+  },
+  "dependencies": {
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
