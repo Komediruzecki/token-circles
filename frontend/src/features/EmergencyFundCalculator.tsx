@@ -23,7 +23,7 @@ export default function EmergencyFundCalculator() {
   const loadEmergencyFund = async () => {
     setLoading(true)
     try {
-      const data = await apiGet('/calculator/emergency-fund')
+      const data = await apiGet('/api/calculator/emergency-fund')
       setMonthlyExpenses(data.avgMonthlyExpenses || 0)
       setTotalEmergencyFund(data.totalEmergencyFund || 0)
       setMonthsWithData(data.monthsWithData || 0)
@@ -71,9 +71,7 @@ export default function EmergencyFundCalculator() {
             <div class={styles.summaryCard}>
               <div class={styles.summaryTitle}>Based on</div>
               <div class={styles.summaryValue}>{monthsWithData()} months</div>
-              <div class={styles.summarySubtitle}>
-                of transaction history
-              </div>
+              <div class={styles.summarySubtitle}>of transaction history</div>
             </div>
             <div class={styles.summaryCard}>
               <div class={styles.summaryTitle}>Average Monthly Expenses</div>

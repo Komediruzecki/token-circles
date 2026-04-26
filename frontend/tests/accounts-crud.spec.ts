@@ -8,7 +8,7 @@ test.describe('Accounts CRUD Operations', () => {
     // Wait for the page header to be visible (accounts page loads even if empty)
     await page.waitForSelector('[data-test-id="accounts-header"], .emptyState', {
       state: 'visible',
-      timeout: 10000
+      timeout: 10000,
     })
 
     // Wait for page content to stabilize
@@ -236,7 +236,7 @@ test.describe('Accounts CRUD Operations', () => {
 
     const accountCards = page.getByTestId('account-card')
     const deleteBtns = accountCards.locator('button').filter({
-      has: accountCards.locator('svg path[d*="M19 7l-.867"]')
+      has: accountCards.locator('svg path[d*="M19 7l-.867"]'),
     })
     const count = await deleteBtns.count()
     expect(count).toBeGreaterThanOrEqual(0)

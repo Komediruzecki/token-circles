@@ -136,7 +136,14 @@ export default function Bills() {
       await apiPost('/api/bills', data)
       showToast('Bill saved successfully', 'success')
       setShowAddModal(false)
-      setFormData({ name: '', amount: '', due_date: '', category: '', frequency: 'monthly', autopay: false })
+      setFormData({
+        name: '',
+        amount: '',
+        due_date: '',
+        category: '',
+        frequency: 'monthly',
+        autopay: false,
+      })
       loadBills()
     } catch (err) {
       console.error('Failed to save bill:', err)
@@ -553,7 +560,10 @@ export default function Bills() {
                   class={styles.formControl}
                   value={categoryForm().type}
                   oninput={(e) =>
-                    setCategoryForm({ ...categoryForm(), type: e.target.value as 'expense' | 'income' })
+                    setCategoryForm({
+                      ...categoryForm(),
+                      type: e.target.value as 'expense' | 'income',
+                    })
                   }
                 >
                   <option value="expense">Expense</option>

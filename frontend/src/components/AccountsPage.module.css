@@ -2,26 +2,24 @@
   margin-top: 24px;
 }
 
-.accountsPage .pageHeader {
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.headerTop {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
-.accountsPage .pageHeader h1 {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.accountsPage .pageSubtitle {
+.pageSubtitle {
   color: var(--text-secondary);
   font-size: 14px;
-  margin-top: 4px;
 }
 
-.accountsPage .addAccountBtn {
+.addAccountBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -36,225 +34,18 @@
   color: #fff;
 }
 
-.accountsPage .addAccountBtn:hover {
+.addAccountBtn:hover {
   background: var(--primary-hover);
 }
 
-.accountsPage .accountsSummary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.accountsPage .summaryCard {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-}
-
-.accountsPage .summaryCard.balance::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--primary);
-}
-
-.accountsPage .summaryCard.income::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--income);
-}
-
-.accountsPage .summaryCard.expenses::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--expense);
-}
-
-.accountsPage .summaryLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.accountsPage .summaryValue {
-  font-size: 20px;
-  font-weight: 700;
-  margin-top: 6px;
-  color: var(--text);
-}
-
-.accountsPage .summaryValue.income {
-  color: var(--income);
-}
-
-.accountsPage .summaryValue.expenses {
-  color: var(--expense);
-}
-
-.accountsPage .accountsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.accountsPage .accountCard {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  position: relative;
-  overflow: hidden;
-}
-
-.accountsPage .accountCard:hover {
-  border-color: var(--primary);
-}
-
-.accountsPage .accountHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-}
-
-.accountsPage .accountIcon {
-  font-size: 32px;
-  flex-shrink: 0;
-}
-
-.accountsPage .accountActions {
-  display: flex;
-  gap: 4px;
-}
-
-.accountsPage .accountName {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-.accountsPage .accountBank {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-}
-
-.accountsPage .accountBalance {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.accountsPage .balanceLabel {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 2px;
-}
-
-.accountsPage .balanceAmount {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.accountsPage .accountActivity {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
-}
-
-.accountsPage .activityItem {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.accountsPage .activityItem:last-child {
-  margin-bottom: 0;
-}
-
-.accountsPage .activityItem.label {
-  color: var(--text-secondary);
-}
-
-.accountsPage .activityItem.amount {
-  font-weight: 500;
-}
-
-.accountsPage .activityItem.amount.income {
-  color: var(--income);
-}
-
-.accountsPage .activityItem.amount.expense {
-  color: var(--expense);
-}
-
-.accountsPage .emptyState {
-  text-align: center;
-  padding: 48px 20px;
-  color: var(--text-secondary);
-}
-
-.accountsPage .emptyState svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.accountsPage .emptyState p {
-  font-size: 14px;
-}
-
-/* Note: page structure classes are handled by base.css directly on the element */
-
-/* Page Header */
-.accountsPage .pageHeader {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.accountsPage .header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.accountsPage .pageSubtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-/* Summary Cards */
-.accountsPage .accountsSummary {
+.accountsSummary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.accountsPage .summaryCard {
+.summaryCard {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -262,11 +53,32 @@
   padding: 20px;
 }
 
-.accountsPage .summaryCard.highlighted::before {
+.summaryCard.highlighted::before {
   background: var(--success);
 }
 
-.accountsPage .summaryLabel {
+.summaryCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.summaryCard.balance::before {
+  background: var(--primary);
+}
+
+.summaryCard.income::before {
+  background: var(--income);
+}
+
+.summaryCard.expenses::before {
+  background: var(--expense);
+}
+
+.summaryLabel {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
@@ -274,30 +86,28 @@
   letter-spacing: 0.5px;
 }
 
-.accountsPage .summaryValue {
+.summaryValue {
   font-size: 20px;
   font-weight: 600;
   margin-top: 4px;
   color: var(--text);
 }
 
-.accountsPage .summaryValue.positive {
+.summaryValue.positive {
   color: var(--income);
 }
 
-.accountsPage .summaryValue.negative {
+.summaryValue.negative {
   color: var(--expense);
 }
 
-/* Accounts Grid */
-.accountsPage .accountsGrid {
+.accountsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
 
-/* Account Card */
-.accountsPage .accountCard {
+.accountCard {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -305,27 +115,27 @@
   padding: 16px;
 }
 
-.accountsPage .accountCard:hover {
+.accountCard:hover {
   border-color: var(--primary);
 }
 
-.accountsPage .accountHeader {
+.accountHeader {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
 
-.accountsPage .accountIcon {
+.accountIcon {
   font-size: 32px;
 }
 
-.accountsPage .accountInfo {
+.accountInfo {
   flex: 1;
   min-width: 0;
 }
 
-.accountsPage .accountName {
+.accountName {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
@@ -335,56 +145,55 @@
   text-overflow: ellipsis;
 }
 
-.accountsPage .accountBank {
+.accountBank {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 2px 0 0 0;
 }
 
-.accountsPage .accountActions {
+.accountActions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.accountsPage .accountBalance {
+.accountBalance {
   padding: 12px 0;
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
 
-.accountsPage .balanceLabel {
+.balanceLabel {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.accountsPage .balanceAmount {
+.balanceAmount {
   font-size: 20px;
   font-weight: 600;
   color: var(--text);
 }
 
-/* Activity */
-.accountsPage .activityHeader {
+.activityHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 }
 
-.accountsPage .activityLabel {
+.activityLabel {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
-.accountsPage .activityList {
+.activityList {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.accountsPage .activityItem {
+.activityItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -392,16 +201,16 @@
   border-bottom: 1px solid var(--border);
 }
 
-.accountsPage .activityItem:last-child {
+.activityItem:last-child {
   border-bottom: none;
 }
 
-.accountsPage .activityContent {
+.activityContent {
   flex: 1;
   min-width: 0;
 }
 
-.accountsPage .activityDesc {
+.activityDesc {
   font-size: 13px;
   font-weight: 500;
   color: var(--text);
@@ -410,28 +219,45 @@
   text-overflow: ellipsis;
 }
 
-.accountsPage .activityDate {
+.activityDate {
   font-size: 11px;
   color: var(--text-secondary);
 }
 
-.accountsPage .activityAmount {
+.activityAmount {
   font-size: 13px;
   font-weight: 600;
   text-align: right;
   white-space: nowrap;
 }
 
-.accountsPage .activityAmount.income {
+.activityAmount.income {
   color: var(--income);
 }
 
-.accountsPage .activityAmount.expense {
+.activityAmount.expense {
   color: var(--expense);
 }
 
+.emptyState {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.emptyState svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.emptyState p {
+  font-size: 14px;
+}
+
 /* Buttons */
-.accountsPage .btn {
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -444,7 +270,7 @@
   transition: all 0.15s;
 }
 
-.accountsPage .btn-link {
+.btnLink {
   color: var(--primary);
   font-size: 13px;
   font-weight: 500;
@@ -452,36 +278,45 @@
   transition: color 0.15s;
 }
 
-.accountsPage .btn-link:hover {
+.btnLink:hover {
   color: var(--primary-hover);
 }
 
-.accountsPage .btn-primary {
+.btnPrimary {
   background: var(--primary);
   color: #fff;
 }
 
-.accountsPage .btn-primary:hover {
+.btnPrimary:hover {
   background: var(--primary-hover);
 }
 
-.accountsPage .btn-sm {
+.btnSm {
   padding: 4px 10px;
   font-size: 12px;
 }
 
-.accountsPage .btn-ghost {
+.btnGhost {
   background: transparent;
   color: var(--text-secondary);
 }
 
-.accountsPage .btn-ghost:hover {
+.btnGhost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }
 
+.btnSecondary {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.btnSecondary:hover {
+  background: var(--border);
+}
+
 /* Badge */
-.accountsPage .badge {
+.badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -491,33 +326,33 @@
   font-weight: 500;
 }
 
-.accountsPage .badge-default {
+.badgeDefault {
   background: var(--bg);
   color: var(--text-secondary);
 }
 
-.accountsPage .badge-primary {
+.badgePrimary {
   background: var(--primary);
   color: #fff;
 }
 
-.accountsPage .badge-success {
+.badgeSuccess {
   background: var(--success);
   color: #fff;
 }
 
-.accountsPage .badge-warning {
+.badgeWarning {
   background: var(--warning);
   color: #fff;
 }
 
-.accountsPage .badge-info {
+.badgeInfo {
   background: var(--info);
   color: #fff;
 }
 
 /* Modal */
-.accountsPage .modalOverlay {
+.modalOverlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -535,12 +370,12 @@
     visibility 0.2s;
 }
 
-.accountsPage .modalOverlay.visible {
+.modalOverlay.visible {
   opacity: 1;
   visibility: visible;
 }
 
-.accountsPage .modal {
+.modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -552,7 +387,7 @@
   flex-direction: column;
 }
 
-.accountsPage .modalHeader {
+.modalHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -560,14 +395,14 @@
   border-bottom: 1px solid var(--border);
 }
 
-.accountsPage .modalTitle {
+.modalTitle {
   font-size: 18px;
   font-weight: 600;
   color: var(--text);
   margin: 0;
 }
 
-.accountsPage .modalClose {
+.modalClose {
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -577,16 +412,16 @@
   padding: 0;
 }
 
-.accountsPage .modalClose:hover {
+.modalClose:hover {
   color: var(--text);
 }
 
-.accountsPage .modalBody {
+.modalBody {
   padding: 20px;
   flex: 1;
 }
 
-.accountsPage .modalFooter {
+.modalFooter {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -595,11 +430,11 @@
 }
 
 /* Form */
-.accountsPage .formGroup {
+.formGroup {
   margin-bottom: 16px;
 }
 
-.accountsPage .formLabel {
+.formLabel {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -607,7 +442,7 @@
   margin-bottom: 6px;
 }
 
-.accountsPage .formControl {
+.formControl {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -618,38 +453,11 @@
   transition: border-color 0.15s;
 }
 
-.accountsPage .formControl:focus {
+.formControl:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.accountsPage .formControl::placeholder {
+.formControl::placeholder {
   color: var(--text-secondary);
-}
-
-/* Legacy class mappings for Accounts page */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  text-align: center;
-}
-
-.empty-state svg {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 16px;
-  color: var(--text-secondary);
-}
-
-.empty-state p {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 16px;
-}
-
-.empty-state button {
-  margin-top: 16px;
 }
