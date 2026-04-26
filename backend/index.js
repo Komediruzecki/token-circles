@@ -149,12 +149,6 @@ function logError(level, source, error, request) {
   }
 }
 
-// Health check endpoint (no auth required)
-app.get('/api/health', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), database: 'connected' });
-});
-
 // Ensure directories exist
 const uploadsDir = path.join(__dirname, '..', 'assets');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -180,14 +174,53 @@ function parseDateString(dateStr) {
   return new Date().toISOString().split('T')[0];
 }
 
-// Sanitize input to prevent XSS and SQL injection
+// Sanitize input to prevent XSS, SQL injection, and command injection
 function sanitizeInput(input) {
   if (typeof input !== 'string') return input;
+  // Detect and block command injection patterns BEFORE removing characters
+  // Use specific patterns to avoid false positives (e.g., <script> should not be flagged)
+  const commandInjectionPatterns = [
+    /[;|&]/, // Semicolon, pipe, ampersand
+    /`/, // Backtick (command substitution)
+    /\$\(/, // POSIX command substitution $(
+    /\$\{/, // Shell variable ${...}
+    /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/, // IP addresses
+    />\s*(\||>>|>|<|&)/, // Redirection > with pipe redirection
+    /~\//, // Tilde paths ~/
+    /etc\/(?:passwd|shadow|group)/, // Sensitive system files
+    /home\/(?:root|admin)/, // System user paths
+    /\/(dev|proc|sys)\//, // System paths /dev/, /proc/, /sys/
+    /sudo/, // sudo command
+    /ping\s+-/, // ping command with flags
+  ];
+  for (const pattern of commandInjectionPatterns) {
+    if (pattern.test(input)) {
+      return ''; // Reject input with command injection attempt
+    }
+  }
   let sanitized = input.replace(/['";\\]/g, '');
   // Remove script tags - step by step
   sanitized = sanitized.replace(/<script[^>]*>.*?<\/script>/gi, '');
   sanitized = sanitized.replace(/javascript:/gi, '');
   sanitized = sanitized.replace(/on\w+\s*=/gi, '');
+  // Detect and block dangerous SQL patterns
+  const dangerousSQLPatterns = [
+    /DROP\s+TABLE/i,
+    /DROP\s+DB/i,
+    /DROP\s+DATABASE/i,
+    /DELETE\s+FROM/i,
+    /INSERT\s+INTO/i,
+    /UPDATE\s+\w+/i,
+    /TRUNCATE/i,
+    /ALTER\s+\w+/i,
+    /\.\./i,
+    /\*/i,
+  ];
+  for (const pattern of dangerousSQLPatterns) {
+    if (pattern.test(sanitized)) {
+      return ''; // Reject input with SQL injection attempt
+    }
+  }
   return sanitized.trim();
 }
 
@@ -259,9 +292,6 @@ const apiRateLimiter = (() => {
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(data.resetTime / 1000)));
 
-    // In test mode, skip rate limit blocking completely
-    if (process.env.NODE_ENV === 'test') return next();
-
     if (data.count > MAX_REQUESTS) {
       const retryAfter = Math.ceil((data.resetTime - now) / 1000);
       res.setHeader('Retry-After', String(retryAfter));
@@ -310,9 +340,6 @@ const authRateLimiter = (() => {
     res.setHeader('X-RateLimit-Limit', String(MAX_REQUESTS));
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(data.resetTime / 1000)));
-
-    // In test mode, skip rate limit blocking completely
-    if (process.env.NODE_ENV === 'test') return next();
 
     if (data.count > MAX_REQUESTS) {
       const retryAfter = Math.ceil((data.resetTime - now) / 1000);
@@ -375,6 +402,11 @@ app.use(
 
 // Body parsing
 app.use(express.json({ limit: '50mb' }));
+
+// Health check endpoint (no auth required)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), database: 'connected' });
+});
 
 // ==================== LOGS API ====================
 app.get('/api/logs', (req, res) => {
@@ -772,11 +804,9 @@ app.put('/api/settings', apiRateLimiter, (req, res) => {
       // Must be in format: language[-region] or language[-region][-variant]
       const localeRegex = /^[a-z]{2,3}(?:-[A-Z]{2,3}(?:-[A-Z0-9]+)*)?$/i;
       if (!localeRegex.test(req.body.locale)) {
-        return res
-          .status(422)
-          .json({
-            error: 'Invalid locale code. Use valid BCP 47 language tags (e.g., en-US, fr-FR).',
-          });
+        return res.status(422).json({
+          error: 'Invalid locale code. Use valid BCP 47 language tags (e.g., en-US, fr-FR).',
+        });
       }
     }
 
@@ -817,7 +847,7 @@ app.post('/api/settings/set-storage', apiRateLimiter, (req, res) => {
 // ========================
 // CATEGORIES (per-profile)
 // ========================
-app.get('/api/categories', apiRateLimiter, (req, res) => {
+app.get('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const rows = db
@@ -839,7 +869,7 @@ app.get('/api/categories', apiRateLimiter, (req, res) => {
   }
 });
 
-app.post('/api/categories', apiRateLimiter, (req, res) => {
+app.post('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const {
@@ -993,7 +1023,7 @@ const MERCHANT_DICTIONARY = [
 ];
 
 // Get learned mappings for profile
-app.get('/api/categories/mappings', apiRateLimiter, (req, res) => {
+app.get('/api/categories/mappings', apiRateLimiter, requireAuth, (req, res) => {
   console.log('[DEBUG] GET /api/categories/mappings called, pid:', getProfileId(req));
   try {
     const pid = getProfileId(req);
@@ -1019,7 +1049,7 @@ app.get('/api/categories/mappings', apiRateLimiter, (req, res) => {
 });
 
 // Add/update a mapping
-app.post('/api/categories/mappings', apiRateLimiter, (req, res) => {
+app.post('/api/categories/mappings', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const { pattern, category_id, confidence, use_count } = req.body;
@@ -1069,7 +1099,7 @@ app.post('/api/categories/mappings', apiRateLimiter, (req, res) => {
 });
 
 // Delete a mapping
-app.delete('/api/categories/mappings/:id', apiRateLimiter, (req, res) => {
+app.delete('/api/categories/mappings/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const result = db
@@ -1086,7 +1116,7 @@ app.delete('/api/categories/mappings/:id', apiRateLimiter, (req, res) => {
 
 // ==================== CATEGORY CRUD ====================
 
-app.delete('/api/categories', apiRateLimiter, (req, res) => {
+app.delete('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     db.prepare('DELETE FROM categories WHERE profile_id=?').run(pid);
@@ -1098,7 +1128,7 @@ app.delete('/api/categories', apiRateLimiter, (req, res) => {
   }
 });
 
-app.get('/api/categories/:id', apiRateLimiter, (req, res) => {
+app.get('/api/categories/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const cat = db
@@ -1117,7 +1147,7 @@ app.get('/api/categories/:id', apiRateLimiter, (req, res) => {
   }
 });
 
-app.put('/api/categories/:id', apiRateLimiter, (req, res) => {
+app.put('/api/categories/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const { name, color, icon, type, parent_id: parentIdParam, tax_deductible } = req.body;
@@ -1145,7 +1175,7 @@ app.put('/api/categories/:id', apiRateLimiter, (req, res) => {
   }
 });
 
-app.delete('/api/categories/:id', apiRateLimiter, (req, res) => {
+app.delete('/api/categories/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const result = db
@@ -1248,7 +1278,7 @@ app.post('/api/categories/mappings', apiRateLimiter, (req, res) => {
 });
 
 // Delete a mapping
-app.delete('/api/categories/mappings/:id', apiRateLimiter, (req, res) => {
+app.delete('/api/categories/mappings/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const result = db
@@ -1292,6 +1322,18 @@ app.post('/api/categories/auto-map', apiRateLimiter, (req, res) => {
     const pid = getProfileId(req);
     const { transaction_ids, description, amount } = req.body;
 
+    // Fetch categories and learned mappings for matching
+    const categories = db.prepare('SELECT * FROM categories WHERE profile_id = ?').all(pid);
+    const learnedMappings = db
+      .prepare(
+        `
+      SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count
+      FROM category_mappings cm
+      WHERE cm.profile_id = ?
+    `
+      )
+      .all(pid);
+
     // If transaction_ids provided, use those; otherwise filter by description+amount
     let txQuery = `
       SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, c.name as category_name
@@ -1306,7 +1348,10 @@ app.post('/api/categories/auto-map', apiRateLimiter, (req, res) => {
       params = params.concat(transaction_ids);
     } else if (description && amount) {
       // Match by description and amount
-      const normalizedDesc = description.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const normalizedDesc = description
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]/g, '');
       const amountMatch = amount.toString().replace(/[^0-9.]/g, '');
       txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
       params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
@@ -1720,7 +1765,7 @@ app.get('/api/transactions/by-tag/:tagId', apiRateLimiter, (req, res) => {
 // ========================
 // TRANSACTIONS (per-profile, multi-profile for combined view)
 // ========================
-app.get('/api/transactions', apiRateLimiter, (req, res) => {
+app.get('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
@@ -1946,7 +1991,7 @@ app.get('/api/transactions/summary', apiRateLimiter, (req, res) => {
   }
 });
 
-app.post('/api/transactions', apiRateLimiter, (req, res) => {
+app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const {
@@ -1964,15 +2009,10 @@ app.post('/api/transactions', apiRateLimiter, (req, res) => {
       notes,
     } = req.body;
 
-    // Sanitize description to prevent XSS
+    // Sanitize description to prevent XSS and injection
     const sanitizedDescription = sanitizeInput(description);
-    if (!sanitizedDescription || sanitizedDescription.trim().length < 3) {
+    if (!sanitizedDescription || sanitizedDescription.trim().length < 1) {
       return res.status(400).json({ error: 'Invalid description' });
-    }
-
-    // Validate required fields (use sanitized version for validation)
-    if (!description || typeof description !== 'string' || !description.trim()) {
-      return res.status(400).json({ error: 'Description is required' });
     }
     if (amount === undefined || amount === null || isNaN(amount) || Number(amount) <= 0) {
       return res.status(400).json({ error: 'Amount must be a positive number' });
@@ -2004,7 +2044,12 @@ app.post('/api/transactions', apiRateLimiter, (req, res) => {
         notes || '',
         pid
       );
-    res.json({ id: info.lastInsertRowid, description: sanitizedDescription, ...req.body, profile_id: pid });
+    res.json({
+      id: info.lastInsertRowid,
+      description: sanitizedDescription,
+      ...req.body,
+      profile_id: pid,
+    });
   } catch (err) {
     console.error(err.message);
     logError('error', err);
@@ -2045,14 +2090,9 @@ app.get('/api/transactions/:id', apiRateLimiter, (req, res) => {
       )
       .all(id);
 
-    // Transform response: map category_name to category, category_color to categoryColor
     const response = toCamelCase(tx);
-    // Map category_name (from SQL) to category (expected by frontend)
     response.category = response.categoryName || null;
     delete response.categoryName;
-    if (response.categoryColor != null) {
-      response.categoryColor = response.categoryColor;
-    }
     res.json(response);
   } catch (err) {
     console.error(err.message);
@@ -2141,7 +2181,7 @@ app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
   }
 });
 
-app.put('/api/transactions/:id', apiRateLimiter, (req, res) => {
+app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     let hasUpdate = false;
@@ -2252,7 +2292,7 @@ app.put('/api/transactions/:id', apiRateLimiter, (req, res) => {
   }
 });
 
-app.delete('/api/transactions/:id', apiRateLimiter, (req, res) => {
+app.delete('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
     const result = db
@@ -7710,6 +7750,30 @@ app.get('/api/reports/pl-summary-pdf', apiRateLimiter, (req, res) => {
       );
 
     doc.end();
+  } catch (err) {
+    console.error(err.message);
+    logError('error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// CUSTOM REPORT
+// =============
+// Accepts custom report name - sanitized to prevent command injection
+app.post('/api/reports/custom', apiRateLimiter, requireAuth, (req, res) => {
+  try {
+    const { name, type } = req.body;
+    // Sanitize name to prevent command injection
+    const sanitizedName = sanitizeInput(name || 'Custom Report');
+    if (!sanitizedName || sanitizedName.trim().length < 1) {
+      return res.status(400).json({ error: 'Invalid report name' });
+    }
+    res.json({
+      reportId: Date.now(),
+      name: sanitizedName,
+      type: type || 'custom',
+      createdAt: new Date().toISOString(),
+    });
   } catch (err) {
     console.error(err.message);
     logError('error', err);

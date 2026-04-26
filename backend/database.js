@@ -1,7 +1,12 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'db', process.env.NODE_ENV === 'test' ? 'test.db' : 'finance.db');
+const DB_PATH = path.join(
+  __dirname,
+  '..',
+  'db',
+  process.env.NODE_ENV === 'test' ? 'test.db' : 'finance.db'
+);
 const db = new Database(DB_PATH);
 
 // Enable WAL mode for better performance
@@ -99,7 +104,9 @@ function migrate() {
       profile_id INTEGER NOT NULL DEFAULT 1
     );
   `);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_emergency_fund_profile ON emergency_fund_config(profile_id)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_emergency_fund_profile ON emergency_fund_config(profile_id)'
+  );
 
   // Create loans table
   db.exec(`
@@ -192,8 +199,12 @@ function migrate() {
       FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
     );
   `);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_balance_history_account ON account_balance_history(account_id)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_balance_history_recorded ON account_balance_history(recorded_at)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_balance_history_account ON account_balance_history(account_id)'
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_balance_history_recorded ON account_balance_history(recorded_at)'
+  );
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS recurring_transactions (
@@ -236,7 +247,7 @@ function migrate() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_bills_profile ON bills(profile_id)');
 
   // Create housings table
-db.exec(`
+  db.exec(`
   CREATE TABLE IF NOT EXISTS housings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     profile_id INTEGER NOT NULL DEFAULT 1,
@@ -248,9 +259,9 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `);
-db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)');
 
-// Create zero-based budgeting table
+  // Create zero-based budgeting table
   db.exec(`
     CREATE TABLE IF NOT EXISTS budgets_zero_based (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -263,9 +274,13 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)
       FOREIGN KEY (category_id) REFERENCES categories(id)
     )
   `);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_zero_based_profile ON budgets_zero_based(profile_id)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_budgets_zero_based_profile ON budgets_zero_based(profile_id)'
+  );
   db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_zero_based_month ON budgets_zero_based(month)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_zero_based_category ON budgets_zero_based(category_id)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_budgets_zero_based_category ON budgets_zero_based(category_id)'
+  );
 
   // Create tags table
   db.exec(`
@@ -312,54 +327,76 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)
 
   // Migration: Add profile_id to existing tables (for upgrades)
   if (!columnExists('categories', 'profile_id')) {
-    try { db.exec('ALTER TABLE categories ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE categories ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1');
+    } catch (e) {}
   }
   if (!columnExists('transactions', 'profile_id')) {
-    try { db.exec('ALTER TABLE transactions ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE transactions ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1');
+    } catch (e) {}
   }
   if (!columnExists('budgets', 'profile_id')) {
-    try { db.exec('ALTER TABLE budgets ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE budgets ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1');
+    } catch (e) {}
   }
   if (!columnExists('loans', 'profile_id')) {
-    try { db.exec('ALTER TABLE loans ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE loans ADD COLUMN profile_id INTEGER NOT NULL DEFAULT 1');
+    } catch (e) {}
   }
   if (!columnExists('settings', 'profile_id')) {
-    try { db.exec('ALTER TABLE settings ADD COLUMN profile_id INTEGER DEFAULT 1'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE settings ADD COLUMN profile_id INTEGER DEFAULT 1');
+    } catch (e) {}
   }
 
   // Migration: Fix sample transaction amounts (should be positive, type determines sign)
   if (columnExists('transactions', 'amount')) {
     try {
-      db.exec("UPDATE transactions SET amount = ABS(amount) WHERE profile_id = 1 AND amount < 0");
-    } catch(e) {}
+      db.exec('UPDATE transactions SET amount = ABS(amount) WHERE profile_id = 1 AND amount < 0');
+    } catch (e) {}
   }
 
   // Migration: Add user_id to profiles table
   if (!columnExists('profiles', 'user_id')) {
-    try { db.exec('ALTER TABLE profiles ADD COLUMN user_id INTEGER REFERENCES users(id)'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE profiles ADD COLUMN user_id INTEGER REFERENCES users(id)');
+    } catch (e) {}
   }
 
   // Migration: Add reconciled column to transactions
   if (!columnExists('transactions', 'reconciled')) {
-    try { db.exec('ALTER TABLE transactions ADD COLUMN reconciled INTEGER DEFAULT 0'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE transactions ADD COLUMN reconciled INTEGER DEFAULT 0');
+    } catch (e) {}
   }
 
   // Migration: Add reconciled_at column to transactions
   if (!columnExists('transactions', 'reconciled_at')) {
-    try { db.exec('ALTER TABLE transactions ADD COLUMN reconciled_at TEXT'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE transactions ADD COLUMN reconciled_at TEXT');
+    } catch (e) {}
   }
 
   // Migration: Add means_of_payment column to transactions
   if (!columnExists('transactions', 'means_of_payment')) {
-    try { db.exec("ALTER TABLE transactions ADD COLUMN means_of_payment TEXT DEFAULT ''"); } catch(e) {}
+    try {
+      db.exec("ALTER TABLE transactions ADD COLUMN means_of_payment TEXT DEFAULT ''");
+    } catch (e) {}
   }
 
   // Migration: Add receipt_id column to transactions
   if (!columnExists('transactions', 'receipt_id')) {
-    try { db.exec("ALTER TABLE transactions ADD COLUMN receipt_id INTEGER"); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE transactions ADD COLUMN receipt_id INTEGER');
+    } catch (e) {}
   }
   if (!columnExists('transactions', 'receipt_name')) {
-    try { db.exec("ALTER TABLE transactions ADD COLUMN receipt_name TEXT DEFAULT ''"); } catch(e) {}
+    try {
+      db.exec("ALTER TABLE transactions ADD COLUMN receipt_name TEXT DEFAULT ''");
+    } catch (e) {}
   }
 
   // Create receipts table
@@ -382,29 +419,43 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)
 
   // Migration: Add rollover columns to budgets
   if (!columnExists('budgets', 'rollover_enabled')) {
-    try { db.exec('ALTER TABLE budgets ADD COLUMN rollover_enabled INTEGER DEFAULT 0'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE budgets ADD COLUMN rollover_enabled INTEGER DEFAULT 0');
+    } catch (e) {}
   }
   if (!columnExists('budgets', 'rollover_amount')) {
-    try { db.exec('ALTER TABLE budgets ADD COLUMN rollover_amount REAL DEFAULT 0'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE budgets ADD COLUMN rollover_amount REAL DEFAULT 0');
+    } catch (e) {}
   }
   if (!columnExists('budgets', 'rollover_used')) {
-    try { db.exec('ALTER TABLE budgets ADD COLUMN rollover_used REAL DEFAULT 0'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE budgets ADD COLUMN rollover_used REAL DEFAULT 0');
+    } catch (e) {}
   }
 
   // Migration: Add missing columns to bills table (due_date, next_due_date, recurring)
   if (!columnExists('bills', 'due_date')) {
-    try { db.exec('ALTER TABLE bills ADD COLUMN due_date TEXT'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE bills ADD COLUMN due_date TEXT');
+    } catch (e) {}
   }
   if (!columnExists('bills', 'next_due_date')) {
-    try { db.exec('ALTER TABLE bills ADD COLUMN next_due_date TEXT'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE bills ADD COLUMN next_due_date TEXT');
+    } catch (e) {}
   }
   if (!columnExists('bills', 'recurring')) {
-    try { db.exec('ALTER TABLE bills ADD COLUMN recurring INTEGER DEFAULT 1'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE bills ADD COLUMN recurring INTEGER DEFAULT 1');
+    } catch (e) {}
   }
 
   // Migration: Add last_paid_date column to bills table
   if (!columnExists('bills', 'last_paid_date')) {
-    try { db.exec('ALTER TABLE bills ADD COLUMN last_paid_date TEXT'); } catch(e) {}
+    try {
+      db.exec('ALTER TABLE bills ADD COLUMN last_paid_date TEXT');
+    } catch (e) {}
   }
 
   // Seed demo user if no users exist
@@ -412,7 +463,10 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)
   if (userCount.c === 0) {
     const bcrypt = require('bcrypt');
     const passwordHash = bcrypt.hashSync('add2', 10);
-    db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run('maff', passwordHash);
+    db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(
+      'maff',
+      passwordHash
+    );
   }
 
   // Seed the three example profiles if they don't exist
@@ -434,7 +488,9 @@ function seedThreeTierProfiles() {
 
   // Seed categories for each profile if none exist
   for (const profile of profiles) {
-    const catCount = db.prepare('SELECT COUNT(*) as c FROM categories WHERE profile_id = ?').get(profile.id);
+    const catCount = db
+      .prepare('SELECT COUNT(*) as c FROM categories WHERE profile_id = ?')
+      .get(profile.id);
     if (catCount.c === 0) {
       seedCategoriesForProfile(profile.id);
     }
@@ -442,7 +498,9 @@ function seedThreeTierProfiles() {
 
   // Seed data for each profile if no transactions exist
   for (const profile of profiles) {
-    const txCount = db.prepare('SELECT COUNT(*) as c FROM transactions WHERE profile_id = ?').get(profile.id);
+    const txCount = db
+      .prepare('SELECT COUNT(*) as c FROM transactions WHERE profile_id = ?')
+      .get(profile.id);
     if (txCount.c === 0) {
       seedProfileData(profile);
     }
@@ -492,9 +550,11 @@ function seedProfileData(profile) {
 
   // Get category IDs
   const cats = {};
-  db.prepare('SELECT name, id FROM categories WHERE profile_id = ?').all(profileId).forEach(c => {
-    cats[c.name] = c.id;
-  });
+  db.prepare('SELECT name, id FROM categories WHERE profile_id = ?')
+    .all(profileId)
+    .forEach((c) => {
+      cats[c.name] = c.id;
+    });
 
   // Get category ID helper
   const catId = (name) => cats[name] || null;
@@ -549,9 +609,7 @@ function getTierConfig(tier) {
         { name: 'Savings Account', type: 'savings', balance: 3500 },
       ],
       // Loan
-      loans: [
-        { name: 'Used Car Loan', principal: 8000, rate: 7.5, term: 48 },
-      ],
+      loans: [{ name: 'Used Car Loan', principal: 8000, rate: 7.5, term: 48 }],
       // Savings goals
       savingsGoals: [
         { name: 'Emergency Fund', target: 5000, current: 2500 },
@@ -685,113 +743,368 @@ function seedTransactions(profileId, config, startYear, currentYear, catId) {
       for (const day of ['01', '15']) {
         const basePay = (monthlySalary / 2) * mult;
         const variation = basePay * (0.95 + Math.random() * 0.1);
-        batch.push(['Salary Deposit', variation.toFixed(2), `${ym}-${day}`, catId('Salary Income'), 'income', profileId, 'USD', 'Employer Inc', `Pay period ${month}/${year}`]);
+        batch.push([
+          'Salary Deposit',
+          variation.toFixed(2),
+          `${ym}-${day}`,
+          catId('Salary Income'),
+          'income',
+          profileId,
+          'USD',
+          'Employer Inc',
+          `Pay period ${month}/${year}`,
+        ]);
       }
 
       // Annual bonus (December)
       if (month === 12) {
         const bonusBase = monthlySalary * (0.5 + Math.random() * 0.5);
-        batch.push(['Year-End Bonus', (bonusBase * mult).toFixed(2), `${ym}-20`, catId('Salary Income'), 'income', profileId, 'USD', 'Employer Inc', 'Annual performance bonus']);
+        batch.push([
+          'Year-End Bonus',
+          (bonusBase * mult).toFixed(2),
+          `${ym}-20`,
+          catId('Salary Income'),
+          'income',
+          profileId,
+          'USD',
+          'Employer Inc',
+          'Annual performance bonus',
+        ]);
       }
 
       // Passive income (quarterly rental)
       if (month % 3 === 0 && year >= 2005) {
-        const passive = (monthlySalary * 0.1 * mult) * (0.8 + Math.random() * 0.4);
-        batch.push(['Passive Income - Rental Property', passive.toFixed(2), `${ym}-${String(10 + Math.floor(Math.random() * 5)).padStart(2, '0')}`, catId('Passive Income'), 'income', profileId, 'USD', 'Property Management LLC', 'Q rental income']);
+        const passive = monthlySalary * 0.1 * mult * (0.8 + Math.random() * 0.4);
+        batch.push([
+          'Passive Income - Rental Property',
+          passive.toFixed(2),
+          `${ym}-${String(10 + Math.floor(Math.random() * 5)).padStart(2, '0')}`,
+          catId('Passive Income'),
+          'income',
+          profileId,
+          'USD',
+          'Property Management LLC',
+          'Q rental income',
+        ]);
       }
 
       // Investment dividends (quarterly)
       if (month === 3 || month === 6 || month === 9 || month === 12) {
         const dividendBase = monthlySalary * 0.08 * mult * (0.5 + Math.random());
-        batch.push(['Investment Dividend', dividendBase.toFixed(2), `${ym}-15`, catId('Investment Income'), 'income', profileId, 'USD', 'Vanguard / Fidelity', 'Quarterly dividend payment']);
+        batch.push([
+          'Investment Dividend',
+          dividendBase.toFixed(2),
+          `${ym}-15`,
+          catId('Investment Income'),
+          'income',
+          profileId,
+          'USD',
+          'Vanguard / Fidelity',
+          'Quarterly dividend payment',
+        ]);
       }
 
       // --- EXPENSES ---
       // Housing (1st)
-      batch.push(['Rent Payment', randRange(config.rent.min, config.rent.max) * mult, `${ym}-01`, catId('Rent / Mortgage'), 'expense', profileId, 'USD', 'Property Management Co', 'Monthly rent']);
+      batch.push([
+        'Rent Payment',
+        randRange(config.rent.min, config.rent.max) * mult,
+        `${ym}-01`,
+        catId('Rent / Mortgage'),
+        'expense',
+        profileId,
+        'USD',
+        'Property Management Co',
+        'Monthly rent',
+      ]);
 
       // Utilities
-      batch.push(['Electricity Bill', (randRange(60, 180) * mult).toFixed(2), `${ym}-12`, catId('Utilities'), 'expense', profileId, 'USD', 'Power Company', '']);
-      batch.push(['Natural Gas Bill', (randRange(40, 120) * mult).toFixed(2), `${ym}-15`, catId('Utilities'), 'expense', profileId, 'USD', 'Gas Utility', '']);
-      batch.push(['Water & Sewer', (randRange(30, 80) * mult).toFixed(2), `${ym}-18`, catId('Utilities'), 'expense', profileId, 'USD', 'Water Dept', '']);
-      batch.push(['Internet Service', (randRange(50, 100) * mult).toFixed(2), `${ym}-20`, catId('Utilities'), 'expense', profileId, 'USD', 'ISP Provider', '']);
-      batch.push(['Mobile Phone Plan', (randRange(40, 80) * mult).toFixed(2), `${ym}-10`, catId('Utilities'), 'expense', profileId, 'USD', 'Verizon/AT&T', '']);
+      batch.push([
+        'Electricity Bill',
+        (randRange(60, 180) * mult).toFixed(2),
+        `${ym}-12`,
+        catId('Utilities'),
+        'expense',
+        profileId,
+        'USD',
+        'Power Company',
+        '',
+      ]);
+      batch.push([
+        'Natural Gas Bill',
+        (randRange(40, 120) * mult).toFixed(2),
+        `${ym}-15`,
+        catId('Utilities'),
+        'expense',
+        profileId,
+        'USD',
+        'Gas Utility',
+        '',
+      ]);
+      batch.push([
+        'Water & Sewer',
+        (randRange(30, 80) * mult).toFixed(2),
+        `${ym}-18`,
+        catId('Utilities'),
+        'expense',
+        profileId,
+        'USD',
+        'Water Dept',
+        '',
+      ]);
+      batch.push([
+        'Internet Service',
+        (randRange(50, 100) * mult).toFixed(2),
+        `${ym}-20`,
+        catId('Utilities'),
+        'expense',
+        profileId,
+        'USD',
+        'ISP Provider',
+        '',
+      ]);
+      batch.push([
+        'Mobile Phone Plan',
+        (randRange(40, 80) * mult).toFixed(2),
+        `${ym}-10`,
+        catId('Utilities'),
+        'expense',
+        profileId,
+        'USD',
+        'Verizon/AT&T',
+        '',
+      ]);
 
       // Groceries (3 visits)
       for (let w = 0; w < 3; w++) {
         const day = 5 + w * 7;
-        batch.push(['Grocery Shopping', (randRange(config.groceries.min / 3, config.groceries.max / 3) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Groceries'), 'expense', profileId, 'USD', 'Supermarket Chain', '']);
+        batch.push([
+          'Grocery Shopping',
+          (randRange(config.groceries.min / 3, config.groceries.max / 3) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Groceries'),
+          'expense',
+          profileId,
+          'USD',
+          'Supermarket Chain',
+          '',
+        ]);
       }
 
       // Food / Eating Out
       const diningCount = Math.floor(randRange(3, 6));
       for (let i = 0; i < diningCount; i++) {
         const day = 3 + i * 5 + Math.floor(Math.random() * 3);
-        const restaurants = ['Local Bistro', 'Pizza Place', 'Sushi Bar', 'Burger Joint', 'Thai Restaurant', 'Italian Place'];
-        batch.push(['Restaurant / Takeout', (randRange(config.dining.min / diningCount, config.dining.max / diningCount) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Food / Eating Out / Restaurants'), 'expense', profileId, 'USD', restaurants[Math.floor(Math.random() * restaurants.length)], '']);
+        const restaurants = [
+          'Local Bistro',
+          'Pizza Place',
+          'Sushi Bar',
+          'Burger Joint',
+          'Thai Restaurant',
+          'Italian Place',
+        ];
+        batch.push([
+          'Restaurant / Takeout',
+          (
+            randRange(config.dining.min / diningCount, config.dining.max / diningCount) * mult
+          ).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Food / Eating Out / Restaurants'),
+          'expense',
+          profileId,
+          'USD',
+          restaurants[Math.floor(Math.random() * restaurants.length)],
+          '',
+        ]);
       }
 
       // Coffee / Lunch
       const lunchCount = Math.floor(randRange(1, 3));
       for (let i = 0; i < lunchCount; i++) {
         const day = 5 + i * 8 + Math.floor(Math.random() * 3);
-        batch.push(['Coffee / Lunch', (randRange(8, 20) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Food / Eating Out / Restaurants'), 'expense', profileId, 'USD', 'Coffee Shop / Cafe', '']);
+        batch.push([
+          'Coffee / Lunch',
+          (randRange(8, 20) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Food / Eating Out / Restaurants'),
+          'expense',
+          profileId,
+          'USD',
+          'Coffee Shop / Cafe',
+          '',
+        ]);
       }
 
       // Car & Transportation
       if (config.carPayment) {
-        batch.push(['Auto Loan Payment', (randRange(config.carPayment.min, config.carPayment.max) * mult).toFixed(2), `${ym}-05`, catId('Car'), 'expense', profileId, 'USD', 'Auto Lender', 'Monthly car payment']);
+        batch.push([
+          'Auto Loan Payment',
+          (randRange(config.carPayment.min, config.carPayment.max) * mult).toFixed(2),
+          `${ym}-05`,
+          catId('Car'),
+          'expense',
+          profileId,
+          'USD',
+          'Auto Lender',
+          'Monthly car payment',
+        ]);
       }
 
       // Gas fill-ups
       const gasFreq = config.tier === 'low' ? 2 : 4;
       for (let g = 0; g < gasFreq; g++) {
         const day = 3 + g * 7 + Math.floor(Math.random() * 3);
-        batch.push(['Gas Station', (randRange(config.gas.min / gasFreq, config.gas.max / gasFreq) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Car'), 'expense', profileId, 'USD', 'Shell / Chevron', '']);
+        batch.push([
+          'Gas Station',
+          (randRange(config.gas.min / gasFreq, config.gas.max / gasFreq) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Car'),
+          'expense',
+          profileId,
+          'USD',
+          'Shell / Chevron',
+          '',
+        ]);
       }
 
       // Car maintenance (quarterly)
       if (month % 3 === 0) {
-        batch.push(['Car Maintenance / Service', (randRange(100, 300) * mult).toFixed(2), `${ym}-${String(15 + Math.floor(Math.random() * 5)).padStart(2, '0')}`, catId('Car Maintenance'), 'expense', profileId, 'USD', 'Auto Shop', 'Oil change, inspections']);
+        batch.push([
+          'Car Maintenance / Service',
+          (randRange(100, 300) * mult).toFixed(2),
+          `${ym}-${String(15 + Math.floor(Math.random() * 5)).padStart(2, '0')}`,
+          catId('Car Maintenance'),
+          'expense',
+          profileId,
+          'USD',
+          'Auto Shop',
+          'Oil change, inspections',
+        ]);
       }
 
       // Insurance
-      batch.push(['Health Insurance Premium', (randRange(50, 300) * mult).toFixed(2), `${ym}-01`, catId('Insurance'), 'expense', profileId, 'USD', 'Insurance Co', 'Monthly health insurance']);
+      batch.push([
+        'Health Insurance Premium',
+        (randRange(50, 300) * mult).toFixed(2),
+        `${ym}-01`,
+        catId('Insurance'),
+        'expense',
+        profileId,
+        'USD',
+        'Insurance Co',
+        'Monthly health insurance',
+      ]);
       if (month % 3 === 1) {
-        batch.push(['Auto Insurance Premium', (randRange(100, 200) * mult).toFixed(2), `${ym}-${String(5 + Math.floor(Math.random() * 10)).padStart(2, '0')}`, catId('Insurance'), 'expense', profileId, 'USD', 'State Farm / Allstate', '']);
+        batch.push([
+          'Auto Insurance Premium',
+          (randRange(100, 200) * mult).toFixed(2),
+          `${ym}-${String(5 + Math.floor(Math.random() * 10)).padStart(2, '0')}`,
+          catId('Insurance'),
+          'expense',
+          profileId,
+          'USD',
+          'State Farm / Allstate',
+          '',
+        ]);
       }
       if (month === 1) {
-        batch.push(['Home/Renters Insurance Annual', (randRange(300, 1200) * mult).toFixed(2), `${ym}-10`, catId('Insurance'), 'expense', profileId, 'USD', 'Insurance Co', 'Annual premium']);
+        batch.push([
+          'Home/Renters Insurance Annual',
+          (randRange(300, 1200) * mult).toFixed(2),
+          `${ym}-10`,
+          catId('Insurance'),
+          'expense',
+          profileId,
+          'USD',
+          'Insurance Co',
+          'Annual premium',
+        ]);
       }
 
       // Healthcare
       const healthVisits = Math.floor(randRange(1, 2));
       for (let h = 0; h < healthVisits; h++) {
         const day = 10 + h * 10 + Math.floor(Math.random() * 5);
-        batch.push(['Medical / Pharmacy', (randRange(config.healthcare.min / 2, config.healthcare.max / 2) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Health'), 'expense', profileId, 'USD', 'Doctor / Pharmacy', '']);
+        batch.push([
+          'Medical / Pharmacy',
+          (randRange(config.healthcare.min / 2, config.healthcare.max / 2) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Health'),
+          'expense',
+          profileId,
+          'USD',
+          'Doctor / Pharmacy',
+          '',
+        ]);
       }
 
       // Subscriptions
-      const subscriptions = ['Netflix Subscription', 'Spotify Premium', 'Gym Membership', 'Online News Sub', 'Cloud Storage'];
+      const subscriptions = [
+        'Netflix Subscription',
+        'Spotify Premium',
+        'Gym Membership',
+        'Online News Sub',
+        'Cloud Storage',
+      ];
       const subCount = config.tier === 'high' ? 4 : config.tier === 'mid' ? 3 : 2;
       for (let s = 0; s < subCount; s++) {
         const subCosts = [15, 10, 40, 10, 10];
-        batch.push([subscriptions[s], (subCosts[s] * mult).toFixed(2), `${ym}-${String(5 + Math.floor(Math.random() * 20)).padStart(2, '0')}`, catId('Subscriptions'), 'expense', profileId, 'USD', 'Service Provider', '']);
+        batch.push([
+          subscriptions[s],
+          (subCosts[s] * mult).toFixed(2),
+          `${ym}-${String(5 + Math.floor(Math.random() * 20)).padStart(2, '0')}`,
+          catId('Subscriptions'),
+          'expense',
+          profileId,
+          'USD',
+          'Service Provider',
+          '',
+        ]);
       }
 
       // Clothing (quarterly)
       if (month === 2 || month === 5 || month === 8 || month === 11) {
-        batch.push(['Clothing / Apparel Purchases', (randRange(config.clothing.min, config.clothing.max) * mult).toFixed(2), `${ym}-${String(15 + Math.floor(Math.random() * 5)).padStart(2, '0')}`, catId('Clothing'), 'expense', profileId, 'USD', 'Retail Store / Online', '']);
+        batch.push([
+          'Clothing / Apparel Purchases',
+          (randRange(config.clothing.min, config.clothing.max) * mult).toFixed(2),
+          `${ym}-${String(15 + Math.floor(Math.random() * 5)).padStart(2, '0')}`,
+          catId('Clothing'),
+          'expense',
+          profileId,
+          'USD',
+          'Retail Store / Online',
+          '',
+        ]);
       }
 
       // Household
-      batch.push(['Household Supplies', (randRange(50, 150) * mult).toFixed(2), `${ym}-${String(10 + Math.floor(Math.random() * 10)).padStart(2, '0')}`, catId('Household Items'), 'expense', profileId, 'USD', 'Target / Walmart', '']);
+      batch.push([
+        'Household Supplies',
+        (randRange(50, 150) * mult).toFixed(2),
+        `${ym}-${String(10 + Math.floor(Math.random() * 10)).padStart(2, '0')}`,
+        catId('Household Items'),
+        'expense',
+        profileId,
+        'USD',
+        'Target / Walmart',
+        '',
+      ]);
 
       // Online shopping
       const amazonOrders = Math.floor(randRange(1, 2));
       for (let a = 0; a < amazonOrders; a++) {
         const day = 8 + a * 10 + Math.floor(Math.random() * 4);
-        batch.push(['Online Shopping', (randRange(30, 120) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Household Items'), 'expense', profileId, 'USD', 'Amazon.com', '']);
+        batch.push([
+          'Online Shopping',
+          (randRange(30, 120) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Household Items'),
+          'expense',
+          profileId,
+          'USD',
+          'Amazon.com',
+          '',
+        ]);
       }
 
       // Entertainment
@@ -799,49 +1112,144 @@ function seedTransactions(profileId, config, startYear, currentYear, catId) {
       for (let e = 0; e < entertainmentCount; e++) {
         const day = 7 + e * 10 + Math.floor(Math.random() * 3);
         const activities = ['Movie Theater', 'Concert / Event', 'Sports Game', 'Arcade / Bowling'];
-        batch.push([activities[e % activities.length], (randRange(config.entertainment.min / entertainmentCount, config.entertainment.max / entertainmentCount) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Entertainment'), 'expense', profileId, 'USD', 'Venue / Theater', '']);
+        batch.push([
+          activities[e % activities.length],
+          (
+            randRange(
+              config.entertainment.min / entertainmentCount,
+              config.entertainment.max / entertainmentCount
+            ) * mult
+          ).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Entertainment'),
+          'expense',
+          profileId,
+          'USD',
+          'Venue / Theater',
+          '',
+        ]);
       }
 
       // Education
       if (month === 1 || month === 9) {
-        batch.push(['Education / Course / Books', (randRange(50, 300) * mult).toFixed(2), `${ym}-${String(5 + Math.floor(Math.random() * 10)).padStart(2, '0')}`, catId('Education'), 'expense', profileId, 'USD', 'University / Online Course', '']);
+        batch.push([
+          'Education / Course / Books',
+          (randRange(50, 300) * mult).toFixed(2),
+          `${ym}-${String(5 + Math.floor(Math.random() * 10)).padStart(2, '0')}`,
+          catId('Education'),
+          'expense',
+          profileId,
+          'USD',
+          'University / Online Course',
+          '',
+        ]);
       }
 
       // Personal care
       const personalVisits = Math.floor(randRange(1, 2));
       for (let p = 0; p < personalVisits; p++) {
         const day = 6 + p * 12 + Math.floor(Math.random() * 3);
-        batch.push(['Personal Care / Grooming', (randRange(25, 60) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Personal Care'), 'expense', profileId, 'USD', 'Salon / Barber', '']);
+        batch.push([
+          'Personal Care / Grooming',
+          (randRange(25, 60) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Personal Care'),
+          'expense',
+          profileId,
+          'USD',
+          'Salon / Barber',
+          '',
+        ]);
       }
 
       // Travel (July & December)
       if (month === 7 || month === 12) {
         const travelMult = config.tier === 'high' ? 2 : 1;
-        batch.push(['Travel / Vacation', (randRange(500, 2000) * travelMult * mult).toFixed(2), `${ym}-${String(1 + Math.floor(Math.random() * 10)).padStart(2, '0')}`, catId('Travel / Vacation'), 'expense', profileId, 'USD', 'Airline / Hotel / Travel Agency', '']);
+        batch.push([
+          'Travel / Vacation',
+          (randRange(500, 2000) * travelMult * mult).toFixed(2),
+          `${ym}-${String(1 + Math.floor(Math.random() * 10)).padStart(2, '0')}`,
+          catId('Travel / Vacation'),
+          'expense',
+          profileId,
+          'USD',
+          'Airline / Hotel / Travel Agency',
+          '',
+        ]);
       }
 
       // Public transportation
       const transitCount = config.tier === 'low' ? 4 : 2;
       for (let t = 0; t < transitCount; t++) {
         const day = 2 + t * 7 + Math.floor(Math.random() * 2);
-        batch.push(['Public Transportation', (randRange(2, 5) * mult).toFixed(2), `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`, catId('Transportation'), 'expense', profileId, 'USD', 'Metro / Bus', '']);
+        batch.push([
+          'Public Transportation',
+          (randRange(2, 5) * mult).toFixed(2),
+          `${ym}-${String(Math.min(day, 28)).padStart(2, '0')}`,
+          catId('Transportation'),
+          'expense',
+          profileId,
+          'USD',
+          'Metro / Bus',
+          '',
+        ]);
       }
 
       // Investments (monthly)
       if (config.investments && month !== 12) {
-        batch.push(['Investment Contribution', (randRange(config.investments.min, config.investments.max) * mult).toFixed(2), `${ym}-05`, catId('Investments / Stocks / ETF'), 'expense', profileId, 'USD', 'Brokerage Account', 'Monthly investment deposit']);
+        batch.push([
+          'Investment Contribution',
+          (randRange(config.investments.min, config.investments.max) * mult).toFixed(2),
+          `${ym}-05`,
+          catId('Investments / Stocks / ETF'),
+          'expense',
+          profileId,
+          'USD',
+          'Brokerage Account',
+          'Monthly investment deposit',
+        ]);
       }
 
       // Emergency fund (Jan & July)
       if (month === 1 || month === 7) {
-        batch.push(['Emergency Fund Transfer', (config.monthlySalary * 0.05 * mult).toFixed(2), `${ym}-${String(25 + Math.floor(Math.random() * 3)).padStart(2, '0')}`, catId('Emergency Fund'), 'expense', profileId, 'USD', 'Savings Account', 'Semi-annual emergency fund contribution']);
+        batch.push([
+          'Emergency Fund Transfer',
+          (config.monthlySalary * 0.05 * mult).toFixed(2),
+          `${ym}-${String(25 + Math.floor(Math.random() * 3)).padStart(2, '0')}`,
+          catId('Emergency Fund'),
+          'expense',
+          profileId,
+          'USD',
+          'Savings Account',
+          'Semi-annual emergency fund contribution',
+        ]);
       }
 
       // Gifts / Donations
       if (month === 12) {
-        batch.push(['Holiday Gifts / Charity', (randRange(200, 800) * mult).toFixed(2), `${ym}-20`, catId('Gifts / Donations'), 'expense', profileId, 'USD', 'Various', '']);
+        batch.push([
+          'Holiday Gifts / Charity',
+          (randRange(200, 800) * mult).toFixed(2),
+          `${ym}-20`,
+          catId('Gifts / Donations'),
+          'expense',
+          profileId,
+          'USD',
+          'Various',
+          '',
+        ]);
       } else if (month === 6 || month === 11) {
-        batch.push(['Gift / Donation', (randRange(50, 150) * mult).toFixed(2), `${ym}-${String(10 + Math.floor(Math.random() * 10)).padStart(2, '0')}`, catId('Gifts / Donations'), 'expense', profileId, 'USD', 'Charity / Gift Recipient', '']);
+        batch.push([
+          'Gift / Donation',
+          (randRange(50, 150) * mult).toFixed(2),
+          `${ym}-${String(10 + Math.floor(Math.random() * 10)).padStart(2, '0')}`,
+          catId('Gifts / Donations'),
+          'expense',
+          profileId,
+          'USD',
+          'Charity / Gift Recipient',
+          '',
+        ]);
       }
 
       // --- Pad to reach a random target between min and max with random purchases ---
@@ -849,8 +1257,24 @@ function seedTransactions(profileId, config, startYear, currentYear, catId) {
       const padNeeded = target - batch.length;
       for (let i = 0; i < Math.max(0, padNeeded); i++) {
         const day = 1 + Math.floor(Math.random() * 28);
-        const cats = ['Groceries', 'Food / Eating Out / Restaurants', 'Entertainment', 'Personal Care', 'Household Items'];
-        batch.push(['Miscellaneous Purchase', (randRange(10, 50) * mult).toFixed(2), `${ym}-${String(day).padStart(2, '0')}`, catId(cats[Math.floor(Math.random() * cats.length)]), 'expense', profileId, 'USD', 'Various Merchant', '']);
+        const cats = [
+          'Groceries',
+          'Food / Eating Out / Restaurants',
+          'Entertainment',
+          'Personal Care',
+          'Household Items',
+        ];
+        batch.push([
+          'Miscellaneous Purchase',
+          (randRange(10, 50) * mult).toFixed(2),
+          `${ym}-${String(day).padStart(2, '0')}`,
+          catId(cats[Math.floor(Math.random() * cats.length)]),
+          'expense',
+          profileId,
+          'USD',
+          'Various Merchant',
+          '',
+        ]);
       }
 
       // Insert all for this month
@@ -862,7 +1286,9 @@ function seedTransactions(profileId, config, startYear, currentYear, catId) {
 }
 
 function seedBudgets(profileId, config, startYear, currentYear, catId) {
-  const insertBudget = db.prepare('INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)');
+  const insertBudget = db.prepare(
+    'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
+  );
 
   // Create budgets for all years from startYear to currentYear (each year gets all 12 months)
   const years = [];
@@ -871,7 +1297,9 @@ function seedBudgets(profileId, config, startYear, currentYear, catId) {
   }
 
   // Calculate avg monthly spend per category from all historical transactions
-  const avgSpends = db.prepare(`
+  const avgSpends = db
+    .prepare(
+      `
     SELECT category_id, AVG(monthly_total) as avg_amount
     FROM (
       SELECT category_id, strftime('%Y-%m', date) as month, SUM(amount) as monthly_total
@@ -880,7 +1308,9 @@ function seedBudgets(profileId, config, startYear, currentYear, catId) {
       GROUP BY category_id, month
     )
     GROUP BY category_id
-  `).all(profileId);
+  `
+    )
+    .all(profileId);
 
   const avgMap = {};
   for (const row of avgSpends) {
@@ -917,7 +1347,8 @@ function seedBudgets(profileId, config, startYear, currentYear, catId) {
         if (cid) {
           const avg = avgMap[cid] || 0;
           // Budget = 100% of average (realistic baseline)
-          const budgetAmount = avg > 0 ? avg : config[catName.toLowerCase().replace(/[^a-z]+/g, '')]?.min || 100;
+          const budgetAmount =
+            avg > 0 ? avg : config[catName.toLowerCase().replace(/[^a-z]+/g, '')]?.min || 100;
           insertBudget.run(cid, budgetAmount.toFixed(2), 'monthly', monthStr, profileId);
         }
       }
@@ -926,14 +1357,23 @@ function seedBudgets(profileId, config, startYear, currentYear, catId) {
 }
 
 function seedSavingsGoals(profileId, config) {
-  const insertGoal = db.prepare('INSERT INTO savings_goals (name, target_amount, current_amount, deadline, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)');
+  const insertGoal = db.prepare(
+    'INSERT INTO savings_goals (name, target_amount, current_amount, deadline, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+  );
 
   // Current year + 1 to 3 years out
   const currentYear = new Date().getFullYear();
 
   for (const goal of config.savingsGoals) {
     const deadline = `${currentYear + (Math.random() > 0.5 ? 1 : 2)}-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-01`;
-    insertGoal.run(goal.name, goal.target, goal.current, deadline, `Savings goal for ${goal.name}`, profileId);
+    insertGoal.run(
+      goal.name,
+      goal.target,
+      goal.current,
+      deadline,
+      `Savings goal for ${goal.name}`,
+      profileId
+    );
   }
 }
 
@@ -943,7 +1383,12 @@ function seedBills(profileId, config) {
   );
 
   const bills = [
-    { name: 'Rent / Mortgage', amount: config.rent?.min || 1000, frequency: 'monthly', day_of_month: 1 },
+    {
+      name: 'Rent / Mortgage',
+      amount: config.rent?.min || 1000,
+      frequency: 'monthly',
+      day_of_month: 1,
+    },
     { name: 'Electricity Bill', amount: 150, frequency: 'monthly', day_of_month: 15 },
     { name: 'Natural Gas Bill', amount: 80, frequency: 'monthly', day_of_month: 20 },
     { name: 'Internet Service', amount: 70, frequency: 'monthly', day_of_month: 5 },
@@ -987,7 +1432,9 @@ function seedBills(profileId, config) {
 }
 
 function seedEmergencyFundConfig(profileId, config) {
-  const insertConfig = db.prepare('INSERT OR REPLACE INTO emergency_fund_config (id, monthly_expenses, profile_id) VALUES (1, ?, ?)');
+  const insertConfig = db.prepare(
+    'INSERT OR REPLACE INTO emergency_fund_config (id, monthly_expenses, profile_id) VALUES (1, ?, ?)'
+  );
 
   // Monthly expenses = roughly 80% of salary
   const monthlyExpenses = config.monthlySalary * 0.8;

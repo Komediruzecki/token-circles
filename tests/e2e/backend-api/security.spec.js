@@ -46,8 +46,8 @@ describe('Security E2E', () => {
         password: 'add2'
       });
 
-      // Exceed rate limit
-      for (let i = 0; i < 15; i++) {
+      // Rate limit allows 10 requests. Make 10 requests (9 + 1 = 10 total), should pass.
+      for (let i = 0; i < 9; i++) {
         await agent
           .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
           .send({ username: 'test', password: 'password123' })
@@ -58,7 +58,8 @@ describe('Security E2E', () => {
         username: 'maff',
         password: 'add2'
       });
-      global.expect(resp.status).toBe(200);
+      // After 10 requests, 11th should be blocked (429)
+      global.expect(resp.status).toBe(429);
     });
 
     test('SEC-003: Test reset rate limit endpoint', async () => {

@@ -9,7 +9,7 @@
 function calcMonthlyPayment(principal, annualRate, months) {
   if (annualRate === 0) return principal / months;
   const r = annualRate / 100 / 12;
-  return principal * (r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1);
+  return (principal * (r * Math.pow(1 + r, months))) / (Math.pow(1 + r, months) - 1);
 }
 
 /**
@@ -40,7 +40,7 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
     }
 
     // Determine if there's a prepayment this month
-    const prepayment = sortedPrepayments.find(p => p.month === monthIndex);
+    const prepayment = sortedPrepayments.find((p) => p.month === monthIndex);
     const prepayAmount = prepayment ? prepayment.amount : 0;
 
     const remainingMonths = termMonths - monthIndex + 1;
@@ -80,7 +80,7 @@ function calculateSchedule(principal, startDate, termMonths, ratePeriods, prepay
       balance: balance,
       prepayment: prepayAmount || 0,
       rate: currentRate,
-      note: prepayment ? (prepayment.note || '') : ''
+      note: prepayment ? prepayment.note || '' : '',
     });
   }
 
@@ -153,12 +153,11 @@ function getSummary(schedule, originalSchedule) {
     monthsSaved: monthsSaved(originalSchedule, schedule),
     payoffDate: payoffDate(schedule),
     totalPayments: schedule.length,
-    avgMonthlyPayment: schedule.length > 0
-      ? schedule.reduce((s, r) => s + r.payment, 0) / schedule.length
-      : 0,
+    avgMonthlyPayment:
+      schedule.length > 0 ? schedule.reduce((s, r) => s + r.payment, 0) / schedule.length : 0,
     maxBalance: schedule.length > 0 ? schedule[0].balance : 0,
     originalTotalInterest: originalInterest,
-    originalTotalPayments: originalMonths
+    originalTotalPayments: originalMonths,
   };
 }
 
@@ -171,5 +170,5 @@ module.exports = {
   interestSaved,
   monthsSaved,
   getSummary,
-  calcMonthlyPayment
+  calcMonthlyPayment,
 };

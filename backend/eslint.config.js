@@ -1,4 +1,4 @@
-import js from '@eslint/js'
+import js from '@eslint/js';
 
 export default [
   js.configs.recommended,
@@ -31,10 +31,6 @@ export default [
       'no-prototype-builtins': 'off',
       'no-useless-escape': 'off',
     },
-    ignores: [
-      '**/node_modules/**',
-      '**/test/**',
-      'jest.setup.js',
-    ],
+    ignores: ['**/node_modules/**', '**/test/**', 'jest.setup.js'],
   },
-]
+];
