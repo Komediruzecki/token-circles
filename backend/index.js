@@ -184,10 +184,11 @@ function parseDateString(dateStr) {
 function sanitizeInput(input) {
   if (typeof input !== 'string') return input;
   let sanitized = input.replace(/['";\\]/g, '');
-  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  // Remove script tags - step by step
+  sanitized = sanitized.replace(/<script[^>]*>.*?<\/script>/gi, '');
   sanitized = sanitized.replace(/javascript:/gi, '');
   sanitized = sanitized.replace(/on\w+\s*=/gi, '');
-  return sanitized;
+  return sanitized.trim();
 }
 
 // Session secret: require env var in production
