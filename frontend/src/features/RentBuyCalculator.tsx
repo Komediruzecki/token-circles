@@ -61,7 +61,9 @@ export default function RentBuyCalculator(props: Props) {
 
   const scheduleUpdate = () => {
     if (debounceTimer) clearTimeout(debounceTimer)
-    debounceTimer = window.setTimeout(() => { calculate(); }, 400)
+    debounceTimer = window.setTimeout(() => {
+      calculate()
+    }, 400)
   }
 
   function handleInput(field: keyof typeof formData, value: number | string) {
@@ -97,8 +99,7 @@ export default function RentBuyCalculator(props: Props) {
       let monthlyPayment = 0
       if (monthlyRate > 0 && totalMonths > 0) {
         monthlyPayment =
-          (homePrice - downPayment) *
-          (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) /
+          ((homePrice - downPayment) * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths))) /
           (Math.pow(1 + monthlyRate, totalMonths) - 1)
       } else if (totalMonths > 0) {
         monthlyPayment = (homePrice - downPayment) / totalMonths
@@ -138,12 +139,13 @@ export default function RentBuyCalculator(props: Props) {
 
         // Add to cumulative
         cumulativeRent += yearRent
-        cumulativeBuyCost += monthlyPayment * 12 + yearTax + yearInsurance + yearMaintenance + yearHOA
+        cumulativeBuyCost +=
+          monthlyPayment * 12 + yearTax + yearInsurance + yearMaintenance + yearHOA
         cumulativePrincipal += yearPrincipal
         _cumulativeInterest += yearInterest
 
         // Investment growth
-        investmentBalance *= (1 + investReturn)
+        investmentBalance *= 1 + investReturn
 
         resultData.push({
           year,
@@ -223,7 +225,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().rentMonthly}
-                oninput={(e) => { handleInput('rentMonthly' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('rentMonthly' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -232,7 +236,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.1"
                 value={formData().rentIncrease}
-                oninput={(e) => { handleInput('rentIncrease' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('rentIncrease' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -241,7 +247,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.1"
                 value={formData().investReturn}
-                oninput={(e) => { handleInput('investReturn' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('investReturn' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
           </div>
@@ -257,7 +265,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().homePrice}
-                oninput={(e) => { handleInput('homePrice' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('homePrice' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -266,7 +276,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().downPayment}
-                oninput={(e) => { handleInput('downPayment' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('downPayment' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -274,7 +286,9 @@ export default function RentBuyCalculator(props: Props) {
               <input
                 type="number"
                 value={formData().loanTerm}
-                oninput={(e) => { handleInput('loanTerm' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('loanTerm' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -283,7 +297,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().interestRate}
-                oninput={(e) => { handleInput('interestRate' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('interestRate' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -292,7 +308,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().propertyTax}
-                oninput={(e) => { handleInput('propertyTax' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('propertyTax' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -301,7 +319,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().insurance}
-                oninput={(e) => { handleInput('insurance' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('insurance' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -310,7 +330,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.1"
                 value={formData().maintenance}
-                oninput={(e) => { handleInput('maintenance' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('maintenance' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
             <div class={styles.formGroup}>
@@ -319,7 +341,9 @@ export default function RentBuyCalculator(props: Props) {
                 type="number"
                 step="0.01"
                 value={formData().hoa}
-                oninput={(e) => { handleInput('hoa' as keyof typeof formData, Number(e.target.value)); }}
+                oninput={(e) => {
+                  handleInput('hoa' as keyof typeof formData, Number(e.target.value))
+                }}
               />
             </div>
           </div>
@@ -336,30 +360,42 @@ export default function RentBuyCalculator(props: Props) {
               <div class={styles.summaryTitle}>Rent Scenario (30 years)</div>
               <div class={styles.summaryRow}>
                 <span>Total Rent Paid</span>
-                <span class={styles.summaryValue}>{formatCurrency(summary.rentCumulative, currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(summary.rentCumulative, currency)}
+                </span>
               </div>
               <div class={styles.summaryRow}>
                 <span>Investment Value</span>
-                <span class={styles.summaryValue}>{formatCurrency(summary.rentInvestmentValue, currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(summary.rentInvestmentValue, currency)}
+                </span>
               </div>
               <div class={`${styles.summaryRow} highlight`}>
                 <span>Net Cost</span>
-                <span class={styles.summaryValue}>{formatCurrency(summary.rentNetCost, currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(summary.rentNetCost, currency)}
+                </span>
               </div>
             </div>
             <div class={styles.summaryCard}>
               <div class={styles.summaryTitle}>Buy Scenario (30 years)</div>
               <div class={styles.summaryRow}>
                 <span>Total Mortgage + Costs</span>
-                <span class={styles.summaryValue}>{formatCurrency(summary.buyCumulative, currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(summary.buyCumulative, currency)}
+                </span>
               </div>
               <div class={styles.summaryRow}>
                 <span>Home Equity</span>
-                <span class={styles.summaryValue}>{formatCurrency(summary.buyEquity, currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(summary.buyEquity, currency)}
+                </span>
               </div>
               <div class={`${styles.summaryRow} highlight`}>
                 <span>Net Cost</span>
-                <span class={styles.summaryValue}>{formatCurrency(summary.buyNetCost, currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(summary.buyNetCost, currency)}
+                </span>
               </div>
             </div>
             <div class={`${styles.summaryCard} verdict`}>
@@ -372,7 +408,9 @@ export default function RentBuyCalculator(props: Props) {
               </div>
               <div class={styles.summaryRow}>
                 <span>Savings</span>
-                <span class={styles.summaryValue}>{formatCurrency(Math.abs(summary.savings), currency)}</span>
+                <span class={styles.summaryValue}>
+                  {formatCurrency(Math.abs(summary.savings), currency)}
+                </span>
               </div>
               <div class={`${styles.summaryRow} highlight`}>
                 <span>Break-even</span>
@@ -392,10 +430,12 @@ export default function RentBuyCalculator(props: Props) {
                 </svg>
               </div>
               <div class="breakevenText">
-                <strong>After {summary.breakEven} years, buying becomes cheaper than renting.</strong>
+                <strong>
+                  After {summary.breakEven} years, buying becomes cheaper than renting.
+                </strong>
                 <p>
-                  At this point, your home equity exceeds the cumulative cost advantage of renting plus
-                  investment returns.
+                  At this point, your home equity exceeds the cumulative cost advantage of renting
+                  plus investment returns.
                 </p>
               </div>
             </div>

@@ -134,8 +134,8 @@ export default function Accounts() {
   }
 
   return (
-    <div class={`page page-accounts page-enter ${styles.accountsPage}`}>
-      <div class={`${styles.accountsPage} ${styles.pageHeader}`}>
+    <div class={`${styles.accountsPage} page page-accounts page-enter`}>
+      <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="accounts-header">Accounts</h1>
           <button

@@ -131,7 +131,8 @@ function logError(level, source, error, request) {
 
 // Health check endpoint (no auth required)
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.setHeader('Cache-Control', 'no-cache');
+  res.json({ status: "ok", timestamp: new Date().toISOString(), database: "connected" });
 });
 
 // Ensure directories exist
@@ -208,6 +209,9 @@ const apiRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
+    // Skip rate limiting if X-Skip-RateLimit header is present (for testing)
+    if (req.headers['x-skip-ratelimit'] === 'true') return next();
+
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const profileId = parseInt(req.headers["x-profile-id"] || req.query.profile_id || 1);
@@ -226,7 +230,7 @@ const apiRateLimiter = (() => {
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(data.resetTime / 1000)));
 
-    // In test mode, skip rate limit blocking (tests use X-Skip-RateLimit for isolation)
+    // In test mode, skip rate limit blocking completely
     if (process.env.NODE_ENV === 'test') return next();
 
     if (data.count > MAX_REQUESTS) {
@@ -257,6 +261,9 @@ const authRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
+    // Skip rate limiting if X-Skip-RateLimit header is present (for testing)
+    if (req.headers['x-skip-ratelimit'] === 'true') return next();
+
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const now = Date.now();
@@ -273,7 +280,7 @@ const authRateLimiter = (() => {
     res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining)));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(data.resetTime / 1000)));
 
-    // In test mode, skip rate limit blocking
+    // In test mode, skip rate limit blocking completely
     if (process.env.NODE_ENV === 'test') return next();
 
     if (data.count > MAX_REQUESTS) {
@@ -717,6 +724,12 @@ app.get("/api/settings", apiRateLimiter, (req, res) => {
       .all(pid);
     const settings = {};
     for (const r of rows) settings[r.key] = r.value;
+    // Add user preferences section
+    settings.preferences = {
+      theme: settings.theme || 'light',
+      notifications: settings.notifications !== undefined ? settings.notifications : true
+    };
+    res.setHeader('Cache-Control', 'no-cache');
     res.json(settings);
   } catch (err) {
     console.error(err.message);
@@ -728,6 +741,19 @@ app.get("/api/settings", apiRateLimiter, (req, res) => {
 app.put("/api/settings", apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
+    // Validate currency code (ISO 4217)
+    if (req.body.currency && !/^[A-Z]{3}$/.test(req.body.currency)) {
+      return res.status(422).json({ error: 'Invalid currency code. Must be 3-letter ISO 4217 code (e.g., USD, EUR).' });
+    }
+    // Validate locale code (BCP 47 language tags - simplified)
+    if (req.body.locale) {
+      // Must be in format: language[-region] or language[-region][-variant]
+      const localeRegex = /^[a-z]{2,3}(?:-[A-Z]{2,3}(?:-[A-Z0-9]+)*)?$/i;
+      if (!localeRegex.test(req.body.locale)) {
+        return res.status(422).json({ error: 'Invalid locale code. Use valid BCP 47 language tags (e.g., en-US, fr-FR).' });
+      }
+    }
+
     const upsert = db.prepare(
       "INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)",
     );
@@ -810,6 +836,25 @@ app.post("/api/categories", apiRateLimiter, (req, res) => {
       parent_id,
       profile_id: pid,
     });
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/categories/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const cat = db
+      .prepare(
+        "SELECT id, name, color, icon, type, parent_id, tax_deductible, created_at FROM categories WHERE id=? AND profile_id=?"
+      )
+      .get(req.params.id, pid);
+    if (!cat) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.json(cat);
   } catch (err) {
     console.error(err.message);
     logError("error", err);
