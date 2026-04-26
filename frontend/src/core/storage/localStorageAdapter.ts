@@ -83,6 +83,9 @@ function createProfileInternal(name: string): number {
   // Create default categories
   createDefaultCategories(id)
 
+  // Seed sample data for this profile
+  seedSampleData(id)
+
   return id
 }
 
@@ -264,35 +267,217 @@ function deleteProfileData(id: number): void {
 
 /**
  * Create default categories for a profile
+ * Uses the same 26 categories as the SQL database (22 expense + 4 income)
  */
 function createDefaultCategories(profileId: number): void {
-  const expenseCategories = [
-    { name: 'Food & Dining', color: '#ef4444' },
-    { name: 'Transportation', color: '#f97316' },
-    { name: 'Entertainment', color: '#eab308' },
-    { name: 'Shopping', color: '#84cc16' },
-    { name: 'Bills & Utilities', color: '#22c55e' },
-    { name: 'Healthcare', color: '#14b8a6' },
-    { name: 'Education', color: '#06b6d4' },
-    { name: 'Personal Care', color: '#0ea5e9' },
-    { name: 'Travel', color: '#3b82f6' },
-    { name: 'Gifts & Donations', color: '#6366f1' },
-    { name: 'Other Expenses', color: '#8b5cf6' },
+  const categories = [
+    // Income categories
+    ['Salary Income', '#059669'],
+    ['Passive Income', '#2563eb'],
+    ['Investment Income', '#4f46e5'],
+    ['Other Income', '#9333ea'],
+    // Expense categories
+    ['Rent / Mortgage', '#dc2626'],
+    ['Utilities', '#475569'],
+    ['Groceries', '#ea580c'],
+    ['Clothing', '#7c3aed'],
+    ['Household Items', '#0891b2'],
+    ['Emergency Fund', '#dc2626'],
+    ['Investments / Stocks / ETF', '#16a34a'],
+    ['Car', '#d97706'],
+    ['Car Maintenance', '#b45309'],
+    ['Food / Eating Out / Restaurants', '#f97316'],
+    ['Health', '#16a34a'],
+    ['Subscriptions', '#0891b2'],
+    ['Transportation', '#6366f1'],
+    ['Travel / Vacation', '#0d9488'],
+    ['Education', '#db2777'],
+    ['Entertainment', '#8b5cf6'],
+    ['Personal Care', '#e11d48'],
+    ['Insurance', '#64748b'],
+    ['Gifts / Donations', '#ec4899'],
   ]
 
-  const incomeCategories = [
-    { name: 'Salary', color: '#22c55e' },
-    { name: 'Freelance', color: '#10b981' },
-    { name: 'Investments', color: '#06b6d4' },
-    { name: 'Other Income', color: '#6366f1' },
-  ]
-
-  expenseCategories.forEach((cat) => {
-    createCategoryData(profileId, 'expense', cat.name, cat.color)
+  categories.forEach(([name, color]) => {
+    createCategoryData(profileId, 'expense', name, color)
   })
 
-  incomeCategories.forEach((cat) => {
-    createCategoryData(profileId, 'income', cat.name, cat.color)
+  // Add income categories
+  const incomeCategories = ['Salary', 'Freelance', 'Investments', 'Other Income']
+  incomeCategories.forEach((name, index) => {
+    const colors = ['#22c55e', '#10b981', '#06b6d4', '#6366f1']
+    createCategoryData(profileId, 'income', name, colors[index])
+  })
+}
+
+/**
+ * Seed sample data for a profile
+ * Generates similar data to the SQL database's seedProfileData function
+ */
+function seedSampleData(profileId: number): void {
+  // Get category IDs
+  const categories = getCategoriesForProfile(profileId, 'expense')
+  const categoryMap: Record<string, number> = {}
+  categories.forEach(c => {
+    categoryMap[c.name] = c.id
+  })
+
+  // Get income category IDs
+  const incomeCategories = getCategoriesForProfile(profileId, 'income')
+  incomeCategories.forEach(c => {
+    categoryMap[c.name] = c.id
+  })
+
+  // Generate sample transactions (last 6 months)
+  const now = new Date()
+  const startMonth = new Date(now.getFullYear(), now.getMonth() - 6, 1)
+
+  for (let i = 0; i < 60; i++) {
+    const daysAgo = Math.floor(Math.random() * 180)
+    const date = new Date(startMonth)
+    date.setDate(date.getDate() + daysAgo)
+    const dateStr = date.toISOString().split('T')[0]
+
+    const random = Math.random()
+
+    // Income
+    if (random < 0.1) {
+      createTransactionData({
+        description: ['Salary Deposit', 'Passive Income - Rental Property', 'Investment Dividend', 'Year-End Bonus'][Math.floor(Math.random() * 4)],
+        amount: [Math.random() * 100 + 500, Math.random() * 200 + 100, Math.random() * 100 + 50, Math.random() * 2000 + 500][Math.floor(Math.random() * 4)],
+        date: dateStr,
+        type: 'income',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+    // Rent/Mortgage
+    else if (random < 0.25) {
+      createTransactionData({
+        description: 'Rent Payment',
+        amount: Math.random() * 500 + 800,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+        beneficiary: 'Property Management Co',
+      })
+    }
+    // Food
+    else if (random < 0.45) {
+      const foodTypes = ['Grocery Shopping', 'Restaurant / Takeout', 'Coffee / Lunch']
+      createTransactionData({
+        description: foodTypes[Math.floor(Math.random() * foodTypes.length)],
+        amount: Math.random() * 50 + 20,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+    // Utilities
+    else if (random < 0.6) {
+      const utilities = ['Electricity Bill', 'Natural Gas Bill', 'Water & Sewer', 'Internet Service']
+      createTransactionData({
+        description: utilities[Math.floor(Math.random() * utilities.length)],
+        amount: Math.random() * 100 + 30,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+    // Transportation
+    else if (random < 0.7) {
+      createTransactionData({
+        description: Math.random() < 0.5 ? 'Gas Station' : 'Car Maintenance / Service',
+        amount: Math.random() * 60 + 30,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+    // Subscriptions
+    else if (random < 0.8) {
+      const subs = ['Netflix Subscription', 'Spotify Premium', 'Gym Membership', 'Online News Sub']
+      createTransactionData({
+        description: subs[Math.floor(Math.random() * subs.length)],
+        amount: Math.random() * 20 + 10,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+    // Entertainment
+    else if (random < 0.9) {
+      const ent = ['Movie Theater', 'Concert / Event', 'Sports Game']
+      createTransactionData({
+        description: ent[Math.floor(Math.random() * ent.length)],
+        amount: Math.random() * 80 + 20,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+    // Miscellaneous
+    else {
+      createTransactionData({
+        description: 'Miscellaneous Purchase',
+        amount: Math.random() * 40 + 10,
+        date: dateStr,
+        type: 'expense',
+        profile_id: profileId,
+        currency: 'USD',
+      })
+    }
+  }
+
+  // Generate sample accounts
+  const accountNames = ['Checking Account', 'Savings Account']
+  accountNames.forEach(name => {
+    createAccountData({
+      name,
+      type: ['giro', 'savings'][Math.floor(Math.random() * 2)],
+      currency: 'USD',
+      balance: Math.random() * 10000 + 1000,
+      profile_id: profileId,
+      notes: 'Sample account',
+    })
+  })
+
+  // Generate sample savings goals
+  const goals = [
+    { name: 'Emergency Fund', target: 10000, current: 5000 },
+    { name: 'Vacation Fund', target: 3000, current: 1500 },
+    { name: 'New Car', target: 25000, current: 8000 },
+  ]
+  goals.forEach(goal => {
+    createGoalData({
+      name: goal.name,
+      target_amount: goal.target,
+      current_amount: goal.current,
+      deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000 * (Math.random() * 2 + 1)).toISOString().split('T')[0],
+      notes: `Savings goal for ${goal.name}`,
+      profile_id: profileId,
+    })
+  })
+
+  // Generate sample loans
+  const loans = [
+    { name: 'Car Loan', principal: 15000, rate: 5.5, start_date: '2024-01-01', term_months: 48 },
+  ]
+  loans.forEach(loan => {
+    createLoanData({
+      name: loan.name,
+      principal: loan.principal,
+      start_date: loan.start_date,
+      term_months: loan.term_months,
+      rate_periods: [{ rate: loan.rate, start_month: 0, end_month: loan.term_months }],
+      profile_id: profileId,
+    })
   })
 }
 
