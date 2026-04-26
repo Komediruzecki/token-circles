@@ -313,15 +313,13 @@ describe('Categories E2E', () => {
 
   describe('Category Auto-Map', () => {
     test('BE-CAT-026: Auto-map transaction description to category', async () => {
-      if (!agent.jar._cookieJar || agent.jar._cookieJar.store.size === 0) {
-        await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
-      }
-
       const resp = await agent.post('/api/categories/auto-map').set('X-Skip-RateLimit', 'true').send({
         description: 'Netflix subscription',
         amount: 15.99
       });
-      global.expect([200, 404]).to.include(resp.status);
+      // Auto-map endpoint returns list of mappings - expect 200 success
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('mappings');
     });
   });
 
