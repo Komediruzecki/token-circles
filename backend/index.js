@@ -18,7 +18,7 @@ function toCamelCase(obj) {
   if (obj !== null && typeof obj === 'object') {
     const result = {};
     Object.keys(obj).forEach(key => {
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      const camelKey = key.replace(/_([a-z])/g, function(_, letter) { return letter.toUpperCase(); });
       result[camelKey] = toCamelCase(obj[key]);
     });
     return result;
@@ -226,7 +226,7 @@ const apiRateLimiter = (() => {
 
   return (req, res, next) => {
     // Skip rate limiting if X-Skip-RateLimit header is present (for testing)
-    if (req.headers['x-skip-ratelimit'] === 'true') return next();
+    if (req.headers['X-Skip-RateLimit'] === 'true') return next();
 
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -278,7 +278,7 @@ const authRateLimiter = (() => {
 
   return (req, res, next) => {
     // Skip rate limiting if X-Skip-RateLimit header is present (for testing)
-    if (req.headers['x-skip-ratelimit'] === 'true') return next();
+    if (req.headers['X-Skip-RateLimit'] === 'true') return next();
 
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -829,19 +829,18 @@ app.get("/api/categories", apiRateLimiter, (req, res) => {
 app.post("/api/categories", apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { name, color, icon, type, parent_id, tax_deductible } = req.body;
+    const { name, color = '#6b7280', icon = 'tag', type = 'expense', parent_id: parentIdParam, tax_deductible } = req.body;
+    const parent_id = parentIdParam !== undefined ? parentIdParam : (req.body.parentId || null);
 
-    // Validation: ensure required fields
+    // Validation: ensure name is required
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ error: 'Category name is required' });
     }
 
-    if (!color || typeof color !== 'string' || color.trim() === '') {
-      return res.status(400).json({ error: 'Category color is required' });
-    }
-
-    if (!type || typeof type !== 'string' || type.trim() === '') {
-      return res.status(400).json({ error: 'Category type is required' });
+    // Check for duplicate category name for same profile
+    const existing = db.prepare('SELECT id FROM categories WHERE name=? AND profile_id=?').get(name.trim(), pid);
+    if (existing) {
+      return res.status(400).json({ error: 'Category name already exists for this profile' });
     }
 
     const info = db
@@ -851,21 +850,220 @@ app.post("/api/categories", apiRateLimiter, (req, res) => {
       .run(
         name.trim(),
         color.trim(),
-        icon || "tag",
-        type.trim(),
-        parent_id || null,
+        icon,
+        type,
+        parent_id,
         tax_deductible ? 1 : 0,
         pid,
       );
+
     res.json(toCamelCase({
       id: info.lastInsertRowid,
       name: name.trim(),
       color: color.trim(),
-      icon: icon || "tag",
+      icon: icon,
       type: type.trim(),
       parent_id,
       profile_id: pid,
     }));
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== CATEGORY MAPPINGS ====================
+
+// Built-in merchant dictionary (50+ common merchants)
+const MERCHANT_DICTIONARY = [
+  // Streaming
+  { pattern: 'netflix', category: 'Streaming', confidence: 0.95 },
+  { pattern: 'spotify', category: 'Streaming', confidence: 0.95 },
+  { pattern: 'youtube', category: 'Streaming', confidence: 0.90 },
+  { pattern: 'disney+', category: 'Streaming', confidence: 0.95 },
+  { pattern: 'hulu', category: 'Streaming', confidence: 0.95 },
+  { pattern: 'apple tv', category: 'Streaming', confidence: 0.90 },
+  { pattern: 'hbo', category: 'Streaming', confidence: 0.90 },
+  { pattern: 'prime video', category: 'Streaming', confidence: 0.95 },
+  // Shopping
+  { pattern: 'amazon', category: 'Shopping', confidence: 0.90 },
+  { pattern: 'ebay', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'walmart', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'target', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'costco', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'ikea', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'zara', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'h&m', category: 'Shopping', confidence: 0.95 },
+  { pattern: 'macy', category: 'Shopping', confidence: 0.95 },
+  // Food & Grocery
+  { pattern: 'walmart grocery', category: 'Groceries', confidence: 0.95 },
+  { pattern: 'costco', category: 'Groceries', confidence: 0.95 },
+  { pattern: 'trader joe', category: 'Groceries', confidence: 0.95 },
+  { pattern: 'whole foods', category: 'Groceries', confidence: 0.95 },
+  { pattern: 'target grocery', category: 'Groceries', confidence: 0.95 },
+  { pattern: 'kroger', category: 'Groceries', confidence: 0.90 },
+  { pattern: 'safeway', category: 'Groceries', confidence: 0.90 },
+  { pattern: 'albertsons', category: 'Groceries', confidence: 0.90 },
+  { pattern: 'stop & shop', category: 'Groceries', confidence: 0.90 },
+  { pattern: 'publix', category: 'Groceries', confidence: 0.90 },
+  { pattern: 'whole foods market', category: 'Groceries', confidence: 0.95 },
+  { pattern: 'sams club', category: 'Groceries', confidence: 0.90 },
+  // Dining
+  { pattern: 'starbucks', category: 'Dining', confidence: 0.95 },
+  { pattern: 'mcdonalds', category: 'Dining', confidence: 0.95 },
+  { pattern: 'burger king', category: 'Dining', confidence: 0.90 },
+  { pattern: 'wendy', category: 'Dining', confidence: 0.90 },
+  { pattern: 'taco bell', category: 'Dining', confidence: 0.90 },
+  { pattern: 'pizza hut', category: 'Dining', confidence: 0.90 },
+  { pattern: 'dominos', category: 'Dining', confidence: 0.90 },
+  { pattern: 'subway', category: 'Dining', confidence: 0.90 },
+  { pattern: 'panera', category: 'Dining', confidence: 0.90 },
+  { pattern: 'chipotle', category: 'Dining', confidence: 0.90 },
+  { pattern: 'chipotle mexican grill', category: 'Dining', confidence: 0.90 },
+  { pattern: 'dunkin', category: 'Dining', confidence: 0.90 },
+  { pattern: 'krispy kreme', category: 'Dining', confidence: 0.85 },
+  { pattern: 'dunkin donuts', category: 'Dining', confidence: 0.85 },
+  { pattern: 'starbucks coffee', category: 'Dining', confidence: 0.90 },
+  { pattern: 'cafe', category: 'Dining', confidence: 0.85 },
+  { pattern: 'restaurant', category: 'Dining', confidence: 0.85 },
+  { pattern: 'dinner', category: 'Dining', confidence: 0.85 },
+  { pattern: 'lunch', category: 'Dining', confidence: 0.85 },
+  { pattern: 'breakfast', category: 'Dining', confidence: 0.85 },
+  { pattern: 'brunch', category: 'Dining', confidence: 0.85 },
+  { pattern: 'cafe coffee', category: 'Dining', confidence: 0.85 },
+  // Utilities
+  { pattern: 'electric', category: 'Utilities', confidence: 0.95 },
+  { pattern: 'power', category: 'Utilities', confidence: 0.90 },
+  { pattern: 'gas bill', category: 'Utilities', confidence: 0.90 },
+  { pattern: 'gas', category: 'Utilities', confidence: 0.90 },
+  { pattern: 'water bill', category: 'Utilities', confidence: 0.90 },
+  { pattern: 'water', category: 'Utilities', confidence: 0.90 },
+  { pattern: 'internet', category: 'Utilities', confidence: 0.85 },
+  { pattern: 'phone', category: 'Utilities', confidence: 0.85 },
+  { pattern: 'mobile', category: 'Utilities', confidence: 0.85 },
+  { pattern: 'at&t', category: 'Utilities', confidence: 0.90 },
+  { pattern: 'verizon', category: 'Utilities', confidence: 0.90 },
+  { pattern: 't-mobile', category: 'Utilities', confidence: 0.90 },
+  // Healthcare
+  { pattern: 'pharmacy', category: 'Healthcare', confidence: 0.85 },
+  { pattern: 'cvs', category: 'Healthcare', confidence: 0.95 },
+  { pattern: 'walgreens', category: 'Healthcare', confidence: 0.95 },
+  { pattern: 'hospital', category: 'Healthcare', confidence: 0.90 },
+  { pattern: 'doctor', category: 'Healthcare', confidence: 0.85 },
+  { pattern: 'clinic', category: 'Healthcare', confidence: 0.85 },
+  { pattern: 'dental', category: 'Healthcare', confidence: 0.90 },
+  { pattern: 'optometrist', category: 'Healthcare', confidence: 0.90 },
+  // Entertainment
+  { pattern: 'cinema', category: 'Entertainment', confidence: 0.90 },
+  { pattern: 'theater', category: 'Entertainment', confidence: 0.90 },
+  { pattern: 'concert', category: 'Entertainment', confidence: 0.90 },
+  { pattern: 'ticketmaster', category: 'Entertainment', confidence: 0.95 },
+  { pattern: 'steam', category: 'Entertainment', confidence: 0.90 },
+  { pattern: 'playstation', category: 'Entertainment', confidence: 0.90 },
+  { pattern: 'xbox', category: 'Entertainment', confidence: 0.90 },
+  // Housing
+  { pattern: 'rent', category: 'Housing', confidence: 0.95 },
+  { pattern: 'mortgage', category: 'Housing', confidence: 0.95 },
+  { pattern: 'hoa', category: 'Housing', confidence: 0.90 },
+  { pattern: 'insurance', category: 'Housing', confidence: 0.70 },
+  // Income
+  { pattern: 'payroll', category: 'Salary', confidence: 0.95 },
+  { pattern: 'salary', category: 'Salary', confidence: 0.95 },
+  { pattern: 'direct deposit', category: 'Salary', confidence: 0.90 },
+  { pattern: 'freelance', category: 'Freelance', confidence: 0.90 },
+  { pattern: 'dividend', category: 'Investments', confidence: 0.95 },
+  { pattern: 'interest', category: 'Investments', confidence: 0.90 },
+];
+
+// Get learned mappings for profile
+app.get("/api/categories/mappings", apiRateLimiter, (req, res) => {
+  console.log("[DEBUG] GET /api/categories/mappings called, pid:", getProfileId(req));
+  try {
+    const pid = getProfileId(req);
+    console.log("[DEBUG] pid:", pid);
+    const rows = db.prepare(`
+      SELECT cm.*, c.name as category_name, c.color as category_color
+      FROM category_mappings cm
+      JOIN categories c ON cm.category_id = c.id
+      WHERE cm.profile_id = ?
+      ORDER BY cm.use_count DESC, cm.confidence DESC
+    `).all(pid);
+    console.log("[DEBUG] rows:", rows);
+    res.json(toCamelCase(rows));
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add/update a mapping
+app.post("/api/categories/mappings", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const { pattern, category_id, confidence, use_count } = req.body;
+
+    // Validation
+    if (!pattern || typeof pattern !== 'string' || pattern.trim() === '') {
+      return res.status(400).json({ error: 'Pattern is required' });
+    }
+    if (!category_id || typeof category_id !== 'number' || category_id <= 0) {
+      return res.status(400).json({ error: 'Valid category_id is required' });
+    }
+
+    // Check if mapping already exists
+    const existing = db.prepare(
+      'SELECT id, use_count FROM category_mappings WHERE profile_id=? AND pattern=?'
+    ).get(pid, pattern);
+
+    if (existing) {
+      // Update existing mapping
+      db.prepare(`
+        UPDATE category_mappings
+        SET category_id=?, confidence=?, use_count=?
+        WHERE id=?
+      `).run(category_id, confidence || 0.9, (use_count || existing.use_count) + 1, existing.id);
+      res.json(toCamelCase({ ok: true, id: existing.id, use_count: (use_count || existing.use_count) + 1 }));
+    } else {
+      // Insert new mapping
+      const info = db.prepare(`
+        INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(pid, pattern.trim(), category_id, confidence || 0.9, use_count || 1);
+      res.json(toCamelCase({ ok: true, id: info.lastInsertRowid }));
+    }
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a mapping
+app.delete("/api/categories/mappings/:id", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const result = db.prepare(
+      'DELETE FROM category_mappings WHERE id=? AND profile_id=?'
+    ).run(req.params.id, pid);
+    if (result.changes === 0)
+      return res.status(404).json({ error: "Not found" });
+    res.json(toCamelCase({ ok: true }));
+  } catch (err) {
+    console.error(err.message);
+    logError("error", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== CATEGORY CRUD ====================
+
+app.delete("/api/categories", apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    db.prepare("DELETE FROM categories WHERE profile_id=?").run(pid);
+    res.json({ ok: true, message: "All categories deleted" });
   } catch (err) {
     console.error(err.message);
     logError("error", err);
@@ -895,16 +1093,17 @@ app.get("/api/categories/:id", apiRateLimiter, (req, res) => {
 app.put("/api/categories/:id", apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { name, color, icon, type, parent_id, tax_deductible } = req.body;
+    const { name, color, icon, type, parent_id: parentIdParam, tax_deductible } = req.body;
+    const parent_id = parentIdParam !== undefined ? parentIdParam : (req.body.parentId || null);
     const result = db
       .prepare(
         "UPDATE categories SET name=?, color=?, icon=?, type=?, parent_id=?, tax_deductible=? WHERE id=? AND profile_id=?",
       )
       .run(
-        name,
-        color,
-        icon || "tag",
-        type,
+        name || '',
+        color || '',
+        icon || 'tag',
+        type || 'expense',
         parent_id || null,
         tax_deductible ? 1 : 0,
         req.params.id,
@@ -948,97 +1147,11 @@ app.delete("/api/categories", apiRateLimiter, (req, res) => {
   }
 });
 
-// ==================== CATEGORY MAPPINGS ====================
-
-// Built-in merchant dictionary (50+ common merchants)
-const MERCHANT_DICTIONARY = [
-  // Streaming
-  { pattern: 'netflix', category: 'Streaming', confidence: 0.95 },
-  { pattern: 'spotify', category: 'Streaming', confidence: 0.95 },
-  { pattern: 'youtube', category: 'Streaming', confidence: 0.90 },
-  { pattern: 'disney+', category: 'Streaming', confidence: 0.95 },
-  { pattern: 'hulu', category: 'Streaming', confidence: 0.95 },
-  { pattern: 'apple tv', category: 'Streaming', confidence: 0.90 },
-  { pattern: 'hbo', category: 'Streaming', confidence: 0.90 },
-  { pattern: 'prime video', category: 'Streaming', confidence: 0.95 },
-  // Shopping
-  { pattern: 'amazon', category: 'Shopping', confidence: 0.90 },
-  { pattern: 'ebay', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'walmart', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'target', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'costco', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'ikea', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'zara', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'h&m', category: 'Shopping', confidence: 0.95 },
-  { pattern: 'macy', category: 'Shopping', confidence: 0.95 },
-  // Food & Dining
-  { pattern: 'uber eats', category: 'Food & Dining', confidence: 0.95 },
-  { pattern: 'doordash', category: 'Food & Dining', confidence: 0.95 },
-  { pattern: 'grubhub', category: 'Food & Dining', confidence: 0.95 },
-  { pattern: 'mcdonald', category: 'Food & Dining', confidence: 0.90 },
-  { pattern: 'starbucks', category: 'Food & Dining', confidence: 0.90 },
-  { pattern: 'chipotle', category: 'Food & Dining', confidence: 0.90 },
-  { pattern: 'subway', category: 'Food & Dining', confidence: 0.90 },
-  { pattern: 'domino', category: 'Food & Dining', confidence: 0.90 },
-  { pattern: 'pizza', category: 'Food & Dining', confidence: 0.70 },
-  { pattern: 'restaurant', category: 'Food & Dining', confidence: 0.70 },
-  { pattern: 'cafe', category: 'Food & Dining', confidence: 0.70 },
-  { pattern: 'coffee', category: 'Food & Dining', confidence: 0.70 },
-  // Transportation
-  { pattern: 'uber', category: 'Transportation', confidence: 0.90 },
-  { pattern: 'lyft', category: 'Transportation', confidence: 0.95 },
-  { pattern: 'shell', category: 'Transportation', confidence: 0.90 },
-  { pattern: 'chevron', category: 'Transportation', confidence: 0.90 },
-  { pattern: 'exxon', category: 'Transportation', confidence: 0.90 },
-  { pattern: 'bp ', category: 'Transportation', confidence: 0.85 },
-  { pattern: 'parking', category: 'Transportation', confidence: 0.85 },
-  { pattern: 'toll', category: 'Transportation', confidence: 0.90 },
-  { pattern: 'metro', category: 'Transportation', confidence: 0.85 },
-  // Utilities
-  { pattern: 'electric', category: 'Utilities', confidence: 0.85 },
-  { pattern: 'water bill', category: 'Utilities', confidence: 0.90 },
-  { pattern: 'gas bill', category: 'Utilities', confidence: 0.90 },
-  { pattern: 'internet', category: 'Utilities', confidence: 0.85 },
-  { pattern: 'phone', category: 'Utilities', confidence: 0.85 },
-  { pattern: 'mobile', category: 'Utilities', confidence: 0.85 },
-  { pattern: 'at&t', category: 'Utilities', confidence: 0.90 },
-  { pattern: 'verizon', category: 'Utilities', confidence: 0.90 },
-  { pattern: 't-mobile', category: 'Utilities', confidence: 0.90 },
-  // Healthcare
-  { pattern: 'pharmacy', category: 'Healthcare', confidence: 0.85 },
-  { pattern: 'cvs', category: 'Healthcare', confidence: 0.95 },
-  { pattern: 'walgreens', category: 'Healthcare', confidence: 0.95 },
-  { pattern: 'hospital', category: 'Healthcare', confidence: 0.90 },
-  { pattern: 'doctor', category: 'Healthcare', confidence: 0.85 },
-  { pattern: 'clinic', category: 'Healthcare', confidence: 0.85 },
-  { pattern: 'dental', category: 'Healthcare', confidence: 0.90 },
-  { pattern: 'optometrist', category: 'Healthcare', confidence: 0.90 },
-  // Entertainment
-  { pattern: 'cinema', category: 'Entertainment', confidence: 0.90 },
-  { pattern: 'theater', category: 'Entertainment', confidence: 0.90 },
-  { pattern: 'concert', category: 'Entertainment', confidence: 0.90 },
-  { pattern: 'ticketmaster', category: 'Entertainment', confidence: 0.95 },
-  { pattern: 'steam', category: 'Entertainment', confidence: 0.90 },
-  { pattern: 'playstation', category: 'Entertainment', confidence: 0.90 },
-  { pattern: 'xbox', category: 'Entertainment', confidence: 0.90 },
-  // Housing
-  { pattern: 'rent', category: 'Housing', confidence: 0.95 },
-  { pattern: 'mortgage', category: 'Housing', confidence: 0.95 },
-  { pattern: 'hoa', category: 'Housing', confidence: 0.90 },
-  { pattern: 'insurance', category: 'Housing', confidence: 0.70 },
-  // Income
-  { pattern: 'payroll', category: 'Salary', confidence: 0.95 },
-  { pattern: 'salary', category: 'Salary', confidence: 0.95 },
-  { pattern: 'direct deposit', category: 'Salary', confidence: 0.90 },
-  { pattern: 'freelance', category: 'Freelance', confidence: 0.90 },
-  { pattern: 'dividend', category: 'Investments', confidence: 0.95 },
-  { pattern: 'interest', category: 'Investments', confidence: 0.90 },
-];
-
-// Get learned mappings for profile
 app.get("/api/categories/mappings", apiRateLimiter, (req, res) => {
+  console.log("[DEBUG] GET /api/categories/mappings called, pid:", getProfileId(req));
   try {
     const pid = getProfileId(req);
+    console.log("[DEBUG] pid:", pid);
     const rows = db.prepare(`
       SELECT cm.*, c.name as category_name, c.color as category_color
       FROM category_mappings cm
@@ -1046,6 +1159,7 @@ app.get("/api/categories/mappings", apiRateLimiter, (req, res) => {
       WHERE cm.profile_id = ?
       ORDER BY cm.use_count DESC, cm.confidence DESC
     `).all(pid);
+    console.log("[DEBUG] rows:", rows);
     res.json(toCamelCase(rows));
   } catch (err) {
     console.error(err.message);
@@ -1270,7 +1384,7 @@ app.post("/api/categories/apply-mappings", apiRateLimiter, (req, res) => {
     }
 
     const updateTx = db.prepare(
-      'UPDATE transactions SET category_id = ?, updated_at = datetime("now") WHERE id = ? AND profile_id = ?'
+      'UPDATE transactions SET category_id = ?, updated_at = datetime(\'now\') WHERE id = ? AND profile_id = ?'
     );
     const insertMapping = db.prepare(`
       INSERT OR REPLACE INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
@@ -1796,7 +1910,15 @@ app.get("/api/transactions/:id", apiRateLimiter, (req, res) => {
       ORDER BY tg.name
     `).all(id);
 
-    res.json(tx);
+    // Transform response: map category_name to category, category_color to categoryColor
+    const response = toCamelCase(tx);
+    // Map category_name (from SQL) to category (expected by frontend)
+    response.category = response.categoryName || null;
+    delete response.categoryName;
+    if (response.categoryColor != null) {
+      response.categoryColor = response.categoryColor;
+    }
+    res.json(response);
   } catch (err) {
     console.error(err.message);
     logError("error", err);
@@ -1877,6 +1999,7 @@ app.put("/api/transactions/bulk", apiRateLimiter, (req, res) => {
 app.put("/api/transactions/:id", apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
+    let hasUpdate = false;
     const {
       description,
       amount,
@@ -1893,44 +2016,90 @@ app.put("/api/transactions/:id", apiRateLimiter, (req, res) => {
       reconciled,
     } = req.body;
 
-    // Validate required fields
-    if (!description || typeof description !== 'string' || !description.trim()) {
-      return res.status(400).json({ error: 'Description is required' });
+    let updates = [];
+    let params = [];
+
+    if (description !== undefined) {
+      updates.push('description=?');
+      params.push(description);
+      hasUpdate = true;
     }
-    if (amount === undefined || amount === null || isNaN(amount) || Number(amount) <= 0) {
-      return res.status(400).json({ error: 'Amount must be a positive number' });
+    if (amount !== undefined) {
+      updates.push('amount=?');
+      params.push(amount);
+      hasUpdate = true;
     }
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ error: 'A valid date is required' });
+    if (date !== undefined) {
+      updates.push('date=?');
+      params.push(date);
+      hasUpdate = true;
     }
+    if (beneficiary !== undefined) {
+      updates.push('beneficiary=?');
+      params.push(beneficiary || "");
+      hasUpdate = true;
+    }
+    if (payor !== undefined) {
+      updates.push('payor=?');
+      params.push(payor || "");
+      hasUpdate = true;
+    }
+    if (category_id !== undefined) {
+      updates.push('category_id=?');
+      params.push(category_id || null);
+      hasUpdate = true;
+    }
+    if (currency !== undefined) {
+      updates.push('currency=?');
+      params.push(currency);
+      hasUpdate = true;
+    }
+    if (amount_local !== undefined) {
+      updates.push('amount_local=?');
+      params.push(amount_local ?? amount);
+      hasUpdate = true;
+    }
+    if (means_of_payment !== undefined) {
+      updates.push('means_of_payment=?');
+      params.push(means_of_payment || "");
+      hasUpdate = true;
+    }
+    if (exchange_rate !== undefined) {
+      updates.push('exchange_rate=?');
+      params.push(exchange_rate || 1.0);
+      hasUpdate = true;
+    }
+    if (type !== undefined) {
+      updates.push('type=?');
+      params.push(type);
+      hasUpdate = true;
+    }
+    if (notes !== undefined) {
+      updates.push('notes=?');
+      params.push(notes || "");
+      hasUpdate = true;
+    }
+    if (reconciled !== undefined) {
+      updates.push('reconciled=?');
+      updates.push('reconciled_at=CASE WHEN ?=1 THEN datetime(\'now\') ELSE reconciled_at END');
+      params.push(reconciled ? 1 : 0);
+      params.push(reconciled ? 1 : 0);
+      hasUpdate = true;
+    }
+
+    if (!hasUpdate) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+
+    updates.push('updated_at=datetime(\'now\')');
+    params.push(req.params.id);
+    params.push(pid);
 
     const result = db
       .prepare(
-        `
-      UPDATE transactions SET description=?, amount=?, date=?, beneficiary=?, payor=?,
-        category_id=?, currency=?, amount_local=?, means_of_payment=?, exchange_rate=?,
-        type=?, notes=?, reconciled=?, reconciled_at= CASE WHEN ? = 1 THEN datetime('now') ELSE reconciled_at END, updated_at=datetime('now')
-      WHERE id=? AND profile_id=?
-    `,
+        `UPDATE transactions SET ${updates.join(', ')} WHERE id=? AND profile_id=?`
       )
-      .run(
-        description,
-        amount,
-        date,
-        beneficiary || "",
-        payor || "",
-        category_id || null,
-        currency,
-        amount_local ?? amount,
-        means_of_payment || "",
-        exchange_rate || 1.0,
-        type,
-        notes || "",
-        reconciled ? 1 : 0,
-        reconciled ? 1 : 0,
-        req.params.id,
-        pid,
-      );
+      .run(...params);
     if (result.changes === 0)
       return res.status(404).json({ error: "Not found" });
     res.json(toCamelCase({ ok: true }));

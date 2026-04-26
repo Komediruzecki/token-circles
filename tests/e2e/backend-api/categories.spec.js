@@ -24,21 +24,21 @@ describe('Categories E2E', () => {
   });
 
   afterAll(async () => {
-    if (testCategoryId) try {
-      await agent.delete(`/api/categories/${testCategoryId}`).set('X-Skip-RateLimit', 'true');
-    } catch (e) {}
-    if (testCategoryId2) try {
-      await agent.delete(`/api/categories/${testCategoryId2}`).set('X-Skip-RateLimit', 'true');
-    } catch (e) {}
-    if (testTxId) try {
-      await agent.delete(`/api/transactions/${testTxId}`).set('X-Skip-RateLimit', 'true');
-    } catch (e) {}
-    if (testTxId2) try {
-      await agent.delete(`/api/transactions/${testTxId2}`).set('X-Skip-RateLimit', 'true');
-    } catch (e) {}
-    if (testTxId3) try {
-      await agent.delete(`/api/transactions/${testTxId3}`).set('X-Skip-RateLimit', 'true');
-    } catch (e) {}
+    const idsToDelete = [];
+
+    if (testCategoryId) idsToDelete.push(`/api/categories/${testCategoryId}`);
+    if (testCategoryId2) idsToDelete.push(`/api/categories/${testCategoryId2}`);
+    if (testTxId) idsToDelete.push(`/api/transactions/${testTxId}`);
+    if (testTxId2) idsToDelete.push(`/api/transactions/${testTxId2}`);
+    if (testTxId3) idsToDelete.push(`/api/transactions/${testTxId3}`);
+
+    for (const path of idsToDelete) {
+      try {
+        await agent.delete(path).set('X-Skip-RateLimit', 'true');
+      } catch (e) {
+        // Ignore errors (already deleted or not found)
+      }
+    }
   });
 
   describe('Category Creation', () => {
@@ -264,7 +264,7 @@ describe('Categories E2E', () => {
 
     test('BE-CAT-021: PUT /api/transactions/:id/category updates category', async () => {
       const resp = await agent.put(`/api/transactions/${testTxId}`).set('X-Skip-RateLimit', 'true').send({
-        categoryId: 1
+        category_id: 1
       });
       global.expect(resp.status).toBe(200);
       global.expect(resp.body.ok).toBe(true);
@@ -287,8 +287,8 @@ describe('Categories E2E', () => {
         const cat2 = categories.body[1].id;
 
         const resp = await agent.post('/api/categories/mappings').set('X-Skip-RateLimit', 'true').send({
-          sourceCategory: cat1,
-          targetCategory: cat2
+          pattern: 'TestPattern_' + Date.now(),
+          category_id: cat2
         });
         global.expect(resp.status).toBe(200);
       }
@@ -339,7 +339,7 @@ describe('Categories E2E', () => {
         });
 
         const mappingResp = await agent.put(`/api/transactions/${txResp.body.id}`).set('X-Skip-RateLimit', 'true').send({
-          categoryId: catId
+          category_id: catId
         });
         global.expect(mappingResp.status).toBe(200);
       }
@@ -358,7 +358,7 @@ describe('Categories E2E', () => {
         });
 
         const mappingResp = await agent.put(`/api/transactions/${txResp.body.id}`).set('X-Skip-RateLimit', 'true').send({
-          categoryId: catId
+          category_id: catId
         });
         global.expect(mappingResp.status).toBe(200);
       }
