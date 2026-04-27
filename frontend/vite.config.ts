@@ -43,6 +43,7 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#ffffff',
         theme_color: '#3b82f6',
+        version: new Date().getTime().toString(),
         icons: [
           {
             src: 'icon-192.png',
@@ -61,12 +62,15 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/finance-manager\.clodhost\.com\/.*/i,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
-              cacheName: 'finance-manager-cache',
+              cacheName: 'finance-manager-v1',
               expiration: {
                 maxEntries: 60,
-                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                maxAgeSeconds: 1 * 24 * 60 * 60, // 1 day
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
               },
             },
           },
