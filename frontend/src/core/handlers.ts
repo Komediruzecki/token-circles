@@ -3,8 +3,6 @@
  * Migrated from legacy window.handlers, window.receipts, window.transactions
  */
 
-import { api } from './api.js'
-
 export interface ReceiptData {
   id: number
   original_name: string
@@ -295,7 +293,6 @@ export const handlers = {
 }
 
 // Direct function exports for window access
-
 export const receipts = {
   handleFileSelect: (event: Event) => {
     handleReceiptFileSelect(event)

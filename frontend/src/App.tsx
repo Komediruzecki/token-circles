@@ -5,9 +5,9 @@
 import { createMemo, createSignal, onMount, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
-import { handlers, receipts, transactions } from './core/handlers.js'
-import { pages as allPages } from './router.tsx'
 import profileStyles from './components/Profile.module.css'
+import { handlers, receipts, transactions, authLogin, authLogout, selectProfile } from './core/handlers.js'
+import { pages as allPages } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -36,7 +36,7 @@ export function App() {
 
   const selectProfile = async (profileId: number) => {
     try {
-      await window.handlers?.selectProfile?.(profileId)
+      window.handlers?.selectProfile?.(profileId)
       setCurrentProfile(profiles().find((p) => p.id === profileId))
       setShowDropdown(false)
     } catch {
@@ -50,7 +50,7 @@ export function App() {
 
   const handleLogin = async () => {
     try {
-      await window.handlers?.authLogin?.()
+      window.handlers?.authLogin?.()
       await loadProfiles()
       // Select the first available profile after login
       if (profiles().length > 0) {
@@ -69,7 +69,7 @@ export function App() {
 
   const handleLogout = async () => {
     try {
-      await window.handlers?.authLogout?.()
+      window.handlers?.authLogout?.()
       setCurrentProfile(null)
       // Clear localStorage when logged out
       localStorage.removeItem('currentProfileId')
