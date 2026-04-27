@@ -4,9 +4,9 @@
 
 import { createMemo, createSignal, onMount, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
+import layoutStyles from './components/Layout.module.css'
 import { handlers, receipts, transactions } from './core/handlers.js'
 import { pages as allPages } from './router.tsx'
-import layoutStyles from './components/Layout.module.css'
 import sidebarStyles from './styles/AppSidebar.module.css'
 
 // Mount handlers to window for legacy code compatibility
@@ -22,7 +22,7 @@ export function App() {
   createMemo(() => {
     const page = allPages[activePage()]
     if (page) {
-      _setIsLoading(page.loading ?? false)
+      _setIsLoading(false)
     }
   })
 
@@ -59,12 +59,11 @@ export function App() {
           {Object.entries(allPages).map(([name, page]) => (
             <Dynamic
               key={name}
-              component={page.component}
+              component={page}
               data-page={name}
               data-testid={`page-${name}`}
               class={{
                 [layoutStyles.page]: true,
-                [page.className || '']: page.className !== undefined,
               }}
             />
           ))}
