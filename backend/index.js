@@ -583,11 +583,13 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     if (!user) {
+      logError('warning', 'AUTH', 'Invalid login attempt - username not found', { username });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      logError('warning', 'AUTH', 'Invalid login attempt - wrong password', { username });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
