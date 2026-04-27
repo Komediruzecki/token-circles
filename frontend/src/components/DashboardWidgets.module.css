@@ -1,4 +1,4 @@
-.savingsRateCard {
+.savings-rate-card {
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -7,36 +7,36 @@
   margin-bottom: 16px;
 }
 
-.savingsRateHeader {
+.savings-rate-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
 }
 
-.savingsRateTitle {
+.savings-rate-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 
-.savingsRateSubtitle {
+.savings-rate-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
 }
 
-.savingsRateInput {
+.savings-rate-input {
   width: 80px;
   font-size: 13px;
 }
 
-.savingsRateContent {
+.savings-rate-content {
   text-align: center;
   padding: 12px 0;
 }
 
-.budgetAlertsCard {
+.budget-alerts-card {
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -46,58 +46,58 @@
   display: none;
 }
 
-.budgetAlertsHeader {
+.budget-alerts-header {
   margin-bottom: 12px;
 }
 
-.budgetAlertsTitle {
+.budget-alerts-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 
-.budgetAlertsSubtitle {
+.budget-alerts-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
 }
 
-.budgetAlertsList {
+.budget-alerts-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.budgetAlertsHistory {
+.budget-alerts-history {
   margin-top: 16px;
   display: none;
 }
 
-.budgetAlertsHistoryHeader {
+.budget-alerts-history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 }
 
-.budgetAlertsHistoryTitle {
+.budget-alerts-history-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
-.budgetAlertsHistoryContent {
+.budget-alerts-history-content {
   max-height: 240px;
   overflow-y: auto;
 }
 
-.budgetAlertsHistoryList {
+.budget-alerts-history-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.recurringInsightsCard {
+.recurring-insights-card {
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -107,31 +107,31 @@
   display: none;
 }
 
-.recurringInsightsHeader {
+.recurring-insights-header {
   margin-bottom: 12px;
 }
 
-.recurringInsightsTitle {
+.recurring-insights-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 
-.recurringInsightsSubtitle {
+.recurring-insights-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
 }
 
-.recurringInsightsTotal {
+.recurring-insights-total {
   font-size: 20px;
   font-weight: 700;
 }
 
-.recurringInsightsCategories {
+.recurring-insights-categories {
   flex: 1;
 }
 
-.recurringInsightsList {
+.recurring-insights-list {
   margin-top: 12px;
 }

@@ -1,27 +1,27 @@
-.transactionsPage {
+.transactions-page {
   padding: 24px;
 }
-.transactionsPage .pageHeader {
+.transactions-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.transactionsPage .pageHeader h1 {
+.transactions-page .page-header h1 {
   font-size: 24px;
   font-weight: 700;
 }
-.transactionsPage .pageSubtitle {
+.transactions-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
-.transactionsPage .filterSection {
+.transactions-page .filter-section {
   margin-bottom: 16px;
 }
-.transactionsPage .searchSection {
+.transactions-page .search-section {
   margin-bottom: 12px;
 }
-.transactionsPage .searchInput {
+.transactions-page .search-input {
   width: 100%;
   padding: 12px 16px;
   border: 1px solid var(--border);
@@ -31,17 +31,17 @@
   font-size: 14px;
   transition: border-color 0.2s;
 }
-.transactionsPage .searchInput:focus {
+.transactions-page .search-input:focus {
   outline: none;
   border-color: var(--primary);
 }
-.transactionsPage .typeFilters {
+.transactions-page .type-filters {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
-.transactionsPage .typeBtn {
+.transactions-page .type-btn {
   padding: 8px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -51,22 +51,22 @@
   transition: all 0.2s;
   font-size: 14px;
 }
-.transactionsPage .typeBtn:hover {
+.transactions-page .type-btn:hover {
   background: var(--card-bg);
 }
-.transactionsPage .typeBtnActive {
+.transactions-page .type-btn-active {
   background: var(--primary);
   color: #fff;
   border-color: var(--primary);
 }
-.transactionsPage .loading {
+.transactions-page .loading {
   padding: 48px;
   text-align: center;
   color: var(--text-secondary);
 }
 
-/* Modal */
-.transactionsPage .modal {
+/* modal */
+.transactions-page .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -76,7 +76,7 @@
   overflow-y: auto;
 }
 
-.transactionsPage .modalHeader {
+.transactions-page .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -84,13 +84,13 @@
   border-bottom: 1px solid var(--border);
 }
 
-.transactionsPage .modalTitle {
+.transactions-page .modal-title {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
 
-.transactionsPage .modalClose {
+.transactions-page .modal-close {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -98,11 +98,11 @@
   color: var(--text-secondary);
 }
 
-.transactionsPage .modalBody {
+.transactions-page .modal-body {
   padding: 20px;
 }
 
-.transactionsPage .modalFooter {
+.transactions-page .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -110,17 +110,17 @@
   border-top: 1px solid var(--border);
 }
 
-/* Form */
-.transactionsPage .formGroup {
+/* form */
+.transactions-page .form-group {
   margin-bottom: 16px;
 }
-.transactionsPage .formLabel {
+.transactions-page .form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 6px;
 }
-.transactionsPage .formControl {
+.transactions-page .form-control {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -128,18 +128,18 @@
   background: var(--bg);
   color: var(--text);
 }
-.transactionsPage .formRow {
+.transactions-page .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-/* Type selector */
-.transactionsPage .typeSelector {
+/* type selector */
+.transactions-page .type-selector {
   display: flex;
   gap: 8px;
 }
-.transactionsPage .typeSelector .expense {
+.transactions-page .type-selector .expense {
   flex: 1;
   padding: 8px;
   border: 1px solid var(--border);
@@ -148,12 +148,12 @@
   cursor: pointer;
   transition: all 0.15s;
 }
-.transactionsPage .typeSelector .expense.active {
+.transactions-page .type-selector .expense.active {
   border-color: var(--expense);
   background: var(--expense);
   color: #fff;
 }
-.transactionsPage .typeSelector .income {
+.transactions-page .type-selector .income {
   flex: 1;
   padding: 8px;
   border: 1px solid var(--border);
@@ -162,12 +162,12 @@
   cursor: pointer;
   transition: all 0.15s;
 }
-.transactionsPage .typeSelector .income.active {
+.transactions-page .type-selector .income.active {
   border-color: var(--income);
   background: var(--income);
   color: #fff;
 }
-.transactionsPage .typeSelector .transfer {
+.transactions-page .type-selector .transfer {
   flex: 1;
   padding: 8px;
   border: 1px solid var(--border);
@@ -176,32 +176,32 @@
   cursor: pointer;
   transition: all 0.15s;
 }
-.transactionsPage .typeSelector .transfer.active {
+.transactions-page .type-selector .transfer.active {
   border-color: var(--primary);
   background: var(--primary);
   color: #fff;
 }
 
-/* Tag chips */
-.transactionsPage .txTagChips {
+/* tag chips */
+.transactions-page .tx-tag-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
-.transactionsPage .txTagNewInput {
+.transactions-page .tx-tag-new-input {
   width: 100%;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
 }
-.transactionsPage .txTagInputRow {
+.transactions-page .tx-tag-input-row {
   display: flex;
   gap: 8px;
   margin-top: 8px;
 }
-.transactionsPage .txTagInput {
+.transactions-page .tx-tag-input {
   flex: 1;
   padding: 8px;
   border: 1px solid var(--border);
@@ -209,55 +209,55 @@
   font-size: 13px;
 }
 
-/* Receipt */
-.transactionsPage .receiptUploadContainer {
+/* receipt */
+.transactions-page .receipt-upload-container {
   padding: 12px;
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   text-align: center;
 }
-.transactionsPage .receiptPlaceholder {
+.transactions-page .receipt-placeholder {
   cursor: pointer;
   display: inline-block;
 }
-.transactionsPage .receiptThumbnail {
+.transactions-page .receipt-thumbnail {
   max-width: 200px;
   max-height: 200px;
   margin-top: 12px;
   border-radius: 8px;
 }
-.transactionsPage .receiptActions {
+.transactions-page .receipt-actions {
   margin-top: 12px;
 }
-.transactionsPage .receiptText {
+.transactions-page .receipt-text {
   display: block;
   margin-top: 8px;
   font-size: 13px;
   color: var(--text-secondary);
 }
-.transactionsPage .receiptInput {
+.transactions-page .receipt-input {
   display: none;
 }
-.transactionsPage .receiptMeta {
+.transactions-page .receipt-meta {
   margin-top: 16px;
   padding: 12px;
   background: var(--bg);
   border-radius: var(--radius);
 }
-.transactionsPage .receiptMetaItem {
+.transactions-page .receipt-meta-item {
   display: flex;
   justify-content: space-between;
   padding: 4px 0;
 }
-.transactionsPage .receiptMetaLabel {
+.transactions-page .receipt-meta-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
-.transactionsPage .receiptModal {
+.transactions-page .receipt-modal {
   max-width: 800px;
 }
 
-/* Legacy class mappings for Transactions modal */
+/* legacy class mappings for transactions modal */
 .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -455,13 +455,13 @@
   max-width: 800px;
 }
 
-/* CamelCase module classes */
-.txTagSelector {
+/* camel-case module classes */
+.tx-tag-selector {
   display: flex;
   flex-direction: column;
 }
 
-.modalFooter {
+.modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -469,7 +469,7 @@
   border-top: 1px solid var(--border);
 }
 
-.modalHeader {
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -477,13 +477,13 @@
   border-bottom: 1px solid var(--border);
 }
 
-.modalTitle {
+.modal-title {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
 
-.btnGhost {
+.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
   border: none;
@@ -496,12 +496,12 @@
   justify-content: center;
 }
 
-.btnGhost:hover {
+.btn-ghost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }
 
-.btnSm {
+.btn-sm {
   padding: 4px 8px;
   font-size: 12px;
   background: transparent;
@@ -511,7 +511,7 @@
   transition: all 0.2s;
 }
 
-.btnSecondary {
+.btn-secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -526,11 +526,11 @@
   justify-content: center;
 }
 
-.btnSecondary:hover {
+.btn-secondary:hover {
   background: var(--bg);
 }
 
-.btnPrimary {
+.btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -545,11 +545,11 @@
   justify-content: center;
 }
 
-.btnPrimary:hover {
+.btn-primary:hover {
   background: var(--primary-hover);
 }
 
-.btnDanger {
+.btn-danger {
   background: var(--danger);
   color: #fff;
   border: none;
@@ -564,43 +564,43 @@
   justify-content: center;
 }
 
-.btnDanger:hover {
+.btn-danger:hover {
   background: var(--danger-hover);
 }
 
-.modalLg {
+.modal-lg {
   max-width: 800px;
 }
 
-.receiptModal {
+.receipt-modal {
   max-width: 800px;
 }
 
-.receiptMeta {
+.receipt-meta {
   margin-top: 16px;
   padding: 12px;
   background: var(--bg);
   border-radius: var(--radius);
 }
 
-.receiptMetaItem {
+.receipt-meta-item {
   display: flex;
   justify-content: space-between;
   padding: 4px 0;
 }
 
-.receiptMetaLabel {
+.receipt-meta-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.receiptText {
+.receipt-text {
   display: block;
   margin-top: 8px;
   font-size: 13px;
   color: var(--text-secondary);
 }
 
-.receiptInput {
+.receipt-input {
   display: none;
 }

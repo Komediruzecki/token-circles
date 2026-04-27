@@ -1,11 +1,11 @@
-.dashboardStats {
+.dashboard-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.dashboardStats .statCard {
+.dashboard-stats .stat-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -14,7 +14,7 @@
   overflow: hidden;
 }
 
-.dashboardStats .statCard.income::before {
+.dashboard-stats .stat-card.income::before {
   content: '';
   position: absolute;
   top: 0;
@@ -24,7 +24,7 @@
   background: var(--income);
 }
 
-.dashboardStats .statCard.expense::before {
+.dashboard-stats .stat-card.expense::before {
   content: '';
   position: absolute;
   top: 0;
@@ -34,7 +34,7 @@
   background: var(--expense);
 }
 
-.dashboardStats .statCard.balance::before {
+.dashboard-stats .stat-card.balance::before {
   content: '';
   position: absolute;
   top: 0;
@@ -44,7 +44,7 @@
   background: var(--primary);
 }
 
-.dashboardStats .statCard.networth::before {
+.dashboard-stats .stat-card.networth::before {
   content: '';
   position: absolute;
   top: 0;
@@ -54,7 +54,7 @@
   background: var(--success);
 }
 
-.dashboardStats .statLabel {
+.dashboard-stats .stat-label {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
@@ -62,34 +62,34 @@
   letter-spacing: 0.5px;
 }
 
-.dashboardStats .statValue {
+.dashboard-stats .stat-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
   color: var(--text);
 }
 
-.dashboardStats .statValue.income {
+.dashboard-stats .stat-value.income {
   color: var(--income);
 }
 
-.dashboardStats .statValue.expense {
+.dashboard-stats .stat-value.expense {
   color: var(--expense);
 }
 
-.dashboardStats .statValue.balance {
+.dashboard-stats .stat-value.balance {
   color: var(--primary);
 }
 
-.dashboardStats .statChange {
+.dashboard-stats .stat-change {
   font-size: 11px;
   margin-top: 6px;
 }
 
-.dashboardStats .statChange.positive {
+.dashboard-stats .stat-change.positive {
   color: var(--success);
 }
 
-.dashboardStats .statChange.negative {
+.dashboard-stats .stat-change.negative {
   color: var(--danger);
 }

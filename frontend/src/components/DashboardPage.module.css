@@ -1,5 +1,5 @@
 /**
- * DashboardPage CSS Module
+ * dashboard-page css module
  */
 
 .page-header {
@@ -270,7 +270,7 @@
   flex: 1;
 }
 
-.btnPrimary {
+.btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -285,11 +285,11 @@
   transition: background 0.2s;
 }
 
-.btnPrimary:hover {
+.btn-primary:hover {
   background: var(--primary-hover);
 }
 
-.btnSecondary {
+.btn-secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -304,17 +304,17 @@
   transition: all 0.2s;
 }
 
-.btnSecondary:hover {
+.btn-secondary:hover {
   background: var(--bg);
 }
 
-@keyframes fadeIn {
+@keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate-y(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate-y(0);
   }
 }

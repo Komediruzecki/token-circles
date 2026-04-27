@@ -1,232 +1,232 @@
-.retirementPage {
+.retirement-page {
   padding: 24px;
 }
-.retirementPage .pageHeader {
+.retirement-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.retirementPage .headerTop {
+.retirement-page .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.retirementPage h1 {
+.retirement-page h1 {
   font-size: 24px;
   font-weight: 700;
 }
-.retirementPage .pageSubtitle {
+.retirement-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
-.retirementPage .retirementProjection {
+.retirement-page .retirement-projection {
   display: flex;
   flex-direction: column;
   gap: 16px;
   margin-bottom: 24px;
 }
-.retirementPage .projectionRow {
+.retirement-page .projection-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
 }
-.retirementPage .projectionCard {
+.retirement-page .projection-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.retirementPage .projectionCard.primary {
+.retirement-page .projection-card.primary {
   border-left: 4px solid var(--primary);
 }
-.retirementPage .cardLabel {
+.retirement-page .card-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
-.retirementPage .cardValue {
+.retirement-page .card-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
 }
-.retirementPage .cardSub {
+.retirement-page .card-sub {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 4px;
 }
-.retirementPage .projectionDetails {
+.retirement-page .projection-details {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
 }
-.retirementPage .detailRow {
+.retirement-page .detail-row {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
   font-size: 14px;
 }
-.retirementPage .detailLabel {
+.retirement-page .detail-label {
   color: var(--text-secondary);
 }
-.retirementPage .detailValue {
+.retirement-page .detail-value {
   font-weight: 600;
 }
-.retirementPage .detailValue.positive {
+.retirement-page .detail-value.positive {
   color: var(--income);
 }
-.retirementPage .retirementGoals {
+.retirement-page .retirement-goals {
   margin-bottom: 24px;
 }
-.retirementPage .sectionTitle {
+.retirement-page .section-title {
   font-size: 18px;
   font-weight: 600;
 }
-.retirementPage .goalsGrid {
+.retirement-page .goals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.retirementPage .goalCard {
+.retirement-page .goal-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.retirementPage .goalHeader {
+.retirement-page .goal-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.retirementPage .goalIcon {
+.retirement-page .goal-icon {
   font-size: 32px;
 }
-.retirementPage .goalInfo {
+.retirement-page .goal-info {
   flex: 1;
   min-width: 0;
 }
-.retirementPage .goalName {
+.retirement-page .goal-name {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 2px;
 }
-.retirementPage .goalActions {
+.retirement-page .goal-actions {
   display: flex;
   gap: 4px;
 }
-.retirementPage .goalBalance {
+.retirement-page .goal-balance {
   padding-top: 12px;
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
-.retirementPage .balanceLabel {
+.retirement-page .balance-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
-.retirementPage .balanceValue {
+.retirement-page .balance-value {
   font-size: 20px;
   font-weight: 700;
 }
-.retirementPage .goalProgress {
+.retirement-page .goal-progress {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.retirementPage .goalDetails {
+.retirement-page .goal-details {
   padding-top: 12px;
   margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.retirementPage .detailItem {
+.retirement-page .detail-item {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
 }
-.retirementPage .retirementProjections {
+.retirement-page .retirement-projections {
   margin-bottom: 24px;
 }
-.retirementPage .projectionChart {
+.retirement-page .projection-chart {
   margin-bottom: 16px;
 }
-.retirementPage .projectionBars {
+.retirement-page .projection-bars {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.retirementPage .projectionBarItem {
+.retirement-page .projection-bar-item {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.retirementPage .barLabel {
+.retirement-page .bar-label {
   font-size: 14px;
   width: 60px;
 }
-.retirementPage .barTrack {
+.retirement-page .bar-track {
   flex: 1;
   height: 8px;
   background: var(--bg);
   border-radius: 4px;
   overflow: hidden;
 }
-.retirementPage .barFill {
+.retirement-page .bar-fill {
   height: 100%;
   background: var(--primary);
   transition: width 0.3s;
 }
-.retirementPage .barFill.start {
+.retirement-page .bar-fill.start {
   background: var(--success);
 }
-.retirementPage .barFill.retirement {
+.retirement-page .bar-fill.retirement {
   background: var(--warning);
 }
-.retirementPage .barValue {
+.retirement-page .bar-value {
   font-size: 14px;
   font-weight: 600;
   width: 100px;
   text-align: right;
 }
-.retirementPage .chartLegend {
+.retirement-page .chart-legend {
   display: flex;
   gap: 16px;
   padding: 12px;
   background: var(--bg);
   border-radius: var(--radius);
 }
-.retirementPage .legendItem {
+.retirement-page .legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
 }
-.retirementPage .legendDot {
+.retirement-page .legend-dot {
   width: 12px;
   height: 12px;
   border-radius: 50%;
 }
-.retirementPage .legendDot.current {
+.retirement-page .legend-dot.current {
   background: var(--success);
 }
-.retirementPage .legendDot.retirement {
+.retirement-page .legend-dot.retirement {
   background: var(--warning);
 }
 
-/* Legacy class mappings for Retirement page */
+/* legacy class mappings for retirement page */
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* Page subtitle */
+/* page subtitle */
 .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-/* Card */
+/* card */
 .card-label {
   font-size: 12px;
   color: var(--text-secondary);
@@ -244,7 +244,7 @@
   margin-top: 4px;
 }
 
-/* Detail item */
+/* detail item */
 .detail-item {
   display: flex;
   justify-content: space-between;
@@ -252,24 +252,24 @@
   padding: 8px 0;
 }
 
-/* Section title */
+/* section title */
 .section-title {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 16px;
 }
 
-/* Retirement projections */
+/* retirement projections */
 .retirement-projections {
   margin-bottom: 24px;
 }
 
-/* Form */
-.retirement-page .formGroup {
+/* form */
+.retirement-page .form-group {
   margin-bottom: 16px;
 }
 
-.retirement-page .formLabel {
+.retirement-page .form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -277,7 +277,7 @@
   color: var(--text);
 }
 
-.retirement-page .formControl {
+.retirement-page .form-control {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -287,12 +287,12 @@
   font-size: 14px;
 }
 
-.retirement-page .formControl:focus {
+.retirement-page .form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.retirement-page .formRow {
+.retirement-page .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;

@@ -1,9 +1,9 @@
 /**
- * Filter CSS Module
- * Filter controls for lists and tables
+ * filter css module
+ * filter controls for lists and tables
  */
 
-.filtersBar {
+.filters-bar {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -11,28 +11,28 @@
   flex-wrap: wrap;
 }
 
-.filtersBar .formControl {
+.filters-bar .form-control {
   width: auto;
   min-width: 140px;
 }
 
-.filtersBar input[type='date'] {
+.filters-bar input[type='date'] {
   width: auto;
 }
 
-.searchInput {
+.search-input {
   position: relative;
 }
 
-.searchInput input {
+.search-input input {
   padding-left: 36px;
 }
 
-.searchInput svg {
+.search-input svg {
   position: absolute;
   left: 10px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate-y(-50%);
   width: 16px;
   height: 16px;
   color: var(--text-secondary);

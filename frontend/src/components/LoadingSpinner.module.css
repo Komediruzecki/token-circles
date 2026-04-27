@@ -1,4 +1,4 @@
-.loadingSpinner {
+.loading-spinner {
   display: inline-block;
   width: 18px;
   height: 18px;
@@ -8,12 +8,12 @@
   animation: spin 0.7s linear infinite;
 }
 
-.loadingSpinner.dark {
+.loading-spinner.dark {
   border-color: rgba(0, 0, 0, 0.2);
   border-top-color: var(--text);
 }
 
-.btn .loadingSpinner {
+.btn .loading-spinner {
   width: 16px;
   height: 16px;
   border-width: 2px;
@@ -24,11 +24,11 @@
   pointer-events: none;
 }
 
-.rowLoading {
+.row-loading {
   position: relative;
 }
 
-.rowLoading::after {
+.row-loading::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -38,7 +38,7 @@
   justify-content: center;
 }
 
-.btnLoadingSpinner {
+.btn-loading-spinner {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.3);

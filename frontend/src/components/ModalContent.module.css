@@ -1,19 +1,19 @@
 /**
- * Modal Content CSS Module
- * Used for modals with form content
+ * modal content css module
+ * used for modals with form content
  */
 
-.modalForm {
+.modal-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.modalForm.hidden {
+.modal-form.hidden {
   display: none;
 }
 
-.modalFormFooter {
+.modal-form-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -21,7 +21,7 @@
   border-top: 1px solid var(--border);
 }
 
-.modalFormLabel {
+.modal-form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -29,7 +29,7 @@
   margin-bottom: 5px;
 }
 
-.modalFormInput {
+.modal-form-input {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -41,19 +41,19 @@
   transition: border-color 0.15s;
 }
 
-.modalFormInput:focus {
+.modal-form-input:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.modalFormInput:disabled {
+.modal-form-input:disabled {
   background: var(--stat-bg);
   cursor: not-allowed;
   opacity: 0.75;
 }
 
-.modalFormSelect {
+.modal-form-select {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -64,23 +64,23 @@
   background: var(--card-bg);
   transition: border-color 0.15s;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2364748b' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2364748b' stroke-width='2' view-box='0 0 24 24'%3E%3Cpath d='m6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 30px;
 }
 
-.modalFormInput:focus {
+.modal-form-input:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.modalFormInput[readonly] {
+.modal-form-input[readonly] {
   background: var(--stat-bg);
 }
 
-.modalFormTextarea {
+.modal-form-textarea {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -94,33 +94,33 @@
   resize: vertical;
 }
 
-.modalFormTextarea:focus {
+.modal-form-textarea:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.modalFormNote {
+.modal-form-note {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 3px;
 }
 
-.modalFormError {
+.modal-form-error {
   color: var(--danger);
   font-size: 12px;
   margin-top: 3px;
 }
 
-.modalFormGroup {
+.modal-form-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.modalFormGroup.is-invalid .modalFormInput,
-.modalFormGroup.is-invalid .modalFormSelect,
-.modalFormGroup.is-invalid .modalFormTextarea {
+.modal-form-group.is-invalid .modal-form-input,
+.modal-form-group.is-invalid .modal-form-select,
+.modal-form-group.is-invalid .modal-form-textarea {
   border-color: var(--danger) !important;
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }

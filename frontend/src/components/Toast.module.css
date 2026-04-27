@@ -1,9 +1,9 @@
 /**
- * Toast CSS Module
- * Reusable toast notification component
+ * toast css module
+ * reusable toast notification component
  */
 
-.toastContainer {
+.toast-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
@@ -19,7 +19,7 @@
   font-size: 14px;
   font-weight: 500;
   box-shadow: var(--shadow-lg);
-  animation: slideIn 0.2s;
+  animation: slide-in 0.2s;
   max-width: 320px;
 }
 
@@ -38,13 +38,13 @@
   color: #fff;
 }
 
-@keyframes slideIn {
+@keyframes slide-in {
   from {
-    transform: translateX(100%);
+    transform: translate-x(100%);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translate-x(0);
     opacity: 1;
   }
 }

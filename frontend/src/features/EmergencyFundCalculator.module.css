@@ -4,56 +4,56 @@
   padding: var(--page-padding);
 }
 
-.pageHeader {
+.page-header {
   margin-bottom: 24px;
 }
 
-.pageHeader h1 {
+.page-header h1 {
   font-size: 28px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
 }
 
-.pageHeader p {
+.page-header p {
   font-size: 14px;
   color: var(--text-secondary);
 }
 
-.summaryGrid {
+.summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.summaryCard {
+.summary-card {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
 }
 
-.summaryTitle {
+.summary-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
-.summaryValue {
+.summary-value {
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
 
-.summarySubtitle {
+.summary-subtitle {
   font-size: 13px;
   color: var(--text-secondary);
   margin-top: 4px;
 }
 
-.chartSection {
+.chart-section {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -61,7 +61,7 @@
   margin-bottom: 24px;
 }
 
-.btnSecondary {
+.btn-secondary {
   align-self: flex-start;
   padding: 10px 16px;
   background: var(--bg-secondary);
@@ -74,31 +74,31 @@
   margin-top: 16px;
 }
 
-.btnSecondary:hover {
+.btn-secondary:hover {
   background: var(--border);
 }
 
-.detailsSection {
+.details-section {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
 }
 
-.detailsHeader {
+.details-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
 }
 
-.detailsHeader h3 {
+.details-header h3 {
   font-size: 18px;
   font-weight: 600;
   color: var(--text);
 }
 
-.toggleBtn {
+.toggle-btn {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   color: var(--text);
@@ -109,11 +109,11 @@
   transition: all 0.2s;
 }
 
-.toggleBtn:hover {
+.toggle-btn:hover {
   background: var(--border);
 }
 
-.coverageGrid {
+.coverage-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
@@ -146,7 +146,7 @@
   margin-bottom: 8px;
 }
 
-.progressBar {
+.progress-bar {
   width: 100%;
   height: 8px;
   background: var(--bg-secondary);
@@ -155,22 +155,22 @@
   margin-bottom: 8px;
 }
 
-.progressFill {
+.progress-fill {
   height: 100%;
   background: var(--primary);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
 
-.coverage-item.complete .progressFill {
+.coverage-item.complete .progress-fill {
   background: var(--success);
 }
 
-.coverage-item.partial .progressFill {
+.coverage-item.partial .progress-fill {
   background: var(--warning);
 }
 
-.progressStats {
+.progress-stats {
   display: flex;
   justify-content: space-between;
   font-size: 13px;

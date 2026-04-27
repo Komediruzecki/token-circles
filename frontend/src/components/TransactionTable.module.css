@@ -1,4 +1,4 @@
-.transactionTable {
+.transaction-table {
   width: 100%;
   border-collapse: collapse;
   background: var(--card-bg);
@@ -7,19 +7,19 @@
   box-shadow: var(--shadow);
 }
 
-.transactionTable table {
+.transaction-table table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.transactionTable th,
-.transactionTable td {
+.transaction-table th,
+.transaction-table td {
   padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
 
-.transactionTable th {
+.transaction-table th {
   background: var(--table-header-bg);
   font-weight: 600;
   font-size: 11px;
@@ -28,30 +28,30 @@
   letter-spacing: 0.5px;
 }
 
-.transactionTable tbody tr {
+.transaction-table tbody tr {
   transition: background-color 0.15s;
 }
 
-.transactionTable tbody tr:hover {
+.transaction-table tbody tr:hover {
   background-color: var(--table-hover);
 }
 
-.checkboxCol {
+.checkbox-col {
   width: 44px;
   text-align: center;
 }
 
-.checkboxCol .checkbox {
+.checkbox-col .checkbox {
   width: 16px;
   height: 16px;
 }
 
-.dateCol {
+.date-col {
   width: 110px;
   font-size: 13px;
 }
 
-.descriptionCol {
+.description-col {
   min-width: 200px;
 }
 
@@ -70,16 +70,16 @@
   color: var(--text-secondary);
 }
 
-.paymentMethod {
+.payment-method {
   font-size: 11px;
   color: var(--text-secondary);
 }
 
-.categoryCol {
+.category-col {
   min-width: 150px;
 }
 
-.categoryName {
+.category-name {
   font-size: 13px;
   font-weight: 500;
 }
@@ -101,12 +101,12 @@
   color: #fff;
 }
 
-.tagCount {
+.tag-count {
   font-size: 10px;
   color: var(--text-secondary);
 }
 
-.amountCol {
+.amount-col {
   width: 130px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -118,12 +118,12 @@
   transition: color 0.2s;
 }
 
-.typeCol {
+.type-col {
   width: 80px;
   text-align: center;
 }
 
-.typeBadge {
+.type-badge {
   display: inline-block;
   padding: 4px 8px;
   border-radius: 4px;
@@ -132,12 +132,12 @@
   text-transform: uppercase;
 }
 
-.actionsCol {
+.actions-col {
   width: 60px;
   text-align: center;
 }
 
-.actionBtn {
+.action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -150,12 +150,12 @@
   transition: all 0.15s;
 }
 
-.actionBtn:hover {
+.action-btn:hover {
   background: var(--table-hover);
   color: var(--primary);
 }
 
-.emptyState {
+.empty-state {
   padding: 40px;
   text-align: center;
   color: var(--text-secondary);
@@ -173,17 +173,17 @@
   color: var(--transfer);
 }
 
-.typeBadge.income {
+.type-badge.income {
   background: var(--badge-income-bg);
   color: var(--badge-income-text);
 }
 
-.typeBadge.expense {
+.type-badge.expense {
   background: var(--badge-expense-bg);
   color: var(--badge-expense-text);
 }
 
-.typeBadge.transfer {
+.type-badge.transfer {
   background: var(--badge-transfer-bg);
   color: var(--badge-transfer-text);
 }

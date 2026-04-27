@@ -1,89 +1,89 @@
-.flowsPage {
+.flows-page {
   margin-top: 24px;
 }
 
-.flowsPage .pageHeader {
+.flows-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
 }
 
-.flowsPage .pageHeader h1 {
+.flows-page .page-header h1 {
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
 
-.flowsPage .pageSubtitle {
+.flows-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 4px;
 }
 
-.flowsPage .flowsContainer {
+.flows-page .flows-container {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-.flowsPage .flowSection {
+.flows-page .flow-section {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
 }
 
-.flowsPage .flowSectionHeader {
+.flows-page .flow-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
 
-.flowsPage .flowSectionTitle {
+.flows-page .flow-section-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
 }
 
-.flowsPage .flowSectionSubtitle {
+.flows-page .flow-section-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
 }
 
-.flowsPage .flowChart {
+.flows-page .flow-chart {
   width: 100%;
   height: 400px;
   position: relative;
 }
 
-.flowsPage .emptyState {
+.flows-page .empty-state {
   text-align: center;
   padding: 48px 20px;
   color: var(--text-secondary);
 }
 
-.flowsPage .emptyState svg {
+.flows-page .empty-state svg {
   width: 48px;
   height: 48px;
   margin-bottom: 12px;
   opacity: 0.5;
 }
 
-.flowsPage .emptyState p {
+.flows-page .empty-state p {
   font-size: 14px;
 }
 
-.flowsPage .flowLegend {
+.flows-page .flow-legend {
   display: flex;
   gap: 16px;
   margin-top: 16px;
   flex-wrap: wrap;
 }
 
-.flowsPage .flowLegendItem {
+.flows-page .flow-legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -91,7 +91,7 @@
   color: var(--text-secondary);
 }
 
-.flowsPage .flowLegendDot {
+.flows-page .flow-legend-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;

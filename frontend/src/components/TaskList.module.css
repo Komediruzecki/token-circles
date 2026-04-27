@@ -1,4 +1,4 @@
-.taskList {
+.task-list {
   width: 100%;
   border-collapse: collapse;
   background: var(--card-bg);
@@ -7,7 +7,7 @@
   box-shadow: var(--shadow);
 }
 
-.taskListHeader {
+.task-list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -16,7 +16,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-.selectAllCheckbox {
+.select-all-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -24,22 +24,22 @@
   color: var(--text);
 }
 
-.selectAllCheckbox .checkbox {
+.select-all-checkbox .checkbox {
   width: 16px;
   height: 16px;
 }
 
-.selectedCount {
+.selected-count {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.taskListBody {
+.task-list-body {
   max-height: 500px;
   overflow-y: auto;
 }
 
-.taskListItem {
+.task-list-item {
   display: flex;
   align-items: center;
   padding: 8px 16px;
@@ -47,15 +47,15 @@
   transition: background-color 0.15s;
 }
 
-.taskListItem:last-child {
+.task-list-item:last-child {
   border-bottom: none;
 }
 
-.taskListItem:hover {
+.task-list-item:hover {
   background-color: var(--table-hover);
 }
 
-.taskItemCheckbox {
+.task-item-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -63,12 +63,12 @@
   flex-shrink: 0;
 }
 
-.taskItemCheckbox .checkbox {
+.task-item-checkbox .checkbox {
   width: 16px;
   height: 16px;
 }
 
-.checkboxCustom {
+.checkbox-custom {
   position: relative;
   width: 16px;
   height: 16px;
@@ -77,16 +77,16 @@
   transition: all 0.15s;
 }
 
-.taskItemCheckbox:hover .checkboxCustom {
+.task-item-checkbox:hover .checkbox-custom {
   border-color: var(--primary);
 }
 
-.taskItemCheckbox input[type='checkbox']:checked + .checkboxCustom {
+.task-item-checkbox input[type='checkbox']:checked + .checkbox-custom {
   background: var(--primary);
   border-color: var(--primary);
 }
 
-.taskItemCheckbox input[type='checkbox']:checked + .checkboxCustom::after {
+.task-item-checkbox input[type='checkbox']:checked + .checkbox-custom::after {
   content: '';
   position: absolute;
   left: 5px;
@@ -98,7 +98,7 @@
   transform: rotate(45deg);
 }
 
-.emptyState {
+.empty-state {
   padding: 40px;
   text-align: center;
   color: var(--text-secondary);

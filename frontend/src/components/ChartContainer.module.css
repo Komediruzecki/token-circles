@@ -1,17 +1,17 @@
 /**
- * ChartContainer CSS Module
- * Container for chart components
+ * chart-container css module
+ * container for chart components
  */
 
-.chartContainer {
+.chart-container {
   position: relative;
   height: 280px;
 }
 
-.chartContainer.tall {
+.chart-container.tall {
   height: 320px;
 }
 
-.chartContainer.short {
+.chart-container.short {
   height: 220px;
 }

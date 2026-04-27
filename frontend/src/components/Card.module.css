@@ -1,6 +1,6 @@
 /**
- * Card CSS Module
- * Reusable card component
+ * card css module
+ * reusable card component
  */
 
 .card {
@@ -11,20 +11,20 @@
   padding: 20px;
 }
 
-.cardHeader {
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
 
-.cardTitle {
+.card-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
 }
 
-.cardSubtitle {
+.card-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 1px;
