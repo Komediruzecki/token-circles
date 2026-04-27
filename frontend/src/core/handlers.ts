@@ -98,21 +98,17 @@ export async function deleteReceipt(receiptId: number): Promise<void> {
   try {
     const { api } = await import('./api.js')
     await api.deleteReceipt(receiptId)
-    const modal = document.getElementById('receipt-modal')
-    if (modal !== null) {
-      modal.classList.remove('show')
-    }
-    toast('Receipt deleted', 'success')
+    await toast('Receipt deleted', 'success')
   } catch (error) {
     console.error('Failed to delete receipt:', error)
-    toast('Failed to delete receipt', 'error')
+    await toast('Failed to delete receipt', 'error')
   }
 }
 
 /**
  * Open transaction edit modal
  */
-export function openTransactionModal(transactionId: number): void {
+export async function openTransactionModal(transactionId: number): Promise<void> {
   import('./api.js').then(async ({ api }) => {
     const transactions = await api.getTransactions()
     const tx = transactions.find((t) => t.id === transactionId)
@@ -168,6 +164,7 @@ export function openTransactionModal(transactionId: number): void {
 
     modal.classList.add('show')
   })
+  await toast('Transaction loaded for editing', 'info')
 }
 
 /**
@@ -271,18 +268,20 @@ export function openReceiptModal(receipt: ReceiptData): void {
 }
 
 /**
- * Toast notification helper (from api module)
+ * HTML escape helper
  */
-const apiModule = await import('./api.js')
-export function toast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
-  apiModule.toast(message, type)
+export function escapeHtml(str: string): string {
+  const div = document.createElement('div')
+  div.textContent = str
+  return div.innerHTML
 }
 
 /**
- * HTML escape helper (from api module)
+ * Toast notification helper
  */
-export function escapeHtml(str: string): string {
-  return apiModule.escapeHtml(str)
+export async function toast(message: string, type: 'success' | 'error' | 'info' = 'info'): Promise<void> {
+  const { api } = await import('./api.js')
+  api.toast(message, type)
 }
 
 // Export window-compatible handlers for legacy code
@@ -319,7 +318,7 @@ export const transactions = {
   },
   save: async () => {
     // Placeholder - would call actual save logic
-    toast('Transaction saved', 'success')
+    await toast('Transaction saved', 'success')
   },
   setType: (type: string) => {
     console.info(`Set type to: ${type}`)
@@ -347,26 +346,28 @@ export async function authLogin(username?: string, password?: string): Promise<v
         return
       }
     }
+    const { api } = await import('./api.js')
     await api.login(username, password)
-    toast('Successfully logged in', 'success')
+    await toast('Successfully logged in', 'success')
   } catch (error) {
     console.error('Login failed:', error)
     const errorMsg = error instanceof Error ? error.message : 'Login failed'
-    toast(errorMsg, 'error')
+    await toast(errorMsg, 'error')
     throw error
   }
 }
 
 export async function authLogout(): Promise<void> {
   try {
+    const { api } = await import('./api.js')
     await api.logout()
     localStorage.removeItem('currentProfileId')
-    toast('Logged out successfully', 'info')
+    await toast('Logged out successfully', 'info')
   } catch (error) {
     console.error('Logout failed:', error)
     // Force clear profile ID even if API call fails
     localStorage.removeItem('currentProfileId')
-    toast('Logged out', 'info')
+    await toast('Logged out', 'info')
   }
 }
 
