@@ -1,25 +1,25 @@
-.accountsPage {
+.accounts-page {
   margin-top: 24px;
 }
 
-.pageHeader {
+.page-header {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.headerTop {
+.header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.pageSubtitle {
+.page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-.addAccountBtn {
+.add-account-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -34,18 +34,18 @@
   color: #fff;
 }
 
-.addAccountBtn:hover {
+.add-account-btn:hover {
   background: var(--primary-hover);
 }
 
-.accountsSummary {
+.accounts-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.summaryCard {
+.summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -53,11 +53,11 @@
   padding: 20px;
 }
 
-.summaryCard.highlighted::before {
+.summary-card.highlighted::before {
   background: var(--success);
 }
 
-.summaryCard::before {
+.summary-card::before {
   content: '';
   position: absolute;
   top: 0;
@@ -66,19 +66,19 @@
   height: 3px;
 }
 
-.summaryCard.balance::before {
+.summary-card.balance::before {
   background: var(--primary);
 }
 
-.summaryCard.income::before {
+.summary-card.income::before {
   background: var(--income);
 }
 
-.summaryCard.expenses::before {
+.summary-card.expenses::before {
   background: var(--expense);
 }
 
-.summaryLabel {
+.summary-label {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
@@ -86,28 +86,28 @@
   letter-spacing: 0.5px;
 }
 
-.summaryValue {
+.summary-value {
   font-size: 20px;
   font-weight: 600;
   margin-top: 4px;
   color: var(--text);
 }
 
-.summaryValue.positive {
+.summary-value.positive {
   color: var(--income);
 }
 
-.summaryValue.negative {
+.summary-value.negative {
   color: var(--expense);
 }
 
-.accountsGrid {
+.accounts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
 
-.accountCard {
+.account-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -115,27 +115,27 @@
   padding: 16px;
 }
 
-.accountCard:hover {
+.account-card:hover {
   border-color: var(--primary);
 }
 
-.accountHeader {
+.account-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
 
-.accountIcon {
+.account-icon {
   font-size: 32px;
 }
 
-.accountInfo {
+.account-info {
   flex: 1;
   min-width: 0;
 }
 
-.accountName {
+.account-name {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
@@ -145,55 +145,55 @@
   text-overflow: ellipsis;
 }
 
-.accountBank {
+.account-bank {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 2px 0 0 0;
 }
 
-.accountActions {
+.account-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.accountBalance {
+.account-balance {
   padding: 12px 0;
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
 
-.balanceLabel {
+.balance-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.balanceAmount {
+.balance-amount {
   font-size: 20px;
   font-weight: 600;
   color: var(--text);
 }
 
-.activityHeader {
+.activity-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 }
 
-.activityLabel {
+.activity-label {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
-.activityList {
+.activity-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.activityItem {
+.activity-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -201,16 +201,16 @@
   border-bottom: 1px solid var(--border);
 }
 
-.activityItem:last-child {
+.activity-item:last-child {
   border-bottom: none;
 }
 
-.activityContent {
+.activity-content {
   flex: 1;
   min-width: 0;
 }
 
-.activityDesc {
+.activity-desc {
   font-size: 13px;
   font-weight: 500;
   color: var(--text);
@@ -219,44 +219,44 @@
   text-overflow: ellipsis;
 }
 
-.activityDate {
+.activity-date {
   font-size: 11px;
   color: var(--text-secondary);
 }
 
-.activityAmount {
+.activity-amount {
   font-size: 13px;
   font-weight: 600;
   text-align: right;
   white-space: nowrap;
 }
 
-.activityAmount.income {
+.activity-amount.income {
   color: var(--income);
 }
 
-.activityAmount.expense {
+.activity-amount.expense {
   color: var(--expense);
 }
 
-.emptyState {
+.empty-state {
   text-align: center;
   padding: 48px 20px;
   color: var(--text-secondary);
 }
 
-.emptyState svg {
+.empty-state svg {
   width: 48px;
   height: 48px;
   margin-bottom: 12px;
   opacity: 0.5;
 }
 
-.emptyState p {
+.empty-state p {
   font-size: 14px;
 }
 
-/* Buttons */
+/* buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -270,7 +270,7 @@
   transition: all 0.15s;
 }
 
-.btnLink {
+.btn-link {
   color: var(--primary);
   font-size: 13px;
   font-weight: 500;
@@ -278,44 +278,44 @@
   transition: color 0.15s;
 }
 
-.btnLink:hover {
+.btn-link:hover {
   color: var(--primary-hover);
 }
 
-.btnPrimary {
+.btn-primary {
   background: var(--primary);
   color: #fff;
 }
 
-.btnPrimary:hover {
+.btn-primary:hover {
   background: var(--primary-hover);
 }
 
-.btnSm {
+.btn-sm {
   padding: 4px 10px;
   font-size: 12px;
 }
 
-.btnGhost {
+.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
 }
 
-.btnGhost:hover {
+.btn-ghost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }
 
-.btnSecondary {
+.btn-secondary {
   background: var(--bg);
   color: var(--text);
 }
 
-.btnSecondary:hover {
+.btn-secondary:hover {
   background: var(--border);
 }
 
-/* Badge */
+/* badge */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -326,33 +326,33 @@
   font-weight: 500;
 }
 
-.badgeDefault {
+.badge-default {
   background: var(--bg);
   color: var(--text-secondary);
 }
 
-.badgePrimary {
+.badge-primary {
   background: var(--primary);
   color: #fff;
 }
 
-.badgeSuccess {
+.badge-success {
   background: var(--success);
   color: #fff;
 }
 
-.badgeWarning {
+.badge-warning {
   background: var(--warning);
   color: #fff;
 }
 
-.badgeInfo {
+.badge-info {
   background: var(--info);
   color: #fff;
 }
 
-/* Modal */
-.modalOverlay {
+/* modal */
+.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -370,7 +370,7 @@
     visibility 0.2s;
 }
 
-.modalOverlay.visible {
+.modal-overlay.visible {
   opacity: 1;
   visibility: visible;
 }
@@ -387,7 +387,7 @@
   flex-direction: column;
 }
 
-.modalHeader {
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -395,14 +395,14 @@
   border-bottom: 1px solid var(--border);
 }
 
-.modalTitle {
+.modal-title {
   font-size: 18px;
   font-weight: 600;
   color: var(--text);
   margin: 0;
 }
 
-.modalClose {
+.modal-close {
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -412,16 +412,16 @@
   padding: 0;
 }
 
-.modalClose:hover {
+.modal-close:hover {
   color: var(--text);
 }
 
-.modalBody {
+.modal-body {
   padding: 20px;
   flex: 1;
 }
 
-.modalFooter {
+.modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -429,12 +429,12 @@
   border-top: 1px solid var(--border);
 }
 
-/* Form */
-.formGroup {
+/* form */
+.form-group {
   margin-bottom: 16px;
 }
 
-.formLabel {
+.form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -442,7 +442,7 @@
   margin-bottom: 6px;
 }
 
-.formControl {
+.form-control {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -453,11 +453,11 @@
   transition: border-color 0.15s;
 }
 
-.formControl:focus {
+.form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.formControl::placeholder {
+.form-control::placeholder {
   color: var(--text-secondary);
 }

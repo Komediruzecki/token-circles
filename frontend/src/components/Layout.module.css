@@ -1,6 +1,6 @@
 /**
- * Layout CSS Module
- * Global app layout: sidebar, main content, grid systems
+ * layout css module
+ * global app layout: sidebar, main content, grid systems
  */
 
 .sidebar {
@@ -19,35 +19,35 @@
   transition: width 0.2s;
 }
 
-.sidebarLogo {
+.sidebar-logo {
   padding: 0 20px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 10px;
 }
 
-.sidebarLogo h1 {
+.sidebar-logo h1 {
   color: #fff;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.5px;
 }
 
-.sidebarLogo span {
+.sidebar-logo span {
   color: var(--primary);
 }
 
-.sidebarLogo p {
+.sidebar-logo p {
   font-size: 11px;
   color: var(--sidebar-text);
   margin-top: 2px;
 }
 
-.sidebarNav {
+.sidebar-nav {
   flex: 1;
   padding: 0 10px;
 }
 
-.sidebarNav a {
+.sidebar-nav a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -61,17 +61,17 @@
   margin-bottom: 2px;
 }
 
-.sidebarNav a:hover {
+.sidebar-nav a:hover {
   background: var(--sidebar-active-bg);
   color: #fff;
 }
 
-.sidebarNav a.active {
+.sidebar-nav a.active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-text);
 }
 
-.sidebarNav a svg {
+.sidebar-nav a svg {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
@@ -92,31 +92,31 @@
   display: block;
 }
 
-.pageHeader {
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
 
-.pageHeader h2 {
+.page-header h2 {
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
 
-.pageHeader p {
+.page-header p {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 2px;
 }
 
-.pageHeaderActions {
+.page-header-actions {
   display: flex;
   gap: 10px;
 }
 
-/* Grid Systems */
+/* grid systems */
 .grid2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -149,18 +149,18 @@
     width: 60px;
   }
 
-  .sidebarLogo h1,
-  .sidebarLogo p,
-  .sidebarNav a span,
-  .sidebarFooter {
+  .sidebar-logo h1,
+  .sidebar-logo p,
+  .sidebar-nav a span,
+  .sidebar-footer {
     display: none;
   }
 
-  .sidebarLogo {
+  .sidebar-logo {
     padding: 0 16px 16px;
   }
 
-  .sidebarNav a {
+  .sidebar-nav a {
     justify-content: center;
     padding: 12px;
   }

@@ -1,68 +1,68 @@
-.goalsPage {
+.goals-page {
   padding: 24px;
 }
-.goalsPage .pageHeader {
+.goals-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.goalsPage .headerTop {
+.goals-page .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.goalsPage h1 {
+.goals-page h1 {
   font-size: 24px;
   font-weight: 700;
 }
-.goalsPage .pageSubtitle {
+.goals-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
-.goalsPage .goalsGrid {
+.goals-page .goals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.goalsPage .goalCard {
+.goals-page .goal-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.goalsPage .goalHeader {
+.goals-page .goal-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.goalsPage .goalIcon {
+.goals-page .goal-icon {
   font-size: 32px;
 }
-.goalsPage .goalInfo {
+.goals-page .goal-info {
   flex: 1;
   min-width: 0;
 }
-.goalsPage .goalName {
+.goals-page .goal-name {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 2px;
 }
-.goalsPage .goalDate {
+.goals-page .goal-date {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.goalsPage .goalActions {
+.goals-page .goal-actions {
   display: flex;
   gap: 4px;
 }
-.goalsPage .goalProgress {
+.goals-page .goal-progress {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.goalsPage .progressBar {
+.goals-page .progress-bar {
   display: flex;
   align-items: center;
   height: 8px;
@@ -71,39 +71,39 @@
   overflow: hidden;
   margin-bottom: 8px;
 }
-.goalsPage .progressFill {
+.goals-page .progress-fill {
   height: 100%;
   background: var(--primary);
   transition: width 0.3s;
 }
-.goalsPage .progressStats {
+.goals-page .progress-stats {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
 }
-.goalsPage .progressPercent {
+.goals-page .progress-percent {
   font-weight: 600;
 }
-.goalsPage .progressCurrent {
+.goals-page .progress-current {
   color: var(--text-secondary);
 }
-.goalsPage .goalsChartSection {
+.goals-page .goals-chart-section {
   margin-top: 24px;
   padding: 20px;
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
-.goalsPage .goalsChartSection h3 {
+.goals-page .goals-chart-section h3 {
   margin: 0 0 16px 0;
   font-size: 18px;
 }
-.goalsPage .chartWrapper {
+.goals-page .chart-wrapper {
   position: relative;
   height: 250px;
 }
-.goalsPage .modalOverlay {
+.goals-page .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -114,9 +114,9 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
+  animation: fade-in 0.2s ease-out;
 }
-.goalsPage .modal {
+.goals-page .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -124,21 +124,21 @@
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  animation: slideIn 0.2s ease-out;
+  animation: slide-in 0.2s ease-out;
 }
-.goalsPage .modalHeader {
+.goals-page .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
-.goalsPage .modalTitle {
+.goals-page .modal-title {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
-.goalsPage .modalClose {
+.goals-page .modal-close {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -153,20 +153,20 @@
   border-radius: var(--radius);
   transition: background 0.2s;
 }
-.goalsPage .modalClose:hover {
+.goals-page .modal-close:hover {
   background: var(--bg);
 }
-.goalsPage .modalBody {
+.goals-page .modal-body {
   padding: 20px;
 }
-.goalsPage .modalFooter {
+.goals-page .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 20px;
   border-top: 1px solid var(--border);
 }
-.goalsPage .btnPrimary {
+.goals-page .btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -180,10 +180,10 @@
   gap: 6px;
   transition: background 0.2s;
 }
-.goalsPage .btnPrimary:hover {
+.goals-page .btn-primary:hover {
   background: var(--primary-hover);
 }
-.goalsPage .btnSecondary {
+.goals-page .btn-secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -194,60 +194,60 @@
   font-weight: 500;
   transition: all 0.2s;
 }
-.goalsPage .btnSecondary:hover {
+.goals-page .btn-secondary:hover {
   background: var(--bg);
 }
-.goalsPage .emptyState {
+.goals-page .empty-state {
   padding: 48px;
   text-align: center;
   color: var(--text-secondary);
 }
-.goalsPage .emptyState p {
+.goals-page .empty-state p {
   margin: 8px 0;
 }
-.goalsPage .goalsGrid {
+.goals-page .goals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.goalsPage .goalCard {
+.goals-page .goal-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.goalsPage .goalHeader {
+.goals-page .goal-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.goalsPage .goalIcon {
+.goals-page .goal-icon {
   font-size: 32px;
 }
-.goalsPage .goalInfo {
+.goals-page .goal-info {
   flex: 1;
   min-width: 0;
 }
-.goalsPage .goalName {
+.goals-page .goal-name {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 2px;
 }
-.goalsPage .goalDate {
+.goals-page .goal-date {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.goalsPage .goalActions {
+.goals-page .goal-actions {
   display: flex;
   gap: 4px;
 }
-.goalsPage .goalProgress {
+.goals-page .goal-progress {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.goalsPage .progressBar {
+.goals-page .progress-bar {
   display: flex;
   align-items: center;
   height: 8px;
@@ -256,24 +256,24 @@
   overflow: hidden;
   margin-bottom: 8px;
 }
-.goalsPage .progressFill {
+.goals-page .progress-fill {
   height: 100%;
   background: var(--primary);
   transition: width 0.3s;
 }
-.goalsPage .progressStats {
+.goals-page .progress-stats {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
 }
-.goalsPage .progressPercent {
+.goals-page .progress-percent {
   font-weight: 600;
 }
-.goalsPage .progressCurrent {
+.goals-page .progress-current {
   color: var(--text-secondary);
 }
-@keyframes fadeIn {
+@keyframes fade-in {
   from {
     opacity: 0;
   }
@@ -281,18 +281,18 @@
     opacity: 1;
   }
 }
-@keyframes slideIn {
+@keyframes slide-in {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translate-y(-20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate-y(0);
   }
 }
 
-/* Legacy class mappings for Goals page */
+/* legacy class mappings for goals page */
 .goals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -387,7 +387,7 @@
   margin-top: 16px;
 }
 
-/* Legacy class mappings for Goals page */
+/* legacy class mappings for goals page */
 .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
@@ -397,7 +397,7 @@
   display: block;
 }
 
-/* Form styles */
+/* form styles */
 .form-group {
   margin-bottom: 16px;
 }
@@ -426,7 +426,7 @@
   border-color: var(--primary);
 }
 
-/* Button styles */
+/* button styles */
 .btn-sm {
   padding: 4px 8px;
   font-size: 12px;

@@ -6,7 +6,7 @@
   padding: 16px 0;
 }
 
-.pageBtn {
+.page-btn {
   min-width: 32px;
   height: 32px;
   padding: 0 8px;
@@ -19,24 +19,24 @@
   transition: all 0.15s;
 }
 
-.pageBtn:hover:not(:disabled):not(.pageBtnActive) {
+.page-btn:hover:not(:disabled):not(.page-btn-active) {
   border-color: var(--primary);
   color: var(--primary);
 }
 
-.pageBtn:disabled {
+.page-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.pageBtnActive {
+.page-btn-active {
   background: var(--primary);
   border-color: var(--primary);
   color: white;
 }
 
-.pageBtnPrev,
-.pageBtnNext {
+.page-btn-prev,
+.page-btn-next {
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1,130 +1,130 @@
-.housingPage {
+.housing-page {
   padding: 24px;
 }
-.housingPage .pageHeader {
+.housing-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.housingPage .headerTop {
+.housing-page .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.housingPage h1 {
+.housing-page h1 {
   font-size: 24px;
   font-weight: 700;
 }
-.housingPage .pageSubtitle {
+.housing-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
-.housingPage .housingSummary {
+.housing-page .housing-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
-.housingPage .summaryCard {
+.housing-page .summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.housingPage .summaryCard.highlighted {
+.housing-page .summary-card.highlighted {
   border-color: var(--primary);
 }
-.housingPage .summaryLabel {
+.housing-page .summary-label {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
-.housingPage .summaryValue {
+.housing-page .summary-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
 }
-.housingPage .housingList {
+.housing-page .housing-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-.housingPage .housingCard {
+.housing-page .housing-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.housingPage .housingHeader {
+.housing-page .housing-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.housingPage .housingIcon {
+.housing-page .housing-icon {
   font-size: 32px;
 }
-.housingPage .housingInfo {
+.housing-page .housing-info {
   flex: 1;
   min-width: 0;
 }
-.housingPage .housingName {
+.housing-page .housing-name {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 2px;
 }
-.housingPage .housingType {
+.housing-page .housing-type {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.housingPage .housingActions {
+.housing-page .housing-actions {
   display: flex;
   gap: 8px;
   align-items: center;
 }
-.housingPage .housingAmount {
+.housing-page .housing-amount {
   padding-top: 12px;
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
-.housingPage .amountLabel {
+.housing-page .amount-label {
   font-size: 12px;
   color: var(--text-secondary);
   margin-bottom: 2px;
 }
-.housingPage .amountValue {
+.housing-page .amount-value {
   font-size: 20px;
   font-weight: 700;
 }
-.housingPage .housingDetails {
+.housing-page .housing-details {
   display: flex;
   gap: 16px;
   font-size: 13px;
   padding-top: 12px;
   margin-top: 12px;
 }
-.housingPage .detailItem {
+.housing-page .detail-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.housingPage .detailLabel {
+.housing-page .detail-label {
   font-size: 11px;
   color: var(--text-secondary);
 }
-.housingPage .detailValue {
+.housing-page .detail-value {
   font-weight: 500;
 }
-.housingPage .emptyState {
+.housing-page .empty-state {
   padding: 48px;
   text-align: center;
   color: var(--text-secondary);
 }
-.housingPage .emptyState p {
+.housing-page .empty-state p {
   margin: 8px 0;
 }
-.housingPage .btnPrimary {
+.housing-page .btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -138,10 +138,10 @@
   gap: 6px;
   transition: background 0.2s;
 }
-.housingPage .btnPrimary:hover {
+.housing-page .btn-primary:hover {
   background: var(--primary-hover);
 }
-.housingPage .btnSecondary {
+.housing-page .btn-secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -152,10 +152,10 @@
   font-weight: 500;
   transition: all 0.2s;
 }
-.housingPage .btnSecondary:hover {
+.housing-page .btn-secondary:hover {
   background: var(--bg);
 }
-.housingPage .modalOverlay {
+.housing-page .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -166,9 +166,9 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
+  animation: fade-in 0.2s ease-out;
 }
-.housingPage .modal {
+.housing-page .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -176,21 +176,21 @@
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-  animation: slideIn 0.2s ease-out;
+  animation: slide-in 0.2s ease-out;
 }
-.housingPage .modalHeader {
+.housing-page .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
-.housingPage .modalTitle {
+.housing-page .modal-title {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
-.housingPage .modalClose {
+.housing-page .modal-close {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -205,30 +205,30 @@
   border-radius: var(--radius);
   transition: background 0.2s;
 }
-.housingPage .modalClose:hover {
+.housing-page .modal-close:hover {
   background: var(--bg);
 }
-.housingPage .modalBody {
+.housing-page .modal-body {
   padding: 20px;
 }
-.housingPage .modalFooter {
+.housing-page .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 20px;
   border-top: 1px solid var(--border);
 }
-.housingPage .formGroup {
+.housing-page .form-group {
   margin-bottom: 16px;
 }
-.housingPage .formLabel {
+.housing-page .form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 6px;
   color: var(--text);
 }
-.housingPage .formControl {
+.housing-page .form-control {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -237,21 +237,21 @@
   color: var(--text);
   font-size: 14px;
 }
-.housingPage .formControl:focus {
+.housing-page .form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
-.housingPage .formRow {
+.housing-page .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.housingPage .toggleSwitch {
+.housing-page .toggle-switch {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.housingPage .toggleSlider {
+.housing-page .toggle-slider {
   width: 44px;
   height: 24px;
   background: var(--bg);
@@ -260,7 +260,7 @@
   transition: background 0.3s;
   border: 2px solid var(--border);
 }
-.housingPage .toggleSlider::before {
+.housing-page .toggle-slider::before {
   content: '';
   position: absolute;
   width: 20px;
@@ -271,15 +271,15 @@
   left: 2px;
   transition: transform 0.3s;
 }
-.housingPage .toggleSwitch input:checked + .toggleSlider {
+.housing-page .toggle-switch input:checked + .toggle-slider {
   background: var(--primary);
   border-color: var(--primary);
 }
-.housingPage .toggleSwitch input:checked + .toggleSlider::before {
-  transform: translateX(20px);
+.housing-page .toggle-switch input:checked + .toggle-slider::before {
+  transform: translate-x(20px);
 }
 
-@keyframes fadeIn {
+@keyframes fade-in {
   from {
     opacity: 0;
   }
@@ -287,31 +287,31 @@
     opacity: 1;
   }
 }
-@keyframes slideIn {
+@keyframes slide-in {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translate-y(-20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate-y(0);
   }
 }
 
-/* Legacy class mappings for Housing page */
+/* legacy class mappings for housing page */
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* Page subtitle */
+/* page subtitle */
 .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-/* Housing summary */
+/* housing summary */
 .housing-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -319,7 +319,7 @@
   margin-bottom: 24px;
 }
 
-/* Summary card */
+/* summary card */
 .summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -331,28 +331,28 @@
   border-color: var(--primary);
 }
 
-/* Summary label */
+/* summary label */
 .summary-label {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
 
-/* Summary value */
+/* summary value */
 .summary-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
 }
 
-/* Housing list */
+/* housing list */
 .housing-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* Housing card */
+/* housing card */
 .housing-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -360,7 +360,7 @@
   padding: 16px;
 }
 
-/* Housing header */
+/* housing header */
 .housing-header {
   display: flex;
   align-items: center;
@@ -394,7 +394,7 @@
   align-items: center;
 }
 
-/* Housing amount */
+/* housing amount */
 .housing-amount {
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -412,7 +412,7 @@
   font-weight: 700;
 }
 
-/* Housing details */
+/* housing details */
 .housing-details {
   display: flex;
   gap: 16px;
@@ -436,12 +436,12 @@
   font-weight: 500;
 }
 
-/* Form */
-.housingPage .formGroup {
+/* form */
+.housing-page .form-group {
   margin-bottom: 16px;
 }
 
-.housingPage .formLabel {
+.housing-page .form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -449,7 +449,7 @@
   color: var(--text);
 }
 
-.housingPage .formControl {
+.housing-page .form-control {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -459,24 +459,24 @@
   font-size: 14px;
 }
 
-.housingPage .formControl:focus {
+.housing-page .form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.housingPage .formRow {
+.housing-page .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.housingPage .toggleSwitch {
+.housing-page .toggle-switch {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.housingPage .toggleSlider {
+.housing-page .toggle-slider {
   width: 44px;
   height: 24px;
   background: var(--bg);
@@ -486,7 +486,7 @@
   border: 2px solid var(--border);
 }
 
-.housingPage .toggleSlider::before {
+.housing-page .toggle-slider::before {
   content: '';
   position: absolute;
   width: 20px;
@@ -498,32 +498,32 @@
   transition: transform 0.3s;
 }
 
-.housingPage .toggleSwitch input:checked + .toggleSlider {
+.housing-page .toggle-switch input:checked + .toggle-slider {
   background: var(--primary);
   border-color: var(--primary);
 }
 
-.housingPage .toggleSwitch input:checked + .toggleSlider::before {
-  transform: translateX(20px);
+.housing-page .toggle-switch input:checked + .toggle-slider::before {
+  transform: translate-x(20px);
 }
 
 .page-housing {
   display: block;
 }
 
-/* CamelCase module classes */
-.summaryCard {
+/* camel-case module classes */
+.summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
 
-.summaryCard.highlighted {
+.summary-card.highlighted {
   border-color: var(--primary);
 }
 
-.btnSm {
+.btn-sm {
   padding: 4px 8px;
   font-size: 12px;
   background: transparent;
@@ -533,11 +533,11 @@
   transition: all 0.2s;
 }
 
-.btnSm:hover {
+.btn-sm:hover {
   background: var(--bg);
 }
 
-.btnGhost {
+.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
   border: none;
@@ -547,7 +547,7 @@
   transition: background 0.2s;
 }
 
-.btnGhost:hover {
+.btn-ghost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }

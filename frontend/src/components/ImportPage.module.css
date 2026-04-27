@@ -1,26 +1,26 @@
-.importPage {
+.import-page {
   padding: 24px;
 }
-.importPage .pageHeader {
+.import-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.importPage .headerTop {
+.import-page .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.importPage .pageSubtitle {
+.import-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 4px;
 }
-.importPage .importUploadSection {
+.import-page .import-upload-section {
   margin-bottom: 24px;
 }
-.importPage .uploadDropzone {
+.import-page .upload-dropzone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);
   padding: 40px 20px;
@@ -28,63 +28,63 @@
   cursor: pointer;
   transition: border-color 0.2s;
 }
-.importPage .uploadDropzone:hover {
+.import-page .upload-dropzone:hover {
   border-color: var(--primary);
 }
-.importPage .uploadLabel {
+.import-page .upload-label {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
-.importPage .uploadLabel svg {
+.import-page .upload-label svg {
   margin-bottom: 12px;
   color: var(--text-secondary);
 }
-.importPage .uploadHint {
+.import-page .upload-hint {
   color: var(--text-secondary);
   font-size: 13px;
   margin-top: 8px;
 }
-.importPage .importTemplate {
+.import-page .import-template {
   margin-bottom: 24px;
   padding: 16px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.importPage .importTemplate h3 {
+.import-page .import-template h3 {
   margin: 0 0 8px 0;
   font-size: 16px;
 }
-.importPage .importTemplate p {
+.import-page .import-template p {
   margin: 0 0 16px 0;
   font-size: 14px;
   color: var(--text-secondary);
 }
-.importPage .importTemplate a {
+.import-page .import-template a {
   color: var(--primary);
   text-decoration: none;
 }
-.importPage .importTemplate a:hover {
+.import-page .import-template a:hover {
   text-decoration: underline;
 }
-.importPage .importOptions {
+.import-page .import-options {
   margin-bottom: 24px;
   padding: 16px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.importPage .importOptions h3 {
+.import-page .import-options h3 {
   margin: 0 0 16px 0;
   font-size: 16px;
 }
-.importPage .importPreviewSection {
+.import-page .import-preview-section {
   margin-bottom: 24px;
 }
-.importPage .previewHeader {
+.import-page .preview-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -92,57 +92,57 @@
   flex-wrap: wrap;
   gap: 16px;
 }
-.importPage .previewStats {
+.import-page .preview-stats {
   display: flex;
   gap: 32px;
 }
-.importPage .statItem {
+.import-page .stat-item {
   display: flex;
   flex-direction: column;
 }
-.importPage .statLabel {
+.import-page .stat-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
-.importPage .statValue {
+.import-page .stat-value {
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
 }
-.importPage .previewActions {
+.import-page .preview-actions {
   display: flex;
   gap: 8px;
 }
-.importPage .previewTableContainer {
+.import-page .preview-table-container {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 16px;
 }
-.importPage .dataTable {
+.import-page .data-table {
   width: 100%;
   border-collapse: collapse;
   min-width: 600px;
 }
-.importPage .dataTable th,
-.importPage .dataTable td {
+.import-page .data-table th,
+.import-page .data-table td {
   padding: 10px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
-.importPage .dataTable th {
+.import-page .data-table th {
   background: var(--bg);
   font-weight: 600;
   font-size: 13px;
   color: var(--text-secondary);
 }
-.importPage .dataTable td {
+.import-page .data-table td {
   font-size: 13px;
 }
-.importPage .dataTable tr.selected {
+.import-page .data-table tr.selected {
   background: rgba(59, 130, 246, 0.1);
 }
-.importPage .pagination {
+.import-page .pagination {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -150,11 +150,11 @@
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
-.importPage .pageInfo {
+.import-page .page-info {
   font-size: 14px;
   color: var(--text);
 }
-.importPage .form-control {
+.import-page .form-control {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -162,27 +162,27 @@
   color: var(--text);
   font-size: 14px;
 }
-.importPage .form-control:focus {
+.import-page .form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
-.importPage .form-group {
+.import-page .form-group {
   margin-bottom: 16px;
 }
-.importPage .form-label {
+.import-page .form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 6px;
   color: var(--text);
 }
-.importPage .importActions {
+.import-page .import-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 16px;
 }
-.importPage .btnOutline {
+.import-page .btn-outline {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -191,11 +191,11 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-.importPage .btnOutline:hover {
+.import-page .btn-outline:hover {
   background: var(--bg);
   border-color: var(--text);
 }
-.importPage .btnPrimary {
+.import-page .btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -204,10 +204,10 @@
   cursor: pointer;
   transition: all 0.2s;
 }
-.importPage .btnPrimary:hover {
+.import-page .btn-primary:hover {
   background: var(--primary-hover);
 }
-.importPage .toast {
+.import-page .toast {
   position: fixed;
   top: 20px;
   right: 20px;
@@ -216,27 +216,27 @@
   color: #fff;
   font-weight: 500;
   box-shadow: var(--shadow-lg);
-  animation: slideIn 0.3s ease-out;
+  animation: slide-in 0.3s ease-out;
 }
-.importPage .toast.success {
+.import-page .toast.success {
   background: var(--success);
 }
-.importPage .toast.error {
+.import-page .toast.error {
   background: var(--danger);
 }
-.importPage .toast summary {
+.import-page .toast summary {
   cursor: pointer;
 }
-.importPage .toast ul {
+.import-page .toast ul {
   margin-top: 8px;
   padding-left: 20px;
 }
-.importPage .toast li {
+.import-page .toast li {
   margin-bottom: 4px;
   font-size: 13px;
 }
 
-/* Legacy class mappings for Import page */
+/* legacy class mappings for import page */
 .page-categories {
   margin-top: 24px;
 }
@@ -523,7 +523,7 @@
 .over {
   color: var(--danger);
 }
-/* Legacy class mappings for Import page */
+/* legacy class mappings for import page */
 .page-import {
   padding: 24px;
 }
@@ -812,39 +812,39 @@
   width: 40px;
 }
 
-@keyframes slideIn {
+@keyframes slide-in {
   from {
     opacity: 0;
-    transform: translateX(100%);
+    transform: translate-x(100%);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate-x(0);
   }
 }
 
-/* CamelCase module classes */
-.statItem {
+/* camel-case module classes */
+.stat-item {
   display: flex;
   flex-direction: column;
 }
 
-.statLabel {
+.stat-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.statValue {
+.stat-value {
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
 }
 
-.formGroup {
+.form-group {
   margin-bottom: 16px;
 }
 
-.formLabel {
+.form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -852,7 +852,7 @@
   color: var(--text);
 }
 
-.formControl {
+.form-control {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -861,12 +861,12 @@
   font-size: 14px;
 }
 
-.formControl:focus {
+.form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.btnOutline {
+.btn-outline {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -876,12 +876,12 @@
   transition: all 0.2s;
 }
 
-.btnOutline:hover {
+.btn-outline:hover {
   background: var(--bg);
   border-color: var(--text);
 }
 
-.btnPrimary {
+.btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -891,16 +891,16 @@
   transition: all 0.2s;
 }
 
-.btnPrimary:hover {
+.btn-primary:hover {
   background: var(--primary-hover);
 }
 
-.btnSm {
+.btn-sm {
   padding: 4px 10px;
   font-size: 12px;
 }
 
-.btnGhost {
+.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
   border: none;
@@ -910,28 +910,28 @@
   transition: background 0.2s;
 }
 
-.btnGhost:hover {
+.btn-ghost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }
 
-.selectCol {
+.select-col {
   width: 40px;
 }
 
-.pageSize {
+.page-size {
   font-size: 14px;
 }
 
-.importFileInput {
+.import-file-input {
   display: none;
 }
 
-.importPreviewSection {
+.import-preview-section {
   margin-bottom: 24px;
 }
 
-.toastSuccess {
+.toast-success {
   background: var(--success);
   position: fixed;
   top: 20px;
@@ -941,10 +941,10 @@
   color: #fff;
   font-weight: 500;
   box-shadow: var(--shadow-lg);
-  animation: slideIn 0.3s ease-out;
+  animation: slide-in 0.3s ease-out;
 }
 
-.toastError {
+.toast-error {
   background: var(--danger);
   position: fixed;
   top: 20px;
@@ -954,22 +954,22 @@
   color: #fff;
   font-weight: 500;
   box-shadow: var(--shadow-lg);
-  animation: slideIn 0.3s ease-out;
+  animation: slide-in 0.3s ease-out;
 }
 
-.toastSuccess summary,
-.toastError summary {
+.toast-success summary,
+.toast-error summary {
   cursor: pointer;
 }
 
-.toastSuccess ul,
-.toastError ul {
+.toast-success ul,
+.toast-error ul {
   margin-top: 8px;
   padding-left: 20px;
 }
 
-.toastSuccess li,
-.toastError li {
+.toast-success li,
+.toast-error li {
   margin-bottom: 4px;
   font-size: 13px;
 }

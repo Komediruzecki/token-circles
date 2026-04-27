@@ -1,15 +1,15 @@
-.exportButtons {
+.export-buttons {
   display: flex;
   gap: 8px;
 }
 
-.exportTypeButtons {
+.export-type-buttons {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.exportTypeButtons button {
+.export-type-buttons button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -24,21 +24,21 @@
   color: var(--text);
 }
 
-.exportTypeButtons button:hover {
+.export-type-buttons button:hover {
   background: var(--btn-secondary-hover);
 }
 
-.exportTypeButtons button.active {
+.export-type-buttons button.active {
   background: var(--primary);
   color: #fff;
 }
 
-.exportTypeButtons svg {
+.export-type-buttons svg {
   width: 16px;
   height: 16px;
 }
 
-.chartExportButton {
+.chart-export-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -53,13 +53,13 @@
   transition: all 0.15s;
 }
 
-.chartExportButton:hover {
+.chart-export-button:hover {
   background: var(--btn-ghost-hover);
   border-color: var(--text);
   color: var(--text);
 }
 
-.chartExportButton svg {
+.chart-export-button svg {
   width: 16px;
   height: 16px;
 }

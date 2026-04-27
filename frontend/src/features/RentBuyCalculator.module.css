@@ -4,62 +4,62 @@
   padding: var(--page-padding);
 }
 
-.pageHeader {
+.page-header {
   margin-bottom: 24px;
 }
 
-.pageHeader h1 {
+.page-header h1 {
   font-size: 28px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
 }
 
-.pageHeader p {
+.page-header p {
   font-size: 14px;
   color: var(--text-secondary);
 }
 
-.calcContainer {
+.calc-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-bottom: 32px;
 }
 
-.calcSection {
+.calc-section {
   background: var(--bg);
   border-radius: var(--radius);
   padding: 20px;
   border: 1px solid var(--border);
 }
 
-.calcTitle {
+.calc-title {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 16px;
   color: var(--text);
 }
 
-.formGrid {
+.form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
-.formGroup {
+.form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.formGroup label {
+.form-group label {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
-.formGroup input {
+.form-group input {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -69,33 +69,33 @@
   transition: border-color 0.2s;
 }
 
-.formGroup input:focus {
+.form-group input:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.summaryGrid {
+.summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
-.summaryCard {
+.summary-card {
   background: var(--bg);
   border-radius: var(--radius);
   padding: 20px;
   border: 1px solid var(--border);
 }
 
-.summaryTitle {
+.summary-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 12px;
 }
 
-.summaryRow {
+.summary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -103,7 +103,7 @@
   font-size: 13px;
 }
 
-.summaryRow.highlight {
+.summary-row.highlight {
   background: var(--bg-secondary);
   border-radius: 6px;
   margin-top: 8px;
@@ -112,24 +112,24 @@
   font-weight: 600;
 }
 
-.summaryValue {
+.summary-value {
   font-weight: 600;
   color: var(--text);
 }
 
-.summaryValue.success {
+.summary-value.success {
   color: var(--success);
 }
 
-.summaryValue.warning {
+.summary-value.warning {
   color: var(--warning);
 }
 
-.verdict .summaryTitle {
+.verdict .summary-title {
   color: var(--primary);
 }
 
-.chartSection {
+.chart-section {
   background: var(--bg);
   border-radius: var(--radius);
   padding: 20px;
@@ -139,7 +139,7 @@
   gap: 16px;
 }
 
-.btnSecondary {
+.btn-secondary {
   align-self: flex-start;
   padding: 10px 16px;
   background: var(--bg-secondary);
@@ -151,7 +151,7 @@
   transition: all 0.2s;
 }
 
-.btnSecondary:hover {
+.btn-secondary:hover {
   background: var(--border);
 }
 
@@ -167,7 +167,7 @@
   color: var(--text-secondary);
 }
 
-/* Break-even message */
+/* break-even message */
 .breakeven {
   background: rgba(16, 185, 129, 0.08);
   border: 1px solid rgba(16, 185, 129, 0.3);
@@ -184,22 +184,22 @@
   border-color: rgba(107, 114, 128, 0.3);
 }
 
-.breakevenIcon {
+.breakeven-icon {
   flex-shrink: 0;
   color: var(--success);
 }
 
-.breakeven.neutral .breakevenIcon {
+.breakeven.neutral .breakeven-icon {
   color: var(--text-secondary);
 }
 
-.breakevenText strong {
+.breakeven-text strong {
   display: block;
   margin-bottom: 4px;
   color: var(--text);
 }
 
-.breakevenText p {
+.breakeven-text p {
   margin: 0;
   font-size: 13px;
   color: var(--text-secondary);

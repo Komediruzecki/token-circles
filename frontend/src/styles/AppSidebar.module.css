@@ -1,4 +1,4 @@
-/* App Sidebar Styles */
+/* app sidebar styles */
 .sidebar {
   width: 240px;
   background: var(--sidebar-bg, #1e293b);
@@ -43,7 +43,7 @@
   list-style: none;
 }
 
-.navLink {
+.nav-link {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -62,12 +62,12 @@
   cursor: pointer;
 }
 
-.navLink:hover {
+.nav-link:hover {
   background: var(--sidebar-active-bg, rgba(255, 255, 255, 0.1));
   color: #fff;
 }
 
-.navLinkActive {
+.nav-link-active {
   background: var(--sidebar-active-bg, rgba(255, 255, 255, 0.1));
   color: var(--sidebar-active-text, #f8fafc);
 }
@@ -85,10 +85,10 @@
   }
 
   .sidebar {
-    transform: translateX(-100%);
+    transform: translate-x(-100%);
   }
 
   .sidebar.mobile-open {
-    transform: translateX(0);
+    transform: translate-x(0);
   }
 }

@@ -1,26 +1,26 @@
-.billsPage {
+.bills-page {
   padding: 24px;
 }
-.billsPage .pageHeader {
+.bills-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.billsPage .pageHeader h1 {
+.bills-page .page-header h1 {
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
-.billsPage .pageSubtitle {
+.bills-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 4px;
 }
-.billsPage .billsSection {
+.bills-page .bills-section {
   margin-bottom: 24px;
 }
-.billsPage .sectionTitle {
+.bills-page .section-title {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 16px;
@@ -28,67 +28,67 @@
   align-items: center;
   gap: 8px;
 }
-.billsPage .sectionSubtitle {
+.bills-page .section-subtitle {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 400;
   margin-left: auto;
 }
-.billsPage .billsList {
+.bills-page .bills-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.billsPage .billCard {
+.bills-page .bill-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.billsPage .billCard.overdue {
+.bills-page .bill-card.overdue {
   border-color: var(--danger);
 }
-.billsPage .billCard.paid {
+.bills-page .bill-card.paid {
   opacity: 0.7;
 }
-.billsPage .billMain {
+.bills-page .bill-main {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.billsPage .billIcon {
+.bills-page .bill-icon {
   font-size: 24px;
 }
-.billsPage .billInfo {
+.bills-page .bill-info {
   flex: 1;
   min-width: 0;
 }
-.billsPage .billName {
+.bills-page .bill-name {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
 }
-.billsPage .billDetails {
+.bills-page .bill-details {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.billsPage .billAmount {
+.bills-page .bill-amount {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.billsPage .amountValue {
+.bills-page .amount-value {
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
 }
-.billsPage .billActions {
+.bills-page .bill-actions {
   display: flex;
   gap: 4px;
 }
-.billsPage .btnPrimary {
+.bills-page .btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -102,14 +102,14 @@
   gap: 6px;
   transition: background 0.2s;
 }
-.billsPage .btnPrimary:hover {
+.bills-page .btn-primary:hover {
   background: var(--primary-hover);
 }
-.billsPage .btnSm {
+.bills-page .btn-sm {
   padding: 4px 10px;
   font-size: 12px;
 }
-.billsPage .btnGhost {
+.bills-page .btn-ghost {
   background: transparent;
   color: var(--text-secondary);
   border: none;
@@ -118,11 +118,11 @@
   border-radius: 6px;
   transition: background 0.2s;
 }
-.billsPage .btnGhost:hover {
+.bills-page .btn-ghost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }
-.billsPage .modal {
+.bills-page .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -131,46 +131,46 @@
   max-height: 90vh;
   overflow-y: auto;
 }
-.billsPage .modalHeader {
+.bills-page .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
-.billsPage .modalTitle {
+.bills-page .modal-title {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
-.billsPage .modalClose {
+.bills-page .modal-close {
   background: transparent;
   border: none;
   cursor: pointer;
   font-size: 24px;
   color: var(--text-secondary);
 }
-.billsPage .modalBody {
+.bills-page .modal-body {
   padding: 20px;
 }
-.billsPage .modalFooter {
+.bills-page .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 20px;
   border-top: 1px solid var(--border);
 }
-.billsPage .formGroup {
+.bills-page .form-group {
   margin-bottom: 16px;
 }
-.billsPage .formLabel {
+.bills-page .form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 6px;
   color: var(--text);
 }
-.billsPage .formControl {
+.bills-page .form-control {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -179,16 +179,16 @@
   color: var(--text);
   font-size: 14px;
 }
-.billsPage .formControl:focus {
+.bills-page .form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
-.billsPage .toggleSwitch {
+.bills-page .toggle-switch {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.billsPage .toggleSlider {
+.bills-page .toggle-slider {
   width: 44px;
   height: 24px;
   background: var(--bg);
@@ -197,7 +197,7 @@
   transition: background 0.3s;
   border: 2px solid var(--border);
 }
-.billsPage .toggleSlider::before {
+.bills-page .toggle-slider::before {
   content: '';
   position: absolute;
   width: 20px;
@@ -208,15 +208,15 @@
   left: 2px;
   transition: transform 0.3s;
 }
-.billsPage .toggleSwitch input:checked + .toggleSlider {
+.bills-page .toggle-switch input:checked + .toggle-slider {
   background: var(--primary);
   border-color: var(--primary);
 }
-.billsPage .toggleSwitch input:checked + .toggleSlider::before {
-  transform: translateX(20px);
+.bills-page .toggle-switch input:checked + .toggle-slider::before {
+  transform: translate-x(20px);
 }
 
-.billsPage .colorInput {
+.bills-page .color-input {
   width: 100%;
   height: 44px;
   padding: 4px;
@@ -225,7 +225,7 @@
   cursor: pointer;
 }
 
-.billsPage .btnLink {
+.bills-page .btn-link {
   font-size: 13px;
   color: var(--primary);
   background: transparent;
@@ -234,6 +234,6 @@
   cursor: pointer;
 }
 
-.billsPage .btnLink:hover {
+.bills-page .btn-link:hover {
   text-decoration: underline;
 }

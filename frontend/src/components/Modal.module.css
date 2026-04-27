@@ -1,8 +1,8 @@
 /**
- * Modal Component CSS Module
+ * modal component css module
  */
 
-.modalOverlay {
+.modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
@@ -17,7 +17,7 @@
   backdrop-filter: blur(2px);
 }
 
-.modalOverlay.visible {
+.modal-overlay.visible {
   opacity: 1;
   pointer-events: all;
 }
@@ -32,27 +32,27 @@
   max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
-  transform: translateY(20px);
+  transform: translate-y(20px);
   transition: transform 0.2s;
 }
 
 .modal.visible {
-  transform: translateY(0);
+  transform: translate-y(0);
 }
 
-.modalSmall {
+.modal-small {
   max-width: 400px;
 }
 
-.modalLarge {
+.modal-large {
   max-width: 800px;
 }
 
-.modalMedium {
+.modal-medium {
   max-width: 560px;
 }
 
-.modalHeader {
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -60,13 +60,13 @@
   border-bottom: 1px solid var(--border);
 }
 
-.modalTitle {
+.modal-title {
   font-size: 18px;
   font-weight: 600;
   color: var(--text);
 }
 
-.modalClose {
+.modal-close {
   background: none;
   border: none;
   font-size: 24px;
@@ -77,15 +77,15 @@
   transition: color 0.15s;
 }
 
-.modalClose:hover {
+.modal-close:hover {
   color: var(--danger);
 }
 
-.modalBody {
+.modal-body {
   padding: 24px;
 }
 
-.modalFooter {
+.modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -93,7 +93,7 @@
   border-top: 1px solid var(--border);
 }
 
-.modalFooterButton {
+.modal-footer-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -110,11 +110,11 @@
   color: var(--btn-secondary-color);
 }
 
-.modalFooterButton:hover:not(:disabled) {
+.modal-footer-button:hover:not(:disabled) {
   background: var(--btn-secondary-hover);
 }
 
-.modalFooterButton:disabled {
+.modal-footer-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

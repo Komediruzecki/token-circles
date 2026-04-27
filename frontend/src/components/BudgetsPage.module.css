@@ -1,91 +1,91 @@
-.budgetSummary {
+.budget-summary {
   padding: 24px;
 }
-.budgetSummary .pageHeader {
+.budget-summary .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.budgetSummary .headerTop {
+.budget-summary .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.budgetSummary h1 {
+.budget-summary h1 {
   font-size: 24px;
   font-weight: 700;
 }
-.budgetSummary .monthSelector {
+.budget-summary .month-selector {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.budgetSummary .monthDisplay {
+.budget-summary .month-display {
   font-size: 14px;
   color: var(--text);
 }
-.budgetSummary .pageSubtitle {
+.budget-summary .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
-.budgetSummary .budgetSummary {
+.budget-summary .budget-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
-.budgetSummary .summaryCard {
+.budget-summary .summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.budgetSummary .summaryLabel {
+.budget-summary .summary-label {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
-.budgetSummary .summaryValue {
+.budget-summary .summary-value {
   font-size: 18px;
   font-weight: 700;
   margin-top: 4px;
 }
-.budgetSummary .summaryValue.positive {
+.budget-summary .summary-value.positive {
   color: var(--income);
 }
-.budgetSummary .summaryValue.negative {
+.budget-summary .summary-value.negative {
   color: var(--expense);
 }
-.budgetSummary .summaryValue.statusOk {
+.budget-summary .summary-value.status-ok {
   color: var(--success);
 }
-.budgetSummary .forecastToggleSection {
+.budget-summary .forecast-toggle-section {
   margin-bottom: 16px;
 }
-.budgetSummary .budgetForecast {
+.budget-summary .budget-forecast {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 24px;
 }
-.budgetSummary .forecastHeader {
+.budget-summary .forecast-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
-.budgetSummary .forecastTitle {
+.budget-summary .forecast-title {
   display: flex;
 }
-.budgetSummary .forecastStats {
+.budget-summary .forecast-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   margin-bottom: 16px;
 }
-.budgetSummary .statItem {
+.budget-summary .stat-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -93,27 +93,27 @@
   background: var(--bg);
   border-radius: var(--radius);
 }
-.budgetSummary .forecastChart {
+.budget-summary .forecast-chart {
   margin-top: 16px;
 }
-.budgetSummary .categoryChartSection {
+.budget-summary .category-chart-section {
   margin-top: 24px;
 }
-.budgetSummary .chartWrapper {
+.budget-summary .chart-wrapper {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
 
-/* Header top */
+/* header top */
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* Month selector */
+/* month selector */
 .month-selector {
   display: flex;
   align-items: center;
@@ -125,7 +125,7 @@
   color: var(--text);
 }
 
-/* Budget forecast */
+/* budget forecast */
 .budget-forecast {
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -180,7 +180,7 @@
   margin-top: 16px;
 }
 
-/* Chart Row Styles */
+/* chart row styles */
 .chart-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 80px 80px;
@@ -221,24 +221,24 @@
 }
 
 .chart-status-over,
-.chartStatusOver {
+.chart-status-over {
   background: rgba(239, 68, 68, 0.15);
   color: var(--danger);
 }
 
 .chart-status-warning,
-.chartStatusWarning {
+.chart-status-warning {
   background: rgba(234, 179, 8, 0.15);
   color: var(--warning);
 }
 
 .chart-status-ok,
-.chartStatusOk {
+.chart-status-ok {
   background: rgba(34, 197, 94, 0.15);
   color: var(--success);
 }
 
-/* Category chart section */
+/* category chart section */
 .category-chart-section {
   margin-top: 24px;
 }
@@ -250,7 +250,7 @@
   padding: 16px;
 }
 
-/* Toggle section */
+/* toggle section */
 .toggle-section {
   margin-bottom: 16px;
 }
@@ -271,7 +271,7 @@
   border-color: var(--primary);
 }
 
-.formInput {
+.form-input {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--border);
@@ -285,7 +285,7 @@
   display: block;
 }
 
-/* Budget Allocations Table */
+/* budget allocations table */
 .budget-allocations {
   margin-top: 24px;
 }
@@ -346,7 +346,7 @@
   background: var(--table-hover);
 }
 
-/* Table cell styles */
+/* table cell styles */
 .category-cell {
   display: flex;
   align-items: center;
@@ -404,7 +404,7 @@
   white-space: nowrap;
 }
 
-/* Status classes */
+/* status classes */
 .status-over {
   background: rgba(239, 68, 68, 0.05);
 }
@@ -427,38 +427,38 @@
   color: var(--success);
 }
 
-/* Summary card highlighted */
-.summaryCard {
+/* summary card highlighted */
+.summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
 
-.summaryCard.highlighted {
+.summary-card.highlighted {
   border-color: var(--primary);
 }
 
-.summaryValue {
+.summary-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
 }
 
-.summaryValuePositive {
+.summary-value-positive {
   color: var(--income);
 }
 
-.summaryValueNegative {
+.summary-value-negative {
   color: var(--expense);
 }
 
-.summaryValueStatusOk {
+.summary-value-status-ok {
   color: var(--success);
 }
 
-/* Toast error */
-.toastError {
+/* toast error */
+.toast-error {
   background: var(--danger-bg, rgba(239, 68, 68, 0.1));
   color: var(--danger);
   padding: 12px 16px;
@@ -467,19 +467,19 @@
   font-size: 14px;
 }
 
-/* Modal small */
-.modalSmall {
+/* modal small */
+.modal-small {
   max-width: 400px;
 }
 
-.modalText {
+.modal-text {
   font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 16px;
 }
 
-/* Form label */
-.formLabel {
+/* form label */
+.form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -487,52 +487,52 @@
   color: var(--text);
 }
 
-/* Help text */
-.helpText {
+/* help text */
+.help-text {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 8px;
 }
 
-/* Budget message */
-.budgetMessage {
+/* budget message */
+.budget-message {
   font-size: 12px;
   color: var(--text-secondary);
   font-style: italic;
 }
 
-/* Budget traditional */
-.budgetTraditional {
+/* budget traditional */
+.budget-traditional {
   margin-top: 24px;
 }
 
-/* Forecast stats */
-.forecastStats {
+/* forecast stats */
+.forecast-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   margin-bottom: 16px;
 }
 
-/* Stat item */
-.statItem {
+/* stat item */
+.stat-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.statLabel {
+.stat-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.statValue {
+.stat-value {
   font-size: 14px;
   font-weight: 600;
 }
 
-/* Buttons */
-.btnPrimary {
+/* buttons */
+.btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -547,16 +547,16 @@
   transition: background 0.2s;
 }
 
-.btnPrimary:hover {
+.btn-primary:hover {
   background: var(--primary-hover);
 }
 
-.btnPrimary:disabled {
+.btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.btnGhost {
+.btn-ghost {
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -569,12 +569,12 @@
   transition: all 0.2s;
 }
 
-.btnGhost:hover {
+.btn-ghost:hover {
   background: var(--bg);
   color: var(--text);
 }
 
-.btnOutline {
+.btn-outline {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -589,18 +589,18 @@
   transition: all 0.2s;
 }
 
-.btnOutline:hover {
+.btn-outline:hover {
   background: var(--bg);
   border-color: var(--primary);
 }
 
-.btnLarge {
+.btn-large {
   padding: 12px 24px;
   font-size: 16px;
 }
 
-/* Modal overlay, modal */
-.modalOverlay {
+/* modal overlay, modal */
+.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -623,7 +623,7 @@
   overflow-y: auto;
 }
 
-.modalHeader {
+.modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -631,13 +631,13 @@
   border-bottom: 1px solid var(--border);
 }
 
-.modalHeader h3 {
+.modal-header h3 {
   font-size: 18px;
   font-weight: 600;
   margin: 0;
 }
 
-.modalClose {
+.modal-close {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -653,15 +653,15 @@
   transition: background 0.2s;
 }
 
-.modalClose:hover {
+.modal-close:hover {
   background: var(--bg);
 }
 
-.modalBody {
+.modal-body {
   padding: 20px;
 }
 
-.modalFooter {
+.modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -669,72 +669,72 @@
   border-top: 1px solid var(--border);
 }
 
-/* Page structure */
-.budgetsPage {
+/* page structure */
+.budgets-page {
   padding: 24px;
 }
 
-.pageHeader {
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
 
-.headerTop {
+.header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.budgetsPage h1 {
+.budgets-page h1 {
   font-size: 24px;
   font-weight: 700;
 }
 
-.pageSubtitle {
+.page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-.monthSelector {
+.month-selector {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.monthDisplay {
+.month-display {
   font-size: 14px;
   color: var(--text);
 }
 
-/* Budget summary grid */
-.budgetSummary {
+/* budget summary grid */
+.budget-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
 
-/* Category chart section */
-.categoryChartSection {
+/* category chart section */
+.category-chart-section {
   margin-top: 24px;
 }
 
-.chartWrapper {
+.chart-wrapper {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
 
-/* Forecast toggle section */
-.forecastToggleSection {
+/* forecast toggle section */
+.forecast-toggle-section {
   margin-bottom: 16px;
 }
 
-/* Budget forecast */
-.budgetForecast {
+/* budget forecast */
+.budget-forecast {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -742,25 +742,25 @@
   margin-bottom: 24px;
 }
 
-.forecastHeader {
+.forecast-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
 
-.forecastTitle {
+.forecast-title {
   font-size: 18px;
   font-weight: 600;
 }
 
-/* Forecast chart */
-.forecastChart {
+/* forecast chart */
+.forecast-chart {
   margin-top: 16px;
 }
 
-/* Chart row */
-.chartRow {
+/* chart row */
+.chart-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 80px 80px;
   gap: 8px;
@@ -769,29 +769,29 @@
   align-items: center;
 }
 
-.chartRow:last-child {
+.chart-row:last-child {
   border-bottom: none;
 }
 
-.chartLabel {
+.chart-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.chartValue {
+.chart-value {
   font-size: 13px;
   font-weight: 500;
 }
 
-.budgetVal {
+.budget-val {
   color: var(--primary);
 }
 
-.actualVal {
+.actual-val {
   color: var(--expense);
 }
 
-.chartStatus {
+.chart-status {
   font-size: 11px;
   font-weight: 600;
   padding: 4px 8px;
@@ -799,28 +799,28 @@
   text-align: center;
 }
 
-.chartStatusOver {
+.chart-status-over {
   background: rgba(239, 68, 68, 0.15);
   color: var(--danger);
 }
 
-.chartStatusWarning {
+.chart-status-warning {
   background: rgba(234, 179, 8, 0.15);
   color: var(--warning);
 }
 
-.chartStatusOk {
+.chart-status-ok {
   background: rgba(34, 197, 94, 0.15);
   color: var(--success);
 }
 
-/* Empty state */
-.emptyState {
+/* empty state */
+.empty-state {
   text-align: center;
   padding: 48px 20px;
   color: var(--text-secondary);
 }
 
-.emptyState p {
+.empty-state p {
   margin: 8px 0;
 }

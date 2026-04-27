@@ -1,27 +1,27 @@
-.categoriesPage {
+.categories-page {
   margin-top: 24px;
 }
 
-.categoriesPage .pageHeader {
+.categories-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
 }
 
-.categoriesPage .pageHeader h1 {
+.categories-page .page-header h1 {
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
 
-.categoriesPage .pageSubtitle {
+.categories-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 4px;
 }
 
-.categoriesPage .addCategoryBtn {
+.categories-page .add-category-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -36,18 +36,18 @@
   color: #fff;
 }
 
-.categoriesPage .addCategoryBtn:hover {
+.categories-page .add-category-btn:hover {
   background: var(--primary-hover);
 }
 
-.categoriesPage .categoriesTabs {
+.categories-page .categories-tabs {
   display: flex;
   gap: 0;
   border-bottom: 2px solid var(--border);
   margin-bottom: 20px;
 }
 
-.categoriesPage .tab {
+.categories-page .tab {
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
@@ -58,22 +58,22 @@
   transition: all 0.15s;
 }
 
-.categoriesPage .tab:hover {
+.categories-page .tab:hover {
   color: var(--text);
 }
 
-.categoriesPage .tab.active {
+.categories-page .tab.active {
   color: var(--primary);
   border-bottom-color: var(--primary);
 }
 
-.categoriesPage .categoriesGrid {
+.categories-page .categories-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
 
-.categoriesPage .categoryCard {
+.categories-page .category-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -82,18 +82,18 @@
   overflow: hidden;
 }
 
-.categoriesPage .categoryCard:hover {
+.categories-page .category-card:hover {
   border-color: var(--primary);
 }
 
-.categoriesPage .categoryHeader {
+.categories-page .category-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
 }
 
-.categoriesPage .categoryIcon {
+.categories-page .category-icon {
   width: 40px;
   height: 40px;
   display: flex;
@@ -105,25 +105,25 @@
   flex-shrink: 0;
 }
 
-.categoriesPage .categoryActions {
+.categories-page .category-actions {
   display: flex;
   gap: 4px;
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.categoriesPage .categoryCard:hover .categoryActions {
+.categories-page .category-card:hover .category-actions {
   opacity: 1;
 }
 
-.categoriesPage .categoryName {
+.categories-page .category-name {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
 }
 
-.categoriesPage .categoryType {
+.categories-page .category-type {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -131,27 +131,27 @@
   font-weight: 500;
 }
 
-.categoriesPage .categorySpending {
+.categories-page .category-spending {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
-.categoriesPage .spendingAmount {
+.categories-page .spending-amount {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
 }
 
-.categoriesPage .spendingAmount.income {
+.categories-page .spending-amount.income {
   color: var(--income);
 }
 
-.categoriesPage .spendingAmount.expense {
+.categories-page .spending-amount.expense {
   color: var(--expense);
 }
 
-.categoriesPage .spendingLabel {
+.categories-page .spending-label {
   font-size: 11px;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -159,53 +159,53 @@
   margin-top: 2px;
 }
 
-.categoriesPage .budgetLimits {
+.categories-page .budget-limits {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
-.categoriesPage .budgetLimit {
+.categories-page .budget-limit {
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
 }
 
-.categoriesPage .budgetLimitLabel {
+.categories-page .budget-limit-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.categoriesPage .budgetLimitAmount {
+.categories-page .budget-limit-amount {
   font-size: 12px;
   font-weight: 500;
 }
 
-.categoriesPage .remainingAmount {
+.categories-page .remaining-amount {
   display: flex;
   justify-content: space-between;
   margin-bottom: 4px;
 }
 
-.categoriesPage .remainingLabel {
+.categories-page .remaining-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.categoriesPage .remainingAmountValue {
+.categories-page .remaining-amount-value {
   font-size: 12px;
   font-weight: 500;
 }
 
-.categoriesPage .remainingAmountValue.positive {
+.categories-page .remaining-amount-value.positive {
   color: var(--success);
 }
 
-.categoriesPage .remainingAmountValue.negative {
+.categories-page .remaining-amount-value.negative {
   color: var(--danger);
 }
 
-.categoriesPage .budgetProgress {
+.categories-page .budget-progress {
   height: 6px;
   background: var(--budget-bar-bg);
   border-radius: 3px;
@@ -213,35 +213,35 @@
   margin-top: 8px;
 }
 
-.categoriesPage .budgetProgressBar {
+.categories-page .budget-progress-bar {
   height: 100%;
   border-radius: 3px;
   transition: width 0.3s;
 }
 
-.categoriesPage .budgetProgressBar.warning {
+.categories-page .budget-progress-bar.warning {
   background: var(--warning);
 }
 
-.categoriesPage .budgetProgressBar.danger {
+.categories-page .budget-progress-bar.danger {
   background: var(--danger);
 }
 
-.categoriesPage .budgetProgressBar.success {
+.categories-page .budget-progress-bar.success {
   background: var(--success);
 }
 
-.categoriesPage .budgetProgressBar.normal {
+.categories-page .budget-progress-bar.normal {
   background: var(--primary);
 }
 
-.categoriesPage .categoryColors {
+.categories-page .category-colors {
   display: flex;
   gap: 6px;
   margin-top: 12px;
 }
 
-.categoriesPage .colorDot {
+.categories-page .color-dot {
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -250,40 +250,40 @@
   transition: all 0.15s;
 }
 
-.categoriesPage .colorDot:hover {
+.categories-page .color-dot:hover {
   transform: scale(1.15);
 }
 
-.categoriesPage .colorDot.selected {
+.categories-page .color-dot.selected {
   border-color: var(--text);
   box-shadow:
     0 0 0 2px var(--bg),
     0 0 0 4px var(--primary);
 }
 
-.categoriesPage .emptyState {
+.categories-page .empty-state {
   text-align: center;
   padding: 48px 20px;
   color: var(--text-secondary);
 }
 
-.categoriesPage .emptyState svg {
+.categories-page .empty-state svg {
   width: 48px;
   height: 48px;
   margin-bottom: 12px;
   opacity: 0.5;
 }
 
-.categoriesPage .emptyState p {
+.categories-page .empty-state p {
   font-size: 14px;
 }
-/* Legacy class mappings for Categories page */
+/* legacy class mappings for categories page */
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-/* Legacy class mappings for Categories page */
+/* legacy class mappings for categories page */
 .header-top {
   display: flex;
   justify-content: space-between;
@@ -562,7 +562,7 @@
   font-size: 14px;
   color: var(--text-secondary);
 }
-/* Legacy class mappings for Categories page - continued */
+/* legacy class mappings for categories page - continued */
 .header-top {
   display: flex;
   justify-content: space-between;

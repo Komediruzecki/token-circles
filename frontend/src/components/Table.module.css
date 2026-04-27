@@ -1,6 +1,6 @@
 /**
- * Table CSS Module
- * Reusable table component
+ * table css module
+ * reusable table component
  */
 
 .tableWrap {
@@ -40,52 +40,52 @@
   border-bottom: none;
 }
 
-.tdAmount {
+.td-amount {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.tdAmount.income {
+.td-amount.income {
   color: var(--income);
 }
 
-.tdAmount.expense {
+.td-amount.expense {
   color: var(--expense);
 }
 
-.tdAmount.transfer {
+.td-amount.transfer {
   color: var(--transfer);
 }
 
-.tdActions {
+.td-actions {
   display: flex;
   gap: 4px;
 }
 
-.thCheckbox {
+.th-checkbox {
   width: 40px;
   text-align: center;
 }
 
-.thCheckbox input[type='checkbox'] {
+.th-checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
   accent-color: var(--primary);
 }
 
-.tdCheckbox {
+.td-checkbox {
   text-align: center;
   width: 40px;
 }
 
-.tdCheckbox input[type='checkbox'] {
+.td-checkbox input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
   accent-color: var(--primary);
 }
 
-.rowSelected {
+.row-selected {
   background: var(--primary-bg, rgba(59, 130, 246, 0.08)) !important;
 }

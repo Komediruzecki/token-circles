@@ -1,9 +1,9 @@
 /**
- * TypeSelector CSS Module
- * Transaction type selector (Income/Expense/Transfer)
+ * type-selector css module
+ * transaction type selector (income/expense/transfer)
  */
 
-.typeSelector {
+.type-selector {
   display: flex;
   gap: 0;
   border: 1px solid var(--border);
@@ -11,7 +11,7 @@
   overflow: hidden;
 }
 
-.typeSelector button {
+.type-selector button {
   flex: 1;
   padding: 8px 12px;
   border: none;
@@ -23,17 +23,17 @@
   color: var(--text-secondary);
 }
 
-.typeSelector button.active.income {
+.type-selector button.active.income {
   background: var(--type-income-bg);
   color: var(--income);
 }
 
-.typeSelector button.active.expense {
+.type-selector button.active.expense {
   background: var(--type-expense-bg);
   color: var(--expense);
 }
 
-.typeSelector button.active.transfer {
+.type-selector button.active.transfer {
   background: var(--type-transfer-bg);
   color: var(--transfer);
 }

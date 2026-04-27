@@ -1,4 +1,4 @@
-.compoundLayout {
+.compound-layout {
   display: grid;
   grid-template-columns: 380px 1fr;
   gap: 24px;
@@ -6,16 +6,16 @@
   margin-top: 16px;
 }
 
-.compoundLeft {
+.compound-left {
   min-height: 0;
 }
 
-.compoundRight {
+.compound-right {
   min-height: 300px;
   display: flex;
 }
 
-.retirementLayout {
+.retirement-layout {
   display: grid;
   grid-template-columns: 420px 1fr;
   grid-template-rows: auto 1fr;
@@ -24,73 +24,73 @@
   height: 100vh;
 }
 
-.retirementLeft,
-.retirementRight,
-.retirementChartCard {
+.retirement-left,
+.retirement-right,
+.retirement-chart-card {
   min-height: 0;
 }
 
-.retirementLeft .card {
+.retirement-left .card {
   padding: 20px;
 }
 
-.retirementLeft .formGroup {
+.retirement-left .form-group {
   margin-bottom: 8px;
 }
 
-.retirementRight {
+.retirement-right {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.retirementChartCard {
+.retirement-chart-card {
   grid-column: 1 / -1;
   padding: 20px;
   display: flex;
 }
 
-.housingCalcLayout {
+.housing-calc-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   margin-bottom: 24px;
 }
 
-.housingInputSection {
+.housing-input-section {
   display: flex;
   flex-direction: column;
 }
 
-.housingResultsSection {
+.housing-results-section {
   display: flex;
   flex-direction: column;
 }
 
-.settingsGrid {
+.settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: start;
 }
 
-.settingsGrid .settingsCol {
+.settings-grid .settings-col {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.settingsGrid .card {
+.settings-grid .card {
   max-width: none;
 }
 
-.settingsDivider {
+.settings-divider {
   border: none;
   border-top: 1px solid var(--border);
   margin: 16px 0 0 0;
 }
 
-.importDropzone {
+.import-dropzone {
   border: 2px dashed var(--border);
   border-radius: 12px;
   padding: 40px;
@@ -100,41 +100,41 @@
   margin-bottom: 20px;
 }
 
-.importDropzone:hover,
-.importDropzone.dragover {
+.import-dropzone:hover,
+.import-dropzone.dragover {
   border-color: var(--primary);
   background: var(--chart-primary-bg);
 }
 
-.importDropzone svg {
+.import-dropzone svg {
   width: 40px;
   height: 40px;
   color: var(--text-secondary);
   margin-bottom: 10px;
 }
 
-.importDropzone p {
+.import-dropzone p {
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-.importDropzone strong {
+.import-dropzone strong {
   color: var(--text);
 }
 
-.chartContainer {
+.chart-container {
   position: relative;
   height: 280px;
 }
 
-.chartContainer tall {
+.chart-container tall {
   height: 320px;
 }
 
-.chartContainer short {
+.chart-container short {
   height: 220px;
 }
 
-.chartContainer medium {
+.chart-container medium {
   height: 260px;
 }

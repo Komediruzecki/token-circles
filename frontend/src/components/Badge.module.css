@@ -1,6 +1,6 @@
 /**
- * Badge CSS Module
- * Reusable badge component
+ * badge css module
+ * reusable badge component
  */
 
 .badge {
@@ -28,17 +28,17 @@
   color: white;
 }
 
-.badgeIncome {
+.badge-income {
   background: var(--badge-income-bg);
   color: var(--badge-income-text);
 }
 
-.badgeExpense {
+.badge-expense {
   background: var(--badge-expense-bg);
   color: var(--badge-expense-text);
 }
 
-.badgeTransfer {
+.badge-transfer {
   background: var(--badge-transfer-bg);
   color: var(--badge-transfer-text);
 }

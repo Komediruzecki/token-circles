@@ -1,31 +1,31 @@
-.dashboardSettings {
+.dashboard-settings {
   padding: 16px;
 }
 
-.settingsHeader {
+.settings-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
 }
 
-.settingsHeader h3 {
+.settings-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
 }
 
-.settingsList {
+.settings-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.settingItem {
+.setting-item {
   display: block;
 }
 
-.widgetToggle {
+.widget-toggle {
   width: 100%;
   display: flex;
   align-items: center;
@@ -38,29 +38,29 @@
   transition: all 0.15s;
 }
 
-.widgetToggle:hover {
+.widget-toggle:hover {
   border-color: var(--primary);
 }
 
-.widgetToggle.active {
+.widget-toggle.active {
   border-color: var(--primary);
   background: rgba(59, 130, 246, 0.1);
 }
 
-.widgetIcon {
+.widget-icon {
   font-size: 20px;
   width: 32px;
   text-align: center;
 }
 
-.widgetName {
+.widget-name {
   flex: 1;
   text-align: left;
   font-size: 14px;
   font-weight: 500;
 }
 
-.widgetStatus {
+.widget-status {
   font-size: 12px;
   color: var(--text-secondary);
   padding: 4px 8px;
@@ -68,7 +68,7 @@
   border-radius: 4px;
 }
 
-.settingsFooter {
+.settings-footer {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
@@ -76,7 +76,7 @@
   justify-content: flex-end;
 }
 
-.btnSm {
+.btn-sm {
   padding: 6px 12px;
   font-size: 12px;
   border-radius: var(--radius);
@@ -84,22 +84,22 @@
   transition: all 0.15s;
 }
 
-.btnSecondary {
+.btn-secondary {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
 }
 
-.btnSecondary:hover {
+.btn-secondary:hover {
   background: var(--bg);
 }
 
-.btnPrimary {
+.btn-primary {
   background: var(--primary);
   color: #fff;
   border: none;
 }
 
-.btnPrimary:hover {
+.btn-primary:hover {
   background: var(--primary-hover);
 }

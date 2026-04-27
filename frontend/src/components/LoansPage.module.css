@@ -1,121 +1,121 @@
-.loansPage {
+.loans-page {
   padding: 24px;
 }
-.loansPage .pageHeader {
+.loans-page .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
-.loansPage .headerTop {
+.loans-page .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.loansPage h1 {
+.loans-page h1 {
   font-size: 24px;
   font-weight: 700;
 }
-.loansPage .pageSubtitle {
+.loans-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
-.loansPage .loansSummary {
+.loans-page .loans-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
-.loansPage .summaryCard {
+.loans-page .summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.loansPage .summaryCard.highlighted {
+.loans-page .summary-card.highlighted {
   border-color: var(--primary);
 }
-.loansPage .summaryLabel {
+.loans-page .summary-label {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
-.loansPage .summaryValue {
+.loans-page .summary-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
 }
-.loansPage .loansGrid {
+.loans-page .loans-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
-.loansPage .loanCard {
+.loans-page .loan-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
 }
-.loansPage .loanHeader {
+.loans-page .loan-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.loansPage .loanIcon {
+.loans-page .loan-icon {
   font-size: 32px;
 }
-.loansPage .loanInfo {
+.loans-page .loan-info {
   flex: 1;
   min-width: 0;
 }
-.loansPage .loanName {
+.loans-page .loan-name {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 2px;
 }
-.loansPage .loanActions {
+.loans-page .loan-actions {
   display: flex;
   gap: 4px;
 }
-.loansPage .loanBalance {
+.loans-page .loan-balance {
   padding-top: 12px;
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
-.loansPage .balanceLabel {
+.loans-page .balance-label {
   font-size: 12px;
   color: var(--text-secondary);
   margin-bottom: 2px;
 }
-.loansPage .balanceAmount {
+.loans-page .balance-amount {
   font-size: 20px;
   font-weight: 700;
 }
-.loansPage .loanDetails {
+.loans-page .loan-details {
   padding-top: 12px;
   margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.loansPage .detailRow {
+.loans-page .detail-row {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
 }
-.loansPage .detailLabel {
+.loans-page .detail-label {
   color: var(--text-secondary);
 }
-.loansPage .detailValue {
+.loans-page .detail-value {
   font-weight: 500;
 }
-.loansPage .loanProgress {
+.loans-page .loan-progress {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-.loansPage .progressBar {
+.loans-page .progress-bar {
   display: flex;
   align-items: center;
   height: 8px;
@@ -123,33 +123,33 @@
   border-radius: 4px;
   overflow: hidden;
 }
-.loansPage .progressFill {
+.loans-page .progress-fill {
   height: 100%;
   background: var(--primary);
   transition: width 0.3s;
 }
-.loansPage .progressStats {
+.loans-page .progress-stats {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
   margin-top: 4px;
 }
-.loansPage .progressPercent {
+.loans-page .progress-percent {
   font-weight: 600;
 }
-.loansPage .progressCurrent {
+.loans-page .progress-current {
   color: var(--text-secondary);
 }
-.loansPage .loanAmortizationSection {
+.loans-page .loan-amortization-section {
   margin-top: 24px;
 }
-.loansPage .loanAmortizationSection h3 {
+.loans-page .loan-amortization-section h3 {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 16px;
 }
-.loansPage .amortizationChartWrapper {
+.loans-page .amortization-chart-wrapper {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -242,7 +242,7 @@
   font-weight: 600;
 }
 
-/* Legacy class mappings for Loans page */
+/* legacy class mappings for loans page */
 .loans-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -354,7 +354,7 @@
   border-top: 1px solid var(--border);
 }
 
-.progressBar {
+.progress-bar {
   display: flex;
   align-items: center;
   height: 8px;
@@ -363,13 +363,13 @@
   overflow: hidden;
 }
 
-.progressFill {
+.progress-fill {
   height: 100%;
   background: var(--primary);
   transition: width 0.3s;
 }
 
-.progressStats {
+.progress-stats {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -377,39 +377,39 @@
   margin-top: 4px;
 }
 
-/* Legacy class mappings for Loans page */
+/* legacy class mappings for loans page */
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* Page subtitle */
+/* page subtitle */
 .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-/* Summary labels */
+/* summary labels */
 .summary-label {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
 
-/* Summary values */
+/* summary values */
 .summary-value {
   font-size: 20px;
   font-weight: 700;
   margin-top: 4px;
 }
 
-/* Loan icon */
+/* loan icon */
 .loan-icon {
   font-size: 32px;
 }
 
-/* Detail row */
+/* detail row */
 .detail-row {
   display: flex;
   justify-content: space-between;
@@ -424,7 +424,7 @@
   font-weight: 500;
 }
 
-/* Loan amortization section */
+/* loan amortization section */
 .loan-amortization-section {
   margin-top: 24px;
 }
@@ -442,7 +442,7 @@
   padding: 16px;
 }
 
-/* Modal form classes */
+/* modal form classes */
 .form-group {
   margin-bottom: 16px;
 }
@@ -474,32 +474,32 @@
   display: block;
 }
 
-/* CamelCase module classes */
-.detailRow {
+/* camel-case module classes */
+.detail-row {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
 }
 
-.detailLabel {
+.detail-label {
   color: var(--text-secondary);
 }
 
-.detailValue {
+.detail-value {
   font-weight: 500;
 }
 
-.loanAmortizationSection {
+.loan-amortization-section {
   margin-top: 24px;
 }
 
-.loanAmortizationSection h3 {
+.loan-amortization-section h3 {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 16px;
 }
 
-.amortizationChartWrapper {
+.amortization-chart-wrapper {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -592,11 +592,11 @@
   font-weight: 600;
 }
 
-.formGroup {
+.form-group {
   margin-bottom: 16px;
 }
 
-.formLabel {
+.form-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
@@ -604,7 +604,7 @@
   margin-bottom: 6px;
 }
 
-.formControl {
+.form-control {
   width: 100%;
   padding: 10px;
   border: 1px solid var(--border);
@@ -614,12 +614,12 @@
   font-size: 14px;
 }
 
-.formControl:focus {
+.form-control:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.btnSm {
+.btn-sm {
   padding: 4px 8px;
   font-size: 12px;
   background: transparent;
@@ -629,11 +629,11 @@
   transition: all 0.2s;
 }
 
-.btnSm:hover {
+.btn-sm:hover {
   background: var(--bg);
 }
 
-.btnGhost {
+.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
   border: none;
@@ -643,7 +643,7 @@
   transition: background 0.2s;
 }
 
-.btnGhost:hover {
+.btn-ghost:hover {
   background: var(--btn-ghost-hover);
   color: var(--text);
 }
