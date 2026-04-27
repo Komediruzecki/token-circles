@@ -113,6 +113,28 @@ npm run build
 
 ## API
 
+### Health Check
+
+The backend provides a health check endpoint to verify the service is running:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | API health status (check if backend is running) |
+
+**Example response:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-04-27T09:58:47.946Z",
+  "database": "connected"
+}
+```
+
+**Live site URLs:**
+- Frontend: https://finance-manager.clodhost.com
+- API: https://finance-manager.clodhost.com/api
+- Health Check: https://finance-manager.clodhost.com/api/health
+
 The backend exposes a REST API. All endpoints require an `X-Profile-Id` header (integer profile ID).
 
 ### Endpoints
@@ -186,3 +208,42 @@ npx jest <path>      # Run specific test file
 ```
 
 Tests require the backend server running on port 3847 with `NODE_ENV=test`. The test database (`db/test.db`) and rate limit stores are reset automatically between test files. The server must have the `test.db` database seeded before running tests — run `npm test` once to initialize.
+
+## Deployment
+
+### Architecture
+
+This project uses **frontend/ and backend/** as the source of truth (ground truth). The deployment process:
+
+1. **Development Repo** (`/tmp/finance-manager-2`): Contains source code in `frontend/` and `backend/`
+2. **Production Build**: Built via Vite and deployed to `/var/www/finance-manager.clodhost.com/frontend/dist`
+3. **Production Backend**: Source code synced to `/var/www/finance-manager.clodhost.com/backend/index.js` and `database.js`
+
+### Deployment Process
+
+```bash
+# 1. Build frontend (from ground truth)
+cd /tmp/finance-manager-2/frontend
+npm run build
+
+# 2. Deploy frontend to production
+./deploy.sh  # or manually copy dist/ to /var/www/finance-manager.clodhost.com/frontend/
+
+# 3. Sync backend from ground truth
+cp /tmp/finance-manager-2/backend/index.js /var/www/finance-manager.clodhost.com/backend/index.js
+cp /tmp/finance-manager-2/backend/database.js /var/www/finance-manager.clodhost.com/backend/database.js
+
+# 4. Restart backend service
+systemctl restart finance-manager.service
+```
+
+### Live Site URLs
+
+| Service | URL |
+|---------|-----|
+| Frontend | https://finance-manager.clodhost.com |
+| Backend API | https://finance-manager.clodhost.com/api |
+| Health Check | https://finance-manager.clodhost.com/api/health |
+| API Docs | https://finance-manager.clodhost.com/api/docs |
+
+The backend runs via systemd as `finance-manager.service` listening on port 3847, served through Apache reverse proxy.
