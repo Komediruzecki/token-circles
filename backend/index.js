@@ -1918,7 +1918,12 @@ app.get('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
       }
     }
     const total = db.prepare(countSql).get(...cparams).c;
-    res.json({ rows, total });
+    res.json({
+      rows,
+      total,
+      limit: limit ? parseInt(limit) : total,
+      offset: offset ? parseInt(offset) : 0,
+    });
   } catch (err) {
     console.error(err.message);
     logError('error', err);
@@ -1974,12 +1979,15 @@ app.get('/api/transactions/summary', apiRateLimiter, (req, res) => {
     }
 
     const result = db.prepare(sql).get(...params);
-    res.json({
+    const data = {
       total_amount: result.total_amount || 0,
       total_expense: result.total_expense || 0,
+      total_expenses: result.total_expense || 0, // Support plural form
       total_income: result.total_income || 0,
+      net_balance: (result.total_income || 0) - (result.total_expense || 0),
       count: result.count || 0,
-    });
+    };
+    res.json(toCamelCase(data));
   } catch (err) {
     console.error(err.message);
     logError('error', err);
@@ -2040,12 +2048,13 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
         notes || '',
         pid
       );
-    res.json({
-      id: info.lastInsertRowid,
-      description: sanitizedDescription,
-      ...req.body,
-      profile_id: pid,
-    });
+    // Return created transaction with all fields including timestamps
+    const created = db
+      .prepare(
+        `SELECT * FROM transactions WHERE id = ? AND profile_id = ?`
+      )
+      .get(info.lastInsertRowid, pid);
+    res.json(toCamelCase(created));
   } catch (err) {
     console.error(err.message);
     logError('error', err);
@@ -2101,8 +2110,11 @@ app.get('/api/transactions/:id', apiRateLimiter, (req, res) => {
 app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
   try {
     const pids = getProfileIds(req);
-    const inClause = pids.map(() => '?').join(',');
-    const { ids, action, data } = req.body;
+    const inClause = pids.map(() => '?').join('');
+    // Support both 'ids' and 'transactionIds' field names
+    let ids = req.body.ids || req.body.transactionIds || [];
+    const action = req.body.action || req.body._method || 'update';
+    const data = req.body.data || req.body;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'No transaction IDs provided' });
@@ -2114,7 +2126,7 @@ app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
     const placeholders = ids.map(() => '?').join(',');
     const authParams = [...pids, ...ids];
 
-    if (action === 'delete') {
+    if (action === 'delete' || action === 'DELETE' || action.toLowerCase() === 'delete') {
       const stmt = db.prepare(
         `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
       );
@@ -2122,12 +2134,12 @@ app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
       return res.json({ ok: true, deleted: result.changes });
     }
 
-    if (action === 'update') {
+    if (action === 'update' || action === 'UPDATE' || action.toLowerCase() === 'update') {
       if (!data || typeof data !== 'object') {
         return res.status(400).json({ error: 'No update data provided' });
       }
 
-      const allowedFields = ['category_id', 'type', 'description', 'beneficiary', 'payor', 'notes'];
+      const allowedFields = ['category_id', 'type', 'description', 'beneficiary', 'payor', 'notes', 'reconciled'];
       const updates = [];
       const updateParams = [];
 
@@ -2140,6 +2152,10 @@ app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
                 ? null
                 : parseInt(data.category_id)
             );
+          } else if (field === 'reconciled') {
+            // Convert boolean to integer for SQLite
+            updates.push('reconciled = ?');
+            updateParams.push(data.reconciled ? 1 : 0);
           } else if (field === 'type') {
             if (!['income', 'expense', 'transfer'].includes(data.type)) {
               return res
