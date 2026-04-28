@@ -6,7 +6,8 @@ import { createMemo, createSignal, onMount, onCleanup, Suspense, Show } from 'so
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
-import { handlers, receipts, transactions, authLogin, authLogout, selectProfile } from './core/handlers.js'
+import { handlers, receipts, transactions, authLogin, authLogout } from './core/handlers.js'
+import { api } from './core/api.js'
 import { pages as allPages } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
@@ -15,7 +16,6 @@ window.transactions = transactions
 window.handlers = handlers
 window.handlers.authLogin = authLogin
 window.handlers.authLogout = authLogout
-window.handlers.selectProfile = selectProfile
 
 export function App() {
   const [_currentPage, _setCurrentPage] = createSignal<PageName>('dashboard')
@@ -27,7 +27,7 @@ export function App() {
 
   const loadProfiles = async () => {
     try {
-      const data = await window.api?.getProfiles?.() || []
+      const data = await api.getProfiles()
       setProfiles(data)
     } catch {
       setProfiles([])
@@ -36,7 +36,7 @@ export function App() {
 
   const selectProfile = async (profileId: number) => {
     try {
-      window.handlers?.selectProfile?.(profileId)
+      localStorage.setItem('currentProfileId', profileId.toString())
       setCurrentProfile(profiles().find((p) => p.id === profileId))
       setShowDropdown(false)
     } catch {
@@ -50,7 +50,7 @@ export function App() {
 
   const handleLogin = async () => {
     try {
-      window.handlers?.authLogin?.()
+      await authLogin()
       await loadProfiles()
       // Select the first available profile after login
       if (profiles().length > 0) {
@@ -69,7 +69,7 @@ export function App() {
 
   const handleLogout = async () => {
     try {
-      window.handlers?.authLogout?.()
+      await authLogout()
       setCurrentProfile(null)
       // Clear localStorage when logged out
       localStorage.removeItem('currentProfileId')

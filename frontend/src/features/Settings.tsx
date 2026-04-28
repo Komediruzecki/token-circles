@@ -65,6 +65,7 @@ export default function Settings() {
     const newStorageType = target.value as 'sqlite' | 'postgresql'
 
     if (newStorageType === 'postgresql') {
+      setStorageType('postgresql')
       setShowStorageWarning(true)
     } else {
       setShowStorageWarning(false)
