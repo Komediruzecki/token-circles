@@ -43,7 +43,7 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#ffffff',
         theme_color: '#3b82f6',
-        version: new Date().getTime().toString(),
+        version: Date.now().toString(),
         icons: [
           {
             src: 'icon-192.png',
@@ -58,13 +58,29 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{html,ico,png,svg,woff2}'],
+        // Don't precache JS/CSS - let Apache/Vite handle hashing
         runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'finance-manager-js-css-v2',
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 5 * 60, // 5 minutes max
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/finance-manager\.clodhost\.com\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'finance-manager-v1',
+              cacheName: 'finance-manager-v2',
               expiration: {
                 maxEntries: 60,
                 maxAgeSeconds: 1 * 24 * 60 * 60, // 1 day
