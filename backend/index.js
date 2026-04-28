@@ -235,17 +235,21 @@ if (!SESSION_SECRET) {
 }
 const sessionSecret = SESSION_SECRET || require('crypto').randomBytes(32).toString('hex');
 
+// Trust reverse proxy (Apache) for proper session handling
+app.set('trust proxy', 1);
+
 // Session middleware
 const isProduction = process.env.NODE_ENV === 'production';
 app.use(
   session({
     secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
+    proxy: true, // Trust X-Forwarded-Proto from Apache
+    resave: true,
+    saveUninitialized: true,
     cookie: {
       secure: isProduction, // Require HTTPS in production
       httpOnly: true,
-      sameSite: 'strict', // CSRF protection
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
     store: new SQLiteStore({
@@ -589,7 +593,9 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 
     req.session.userId = user.id;
     req.session.username = user.username;
-    res.json({ ok: true, username: user.username, isLoggedIn: true });
+    req.session.save(() => {
+      res.json({ ok: true, username: user.username, isLoggedIn: true });
+    });
   } catch (err) {
     console.error(err.message);
     logError('error', err);
@@ -606,6 +612,10 @@ app.post('/api/auth/logout', apiRateLimiter, (req, res) => {
 
 app.get('/api/auth/me', apiRateLimiter, requireAuth, (req, res) => {
   res.json({ userId: req.session.userId, username: req.session.username });
+});
+
+app.get('/api/auth/check', apiRateLimiter, requireAuth, (req, res) => {
+  res.json({ isLoggedIn: true, userId: req.session.userId, username: req.session.username });
 });
 
 // ==================== APP INFO ====================

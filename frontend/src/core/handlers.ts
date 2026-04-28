@@ -278,8 +278,8 @@ export function escapeHtml(str: string): string {
  * Toast notification helper
  */
 export async function toast(message: string, type: 'success' | 'error' | 'info' = 'info'): Promise<void> {
-  const { api } = await import('./api.js')
-  api.toast(message, type)
+  const { toast: apiToast } = await import('./api.js')
+  apiToast(message, type)
 }
 
 // Export window-compatible handlers for legacy code
@@ -402,7 +402,7 @@ function showLoginDialog(): { username: string; password: string } | null {
       <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Sign In</h3>
       <div style="margin-bottom: 12px;">
         <label style="display: block; font-size: 12px; margin-bottom: 4px;">Username</label>
-        <input type="text" id="login-username" placeholder="maff" style="
+        <input type="text" id="login-username" placeholder="Enter your username" style="
           width: 100%;
           padding: 8px 12px;
           border-radius: 6px;
@@ -414,7 +414,7 @@ function showLoginDialog(): { username: string; password: string } | null {
       </div>
       <div style="margin-bottom: 16px;">
         <label style="display: block; font-size: 12px; margin-bottom: 4px;">Password</label>
-        <input type="password" id="login-password" placeholder="add2" style="
+        <input type="password" id="login-password" placeholder="Enter your password" style="
           width: 100%;
           padding: 8px 12px;
           border-radius: 6px;
@@ -446,9 +446,6 @@ function showLoginDialog(): { username: string; password: string } | null {
           font-weight: 500;
         ">Sign In</button>
       </div>
-      <p style="margin: 12px 0 0 0; font-size: 11px; opacity: 0.7;">
-        Demo: username "maff", password "add2"
-      </p>
     `
 
     overlay.appendChild(dialog)
@@ -462,8 +459,9 @@ function showLoginDialog(): { username: string; password: string } | null {
 
     // Handle submit
     document.getElementById('login-submit')?.addEventListener('click', () => {
-      const username = document.getElementById('login-username')?.value || 'maff'
-      const password = document.getElementById('login-password')?.value || 'add2'
+      const username = document.getElementById('login-username')?.value?.trim()
+      const password = document.getElementById('login-password')?.value
+      if (!username || !password) return
       overlay.remove()
       resolve({ username, password })
     })
