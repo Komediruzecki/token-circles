@@ -15,10 +15,20 @@ export interface ApiResponse<T = unknown> {
 }
 
 // Default fetch options
-const DEFAULT_FETCH_OPTIONS = {
-  headers: {
+function getProfileHeader() {
+  const id = localStorage.getItem('currentProfileId')
+  return (id !== null ? parseInt(id, 10) : 1).toString()
+}
+
+function getHeaders() {
+  return {
     'Content-Type': 'application/json',
-  },
+    'X-Profile-Id': getProfileHeader(),
+  }
+}
+
+const DEFAULT_FETCH_OPTIONS = {
+  credentials: 'include',
 }
 
 /**
@@ -57,6 +67,7 @@ export async function apiGet<T = unknown>(url: string): Promise<T> {
   const response = await fetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'GET',
+    headers: getHeaders(),
   })
   checkResponseStatus(response)
   return parseJsonResponse<T>(response)
@@ -73,6 +84,7 @@ export async function apiPost<T = unknown>(
   const response = await fetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'POST',
+    headers: getHeaders(),
     body: JSON.stringify(body),
     ...options,
   })
@@ -91,6 +103,7 @@ export async function apiPut<T = unknown>(
   const response = await fetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'PUT',
+    headers: getHeaders(),
     body: JSON.stringify(body),
     ...options,
   })
@@ -105,6 +118,7 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
   const response = await fetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'DELETE',
+    headers: getProfileHeader() !== '1' ? { 'X-Profile-Id': getProfileHeader() } : {},
   })
   checkResponseStatus(response)
   return parseJsonResponse<T>(response)
@@ -121,6 +135,7 @@ export async function apiRequest<T>(
   try {
     const response = await fetch(url, {
       ...DEFAULT_FETCH_OPTIONS,
+      headers: getHeaders(),
       ...options,
     })
 

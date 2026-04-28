@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createMemo, createSignal, onMount, Suspense } from 'solid-js'
+import { createMemo, createSignal, onMount, onCleanup, Suspense, Show } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
@@ -80,7 +80,24 @@ export function App() {
 
   onMount(() => {
     loadProfiles()
-    setActivePage('dashboard')
+
+    // Parse initial hash from URL
+    const hash = window.location.hash.slice(1)
+    if (hash && allPages[hash as PageName]) {
+      setActivePage(hash as PageName)
+    } else {
+      setActivePage('dashboard')
+    }
+
+    // Listen for hash changes (back/forward buttons, manual URL edits)
+    const handleHashChange = () => {
+      const newHash = window.location.hash.slice(1)
+      if (newHash && allPages[newHash as PageName]) {
+        setActivePage(newHash as PageName)
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    onCleanup(() => window.removeEventListener('hashchange', handleHashChange))
   })
 
   createMemo(() => {
@@ -248,18 +265,17 @@ export function App() {
         </nav>
       </div>
       <main class={layoutStyles.main}>
-          {Object.entries(allPages).map(([name, page]) => (
+        {Object.entries(allPages).map(([name, page]) => (
+          <Show when={activePage() === name}>
             <Dynamic
               key={name}
               component={page}
               data-page={name}
               data-testid={`page-${name}`}
-              class={{
-                [layoutStyles.page]: true,
-              }}
             />
-          ))}
-        </main>
+          </Show>
+        ))}
+      </main>
       </Suspense>
   )
 }
