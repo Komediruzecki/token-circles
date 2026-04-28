@@ -122,7 +122,7 @@ function logError(level, source, error, request) {
           path: request.path,
           query: request.query,
           ip: request.ip,
-          userAgent: request.get('user-agent'),
+          userAgent: typeof request.get === 'function' ? request.get('user-agent') : undefined,
         }
       : null,
   };
