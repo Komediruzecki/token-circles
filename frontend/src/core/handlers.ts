@@ -277,7 +277,10 @@ export function escapeHtml(str: string): string {
 /**
  * Toast notification helper
  */
-export async function toast(message: string, type: 'success' | 'error' | 'info' = 'info'): Promise<void> {
+export async function toast(
+  message: string,
+  type: 'success' | 'error' | 'info' = 'info'
+): Promise<void> {
   const { toast: apiToast } = await import('./api.js')
   apiToast(message, type)
 }

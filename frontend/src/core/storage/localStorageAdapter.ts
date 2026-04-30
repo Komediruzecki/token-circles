@@ -318,13 +318,13 @@ function seedSampleData(profileId: number): void {
   // Get category IDs
   const categories = getCategoriesForProfile(profileId, 'expense')
   const categoryMap: Record<string, number> = {}
-  categories.forEach(c => {
+  categories.forEach((c) => {
     categoryMap[c.name] = c.id
   })
 
   // Get income category IDs
   const incomeCategories = getCategoriesForProfile(profileId, 'income')
-  incomeCategories.forEach(c => {
+  incomeCategories.forEach((c) => {
     categoryMap[c.name] = c.id
   })
 
@@ -343,8 +343,18 @@ function seedSampleData(profileId: number): void {
     // Income
     if (random < 0.1) {
       createTransactionData({
-        description: ['Salary Deposit', 'Passive Income - Rental Property', 'Investment Dividend', 'Year-End Bonus'][Math.floor(Math.random() * 4)],
-        amount: [Math.random() * 100 + 500, Math.random() * 200 + 100, Math.random() * 100 + 50, Math.random() * 2000 + 500][Math.floor(Math.random() * 4)],
+        description: [
+          'Salary Deposit',
+          'Passive Income - Rental Property',
+          'Investment Dividend',
+          'Year-End Bonus',
+        ][Math.floor(Math.random() * 4)],
+        amount: [
+          Math.random() * 100 + 500,
+          Math.random() * 200 + 100,
+          Math.random() * 100 + 50,
+          Math.random() * 2000 + 500,
+        ][Math.floor(Math.random() * 4)],
         date: dateStr,
         type: 'income',
         profile_id: profileId,
@@ -377,7 +387,12 @@ function seedSampleData(profileId: number): void {
     }
     // Utilities
     else if (random < 0.6) {
-      const utilities = ['Electricity Bill', 'Natural Gas Bill', 'Water & Sewer', 'Internet Service']
+      const utilities = [
+        'Electricity Bill',
+        'Natural Gas Bill',
+        'Water & Sewer',
+        'Internet Service',
+      ]
       createTransactionData({
         description: utilities[Math.floor(Math.random() * utilities.length)],
         amount: Math.random() * 100 + 30,
@@ -437,7 +452,7 @@ function seedSampleData(profileId: number): void {
 
   // Generate sample accounts
   const accountNames = ['Checking Account', 'Savings Account']
-  accountNames.forEach(name => {
+  accountNames.forEach((name) => {
     createAccountData({
       name,
       type: ['giro', 'savings'][Math.floor(Math.random() * 2)],
@@ -454,12 +469,14 @@ function seedSampleData(profileId: number): void {
     { name: 'Vacation Fund', target: 3000, current: 1500 },
     { name: 'New Car', target: 25000, current: 8000 },
   ]
-  goals.forEach(goal => {
+  goals.forEach((goal) => {
     createGoalData({
       name: goal.name,
       target_amount: goal.target,
       current_amount: goal.current,
-      deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000 * (Math.random() * 2 + 1)).toISOString().split('T')[0],
+      deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000 * (Math.random() * 2 + 1))
+        .toISOString()
+        .split('T')[0],
       notes: `Savings goal for ${goal.name}`,
       profile_id: profileId,
     })
@@ -469,7 +486,7 @@ function seedSampleData(profileId: number): void {
   const loans = [
     { name: 'Car Loan', principal: 15000, rate: 5.5, start_date: '2024-01-01', term_months: 48 },
   ]
-  loans.forEach(loan => {
+  loans.forEach((loan) => {
     createLoanData({
       name: loan.name,
       principal: loan.principal,

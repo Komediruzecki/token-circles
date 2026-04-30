@@ -63,7 +63,10 @@ export default function Chart(props: ChartProps) {
         ref={(canvas: HTMLCanvasElement) => {
           canvasRef = canvas
         }}
-        style={{ height: props.height ? `${props.height}px` : '300px', width: props.width || '100%' }}
+        style={{
+          height: props.height ? `${props.height}px` : '300px',
+          width: props.width || '100%',
+        }}
       />
     </div>
   )
