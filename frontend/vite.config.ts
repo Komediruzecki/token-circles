@@ -6,15 +6,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 import solidPlugin from 'vite-plugin-solid'
 import solidSvg from 'vite-plugin-solid-svg'
 import { devtoolsPlugin as devtools } from 'solid-devtools/vite'
-import fs from 'fs'
 
-const packageJson = JSON.parse(fs.readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 
 export default defineConfig({
-  define: {
-    __APP_VERSION__: JSON.stringify(packageJson.version),
-  },
   base: './',
   build: {
     emptyOutDir: true,

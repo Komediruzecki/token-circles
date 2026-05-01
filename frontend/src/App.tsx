@@ -2,12 +2,12 @@
  * Main App Component - Root component for the application
  */
 
-import { createMemo, createSignal, onCleanup, onMount, Show,Suspense } from 'solid-js'
+import { createMemo, createSignal, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
 import { api } from './core/api.js'
-import { authLogin, authLogout,handlers, receipts, transactions } from './core/handlers.js'
+import { authLogin, authLogout, handlers, receipts, transactions } from './core/handlers.js'
 import { pages as allPages } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
@@ -99,7 +99,9 @@ export function App() {
       }
     }
     window.addEventListener('hashchange', handleHashChange)
-    onCleanup(() => { window.removeEventListener('hashchange', handleHashChange); })
+    onCleanup(() => {
+      window.removeEventListener('hashchange', handleHashChange)
+    })
   })
 
   createMemo(() => {

@@ -973,3 +973,100 @@
   margin-bottom: 4px;
   font-size: 13px;
 }
+
+/* MAPPING GRID */
+.mappingSection {
+  background: var(--bg-card);
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+}
+
+.mappingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.mappingRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mappingFieldLabel {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.requiredStar {
+  color: var(--accent-danger);
+  margin-left: 0.25rem;
+}
+
+/* PREVIEW AND CATEGORIES */
+.categoryReviewSection {
+  background: var(--bg-body);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+}
+
+.categoryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.categoryChip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-card);
+  padding: 0.5rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.categoryChipName {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.mappedBadge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  background: var(--bg-body);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+}
+
+.duplicateRow {
+  background-color: rgba(245, 158, 11, 0.05); /* Warning accent slight */
+}
+
+.selectedRow {
+  background-color: rgba(59, 130, 246, 0.05); /* Primary accent slight */
+}
+
+/* GOOGLE SHEETS UPLOAD */
+.googleSheetsUpload {
+  background: var(--bg-card);
+  padding: 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.dragOver {
+  border-color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.05);
+}
