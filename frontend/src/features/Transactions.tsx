@@ -59,7 +59,7 @@ export default function Transactions() {
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
   const [dateRange, setDateRange] = createSignal<{ from: string; to: string }>({ from: '', to: '' })
-  const [selectedPreset, setSelectedPreset] = createSignal<string>('month')
+  const [selectedPreset, setSelectedPreset] = createSignal<string>('')
   const [currentPage, setCurrentPage] = createSignal(1)
   const [itemsPerPage] = createSignal(10)
   const [sortField, setSortField] = createSignal<string>('date')
@@ -75,7 +75,7 @@ export default function Transactions() {
     try {
       setLoading(true)
       const data = (await api.getTransactions()) as any
-      const transactionsData = Array.isArray(data) ? data : []
+      const transactionsData = Array.isArray(data) ? data : data.rows || data.transactions || []
       setTransactions(transactionsData as Transaction[])
 
       // Extract unique categories and tags for filter bar
@@ -216,17 +216,17 @@ export default function Transactions() {
     setCurrentPage(page)
   }
 
-  // Calculate paginated results
-  const paginatedTransactions = () => {
+  // Calculate filtered results
+  const filteredTransactions = () => {
     const allTransactions = transactions()
-    const filtered = allTransactions.filter((tx) => {
+    return allTransactions.filter((tx) => {
       // Filter by type
       if (filterType() !== 'all' && tx.type !== filterType()) {
         return false
       }
 
       // Filter by month
-      if (filterMonth() && !tx.date.startsWith(filterMonth())) {
+      if (filterMonth() && !tx.date.startsWith(filterMonth()!)) {
         return false
       }
 
@@ -263,12 +263,16 @@ export default function Transactions() {
 
       return true
     })
+  }
 
+  // Calculate paginated results
+  const paginatedTransactions = () => {
+    const filtered = filteredTransactions()
     const start = (currentPage() - 1) * itemsPerPage()
     return filtered.slice(start, start + itemsPerPage())
   }
 
-  const totalPages = () => Math.ceil(paginatedTransactions().length / itemsPerPage())
+  const totalPages = () => Math.ceil(filteredTransactions().length / itemsPerPage())
 
   // Date presets
   const _applyDatePreset = (preset: string) => {
