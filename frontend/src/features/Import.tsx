@@ -1,230 +1,321 @@
 /**
  * Import Component
- * Handles CSV and Excel file import with preview and duplicate detection
+ * Handles CSV/Excel file and Google Sheets import with full 12-field column mapping, duplicate detection, and category type review
  */
 
-import { createSignal } from 'solid-js'
-import styles from '../components/ImportPage.module.css'
-import { apiPost, showToast } from '../utils/api'
+import { createSignal, onMount } from 'solid-js'
+import styles from './Import.module.css'
 
-type ImportResult = {
-  status: 'idle' | 'uploading' | 'previewing' | 'importing' | 'success' | 'error'
-  message?: string
-  errors?: string[]
+// Column field names for mapping
+const FIELD_NAMES = [
+  { key: 'date', label: 'Date', required: true },
+  { key: 'description', label: 'Description', required: true },
+  { key: 'amount', label: 'Amount', required: true },
+  { key: 'category', label: 'Category', required: false },
+  { key: 'currency', label: 'Currency', required: false },
+  { key: 'beneficiary', label: 'Beneficiary', required: false },
+  { key: 'payor', label: 'Payor', required: false },
+  { key: 'means_of_payment', label: 'Means of Payment', required: false },
+  { key: 'exchange_rate', label: 'Exchange Rate', required: false },
+  { key: 'notes', label: 'Notes', required: false },
+  { key: 'type', label: 'Type', required: false },
+  { key: 'amount_local', label: 'Amount Local', required: false },
+] as const
+
+// Header name variants for auto-detection
+const HEADER_VARIANTS: Record<string, string[]> = {
+  date: ['date', 'datum', 'trans date', 'transaction date'],
+  description: ['description', 'desc', 'memo', 'note', 'narration', 'details'],
+  amount: ['amount', 'sum', 'total', 'value', 'suma'],
+  category: ['category', 'cat', 'type', 'kategoria'],
+  currency: ['currency', 'waluta', 'curr'],
+  beneficiary: ['beneficiary', 'beneficjent', 'recipient', 'payee'],
+  payor: ['payor', 'payer', 'płatnik', 'from'],
+  means_of_payment: ['payment', 'method', 'means', 'payment method'],
+  exchange_rate: ['rate', 'exchange rate', 'kurs'],
+  notes: ['notes', 'note', 'remark', 'comments'],
+  type: ['type', 'typ', 'tx type', 'transaction type'],
+  amount_local: ['amount local', 'local amount', 'amount pln'],
+} as const
+
+interface UploadResult {
+  fileId: string
+  filename: string
+  sheetName: string
+  sheetNames: string[]
+  headers: string[]
+  rows: string[][]
+  totalRows: number
 }
 
+interface SheetResult {
+  headers: string[]
+  rows: string[][]
+  sheetNames: string[]
+  selectedSheet: string
+  duplicateCount?: number
+  duplicateIndices?: number[]
+}
+
+type Step = 'upload' | 'mapping' | 'preview' | 'importing' | 'done'
+
 export default function Import() {
-  const [fileContent, setFileContent] = createSignal<any[]>([])
+  // Tab state
+  const [activeTab, setActiveTab] = createSignal<'file' | 'sheets'>('file')
+
+  // Step state
+  const [activeStep, setActiveStep] = createSignal<Step>('upload')
+
+  // File upload state
+  const [uploadResult, setUploadResult] = createSignal<UploadResult | null>(null)
+  const [selectedSheet, setSelectedSheet] = createSignal<string>('')
+  const [fileId, setFileId] = createSignal<string>('')
+
+  // Google Sheets state
+  const [sheetUrl, setSheetUrl] = createSignal<string>('')
+  const [sheetResult, setSheetResult] = createSignal<SheetResult | null>(null)
+  const [sheetNames, setSheetNames] = createSignal<string[]>([])
+
+  // Column mapping
+  const [columnMapping, setColumnMapping] = createSignal<Record<string, number>>({})
+  const [categoryTypes, setCategoryTypes] = createSignal<Record<string, 'income' | 'expense'>>({})
+
+  // Preview state
+  const [rows, setRows] = createSignal<string[][]>([])
   const [headers, setHeaders] = createSignal<string[]>([])
-  const [importResult, setImportResult] = createSignal<ImportResult>({ status: 'idle' })
   const [selectedRows, setSelectedRows] = createSignal<Set<number>>(new Set())
   const [currentPage, setCurrentPage] = createSignal(1)
-  const [rowsPerPage, setRowsPerPage] = createSignal(10)
+  const [rowsPerPage, setRowsPerPage] = createSignal(50)
+  const [duplicateIndices, setDuplicateIndices] = createSignal<number[]>([])
 
-  const [formData, setFormData] = createSignal({
-    date: new Date().toISOString().split('T')[0],
-    description: '',
-    amount: '',
-    type: 'expense',
-    category: '',
-  })
+  // Loading/error
+  const [loading, setLoading] = createSignal(false)
+  const [error, setError] = createSignal<string | null>(null)
+  const [resultMessage, setResultMessage] = createSignal<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Parse CSV content
-  const parseCSV = (text: string): Record<string, unknown>[] => {
-    const lines = text.trim().split('\n')
-    if (lines.length < 2) return []
-
-    const headers = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''))
-    const result: Record<string, unknown>[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map((v) => v.trim().replace(/"/g, ''))
-      const row: Record<string, unknown> = {}
-      headers.forEach((header, index) => {
-        let val = values[index] || ''
-        // Try to parse numbers
-        if (!isNaN(parseFloat(val))) {
-          val = parseFloat(val) as unknown
-        }
-        row[header] = val as unknown
-      })
-      result.push(row)
-    }
-
-    return result
+  const currentHeaders = () => {
+    if (activeTab() === 'file' && uploadResult()) return uploadResult()!.headers
+    if (activeTab() === 'sheets' && sheetResult()) return sheetResult()!.headers
+    return []
   }
 
-  // Parse Excel content
-  const parseExcel = async (binary: ArrayBuffer): Promise<Record<string, unknown>[]> => {
-    try {
-      const workbook = (window as Record<string, unknown>).XLSX.read(binary, { type: 'array' })
-      const sheetName = workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[sheetName]
-      const data = (window as Record<string, unknown>).XLSX.utils.sheet_to_json(worksheet, {
-        defval: '',
-      })
-      return data
-    } catch {
-      throw new Error('Failed to parse Excel file')
-    }
+  const currentRows = () => {
+    if (activeTab() === 'file' && uploadResult()) return uploadResult()!.rows
+    if (activeTab() === 'sheets' && sheetResult()) return sheetResult()!.rows
+    return []
   }
 
-  // Handle file upload
-  // @ts-expect-error unused handler function
-  const _handleFileUpload = async (_e: Event) => {
-    const target = _e.target as HTMLInputElement
-    const uploadedFile = target.files?.[0]
-    if (!uploadedFile) return
+  const hasDuplicateCount = () => {
+    if (activeTab() === 'file' && uploadResult()) return uploadResult()!.duplicateCount
+    if (activeTab() === 'sheets' && sheetResult()) return sheetResult()!.duplicateCount
+    return 0
+  }
 
-    setImportResult({ status: 'uploading', message: 'Parsing file...' })
-    setSelectedRows(new Set<number>())
-
-    try {
-      const text = await uploadedFile.text()
-      let data: Record<string, unknown>[]
-
-      const ext = uploadedFile.name.toLowerCase().split('.').pop()
-      if (ext === 'csv') {
-        data = parseCSV(text)
-      } else if (ext === 'xlsx' || ext === 'xls') {
-        data = await parseExcel(await uploadedFile.arrayBuffer())
-      } else {
-        throw new Error('Unsupported file format. Please use CSV or Excel.')
+  // Calculate auto-detection mapping
+  const autoDetectMapping = (headers: string[]) => {
+    const mapping: Record<string, number> = {}
+    FIELD_NAMES.forEach((field) => {
+      const variants = HEADER_VARIANTS[field.key]
+      const lowerHeaders = headers.map((h) => h.toLowerCase())
+      const idx = lowerHeaders.findIndex((h) => variants.some((v) => h.includes(v.toLowerCase())))
+      if (idx !== -1) {
+        mapping[field.key] = idx
       }
-
-      if (data.length === 0) {
-        setImportResult({ status: 'error', message: 'File appears to be empty or invalid' })
-        return
-      }
-
-      setFileContent(data)
-      setHeaders(Object.keys(data[0]))
-      setCurrentPage(1)
-      setImportResult({ status: 'previewing' })
-    } catch {
-      setImportResult({
-        status: 'error',
-        message: 'Failed to parse file',
-      })
-    }
-  }
-
-  // Show/hide row toggle
-  const toggleRow = (index: number) => {
-    const newSelected = new Set<number>(selectedRows())
-    if (newSelected.has(index)) {
-      newSelected.delete(index)
-    } else {
-      newSelected.add(index)
-    }
-    setSelectedRows(newSelected)
-  }
-
-  // Select/deselect all rows
-  const toggleAll = (select: boolean) => {
-    if (select) {
-      setSelectedRows(new Set<number>(fileContent().map((_, i) => i)))
-    } else {
-      setSelectedRows(new Set<number>())
-    }
-  }
-
-  // Start import
-  // @ts-expect-error - Used via event delegation (data-action="import:start")
-  const _startImport = async () => {
-    setImportResult({ status: 'importing', message: 'Importing data...' })
-    setSelectedRows(new Set<number>())
-
-    try {
-      // Get selected rows
-      const rowsToImport = fileContent().filter((_, i) => selectedRows().has(i))
-
-      if (rowsToImport.length === 0) {
-        setImportResult({ status: 'error', message: 'No rows selected for import' })
-        return
-      }
-
-      // Transform data for API
-      const apiData = {
-        categories: [],
-        accounts: [],
-        transactions: rowsToImport.map((row) => ({
-          date: row.date || formData().date,
-          description: row.description || row.name || row.category || row.Transaction || 'Untitled',
-          amount: parseFloat(row.amount || row.Amount || row.Money || row.Cost || 0),
-          type: row.type || row.Type || row.CategoryType || 'expense',
-          category_name: row.category || row.Category || row.CategoryName || '',
-          notes: row.notes || row.Note || row.Description || '',
-          means_of_payment: row.payment || row.Payment || row.Method || '',
-        })),
-      }
-
-      // Check duplicates first
-      const preview = await apiPost<{ duplicateTransactions: number; newTransactions: number }>(
-        '/api/import/preview',
-        apiData
-      )
-      if (preview.duplicateTransactions > 0) {
-        if (
-          !confirm(
-            `This import will add ${preview.newTransactions} new transactions and skip ${preview.duplicateTransactions} existing duplicates. Continue?`
-          )
-        ) {
-          setImportResult({ status: 'idle' })
-          return
-        }
-      }
-
-      // Execute import
-      const result = await apiPost<{ imported: number }>('/api/import', apiData)
-      showToast(
-        `Successfully imported ${result.imported || apiData.transactions.length} transactions`,
-        'success'
-      )
-      setImportResult({
-        status: 'success',
-        message: `Successfully imported ${result.imported || apiData.transactions.length} transactions`,
-      })
-      // Clear file after successful import
-      setFileContent([])
-      setHeaders([])
-      setSelectedRows(new Set<number>())
-      setCurrentPage(1)
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        description: '',
-        amount: '',
-        type: 'expense',
-        category: '',
-      })
-    } catch (err) {
-      setImportResult({
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Import failed',
-      })
-    }
-  }
-
-  // Reset
-  // @ts-expect-error - Used via event delegation (data-action="import:reset")
-  const _resetImport = () => {
-    setFileContent([])
-    setHeaders([])
-    setImportResult({ status: 'idle' })
-    setSelectedRows(new Set<number>())
-    setCurrentPage(1)
-    setFormData({
-      date: new Date().toISOString().split('T')[0],
-      description: '',
-      amount: '',
-      type: 'expense',
-      category: '',
     })
+    return mapping
   }
 
-  // Get pagination info
+  // Detect unique categories
+  const detectCategories = () => {
+    const categories = new Set<string>()
+    currentRows().forEach((row) => {
+      const catIdx = columnMapping()[currentHeaders()[0]]
+      if (catIdx !== undefined && row[catIdx]) {
+        const catName = row[catIdx].toString().trim()
+        if (catName) categories.add(catName)
+      }
+    })
+    return Array.from(categories)
+  }
+
+  // Step navigation
+  const goToMapping = () => {
+    const headers = currentHeaders()
+    if (headers.length === 0) return
+    setActiveStep('mapping')
+    setColumnMapping(autoDetectMapping(headers))
+  }
+
+  const goToPreview = () => {
+    const rows = currentRows()
+    if (rows.length === 0) return
+    setActiveStep('preview')
+    setSelectedRows(new Set(rows.map((_, i) => i)))
+    setCurrentPage(1)
+  }
+
+  const resetForm = () => {
+    setActiveStep('upload')
+    setUploadResult(null)
+    setSheetResult(null)
+    setSelectedSheet('')
+    setFileId('')
+    setSheetUrl('')
+    setColumnMapping({})
+    setCategoryTypes({})
+    setRows([])
+    setHeaders([])
+    setSelectedRows(new Set())
+    setCurrentPage(1)
+    setError(null)
+    setResultMessage(null)
+  }
+
+  // File upload
+  const handleFileUpload = async (file: File) => {
+    setLoading(true)
+    setError(null)
+    setResultMessage(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/import/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) throw new Error(data.error || 'Upload failed')
+
+      setUploadResult(data)
+      setSelectedSheet(data.sheetNames[0])
+      setFileId(data.fileId)
+      setHeaders(data.headers)
+      setRows(data.rows.slice(1).filter((r: string[]) => r.some((c) => c !== undefined && c !== '')))
+      setActiveStep('mapping')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFileSelect = (event: Event) => {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (file) handleFileUpload(file)
+  }
+
+  const handleDragOver = (event: DragEvent) => {
+    event.preventDefault()
+  }
+
+  const handleDrop = (event: DragEvent) => {
+    event.preventDefault()
+    const file = event.dataTransfer?.files[0]
+    if (file) handleFileUpload(file)
+  }
+
+  // Google Sheets fetch
+  const fetchGoogleSheet = async () => {
+    const url = sheetUrl()
+    if (!url) {
+      setError('Please enter a Google Sheets URL')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/import/googlesheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, sheetName: selectedSheet() }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch Google Sheet')
+
+      setSheetNames(data.sheetNames || [])
+      setSheetResult({
+        ...data,
+        rows: data.rows || [],
+        headers: data.headers || [],
+        sheetNames: data.sheetNames || [],
+        selectedSheet: data.selectedSheet,
+      })
+      setSelectedSheet(data.selectedSheet || data.sheetNames?.[0] || '')
+      setHeaders(data.headers || [])
+      setRows(data.rows || [])
+
+      // If returning with specific sheet, go to mapping
+      if (selectedSheet()) {
+        setActiveStep('mapping')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch Google Sheet')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSheetTabClick = (sheetName: string) => {
+    setSelectedSheet(sheetName)
+    // Fetch the sheet data
+    fetchGoogleSheet()
+  }
+
+  // Column mapping changes
+  const handleColumnMappingChange = (field: string, index: number) => {
+    const mapping = { ...columnMapping() }
+    mapping[field] = index
+    setColumnMapping(mapping)
+
+    // Detect category types when category column changes
+    if (field === 'category') {
+      const newCategoryTypes: Record<string, 'income' | 'expense'> = {}
+      const allCategories = detectCategories()
+      allCategories.forEach((cat) => {
+        // Default to expense unless type is explicitly set
+        newCategoryTypes[cat] = 'expense'
+      })
+      setCategoryTypes(newCategoryTypes)
+    }
+  }
+
+  // Category type toggle
+  const handleCategoryTypeToggle = (category: string, type: 'income' | 'expense') => {
+    const types = { ...categoryTypes() }
+    types[category] = type
+    setCategoryTypes(types)
+  }
+
+  // Preview actions
+  const toggleRow = (index: number) => {
+    const selected = new Set(selectedRows())
+    if (selected.has(index)) {
+      selected.delete(index)
+    } else {
+      selected.add(index)
+    }
+    setSelectedRows(selected)
+  }
+
+  const toggleAll = (select: boolean) => {
+    const allSelected = new Set<number>()
+    if (select) {
+      currentRows().forEach((_, i) => allSelected.add(i))
+    }
+    setSelectedRows(allSelected)
+  }
+
   const totalPages = () => {
-    return Math.ceil(fileContent().length / rowsPerPage())
+    return Math.ceil(currentRows().length / rowsPerPage())
   }
 
   const startRow = () => {
@@ -232,223 +323,459 @@ export default function Import() {
   }
 
   const endRow = () => {
-    return Math.min(startRow() + rowsPerPage(), fileContent().length)
+    return Math.min(startRow() + rowsPerPage(), currentRows().length)
   }
 
-  return (
-    <div class="page page-import page-enter">
-      <div class={styles.pageHeader}>
-        <h1>Import Transactions</h1>
-        <p>Import transactions from CSV or Excel files</p>
+  // Import execution
+  const handleImport = async (mode: 'all' | 'new' | 'selected') => {
+    setLoading(true)
+    setError(null)
+    setResultMessage(null)
+
+    try {
+      const mapping = columnMapping()
+      const types = categoryTypes()
+
+      // Get rows to import
+      let rowsToImport = currentRows()
+      if (mode === 'selected') {
+        rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
+      }
+
+      // Server-side duplicate detection for new-only mode
+      if (mode === 'new' && hasDuplicateCount() && hasDuplicateCount() > 0) {
+        const previewResponse = await fetch('/api/import/file-sheet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId: fileId(),
+            sheetName: selectedSheet(),
+            mapping,
+          }),
+        })
+
+        const previewData = await previewResponse.json()
+        if (previewData.duplicateIndices) {
+          rowsToImport = rowsToImport.filter((_, i) => !previewData.duplicateIndices!.includes(i))
+        }
+      }
+
+      const response = await fetch('/api/import/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: rowsToImport,
+          mapping,
+          categoryTypes: types,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) throw new Error(data.error || 'Import failed')
+
+      setResultMessage({
+        type: 'success',
+        text: data.message || `Successfully imported ${data.imported || rowsToImport.length} transactions`,
+      })
+
+      // Reset after delay
+      setTimeout(() => resetForm(), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle dropdown change for Google Sheets
+  const handleHeaderChange = (event: Event, field: string) => {
+    const select = event.currentTarget as HTMLSelectElement
+    handleColumnMappingChange(field, parseInt(select.value))
+  }
+
+  onMount(() => {
+    // Initialize default category types with discovered categories
+    const categories = detectCategories()
+    const types: Record<string, 'income' | 'expense'> = {}
+    categories.forEach((cat) => {
+      types[cat] = 'expense'
+    })
+    setCategoryTypes(types)
+  })
+
+  // File upload step
+  const fileUploadStep = () => (
+    <div class={styles.uploadArea}>
+      {/* Tabs */}
+      <div class={styles.tabBar}>
+        <button
+          class={`${styles.tab} ${activeTab() === 'file' ? styles.active : ''}`}
+          onClick={() => setActiveTab('file')}
+        >
+          File Upload
+        </button>
+        <button
+          class={`${styles.tab} ${activeTab() === 'sheets' ? styles.active : ''}`}
+          onClick={() => setActiveTab('sheets')}
+        >
+          Google Sheets
+        </button>
       </div>
 
-      {/* Import Result */}
-      {(importResult().status === 'success' || importResult().status === 'error') && (
-        <div class={importResult().status === 'success' ? styles.toastSuccess : styles.toastError}>
-          {importResult().message}
-          {(() => {
-            const errors = importResult().errors
-            if (!errors || errors.length === 0) return null
-            return (
-              <details>
-                <summary>View errors</summary>
-                <ul>
-                  {errors.map((err) => (
-                    <li>{err}</li>
-                  ))}
-                </ul>
-              </details>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* File Upload Section */}
-      {!fileContent().length ? (
-        <div class={styles.importUploadSection}>
-          <div class={styles.uploadDropzone} id="import-dropzone">
+      {/* File Tab */}
+      {activeTab() === 'file' && (
+        <>
+          <div
+            class={`${styles.dropzone} ${loading() ? styles.disabled : ''}`}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            id="import-dropzone"
+          >
             <input
               type="file"
               id="import-file-input"
               accept=".csv,.xlsx,.xls"
-              class={styles.importFileInput}
-              data-action="import:file"
+              class={styles.fileInput}
+              disabled={loading()}
+              onChange={handleFileSelect}
             />
             <label for="import-file-input" class={styles.uploadLabel}>
-              <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class={styles.dropzoneIcon} width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p>Click or drag and drop your file here</p>
-              <p class={styles.uploadHint}>Supported formats: CSV, XLSX, XLS</p>
+              <p class={styles.dropzoneTitle}>Click or drag and drop your file here</p>
+              <p class={styles.dropzoneHint}>Supported formats: CSV, XLSX, XLS</p>
             </label>
           </div>
 
-          {/* Sample Template */}
-          <div class={styles.importTemplate}>
-            <h3>Need a template?</h3>
-            <p>Download a sample CSV file to get started:</p>
-            <a href="#" class={styles.btnOutline} data-action="import:download-template">
+          {/* Sheet selector if multiple sheets */}
+          {uploadResult() && uploadResult()!.sheetNames.length > 1 && (
+            <div class={styles.sheetsUrlRow}>
+              <label class={styles.sheetsInfo}>Available sheets:</label>
+              <div class={styles.sheetTabs}>
+                {uploadResult()!.sheetNames.map((name) => (
+                  <button
+                    class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
+                    onClick={() => setSelectedSheet(name)}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Upload data button */}
+          {uploadResult() && (
+            <button class="btn btn-primary" onClick={goToMapping}>
+              Continue to Mapping
+            </button>
+          )}
+
+          {/* Template download */}
+          <div class={styles.templateSection}>
+            <p class={styles.dropzoneHint}>Need a template?</p>
+            <a href="#" class="btn btn-outline" onClick={(e) => e.preventDefault()}>
               Download Sample Template
             </a>
           </div>
+        </>
+      )}
 
-          {/* Import Options */}
-          <div class={styles.importOptions}>
-            <h3>Default Import Settings</h3>
-            <div class={styles.formGroup}>
-              <label class={styles.formLabel}>Default Date</label>
-              <input
-                type="date"
-                class={styles.formControl}
-                value={formData().date}
-                oninput={(e) => setFormData({ ...formData(), date: e.target.value })}
-              />
-            </div>
-            <div class={styles.formGroup}>
-              <label class={styles.formLabel}>Default Type</label>
-              <select
-                class={styles.formControl}
-                value={formData().type}
-                oninput={(e) =>
-                  setFormData({
-                    ...formData(),
-                    type: e.target.value as 'income' | 'expense' | 'transfer',
-                  })
-                }
-              >
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-                <option value="transfer">Transfer</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      ) : (
+      {/* Sheets Tab */}
+      {activeTab() === 'sheets' && (
         <>
-          {/* Preview Section */}
-          <div class={styles.importPreviewSection}>
-            <div class={styles.previewHeader}>
-              <div class={styles.previewStats}>
-                <div class={styles.statItem}>
-                  <span class={styles.statLabel}>Total Rows</span>
-                  <span class={styles.statValue}>{fileContent().length}</span>
-                </div>
-                <div class={styles.statItem}>
-                  <span class={styles.statLabel}>Selected</span>
-                  <span class={styles.statValue}>{selectedRows().size}</span>
-                </div>
-              </div>
-              <div class={styles.previewActions}>
-                <button class={styles.btnOutline} data-action="import:select-all" data-arg="all">
-                  Select All
-                </button>
-                <button class={styles.btnOutline} data-action="import:select-all" data-arg="none">
-                  Deselect All
-                </button>
-                <button class={styles.btnOutline} data-action="import:select-page">
-                  Select Page
-                </button>
-                <button class={styles.btnOutline} data-action="import:preview-template">
-                  Change File
-                </button>
+          <div class={styles.sheetsUrlRow}>
+            <input
+              type="text"
+              class={styles.sheetsUrlInput}
+              placeholder="Paste Google Sheets URL"
+              value={sheetUrl()}
+              onInput={(e) => setSheetUrl(e.target.value)}
+            />
+            <button class="btn btn-primary" onClick={fetchGoogleSheet} disabled={loading()}>
+              Fetch
+            </button>
+          </div>
+          <p class={styles.sheetsInfo}>Google Sheets URL format: https://docs.google.com/spreadsheets/d/...</p>
+
+          {/* Sheet tabs from first fetch */}
+          {sheetNames().length > 0 && !sheetResult() && (
+            <div class={styles.sheetsUrlRow}>
+              <label class={styles.sheetsInfo}>Available sheets:</label>
+              <div class={styles.sheetTabs}>
+                {sheetNames().map((name) => (
+                  <button
+                    class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
+                    onClick={() => handleSheetTabClick(name)}
+                  >
+                    {name}
+                  </button>
+                ))}
               </div>
             </div>
+          )}
+        </>
+      )}
+    </div>
+  )
 
-            <div class={styles.previewTableContainer}>
-              <table class={styles.dataTable}>
-                <thead>
-                  <tr>
-                    <th class={styles.selectCol}>
-                      <input
-                        type="checkbox"
-                        checked={
-                          selectedRows().size === fileContent().length && fileContent().length > 0
-                        }
-                        onchange={(e) => {
-                          toggleAll(e.currentTarget.checked)
-                        }}
-                      />
-                    </th>
-                    {headers().map((h, idx) => (
-                      <th data-header={idx}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {fileContent()
-                    .slice(startRow(), endRow())
-                    .map((row, idx) => (
-                      <tr
-                        data-index={startRow() + idx}
-                        class={selectedRows().has(startRow() + idx) ? 'selected' : ''}
-                      >
-                        <td class={styles.selectCol}>
-                          <input
-                            type="checkbox"
-                            checked={selectedRows().has(startRow() + idx)}
-                            onchange={() => {
-                              toggleRow(startRow() + idx)
-                            }}
-                          />
-                        </td>
-                        {headers().map((h) => (
-                          <td>{String(row[h] ?? '')}</td>
-                        ))}
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+  // Column mapping step
+  const mappingStep = () => {
+    const headers = currentHeaders()
+    return (
+      <>
+        <div class={styles.mappingSection}>
+          <h2 class={styles.mappingTitle}>Map Columns</h2>
+          <p class={styles.mappingSubtitle}>
+            Map your data columns to the 12 required fields. Fields in bold are required.
+          </p>
 
-            {/* Pagination */}
-            {fileContent().length > rowsPerPage() && (
-              <div class={styles.pagination}>
-                <button
-                  class={`${styles.btnSm} ${styles.btnGhost}`}
-                  disabled={currentPage() === 1}
-                  data-action="import:page"
-                  data-arg="prev"
-                >
-                  Previous
-                </button>
-                <span class={styles.pageInfo}>
-                  Page {currentPage()} of {totalPages()}
-                </span>
-                <button
-                  class={`${styles.btnSm} ${styles.btnGhost}`}
-                  disabled={currentPage() === totalPages()}
-                  data-action="import:page"
-                  data-arg="next"
-                >
-                  Next
-                </button>
+          <div class={styles.mappingGrid}>
+            {FIELD_NAMES.map((field) => (
+              <div class={styles.mappingField}>
+                <label class={styles.mappingLabel}>
+                  {field.label}
+                  {field.required && <span class={styles.required}>*</span>}
+                </label>
                 <select
-                  class={`${styles.formControl} ${styles.pageSize}`}
-                  value={rowsPerPage()}
-                  oninput={(e) => {
-                    setRowsPerPage(Number(e.target.value))
-                    setCurrentPage(1)
-                  }}
+                  class={styles.mappingSelect}
+                  value={columnMapping()[field.key] ?? ''}
+                  onChange={(e) => handleColumnMappingChange(field.key, parseInt(e.target.value))}
                 >
-                  <option value="10">10 per page</option>
-                  <option value="25">25 per page</option>
-                  <option value="50">50 per page</option>
-                  <option value="100">100 per page</option>
+                  <option value="">-- Select column --</option>
+                  {headers.map((h, i) => (
+                    <option key={i} value={i}>
+                      {h}
+                    </option>
+                  ))}
                 </select>
               </div>
-            )}
-
-            {/* Import Actions */}
-            <div class={styles.importActions}>
-              <button class={styles.btnOutline} data-action="import:reset">
-                Cancel
-              </button>
-              <button class={styles.btnPrimary} data-action="import:start">
-                Import {selectedRows().size} Transaction{selectedRows().size !== 1 ? 's' : ''}
-              </button>
-            </div>
+            ))}
           </div>
-        </>
+        </div>
+
+        {/* Category type review */}
+        <div class={styles.categoryReview}>
+          <h3 class={styles.categoryReviewTitle}>Category Types</h3>
+          <div class={styles.categoryChips}>
+            {detectCategories().map((category) => (
+              <div key={category} class={styles.categoryChip}>
+                <span class={styles.categoryChipName}>{category}</span>
+                <select
+                  class={styles.categoryChipSelect}
+                  value={categoryTypes()[category] || 'expense'}
+                  onChange={(e) => handleCategoryTypeToggle(category, e.target.value as 'income' | 'expense')}
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div class={styles.previewHeader}>
+          <span>
+            Total Rows: {currentRows().length} | Mapped: {Object.keys(columnMapping()).length}/12
+          </span>
+          <div class={styles.previewActions}>
+            <button class="btn btn-outline" onClick={resetForm}>
+              Cancel
+            </button>
+            <button class="btn btn-primary" onClick={goToPreview} disabled={loading()}>
+              Continue to Preview
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // Preview step
+  const previewStep = () => {
+    const headers = currentHeaders()
+    const total = currentRows().length
+    const selected = selectedRows().size
+    const duplicates = duplicateIndices().length
+
+    return (
+      <>
+        {/* Stats */}
+        <div class={styles.previewHeader}>
+          <div class={styles.previewStats}>
+            <div class={styles.statItem}>
+              <span class={styles.statLabel}>Total Rows</span>
+              <span class={styles.statValue}>{total}</span>
+            </div>
+            <div class={styles.statItem}>
+              <span class={styles.statLabel}>Selected</span>
+              <span class={styles.statValue}>{selected}</span>
+            </div>
+            {duplicates > 0 && (
+              <div class={styles.statItem}>
+                <span class={styles.statLabel}>Duplicates</span>
+                <span class={`${styles.statValue} ${duplicates > 0 ? styles.duplicate : ''}`}>{duplicates}</span>
+              </div>
+            )}
+          </div>
+          <div class={styles.previewActions}>
+            <button class="btn btn-outline" onClick={resetForm}>
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div class={styles.tableWrapper}>
+          <table class={styles.previewTable}>
+            <thead>
+              <tr>
+                <th class={styles.selectCol}>
+                  <input
+                    type="checkbox"
+                    checked={selected === total}
+                    onChange={(e) => toggleAll(e.currentTarget.checked)}
+                  />
+                </th>
+                {headers.map((h, i) => <th key={i}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {currentRows()
+                .slice(startRow(), endRow())
+                .map((row, idx) => {
+                  const actualIndex = startRow() + idx
+                  return (
+                    <tr
+                      key={actualIndex}
+                      class={
+                        selectedRows().has(actualIndex)
+                          ? styles.selected
+                          : duplicateIndices().includes(actualIndex)
+                          ? styles.duplicate
+                          : ''
+                      }
+                    >
+                      <td class={styles.selectCol}>
+                        <input
+                          type="checkbox"
+                          checked={selectedRows().has(actualIndex)}
+                          onChange={() => toggleRow(actualIndex)}
+                        />
+                      </td>
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx}>{cell ?? ''}</td>
+                      ))}
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {total > rowsPerPage() && (
+          <div class={styles.pagination}>
+            <button
+              class="btn btn-sm btn-ghost"
+              disabled={currentPage() === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+            >
+              Previous
+            </button>
+            <span class={styles.pageInfo}>
+              Page {currentPage()} of {totalPages()}
+            </span>
+            <button
+              class="btn btn-sm btn-ghost"
+              disabled={currentPage() === totalPages()}
+              onClick={() => setCurrentPage((p) => p + 1)}
+            >
+              Next
+            </button>
+            <select
+              class={styles.pageSize}
+              value={rowsPerPage()}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value))
+                setCurrentPage(1)
+              }}
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        )}
+
+        {/* Import actions */}
+        <div class={styles.actionBar}>
+          <div class={styles.importButtons}>
+            <button
+              class="btn btn-primary"
+              onClick={() => handleImport('selected')}
+              disabled={selectedRows().size === 0}
+            >
+              Import Selected ({selected})
+            </button>
+            {duplicates > 0 && (
+              <button
+                class="btn btn-secondary"
+                onClick={() => handleImport('new')}
+              >
+                Import Only New (Skip {duplicates} Duplicates)
+              </button>
+            )}
+            <button class="btn btn-outline" onClick={() => handleImport('all')}>
+              Import All
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <div class="page page-import page-enter">
+      <div class="page-header">
+        <h1>Import Transactions</h1>
+        <p>Import transactions from CSV, Excel, or Google Sheets</p>
+      </div>
+
+      {/* Error message */}
+      {error() && (
+        <div class={`${styles.resultMessage} ${styles.error}`}>{error()}</div>
+      )}
+
+      {/* Success message */}
+      {resultMessage() && (
+        <div class={`${styles.resultMessage} ${styles.success}`}>{resultMessage()!.text}</div>
+      )}
+
+      {/* Loading overlay */}
+      {loading() && (
+        <div class={styles.loadingOverlay}>
+          <div class={styles.spinner}></div>
+          <p class={styles.loadingText}>Processing...</p>
+        </div>
+      )}
+
+      {/* Form content */}
+      {activeStep() === 'upload' && fileUploadStep()}
+      {activeStep() === 'mapping' && mappingStep()}
+      {activeStep() === 'preview' && previewStep()}
+
+      {/* Done state */}
+      {activeStep() === 'done' && (
+        <div class={styles.settingsCard}>
+          <h2 class={styles.settingsCardTitle}>Import Complete!</h2>
+          <p>Transactions have been successfully imported.</p>
+          <button class="btn btn-primary" style={{ marginTop: '16px' }} onClick={resetForm}>
+            Import More
+          </button>
+        </div>
       )}
     </div>
   )
