@@ -6,6 +6,12 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from './Import.module.css'
 
+// Type declaration for CSS module
+declare module './Import.module.css' {
+  const classes: { [key: string]: string }
+  export default classes
+}
+
 // Column field names for mapping
 const FIELD_NAMES = [
   { key: 'date', label: 'Date', required: true },
@@ -46,6 +52,8 @@ interface UploadResult {
   headers: string[]
   rows: string[][]
   totalRows: number
+  duplicateCount?: number
+  duplicateIndices?: number[]
 }
 
 interface SheetResult {
@@ -149,8 +157,8 @@ export default function Import() {
   const goToPreview = () => {
     const rows = currentRows()
     if (rows.length === 0) return
-    setActiveStep('preview')
-    setSelectedRows(new Set(rows.map((_, i) => i)))
+    setActiveStep('mapping')
+    setSelectedRows(new Set<number>(rows.map((_, i) => i)))
     setCurrentPage(1)
   }
 
@@ -165,7 +173,7 @@ export default function Import() {
     setCategoryTypes({})
     setRows([])
     setHeaders([])
-    setSelectedRows(new Set())
+    setSelectedRows(new Set<number>())
     setCurrentPage(1)
     setError(null)
     setResultMessage(null)
@@ -310,7 +318,7 @@ export default function Import() {
 
   // Preview actions
   const toggleRow = (index: number) => {
-    const selected = new Set(selectedRows())
+    const selected: Set<number> = new Set(selectedRows())
     if (selected.has(index)) {
       selected.delete(index)
     } else {
