@@ -3,10 +3,14 @@
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
 import { createEffect, createSignal, onMount } from 'solid-js'
+import CategoryMultiSelect from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
+import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import Pagination from '../components/Pagination'
-import styles from '../components/TransactionsPage.module.css'
+import ReconciliationModal from '../components/ReconciliationModal'
+import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
+import styles from '../components/TransactionsPage.module.css'
 import { api } from '../core/api.js'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -49,6 +53,8 @@ export default function Transactions() {
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
   const [isTransactionModalOpen, setTransactionModalOpen] = createSignal(false)
+  const [isAutoCategorizeModalOpen, setAutoCategorizeModalOpen] = createSignal(false)
+  const [isReconciliationModalOpen, setReconciliationModalOpen] = createSignal(false)
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
   const [type, _setType] = createSignal<TransactionType>('expense')
@@ -190,6 +196,8 @@ export default function Transactions() {
   // Handle selection changes
   const handleSelectionChange = (ids: number[]) => {
     setSelectedTransactions(ids)
+    // Re-fetch to update transaction data
+    refreshTransactions()
   }
 
   // Handle sort changes
@@ -265,6 +273,12 @@ export default function Transactions() {
     })
   }
 
+  // Get uncategorized transactions
+  const uncategorizedTransactions = () => {
+    const allTransactions = transactions()
+    return allTransactions.filter((tx) => tx.category_id === undefined || tx.category_id === null)
+  }
+
   // Calculate paginated results
   const paginatedTransactions = () => {
     const filtered = filteredTransactions()
@@ -273,6 +287,46 @@ export default function Transactions() {
   }
 
   const totalPages = () => Math.ceil(filteredTransactions().length / itemsPerPage())
+
+  // Auto-categorize handler
+  const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
+    try {
+      await api.updateTransaction(transactionId, { category_id: categoryId })
+      // Reload transactions to update the view
+      const data = await api.getTransactions()
+      const transactionsData = Array.isArray(data) ? data : data.rows || data.transactions || []
+      setTransactions(transactionsData as Transaction[])
+    } catch (error) {
+      console.error('Failed to apply category:', error)
+    }
+  }
+
+  // Refresh transactions handler
+  const refreshTransactions = async () => {
+    setLoading(true)
+    try {
+      const data = (await api.getTransactions()) as any
+      const transactionsData = Array.isArray(data) ? data : data.rows || data.transactions || []
+      setTransactions(transactionsData as Transaction[])
+    } catch (error) {
+      console.error('Failed to reload transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Reconcile handler (mock - can be extended)
+  const handleReconcile = async (transactionId: number) => {
+    try {
+      await api.toggleReconcile(transactionId)
+      // Reload transactions to update the view
+      const data = await api.getTransactions()
+      const transactionsData = Array.isArray(data) ? data : data.rows || data.transactions || []
+      setTransactions(transactionsData as Transaction[])
+    } catch (error) {
+      console.error('Failed to toggle reconciliation:', error)
+    }
+  }
 
   // Date presets
   const _applyDatePreset = (preset: string) => {
@@ -311,20 +365,56 @@ export default function Transactions() {
     <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
       <div class={styles.pageHeader}>
         <h1>Transactions</h1>
+        <div class={styles.pageHeaderActions}>
+          <button
+            class={`${styles.btnSecondary} ${styles.btnSm}`}
+            onClick={() => setAutoCategorizeModalOpen(true)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Auto-categorize
+          </button>
+          <button
+            class={`${styles.btnSecondary} ${styles.btnSm}`}
+            onClick={() => setReconciliationModalOpen(true)}
+            disabled={selectedTransactions().length === 0}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" />
+            </svg>
+            Reconcile
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
       <div class={styles.filterSection}>
+        <CategoryMultiSelect
+          categories={categories}
+          selectedCategoryIds={selectedCategories}
+          onChange={(ids) => {
+            setSelectedCategories(ids)
+            setCurrentPage(1)
+          }}
+          placeholder="All categories"
+        />
         <FilterBar
-          categories={categories()}
           tags={tags()}
-          selectedCategories={selectedCategories()}
           selectedTags={selectedTags()}
           dateRange={dateRange()}
           selectedPreset={selectedPreset()}
           onChange={handleFilterChange}
         />
       </div>
+
+      {/* Transaction Summary Bar */}
+      <TransactionSummaryBar
+        selectedTransactions={selectedTransactions}
+        onDeselectAll={() => setSelectedTransactions([])}
+        visible={selectedTransactions().length > 0}
+      />
 
       {/* Search */}
       <div class={styles.searchSection}>
@@ -747,6 +837,22 @@ export default function Transactions() {
           )}
         </>
       )}
+
+      {/* Auto Categorize Modal */}
+      <AutoCategorizeModal
+        isOpen={isAutoCategorizeModalOpen}
+        onClose={() => setAutoCategorizeModalOpen(false)}
+        uncategorizedTransactions={uncategorizedTransactions}
+        onApply={handleAutoApplyCategory}
+      />
+
+      {/* Reconciliation Modal */}
+      <ReconciliationModal
+        isOpen={isReconciliationModalOpen}
+        onClose={() => setReconciliationModalOpen(false)}
+        selectedTransactions={selectedTransactions}
+        onRefresh={refreshTransactions}
+      />
     </div>
   )
 }

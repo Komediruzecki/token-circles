@@ -398,7 +398,7 @@ export default function Import() {
       })
 
       // Reset after delay
-      setTimeout(() => resetForm(), 3000)
+      setTimeout(() => { resetForm(); }, 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed')
     } finally {
@@ -494,7 +494,7 @@ export default function Import() {
           {/* Template download */}
           <div class={styles.templateSection}>
             <p class={styles.dropzoneHint}>Need a template?</p>
-            <a href="#" class="btn btn-outline" onClick={(e) => e.preventDefault()}>
+            <a href="#" class="btn btn-outline" onClick={(e) => { e.preventDefault(); }}>
               Download Sample Template
             </a>
           </div>
@@ -526,7 +526,7 @@ export default function Import() {
                 {sheetNames().map((name) => (
                   <button
                     class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
-                    onClick={() => handleSheetTabClick(name)}
+                    onClick={() => { handleSheetTabClick(name); }}
                   >
                     {name}
                   </button>
@@ -560,7 +560,7 @@ export default function Import() {
                 <select
                   class={styles.mappingSelect}
                   value={columnMapping()[field.key] ?? ''}
-                  onChange={(e) => handleColumnMappingChange(field.key, parseInt(e.target.value))}
+                  onChange={(e) => { handleColumnMappingChange(field.key, parseInt(e.target.value)); }}
                 >
                   <option value="">-- Select column --</option>
                   {headers.map((h, i) => (
@@ -584,7 +584,7 @@ export default function Import() {
                 <select
                   class={styles.categoryChipSelect}
                   value={categoryTypes()[category] || 'expense'}
-                  onChange={(e) => handleCategoryTypeToggle(category, e.target.value as 'income' | 'expense')}
+                  onChange={(e) => { handleCategoryTypeToggle(category, e.target.value as 'income' | 'expense'); }}
                 >
                   <option value="expense">Expense</option>
                   <option value="income">Income</option>
@@ -654,7 +654,7 @@ export default function Import() {
                   <input
                     type="checkbox"
                     checked={selected === total}
-                    onChange={(e) => toggleAll(e.currentTarget.checked)}
+                    onChange={(e) => { toggleAll(e.currentTarget.checked); }}
                   />
                 </th>
                 {headers.map((h, i) => <th key={i}>{h}</th>)}
@@ -680,7 +680,7 @@ export default function Import() {
                         <input
                           type="checkbox"
                           checked={selectedRows().has(actualIndex)}
-                          onChange={() => toggleRow(actualIndex)}
+                          onChange={() => { toggleRow(actualIndex); }}
                         />
                       </td>
                       {row.map((cell, cIdx) => (

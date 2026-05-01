@@ -80,6 +80,77 @@
   margin-top: 2px;
 }
 
+.metricDelta {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.metricDelta.positive {
+  color: var(--text-positive);
+}
+
+.metricDelta.negative {
+  color: var(--text-negative);
+}
+
+.metricDelta.neutral {
+  color: var(--text-secondary);
+}
+
+.metricDeltaLabel {
+  color: var(--text-secondary);
+}
+
+.widgetsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.widgetCard {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  height: 200px;
+}
+
+.widgetHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.widgetTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.widgetLink {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.chartsGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -106,6 +177,20 @@
 .chart-container {
   position: relative;
   height: 250px;
+}
+
+.chart-container-medium {
+  position: relative;
+  height: 300px;
+}
+
+.chart-container-tall {
+  position: relative;
+  height: 320px;
+}
+
+.periodNavigatorContainer {
+  padding: 8px;
 }
 
 .transaction-list {

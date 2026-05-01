@@ -236,6 +236,26 @@ export interface DashboardMetrics {
   expenseByCategory: CategoryBalance[]
   recentTransactions: Transaction[]
   upcomingBills: Bill[]
+  // MoM delta fields
+  momIncomeDelta?: number
+  momExpenseDelta?: number
+  momBalanceDelta?: number
+}
+
+export interface DashboardMonthMetrics {
+  month: string
+  income: number
+  expenses: number
+  balance: number
+  incomeByCategory: CategoryBalance[]
+  expenseByCategory: CategoryBalance[]
+}
+
+export interface DashboardChartData {
+  labels: string[]
+  income: number[]
+  expenses: number[]
+  netWorth: number[]
 }
 
 export interface CategoryBalance {

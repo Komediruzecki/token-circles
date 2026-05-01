@@ -4,17 +4,32 @@
 
 import { createSignal, onMount } from 'solid-js'
 import Chart from '../components/Chart'
+import ChartWrapper from '../components/ChartWrapper'
+import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
+import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
+import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
+import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
+import { StatCard } from '../components/Dashboard/StatCard'
+import { PeriodPills } from '../components/PeriodPills'
 import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
+import type {PeriodPreset} from '../components/Dashboard/PeriodNavigator';
 import type * as Models from '../types/models'
 
 export default function Dashboard() {
+  const [month, setMonth] = createSignal(5)
+  const [year, setYear] = createSignal(2026)
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
+  const [momMetrics, setMomMetrics] = createSignal<Models.DashboardMetrics | null>(null)
+  const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [loading, setLoading] = createSignal(true)
+  const [selectedPeriod, setSelectedPeriod] = createSignal<PeriodPreset>('this-month')
+  const [pillPeriod, setPillPeriod] = createSignal('month')
 
   onMount(() => {
     void loadDashboard()
+    void loadMonthlyData()
   })
 
   const loadDashboard = async () => {
@@ -27,6 +42,131 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadMonthlyData = async () => {
+    try {
+      const data = await api.getDashboardByMonth(month(), year())
+      setMonthlyData(data)
+    } catch {
+      // Don't show error for monthly data - it's optional
+    }
+  }
+
+  const handleMonthChange = (newMonth: number) => {
+    setMonth(newMonth)
+    void loadMonthlyData()
+  }
+
+  const handleYearChange = (newYear: number) => {
+    setYear(newYear)
+    void loadMonthlyData()
+  }
+
+  const handlePrev = () => {
+    if (month() === 1) {
+      setMonth(12)
+      setYear(year() - 1)
+    } else {
+      setMonth(month() - 1)
+    }
+    void loadMonthlyData()
+  }
+
+  const handleNext = () => {
+    if (month() === 12) {
+      setMonth(1)
+      setYear(year() + 1)
+    } else {
+      setMonth(month() + 1)
+    }
+    void loadMonthlyData()
+  }
+
+  const handlePresetChange = async (preset: PeriodPreset) => {
+    setSelectedPeriod(preset)
+    const now = new Date()
+    let m = now.getMonth() + 1
+    const y = now.getFullYear()
+
+    switch (preset) {
+      case 'this-month':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'last-month':
+        m = m === 1 ? 12 : m - 1
+        setMonth(m)
+        setYear(y)
+        break
+      case 'last-3':
+        m = m <= 3 ? 12 : m - 3
+        setYear(y)
+        break
+      case 'last-6':
+        m = m <= 6 ? 12 : m - 6
+        setYear(y)
+        break
+      case 'this-year':
+        setMonth(1)
+        setYear(y)
+        break
+      case 'last-year':
+        setMonth(1)
+        setYear(y - 1)
+        break
+      case 'all':
+        setMonth(1)
+        setYear(2020)
+        break
+    }
+
+    void loadMonthlyData()
+  }
+
+  const handlePillChange = async (pillId: string) => {
+    setPillPeriod(pillId)
+    const now = new Date()
+    let m = now.getMonth() + 1
+    const y = now.getFullYear()
+    const today = now.getDate()
+
+    switch (pillId) {
+      case 'today':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'week':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'month':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'quarter':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'year':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'last7':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'last30':
+        setMonth(m)
+        setYear(y)
+        break
+      case 'last90':
+        setMonth(m)
+        setYear(y)
+        break
+    }
+
+    void loadMonthlyData()
   }
 
   const showSettings = () => {
@@ -69,6 +209,12 @@ export default function Dashboard() {
             </svg>
             Refresh
           </button>
+          <div class={styles.periodPills}>
+            <PeriodPills
+              value={pillPeriod()}
+              onChange={handlePillChange}
+            />
+          </div>
         </div>
       </div>
 
@@ -76,14 +222,50 @@ export default function Dashboard() {
         <div class={styles.emptyState}>Loading...</div>
       ) : metrics() ? (
         <>
+          {/* Period Navigator */}
+          <div class={styles.card}>
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Period Navigator</div>
+            </div>
+            <div class={styles.periodNavigatorContainer}>
+              <PeriodNavigator
+                month={month}
+                year={year}
+                onMonthChange={setMonth}
+                onYearChange={setYear}
+                onPrev={() => {
+                  const m = month()
+                  const y = year()
+                  setMonth(m === 1 ? 12 : m - 1)
+                  setYear(y === 1 ? y - 1 : y)
+                }}
+                onNext={() => {
+                  const m = month()
+                  const y = year()
+                  setMonth(m === 12 ? 1 : m + 1)
+                  setYear(m === 12 ? y + 1 : y)
+                }}
+              />
+            </div>
+          </div>
+
           {/* Metrics Grid */}
           <div class={styles.metricsGrid}>
             <div class={styles.metricCard}>
-              <div class={styles.metricLabel}>Balance</div>
-              <div class={`${styles.metricValue} ${styles.positive}`}>
+              <div class={styles.metricLabel}>Net Worth</div>
+              <div class={`${styles.metricValue} ${styles.networth}`}>
                 {formatCurrency(metrics()!.balance)}
               </div>
               <div class={styles.metricSubtext}>Total available</div>
+              {momMetrics() && (
+                <div class={styles.metricDelta}>
+                  <span class={momMetrics()!.momBalanceDelta! > 0 ? styles.positive : momMetrics()!.momBalanceDelta! < 0 ? styles.negative : styles.neutral}>
+                    {momMetrics()!.momBalanceDelta! > 0 ? '↑' : momMetrics()!.momBalanceDelta! < 0 ? '↓' : '→'}
+                    {Math.abs(momMetrics()!.momBalanceDelta!).toFixed(2)}
+                  </span>
+                  <span class={styles.metricDeltaLabel}>vs last month</span>
+                </div>
+              )}
             </div>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Income</div>
@@ -91,117 +273,209 @@ export default function Dashboard() {
                 {formatCurrency(metrics()!.totalIncome)}
               </div>
               <div class={styles.metricSubtext}>For this period</div>
+              {momMetrics() && (
+                <div class={styles.metricDelta}>
+                  <span class={momMetrics()!.momIncomeDelta! > 0 ? styles.positive : momMetrics()!.momIncomeDelta! < 0 ? styles.negative : styles.neutral}>
+                    {momMetrics()!.momIncomeDelta! > 0 ? '↑' : momMetrics()!.momIncomeDelta! < 0 ? '↓' : '→'}
+                    {Math.abs(momMetrics()!.momIncomeDelta!).toFixed(2)}
+                  </span>
+                  <span class={styles.metricDeltaLabel}>vs last month</span>
+                </div>
+              )}
             </div>
             <div class={styles.metricCard}>
               <div class={styles.metricLabel}>Expenses</div>
-              <div class={styles.metricValue}>{formatCurrency(metrics()!.totalExpenses)}</div>
+              <div class={`${styles.metricValue} ${styles.expense}`}>
+                {formatCurrency(metrics()!.totalExpenses)}
+              </div>
               <div class={styles.metricSubtext}>For this period</div>
-            </div>
-          </div>
-
-          {/* Category Breakdown */}
-          <div class={styles.card}>
-            <div class={styles.cardHeader}>
-              <div class={styles.cardTitle}>Spending by Category</div>
-            </div>
-            <div class={styles.chartContainer}>
-              {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
-                <Chart
-                  id="expense-category-chart"
-                  type="doughnut"
-                  data={{
-                    labels: metrics()!.expenseByCategory.map(
-                      (item: any) => item.category_name || 'Uncategorized'
-                    ),
-                    datasets: [
-                      {
-                        data: metrics()!.expenseByCategory.map((item: any) => item.total),
-                        backgroundColor: [
-                          '#dc2626',
-                          '#f97316',
-                          '#eab308',
-                          '#22c55e',
-                          '#06b6d4',
-                          '#3b82f6',
-                          '#8b5cf6',
-                          '#ec4899',
-                          '#6b7280',
-                          '#14b8a6',
-                        ],
-                        borderWidth: 0,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'right',
-                        labels: {
-                          usePointStyle: true,
-                          padding: 15,
-                          font: { size: 12 },
-                        },
-                      },
-                    },
-                  }}
-                  height={300}
-                  width="100%"
-                />
-              ) : (
-                <div class={styles.emptyState}>No expense data to display</div>
+              {momMetrics() && (
+                <div class={styles.metricDelta}>
+                  <span class={momMetrics()!.momExpenseDelta! > 0 ? styles.positive : momMetrics()!.momExpenseDelta! < 0 ? styles.negative : styles.neutral}>
+                    {momMetrics()!.momExpenseDelta! > 0 ? '↑' : momMetrics()!.momExpenseDelta! < 0 ? '↓' : '→'}
+                    {Math.abs(momMetrics()!.momExpenseDelta!).toFixed(2)}
+                  </span>
+                  <span class={styles.metricDeltaLabel}>vs last month</span>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Income vs Expenses Chart */}
-          <div class={styles.card}>
-            <div class={styles.cardHeader}>
-              <div class={styles.cardTitle}>Income vs Expenses</div>
+          {/* Charts Section */}
+          <div class={styles.chartsGrid}>
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Net Worth Over Time</div>
+              </div>
+              <div class={styles.chartContainerTall}>
+                {monthlyData() ? (
+                  <ChartWrapper
+                    type="line"
+                    data={{
+                      labels: monthlyData()!.labels,
+                      datasets: [
+                        {
+                          label: 'Net Worth',
+                          data: monthlyData()!.netWorth,
+                          borderColor: '#8B5CF6',
+                          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                          fill: true,
+                          tension: 0.4,
+                        },
+                      ],
+                    }}
+                    height={320}
+                    variant="tall"
+                    showExport
+                    filename="net-worth-over-time"
+                  />
+                ) : (
+                  <div class={styles.emptyState}>Loading chart data...</div>
+                )}
+              </div>
             </div>
-            <div class={styles.chartContainer}>
-              <Chart
-                id="income-expense-chart"
-                type="bar"
-                data={{
-                  labels: ['Income', 'Expenses', 'Net'],
-                  datasets: [
-                    {
-                      data: [
-                        metrics()!.totalIncome || 0,
-                        metrics()!.totalExpenses || 0,
-                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
+
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Cash Flow (12 Months)</div>
+              </div>
+              <div class={styles.chartContainerMedium}>
+                {monthlyData() ? (
+                  <ChartWrapper
+                    type="line"
+                    data={{
+                      labels: monthlyData()!.labels,
+                      datasets: [
+                        {
+                          label: 'Income',
+                          data: monthlyData()!.income,
+                          borderColor: '#22C55E',
+                          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                          fill: true,
+                          tension: 0.4,
+                        },
+                        {
+                          label: 'Expenses',
+                          data: monthlyData()!.expenses,
+                          borderColor: '#EF4444',
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          fill: true,
+                          tension: 0.4,
+                        },
                       ],
-                      backgroundColor: [
-                        '#22c55e',
-                        '#dc2626',
-                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
-                          ? '#22c55e'
-                          : '#dc2626',
+                    }}
+                    height={300}
+                    variant="medium"
+                    showExport
+                    filename="cash-flow-12months"
+                  />
+                ) : (
+                  <div class={styles.emptyState}>Loading chart data...</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Widget Cards */}
+          <div class={styles.widgetsGrid}>
+            <div class={styles.widgetCard}>
+              <div class={styles.widgetHeader}>
+                <div class={styles.widgetTitle}>Budget Alerts</div>
+                <a href="#budgets" class={styles.widgetLink}>View All</a>
+              </div>
+              <BudgetAlertsCard />
+            </div>
+
+            <div class={styles.widgetCard}>
+              <div class={styles.widgetHeader}>
+                <div class={styles.widgetTitle}>Savings Rate</div>
+                <a href="#budgets" class={styles.widgetLink}>Details</a>
+              </div>
+              <SavingsRateCard />
+            </div>
+
+            <div class={styles.widgetCard}>
+              <div class={styles.widgetHeader}>
+                <div class={styles.widgetTitle}>Recurring Insights</div>
+              </div>
+              <RecurringInsightsCard />
+            </div>
+          </div>
+
+          {/* Charts Section */}
+          <div class={styles.chartsGrid}>
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Spending by Category</div>
+              </div>
+              <div class={styles.chartContainer}>
+                {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
+                  <ChartWrapper
+                    type="doughnut"
+                    data={{
+                      labels: metrics()!.expenseByCategory.map(
+                        (item: any) => item.category_name || 'Uncategorized'
+                      ),
+                      datasets: [
+                        {
+                          data: metrics()!.expenseByCategory.map((item: any) => item.total),
+                          backgroundColor: [
+                            '#dc2626',
+                            '#f97316',
+                            '#eab308',
+                            '#22c55e',
+                            '#06b6d4',
+                            '#3b82f6',
+                            '#8b5cf6',
+                            '#ec4899',
+                            '#6b7280',
+                            '#14b8a6',
+                          ],
+                        },
                       ],
-                      borderRadius: 8,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        callback: (value: any) => formatCurrency(value),
+                    }}
+                    height={300}
+                    showExport
+                    filename="spending-by-category"
+                  />
+                ) : (
+                  <div class={styles.emptyState}>No expense data to display</div>
+                )}
+              </div>
+            </div>
+
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Income vs Expenses</div>
+              </div>
+              <div class={styles.chartContainer}>
+                <ChartWrapper
+                  type="bar"
+                  data={{
+                    labels: ['Income', 'Expenses', 'Net'],
+                    datasets: [
+                      {
+                        data: [
+                          metrics()!.totalIncome || 0,
+                          metrics()!.totalExpenses || 0,
+                          (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
+                        ],
+                        backgroundColor: [
+                          '#22C55E',
+                          '#DC2626',
+                          (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
+                            ? '#22C55E'
+                            : '#DC2626',
+                        ],
+                        borderRadius: 8,
                       },
-                    },
-                  },
-                  plugins: {
-                    legend: { display: false },
-                  },
-                }}
-                height={250}
-                width="100%"
-              />
+                    ],
+                  }}
+                  height={250}
+                  showExport
+                  filename="income-vs-expenses"
+                />
+              </div>
             </div>
           </div>
 

@@ -1,0 +1,147 @@
+.bulkActionBar {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  max-width: 90%;
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
+}
+
+.dark-mode .content {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.selectedInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 1rem;
+  border-right: 1px solid #e5e7eb;
+}
+
+.dark-mode .selectedInfo {
+  border-right-color: #374151;
+}
+
+.count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.dark-mode .count {
+  color: #f3f4f6;
+}
+
+.label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.dark-mode .label {
+  color: #9ca3af;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.actionButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1f2937;
+  transition: all 0.15s ease;
+}
+
+.actionButton:hover {
+  border-color: #6366f1;
+  background: #f5f3ff;
+  color: #6366f1;
+}
+
+.dark-mode .actionButton {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+.dark-mode .actionButton:hover {
+  border-color: #6366f1;
+  background: #374151;
+  color: #6366f1;
+}
+
+.deselectButton {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.15s ease;
+}
+
+.deselectButton:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.dark-mode .deselectButton {
+  background: #1f2937;
+  border-color: #374151;
+  color: #9ca3af;
+}
+
+.dark-mode .deselectButton:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #374151;
+}
+
+@media (max-width: 640px) {
+  .content {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .selectedInfo {
+    border-right: none;
+    justify-content: center;
+  }
+
+  .actions {
+    justify-content: center;
+  }
+
+  .actionButton {
+    justify-content: center;
+  }
+}

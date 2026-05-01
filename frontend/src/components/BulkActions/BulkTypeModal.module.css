@@ -1,0 +1,284 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.overlay.isOpen {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(20px);
+  transition: transform 0.2s ease;
+}
+
+.dark-mode .modal {
+  background: #1f2937;
+}
+
+.overlay.isOpen .modal {
+  transform: translateY(0);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dark-mode .header {
+  border-bottom-color: #374151;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-mode .title {
+  color: #f3f4f6;
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.closeButton:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.dark-mode .closeButton:hover:not(:disabled) {
+  background: #374151;
+  color: #d1d5db;
+}
+
+.closeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.transactionCount {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+}
+
+.dark-mode .transactionCount {
+  color: #9ca3af;
+}
+
+.typeList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.typeItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
+
+.dark-mode .typeItem {
+  background: #1f2937;
+  border-color: #374151;
+  color: #d1d5db;
+}
+
+.typeItem:hover {
+  border-color: #6366f1;
+  background: #f5f3ff;
+}
+
+.dark-mode .typeItem:hover {
+  background: #374151;
+}
+
+.typeItem.selected {
+  border-color: #6366f1;
+  background: #f5f3ff;
+}
+
+.dark-mode .typeItem.selected {
+  background: #374151;
+}
+
+.typeIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.typeIcon.income {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.dark-mode .typeIcon.income {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.typeIcon.expense {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.dark-mode .typeIcon.expense {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.typeIcon.income svg,
+.typeIcon.expense svg {
+  stroke-width: 2;
+}
+
+.typeInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.typeTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dark-mode .typeTitle {
+  color: #f3f4f6;
+}
+
+.typeDescription {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.dark-mode .typeDescription {
+  color: #9ca3af;
+}
+
+.checkIcon {
+  color: #6366f1;
+}
+
+.footer {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.dark-mode .footer {
+  border-top-color: #374151;
+}
+
+.cancelButton,
+.confirmButton {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelButton {
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+}
+
+.dark-mode .cancelButton {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+.cancelButton:hover:not(:disabled) {
+  border-color: #6366f1;
+  background: #f5f3ff;
+}
+
+.dark-mode .cancelButton:hover:not(:disabled) {
+  background: #374151;
+}
+
+.confirmButton {
+  background: #6366f1;
+  color: white;
+}
+
+.confirmButton:hover:not(.disabled) {
+  background: #4f46e5;
+}
+
+.confirmButton.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

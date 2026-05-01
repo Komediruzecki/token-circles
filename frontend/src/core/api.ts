@@ -681,6 +681,13 @@ export class ApiClient {
   }
 
   /**
+   * Get dashboard data for a specific month/year
+   */
+  async getDashboardByMonth(month: number, year: number): Promise<Models.DashboardChartData> {
+    return this.request<Models.DashboardChartData>(`/dashboard?month=${month}&year=${year}`)
+  }
+
+  /**
    * Export transactions as CSV
    */
   async exportTransactions(params?: { date_from?: string; date_to?: string }): Promise<Blob> {
@@ -859,6 +866,47 @@ export class ApiClient {
    */
   async deleteReceipt(id: number): Promise<void> {
     await this.request(`/receipts/${id}`, { method: 'DELETE' })
+  }
+
+  // ============ RECONCILIATION ============
+
+  /**
+   * Toggle reconciled status for a transaction
+   */
+  async toggleReconcile(id: number): Promise<{ reconciled: number; reconciled_at: string | null }> {
+    return this.request(`/transactions/${id}/reconcile`, { method: 'PATCH' })
+  }
+
+  /**
+   * Bulk reconcile transactions by date range
+   */
+  async reconcileByDateRange(dateFrom: string, dateTo: string): Promise<{ message: string; count: number }> {
+    return this.request(`/transactions/reconcile/bulk`, {
+      method: 'POST',
+      body: { date_from: dateFrom, date_to: dateTo },
+    })
+  }
+
+  /**
+   * Get reconciliation summary for all transactions
+   */
+  async getReconciliationSummary(): Promise<{
+    reconciled_count: number
+    unreconciled_count: number
+    reconciled_total: number
+    unreconciled_total: number
+  }> {
+    return this.request(`/transactions/reconcile/summary`)
+  }
+
+  /**
+   * Batch mark transactions as reconciled by ID list
+   */
+  async reconcileByIds(transactionIds: number[]): Promise<{ message: string; updated: number }> {
+    return this.request(`/transactions/reconcile-batch`, {
+      method: 'PUT',
+      body: { transaction_ids: transactionIds },
+    })
   }
 }
 
