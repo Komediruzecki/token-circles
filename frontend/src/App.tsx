@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createMemo, createSignal, onCleanup, onMount, Show,Suspense } from 'solid-js'
+import { createMemo, createSignal, Show,Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
@@ -96,7 +96,7 @@ export function App() {
     }
   }
 
-  onMount(async () => {
+  createEffect(() => {
     // Initialize theme
     const savedDarkMode = localStorage.getItem('darkMode')
     if (savedDarkMode === 'true') {
@@ -105,16 +105,17 @@ export function App() {
       document.documentElement.setAttribute('data-theme', 'light')
     }
 
-    const isLoggedIn = await api.checkLogin()
-    if (isLoggedIn) {
-      await loadProfiles(true)
-    } else {
-      await loadProfiles(false)
-      // Default to first profile if not strictly logged in but profiles exist
-      if (profiles().length > 0) {
-        setCurrentProfile(profiles()[0])
+    const _isLoggedIn = api.checkLogin().then(async (loggedIn) => {
+      if (loggedIn) {
+        await loadProfiles(true)
+      } else {
+        await loadProfiles(false)
+        // Default to first profile if not strictly logged in but profiles exist
+        if (profiles().length > 0) {
+          setCurrentProfile(profiles()[0])
+        }
       }
-    }
+    })
 
     // Parse initial hash from URL
     const hash = window.location.hash.slice(1)
@@ -142,10 +143,10 @@ export function App() {
     }
     window.addEventListener('auth:required', handleAuthRequired)
 
-    onCleanup(() => { 
+    return () => {
       window.removeEventListener('hashchange', handleHashChange)
       window.removeEventListener('auth:required', handleAuthRequired)
-    })
+    }
   })
 
   createMemo(() => {

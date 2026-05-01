@@ -11,7 +11,7 @@ import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
 import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { PeriodPills } from '../components/PeriodPills'
-import { api, formatCurrency, toast } from '../core/api'
+import { api, formatCurrency, formatDate, toast } from '../core/api'
 import type {PeriodPreset} from '../components/Dashboard/PeriodNavigator';
 import type * as Models from '../types/models'
 

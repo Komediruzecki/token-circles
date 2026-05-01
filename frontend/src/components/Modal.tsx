@@ -2,7 +2,7 @@
  * Modal Component - Generic modal dialog
  */
 
-import { createSignal, onCleanup, onMount } from 'solid-js'
+import { createSignal, onMount } from 'solid-js'
 import styles from './Modal.module.css'
 import type { JSX } from 'solid-js'
 
@@ -16,17 +16,7 @@ interface ModalProps {
 
 export function Modal(props: ModalProps) {
   const [isVisible, setIsVisible] = createSignal(false)
-
-  onMount(() => {
-    if (props.isOpen) {
-      setIsVisible(true)
-      document.body.style.overflow = 'hidden'
-    }
-  })
-
-  onCleanup(() => {
-    document.body.style.overflow = ''
-  })
+  const [isMounted, setIsMounted] = createSignal(false)
 
   const handleClose = () => {
     setIsVisible(false)
@@ -42,6 +32,21 @@ export function Modal(props: ModalProps) {
       handleClose()
     }
   }
+
+  createEffect(() => {
+    if (props.isOpen && isMounted()) {
+      setIsVisible(true)
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      if (!isMounted()) return
+      document.body.style.overflow = ''
+    }
+  })
+
+  onMount(() => {
+    setIsMounted(true)
+  })
 
   if (!props.isOpen) return null
 
