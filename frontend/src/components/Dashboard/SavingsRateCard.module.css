@@ -1,0 +1,52 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cardLink {
+  font-size: 14px;
+  color: var(--primary);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.cardLink:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.savingsRateContainer {
+  padding: 12px;
+  background-color: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.savingsRateValue {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rateLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rateValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+}

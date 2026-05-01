@@ -1,0 +1,47 @@
+.periodNavigator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.prevButton,
+.nextButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.prevButton:hover,
+.nextButton:hover {
+  background-color: var(--bg-secondary);
+}
+
+.prevButton:disabled,
+.nextButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.periodDisplay {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.month {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.year {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}

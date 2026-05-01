@@ -1,0 +1,50 @@
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover {
+    background: var(--surface-hover);
+    border-color: var(--primary);
+  }
+
+  &:hover svg {
+    opacity: 1;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  span {
+    font-weight: 500;
+  }
+
+  .icon-only {
+    padding: 6px;
+  }
+}
+
+.inlineWrapper {
+  display: flex;
+  gap: 4px;
+}

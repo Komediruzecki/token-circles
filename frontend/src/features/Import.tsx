@@ -81,12 +81,12 @@ export default function Import() {
   const [categoryTypes, setCategoryTypes] = createSignal<Record<string, 'income' | 'expense'>>({})
 
   // Preview state
-  const [rows, setRows] = createSignal<string[][]>([])
-  const [headers, setHeaders] = createSignal<string[]>([])
+  const [_rows, setRows] = createSignal<string[][]>([])
+  const [_headers, setHeaders] = createSignal<string[]>([])
   const [selectedRows, setSelectedRows] = createSignal<Set<number>>(new Set())
   const [currentPage, setCurrentPage] = createSignal(1)
   const [rowsPerPage, setRowsPerPage] = createSignal(50)
-  const [duplicateIndices, setDuplicateIndices] = createSignal<number[]>([])
+  const [duplicateIndices, _setDuplicateIndices] = createSignal<number[]>([])
 
   // Loading/error
   const [loading, setLoading] = createSignal(false)
@@ -131,7 +131,7 @@ export default function Import() {
     currentRows().forEach((row) => {
       const catIdx = columnMapping()[currentHeaders()[0]]
       if (catIdx !== undefined && row[catIdx]) {
-        const catName = row[catIdx].toString().trim()
+        const catName = row[catIdx].trim()
         if (catName) categories.add(catName)
       }
     })
@@ -407,7 +407,7 @@ export default function Import() {
   }
 
   // Handle dropdown change for Google Sheets
-  const handleHeaderChange = (event: Event, field: string) => {
+  const _handleHeaderChange = (event: Event, field: string) => {
     const select = event.currentTarget as HTMLSelectElement
     handleColumnMappingChange(field, parseInt(select.value))
   }

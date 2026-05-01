@@ -3,8 +3,8 @@
  * Quick transaction entry (Ctrl+Shift+T shortcut)
  */
 import { createSignal, onCleanup, onMount } from 'solid-js'
+import { api } from '../core/api'
 import quickAddModalStyles from './QuickAddModal.module.css'
-import { api, formatCurrency } from '../core/api'
 import type { Category } from '../types/models'
 
 export interface QuickAddModalProps {

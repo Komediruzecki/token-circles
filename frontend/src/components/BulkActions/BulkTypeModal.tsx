@@ -2,7 +2,7 @@
  * Bulk Type Modal Component
  * Modal for changing type (income/expense) of selected transactions
  */
-import { createSignal, createEffect, onCleanup } from 'solid-js'
+import { createEffect,createSignal } from 'solid-js'
 import bulkTypeModalStyles from './BulkTypeModal.module.css'
 
 export interface BulkTypeModalProps {
@@ -67,10 +67,14 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
           <div class={bulkTypeModalStyles.typeList}>
             <button
               class={`${bulkTypeModalStyles.typeItem} ${selectedType() === 'income' ? bulkTypeModalStyles.selected : ''}`}
-              onClick={() => !isSubmitting() && setSelectedType('income')}
+              onClick={() => {
+                if (!isSubmitting()) {
+                  setSelectedType('income')
+                }
+              }}
               type="button"
             >
-              <div class={bulkTypeModalStyles.typeIcon income}>
+              <div class={bulkTypeModalStyles.typeIcon}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
@@ -92,10 +96,14 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
 
             <button
               class={`${bulkTypeModalStyles.typeItem} ${selectedType() === 'expense' ? bulkTypeModalStyles.selected : ''}`}
-              onClick={() => !isSubmitting() && setSelectedType('expense')}
+              onClick={() => {
+                if (!isSubmitting()) {
+                  setSelectedType('expense')
+                }
+              }}
               type="button"
             >
-              <div class={bulkTypeModalStyles.typeIcon expense}>
+              <div class={bulkTypeModalStyles.typeIcon}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
                 </svg>
@@ -119,7 +127,7 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
 
         <div class={bulkTypeModalStyles.footer}>
           <button
-            class={bulkTypeModalStyles cancelButton}
+            class={bulkTypeModalStyles.cancelButton}
             onClick={handleClose}
             disabled={isSubmitting()}
             type="button"

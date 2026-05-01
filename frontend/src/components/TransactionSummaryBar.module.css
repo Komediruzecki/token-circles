@@ -1,0 +1,43 @@
+.summaryBar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 80px;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.summaryValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.summaryValue.positive {
+  color: var(--success);
+}
+
+.summaryValue.negative {
+  color: var(--danger);
+}
+
+.summaryDivider {
+  width: 1px;
+  height: 32px;
+  background-color: var(--border-color);
+}

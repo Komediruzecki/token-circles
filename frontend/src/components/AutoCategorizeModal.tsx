@@ -3,8 +3,8 @@
  * Suggests categories based on description patterns and allows user to accept/reject
  */
 import { createEffect, createSignal, onCleanup } from 'solid-js'
-import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import { api } from '../core/api'
+import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
 
 export interface AutoCategorizeModalProps {
@@ -58,16 +58,15 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
   const applyCategory = (transactionId: number, categoryId: number) => {
     setPendingUpdates((prev) => ({ ...prev, [transactionId]: categoryId }))
     setApplying(true)
-    props.onApply(transactionId, categoryId).finally(() => {
-      setApplying(false)
-    })
+    props.onApply(transactionId, categoryId)
+    setApplying(false)
   }
 
   const applyAll = async () => {
     setApplying(true)
     try {
       for (const [transactionId, categoryId] of Object.entries(pendingUpdates())) {
-        await props.onApply(Number(transactionId), categoryId)
+        props.onApply(Number(transactionId), categoryId)
       }
       props.onClose()
     } finally {

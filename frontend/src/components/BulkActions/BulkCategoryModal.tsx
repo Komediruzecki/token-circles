@@ -2,7 +2,7 @@
  * Bulk Category Modal Component
  * Modal for changing categories of selected transactions
  */
-import { createSignal, createEffect, For, onCleanup } from 'solid-js'
+import { createEffect, createSignal, For } from 'solid-js'
 import bulkCategoryModalStyles from './BulkCategoryModal.module.css'
 
 export interface BulkCategoryModalProps {
@@ -72,7 +72,11 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
                 return (
                   <button
                     class={`${bulkCategoryModalStyles.categoryItem} ${isSelected() ? bulkCategoryModalStyles.selected : ''}`}
-                    onClick={() => !isSubmitting() && setSelectedCategory(category.id)}
+                    onClick={() => {
+                      if (!isSubmitting()) {
+                        setSelectedCategory(category.id)
+                      }
+                    }}
                     type="button"
                   >
                     <span
@@ -94,7 +98,7 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
 
         <div class={bulkCategoryModalStyles.footer}>
           <button
-            class={bulkCategoryModalStyles cancelButton}
+            class={bulkCategoryModalStyles.cancelButton}
             onClick={handleClose}
             disabled={isSubmitting()}
             type="button"

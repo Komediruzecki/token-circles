@@ -2,15 +2,15 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal, onMount } from 'solid-js'
+import { createSignal, onMount } from 'solid-js'
+import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import CategoryMultiSelect from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
-import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import Pagination from '../components/Pagination'
 import ReconciliationModal from '../components/ReconciliationModal'
+import styles from '../components/TransactionsPage.module.css'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
-import styles from '../components/TransactionsPage.module.css'
 import { api } from '../core/api.js'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
@@ -316,7 +316,7 @@ export default function Transactions() {
   }
 
   // Reconcile handler (mock - can be extended)
-  const handleReconcile = async (transactionId: number) => {
+  const _handleReconcile = async (transactionId: number) => {
     try {
       await api.toggleReconcile(transactionId)
       // Reload transactions to update the view

@@ -3,17 +3,15 @@
  */
 
 import { createSignal, onMount } from 'solid-js'
-import Chart from '../components/Chart'
 import ChartWrapper from '../components/ChartWrapper'
 import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
 import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
 import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
 import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
-import { StatCard } from '../components/Dashboard/StatCard'
-import { PeriodPills } from '../components/PeriodPills'
 import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
-import { api, formatCurrency, formatDate, toast } from '../core/api'
+import { PeriodPills } from '../components/PeriodPills'
+import { api, formatCurrency, toast } from '../core/api'
 import type {PeriodPreset} from '../components/Dashboard/PeriodNavigator';
 import type * as Models from '../types/models'
 
@@ -21,10 +19,9 @@ export default function Dashboard() {
   const [month, setMonth] = createSignal(5)
   const [year, setYear] = createSignal(2026)
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
-  const [momMetrics, setMomMetrics] = createSignal<Models.DashboardMetrics | null>(null)
+  const [momMetrics, _setMomMetrics] = createSignal<Models.DashboardMetrics | null>(null)
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [loading, setLoading] = createSignal(true)
-  const [selectedPeriod, setSelectedPeriod] = createSignal<PeriodPreset>('this-month')
   const [pillPeriod, setPillPeriod] = createSignal('month')
 
   onMount(() => {
@@ -53,17 +50,17 @@ export default function Dashboard() {
     }
   }
 
-  const handleMonthChange = (newMonth: number) => {
+  const _handleMonthChange = (newMonth: number) => {
     setMonth(newMonth)
     void loadMonthlyData()
   }
 
-  const handleYearChange = (newYear: number) => {
+  const _handleYearChange = (newYear: number) => {
     setYear(newYear)
     void loadMonthlyData()
   }
 
-  const handlePrev = () => {
+  const _handlePrev = () => {
     if (month() === 1) {
       setMonth(12)
       setYear(year() - 1)
@@ -73,7 +70,7 @@ export default function Dashboard() {
     void loadMonthlyData()
   }
 
-  const handleNext = () => {
+  const _handleNext = () => {
     if (month() === 12) {
       setMonth(1)
       setYear(year() + 1)
@@ -83,7 +80,7 @@ export default function Dashboard() {
     void loadMonthlyData()
   }
 
-  const handlePresetChange = async (preset: PeriodPreset) => {
+  const _handlePresetChange = async (preset: PeriodPreset) => {
     setSelectedPeriod(preset)
     const now = new Date()
     let m = now.getMonth() + 1
@@ -127,9 +124,8 @@ export default function Dashboard() {
   const handlePillChange = async (pillId: string) => {
     setPillPeriod(pillId)
     const now = new Date()
-    let m = now.getMonth() + 1
+    const m = now.getMonth() + 1
     const y = now.getFullYear()
-    const today = now.getDate()
 
     switch (pillId) {
       case 'today':

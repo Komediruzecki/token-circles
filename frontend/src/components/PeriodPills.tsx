@@ -36,7 +36,7 @@ export function PeriodPills(props: PeriodPillsProps) {
         <button
           key={period.id}
           class={`${periodPillsStyles.pill} ${props.value === period.id ? periodPillsStyles.pillActive : ''}`}
-          onClick={() => props.onChange(period.id)}
+          onClick={() => { props.onChange(period.id); }}
           type="button"
         >
           {period.icon && (

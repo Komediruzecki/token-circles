@@ -336,7 +336,6 @@ export async function authLogin(username?: string, password?: string): Promise<v
   try {
     // Use provided credentials or show login prompt
     if (!username || !password) {
-      // Show custom login dialog
       const result = await showLoginDialog()
       if (result) {
         username = result.username
@@ -374,7 +373,7 @@ export async function authLogout(): Promise<void> {
 /**
  * Show custom login dialog
  */
-function showLoginDialog(): { username: string; password: string } | null {
+function showLoginDialog(): Promise<{ username: string; password: string } | null> {
   return new Promise((resolve) => {
     // Create dialog overlay
     const overlay = document.createElement('div')

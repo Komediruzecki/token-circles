@@ -2,7 +2,7 @@
  * Tag Filter Component
  * Dropdown filter for filtering transactions by tags
  */
-import { createSignal, createEffect, For } from 'solid-js'
+import { createEffect, createSignal, For } from 'solid-js'
 import tagFilterStyles from './TagFilter.module.css'
 
 export interface TagFilterProps {
@@ -77,7 +77,7 @@ export function TagFilter(props: TagFilterProps) {
                   if (allSelected()) {
                     props.onClear()
                   } else {
-                    tags.forEach((tag) => props.onToggle(tag))
+                    tags.forEach((tag) => { props.onToggle(tag); })
                   }
                 }}
                 type="button"
@@ -93,7 +93,7 @@ export function TagFilter(props: TagFilterProps) {
                   <div class={tagFilterStyles.tagItem}>
                     <button
                       class={`${tagFilterStyles.tagCheckbox} ${isSelected() ? tagFilterStyles.selected : ''}`}
-                      onClick={() => props.onToggle(tag)}
+                      onClick={() => { props.onToggle(tag); }}
                       type="button"
                     >
                       <span class={tagFilterStyles.checkboxIndicator}>

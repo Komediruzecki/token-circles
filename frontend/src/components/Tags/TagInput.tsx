@@ -15,7 +15,7 @@ export interface TagInputProps {
 
 export function TagInput(props: TagInputProps) {
   const [tagText, setTagText] = createSignal('')
-  const [isFocused, setIsFocused] = createSignal(false)
+  const [_isFocused, _setIsFocused] = createSignal(false)
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -36,7 +36,7 @@ export function TagInput(props: TagInputProps) {
     }
   }
 
-  const removeTag = (tag: string) => {
+  const removeTag = (_tag: string) => {
     // Called when user clicks away, tag is automatically added
     if (tagText().trim()) {
       props.onAdd(tagText().trim())

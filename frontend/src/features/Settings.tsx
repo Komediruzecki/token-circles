@@ -5,7 +5,6 @@
 import { createEffect, createSignal, onMount } from 'solid-js'
 import styles from '../components/SettingsPage.module.css'
 import { setStorageMode } from '../core/storage/storageFactory'
-import { apiPost } from '../utils/api'
 
 export default function Settings() {
   const [localCurrency, setLocalCurrency] = createSignal('USD')
