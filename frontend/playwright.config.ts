@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import os from 'os'
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -6,10 +7,10 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   timeout: 60000,
   testDir: './tests',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: process.env.CI !== undefined,
   retries: 0,
-  workers: 1,
+  workers: os.cpus().length,
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:3801',
