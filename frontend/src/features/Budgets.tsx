@@ -77,17 +77,21 @@ export default function Budgets() {
     setError(null)
 
     try {
-      const [allocationsData, summaryData, forecastDataRaw] = await Promise.all([
-        apiGet<CategoryAllocation[]>(`/api/budgets/zero-based?month=${month()}`),
-        apiGet<ZeroBasedSummary>(`/api/budgets/zero-based/summary?month=${month()}`),
+      const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
+        apiGet<any>(`/api/budgets/zero-based?month=${month()}`),
+        apiGet<any>(`/api/budgets/zero-based/summary?month=${month()}`),
         apiGet<ForecastData>(`/api/budgets/forecast?month=${month()}`).catch(() => null),
       ])
 
-      setAllocations(allocationsData)
-      setSummary(summaryData)
+      const allocationsList = allocationsRes?.allocations || allocationsRes?.categories || []
+      setAllocations(allocationsList)
+      setSummary({
+        ...summaryRes,
+        categories: summaryRes?.allocations || summaryRes?.categories || [],
+      })
       setBudgetMessage(
-        summaryData.zero_based_remaining > 0
-          ? `Unallocated: $${summaryData.zero_based_remaining.toFixed(2)}`
+        (summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0) > 0
+          ? `Unallocated: $${(summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0).toFixed(2)}`
           : `All income allocated!`
       )
 

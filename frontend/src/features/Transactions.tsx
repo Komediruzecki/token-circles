@@ -2,7 +2,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, onMount } from 'solid-js'
 import FilterBar from '../components/FilterBar'
 import Pagination from '../components/Pagination'
 import styles from '../components/TransactionsPage.module.css'
@@ -299,7 +299,7 @@ export default function Transactions() {
   }
 
   // Initial load
-  createEffect(() => {
+  onMount(() => {
     _loadTransactions()
   })
 

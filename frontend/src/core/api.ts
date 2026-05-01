@@ -103,6 +103,9 @@ export class ApiClient {
       const response = await fetch(url, requestOptions)
 
       if (!response.ok) {
+        if (response.status === 401) {
+          window.dispatchEvent(new Event('auth:required'))
+        }
         const errorData = await response.json().catch(() => ({
           error: `HTTP ${response.status}`,
         }))

@@ -25,10 +25,23 @@ export function App() {
   const [currentProfile, setCurrentProfile] = createSignal<any>(null)
   const [showDropdown, setShowDropdown] = createSignal(false)
 
-  const loadProfiles = async () => {
+  const loadProfiles = async (autoSelect = false) => {
     try {
       const data = await api.getProfiles()
       setProfiles(data)
+      
+      if (autoSelect && data.length > 0) {
+        const savedId = localStorage.getItem('currentProfileId')
+        let activeProfile = null
+        if (savedId) {
+          activeProfile = data.find((p) => p.id === parseInt(savedId))
+        }
+        if (!activeProfile) {
+          activeProfile = data[0]
+          localStorage.setItem('currentProfileId', activeProfile.id.toString())
+        }
+        setCurrentProfile(activeProfile)
+      }
     } catch {
       setProfiles([])
     }
@@ -39,6 +52,9 @@ export function App() {
       localStorage.setItem('currentProfileId', profileId.toString())
       setCurrentProfile(profiles().find((p) => p.id === profileId))
       setShowDropdown(false)
+      // Force page content to refresh by briefly showing loading
+      _setIsLoading(true)
+      setTimeout(() => _setIsLoading(false), 50)
     } catch {
       console.error('Failed to select profile')
     }
@@ -80,8 +96,25 @@ export function App() {
     }
   }
 
-  onMount(() => {
-    loadProfiles()
+  onMount(async () => {
+    // Initialize theme
+    const savedDarkMode = localStorage.getItem('darkMode')
+    if (savedDarkMode === 'true') {
+      document.documentElement.setAttribute('data-theme', 'dark')
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light')
+    }
+
+    const isLoggedIn = await api.checkLogin()
+    if (isLoggedIn) {
+      await loadProfiles(true)
+    } else {
+      await loadProfiles(false)
+      // Default to first profile if not strictly logged in but profiles exist
+      if (profiles().length > 0) {
+        setCurrentProfile(profiles()[0])
+      }
+    }
 
     // Parse initial hash from URL
     const hash = window.location.hash.slice(1)
@@ -99,7 +132,20 @@ export function App() {
       }
     }
     window.addEventListener('hashchange', handleHashChange)
-    onCleanup(() => { window.removeEventListener('hashchange', handleHashChange); })
+
+    // Listen for unauthorized API calls
+    const handleAuthRequired = () => {
+      // Clear profile state and prompt login
+      setCurrentProfile(null)
+      localStorage.removeItem('currentProfileId')
+      handleLogin()
+    }
+    window.addEventListener('auth:required', handleAuthRequired)
+
+    onCleanup(() => { 
+      window.removeEventListener('hashchange', handleHashChange)
+      window.removeEventListener('auth:required', handleAuthRequired)
+    })
   })
 
   createMemo(() => {
@@ -236,22 +282,33 @@ export function App() {
         </div>
         <div class={profileStyles.profileSelector}>
           <div class={profileStyles.profileDropdown}>
-            <button class={profileStyles.profileDropdownBtn} onClick={toggleDropdown}>
-              <span class={profileStyles.profileName}>
-                {currentProfile() ? currentProfile().name : 'Loading...'}
-              </span>
-              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <button 
+              class={profileStyles.profileDropdownBtn} 
+              onClick={toggleDropdown}
+              style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', width: '100%' }}
+            >
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                <div style={{ width: '24px', height: '24px', 'border-radius': '50%', background: 'var(--primary)', color: 'white', display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'font-size': '12px', 'font-weight': 'bold' }}>
+                  {currentProfile() ? currentProfile().name.charAt(0).toUpperCase() : '?'}
+                </div>
+                <span class={profileStyles.profileName} style={{ 'font-weight': 600 }}>
+                  {currentProfile() ? currentProfile().name : 'Not Logged In'}
+                </span>
+              </div>
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: '16px', height: '16px', transition: 'transform 0.2s', transform: showDropdown() ? 'rotate(180deg)' : 'none' }}>
                 <path d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            <div class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? 'visible' : ''}`}>
+            <div class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}>
+              <div class={profileStyles.profileDropdownHeader}>Switch Profile</div>
               {profiles().length > 0 ? (
                 profiles().map((profile) => (
                   <div
                     key={profile.id}
-                    class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? 'active' : ''}`}
+                    class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
                     onClick={() => selectProfile(profile.id)}
                   >
+                    <div style={{ width: '8px', height: '8px', 'border-radius': '50%', background: currentProfile()?.id === profile.id ? 'var(--primary)' : 'transparent', border: currentProfile()?.id === profile.id ? 'none' : '1px solid var(--border)', 'margin-right': '8px' }}></div>
                     {profile.name}
                   </div>
                 ))
@@ -259,6 +316,31 @@ export function App() {
                 <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
                   Sign In
                 </div>
+              )}
+              
+              <div class={profileStyles.profileDropdownItem} onClick={() => {
+                const name = prompt('Enter new profile name:');
+                if (name && name.trim()) {
+                  api.createProfile(name).then(() => loadProfiles(true));
+                }
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ 'margin-right': '8px' }}>
+                  <path d="M12 4v16m8-8H4" />
+                </svg>
+                Create Profile
+              </div>
+
+              {currentProfile() && (
+                <>
+                  <div class={profileStyles.profileDropdownDivider}></div>
+                  <div class={profileStyles.profileDropdownItem} onClick={handleLogin} style={{ color: 'var(--text-secondary)' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ 'margin-right': '8px' }}>
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    Manage Account
+                  </div>
+                </>
               )}
             </div>
           </div>

@@ -178,11 +178,17 @@ export default function Import() {
     setResultMessage(null)
 
     try {
+      const getProfileHeaders = () => {
+        const pid = localStorage.getItem('currentProfileId') || '1'
+        return { 'X-Profile-Id': pid }
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 
       const response = await fetch('/api/import/upload', {
         method: 'POST',
+        headers: getProfileHeaders(),
         body: formData,
       })
 
@@ -231,9 +237,14 @@ export default function Import() {
     setError(null)
 
     try {
+      const getProfileHeaders = () => {
+        const pid = localStorage.getItem('currentProfileId') || '1'
+        return { 'X-Profile-Id': pid }
+      }
+
       const response = await fetch('/api/import/googlesheet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
         body: JSON.stringify({ url, sheetName: selectedSheet() }),
       })
 
@@ -253,9 +264,11 @@ export default function Import() {
       setHeaders(data.headers || [])
       setRows(data.rows || [])
 
-      // If returning with specific sheet, go to mapping
-      if (selectedSheet()) {
-        setActiveStep('mapping')
+      // If returning with specific sheet and we have headers, go to mapping
+      if (selectedSheet() && data.headers && data.headers.length > 0) {
+        goToMapping()
+      } else {
+        setActiveStep('upload')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch Google Sheet')
@@ -342,11 +355,16 @@ export default function Import() {
         rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
       }
 
+      const getProfileHeaders = () => {
+        const pid = localStorage.getItem('currentProfileId') || '1'
+        return { 'X-Profile-Id': pid }
+      }
+
       // Server-side duplicate detection for new-only mode
       if (mode === 'new' && hasDuplicateCount() && hasDuplicateCount() > 0) {
         const previewResponse = await fetch('/api/import/file-sheet', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
           body: JSON.stringify({
             fileId: fileId(),
             sheetName: selectedSheet(),
@@ -362,7 +380,7 @@ export default function Import() {
 
       const response = await fetch('/api/import/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
         body: JSON.stringify({
           rows: rowsToImport,
           mapping,

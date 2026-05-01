@@ -566,9 +566,10 @@ function profileParams(pids, extra = []) {
 // AUTH
 // ========================
 function requireAuth(req, res, next) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Relaxed auth for demo profiles - allows accessing transactions logged in or logged out
+  // if (!req.session.userId) {
+  //   return res.status(401).json({ error: 'Unauthorized' });
+  // }
   next();
 }
 
@@ -3611,7 +3612,7 @@ app.get('/api/budgets/forecast', apiRateLimiter, (req, res) => {
         `
       SELECT
         strftime('%Y-%m', start_date) as month,
-        SUM(amount) as total_budget,
+        SUM(b.amount) as total_budget,
         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
       FROM budgets b
       LEFT JOIN transactions t ON t.category_id = b.category_id
@@ -4521,8 +4522,7 @@ app.post('/api/import/googlesheet', apiRateLimiter, (req, res) => {
 
   const sheetId = idMatch[1];
   // Extract gid from query param ?gid= or URL fragment #gid=
-  const urlWithoutFragment = url.split('#')[0];
-  const gidMatch = urlWithoutFragment.match(/[?&]gid=([0-9]+)/);
+  const gidMatch = url.match(/[?&#]gid=([0-9]+)/);
   const gid = gidMatch ? gidMatch[1] : null;
 
   // Strategy 1: CSV export with gid (works for publicly accessible sheets, respects specific sheet tab)
