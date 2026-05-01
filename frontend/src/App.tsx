@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createMemo, createSignal, Show,Suspense } from 'solid-js'
+import { createEffect, createMemo, createSignal, Show,Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
