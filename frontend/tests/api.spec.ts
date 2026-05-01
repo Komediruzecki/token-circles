@@ -57,18 +57,24 @@ test.describe('API Endpoint Verification', () => {
   })
 
   test('verify transactions summary API', async ({ request }) => {
-    const response = await request.get('http://localhost:3847/api/transactions/summary')
+    const response = await request.get('http://localhost:3847/api/transactions/summary', {
+      headers: { 'x-profile-id': '1' }
+    })
     expect(response.status()).toBe(200)
 
     const data = await response.json()
-    expect(data).toHaveProperty('total_amount')
-    expect(data).toHaveProperty('total_expense')
-    expect(data).toHaveProperty('total_income')
     expect(data).toHaveProperty('count')
+    expect(data).toHaveProperty('totalAmount')
+    expect(data).toHaveProperty('totalExpense')
+    expect(data).toHaveProperty('totalIncome')
+    expect(data).toHaveProperty('totalExpenses')
+    expect(data).toHaveProperty('netBalance')
   })
 
   test('verify transactions API pagination', async ({ request }) => {
-    const response = await request.get('http://localhost:3847/api/transactions?limit=20')
+    const response = await request.get('http://localhost:3847/api/transactions?limit=20', {
+      headers: { 'x-profile-id': '1' }
+    })
     expect(response.status()).toBe(200)
 
     const data = await response.json()
@@ -78,7 +84,8 @@ test.describe('API Endpoint Verification', () => {
 
   test('verify transactions filter by date', async ({ request }) => {
     const response = await request.get(
-      'http://localhost:3847/api/transactions?start_date=2026-01-01'
+      'http://localhost:3847/api/transactions?start_date=2026-01-01',
+      { headers: { 'x-profile-id': '1' } }
     )
     expect(response.status()).toBe(200)
 
@@ -136,7 +143,9 @@ test.describe('API Endpoint Verification', () => {
   })
 
   test('verify categories API', async ({ request }) => {
-    const response = await request.get('http://localhost:3847/api/categories')
+    const response = await request.get('http://localhost:3847/api/categories', {
+      headers: { 'x-profile-id': '1' }
+    })
     expect(response.status()).toBe(200)
 
     const data = await response.json()
@@ -150,7 +159,9 @@ test.describe('API Endpoint Verification', () => {
   })
 
   test('verify categories filter by type', async ({ request }) => {
-    const response = await request.get('http://localhost:3847/api/categories?type=expense')
+    const response = await request.get('http://localhost:3847/api/categories?type=expense', {
+      headers: { 'x-profile-id': '1' }
+    })
     expect(response.status()).toBe(200)
 
     const data = await response.json()
@@ -196,7 +207,9 @@ test.describe('API Endpoint Verification', () => {
   })
 
   test('verify API CORS headers', async ({ request }) => {
-    const response = await request.get('http://localhost:3847/api/accounts')
+    const response = await request.get('http://localhost:3847/api/accounts', {
+      headers: { Origin: 'http://localhost:3801' }
+    })
     expect(response.headers()['access-control-allow-origin']).toBeDefined()
   })
 })

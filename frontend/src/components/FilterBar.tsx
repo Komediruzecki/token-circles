@@ -23,8 +23,8 @@ interface FilterState {
 interface FilterBarProps {
   categories: FilterOption[]
   tags: FilterOption[]
-  selectedCategories: number[]
-  selectedTags: number[]
+  selectedCategories: number[] | undefined
+  selectedTags: number[] | undefined
   dateRange: { from: string; to: string }
   selectedPreset: string
   onChange: (filters: FilterState) => void
@@ -33,6 +33,9 @@ interface FilterBarProps {
 export default function FilterBar(props: FilterBarProps) {
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = createSignal(false)
   const [isTagDropdownOpen, setIsTagDropdownOpen] = createSignal(false)
+
+  const selectedCategories = () => props.selectedCategories || []
+  const selectedTags = () => props.selectedTags || []
 
   const toggleCategoryDropdown = () => {
     setIsCategoryDropdownOpen(!isCategoryDropdownOpen())
@@ -43,31 +46,31 @@ export default function FilterBar(props: FilterBarProps) {
   }
 
   const toggleCategory = (categoryId: number) => {
-    const idx = props.selectedCategories.indexOf(categoryId)
+    const idx = selectedCategories().indexOf(categoryId)
     if (idx >= 0) {
       props.onChange({
         ...props,
-        selectedCategories: props.selectedCategories.filter((id) => id !== categoryId),
+        selectedCategories: selectedCategories().filter((id) => id !== categoryId),
       })
     } else {
       props.onChange({
         ...props,
-        selectedCategories: [...props.selectedCategories, categoryId],
+        selectedCategories: [...selectedCategories(), categoryId],
       })
     }
   }
 
   const toggleTag = (tagId: number) => {
-    const idx = props.selectedTags.indexOf(tagId)
+    const idx = selectedTags().indexOf(tagId)
     if (idx >= 0) {
       props.onChange({
         ...props,
-        selectedTags: props.selectedTags.filter((id) => id !== tagId),
+        selectedTags: selectedTags().filter((id) => id !== tagId),
       })
     } else {
       props.onChange({
         ...props,
-        selectedTags: [...props.selectedTags, tagId],
+        selectedTags: [...selectedTags(), tagId],
       })
     }
   }
@@ -83,13 +86,13 @@ export default function FilterBar(props: FilterBarProps) {
   }
 
   const categoryLabel = () => {
-    if (props.selectedCategories.length === 0) return 'All Categories'
-    return `${props.selectedCategories.length} Selected`
+    if (selectedCategories().length === 0) return 'All Categories'
+    return `${selectedCategories().length} Selected`
   }
 
   const tagLabel = () => {
-    if (props.selectedTags.length === 0) return 'All Tags'
-    return `${props.selectedTags.length} Selected`
+    if (selectedTags().length === 0) return 'All Tags'
+    return `${selectedTags().length} Selected`
   }
 
   const handlePresetClick = (preset: string) => {
@@ -134,7 +137,7 @@ export default function FilterBar(props: FilterBarProps) {
                   <label class={styles.checkboxLabel}>
                     <input
                       type="checkbox"
-                      checked={props.selectedCategories.length === 0}
+                      checked={selectedCategories().length === 0}
                       onChange={() => {
                         clearFilters()
                       }}
@@ -147,7 +150,7 @@ export default function FilterBar(props: FilterBarProps) {
                     <label class={styles.checkboxLabel}>
                       <input
                         type="checkbox"
-                        checked={props.selectedCategories.includes(cat.id)}
+                        checked={selectedCategories().includes(cat.id)}
                         onChange={() => {
                           toggleCategory(cat.id)
                         }}
@@ -181,7 +184,7 @@ export default function FilterBar(props: FilterBarProps) {
                   <label class={styles.checkboxLabel}>
                     <input
                       type="checkbox"
-                      checked={props.selectedTags.length === 0}
+                      checked={selectedTags().length === 0}
                       onChange={() => {
                         clearFilters()
                       }}
@@ -194,7 +197,7 @@ export default function FilterBar(props: FilterBarProps) {
                     <label class={styles.checkboxLabel}>
                       <input
                         type="checkbox"
-                        checked={props.selectedTags.includes(tag.id)}
+                        checked={selectedTags().includes(tag.id)}
                         onChange={() => {
                           toggleTag(tag.id)
                         }}

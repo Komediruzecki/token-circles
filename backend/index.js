@@ -857,17 +857,35 @@ app.post('/api/settings/set-storage', apiRateLimiter, (req, res) => {
 app.get('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
+    const { type, income, expense } = req.query;
+    let whereClause = 'WHERE c.profile_id = ?';
+    const params = [pid];
+
+    if (type || income || expense) {
+      const types = [];
+      if (type === 'income') types.push('income');
+      if (type === 'expense') types.push('expense');
+      if (income === 'true') types.push('income');
+      if (expense === 'true') types.push('expense');
+
+      if (types.length > 0) {
+        const placeholders = types.map(() => '?').join(',');
+        whereClause += ` AND c.type IN (${placeholders})`;
+        params.push(...types);
+      }
+    }
+
     const rows = db
       .prepare(
         `
       SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, p.name as parent_name
       FROM categories c
       LEFT JOIN categories p ON c.parent_id = p.id AND p.profile_id = c.profile_id
-      WHERE c.profile_id = ?
+      ${whereClause}
       ORDER BY c.type, c.name
     `
       )
-      .all(pid);
+      .all(...params);
     res.json(toCamelCase(rows));
   } catch (err) {
     console.error(err.message);
@@ -1929,12 +1947,12 @@ app.get('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
       }
     }
     const total = db.prepare(countSql).get(...cparams).c;
-    res.json({
+    res.json(toCamelCase({
       rows,
       total,
       limit: limit ? parseInt(limit) : total,
       offset: offset ? parseInt(offset) : 0,
-    });
+    }));
   } catch (err) {
     console.error(err.message);
     logError('error', err);
@@ -8187,6 +8205,13 @@ if (process.env.NODE_ENV === 'test') {
 
 // Serve index.html for client-side routes (SPA navigation) only
 // Static files (JS, CSS) are served by the middleware above
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not Found' });
+  }
+  next();
+});
+
 app.get('*', (req, res) => {
   // For requests to /frontend/dist/... or /frontend/css/...:
   // These should be handled by Apache (Direct access to static files)

@@ -418,6 +418,8 @@ export default function Transactions() {
           placeholder="All categories"
         />
         <FilterBar
+          categories={categories()}
+          selectedCategories={selectedCategories()}
           tags={tags()}
           selectedTags={selectedTags()}
           dateRange={dateRange()}

@@ -1,7 +1,61 @@
 /**
- * Bills Component
- * Manages upcoming bills and payment tracking
+ * Bills Component - EARS Specification
+ *
+ * GIVEN: A user is viewing the Bills page
+ * WHEN: The page loads
+ * THEN: The header displays "Bills" and page subtitle "Track upcoming payments and never miss a due date"
+ *
+ * GIVEN: The user has unpaid bills
+ * WHEN: The page displays bills
+ * THEN: Bills are shown in the Upcoming Bills section with:
+ *       - Bill name
+ *       - Due date
+ *       - Days until due (with special messages: "Due today", "Due tomorrow", "X days overdue", "Due in X days")
+ *       - Amount in currency
+ *       - Frequency (Monthly, Weekly, Biweekly)
+ *       - Icon (📝 for regular, 🤖 for autopay)
+ *       - Mark as Paid button
+ *
+ * GIVEN: The user has paid bills
+ * WHEN: The page displays paid bills
+ * THEN: Bills are shown in the Paid Bills section with:
+ *       - Bill name
+ *       - Due date
+ *       - "Paid" status
+ *       - Delete button
+ *
+ * GIVEN: The user has all bills
+ * WHEN: The page displays all bills
+ * THEN: All bills are shown in the All Bills section with the same details as unpaid bills,
+ *       but without the Mark as Paid button (use Delete button instead for paid bills)
+ *
+ * GIVING: A new bill modal
+ * WHEN: The user clicks "Add Bill" button
+ * THEN: The modal opens with form fields:
+ *       - Bill Name (required, text input)
+ *       - Amount (required, number input)
+ *       - Due Date (required, date input)
+ *       - Category (select with existing expense categories)
+ *       - + Add Category button
+ *       - Frequency (select: Monthly, Weekly, Biweekly)
+ *       - Autopay toggle
+ *       - Cancel and Add Bill buttons in footer
+ *
+ * GIVING: A category modal
+ * WHEN: The user clicks "+ Add Category"
+ * THEN: The modal opens with form fields:
+ *       - Category Name (required)
+ *       - Type (select: Expense, Income)
+ *       - Color (color picker)
+ *       - Cancel and Add buttons
+ *
+ * ENSURING: Data integrity
+ * WHEN: A bill is marked as paid
+ * THEN: The bill is moved from upcoming/paid lists to paid list
+ * WHEN: A bill is deleted
+ * THEN: The bill is removed from all lists with confirmation
  */
+
 import { createSignal, onMount } from 'solid-js'
 import styles from '../components/BillsPage.module.css'
 import { formatCurrency } from '../core/api'
@@ -216,18 +270,22 @@ export default function Bills() {
   })
 
   return (
-    <div class={`page page-bills page-enter ${styles.billsPage}`}>
+    <div class={`${styles.billsPage} page page-bills page-enter`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1>Bills</h1>
-          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <h1 data-test-id="bills-header">Bills</h1>
+          <button
+            data-test-id="bills-add-btn"
+            class={styles.btnPrimary}
+            onClick={() => setShowAddModal(true)}
+          >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Bill
           </button>
         </div>
-        <p class={styles.pageSubtitle} data-test-id="bills-subtitle">
+        <p data-test-id="bills-subtitle" class={styles.pageSubtitle}>
           Track upcoming payments and never miss a due date
         </p>
       </div>
@@ -246,10 +304,12 @@ export default function Bills() {
                 class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
               >
                 <div class={styles.billMain}>
-                  <div class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
+                  <div data-test-id="bill-icon" class={styles.billIcon}>
+                    {bill.autopay ? '🤖' : '📝'}
+                  </div>
                   <div class={styles.billInfo}>
-                    <h3 class={styles.billName}>{bill.name}</h3>
-                    <p class={styles.billDetails}>
+                    <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
+                    <p data-test-id="bill-details" class={styles.billDetails}>
                       {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
                       {bill.frequency === 'monthly'
                         ? 'Monthly'
@@ -260,12 +320,13 @@ export default function Bills() {
                   </div>
                 </div>
                 <div
+                  data-test-id="bill-amount-container"
                   class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
                 >
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   {!bill.paid && (
                     <button
-                      data-test-id="mark-paid-btn"
+                      data-test-id="bill-mark-paid-btn"
                       class={`${styles.btnPrimary} ${styles.btnSm}`}
                       onClick={() => markPaid(bill.id)}
                     >
@@ -290,15 +351,16 @@ export default function Bills() {
             {paid().map((bill) => (
               <div data-test-id="bill-card" class={`${styles.billCard} ${styles.paid}`}>
                 <div class={styles.billMain}>
-                  <div class={styles.billIcon}>✅</div>
+                  <div data-test-id="bill-icon" class={styles.billIcon}>✅</div>
                   <div class={styles.billInfo}>
-                    <h3 class={styles.billName}>{bill.name}</h3>
-                    <p class={styles.billDetails}>Paid {formatDate(bill.due_date)}</p>
+                    <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
+                    <p data-test-id="bill-details" class={styles.billDetails}>Paid {formatDate(bill.due_date)}</p>
                   </div>
                 </div>
                 <div class={styles.billAmount}>
                   <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                   <button
+                    data-test-id="bill-delete-btn"
                     class={`${styles.btnSm} ${styles.btnGhost}`}
                     onClick={() => deleteBill(bill.id)}
                   >
@@ -334,7 +396,7 @@ export default function Bills() {
             <p>No bills yet</p>
             <p>Add your first bill to start tracking your payments.</p>
             <button
-              data-test-id="add-bill-btn-empty"
+              data-test-id="bills-add-btn-empty"
               class={styles.btnPrimary}
               onClick={() => setShowAddModal(true)}
             >
@@ -346,10 +408,10 @@ export default function Bills() {
             {bills().map((bill) => (
               <div class={styles.billCard}>
                 <div class={styles.billMain}>
-                  <div class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
+                  <div data-test-id="bill-icon" class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
                   <div class={styles.billInfo}>
-                    <h3 class={styles.billName}>{bill.name}</h3>
-                    <p class={styles.billDetails}>
+                    <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
+                    <p data-test-id="bill-details" class={styles.billDetails}>
                       {formatDate(bill.due_date)} •{' '}
                       {bill.frequency === 'monthly'
                         ? 'Monthly'
@@ -365,7 +427,7 @@ export default function Bills() {
                   <div class={styles.billActions}>
                     {!bill.paid ? (
                       <button
-                        data-test-id="mark-paid-btn"
+                        data-test-id="bill-mark-paid-btn"
                         class={`${styles.btnPrimary} ${styles.btnSm}`}
                         onClick={() => markPaid(bill.id)}
                       >
@@ -373,7 +435,7 @@ export default function Bills() {
                       </button>
                     ) : (
                       <button
-                        data-test-id="delete-bill-btn"
+                        data-test-id="bill-delete-btn"
                         class={`${styles.btnSm} ${styles.btnGhost}`}
                         onClick={() => deleteBill(bill.id)}
                       >
