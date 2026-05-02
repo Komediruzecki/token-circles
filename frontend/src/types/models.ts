@@ -33,6 +33,7 @@ export type PageName =
   | 'analytics'
   | 'compound'
   | 'emergency'
+  | 'rentBuy'
 
 // ============ PROFILE ============
 export interface Profile {

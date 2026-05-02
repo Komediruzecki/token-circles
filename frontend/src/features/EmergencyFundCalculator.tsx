@@ -39,7 +39,7 @@ export default function EmergencyFundCalculator() {
   const loadEmergencyFund = async () => {
     setLoading(true)
     try {
-      const data = await apiGet('/api/calculator/emergency-fund')
+      const data: any = await apiGet('/api/calculator/emergency-fund')
       setMonthlyExpenses(data.avgMonthlyExpenses || 0)
       setTotalEmergencyFund(data.totalEmergencyFund || 0)
       setMonthsWithData(data.monthsWithData || 0)
@@ -51,15 +51,7 @@ export default function EmergencyFundCalculator() {
     }
   }
 
-  const _coverageData = () => {
-    return coverage().map((c) => ({
-      x: c.months,
-      y: c.coveragePct,
-      status: c.status,
-      required: c.required,
-      current: c.current,
-    }))
-  }
+  // _coverageData - placeholder (functionality can be extended)
 
   const downloadChart = () => {
     const canvas = document.getElementById('emergencyFundChart') as HTMLCanvasElement

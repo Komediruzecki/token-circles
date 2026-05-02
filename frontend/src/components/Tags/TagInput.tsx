@@ -3,7 +3,6 @@
  * Inline tag creation with enter key to add
  */
 import { createSignal } from 'solid-js'
-import type { TagInputProps } from './TagInput.module.css'
 
 export interface TagInputProps {
   existingTags: () => string[]
@@ -36,8 +35,8 @@ export function TagInput(props: TagInputProps) {
     }
   }
 
-  const removeTag = (_tag: string) => {
-    // Called when user clicks away, tag is automatically added
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const removeTag = () => {
     if (tagText().trim()) {
       props.onAdd(tagText().trim())
     }
@@ -46,8 +45,25 @@ export function TagInput(props: TagInputProps) {
   return (
     <div
       class={TagInputStyles.tagInput}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => { removeTag(tagText()) }}
+    >
+      <input
+        class={TagInputStyles.input}
+        type="text"
+        value={tagText()}
+        onInput={(e) => setTagText(e.currentTarget.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={removeTag}
+        placeholder={props.placeholder || 'Add tag and press Enter'}
+        autocomplete="off"
+        autofocus={props.autoFocus}
+      />
+      <span class={TagInputStyles.divider}>+</span>
+    </div>
+  )
+
+  return (
+    <div
+      class={TagInputStyles.tagInput}
     >
       <input
         class={TagInputStyles.input}

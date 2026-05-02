@@ -96,7 +96,10 @@ export default function TransactionTable(props: TransactionTableProps) {
             ? valA.localeCompare(valB as string)
             : (valB as string).localeCompare(valA)
         }
-        return direction === 'asc' ? (valA > valB ? 1 : -1) : valB > valA ? 1 : -1
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return direction === 'asc' ? (valA > valB ? 1 : -1) : (valB > valA ? 1 : -1)
+        }
+        return 0
       }
       return 0
     })

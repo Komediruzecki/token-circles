@@ -24,6 +24,7 @@
  */
 import { createSignal, onMount } from 'solid-js'
 import Chart from '../components/Chart'
+import type * as Models from '../types/models'
 import { formatCurrency } from '../core/api'
 import styles from './RentBuyCalculator.module.css'
 
@@ -38,7 +39,7 @@ interface Result {
 }
 
 interface Props {
-  currency?: string
+  currency?: Models.Currency
 }
 
 export default function RentBuyCalculator(props: Props) {
@@ -498,7 +499,7 @@ export default function RentBuyCalculator(props: Props) {
                 scales: {
                   y: {
                     ticks: {
-                      callback: (v) => formatCurrency(v, currency),
+                      callback: (v: number | string) => formatCurrency(typeof v === 'number' ? v : Number(v), currency as any),
                       color: 'var(--text)',
                     },
                     grid: {

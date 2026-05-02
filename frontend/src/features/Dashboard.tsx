@@ -40,7 +40,6 @@ import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { PeriodPills } from '../components/PeriodPills'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
-import type {PeriodPreset} from '../components/Dashboard/PeriodNavigator';
 import type * as Models from '../types/models'
 
 export default function Dashboard() {
@@ -76,77 +75,6 @@ export default function Dashboard() {
     } catch {
       // Don't show error for monthly data - it's optional
     }
-  }
-
-  const _handleMonthChange = (newMonth: number) => {
-    setMonth(newMonth)
-    void loadMonthlyData()
-  }
-
-  const _handleYearChange = (newYear: number) => {
-    setYear(newYear)
-    void loadMonthlyData()
-  }
-
-  const _handlePrev = () => {
-    if (month() === 1) {
-      setMonth(12)
-      setYear(year() - 1)
-    } else {
-      setMonth(month() - 1)
-    }
-    void loadMonthlyData()
-  }
-
-  const _handleNext = () => {
-    if (month() === 12) {
-      setMonth(1)
-      setYear(year() + 1)
-    } else {
-      setMonth(month() + 1)
-    }
-    void loadMonthlyData()
-  }
-
-  const _handlePresetChange = async (preset: PeriodPreset) => {
-    setSelectedPeriod(preset)
-    const now = new Date()
-    let m = now.getMonth() + 1
-    const y = now.getFullYear()
-
-    switch (preset) {
-      case 'this-month':
-        setMonth(m)
-        setYear(y)
-        break
-      case 'last-month':
-        m = m === 1 ? 12 : m - 1
-        setMonth(m)
-        setYear(y)
-        break
-      case 'last-3':
-        m = m <= 3 ? 12 : m - 3
-        setYear(y)
-        break
-      case 'last-6':
-        m = m <= 6 ? 12 : m - 6
-        setYear(y)
-        break
-      case 'this-year':
-        setMonth(1)
-        setYear(y)
-        break
-      case 'last-year':
-        setMonth(1)
-        setYear(y - 1)
-        break
-      case 'all':
-        setMonth(1)
-        setYear(2020)
-        break
-    }
-
-    void loadMonthlyData()
   }
 
   const handlePillChange = async (pillId: string) => {

@@ -224,7 +224,6 @@ export default function Analytics() {
                   <div class={styles.emptyState}>No expense data</div>
                 ) : (
                   <Chart
-                    id="analytics-category-chart"
                     type="doughnut"
                     data={{
                       labels: data()!.byCategory.map((item) => item.category_name),
@@ -278,7 +277,6 @@ export default function Analytics() {
                   <div class={styles.emptyState}>No data available</div>
                 ) : (
                   <Chart
-                    id="analytics-monthly-chart"
                     type="line"
                     data={{
                       labels: data()!.byMonth.map((item) =>
@@ -480,7 +478,7 @@ export default function Analytics() {
                                     style={{
                                       width: `${cellSize}px`,
                                       height: `${cellSize}px`,
-                                      backgroundColor: bgColor,
+                                      'background-color': bgColor,
                                     }}
                                     title={`${cell.date.toLocaleDateString()}: ${formatCurrency(cell.amount)}`}
                                   />
@@ -501,36 +499,28 @@ export default function Analytics() {
                       <div class={styles.heatmapScale}>
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{
-                            backgroundColor:
-                              heatmapType() === 'income'
+                          style={{ 'background-color': heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 0.1)'
                                 : 'rgba(34, 197, 94, 0.1)',
                           }}
                         />
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{
-                            backgroundColor:
-                              heatmapType() === 'income'
+                          style={{ 'background-color': heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 0.4)'
                                 : 'rgba(34, 197, 94, 0.4)',
                           }}
                         />
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{
-                            backgroundColor:
-                              heatmapType() === 'income'
+                          style={{ 'background-color': heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 0.7)'
                                 : 'rgba(34, 197, 94, 0.7)',
                           }}
                         />
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{
-                            backgroundColor:
-                              heatmapType() === 'income'
+                          style={{ 'background-color': heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 1)'
                                 : 'rgba(34, 197, 94, 1)',
                           }}

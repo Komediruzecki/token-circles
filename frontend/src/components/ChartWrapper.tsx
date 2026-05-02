@@ -7,7 +7,7 @@ import ChartContainer from './ChartContainer.module.css'
 import ExportChartButton from './ExportChartButton'
 import type * as ChartJS from 'chart.js/auto'
 
-export const ThemeContext = createContext<() => 'light' | 'dark'>(() => 'light')
+export const ThemeContext = createContext<() => 'light' | 'dark'>(() => 'light' as 'light' | 'dark')
 
 export interface ChartWrapperProps {
   type: 'line' | 'bar' | 'doughnut' | 'pie' | 'polarArea' | 'radar' | 'bubble' | 'scatter'
@@ -45,8 +45,8 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         }
 
         // Create new chart
-        const ctx = canvasRef.getContext('2d')
-        if (ctx === null) return
+        const ctx = canvasRef?.getContext('2d')
+        if (!ctx) return
 
         const options = props.options || {
           responsive: true,
@@ -90,7 +90,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
                     },
                     ticks: {
                       color: isDarkValue ? '#E5E7EB' : '#374151',
-                      callback: (value: number) => `$${  value.toLocaleString()}`,
+                      callback: (value: number) => `$${value.toLocaleString()}` as any,
                     },
                   },
                 },
@@ -103,7 +103,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         const newChart = new ChartJS(ctx, {
           type: props.type,
           data: props.data,
-          options,
+          options: options as any,
         })
 
         setChartInstance(newChart)
@@ -129,12 +129,9 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         : ''
 
   return (
-    <div class={ChartContainer.chartContainer} class={heightClass}>
+    <div class={ChartContainer.chartContainer} classList={{ [heightClass]: !!heightClass }}>
       {props.showExport && props.filename && (
-        <ExportChartButton
-          chartRef={() => chartInstance()}
-          filename={props.filename}
-        />
+        <ExportChartButton filename={props.filename} chart={undefined} />
       )}
       <canvas ref={(canvas: HTMLCanvasElement) => (canvasRef = canvas)} />
     </div>

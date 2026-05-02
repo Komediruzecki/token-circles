@@ -285,7 +285,6 @@ export default function Budgets() {
             <div class={styles.emptyState}>No allocations for this month</div>
           ) : (
             <Chart
-              id="budget-category-chart"
               type="doughnut"
               data={{
                 labels: allocations().map((a) => a.category_name),

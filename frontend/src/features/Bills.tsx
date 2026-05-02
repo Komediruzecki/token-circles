@@ -156,19 +156,6 @@ export default function Bills() {
     }
   }
 
-  // Delete category
-  const _deleteCategory = async (_id: number) => {
-    if (!confirm('Delete this category? Bills linked to this category will be unaffected.')) return
-    try {
-      await apiDelete(`/api/categories/${_id}`)
-      showToast('Category deleted', 'success')
-      loadCategories()
-    } catch (err) {
-      console.error('Failed to delete category', err)
-      showToast('Failed to delete category', 'error')
-    }
-  }
-
   // Open category modal
   const openCategoryModal = () => {
     setShowCategoryModal(true)
@@ -529,7 +516,7 @@ export default function Bills() {
                 <button
                   type="button"
                   class={styles.btnLink}
-                  style={{ 'margin-top': 8 }}
+                  style={{ 'margin-top': '8px' }}
                   onClick={openCategoryModal}
                 >
                   + Add Category

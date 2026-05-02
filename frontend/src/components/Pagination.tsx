@@ -72,15 +72,16 @@ export default function Pagination(props: PaginationProps) {
       )}
 
       {visiblePages.map((page) => (
-        <button
-          key={page}
-          class={`${styles.pageBtn} ${page === props.currentPage ? styles.pageBtnActive : ''}`}
-          onClick={() => {
-            goToPage(page)
-          }}
-        >
-          {page}
-        </button>
+        <>
+          <button
+            class={`${styles.pageBtn} ${page === props.currentPage ? styles.pageBtnActive : ''}`}
+            onClick={() => {
+              goToPage(page)
+            }}
+          >
+            {page}
+          </button>
+        </>
       ))}
 
       {visiblePages[visiblePages.length - 1] < props.totalPages && (

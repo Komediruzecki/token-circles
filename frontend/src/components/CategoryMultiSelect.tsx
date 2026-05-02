@@ -20,8 +20,23 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0)
   const [hoverIndex, setHoverIndex] = createSignal(-1)
   const [isMounted, setIsMounted] = createSignal(false)
+  const containerRef = createSignal<HTMLElement | null>(null)
 
-  const [_loading, _setLoading] = createSignal(false)
+  const handleToggleDropdown = () => {
+    setIsOpen(!isOpen())
+    if (!isOpen()) {
+      setSearchTerm('')
+      setSelectedIndex(0)
+    }
+  }
+
+  const handleClickOutside = (e: MouseEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const container = (containerRef as any)[0] as HTMLElement | null
+    if (container && !container.contains(e.target as Node)) {
+      setIsOpen(false)
+    }
+  }
 
   createEffect(() => {
     const all = props.categories()
@@ -59,23 +74,6 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     return selected
       .map((id) => categories.find((c) => c.id === id)?.name)
       .filter((name): name is string => name !== undefined)
-  }
-
-  const containerRef = createSignal<HTMLElement | null>(null)
-
-  const handleToggleDropdown = () => {
-    setIsOpen(!isOpen())
-    if (!isOpen()) {
-      setSearchTerm('')
-      setSelectedIndex(0)
-    }
-  }
-
-  const handleClickOutside = (e: MouseEvent) => {
-    const container = containerRef() as HTMLElement
-    if (container && !container.contains(e.target as Node)) {
-      setIsOpen(false)
-    }
   }
 
   const handleSearchInput = (e: InputEvent) => {
@@ -127,13 +125,16 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   return (
     <div
       class={categoryMultiSelectStyles.container}
-      ref={containerRef}
+      ref={(el: HTMLDivElement) => { containerRef[1](el) }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
       onClick={handleToggleDropdown}
       onBlur={handleBlur}
     >
-      <button class={categoryMultiSelectStyles.selectBtn}>
+      <button
+        class={categoryMultiSelectStyles.selectBtn}
+        ref={(el: HTMLButtonElement) => { containerRef[1](el) }}
+      >
         <span class={categoryMultiSelectStyles.selectValue}>{countText()}</span>
         <svg
           class={`${categoryMultiSelectStyles.arrow} ${isOpen() ? categoryMultiSelectStyles.arrowOpen : ''}`}
@@ -173,7 +174,6 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
             ) : (
               filteredCategories().map((category, index) => (
                 <button
-                  key={category.id}
                   class={`${categoryMultiSelectStyles.categoryItem} ${
                     hoverIndex() === index ? categoryMultiSelectStyles.hovered : ''
                   }`}

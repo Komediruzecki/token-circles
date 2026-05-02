@@ -82,6 +82,7 @@ export default function Loans() {
           interest_rate: l.interest_rate,
           term_months: l.term_months,
           start_date: l.start_date,
+          profile_id: l.profile_id || 1,
           status: 'active',
           remaining_balance: l.principal,
           total_paid: 0,
@@ -250,7 +251,7 @@ export default function Loans() {
 
       {/* Summary Cards */}
       <div class={styles.loansSummary}>
-        <div class={styles.summaryCard} style={{ borderColor: 'var(--primary)' }}>
+        <div class={styles.summaryCard} style={{ 'border-color': 'var(--primary)' }}>
           <div class={styles.summaryLabel}>Total Borrowed</div>
           <div class={styles.summaryValue}>{formatAmount(totalPrincipal())}</div>
         </div>
@@ -395,7 +396,6 @@ export default function Loans() {
           <h3>Loan Amortization Summary</h3>
           <div class={styles.amortizationChartWrapper}>
             <Chart
-              id="loan-amortization-chart"
               type="line"
               data={{
                 labels: loans().map((l) => l.name),

@@ -2,6 +2,7 @@
  * Tag Chips Component
  * Displays tags as clickable chips with optional remove buttons
  */
+import { For, Show } from 'solid-js'
 import tagChipsStyles from './TagChips.module.css'
 
 export interface TagChipsProps {

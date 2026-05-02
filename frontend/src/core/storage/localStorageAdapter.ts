@@ -11,6 +11,8 @@ import type {
   DataStore,
   GoalData,
   LoanData,
+  LoanPrepaymentData,
+  LoanRatePeriodData,
   ProfileData,
   SettingsData,
   TransactionData,
@@ -23,6 +25,7 @@ import type {
   ExportData,
   Goal,
   Loan,
+  Settings,
   StorageAdapter,
   Transaction,
   TransactionFilters,
@@ -210,27 +213,29 @@ function deleteProfileData(id: number): void {
   Object.keys(data.categories).forEach((key) => {
     const cat = data.categories[Number(key)]
     if (cat.profile_id === id) {
-      data.categories[Number(key)] = undefined
+      data.categories[Number(key)] = undefined as any
     }
   })
 
   Object.keys(data.transactions).forEach((key) => {
     const tx = data.transactions[Number(key)]
     if (tx.profile_id === id) {
-      data.transactions[Number(key)] = undefined
+      data.transactions[Number(key)] = undefined as any
     }
   })
 
   Object.keys(data.accounts).forEach((key) => {
     const acc = data.accounts[Number(key)]
     if (acc.profile_id === id) {
-      data.accounts[Number(key)] = undefined
+      data.accounts[Number(key)] = undefined as any
     }
   })
 
   Object.keys(data.budgets).forEach((key) => {
     const budget = data.budgets[Number(key)]
     if (budget.profile_id === id) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error - Allow undefined assignment for clean up
       data.budgets[Number(key)] = undefined
     }
   })
@@ -238,6 +243,8 @@ function deleteProfileData(id: number): void {
   Object.keys(data.goals).forEach((key) => {
     const goal = data.goals[Number(key)]
     if (goal.profile_id === id) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error - Allow undefined assignment for clean up
       data.goals[Number(key)] = undefined
     }
   })
@@ -245,6 +252,8 @@ function deleteProfileData(id: number): void {
   Object.keys(data.loans).forEach((key) => {
     const loan = data.loans[Number(key)]
     if (loan.profile_id === id) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error - Allow undefined assignment for clean up
       data.loans[Number(key)] = undefined
     }
   })
@@ -256,11 +265,15 @@ function deleteProfileData(id: number): void {
       // Check if account belongs to this profile
       const account = Object.values(data.accounts).find((a) => a.id === entry.account_id)
       if (account && account.profile_id === id) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error - Allow undefined assignment for clean up
         data.balanceHistory[Number(key)] = undefined
       }
     }
   })
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-expect-error - Allow undefined assignment for clean up
   data.profiles[id] = undefined
   saveData()
 }
@@ -342,47 +355,80 @@ function seedSampleData(profileId: number): void {
 
     // Income
     if (random < 0.1) {
+      const descriptions = [
+        'Salary Deposit',
+        'Passive Income - Rental Property',
+        'Investment Dividend',
+        'Year-End Bonus',
+      ]
+      const amounts = [
+        Math.random() * 100 + 500,
+        Math.random() * 200 + 100,
+        Math.random() * 100 + 50,
+        Math.random() * 2000 + 500,
+      ]
+      const idx = Math.floor(Math.random() * 4)
       createTransactionData({
-        description: [
-          'Salary Deposit',
-          'Passive Income - Rental Property',
-          'Investment Dividend',
-          'Year-End Bonus',
-        ][Math.floor(Math.random() * 4)],
-        amount: [
-          Math.random() * 100 + 500,
-          Math.random() * 200 + 100,
-          Math.random() * 100 + 50,
-          Math.random() * 2000 + 500,
-        ][Math.floor(Math.random() * 4)],
+        id: counters.transactions++,
+        description: descriptions[idx],
+        amount: amounts[idx],
         date: dateStr,
         type: 'income',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Employer',
+        payor: 'Employer',
+        means: 'giro',
+        notes: descriptions[idx],
+        tags: [],
       })
     }
     // Rent/Mortgage
     else if (random < 0.25) {
       createTransactionData({
+        id: counters.transactions++,
         description: 'Rent Payment',
         amount: Math.random() * 500 + 800,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
         beneficiary: 'Property Management Co',
+        payor: 'Landlord',
+        means: 'giro',
+        notes: 'Monthly rent payment',
+        tags: [],
       })
     }
     // Food
     else if (random < 0.45) {
       const foodTypes = ['Grocery Shopping', 'Restaurant / Takeout', 'Coffee / Lunch']
+      const idx = Math.floor(Math.random() * foodTypes.length)
       createTransactionData({
-        description: foodTypes[Math.floor(Math.random() * foodTypes.length)],
+        id: counters.transactions++,
+        description: foodTypes[idx],
         amount: Math.random() * 50 + 20,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Store',
+        payor: 'Store',
+        means: 'giro',
+        notes: foodTypes[idx],
+        tags: [],
       })
     }
     // Utilities
@@ -393,74 +439,129 @@ function seedSampleData(profileId: number): void {
         'Water & Sewer',
         'Internet Service',
       ]
+      const idx = Math.floor(Math.random() * utilities.length)
       createTransactionData({
-        description: utilities[Math.floor(Math.random() * utilities.length)],
+        id: counters.transactions++,
+        description: utilities[idx],
         amount: Math.random() * 100 + 30,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Utility Company',
+        payor: 'Utility Company',
+        means: 'giro',
+        notes: utilities[idx],
+        tags: [],
       })
     }
     // Transportation
     else if (random < 0.7) {
+      const description = Math.random() < 0.5 ? 'Gas Station' : 'Car Maintenance / Service'
       createTransactionData({
-        description: Math.random() < 0.5 ? 'Gas Station' : 'Car Maintenance / Service',
+        id: counters.transactions++,
+        description,
         amount: Math.random() * 60 + 30,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Gas Station',
+        payor: 'Gas Station',
+        means: 'giro',
+        notes: description,
+        tags: [],
       })
     }
     // Subscriptions
     else if (random < 0.8) {
       const subs = ['Netflix Subscription', 'Spotify Premium', 'Gym Membership', 'Online News Sub']
+      const idx = Math.floor(Math.random() * subs.length)
       createTransactionData({
-        description: subs[Math.floor(Math.random() * subs.length)],
+        id: counters.transactions++,
+        description: subs[idx],
         amount: Math.random() * 20 + 10,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Subscription Service',
+        payor: 'Subscription Service',
+        means: 'giro',
+        notes: subs[idx],
+        tags: [],
       })
     }
     // Entertainment
     else if (random < 0.9) {
       const ent = ['Movie Theater', 'Concert / Event', 'Sports Game']
+      const idx = Math.floor(Math.random() * ent.length)
       createTransactionData({
-        description: ent[Math.floor(Math.random() * ent.length)],
+        id: counters.transactions++,
+        description: ent[idx],
         amount: Math.random() * 80 + 20,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Entertainment Venue',
+        payor: 'Entertainment Venue',
+        means: 'giro',
+        notes: ent[idx],
+        tags: [],
       })
     }
     // Miscellaneous
     else {
       createTransactionData({
+        id: counters.transactions++,
         description: 'Miscellaneous Purchase',
         amount: Math.random() * 40 + 10,
         date: dateStr,
         type: 'expense',
         profile_id: profileId,
         currency: 'USD',
+        local_currency: 'USD',
+        exchange_rate: 1,
+        category_id: undefined,
+        account_id: undefined,
+        beneficiary: 'Merchant',
+        payor: 'Merchant',
+        means: 'giro',
+        notes: 'Miscellaneous',
+        tags: [],
       })
     }
   }
 
   // Generate sample accounts
   const accountNames = ['Checking Account', 'Savings Account']
+  const accountTypes: ['giro', 'savings', 'ib'] = ['giro', 'savings', 'ib']
   accountNames.forEach((name) => {
-    createAccountData({
+    createAccountData(
       name,
-      type: ['giro', 'savings'][Math.floor(Math.random() * 2)],
-      currency: 'USD',
-      balance: Math.random() * 10000 + 1000,
-      profile_id: profileId,
-      notes: 'Sample account',
-    })
+      accountTypes[Math.floor(Math.random() * accountTypes.length)],
+      'USD',
+      Math.random() * 10000 + 1000,
+      profileId,
+      'Sample account'
+    )
   })
 
   // Generate sample savings goals
@@ -471,6 +572,7 @@ function seedSampleData(profileId: number): void {
   ]
   goals.forEach((goal) => {
     createGoalData({
+      id: counters.goals++,
       name: goal.name,
       target_amount: goal.target,
       current_amount: goal.current,
@@ -488,11 +590,13 @@ function seedSampleData(profileId: number): void {
   ]
   loans.forEach((loan) => {
     createLoanData({
+      id: counters.loans++,
       name: loan.name,
       principal: loan.principal,
       start_date: loan.start_date,
       term_months: loan.term_months,
-      rate_periods: [{ rate: loan.rate, start_month: 0, end_month: loan.term_months }],
+      rate_periods: [{ id: 1, rate: loan.rate, start_month: 0, end_month: loan.term_months }],
+      prepayments: [],
       profile_id: profileId,
     })
   })
@@ -562,6 +666,8 @@ function deleteCategoryData(id: number): void {
     throw new Error(`Category ${id} not found`)
   }
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-expect-error - Allow undefined assignment for clean up
   data.categories[id] = undefined
   saveData()
 }
@@ -661,7 +767,7 @@ function deleteTransactionData(id: number): void {
     throw new Error(`Transaction ${id} not found`)
   }
 
-  data.transactions[id] = undefined
+  data.transactions[id] = undefined as any
   saveData()
 }
 
@@ -681,8 +787,17 @@ function getAccounts(filterProfileId?: number): AccountData[] {
 /**
  * Create an account
  */
-function createAccountData(account: AccountData): AccountData {
+function createAccountData(name: string, type: AccountData['type'], currency: string, balance: number, profileId: number, notes?: string): AccountData {
   const id = counters.accounts++
+  const account: AccountData = {
+    id,
+    profile_id: profileId,
+    name,
+    type,
+    currency,
+    balance,
+    notes: notes || '',
+  }
   data.accounts[id] = account
   saveData()
   return account
@@ -714,11 +829,11 @@ function deleteAccountData(id: number): void {
   Object.keys(data.balanceHistory).forEach((key) => {
     const entry = data.balanceHistory[Number(key)]
     if (entry.account_id === id) {
-      data.balanceHistory[Number(key)] = undefined
+      data.balanceHistory[Number(key)] = undefined as any
     }
   })
 
-  data.accounts[id] = undefined
+  data.accounts[id] = undefined as any
   saveData()
 }
 
@@ -767,7 +882,7 @@ function deleteBudgetData(id: number): void {
     throw new Error(`Budget ${id} not found`)
   }
 
-  data.budgets[id] = undefined
+  data.budgets[id] = undefined as any
   saveData()
 }
 
@@ -816,7 +931,7 @@ function deleteGoalData(id: number): void {
     throw new Error(`Goal ${id} not found`)
   }
 
-  data.goals[id] = undefined
+  data.goals[id] = undefined as any
   saveData()
 }
 
@@ -865,7 +980,7 @@ function deleteLoanData(id: number): void {
     throw new Error(`Loan ${id} not found`)
   }
 
-  data.loans[id] = undefined
+  data.loans[id] = undefined as any
   saveData()
 }
 
@@ -973,7 +1088,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     return Promise.resolve()
   }
 
-  deleteProfile(id: number, _name: string): Promise<void> {
+  deleteProfile(id: number): Promise<void> {
     deleteProfileData(id)
     return Promise.resolve()
   }
@@ -1008,7 +1123,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     Object.keys(data.transactions).forEach((key) => {
       const tx = data.transactions[Number(key)]
       if (tx.profile_id === profileId) {
-        data.transactions[Number(key)] = undefined
+        data.transactions[Number(key)] = undefined as any
       }
     })
     saveData()
@@ -1039,7 +1154,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     Object.keys(data.categories).forEach((key) => {
       const cat = data.categories[Number(key)]
       if (cat.profile_id === profileId) {
-        data.categories[Number(key)] = undefined
+        data.categories[Number(key)] = undefined as any
       }
     })
     saveData()
@@ -1053,7 +1168,15 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async createAccount(account: Account): Promise<number> {
-    return createAccountData(account as AccountData).id
+    const profileId = await this.getCurrentProfileId()
+    return createAccountData(
+      account.name,
+      account.type,
+      account.currency,
+      account.balance,
+      profileId,
+      account.notes
+    ).id
   }
 
   async updateAccount(id: number, account: Partial<Account>): Promise<void> {
@@ -1128,8 +1251,8 @@ export class LocalStorageAdapter implements StorageAdapter {
       principal: loan.principal,
       start_date: loan.start_date,
       term_months: loan.term_months,
-      rate_periods: loan.rate_periods || [],
-      prepayments: loan.prepayments || [],
+      rate_periods: (loan.rate_periods || []) as LoanRatePeriodData[],
+      prepayments: (loan.prepayments || []) as LoanPrepaymentData[],
     }
     return createLoanData(loanData).id
   }
@@ -1285,46 +1408,46 @@ export class LocalStorageAdapter implements StorageAdapter {
     Object.keys(importData.profiles).forEach((key) => {
       const id = Number(key)
       if (id === currentProfileId) {
-        importData.profiles[id] = undefined
+        importData.profiles[id] = undefined as any
         Object.keys(importData.categories).forEach((cKey) => {
           const cat = importData.categories[Number(cKey)]
           if (cat.profile_id === currentProfileId) {
-            importData.categories[Number(cKey)] = undefined
+            importData.categories[Number(cKey)] = undefined as any
           }
         })
 
         Object.keys(importData.transactions).forEach((tKey) => {
           const tx = importData.transactions[Number(tKey)]
           if (tx.profile_id === currentProfileId) {
-            importData.transactions[Number(tKey)] = undefined
+            importData.transactions[Number(tKey)] = undefined as any
           }
         })
 
         Object.keys(importData.accounts).forEach((aKey) => {
           const acc = importData.accounts[Number(aKey)]
           if (acc.profile_id === currentProfileId) {
-            importData.accounts[Number(aKey)] = undefined
+            importData.accounts[Number(aKey)] = undefined as any
           }
         })
 
         Object.keys(importData.budgets).forEach((bKey) => {
           const budget = importData.budgets[Number(bKey)]
           if (budget.profile_id === currentProfileId) {
-            importData.budgets[Number(bKey)] = undefined
+            importData.budgets[Number(bKey)] = undefined as any
           }
         })
 
         Object.keys(importData.goals).forEach((gKey) => {
           const goal = importData.goals[Number(gKey)]
           if (goal.profile_id === currentProfileId) {
-            importData.goals[Number(gKey)] = undefined
+            importData.goals[Number(gKey)] = undefined as any
           }
         })
 
         Object.keys(importData.loans).forEach((lKey) => {
           const loan = importData.loans[Number(lKey)]
           if (loan.profile_id === currentProfileId) {
-            importData.loans[Number(lKey)] = undefined
+            importData.loans[Number(lKey)] = undefined as any
           }
         })
 
@@ -1338,7 +1461,7 @@ export class LocalStorageAdapter implements StorageAdapter {
               )
               if (account !== undefined && account.profile_id === currentProfileId) {
                 const key = Number(bhKey)
-                balanceHistory[key] = undefined
+                balanceHistory[key] = undefined as any
               }
             }
           })
@@ -1372,7 +1495,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     })
 
     importData.loans.forEach((loan) => {
-      data.loans[loan.id] = loan
+      data.loans[loan.id] = loan as unknown as LoanData
     })
 
     data.balanceHistory = {}
@@ -1388,7 +1511,7 @@ export class LocalStorageAdapter implements StorageAdapter {
       idMap.set(original.id, newId)
 
       data.profiles[newId] = { ...original, id: newId }
-      data.profiles[original.id] = undefined
+      data.profiles[original.id] = undefined as any
     })
 
     // Fix references
@@ -1399,7 +1522,7 @@ export class LocalStorageAdapter implements StorageAdapter {
         cat.profile_id = mappedId
       }
       data.categories[cat.id] = cat
-      data.categories[Number(key)] = undefined
+      data.categories[Number(key)] = undefined as any
     })
 
     Object.keys(data.transactions).forEach((key) => {
@@ -1415,7 +1538,7 @@ export class LocalStorageAdapter implements StorageAdapter {
         if (newCatId !== undefined) tx.category_id = newCatId
       }
       data.transactions[tx.id] = tx
-      data.transactions[Number(key)] = undefined
+      data.transactions[Number(key)] = undefined as any
     })
 
     Object.keys(data.accounts).forEach((key) => {
@@ -1425,7 +1548,7 @@ export class LocalStorageAdapter implements StorageAdapter {
         acc.profile_id = mappedId
       }
       data.accounts[acc.id] = acc
-      data.accounts[Number(key)] = undefined
+      data.accounts[Number(key)] = undefined as any
     })
 
     Object.keys(data.budgets).forEach((key) => {
@@ -1437,7 +1560,7 @@ export class LocalStorageAdapter implements StorageAdapter {
       budget.category_id =
         Object.values(data.categories).find((c) => c.id === budget.category_id)?.id || 1
       data.budgets[budget.id] = budget
-      data.budgets[Number(key)] = undefined
+      data.budgets[Number(key)] = undefined as any
     })
 
     Object.keys(data.goals).forEach((key) => {
@@ -1447,7 +1570,7 @@ export class LocalStorageAdapter implements StorageAdapter {
         goal.profile_id = mappedId
       }
       data.goals[goal.id] = goal
-      data.goals[Number(key)] = undefined
+      data.goals[Number(key)] = undefined as any
     })
 
     Object.keys(data.loans).forEach((key) => {
@@ -1457,7 +1580,7 @@ export class LocalStorageAdapter implements StorageAdapter {
         loan.profile_id = mappedId
       }
       data.loans[loan.id] = loan
-      data.loans[Number(key)] = undefined
+      data.loans[Number(key)] = undefined as any
     })
 
     // Rebuild counter

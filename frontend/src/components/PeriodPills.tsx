@@ -34,7 +34,6 @@ export function PeriodPills(props: PeriodPillsProps) {
     <div class={periodPillsStyles.pillsContainer}>
       {periods.map((period) => (
         <button
-          key={period.id}
           class={`${periodPillsStyles.pill} ${props.value === period.id ? periodPillsStyles.pillActive : ''}`}
           onClick={() => { props.onChange(period.id); }}
           type="button"

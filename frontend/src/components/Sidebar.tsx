@@ -4,7 +4,8 @@
  * This file is kept for backward compatibility
  */
 
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
+import { pages as navItems } from '../router.tsx'
 import styles from '../styles/design/Sidebar.module.css'
 
 export default function Sidebar() {
@@ -13,7 +14,7 @@ export default function Sidebar() {
 
   const handleClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement
-    const actionTrigger = target.closest('[data-action]')
+    const actionTrigger = target.closest('[data-action]') as HTMLDivElement | null
     if (actionTrigger === null) return
 
     const action = actionTrigger.dataset.action
@@ -153,8 +154,8 @@ export default function Sidebar() {
         </div>
 
         <nav class={styles.sidebarNav}>
-          <For each={navItems}>
-            {(item) => (
+          <For each={(navItems as any)}>
+            {(item: any) => (
               <a
                 href={`#${item.page}`}
                 class={`${styles.navItem} ${styles.navItemActive}`}

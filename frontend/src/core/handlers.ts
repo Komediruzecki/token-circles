@@ -212,8 +212,8 @@ export function handleModalAction(action: string, arg?: unknown): void {
           ? window.transactionsSetType
           : (_newType: string) => {
               const txComponent = document.querySelector('[data-page="transactions"]')
-              if (txComponent !== null && txComponent.setType !== undefined) {
-                txComponent.setType(_newType)
+              if (txComponent !== null && 'setType' in txComponent) {
+                ;(txComponent as any).setType(_newType)
               }
             }
       setType(arg as string)
@@ -461,8 +461,10 @@ function showLoginDialog(): Promise<{ username: string; password: string } | nul
 
     // Handle submit
     document.getElementById('login-submit')?.addEventListener('click', () => {
-      const username = document.getElementById('login-username')?.value?.trim()
-      const password = document.getElementById('login-password')?.value
+      const usernameInput = document.getElementById('login-username') as HTMLInputElement | null
+      const passwordInput = document.getElementById('login-password') as HTMLInputElement | null
+      const username = usernameInput?.value?.trim()
+      const password = passwordInput?.value
       if (!username || !password) return
       overlay.remove()
       resolve({ username, password })

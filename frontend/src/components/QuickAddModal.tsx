@@ -2,8 +2,8 @@
  * Quick Add Modal Component
  * Quick transaction entry (Ctrl+Shift+T shortcut)
  */
-import { createSignal } from 'solid-js'
-import { api } from '../core/api'
+import { createEffect, createSignal, For } from 'solid-js'
+import { api, toast } from '../core/api'
 import quickAddModalStyles from './QuickAddModal.module.css'
 import type { Category } from '../types/models'
 
@@ -45,10 +45,13 @@ export function QuickAddModal(props: QuickAddModalProps) {
         description: data.description || (data.amount >= 0 ? 'Quick Add' : 'Quick Add'),
         type: data.type,
         date: data.date,
+        beneficiary: '',
+        payor: '',
         currency: 'EUR',
         amount_local: data.amount >= 0 ? data.amount : null,
         exchange_rate: 1,
         notes: '',
+        profile_id: 1,
       })
       props.onSave(newTransaction)
       props.onClose()

@@ -2,7 +2,7 @@
  * Bulk Category Modal Component
  * Modal for changing categories of selected transactions
  */
-import { createEffect, createSignal, For } from 'solid-js'
+import { createEffect, createSignal } from 'solid-js'
 import bulkCategoryModalStyles from './BulkCategoryModal.module.css'
 
 export interface BulkCategoryModalProps {

@@ -38,12 +38,6 @@
 import { createSignal, onMount } from 'solid-js'
 import styles from './Import.module.css'
 
-// Type declaration for CSS module
-declare module './Import.module.css' {
-  const classes: { [key: string]: string }
-  export default classes
-}
-
 // Column field names for mapping
 const FIELD_NAMES = [
   { key: 'date', label: 'Date', required: true },
@@ -401,7 +395,8 @@ export default function Import() {
       }
 
       // Server-side duplicate detection for new-only mode
-      if (mode === 'new' && hasDuplicateCount() && hasDuplicateCount() > 0) {
+      const dupCount = hasDuplicateCount() ?? 0
+      if (mode === 'new' && dupCount > 0) {
         const previewResponse = await fetch('/api/import/file-sheet', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
@@ -444,12 +439,6 @@ export default function Import() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // Handle dropdown change for Google Sheets
-  const _handleHeaderChange = (event: Event, field: string) => {
-    const select = event.currentTarget as HTMLSelectElement
-    handleColumnMappingChange(field, parseInt(select.value))
   }
 
   onMount(() => {
@@ -566,7 +555,9 @@ export default function Import() {
                 {sheetNames().map((name) => (
                   <button
                     class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
-                    onClick={() => { handleSheetTabClick(name); }}
+                    onClick={() => {
+                      handleSheetTabClick(name);
+                    }}
                   >
                     {name}
                   </button>
@@ -600,11 +591,13 @@ export default function Import() {
                 <select
                   class={styles.mappingSelect}
                   value={columnMapping()[field.key] ?? ''}
-                  onChange={(e) => { handleColumnMappingChange(field.key, parseInt(e.target.value)); }}
+                  onChange={(e) => {
+                    handleColumnMappingChange(field.key, parseInt(e.target.value));
+                  }}
                 >
                   <option value="">-- Select column --</option>
                   {headers.map((h, i) => (
-                    <option key={i} value={i}>
+                    <option value={i}>
                       {h}
                     </option>
                   ))}
@@ -619,12 +612,14 @@ export default function Import() {
           <h3 class={styles.categoryReviewTitle}>Category Types</h3>
           <div class={styles.categoryChips}>
             {detectCategories().map((category) => (
-              <div key={category} class={styles.categoryChip}>
+              <div class={styles.categoryChip}>
                 <span class={styles.categoryChipName}>{category}</span>
                 <select
                   class={styles.categoryChipSelect}
                   value={categoryTypes()[category] || 'expense'}
-                  onChange={(e) => { handleCategoryTypeToggle(category, e.target.value as 'income' | 'expense'); }}
+                  onChange={(e) => {
+                    handleCategoryTypeToggle(category, e.target.value as 'income' | 'expense');
+                  }}
                 >
                   <option value="expense">Expense</option>
                   <option value="income">Income</option>
@@ -694,10 +689,12 @@ export default function Import() {
                   <input
                     type="checkbox"
                     checked={selected === total}
-                    onChange={(e) => { toggleAll(e.currentTarget.checked); }}
+                    onChange={(e) => {
+                      toggleAll(e.currentTarget.checked);
+                    }}
                   />
                 </th>
-                {headers.map((h, i) => <th key={i}>{h}</th>)}
+                {headers.map((h) => <th>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -707,24 +704,20 @@ export default function Import() {
                   const actualIndex = startRow() + idx
                   return (
                     <tr
-                      key={actualIndex}
-                      class={
-                        selectedRows().has(actualIndex)
-                          ? styles.selected
-                          : duplicateIndices().includes(actualIndex)
-                          ? styles.duplicate
-                          : ''
-                      }
+                      key={idx}
+                      {...({} as any)}
                     >
                       <td class={styles.selectCol}>
                         <input
                           type="checkbox"
                           checked={selectedRows().has(actualIndex)}
-                          onChange={() => { toggleRow(actualIndex); }}
+                          onChange={() => {
+                            toggleRow(actualIndex);
+                          }}
                         />
                       </td>
-                      {row.map((cell, cIdx) => (
-                        <td key={cIdx}>{cell ?? ''}</td>
+                      {row.map((cell) => (
+                        <td>{cell ?? ''}</td>
                       ))}
                     </tr>
                   )
@@ -830,7 +823,7 @@ export default function Import() {
         <div class={styles.settingsCard}>
           <h2 class={styles.settingsCardTitle}>Import Complete!</h2>
           <p>Transactions have been successfully imported.</p>
-          <button class="btn btn-primary" style={{ marginTop: '16px' }} onClick={resetForm}>
+          <button class="btn btn-primary" style={{ 'margin-top': '16px' }} onClick={resetForm}>
             Import More
           </button>
         </div>

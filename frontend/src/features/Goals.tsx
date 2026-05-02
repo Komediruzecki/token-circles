@@ -133,8 +133,8 @@ export default function Goals() {
     setFormData({
       name: goal.name,
       target_amount: goal.target_amount.toString(),
-      target_date: goal.target_date.slice(0, 10),
-      monthly_contribution: goal.monthly_contribution ? goal.monthly_contribution.toString() : '',
+      target_date: goal.target_date,
+      monthly_contribution: '',
     })
     setShowAddModal(true)
   }
@@ -331,7 +331,7 @@ export default function Goals() {
                 onClick={() => {
                   setShowAddModal(false)
                   setEditingGoal(null)
-                  setFormData({ name: '', target_amount: '', target_date: '' })
+                  setFormData({ name: '', target_amount: '', target_date: '', monthly_contribution: '' })
                 }}
               >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -393,7 +393,7 @@ export default function Goals() {
                   onClick={() => {
                     setShowAddModal(false)
                     setEditingGoal(null)
-                    setFormData({ name: '', target_amount: '', target_date: '' })
+                    setFormData({ name: '', target_amount: '', target_date: '', monthly_contribution: '' })
                   }}
                 >
                   Cancel

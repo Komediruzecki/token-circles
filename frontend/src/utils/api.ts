@@ -28,7 +28,7 @@ function getHeaders() {
 }
 
 const DEFAULT_FETCH_OPTIONS = {
-  credentials: 'include',
+  credentials: 'include' as RequestCredentials,
 }
 
 /**
@@ -148,7 +148,7 @@ export async function apiRequest<T>(
 
     if (!response.ok) {
       const errorMsg =
-        data !== undefined && 'error' in data
+        data !== undefined && 'error' in (data as object)
           ? (data as ApiError).error
           : `Request failed (${response.status})`
       return { success: false, error: errorMsg }

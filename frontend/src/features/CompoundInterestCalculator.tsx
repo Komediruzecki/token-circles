@@ -68,7 +68,7 @@ export default function CompoundInterestCalculator() {
     setLoading(true)
     try {
       const data = await apiPost('/api/calculator/compound-interest', form())
-      setResults(data)
+      setResults(data as CompoundInterestResult)
     } catch (e: any) {
       showToast(e.message || 'Calculation failed', 'error')
     } finally {
@@ -179,7 +179,7 @@ export default function CompoundInterestCalculator() {
               <label>Final Balance</label>
               <div class={styles.formValue}>
                 {summary()?.finalBalance !== undefined
-                  ? formatCurrency(summary().finalBalance, 'EUR')
+                  ? formatCurrency(summary()!.finalBalance, 'EUR')
                   : '--'}
               </div>
             </div>
@@ -187,7 +187,7 @@ export default function CompoundInterestCalculator() {
               <label>Total Contributions</label>
               <div class={styles.formValue}>
                 {summary()?.contributions !== undefined
-                  ? formatCurrency(summary().contributions, 'EUR')
+                  ? formatCurrency(summary()!.contributions, 'EUR')
                   : '--'}
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function CompoundInterestCalculator() {
               <label>Interest Earned</label>
               <div class={`${styles.formValue} success`}>
                 {summary()?.interest !== undefined
-                  ? formatCurrency(summary().interest, 'EUR')
+                  ? formatCurrency(summary()!.interest, 'EUR')
                   : '--'}
               </div>
             </div>
@@ -235,7 +235,7 @@ export default function CompoundInterestCalculator() {
                 scales: {
                   y: {
                     ticks: {
-                      callback: (v) => formatCurrency(v, 'EUR'),
+                      callback: (v: number | string) => formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
                       color: 'var(--text)',
                     },
                     grid: { color: 'var(--border)' },
@@ -269,11 +269,11 @@ export default function CompoundInterestCalculator() {
               id="compoundInterestChartDetailed"
               type="line"
               data={{
-                labels: results().projection.map((p) => `${p.year} yrs`),
+                labels: results()!.projection.map((p) => `${p.year} yrs`),
                 datasets: [
                   {
                     label: 'Balance',
-                    data: results().projection.map((p) => p.balance),
+                    data: results()!.projection.map((p) => p.balance),
                     borderColor: '#6366f1',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     fill: true,
@@ -282,7 +282,7 @@ export default function CompoundInterestCalculator() {
                   },
                   {
                     label: 'Contributions',
-                    data: results().projection.map((p) => p.contributions),
+                    data: results()!.projection.map((p) => p.contributions),
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     fill: true,
@@ -291,7 +291,7 @@ export default function CompoundInterestCalculator() {
                   },
                   {
                     label: 'Interest',
-                    data: results().projection.map((p) => p.interest),
+                    data: results()!.projection.map((p) => p.interest),
                     borderColor: '#f59e0b',
                     backgroundColor: 'rgba(245, 158, 11, 0.1)',
                     fill: true,
@@ -306,7 +306,7 @@ export default function CompoundInterestCalculator() {
                 scales: {
                   y: {
                     ticks: {
-                      callback: (v) => formatCurrency(v, 'EUR'),
+                      callback: (v: number | string) => formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
                       color: 'var(--text)',
                     },
                     grid: { color: 'var(--border)' },

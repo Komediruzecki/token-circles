@@ -2,20 +2,21 @@
  * Main App Component - Root component for the application
  */
 
-import { createEffect, createMemo, createSignal, Show,Suspense } from 'solid-js'
+import { createEffect, createSignal, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
+import type { PageName } from './router.tsx'
 import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
 import { api } from './core/api.js'
-import { authLogin, authLogout,handlers, receipts, transactions } from './core/handlers.js'
-import { pages as allPages, type PageName } from './router.tsx'
+import { authLogin, authLogout, handlers, receipts, transactions } from './core/handlers.js'
+import { pages as allPages } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
 window.transactions = transactions
-window.handlers = handlers
-window.handlers.authLogin = authLogin
-window.handlers.authLogout = authLogout
+window.handlers = handlers as any
+window.handlers.authLogin = () => authLogin()
+window.handlers.authLogout = () => authLogout()
 
 export function App() {
   const [_currentPage, _setCurrentPage] = createSignal<PageName>('dashboard')
@@ -151,12 +152,7 @@ export function App() {
     }
   })
 
-  createMemo(() => {
-    const page = allPages[activePage()]
-    if (page) {
-      _setIsLoading(false)
-    }
-  })
+  _setIsLoading?.(false)
 
   // Navigation items with icons for sidebar
   const navItems = [
@@ -307,7 +303,6 @@ export function App() {
               {profiles().length > 0 ? (
                 profiles().map((profile) => (
                   <div
-                    key={profile.id}
                     class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
                     onClick={() => selectProfile(profile.id)}
                   >
@@ -376,7 +371,7 @@ export function App() {
                 {currentProfile().name}
               </span>
               <button
-                className={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
+                class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
                 onClick={handleLogout}
                 title="Logout"
                 style={{ padding: '4px 6px', 'flex-shrink': 0 }}
@@ -406,7 +401,6 @@ export function App() {
         <nav class={layoutStyles.sidebarNav}>
           {navItems.map((item) => (
             <a
-              key={item.name}
               href={`#${item.name}`}
               class={
                 activePage() === item.name

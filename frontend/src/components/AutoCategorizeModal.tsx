@@ -138,10 +138,10 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
                 const isSelected = tx.id in pendingUpdates()
 
                 return (
-                  <div
-                    key={tx.id}
-                    class={`${autoCategorizeModalStyles.transactionItem} ${isSelected ? autoCategorizeModalStyles.selected : ''}`}
-                  >
+                  <>
+                    <div
+                      class={`${autoCategorizeModalStyles.transactionItem} ${isSelected ? autoCategorizeModalStyles.selected : ''}`}
+                    >
                     <div class={autoCategorizeModalStyles.txInfo}>
                       <p class={autoCategorizeModalStyles.txDescription}>{tx.description}</p>
                       {matching ? (
@@ -178,7 +178,8 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
                       )}
                     </button>
                   </div>
-                )
+                </>
+              )
               })}
             </div>
           )}

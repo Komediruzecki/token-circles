@@ -6,6 +6,7 @@ import { createEffect, onCleanup } from 'solid-js'
 import type * as ChartJS from 'chart.js/auto'
 
 export interface ChartProps {
+  id?: string
   type: 'line' | 'bar' | 'doughnut' | 'pie' | 'polarArea' | 'radar' | 'bubble' | 'scatter'
   data: ChartJS.ChartData
   options?: ChartJS.ChartOptions
@@ -30,8 +31,8 @@ export default function Chart(props: ChartProps) {
         }
 
         // Create new chart
-        const ctx = canvasRef.getContext('2d')
-        if (ctx === null) return
+        const ctx = canvasRef?.getContext('2d')
+        if (!ctx) return
         ;(canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance =
           new ChartJS(ctx, {
             type: props.type,

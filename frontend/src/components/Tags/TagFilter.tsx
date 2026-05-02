@@ -2,7 +2,7 @@
  * Tag Filter Component
  * Dropdown filter for filtering transactions by tags
  */
-import { createEffect, createSignal, For } from 'solid-js'
+import { createEffect, createSignal, For, Show } from 'solid-js'
 import tagFilterStyles from './TagFilter.module.css'
 
 export interface TagFilterProps {
@@ -16,7 +16,9 @@ export function TagFilter(props: TagFilterProps) {
   const [isOpen, setIsOpen] = createSignal(false)
   const [filterText, setFilterText] = createSignal('')
   const tags = props.availableTags()
-  const selectedTags = props.selectedTags()
+  const tagsResult = props.selectedTags()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const selectedTags: Set<string> = (tagsResult as any)[0]
 
   const filteredTags = () => {
     if (!filterText()) return tags
@@ -24,15 +26,15 @@ export function TagFilter(props: TagFilterProps) {
   }
 
   const selectedCount = () => {
-    return Array.from(selectedTags()).length
+    return selectedTags.size
   }
 
   const allSelected = () => {
-    return selectedTags().size === tags.length && tags.length > 0
+    return selectedTags.size === tags.length && tags.length > 0
   }
 
   const anySelected = () => {
-    return selectedTags().size > 0
+    return selectedTags.size > 0
   }
 
   createEffect(() => {
@@ -88,12 +90,14 @@ export function TagFilter(props: TagFilterProps) {
 
             <For each={filteredTags()}>
               {(tag) => {
-                const isSelected = () => selectedTags().has(tag)
+                const isSelected = () => selectedTags?.has(tag) ?? false
                 return (
                   <div class={tagFilterStyles.tagItem}>
                     <button
                       class={`${tagFilterStyles.tagCheckbox} ${isSelected() ? tagFilterStyles.selected : ''}`}
-                      onClick={() => { props.onToggle(tag); }}
+                      onClick={() => {
+                        if (selectedTags) props.onToggle(tag)
+                      }}
                       type="button"
                     >
                       <span class={tagFilterStyles.checkboxIndicator}>

@@ -2,7 +2,7 @@
  * Modal Component - Generic modal dialog
  */
 
-import { createSignal, onMount } from 'solid-js'
+import { createEffect, createSignal, onMount } from 'solid-js'
 import styles from './Modal.module.css'
 import type { JSX } from 'solid-js'
 
@@ -77,7 +77,7 @@ export function Modal(props: ModalProps) {
 
         {/* Modal Footer */}
         <div class={styles.modalFooter}>
-          {props.title !== undefined && !props.title.includes('Settings') && (
+          {props.title !== undefined && !props.title?.includes('Settings') && (
             <button class={styles.modalFooterButton} onClick={handleClose}>
               Close
             </button>

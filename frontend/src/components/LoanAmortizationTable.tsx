@@ -114,7 +114,7 @@ export default function LoanAmortizationTable(props: Props) {
             </div>
             <div class={styles.summaryCard}>
               <div class={styles.summaryLabel}>Payoff Date</div>
-              <div class={styles.summaryValue} style={{ fontWeight: 600 }}>
+              <div class={styles.summaryValue} style={{ 'font-weight': 600 }}>
                 {s?.payoffDate || '-'}
               </div>
             </div>
@@ -137,14 +137,14 @@ export default function LoanAmortizationTable(props: Props) {
                   prepayDate.setMonth(prepayDate.getMonth() + p.month - 1)
                   return (
                     <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
                         {formatDate(prepayDate.toISOString().split('T')[0])}
                       </span>
-                      <span style={{ fontWeight: 600, color: 'var(--success)' }}>
+                      <span style={{ 'font-weight': 600, color: 'var(--success)' }}>
                         +{formatCurrency(p.amount)}
                       </span>
                       {p.note && (
-                        <span style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600 }}>
+                        <span style={{ 'font-size': '11px', color: 'var(--warning)', 'font-weight': '600' }}>
                           {p.note}
                         </span>
                       )}
@@ -166,14 +166,14 @@ export default function LoanAmortizationTable(props: Props) {
                   rateDate.setMonth(rateDate.getMonth() + rp.start_month - 1)
                   return (
                     <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
                         {formatDate(rateDate.toISOString().split('T')[0])}
                       </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      <span style={{ 'font-size': '11px', color: 'var(--text-secondary)' }}>
                         ({rp.start_month}
                         {rp.end_month ? ` - ${rp.end_month}` : '+'} mo)
                       </span>
-                      <span style={{ fontWeight: 600 }}>{rp.rate}%</span>
+                      <span style={{ 'font-weight': 600 }}>{rp.rate}%</span>
                     </div>
                   )
                 })}
@@ -184,10 +184,10 @@ export default function LoanAmortizationTable(props: Props) {
           {/* Charts */}
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
             <div>
-              <canvas id={`loan-chart-principal-${props.loanId}`} style={{ height: 220 }} />
+              <canvas id={`loan-chart-principal-${props.loanId}`} style={{ height: '220px' }} />
             </div>
             <div>
-              <canvas id={`loan-chart-balance-${props.loanId}`} style={{ height: 220 }} />
+              <canvas id={`loan-chart-balance-${props.loanId}`} style={{ height: '220px' }} />
             </div>
           </div>
 
@@ -224,9 +224,9 @@ export default function LoanAmortizationTable(props: Props) {
 
                     return (
                       <tr
-                        class={{
-                          [styles.prepaymentRow]: hasPrepayment,
-                          [styles.rateChangeRow]: rateChanged,
+                        classList={{
+                          [styles.prepaymentRow]: !!hasPrepayment,
+                          [styles.rateChangeRow]: !!rateChanged,
                         }}
                       >
                         <td>{row.month}</td>
@@ -238,20 +238,20 @@ export default function LoanAmortizationTable(props: Props) {
                         <td class={`${styles.tdAmount} ${styles.expense}`}>
                           {formatCurrency(row.interest)}
                         </td>
-                        <td style={{ fontWeight: 600 }}>{formatCurrency(row.balance)}</td>
+                        <td style={{ 'font-weight': 600 }}>{formatCurrency(row.balance)}</td>
                         <td>{row.rate.toFixed(3)}%</td>
                         {hasPrepayment ? (
                           <td
                             class={styles.tdAmount}
-                            style={{ color: 'var(--success)', fontWeight: 600 }}
+                            style={{ color: 'var(--success)', 'font-weight': 600 }}
                           >
-                            {formatCurrency(row.prepayment)}
+                            {formatCurrency(row.prepayment as number)}
                           </td>
                         ) : (
                           <td>-</td>
                         )}
                         {note ? (
-                          <td style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600 }}>
+                          <td style={{ 'font-size': '11px', color: 'var(--warning)', 'font-weight': 600 }}>
                             {note}
                           </td>
                         ) : (
@@ -263,14 +263,14 @@ export default function LoanAmortizationTable(props: Props) {
                 </tbody>
               </table>
             </div>
-            <div style="margin-top: 8px; font-size: 12px; color: 'var(--text-secondary)'; display: flex; gap: 16px;">
+            <div style="margin-top: 8px; font-size: '12px'; color: 'var(--text-secondary)'; display: flex; gap: 16px;">
               <span>
                 <span
                   style={{
                     background: 'rgba(245, 158, 11, 0.15)',
                     padding: '2px 6px',
-                    borderRadius: 4,
-                    marginRight: 4,
+                    'border-radius': '4px',
+                    'margin-right': '4px',
                   }}
                 >
                   &nbsp;
@@ -282,8 +282,8 @@ export default function LoanAmortizationTable(props: Props) {
                   style={{
                     background: 'rgba(16, 185, 129, 0.15)',
                     padding: '2px 6px',
-                    borderRadius: 4,
-                    marginRight: 4,
+                    'border-radius': '4px',
+                    'margin-right': '4px',
                   }}
                 >
                   &nbsp;
@@ -301,7 +301,7 @@ export default function LoanAmortizationTable(props: Props) {
                   <h4 style="margin: 0; font-size: 16px; font-weight: 600;">
                     Detailed Amortization Schedule
                   </h4>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
                     {props.loan.name} - {schedule.length} payments
                   </span>
                 </div>
@@ -340,12 +340,12 @@ export default function LoanAmortizationTable(props: Props) {
                           <td class={styles.tdAmount}>{row.payment}</td>
                           <td class={`${styles.tdAmount} ${styles.income}`}>{row.principal}</td>
                           <td class={`${styles.tdAmount} ${styles.expense}`}>{row.interest}</td>
-                          <td style={{ fontWeight: 600 }}>{row.balance}</td>
+                          <td style={{ 'font-weight': 600 }}>{row.balance}</td>
                           <td>{row.rate}</td>
                           {row.prepayment > 0 ? (
                             <td
                               class={styles.tdAmount}
-                              style={{ color: 'var(--success)', fontWeight: 600 }}
+                              style={{ color: 'var(--success)', 'font-weight': 600 }}
                             >
                               {row.prepayment}
                             </td>
@@ -402,12 +402,12 @@ export default function LoanAmortizationTable(props: Props) {
                         <td class={styles.tdAmount}>{row.payment}</td>
                         <td class={`${styles.tdAmount} ${styles.income}`}>{row.principal}</td>
                         <td class={`${styles.tdAmount} ${styles.expense}`}>{row.interest}</td>
-                        <td style={{ fontWeight: 600 }}>{row.balance}</td>
+                        <td style={{ 'font-weight': 600 }}>{row.balance}</td>
                         <td>{row.rate}</td>
                         {row.prepayment > 0 ? (
                           <td
                             class={styles.tdAmount}
-                            style={{ color: 'var(--success)', fontWeight: 600 }}
+                            style={{ color: 'var(--success)', 'font-weight': 600 }}
                           >
                             {row.prepayment}
                           </td>
@@ -440,14 +440,14 @@ export default function LoanAmortizationTable(props: Props) {
                   </tfoot>
                 </table>
               )}
-              <div style="margin-top: 12px; font-size: 12px; color: 'var(--text-secondary)'; display: flex; gap: 16px;">
+              <div style="margin-top: 12px; font-size: '12px'; color: 'var(--text-secondary)'; display: flex; gap: 16px;">
                 <span>
                   <span
                     style={{
                       background: 'rgba(16, 185, 129, 0.2)',
                       padding: '2px 6px',
-                      borderRadius: 4,
-                      marginRight: 4,
+                      'border-radius': '4px',
+                      'margin-right': '4px',
                     }}
                   >
                     &nbsp;
