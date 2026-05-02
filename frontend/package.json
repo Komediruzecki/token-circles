@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "tsc": "npx tsc",
+    "typecheck": "tsc --noEmit",
     "vite": "npx vite",
     "preview": "vite preview",
     "lint": "eslint",
