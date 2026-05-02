@@ -8,7 +8,7 @@ import layoutStyles from './components/Layout.module.css'
 import profileStyles from './components/Profile.module.css'
 import { api } from './core/api.js'
 import { authLogin, authLogout,handlers, receipts, transactions } from './core/handlers.js'
-import { pages as allPages } from './router.tsx'
+import { pages as allPages, type PageName } from './router.tsx'
 
 // Mount handlers to window for legacy code compatibility
 window.receipts = receipts
@@ -70,8 +70,9 @@ export function App() {
       await loadProfiles()
       // Select the first available profile after login
       if (profiles().length > 0) {
+        const savedProfileId = localStorage.getItem('currentProfileId')
         const selectedProfile = profiles().find(
-          (p) => p.id === parseInt(localStorage.getItem('currentProfileId')) || p.id === 1
+          (p) => p.id === (savedProfileId ? parseInt(savedProfileId) : null) || p.id === 1
         )
         if (selectedProfile) {
           setCurrentProfile(selectedProfile)
@@ -96,7 +97,7 @@ export function App() {
     }
   }
 
-  createEffect(() => {
+  createEffect(async () => {
     // Initialize theme
     const savedDarkMode = localStorage.getItem('darkMode')
     if (savedDarkMode === 'true') {
@@ -105,17 +106,18 @@ export function App() {
       document.documentElement.setAttribute('data-theme', 'light')
     }
 
-    const _isLoggedIn = api.checkLogin().then(async (loggedIn) => {
-      if (loggedIn) {
-        await loadProfiles(true)
-      } else {
-        await loadProfiles(false)
-        // Default to first profile if not strictly logged in but profiles exist
-        if (profiles().length > 0) {
-          setCurrentProfile(profiles()[0])
+    await api.checkLogin()
+      .then(async (loggedIn) => {
+        if (loggedIn) {
+          await loadProfiles(true)
+        } else {
+          await loadProfiles(false)
+          // Default to first profile if not strictly logged in but profiles exist
+          if (profiles().length > 0) {
+            setCurrentProfile(profiles()[0])
+          }
         }
-      }
-    })
+      })
 
     // Parse initial hash from URL
     const hash = window.location.hash.slice(1)
@@ -346,9 +348,9 @@ export function App() {
             </div>
           </div>
         </div>
-        <div style={{ padding: '0 16px', marginBottom: '12px' }}>
+        <div style={{ padding: '0 16px', 'margin-bottom': '12px' }}>
           {currentProfile() ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0' }}>
+            <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', padding: '6px 0' }}>
               <svg
                 width="16"
                 height="16"
@@ -356,7 +358,7 @@ export function App() {
                 stroke="currentColor"
                 stroke-width="2"
                 viewBox="0 0 24 24"
-                style={{ flexShrink: 0 }}
+                style={{ 'flex-shrink': 0 }}
               >
                 <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
@@ -364,20 +366,20 @@ export function App() {
               <span
                 style={{
                   flex: 1,
-                  fontSize: '13px',
-                  fontWeight: 500,
+                  'font-size': '13px',
+                  'font-weight': 500,
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  'text-overflow': 'ellipsis',
+                  'white-space': 'nowrap',
                 }}
               >
                 {currentProfile().name}
               </span>
               <button
-                class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
+                className={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
                 onClick={handleLogout}
                 title="Logout"
-                style={{ padding: '4px 6px', flexShrink: 0 }}
+                style={{ padding: '4px 6px', 'flex-shrink': 0 }}
               >
                 <svg
                   width="16"
@@ -428,7 +430,7 @@ export function App() {
       <main class={layoutStyles.main}>
         {Object.entries(allPages).map(([name, page]) => (
           <Show when={activePage() === name}>
-            <Dynamic key={name} component={page} data-page={name} data-testid={`page-${name}`} />
+            <Dynamic key={name} component={page} {...(name as any) as any} data-testid={`page-${name}`} />
           </Show>
         ))}
       </main>

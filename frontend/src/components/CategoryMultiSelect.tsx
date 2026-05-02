@@ -142,9 +142,9 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          stroke-width="2"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
         </svg>
       </button>
 
@@ -188,7 +188,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
                     checked={props.selectedCategoryIds().includes(category.id)}
                     readOnly
                   />
-                  <span class={categoryMultiSelectStyles.categoryColor} style={{ backgroundColor: category.color }} />
+                  <span class={categoryMultiSelectStyles.categoryColor} style={{ 'background-color': category.color }} />
                   <span class={categoryMultiSelectStyles.categoryName}>{category.name}</span>
                 </button>
               ))

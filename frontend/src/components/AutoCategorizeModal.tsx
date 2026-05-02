@@ -106,8 +106,8 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             type="button"
             aria-label="Close modal"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -126,7 +126,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             <div class={autoCategorizeModalStyles.loading}>Loading category suggestions...</div>
           ) : uncategorized.length === 0 ? (
             <div class={autoCategorizeModalStyles.empty}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p>All transactions are categorized!</p>
@@ -167,10 +167,10 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
                     >
                       {applying() && tx.id in pendingUpdates() ? (
                         <svg class={autoCategorizeModalStyles.spinnerIcon} viewBox="0 0 24 24">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30" strokeDashoffset="60" />
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
                         </svg>
                       ) : isSelected ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       ) : (
@@ -202,7 +202,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             {applying() ? (
               <span class={autoCategorizeModalStyles.spinner}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30" strokeDashoffset="60" />
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
                 </svg>
               </span>
             ) : (

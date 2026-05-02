@@ -103,7 +103,7 @@ export function TagFilter(props: TagFilterProps) {
                           viewBox="0 0 12 12"
                           fill="none"
                           stroke="white"
-                          strokeWidth="2"
+                          stroke-width="2"
                         >
                           <polyline points="2 6 4.5 8.5 10 2.5" />
                         </svg>
