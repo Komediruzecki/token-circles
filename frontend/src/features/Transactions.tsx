@@ -415,7 +415,7 @@ export default function Transactions() {
             class={`${styles.btnSecondary} ${styles.btnSm}`}
             onClick={() => setAutoCategorizeModalOpen(true)}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             Auto-categorize
@@ -425,7 +425,7 @@ export default function Transactions() {
             onClick={() => setReconciliationModalOpen(true)}
             disabled={selectedTransactions().length === 0}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" />
             </svg>

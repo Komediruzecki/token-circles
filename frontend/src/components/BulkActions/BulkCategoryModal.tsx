@@ -54,8 +54,8 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
             type="button"
             aria-label="Close modal"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -66,33 +66,24 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
           </div>
 
           <div class={bulkCategoryModalStyles.categoryList}>
-            <For each={props.categories()}>
-              {(category) => {
-                const isSelected = () => selectedCategory() === category.id
-                return (
-                  <button
-                    class={`${bulkCategoryModalStyles.categoryItem} ${isSelected() ? bulkCategoryModalStyles.selected : ''}`}
-                    onClick={() => {
-                      if (!isSubmitting()) {
-                        setSelectedCategory(category.id)
-                      }
-                    }}
-                    type="button"
-                  >
-                    <span
-                      class={bulkCategoryModalStyles.categoryColor}
-                      style={{ backgroundColor: category.color }}
-                    />
-                    <span class={bulkCategoryModalStyles.categoryName}>{category.name}</span>
-                    {isSelected() && (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                  </button>
-                )
-              }}
-            </For>
+            {/* Temporarily disabled category mapping */}
+            {/* {props.categories().map((category) => (
+              <button
+                class={''}
+                onClick={() => {
+                  if (!isSubmitting()) {
+                    setSelectedCategory(category.id)
+                  }
+                }}
+                type="button"
+              >
+                <span
+                  class={''}
+                  style={{ background-color: category.color }}
+                />
+                <span class={''}>{category.name}</span>
+              </button>
+            ))} */}
           </div>
         </div>
 
@@ -114,7 +105,7 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
             {isSubmitting() ? (
               <span class={bulkCategoryModalStyles.spinner}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30" strokeDashoffset="60" />
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
                 </svg>
               </span>
             ) : (

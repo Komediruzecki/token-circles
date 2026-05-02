@@ -529,7 +529,7 @@ export default function Bills() {
                 <button
                   type="button"
                   class={styles.btnLink}
-                  style={{ marginTop: 8 }}
+                  style={{ 'margin-top': 8 }}
                   onClick={openCategoryModal}
                 >
                   + Add Category

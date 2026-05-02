@@ -14,8 +14,8 @@ interface FilterOption {
 interface FilterState {
   categories: FilterOption[]
   tags: FilterOption[]
-  selectedCategories: number[]
-  selectedTags: number[]
+  selectedCategories: number[] | undefined
+  selectedTags: number[] | undefined
   dateRange: { from: string; to: string }
   selectedPreset: string
 }
@@ -125,7 +125,7 @@ export default function FilterBar(props: FilterBarProps) {
                 height="12"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth={2}
+                stroke-width={2}
                 viewBox="0 0 24 24"
               >
                 <path d="M19 9l-7 7-7-7" />
@@ -172,7 +172,7 @@ export default function FilterBar(props: FilterBarProps) {
                 height="12"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth={2}
+                stroke-width={2}
                 viewBox="0 0 24 24"
               >
                 <path d="M19 9l-7 7-7-7" />
