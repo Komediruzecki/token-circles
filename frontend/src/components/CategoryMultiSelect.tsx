@@ -31,8 +31,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   }
 
   const handleClickOutside = (e: MouseEvent) => {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const container = (containerRef as any)[0] as HTMLElement | null
+    const container = containerRef()
     if (container && !container.contains(e.target as Node)) {
       setIsOpen(false)
     }
