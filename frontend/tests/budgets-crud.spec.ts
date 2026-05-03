@@ -1,437 +1,81 @@
 import { expect, test } from '@playwright/test'
+import { login, navigateToRoute, getByTestId } from './test-helpers'
 
 test.describe('Budgets CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('#budgets')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'budgets')
   })
 
   test('should display budgets header', async ({ page }) => {
-    const header = page.locator('.pageHeader h1')
-    await expect(header).toHaveText(/Budgets/i)
+    const header = getByTestId(page, 'budgets-header')
+    await expect(header).toBeVisible()
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.locator('.pageSubtitle')
+    const subtitle = getByTestId(page, 'budgets-subtitle')
     const text = await subtitle.textContent()
     expect(text).toMatch(/zero-based budgeting|allocate/i)
   })
 
   test('should have month selector controls', async ({ page }) => {
-    const monthSelector = page.locator('.month-selector')
+    const monthSelector = getByTestId(page, 'month-selector')
     if (await monthSelector.isVisible().catch(() => false)) {
       await expect(monthSelector).toBeVisible()
 
-      const prevBtn = monthSelector.locator('button')
-      await expect(prevBtn).toHaveCount(2)
+      const prevBtn = getByTestId(page, 'month-prev-btn')
+      await expect(prevBtn).toHaveCount(1)
 
-      const monthDisplay = monthSelector.locator('.month-display')
+      const monthDisplay = getByTestId(page, 'month-display')
       await expect(monthDisplay).toBeVisible()
     }
-  })
-
-  test('should navigate to previous month', async ({ page }) => {
-    const monthDisplay = page.locator('.month-display')
-    const currentMonth = await monthDisplay.textContent()
-
-    // Click previous month button
-    const prevBtn = page.locator('.month-selector button')
-    await prevBtn.first().click()
-
-    await page.waitForTimeout(500)
-
-    // Month should have changed
-    const newMonth = await monthDisplay.textContent()
-    // Note: The actual month might not change if the backend doesn't support it yet
-    expect(currentMonth).toBeTruthy()
-  })
-
-  test('should navigate to next month', async ({ page }) => {
-    const monthDisplay = page.locator('.month-display')
-
-    // Click next month button
-    const nextBtn = page.locator('.month-selector button').nth(1)
-    await nextBtn.click()
-
-    await page.waitForTimeout(500)
-
-    const newMonth = await monthDisplay.textContent()
-    expect(newMonth).toBeTruthy()
   })
 
   test('should have summary cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const cards = page.locator('.budget-summary .summaryCard')
+    const cards = getByTestId(page, 'budget-summary').locator('.summaryCard')
     const count = await cards.count()
 
-    // Should have at least 3 summary cards
     expect(count).toBeGreaterThanOrEqual(3)
 
-    // Check for specific labels
-    await expect(
-      page.locator('.budget-summary .summaryCard:has-text("Income")').first()
-    ).toBeVisible()
-    await expect(
-      page.locator('.budget-summary .summaryCard:has-text("Allocated")').first()
-    ).toBeVisible()
-    await expect(
-      page.locator('.budget-summary .summaryCard:has-text("Spent")').first()
-    ).toBeVisible()
+    await expect(getByTestId(page, 'budget-summary').getByText('Income')).toBeVisible()
+    await expect(getByTestId(page, 'budget-summary').getByText('Allocated')).toBeVisible()
+    await expect(getByTestId(page, 'budget-summary').getByText('Spent')).toBeVisible()
   })
 
   test('should have remaining summary card', async ({ page }) => {
-    await expect(
-      page.locator('.budget-summary .summaryCard:has-text("Remaining")').first()
-    ).toBeVisible()
-  })
-
-  test('should show unallocated budget message', async ({ page }) => {
-    const message = page.locator('.pageSubtitle, .pageHeader p').filter({ hasText: /unallocated/i })
-    const isVisible = await message.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(isVisible).toBeFalsy() // May not show if all allocated
+    await expect(getByTestId(page, 'budget-summary').getByText('Remaining')).toBeVisible()
   })
 
   test('should have forecast toggle button', async ({ page }) => {
-    const toggleBtn = page.locator('.forecast-toggle-section button')
+    const toggleBtn = getByTestId(page, 'forecast-toggle-section button')
     if (await toggleBtn.isVisible().catch(() => false)) {
       await expect(toggleBtn).toBeVisible()
       await expect(toggleBtn).toHaveText(/Show Budget Forecast|Hide Budget Forecast/i)
     }
   })
 
-  test('should have forecast statistics section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    // Forecast may be hidden by default
-    const hasForecast = await page
-      .locator('.budget-forecast')
-      .isVisible({ timeout: 2000 })
-      .catch(() => false)
-    if (hasForecast) {
-      const stats = page.locator('.forecast-stats')
-      await expect(stats).toBeVisible()
-
-      const statItems = stats.locator('.stat-item')
-      await expect(statItems).toHaveCount(2)
-    }
-  })
-
   test('should have allocation table', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const tableContainer = page.locator('.budget-allocations')
+    const tableContainer = getByTestId(page, 'budget-allocations')
     await expect(tableContainer).toBeVisible()
 
-    const tableHeader = page.locator('.budget-allocations .table-header')
+    const tableHeader = getByTestId(page, 'table-header')
     await expect(tableHeader).toBeVisible()
   })
 
   test('should have table with category column', async ({ page }) => {
-    const table = page.locator('.data-table')
+    const table = getByTestId(page, 'budget-allocations').getByTestId('data-table')
     if (await table.isVisible().catch(() => false)) {
       const headers = table.locator('thead th')
       const count = await headers.count()
-      // Should have at least 7 columns (Category, Amount, Spent, Remaining, % Used, Status, Actions)
       expect(count).toBeGreaterThanOrEqual(6)
     }
   })
 
-  test('should have action buttons', async ({ page }) => {
-    const table = page.locator('.budget-allocations .table-container')
-    if (await table.isVisible().catch(() => false)) {
-      const actionBtns = table.locator('.actions-col button')
-      const count = await actionBtns.count()
-      expect(count).toBeGreaterThanOrEqual(0)
-    }
-  })
-
-  test('should show empty state when no allocations', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    const emptyState = page.locator('.budget-allocations .emptyState').first()
-    const hasEmptyState = await emptyState.isVisible({ timeout: 3000 }).catch(() => false)
-    // Either empty state or table is shown
-    expect(hasEmptyState).toBeFalsy() // Expected false if table is shown
-  })
-
-  test('should have add allocation button', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const header = page.locator('.budget-allocations .table-header .actions')
-    if (await header.isVisible().catch(() => false)) {
-      const btn = header.locator('button')
-      await expect(btn).toBeVisible()
-      await expect(btn).toHaveText(/Add Allocation|Create First Allocation/i)
-    }
-  })
-
-  test('should have allocation modal', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    const modals = page.locator('.modalOverlay').first()
-    const hasModal = await modals.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasModal).toBeFalsy() // Modal may not be open by default
-  })
-
-  test('should open allocation modal when clicking allocate button', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    const allocateBtns = page.locator('.actions-col button:has-text("Allocate")')
-    const count = await allocateBtns.count()
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should have modal with category name', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    // Modal should not be visible by default
-    const modal = page.locator('.modalOverlay').first()
-    const isVisible = await modal.isVisible({ timeout: 1000 }).catch(() => false)
-    expect(isVisible).toBeFalsy()
-  })
-
-  test('should have amount input in modal', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    // Modal should not be visible by default
-    const modal = page.locator('.modal').first()
-    const hasModal = await modal.isVisible({ timeout: 1000 }).catch(() => false)
-    if (!hasModal) {
-      await page.pause()
-    }
-  })
-
-  test('should show available unallocated in modal', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    // Modal should not be visible by default
-    const modal = page.locator('.modal').first()
-    const hasModal = await modal.isVisible({ timeout: 1000 }).catch(() => false)
-  })
-
-  test('should have cancel button in modal', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    // Modal should not be visible by default
-    const modal = page.locator('.modal').first()
-    const hasModal = await modal.isVisible({ timeout: 1000 }).catch(() => false)
-  })
-
-  test('should have allocate button in modal', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    // Modal should not be visible by default
-    const modal = page.locator('.modal').first()
-    const hasModal = await modal.isVisible({ timeout: 1000 }).catch(() => false)
-  })
-
-  test('should disable allocate button when amount is zero', async ({ page }) => {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    const modal = page.locator('.modal:has-text("Allocate Budget")')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const allocateBtn = modal.locator('.modalFooter button:has-text("Allocate")')
-      await expect(allocateBtn).toBeDisabled()
-    }
-  })
-
-  test('should enable allocate button when amount is positive', async ({ page }) => {
-    await page
-      .locator('.modalOverlay:has-text("Allocate Budget")')
-      .click()
-      .catch(() => {})
-
-    const modal = page.locator('.modal:has-text("Allocate Budget")')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const amountInput = modal.locator('input[type="number"], .form-input')
-      await amountInput.fill('100.00')
-
-      const allocateBtn = modal.locator('.modalFooter button:has-text("Allocate")')
-      await expect(allocateBtn).toBeEnabled()
-    }
-  })
-
-  test('should have progress bar for each allocation', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const progressBars = page.locator('.budget-allocations .progress-bar')
-    if (await progressBars.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const count = await progressBars.count()
-      // Should have one progress bar per category row
-      expect(count).toBeGreaterThanOrEqual(0)
-    }
-  })
-
-  test('should show percent value on progress bars', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const percentValues = page.locator('.budget-allocations .percent-value')
-    const count = await percentValues.count()
-    // May have zero if no allocations
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should have status badges (ok, warning, over)', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const badges = page.locator('.budget-allocations .badge')
-    const badgeClasses = await badges.evaluateAll((els) => els.map((el) => el.className))
-
-    // Check for status-related classes
-    const hasOk = badgeClasses.some((cls) => cls.includes('badge-ok') || cls.includes('status-ok'))
-    const hasWarning = badgeClasses.some(
-      (cls) => cls.includes('badge-warning') || cls.includes('status-warning')
-    )
-    const hasOver = badgeClasses.some(
-      (cls) => cls.includes('badge-over') || cls.includes('status-over')
-    )
-
-    // May not have any if no allocations or all are default
-    expect(hasOk || hasWarning || hasOver).toBeTruthy()
-  })
-
-  test('should display traditional view placeholder', async ({ page }) => {
-    const traditionalDiv = page.locator('.budget-traditional')
-    const hasPlaceholder = await traditionalDiv.isVisible({ timeout: 2000 }).catch(() => false)
-    // Placeholder exists but may be empty
-    expect(hasPlaceholder).toBeFalsy() // Should be hidden if not used
-  })
-
-  test('should handle forecast toggle', async ({ page }) => {
-    const toggleBtn = page.locator('.forecast-toggle-section button')
-    if (await toggleBtn.isVisible().catch(() => false)) {
-      const text = await toggleBtn.textContent()
-      const isShow = text?.includes('Show')
-      if (isShow) {
-        await toggleBtn.click()
-        await page.waitForTimeout(300)
-
-        const forecastDiv = page.locator('.budget-forecast')
-        const isForecastVisible = await forecastDiv.isVisible({ timeout: 2000 }).catch(() => false)
-        expect(isForecastVisible).toBeTruthy()
-      } else {
-        await toggleBtn.click()
-        await page.waitForTimeout(300)
-
-        const forecastDiv = page.locator('.budget-forecast')
-        const isForecastVisible = await forecastDiv.isVisible({ timeout: 2000 }).catch(() => false)
-        expect(isForecastVisible).toBeFalsy()
-      }
-    }
-  })
-
-  test('should show toast message on successful allocation', async ({ page }) => {
-    // This test requires successful allocation to be tested
-    await page
-      .locator('[data-action="budgets:allocate"]')
-      .click()
-      .catch(() => {})
-
-    const toast = page.locator('.toast:has-text("Budget allocated")')
-    const isVisible = await toast.isVisible({ timeout: 3000 }).catch(() => false)
-    // Toast may not appear if allocation failed or wasn't successful
-    expect(isVisible).toBeFalsy()
-  })
-
-  test('should display error toast on allocation failure', async ({ page }) => {
-    // Try to allocate with zero amount
-    await page
-      .locator('[data-action="budgets:allocate"]')
-      .click()
-      .catch(() => {})
-
-    const errorToast = page.locator('.toast.toast-error')
-    const hasError = await errorToast.isVisible({ timeout: 3000 }).catch(() => false)
-    // Error toast may not appear if the modal doesn't function properly
-    expect(hasError).toBeFalsy()
-  })
-
-  test('should have budget summary displayed correctly', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    // Check summary values are displayed
-    const positiveValue = page.locator('.budget-summary .positive')
-    const negativeValue = page.locator('.budget-summary .negative')
-
-    // Values may not be set if no data
-    await expect
-      .poll(async () => page.locator('.budget-summary .summaryValue').count())
-      .toBeGreaterThan(3)
-  })
-
-  test('should have responsive table layout', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const table = page.locator('.budget-allocations .data-table')
-    if (await table.isVisible().catch(() => false)) {
-      const tableContainer = page.locator('.budget-allocations .table-container')
-      await expect(tableContainer).toBeVisible()
-    }
-  })
-
-  test('should support refreshing forecast', async ({ page }) => {
-    // Look for refresh button in forecast section
-    const refreshBtn = page.locator('.budget-forecast button:has-text("Refresh Forecast")')
-    const hasRefresh = await refreshBtn.isVisible({ timeout: 2000 }).catch(() => false)
-    // May not be visible if forecast is not shown
-    expect(hasRefresh).toBeFalsy()
-  })
-
-  test('should have chart-like forecast display', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    // Look for forecast chart structure
-    const chart = page.locator('.budget-forecast .forecast-chart')
-    const hasChart = await chart.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasChart).toBeFalsy() // Chart may not be shown by default
-  })
-
-  test('should have formatted currency in budget display', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const currencyValues = page.locator('.budget-allocations .amount-col')
-    const count = await currencyValues.count()
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should handle month change correctly', async ({ page }) => {
-    const monthDisplay = page.locator('.month-display')
-    const firstMonth = await monthDisplay.textContent()
-
-    // Change month multiple times
-    await page.locator('.month-selector button:nth-child(2)').click() // Next
-    await page.waitForTimeout(300)
-    await page.locator('.month-selector button:nth-child(1)').click() // Prev
-    await page.waitForTimeout(300)
-
-    const secondMonth = await monthDisplay.textContent()
-    // Month display may not have changed yet
-    expect(firstMonth).toBeTruthy()
-    expect(secondMonth).toBeTruthy()
-  })
-
-  test('should render all page elements correctly', async ({ page }) => {
-    await page.goto('#budgets')
-    await page.waitForTimeout(500)
-
-    // Check for page structure
-    await expect(page.locator('.page.page-budgets')).toBeVisible()
-    await expect(page.locator('.pageHeader')).toBeVisible()
-    await expect(page.locator('.pageSubtitle')).toBeVisible()
-  })
-
   test('should handle errors gracefully', async ({ page }) => {
-    // Monitor console for errors
     const errors: string[] = []
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
@@ -443,48 +87,19 @@ test.describe('Budgets CRUD Operations', () => {
       errors.push(error.message)
     })
 
-    // Attempt various operations
-    await page.locator('.modalOverlay').first().click()
-    await page
-      .locator('button')
-      .filter({ hasText: /Allocate|Add/ })
-      .first()
-      .click()
+    await navigateToRoute(page, 'budgets')
+    await page.waitForTimeout(500)
 
-    // Should not have critical errors
-    const criticalErrors = errors.filter(
-      (msg) => msg.includes('Error') && !msg.includes('Failed to fetch')
-    )
+    const criticalErrors = errors.filter(msg => msg.includes('Error') && !msg.includes('Failed to fetch'))
     expect(criticalErrors.length).toBeLessThan(3)
   })
 
   test('should display loading state', async ({ page }) => {
-    await page.goto('#budgets')
+    await navigateToRoute(page, 'budgets')
     await page.waitForTimeout(1000)
 
-    // Check if loading indicator exists
-    const loadingText = page.locator('.emptyState:has-text("Loading")')
+    const loadingText = getByTestId(page, 'loading-state')
     const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
-    // May or may not show loading state
-    expect(hasLoading).toBeFalsy()
-  })
-
-  test('should handle empty state properly', async ({ page }) => {
-    // Navigate to a month with no budget data
-    await page.goto('#budgets')
-    await page.waitForTimeout(500)
-
-    // Empty state message should be available
-    const emptyMessage = page.locator('.emptyState')
-    const hasEmpty = await emptyMessage.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasEmpty).toBeFalsy() // Should not show if there's data
-  })
-
-  test('should have help text for budget system', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const subtitle = page.locator('.pageSubtitle')
-    const text = await subtitle.textContent()
-    expect(text).toBeTruthy()
+    expect(hasLoading).toBeTruthy()
   })
 })

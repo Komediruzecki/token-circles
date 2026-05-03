@@ -1,13 +1,17 @@
 import { expect, test } from '@playwright/test'
+import { login, navigateToRoute } from './test-helpers'
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('#dashboard')
-    await page.waitForLoadState('networkidle')
+    // Login first
+    await login(page)
+
+    // Navigate to dashboard page
+    await navigateToRoute(page, 'dashboard')
   })
 
   test('should display dashboard header', async ({ page }) => {
-    const header = page.getByRole('heading', { name: /dashboard/i, level: 1 })
+    const header = page.getByTestId('dashboard-header')
     await expect(header).toBeVisible()
   })
 

@@ -1,0 +1,357 @@
+{
+  "allElementCount": 287,
+  "dashPageCount": 0,
+  "pageContent": "<div class=\"_sidebar_1a1j2_55\"><div class=\"_sidebar-logo_1a1j2_71\"><h1>Finance<span>.</span></h1><p>Personal Finance Tracker</p></div><div class=\"_profileSelector_14e41_2\"><div class=\"_profileDropdown_14e41_7\"><button style=\"display:flex;align-items:center;justify-content:space-between;width:100%\" class=\"_profileDropdownBtn_14e41_31\"><div style=\"display:flex;align-items:center;gap:8px\"><div style=\"width:24px;height:24px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold\">E</div><span style=\"font-weight:600\">Example Low Income</span></div><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" style=\"width: 16px; height: 16px; transition: transform 0.2s; transform: none;\"><path d=\"M19 9l-7 7-7-7\"></path></svg></button><div class=\"_profileDropdownMenu_14e41_11 \"><div class=\"_profileDropdownHeader_14e41_67\">Switch Profile</div><div class=\"_profileDropdownItem_14e41_47 _active_14e41_61\"><div style=\"width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--primary); border-color: currentcolor; border-style: none; border-width: medium; border-image: initial;\"></div>Example Low Income</div><div class=\"_profileDropdownItem_14e41_47 \"><div style=\"width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: transparent; border: 1px solid var(--border);\"></div>Example Mid Income</div><div class=\"_profileDropdownItem_14e41_47 \"><div style=\"width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: transparent; border: 1px solid var(--border);\"></div>Example High Income</div><div class=\"_profileDropdownItem_14e41_47\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:8px\"><path d=\"M12 4v16m8-8H4\"></path></svg>Create Profile</div><div class=\"_profileDropdownDivider_14e41_76\"></div><div style=\"color:var(--text-secondary)\" class=\"_profileDropdownItem_14e41_47\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:8px\"><path d=\"M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg>Manage Account</div></div></div></div><div style=\"padding:0 16px;margin-bottom:12px\"><div style=\"display:flex;align-items:center;gap:8px;padding:6px 0\"><svg width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" style=\"flex-shrink:0\"><path d=\"M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg><span style=\"flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">Example Low Income</span><button title=\"Logout\" style=\"padding:4px 6px;flex-shrink:0\" class=\"_btn_1a1j2_7 _btn-ghost_1a1j2_44 _btn-sm_1a1j2_39\"><svg width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9\"></path></svg></button></div></div><nav class=\"_sidebar-nav_1a1j2_94\"><a href=\"#dashboard\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"></rect></svg><span>Dashboard</span></a><a href=\"#transactions\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2\"></path></svg><span>Transactions</span></a><a href=\"#budgets\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z\"></path></svg><span>Budgets</span></a><a href=\"#loans\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6\"></path></svg><span>Loan Calculator</span></a><a href=\"#goals\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M13 7h8m0 0v8m0-8l-8 8-4-4-6 6\"></path></svg><span>Savings Goals</span></a><a href=\"#bills\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4\"></path></svg><span>Bills</span></a><a href=\"#rent-buy\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6\"></path></svg><span>Rent vs Buy</span></a><a href=\"#compound\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z\"></path></svg><span>Compound Interest</span></a><a href=\"#emergency\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M13 10V3L4 14h7v7l9-11h-7z\"></path></svg><span>Emergency Fund</span></a><a href=\"#import\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12\"></path></svg><span>Import</span></a><a href=\"#accounts\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z\"></path></svg><span>Accounts</span></a><a href=\"#retirement\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z\"></path></svg><span>Retirement</span></a><a href=\"#housing\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6\"></path></svg><span>Housing Calc</span></a><a href=\"#analytics\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z\"></path></svg><span>Analytics</span></a><a href=\"#categories\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z\"></path></svg><span>Categories</span></a><a href=\"#settings\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle></svg><span>Settings</span></a></nav></div><main class=\"_main_1a1j2_129\"><div class=\"page page-transactions page-enter _transactions-page_zxxg6_1\"><div class=\"_page-header_zxxg6_4\"><h1 data-test-id=\"transactions-header\">Transactions</h1><div><button data-test-id=\"add-transaction-btn\" class=\"_btn-primary_zxxg6_261 _btn-sm_zxxg6_319\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 5v14M5 12h14\"></path></svg>Add Transaction</button><button class=\"_btn-secondary_zxxg6_281 _btn-sm_zxxg6_319\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M13 10V3L4 14h7v7l9-11h-7z\"></path></svg>Auto-categorize</button><button class=\"_btn-secondary_zxxg6_281 _btn-sm_zxxg6_319\" disabled=\"\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2\"></path><rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\"></rect></svg>Reconcile</button></div></div><div class=\"_filter-section_zxxg6_18\"><div tabindex=\"0\" class=\"_container_is4jv_1\"><button class=\"_selectBtn_is4jv_6\"><span class=\"_selectValue_is4jv_36\">All categories</span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" class=\"_arrow_is4jv_44 \"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M6 9l6 6 6-6\"></path></svg></button></div><div class=\"_filter-bar_12wo4_1\"><div class=\"_filters_12wo4_10\"><div class=\"_filter-group_12wo4_15\"><div class=\"_filter-dropdown_12wo4_20\"><button class=\"_filter-btn_12wo4_24\"><span>All Categories</span><svg width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M19 9l-7 7-7-7\"></path></svg></button></div><div class=\"_filter-dropdown_12wo4_20\"><button class=\"_filter-btn_12wo4_24\"><span>All Tags</span><svg width=\"12\" height=\"12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M19 9l-7 7-7-7\"></path></svg></button></div></div><div class=\"_date-filters_12wo4_98\"><button class=\"_preset-btn_12wo4_103 \">This Month</button><button class=\"_preset-btn_12wo4_103 \">Last Month</button><button class=\"_preset-btn_12wo4_103 \">This Year</button><button class=\"_preset-btn_12wo4_103 \">Custom</button></div></div></div></div><div class=\"_summaryBar_19hyg_1\"><div class=\"_summaryItem_19hyg_11\"><span class=\"_summaryLabel_19hyg_18\">Income</span><span class=\"_summaryValue_19hyg_25 _positive_19hyg_31\">+0.00</span></div><div class=\"_summaryDivider_19hyg_39\"></div><div class=\"_summaryItem_19hyg_11\"><span class=\"_summaryLabel_19hyg_18\">Expenses</span><span class=\"_summaryValue_19hyg_25 _negative_19hyg_35\">-0.00</span></div><div class=\"_summaryDivider_19hyg_39\"></div><div class=\"_summaryItem_19hyg_11\"><span class=\"_summaryLabel_19hyg_18\">Net</span><span class=\"_summaryValue_19hyg_25 _positive_19hyg_31\">+0.00</span></div></div><div class=\"_search-section_zxxg6_21\"><input type=\"text\" placeholder=\"Search transactions...\" class=\"_search-input_zxxg6_24\"></div><div class=\"_type-filters_zxxg6_38\"><button class=\"_type-btn_zxxg6_44 _type-btn-active_zxxg6_57\">All</button><button class=\"_type-btn_zxxg6_44 \">Income</button><button class=\"_type-btn_zxxg6_44 \">Expense</button><button class=\"_type-btn_zxxg6_44 \">Transfer</button></div><div id=\"tx-modal\" class=\"modal-overlay \"><div class=\"_modal_zxxg6_69\"><div class=\"_modal-header_zxxg6_79\"><div id=\"tx-modal-title\" class=\"_modal-title_zxxg6_87\">Add Transaction</div><button aria-label=\"Close modal\" class=\"_btn-ghost_zxxg6_301\"><svg width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path d=\"M6 18L18 6M6 6l12 12\"></path></svg></button></div><div class=\"_modal-body_zxxg6_101\"><form id=\"tx-form\"><input type=\"hidden\" id=\"tx-id\"><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Type</label><div id=\"tx-type-selector\" class=\"_type-selector_zxxg6_138\"><button type=\"button\" data-action=\"transactions:setType\" data-arg=\"expense\" class=\"expense active\">Expense</button><button type=\"button\" data-action=\"transactions:setType\" data-arg=\"income\" class=\"income \">Income</button><button type=\"button\" data-action=\"transactions:setType\" data-arg=\"transfer\" class=\"transfer \">Transfer</button></div></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Description</label><input type=\"text\" id=\"tx-description\" required=\"\" class=\"_form-control_zxxg6_123\"></div><div class=\"_form-row_zxxg6_131\"><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Amount</label><input type=\"number\" step=\"0.01\" id=\"tx-amount\" required=\"\" class=\"_form-control_zxxg6_123\"></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Currency</label><select id=\"tx-currency\" class=\"_form-control_zxxg6_123\"><option value=\"USD\">USD</option><option value=\"EUR\">EUR</option><option value=\"GBP\">GBP</option><option value=\"JPY\">JPY</option><option value=\"CAD\">CAD</option><option value=\"AUD\">AUD</option><option value=\"CHF\">CHF</option><option value=\"CNY\">CNY</option><option value=\"INR\">INR</option></select></div></div><div class=\"_form-row_zxxg6_131\"><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Date</label><input type=\"date\" id=\"tx-date\" required=\"\" class=\"_form-control_zxxg6_123\"></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Category</label><select id=\"tx-category\" class=\"_form-control_zxxg6_123\"></select></div></div><div class=\"_form-group_zxxg6_114 _tx-tag-selector_zxxg6_374\"><label class=\"_form-label_zxxg6_117\">Tags</label><div id=\"tx-tag-chips\" class=\"_tx-tag-chips_zxxg6_186\"></div><div class=\"_tx-tag-input-row_zxxg6_199\"><input type=\"text\" id=\"tx-tag-new-input\" placeholder=\"Type tag name, press Enter to create...\" data-action=\"transactions:addTagFromInput\" class=\"_tx-tag-new-input_zxxg6_192\"></div></div><div class=\"_form-row_zxxg6_131\"><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Beneficiary</label><input type=\"text\" id=\"tx-beneficiary\" placeholder=\"Who you paid\" class=\"_form-control_zxxg6_123\"></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Payor</label><input type=\"text\" id=\"tx-payor\" placeholder=\"Who paid you\" class=\"_form-control_zxxg6_123\"></div></div><div class=\"_form-row_zxxg6_131\"><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Amount in Local Currency</label><input type=\"number\" step=\"0.01\" id=\"tx-amount-local\" class=\"_form-control_zxxg6_123\"></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Exchange Rate</label><input type=\"number\" step=\"0.0001\" id=\"tx-exchange-rate\" value=\"1\" class=\"_form-control_zxxg6_123\"></div></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Means of Payment</label><select id=\"tx-means\" class=\"_form-control_zxxg6_123\"><option value=\"\">Select...</option><option value=\"Cash\">Cash</option><option value=\"Credit Card\">Credit Card</option><option value=\"Debit Card\">Debit Card</option><option value=\"Bank Transfer\">Bank Transfer</option><option value=\"Mobile Payment\">Mobile Payment</option><option value=\"Check\">Check</option><option value=\"Wire Transfer\">Wire Transfer</option></select></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Receipt</label><div class=\"_receipt-upload-container_zxxg6_213\"><label for=\"tx-receipt\" style=\"cursor:pointer\" class=\"_receipt-placeholder_zxxg6_219\"><svg fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path d=\"M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12\"></path></svg><span class=\"_receipt-text_zxxg6_232\">Click to upload receipt</span></label><input type=\"file\" id=\"tx-receipt\" accept=\"image/*,.pdf\" data-action=\"transactions:handleReceiptFileSelect\" class=\"_receipt-input_zxxg6_238\"></div></div><div class=\"_form-group_zxxg6_114\"><label class=\"_form-label_zxxg6_117\">Notes</label><textarea id=\"tx-notes\" rows=\"2\" class=\"_form-control_zxxg6_123\"></textarea></div></form></div><div class=\"_modal-footer_zxxg6_105\"><button class=\"_btn-secondary_zxxg6_281\">Cancel</button><button id=\"tx-save-btn\" data-action=\"transactions:save\" class=\"_btn-primary_zxxg6_261\">Save Transaction</button></div></div></div><div class=\"_loading_zxxg6_62\">Loading transactions...</div><div class=\"_overlay_16fo3_1\"><div class=\"_modal_16fo3_19\"><div class=\"_header_16fo3_41\"><h2 class=\"_title_16fo3_53\">Auto Categorize</h2><button type=\"button\" aria-label=\"Close modal\" class=\"_closeButton_16fo3_63\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M6 18L18 6M6 6l12 12\"></path></svg></button></div><div class=\"_content_16fo3_93\"><div class=\"_stats_16fo3_98\"><span class=\"_statItem_16fo3_110\">0 uncategorized</span><span class=\"_statItem_16fo3_110\">0 selected</span></div><div class=\"_empty_16fo3_260\"><svg width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z\"></path></svg><p>All transactions are categorized!</p></div></div><div class=\"_footer_16fo3_301\"><button type=\"button\" class=\"_cancelButton_16fo3_314\">Cancel</button><button type=\"button\" class=\"_applyButton_16fo3_315 _disabled_16fo3_352\" disabled=\"\">Apply 0</button></div></div></div><div><p>Reconciliation modal placeholder</p><button>Close</button></div></div></main>",
+  "elementsWithDataAttributes": [
+    {
+      "tag": "HTML",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "<head>\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-sca"
+    },
+    {
+      "tag": "HEAD",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    },
+    {
+      "tag": "META",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "META",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "META",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "LINK",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "TITLE",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "Finance Manager"
+    },
+    {
+      "tag": "SCRIPT",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "LINK",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "LINK",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "SCRIPT",
+      "id": "vite-plugin-pwa:register-sw",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "BODY",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "\n    <noscript>You need to enable JavaScript to run this app.</noscript>\n    <div id=\"root\"><div cla"
+    },
+    {
+      "tag": "NOSCRIPT",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "You need to enable JavaScript to run this app."
+    },
+    {
+      "tag": "DIV",
+      "id": "root",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "<div class=\"_sidebar_1a1j2_55\"><div class=\"_sidebar-logo_1a1j2_71\"><h1>Finance<span>.</span></h1><p>"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_sidebar_1a1j2_55",
+      "hasDataTestId": false,
+      "innerHTML": "<div class=\"_sidebar-logo_1a1j2_71\"><h1>Finance<span>.</span></h1><p>Personal Finance Tracker</p></d"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_sidebar-logo_1a1j2_71",
+      "hasDataTestId": false,
+      "innerHTML": "<h1>Finance<span>.</span></h1><p>Personal Finance Tracker</p>"
+    },
+    {
+      "tag": "H1",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "Finance<span>.</span>"
+    },
+    {
+      "tag": "SPAN",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "."
+    },
+    {
+      "tag": "P",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "Personal Finance Tracker"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileSelector_14e41_2",
+      "hasDataTestId": false,
+      "innerHTML": "<div class=\"_profileDropdown_14e41_7\"><button style=\"display:flex;align-items:center;justify-content"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdown_14e41_7",
+      "hasDataTestId": false,
+      "innerHTML": "<button style=\"display:flex;align-items:center;justify-content:space-between;width:100%\" class=\"_pro"
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "className": "_profileDropdownBtn_14e41_31",
+      "hasDataTestId": false,
+      "innerHTML": "<div style=\"display:flex;align-items:center;gap:8px\"><div style=\"width:24px;height:24px;border-radiu"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "<div style=\"width:24px;height:24px;border-radius:50%;background:var(--primary);color:white;display:f"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "E"
+    },
+    {
+      "tag": "SPAN",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "Example Low Income"
+    },
+    {
+      "tag": "svg",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": "<path d=\"M19 9l-7 7-7-7\"></path>"
+    },
+    {
+      "tag": "path",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownMenu_14e41_11 ",
+      "hasDataTestId": false,
+      "innerHTML": "<div class=\"_profileDropdownHeader_14e41_67\">Switch Profile</div><div class=\"_profileDropdownItem_14"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownHeader_14e41_67",
+      "hasDataTestId": false,
+      "innerHTML": "Switch Profile"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownItem_14e41_47 _active_14e41_61",
+      "hasDataTestId": false,
+      "innerHTML": "<div style=\"width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--primar"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownItem_14e41_47 ",
+      "hasDataTestId": false,
+      "innerHTML": "<div style=\"width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: transparent;"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownItem_14e41_47 ",
+      "hasDataTestId": false,
+      "innerHTML": "<div style=\"width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: transparent;"
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownItem_14e41_47",
+      "hasDataTestId": false,
+      "innerHTML": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" s"
+    },
+    {
+      "tag": "svg",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": "<path d=\"M12 4v16m8-8H4\"></path>"
+    },
+    {
+      "tag": "path",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownDivider_14e41_76",
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "_profileDropdownItem_14e41_47",
+      "hasDataTestId": false,
+      "innerHTML": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" s"
+    },
+    {
+      "tag": "svg",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": "<path d=\"M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle>"
+    },
+    {
+      "tag": "path",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "circle",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "<div style=\"display:flex;align-items:center;gap:8px;padding:6px 0\"><svg width=\"16\" height=\"16\" fill="
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "<svg width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\" s"
+    },
+    {
+      "tag": "svg",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": "<path d=\"M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle>"
+    },
+    {
+      "tag": "path",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "circle",
+      "id": "",
+      "className": {},
+      "hasDataTestId": false,
+      "innerHTML": ""
+    },
+    {
+      "tag": "SPAN",
+      "id": "",
+      "className": "",
+      "hasDataTestId": false,
+      "innerHTML": "Example Low Income"
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "className": "_btn_1a1j2_7 _btn-ghost_1a1j2_44 _btn-sm_1a1j2_39",
+      "hasDataTestId": false,
+      "innerHTML": "<svg width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><"
+    }
+  ]
+}

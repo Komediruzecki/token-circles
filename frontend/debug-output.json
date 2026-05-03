@@ -1,0 +1,16 @@
+{
+  "title": "Finance Manager",
+  "elements": 2,
+  "accountsHeader": 0,
+  "transactionsHeader": 1,
+  "rootChildren": 2,
+  "anyElement": 275,
+  "htmlLength": 18170,
+  "localStorageItems": {
+    "darkMode": "false",
+    "currentProfileId": "1"
+  },
+  "consoleErrors": [],
+  "consoleMessages": [],
+  "pageErrors": []
+}

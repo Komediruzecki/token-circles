@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal, onMount } from 'solid-js'
+import { createEffect, createSignal } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import { CategoryMultiSelect } from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
@@ -40,6 +40,7 @@ import styles from '../components/TransactionsPage.module.css'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api } from '../core/api'
+import type { Category } from '../types/models'
 
 type TransactionType = 'income' | 'expense' | 'transfer'
 
@@ -86,21 +87,16 @@ export default function Transactions() {
   const [selectedFile, setSelectedFile] = createSignal<File | null>(null)
   const [receiptPreviewUrl, setReceiptPreviewUrl] = createSignal<string | null>(null)
   const [type, _setType] = createSignal<TransactionType>('expense')
-  // Initialize form date to today's date
-  const today = new Date().toISOString().slice(0, 10)
-  const [formDate, setFormDate] = createSignal(today)
-  const [formDescription, setFormDescription] = createSignal('')
+  const [formDate] = createSignal(new Date().toISOString().slice(0, 10))
   const [formAmount, setFormAmount] = createSignal('')
   const [formCurrency, setFormCurrency] = createSignal('USD')
+  const [formExchangeRate, setFormExchangeRate] = createSignal('1')
   const [formCategory, setFormCategory] = createSignal<number | null>(null)
   const [formBeneficiary, setFormBeneficiary] = createSignal('')
   const [formPayor, setFormPayor] = createSignal('')
   const [formNotes, setFormNotes] = createSignal('')
-  const [formTags, setFormTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
-  const [categories, setCategories] = createSignal<
-    Array<{ id: number; name: string; color: string }>
-  >([])
-  const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
+  const [categories] = createSignal<Category[]>([])
+  const [tags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
   const [dateRange, setDateRange] = createSignal<{ from: string; to: string }>({ from: '', to: '' })
@@ -129,53 +125,6 @@ export default function Transactions() {
     setTotalExpenses(expenses)
     setNetBalance(income - expenses)
   })
-
-  // Load transactions function (exposed to window)
-  const _loadTransactions = async () => {
-    try {
-      setLoading(true)
-      const data = (await api.getTransactions()) as any
-      const transactionsData = Array.isArray(data) ? data : data.rows || data.transactions || []
-      setTransactions(transactionsData as Transaction[])
-
-      // Extract unique categories and tags for filter bar
-      const categoriesSet = new Map<number, { name: string; color: string }>()
-      const tagsSet = new Map<number, { name: string; color: string }>()
-      transactionsData.forEach((tx: any) => {
-        if (tx.category_name) {
-          if (!categoriesSet.has(tx.category_id !== undefined ? tx.category_id : 0)) {
-            const categoryNames = tx.category_name.split('|')
-            categoriesSet.set(tx.category_id || 0, {
-              name: categoryNames[categoryNames.length - 1].trim(),
-              color: '#666666',
-            })
-          }
-        }
-        if (tx.tags !== undefined && tx.tags.length > 0) {
-          tx.tags.forEach((tag: any) => {
-            if (!tagsSet.has(tag.id)) {
-              tagsSet.set(tag.id, { name: tag.name, color: tag.color })
-            }
-          })
-        }
-      })
-
-      setCategories(Array.from(categoriesSet.values()).map((c, i) => ({
-        id: i + 1,
-        name: c.name,
-        color: c.color
-      })))
-      setTags(Array.from(tagsSet.values()).map((t, i) => ({
-        id: i + 1,
-        name: t.name,
-        color: t.color
-      })))
-    } catch (error) {
-      console.error('Failed to load transactions:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // _loadTransactionReceipt - placeholder for receipt loading
   // @ts-expect-error unused but used by event delegation
@@ -402,31 +351,17 @@ export default function Transactions() {
   // Update form values when closing modal
   createEffect(() => {
     if (!isTransactionModalOpen()) {
-      setFormDescription('')
       setFormAmount('')
       setFormCategory(null)
       setFormBeneficiary('')
       setFormPayor('')
       setFormNotes('')
-      setFormTags([])
     }
   })
 
   const openTransactionModal = () => {
     setTransactionModalOpen(true)
     // Don't reset form values since they're already initialized with defaults
-  }
-
-  const closeTransactionModal = () => {
-    setTransactionModalOpen(false)
-    setFormDate('')
-    setFormDescription('')
-    setFormAmount('')
-    setFormCategory(null)
-    setFormBeneficiary('')
-    setFormPayor('')
-    setFormNotes('')
-    setFormTags([])
   }
 
   return (
@@ -470,8 +405,8 @@ export default function Transactions() {
       {/* Filter Bar */}
       <div class={styles.filterSection}>
         <CategoryMultiSelect
-          categories={categories}
-          selectedCategoryIds={selectedCategories}
+          categories={() => categories()}
+          selectedCategoryIds={() => selectedCategories()}
           onChange={(ids) => {
             setSelectedCategories(ids)
             setCurrentPage(1)
@@ -612,14 +547,14 @@ export default function Transactions() {
                     step="0.01"
                     class={styles.formControl}
                     id="tx-amount"
-                    value={formAmount}
+                    value={formAmount()}
                     onInput={(e) => setFormAmount((e.target as HTMLInputElement).value)}
                     required
                   />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Currency</label>
-                  <select class={styles.formControl} id="tx-currency" value={formCurrency} onInput={(e) => setFormCurrency((e.target as HTMLSelectElement).value)}>
+                  <select class={styles.formControl} id="tx-currency" value={formCurrency()} onInput={(e) => setFormCurrency((e.target as HTMLSelectElement).value)}>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
@@ -635,11 +570,19 @@ export default function Transactions() {
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Date</label>
-                  <input type="date" class={styles.formControl} id="tx-date" value={formDate} required />
+                  <input type="date" class={styles.formControl} id="tx-date" value={formDate()} required />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Category</label>
-                  <select class={styles.formControl} id="tx-category" value={formCategory || ''} onInput={(e) => setFormCategory((e.target as HTMLSelectElement).value ? parseInt((e.target as HTMLSelectElement).value) : null)}></select>
+                  <select
+                    class={styles.formControl}
+                    id="tx-category"
+                    value={formCategory() ?? ''}
+                    onchange={(e) => {
+                      const value = (e.target as HTMLSelectElement).value
+                      setFormCategory(value !== '' ? parseInt(value) : null)
+                    }}
+                  ></select>
                 </div>
               </div>
               <div class={`${styles.formGroup} ${styles.txTagSelector}`}>
@@ -663,7 +606,7 @@ export default function Transactions() {
                     class={styles.formControl}
                     id="tx-beneficiary"
                     placeholder="Who you paid"
-                    value={formBeneficiary}
+                    value={formBeneficiary()}
                     onInput={(e) => setFormBeneficiary((e.target as HTMLInputElement).value)}
                   />
                 </div>
@@ -674,7 +617,7 @@ export default function Transactions() {
                     class={styles.formControl}
                     id="tx-payor"
                     placeholder="Who paid you"
-                    value={formPayor}
+                    value={formPayor()}
                     onInput={(e) => setFormPayor((e.target as HTMLInputElement).value)}
                   />
                 </div>
@@ -696,7 +639,8 @@ export default function Transactions() {
                     step="0.0001"
                     class={styles.formControl}
                     id="tx-exchange-rate"
-                    value="1"
+                    value={formExchangeRate()}
+                    onInput={(e) => setFormExchangeRate((e.target as HTMLInputElement).value)}
                   />
                 </div>
               </div>
@@ -794,7 +738,7 @@ export default function Transactions() {
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Notes</label>
-                <textarea class={styles.formControl} id="tx-notes" rows="2" value={formNotes} onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}></textarea>
+                <textarea class={styles.formControl} id="tx-notes" rows="2" value={formNotes()} onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}></textarea>
               </div>
             </form>
           </div>
@@ -806,8 +750,8 @@ export default function Transactions() {
               class={styles.btnPrimary}
               id="tx-save-btn"
               data-action="transactions:save"
-              onclick={(e) => {
-                console.log('Save button clicked, openTransactionModal:', openTransactionModal)
+              onclick={(_e) => {
+                console.info('Save button clicked, openTransactionModal:', openTransactionModal)
                 openTransactionModal()
               }}
             >
