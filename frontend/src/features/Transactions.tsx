@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, onMount } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import { CategoryMultiSelect } from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
@@ -851,7 +851,11 @@ export default function Transactions() {
         </div>
       )}
 
-      {/* Transactions Table */}
+      {/* Load transactions on mount */}
+      onMount(() => {
+        refreshTransactions()
+      })
+
       {loading() ? (
         <div class={styles.loading}>Loading transactions...</div>
       ) : (
