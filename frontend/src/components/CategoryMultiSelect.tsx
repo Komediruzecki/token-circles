@@ -20,7 +20,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0)
   const [hoverIndex, setHoverIndex] = createSignal(-1)
   const [isMounted, setIsMounted] = createSignal(false)
-  const containerRef = createSignal<HTMLElement | null>(null)
+  const [getContainerRef, setContainerRef] = createSignal<HTMLElement | null>(null)
 
   const handleToggleDropdown = () => {
     setIsOpen(!isOpen())
@@ -31,7 +31,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   }
 
   const handleClickOutside = (e: MouseEvent) => {
-    const container = containerRef()
+    const container = getContainerRef()
     if (container && !container.contains(e.target as Node)) {
       setIsOpen(false)
     }
@@ -124,7 +124,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   return (
     <div
       class={categoryMultiSelectStyles.container}
-      ref={(el: HTMLDivElement) => { containerRef[1](el) }}
+      ref={(el: HTMLDivElement) => { setContainerRef(el) }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
       onClick={handleToggleDropdown}
@@ -132,7 +132,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     >
       <button
         class={categoryMultiSelectStyles.selectBtn}
-        ref={(el: HTMLButtonElement) => { containerRef[1](el) }}
+        ref={(el: HTMLButtonElement) => { setContainerRef(el) }}
       >
         <span class={categoryMultiSelectStyles.selectValue}>{countText()}</span>
         <svg

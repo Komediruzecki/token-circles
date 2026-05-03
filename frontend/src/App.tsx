@@ -424,7 +424,7 @@ export function App() {
       <main class={layoutStyles.main}>
         {Object.entries(allPages).map(([name, page]) => (
           <Show when={activePage() === name}>
-            <Dynamic key={name} component={page} data-testid={`page-${name}`} />
+            <Dynamic component={page} data-testid={`page-${name}`} />
           </Show>
         ))}
       </main>
