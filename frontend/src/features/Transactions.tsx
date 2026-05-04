@@ -363,6 +363,9 @@ export default function Transactions() {
     setTransactionModalOpen(true)
     // Don't reset form values since they're already initialized with defaults
   }
+  onMount(() => {
+    refreshTransactions()
+  })
 
   return (
     <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
@@ -374,7 +377,14 @@ export default function Transactions() {
             onClick={openTransactionModal}
             data-test-id="add-transaction-btn"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M12 5v14M5 12h14" />
             </svg>
             Add Transaction
@@ -383,7 +393,14 @@ export default function Transactions() {
             class={`${styles.btnSecondary} ${styles.btnSm}`}
             onClick={() => setAutoCategorizeModalOpen(true)}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             Auto-categorize
@@ -393,7 +410,14 @@ export default function Transactions() {
             onClick={() => setReconciliationModalOpen(true)}
             disabled={selectedTransactions().length === 0}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" />
             </svg>
@@ -554,7 +578,12 @@ export default function Transactions() {
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Currency</label>
-                  <select class={styles.formControl} id="tx-currency" value={formCurrency()} onInput={(e) => setFormCurrency((e.target as HTMLSelectElement).value)}>
+                  <select
+                    class={styles.formControl}
+                    id="tx-currency"
+                    value={formCurrency()}
+                    onInput={(e) => setFormCurrency((e.target as HTMLSelectElement).value)}
+                  >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
@@ -570,7 +599,13 @@ export default function Transactions() {
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Date</label>
-                  <input type="date" class={styles.formControl} id="tx-date" value={formDate()} required />
+                  <input
+                    type="date"
+                    class={styles.formControl}
+                    id="tx-date"
+                    value={formDate()}
+                    required
+                  />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Category</label>
@@ -738,7 +773,13 @@ export default function Transactions() {
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Notes</label>
-                <textarea class={styles.formControl} id="tx-notes" rows="2" value={formNotes()} onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}></textarea>
+                <textarea
+                  class={styles.formControl}
+                  id="tx-notes"
+                  rows="2"
+                  value={formNotes()}
+                  onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}
+                ></textarea>
               </div>
             </form>
           </div>
@@ -850,11 +891,6 @@ export default function Transactions() {
           </div>
         </div>
       )}
-
-      {/* Load transactions on mount */}
-      onMount(() => {
-        refreshTransactions()
-      })
 
       {loading() ? (
         <div class={styles.loading}>Loading transactions...</div>
