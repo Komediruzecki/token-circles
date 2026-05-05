@@ -921,6 +921,10 @@ export class ApiClient {
     })
   }
 
+  async getTags(): Promise<{ id: number; name: string; color: string }[]> {
+    return this.request('/tags')
+  }
+
   /**
    * Create a new tag
    */

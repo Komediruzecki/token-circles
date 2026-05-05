@@ -106,9 +106,8 @@ export default function D3HeatmapChart(props: Props) {
         const val = getValue(d)
         const dateLabel = d3.timeFormat('%b %d, %Y')(d)
         const amountLabel = formatCurrency(val)
-        tooltipEl.innerHTML = val > 0
-          ? `${dateLabel}: ${amountLabel} ${props.type}`
-          : `${dateLabel}: No ${props.type}`
+        tooltipEl.innerHTML =
+          val > 0 ? `${dateLabel}: ${amountLabel} ${props.type}` : `${dateLabel}: No ${props.type}`
         tooltipEl.style.display = 'block'
         tooltipEl.style.left = `${event.pageX + 12}px`
         tooltipEl.style.top = `${event.pageY - 40}px`
@@ -168,7 +167,9 @@ export default function D3HeatmapChart(props: Props) {
     }
 
     renderHeatmap()
-    const observer = new ResizeObserver(() => { renderHeatmap(); })
+    const observer = new ResizeObserver(() => {
+      renderHeatmap()
+    })
     if (containerRef) observer.observe(containerRef)
     onCleanup(() => {
       observer.disconnect()

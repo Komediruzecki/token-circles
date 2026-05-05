@@ -216,9 +216,7 @@ export default function Analytics() {
         const week = selectedWeek()
         if (week) cmpParams.set('week', week)
         try {
-          const cmpRes = await apiGet<any>(
-            `/api/analytics/category-trends?${cmpParams.toString()}`
-          )
+          const cmpRes = await apiGet<any>(`/api/analytics/category-trends?${cmpParams.toString()}`)
           setCompareData({
             labels: cmpRes.labels || [],
             datasets: cmpRes.datasets || [],
@@ -525,8 +523,16 @@ export default function Analytics() {
             <div class={styles.analyticsChart}>
               <div class={styles.heatmapHeader}>
                 <h3 class={styles.chartTitle}>
-                  Category Trends ({stackedView() === 'year' ? stackedYear() : new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  {compareEnabled() && ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`})
+                  Category Trends (
+                  {stackedView() === 'year'
+                    ? stackedYear()
+                    : new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', {
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                  {compareEnabled() &&
+                    ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
+                  )
                 </h3>
                 <div class={styles.heatmapControls}>
                   <select
@@ -646,7 +652,7 @@ export default function Analytics() {
                           ? compareData()!.datasets.map((ds) => ({
                               label: `${ds.category} (Compare)`,
                               data: ds.data,
-                              backgroundColor: ds.color ? `${ds.color  }66` : '#6366f166',
+                              backgroundColor: ds.color ? `${ds.color}66` : '#6366f166',
                               borderColor: ds.color || '#6366f1',
                               borderWidth: 2,
                               borderDash: [4, 4],
@@ -679,8 +685,7 @@ export default function Analytics() {
                         },
                         tooltip: {
                           callbacks: {
-                            label: (ctx: any) =>
-                              `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`,
+                            label: (ctx: any) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`,
                           },
                         },
                       },
@@ -866,18 +871,14 @@ export default function Analytics() {
                 style="position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:9998;"
                 onClick={closeHeatmapModal}
               />
-              <div
-                style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow-lg,0 4px 20px rgba(0,0,0,0.3));z-index:9999;min-width:300px;max-width:400px;max-height:80vh;overflow-y:auto;"
-              >
+              <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow-lg,0 4px 20px rgba(0,0,0,0.3));z-index:9999;min-width:300px;max-width:400px;max-height:80vh;overflow-y:auto;">
                 {heatmapModal()!.loading ? (
                   <div style="text-align:center;padding:20px;color:var(--text-secondary);">
                     Loading...
                   </div>
                 ) : (
                   <>
-                    <div
-                      style="font-weight:600;font-size:14px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px;color:var(--text);"
-                    >
+                    <div style="font-weight:600;font-size:14px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px;color:var(--text);">
                       {new Date(heatmapModal()!.dateStr).toLocaleDateString('en-US', {
                         month: 'long',
                         day: 'numeric',
@@ -891,21 +892,21 @@ export default function Analytics() {
                       </p>
                     ) : (
                       <div style="max-height:200px;overflow-y:auto;">
-                        {heatmapModal()!.transactions.slice(0, 10).map((tx: any) => (
-                          <div
-                            style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;"
-                          >
-                            <span style="color:var(--text);">
-                              {tx.description || tx.category || '-'}
-                            </span>
-                            <span
-                              style={`font-weight:600;color:${tx.type === 'income' ? 'var(--income)' : 'var(--expense)'};`}
-                            >
-                              {tx.type === 'income' ? '+' : '-'}
-                              {formatAmount(Math.abs(tx.amount || 0))}
-                            </span>
-                          </div>
-                        ))}
+                        {heatmapModal()!
+                          .transactions.slice(0, 10)
+                          .map((tx: any) => (
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
+                              <span style="color:var(--text);">
+                                {tx.description || tx.category || '-'}
+                              </span>
+                              <span
+                                style={`font-weight:600;color:${tx.type === 'income' ? 'var(--income)' : 'var(--expense)'};`}
+                              >
+                                {tx.type === 'income' ? '+' : '-'}
+                                {formatAmount(Math.abs(tx.amount || 0))}
+                              </span>
+                            </div>
+                          ))}
                         {heatmapModal()!.transactions.length > 10 && (
                           <div style="padding:5px 0;font-size:12px;color:var(--text-secondary);">
                             +{heatmapModal()!.transactions.length - 10} more

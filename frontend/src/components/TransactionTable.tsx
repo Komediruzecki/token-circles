@@ -133,7 +133,14 @@ export default function TransactionTable(props: TransactionTableProps) {
               />
             </th>
             <th class={styles.reconcileCol} title="Reconciled">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </th>
@@ -162,8 +169,7 @@ export default function TransactionTable(props: TransactionTableProps) {
               }}
             >
               Category{' '}
-              {sortConfig().field === 'category' &&
-                (sortConfig().direction === 'asc' ? '↑' : '↓')}
+              {sortConfig().field === 'category' && (sortConfig().direction === 'asc' ? '↑' : '↓')}
             </th>
             <th
               class={`${styles.col} ${styles.amountCol}`}
@@ -272,10 +278,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                       />
                     </svg>
                   </button>
-                  <button
-                    class={styles.actionBtn}
-                    onClick={() => props.onDelete?.(transaction)}
-                  >
+                  <button class={styles.actionBtn} onClick={() => props.onDelete?.(transaction)}>
                     <svg
                       width="14"
                       height="14"

@@ -71,8 +71,10 @@ export default function SankeyChart(props: Props) {
     }
 
     const { nodes, links } = sankeyGenerator({
-      nodes: props.data.nodes.map((d) => ({ ...d })),
-      links: props.data.links.map((d) => ({ ...d })),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      nodes: props.data.nodes.map((d) => ({ ...d }) as any),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      links: props.data.links.map((d) => ({ ...d }) as any),
     })
 
     // Draw links

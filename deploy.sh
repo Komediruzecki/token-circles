@@ -3,16 +3,17 @@
 
 set -e
 
-PROJECT_DIR="/tmp/finance-manager-2"
+PROJECT_DIR="/tmp/finance-manager"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 BACKEND_DIR="$PROJECT_DIR/backend"
-LIVE_DIR="/var/www/finance-manager.clodhost.com/frontend"
+LIVE_FRONTEND="/var/www/finance-manager.clodhost.com/frontend"
+LIVE_BACKEND="/var/www/finance-manager.clodhost.com/backend"
 
-echo "📦 Building frontend..."
+echo "Building frontend..."
 cd "$FRONTEND_DIR"
 npm run build
 
-echo "🔧 Replacing service worker registration with cache-busting version..."
+echo "Replacing service worker registration with cache-busting version..."
 cat > "$FRONTEND_DIR/dist/registerSW.js" << 'SWREG'
 if('serviceWorker' in navigator){
   // Clear all old caches before registering new SW
@@ -24,29 +25,29 @@ if('serviceWorker' in navigator){
 }
 SWREG
 
-echo "🔄 Deploying to production..."
-mkdir -p "$LIVE_DIR"
-rm -rf "$LIVE_DIR/*"
-cp -r "$FRONTEND_DIR/dist"/* "$LIVE_DIR/"
+echo "Deploying frontend to production..."
+# Remove old hashed assets
+rm -rf "$LIVE_FRONTEND/assets"
+# Copy new dist contents
+cp -r "$FRONTEND_DIR/dist"/* "$LIVE_FRONTEND/"
 
-echo "🔒 Setting permissions..."
-chown -R www-data:www-data "$LIVE_DIR"
-chmod -R 755 "$LIVE_DIR"
+echo "Syncing backend..."
+rsync -a --exclude='node_modules' --exclude='db/finance.db' --exclude='db/sessions.db' --exclude='db/*.db-backup*' "$BACKEND_DIR/" "$LIVE_BACKEND/"
 
-echo "🔧 Restarting backend..."
-if systemctl is-active --quiet finance-manager-backend; then
-  systemctl restart finance-manager-backend
-else
-  # Fallback: find and kill old process, restart
-  pkill -f "node.*backend/index.js" 2>/dev/null || true
-  sleep 1
-  cd "$BACKEND_DIR"
-  nohup node index.js > /var/log/finance-manager-backend.log 2>&1 &
-fi
+echo "Installing backend dependencies..."
+cd "$LIVE_BACKEND"
+npm install --omit=dev
 
-echo "🔧 Reloading Apache..."
+echo "Setting permissions..."
+chown -R www-data:www-data "$LIVE_FRONTEND" "$LIVE_BACKEND"
+chmod -R 755 "$LIVE_FRONTEND" "$LIVE_BACKEND"
+
+echo "Restarting backend..."
+systemctl restart finance-manager.service
+
+echo "Reloading Apache..."
 systemctl reload apache2
 
-echo "✅ Deployment complete!"
-echo "🌐 Frontend: http://localhost/"
-echo "🌐 Backend:  http://localhost:3847/api"
+echo "Deployment complete!"
+echo "Site: https://finance-manager.clodhost.com/"
+echo "API:  http://localhost:3847/api"
