@@ -45,7 +45,7 @@ export default function Analytics() {
   const [data, setData] = createSignal<AnalyticsData | null>(null)
   const [loading, setLoading] = createSignal(true)
   const [selectedChart, setSelectedChart] = createSignal<
-    'category' | 'monthly' | 'savings' | 'heatmap' | 'sankey'
+    'category' | 'stacked' | 'monthly' | 'savings' | 'heatmap' | 'sankey'
   >('category')
   const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
   const [heatmapType, setHeatmapType] = createSignal<'income' | 'expense'>('expense')
@@ -56,13 +56,21 @@ export default function Analytics() {
     nodes: [],
     links: [],
   })
+  const [categoryType, setCategoryType] = createSignal<'expense' | 'income'>('expense')
+  const [stackedYear, setStackedYear] = createSignal(new Date().getFullYear())
+  const [stackedView, setStackedView] = createSignal<'year' | 'month'>('year')
+  const [stackedMonth, setStackedMonth] = createSignal(new Date().getMonth() + 1)
+  const [stackedData, setStackedData] = createSignal<{
+    labels: string[]
+    datasets: Array<{ category: string; color: string; data: number[] }>
+  }>({ labels: [], datasets: [] })
 
   // Load analytics data
   const loadData = async () => {
     setLoading(true)
     try {
       const [categoryRes, transactionsRes] = await Promise.all([
-        apiGet<any>('/api/analytics/category-trends'),
+        apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}`),
         apiGet<any>('/api/transactions/summary'),
       ])
 
@@ -128,6 +136,27 @@ export default function Analytics() {
     }
   }
 
+  // Load stacked trend data
+  const loadStackedData = async () => {
+    try {
+      const params = new URLSearchParams({
+        year: String(stackedYear()),
+        type: categoryType(),
+      })
+      if (stackedView() === 'month') {
+        params.set('month', String(stackedMonth()))
+      }
+      const res = await apiGet<any>(`/api/analytics/category-trends?${params.toString()}`)
+      setStackedData({
+        labels: res.labels || [],
+        datasets: res.datasets || [],
+      })
+    } catch (err) {
+      console.error('Failed to load stacked data', err)
+      setStackedData({ labels: [], datasets: [] })
+    }
+  }
+
   // Get total income
   const totalIncome = () => {
     return data()?.byMonth.reduce((sum, m) => sum + m.income, 0) || 0
@@ -162,6 +191,12 @@ export default function Analytics() {
     }
     if (selectedChart() === 'sankey') {
       loadSankeyData()
+    }
+    if (selectedChart() === 'stacked') {
+      loadStackedData()
+    }
+    if (selectedChart() === 'category') {
+      loadData()
     }
   })
 
@@ -221,25 +256,34 @@ export default function Analytics() {
               class={`${styles.tab} ${selectedChart() === 'category' ? styles.active : ''}`}
               onClick={() => setSelectedChart('category')}
             >
-              Spending by Category
+              By Category
+            </button>
+            <button
+              class={`${styles.tab} ${selectedChart() === 'stacked' ? styles.active : ''}`}
+              onClick={() => {
+                setSelectedChart('stacked')
+                loadStackedData()
+              }}
+            >
+              Stacked Trends
             </button>
             <button
               class={`${styles.tab} ${selectedChart() === 'monthly' ? styles.active : ''}`}
               onClick={() => setSelectedChart('monthly')}
             >
-              Monthly Trends
+              Monthly
             </button>
             <button
               class={`${styles.tab} ${selectedChart() === 'savings' ? styles.active : ''}`}
               onClick={() => setSelectedChart('savings')}
             >
-              Savings Rate
+              Savings
             </button>
             <button
               class={`${styles.tab} ${selectedChart() === 'heatmap' ? styles.active : ''}`}
               onClick={() => setSelectedChart('heatmap')}
             >
-              Spending Heatmap
+              Heatmap
             </button>
             <button
               class={`${styles.tab} ${selectedChart() === 'sankey' ? styles.active : ''}`}
@@ -254,50 +298,255 @@ export default function Analytics() {
 
           {/* Category Chart */}
           {selectedChart() === 'category' && (
+            <>
+              <div class={styles.analyticsChart}>
+                <div class={styles.heatmapHeader}>
+                  <h3 class={styles.chartTitle}>
+                    {categoryType() === 'expense' ? 'Spending' : 'Income'} by Category
+                  </h3>
+                  <div class={styles.heatmapControls}>
+                    <select
+                      class={styles.heatmapTypeSelect}
+                      value={categoryType()}
+                      onchange={(e) => {
+                        setCategoryType(e.currentTarget.value as 'expense' | 'income')
+                        loadData()
+                      }}
+                    >
+                      <option value="expense">Expenses</option>
+                      <option value="income">Income</option>
+                    </select>
+                  </div>
+                </div>
+                <div class={styles.chartContainer}>
+                  {data()!.byCategory.length === 0 ? (
+                    <div class={styles.emptyState}>No {categoryType()} data</div>
+                  ) : (
+                    <Chart
+                      type="doughnut"
+                      data={{
+                        labels: data()!.byCategory.map((item) => item.category_name),
+                        datasets: [
+                          {
+                            data: data()!.byCategory.map((item) => item.amount),
+                            backgroundColor: [
+                              '#dc2626',
+                              '#f97316',
+                              '#eab308',
+                              '#22c55e',
+                              '#06b6d4',
+                              '#3b82f6',
+                              '#8b5cf6',
+                              '#ec4899',
+                              '#6b7280',
+                              '#14b8a6',
+                            ],
+                            borderWidth: 0,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            position: 'right',
+                            labels: {
+                              usePointStyle: true,
+                              padding: 15,
+                              font: { size: 12 },
+                            },
+                          },
+                        },
+                      }}
+                      height={300}
+                      width="100%"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Top Categories Breakdown */}
+              {data()!.byCategory.length > 0 && (
+                <div class={styles.analyticsChart}>
+                  <h3 class={styles.chartTitle}>Top Categories Breakdown</h3>
+                  <div class={styles.chartContainer}>
+                    <div class={styles.categoryBars}>
+                      {(() => {
+                        const total = data()!.byCategory.reduce((s, c) => s + c.amount, 0) || 1
+                        return data()!.byCategory.map((item) => {
+                          const pct = ((item.amount / total) * 100).toFixed(1)
+                          return (
+                            <div class={styles.categoryBarItem}>
+                              <div class={styles.barInfo}>
+                                <div class={styles.barName}>{item.category_name}</div>
+                                <div class={styles.barPercent}>{pct}%</div>
+                              </div>
+                              <div class={styles.barTrack}>
+                                <div
+                                  class={styles.barFill}
+                                  style={{ width: `${Math.min(pct, 100)}%` }}
+                                />
+                              </div>
+                              <div class={styles.barAmount}>{formatAmount(item.amount)}</div>
+                            </div>
+                          )
+                        })
+                      })()}
+                    </div>
+                    {/* Averages */}
+                    <div
+                      style={{
+                        margin: '20px 0 0',
+                        display: 'flex',
+                        gap: '20px',
+                        'flex-wrap': 'wrap',
+                        'border-top': '1px solid var(--border)',
+                        'padding-top': '16px',
+                      }}
+                    >
+                      {(() => {
+                        const total = data()!.byCategory.reduce((s, c) => s + c.amount, 0)
+                        const count = data()!.byCategory.length
+                        const avg = count > 0 ? total / count : 0
+                        const monthly = total / 6 // last 6 months
+                        const daily = monthly / 30
+                        return (
+                          <>
+                            <div>
+                              <div class={styles.statLabel}>Total {categoryType()}</div>
+                              <div class={styles.statValue}>{formatAmount(total)}</div>
+                            </div>
+                            <div>
+                              <div class={styles.statLabel}>Monthly Average</div>
+                              <div class={styles.statValue}>{formatAmount(monthly)}</div>
+                            </div>
+                            <div>
+                              <div class={styles.statLabel}>Daily Average</div>
+                              <div class={styles.statValue}>{formatAmount(daily)}</div>
+                            </div>
+                            <div>
+                              <div class={styles.statLabel}>Per-Category Avg</div>
+                              <div class={styles.statValue}>{formatAmount(avg)}</div>
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Stacked Trends Chart */}
+          {selectedChart() === 'stacked' && (
             <div class={styles.analyticsChart}>
-              <h3 class={styles.chartTitle}>Spending by Category</h3>
+              <div class={styles.heatmapHeader}>
+                <h3 class={styles.chartTitle}>
+                  Category Trends ({stackedView() === 'year' ? stackedYear() : new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})
+                </h3>
+                <div class={styles.heatmapControls}>
+                  <select
+                    class={styles.heatmapTypeSelect}
+                    value={categoryType()}
+                    onchange={(e) => {
+                      setCategoryType(e.currentTarget.value as 'expense' | 'income')
+                      loadStackedData()
+                    }}
+                  >
+                    <option value="expense">Expenses</option>
+                    <option value="income">Income</option>
+                  </select>
+                  <select
+                    class={styles.heatmapTypeSelect}
+                    value={stackedView()}
+                    onchange={(e) => {
+                      setStackedView(e.currentTarget.value as 'year' | 'month')
+                      loadStackedData()
+                    }}
+                  >
+                    <option value="year">Year View</option>
+                    <option value="month">Month View</option>
+                  </select>
+                  <select
+                    class={styles.heatmapYearSelect}
+                    value={stackedYear()}
+                    onchange={(e) => {
+                      setStackedYear(Number(e.currentTarget.value))
+                      loadStackedData()
+                    }}
+                  >
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const year = new Date().getFullYear() - 2 + i
+                      return <option value={year}>{year}</option>
+                    })}
+                  </select>
+                  {stackedView() === 'month' && (
+                    <select
+                      class={styles.heatmapTypeSelect}
+                      value={stackedMonth()}
+                      onchange={(e) => {
+                        setStackedMonth(Number(e.currentTarget.value))
+                        loadStackedData()
+                      }}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option value={i + 1}>
+                          {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
               <div class={styles.chartContainer}>
-                {data()!.byCategory.length === 0 ? (
-                  <div class={styles.emptyState}>No expense data</div>
+                {stackedData().datasets.length === 0 ? (
+                  <div class={styles.emptyState}>No category trend data available</div>
                 ) : (
                   <Chart
-                    type="doughnut"
+                    type="bar"
                     data={{
-                      labels: data()!.byCategory.map((item) => item.category_name),
-                      datasets: [
-                        {
-                          data: data()!.byCategory.map((item) => item.amount),
-                          backgroundColor: [
-                            '#dc2626',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#06b6d4',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                            '#14b8a6',
-                          ],
-                          borderWidth: 0,
-                        },
-                      ],
+                      labels: stackedData().labels,
+                      datasets: stackedData().datasets.map((ds) => ({
+                        label: ds.category,
+                        data: ds.data,
+                        backgroundColor: ds.color || '#6366f1',
+                        borderWidth: 0,
+                      })),
                     }}
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
+                      scales: {
+                        x: { stacked: true },
+                        y: {
+                          stacked: true,
+                          beginAtZero: true,
+                          ticks: {
+                            callback: (value: any) => formatCurrency(value),
+                          },
+                        },
+                      },
                       plugins: {
                         legend: {
-                          position: 'right',
+                          position: 'bottom',
                           labels: {
                             usePointStyle: true,
-                            padding: 15,
-                            font: { size: 12 },
+                            padding: 10,
+                            font: { size: 11 },
+                            boxWidth: 10,
+                          },
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: (ctx: any) =>
+                              `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`,
                           },
                         },
                       },
                     }}
-                    height={300}
+                    height={350}
                     width="100%"
                   />
                 )}
