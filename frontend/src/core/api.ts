@@ -972,19 +972,11 @@ export const hexToRgba = (hex: string, alpha = 1): string => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+import { addToast } from './toastStore'
+
 export const toast = (
   message: string,
   type: 'info' | 'success' | 'error' | 'warning' = 'info'
 ): void => {
-  const container = document.getElementById('toast-container')
-  if (!container) return
-
-  const el = document.createElement('div')
-  el.className = `toast ${type}`
-  el.textContent = message
-  container.appendChild(el)
-
-  setTimeout(() => {
-    el.remove()
-  }, 4000)
+  addToast(message, type)
 }

@@ -162,40 +162,8 @@ export async function apiRequest<T>(
   }
 }
 
-/**
- * Toast notification helper (singleton pattern)
- */
-let toastTimeout: ReturnType<typeof setTimeout> | null = null
+import { addToast } from '../core/toastStore'
+
 export function showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
-  // Remove existing toast
-  const existing = document.querySelector('.toast-notification')
-  if (existing !== null) existing.remove()
-
-  // Create toast element
-  const toast = document.createElement('div')
-  toast.className = `toast-notification toast-${type}`
-  toast.textContent = message
-  toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    padding: 12px 20px;
-    border-radius: 6px;
-    color: white;
-    font-size: 14px;
-    z-index: 10000;
-    animation: toastSlideIn 0.3s ease-out;
-    background: ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#007bff'};
-  `
-
-  document.body.appendChild(toast)
-
-  // Auto-remove after 4 seconds
-  if (toastTimeout !== null) clearTimeout(toastTimeout)
-  toastTimeout = setTimeout(() => {
-    toast.style.animation = 'toastSlideOut 0.3s ease-out'
-    setTimeout(() => {
-      toast.remove()
-    }, 300)
-  }, 4000)
+  addToast(message, type === 'error' ? 'error' : type === 'success' ? 'success' : 'info')
 }

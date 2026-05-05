@@ -9,6 +9,7 @@ import LoginModal from './components/LoginModal'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import QuickAddModal from './components/QuickAddModal'
+import ToastContainer from './components/ToastContainer'
 import { api, toast } from './core/api.js'
 import { authLogout, handlers, receipts, transactions } from './core/handlers.js'
 import { logger } from './core/logger.js'
@@ -571,6 +572,8 @@ export function App() {
           toast('Transaction added', 'success')
         }}
       />
+
+      <ToastContainer />
     </Suspense>
   )
 }
