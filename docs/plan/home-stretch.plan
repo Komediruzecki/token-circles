@@ -1,0 +1,188 @@
+# Home Stretch Plan — Gap Closure from old-js-app-fixed
+
+## Summary
+
+Detailed comparison of `fix/migration-full-plan` (SolidJS) against `origin/special/old-js-app-fixed` (Vanilla JS) revealed significant gaps in Transactions, Settings, Dashboard layout, Budget performance, Loan rendering, and general backend performance. This plan organizes all findings into prioritized, executable phases.
+
+---
+
+## Phase 1: Transactions Page — Full Rewrite of Missing Features (P0)
+
+### 1.1 Fix Broken Filters
+- **Category dropdown shows only already-selected categories** — `CategoryMultiSelect` filters to `props.selectedCategoryIds().includes(cat.id)`, making it impossible to select new categories. Fix the filter logic.
+- **Tag filter receives empty data** — `tags` signal is hardcoded to `[]`. Load tags from `GET /tags` on mount.
+- **Period presets are non-functional** — `_applyDatePreset` is dead code (prefixed `_`, `@ts-expect-error unused`). Wire date presets to FilterBar so clicking "This Month" actually filters.
+- **No reconciliation toggle** — Add a reconciliation filter toggle with unreconciled count badge (old app had this).
+
+### 1.2 Add Missing Table Columns & Features
+- **Reconcile checkbox per row** — Add inline reconcile toggle to each transaction row.
+- **Reconciled rows visually distinct** — Add CSS class for reconciled rows.
+- **Category colored dot** — Add colored circle indicator next to category name.
+- **Delete button per row** — Add inline delete with confirmation.
+- **Counter-party column** — Add dedicated column instead of burying under description.
+- **Sortable Category column** — Make category header clickable for sort.
+- **Fix bulk action bar** — `BulkActionBar` exists but is never rendered. Wire it up.
+- **Modal title** — Change to "Edit Transaction" when editing (currently always "Add").
+
+### 1.3 Add Missing Summary & Pagination
+- **Pagination info text** — Show "N transactions (page X/Y)".
+- **Page size** — Change from 10 to 50 per page (match old app).
+- **Bug: `totalItems` passed as raw `transactions().length`** — Should be filtered count.
+- **Summary bar** — Add Total Amount and Transaction Count.
+
+### 1.4 Fix Selection Bug
+- `handleSelectionChange` calls `refreshTransactions()` on every checkbox toggle — fires full API reload. Remove this side-effect.
+
+### 1.5 Add Recurring Transactions
+- Old app had full CRUD for recurring transactions with populate-to-transactions. This is entirely missing. Implement:
+  - Recurring transaction list section on Transactions page
+  - Create/Edit/Delete recurring transactions
+  - "Populate" button to generate a transaction from a recurring template
+
+---
+
+## Phase 2: Settings Page Fixes (P1)
+
+### 2.1 Remove Duplicate Theme Toggle
+- **SettingsDialog.tsx** has a theme toggle with LOCAL state only — it does not call `theme.setTheme()`. Either wire it to the core ThemeStore or remove it.
+- Remove the `[theme, setTheme]` signal in `stores/index.ts` (lines 140-165) if unused, or consolidate.
+
+### 2.2 Fix PDF Exports
+- **Missing `export-monthly.html` and `export.html`** — These HTML templates are referenced by Puppeteer in the backend for PDF rendering but do NOT exist in the new repo. Copy them from the old app branch.
+- **Add Annual PDF report option** — Backend supports `/api/reports/annual-pdf` but the UI has no button. Add "Annual Financial Report" to the Report Type dropdown.
+- **Dynamic year population** — Year dropdowns are static (`currentYear - 2` to `currentYear + 2`). Should fetch from `/analytics/distinct-years` like the old app.
+- **Year dropdown should support full year** — Old app could select "All Months" / full year, not just a single month. Add this option.
+
+### 2.3 Export Format Selection
+- Old app had a format dropdown for CSV/JSON/etc. New app hardcodes one format per button. Add format selection or match old app's single export section.
+
+---
+
+## Phase 3: Loan Calculator Bug Fix (P1)
+
+### 3.1 Fix Infinite Scroll (Chart.js Responsive Feedback Loop)
+- **Root cause**: `Chart.tsx` wrapper div has `height: '100%'` but no parent has explicit height. Chart.js ResizeObserver creates circular dependency — container height depends on canvas, canvas tries to fill container → unbounded growth.
+- **Fix**: Change the wrapper div from `height: '100%'` to the explicit pixel value from `props.height` (e.g., `250px`).
+
+### 3.2 Fix Amortization Table Overflow
+- Basic amortization table renders ALL rows (up to 360 for a 30-year mortgage) with no max-height or overflow. Wrap in a scrollable container with `max-height: 500px; overflow-y: auto`.
+
+### 3.3 Clean Up CSS Duplication
+- `LoansPage.module.css` has 3 copies of the same class definitions (649 lines, ~40% is duplicates). Remove legacy duplicates.
+
+---
+
+## Phase 4: Budget Performance Fix (P1)
+
+### 4.1 Fix Double-Fire Bug (CRITICAL)
+- Both `onMount` AND `createEffect` call `loadData()` + `loadImprovements()` — page fires 8 API calls instead of 4.
+- **Fix**: Remove `onMount` block, keep only `createEffect` (which auto-tracks `month()`).
+
+### 4.2 Remove Redundant API Call
+- `loadImprovements()` is called on every month change but returns 6-month data that is NOT month-specific. Move to `onMount` only, not in the effect.
+
+### 4.3 Add Missing DB Index
+- Create composite index: `CREATE INDEX idx_budgets_profile_start_date ON budgets(profile_id, start_date)` — all budget queries filter by both columns.
+
+### 4.4 Add Request Debouncing
+- Rapid month navigation triggers bursts of API calls with no AbortController. Add debounce (300ms) and cancel in-flight requests on month change.
+
+---
+
+## Phase 5: Dashboard Layout Parity (P2)
+
+### 5.1 Restore 4-Column Stat Cards
+- Old app: 4 cards (Income, Expense, Balance, Net Worth) in `grid-4`.
+- New app: 3 cards (Net Worth, Income, Expense) in `repeat(3, 1fr)`.
+- **Fix**: Add back Balance card, switch to `repeat(4, 1fr)` grid.
+
+### 5.2 Fix Net Worth Data Source
+- New app uses `metrics().balance` (sum of all account balances) — this is NOT net worth.
+- Old app used a dedicated `/dashboard/net-worth` endpoint that calculated assets minus liabilities.
+- **Fix**: Either call the proper endpoint or calculate correctly.
+
+### 5.3 Change Month-over-Month Format
+- Old app showed percentage changes (`▲ 5.3%`), new app shows raw currency amounts (`↑ 523.45`).
+- **Fix**: Switch to percentage-based comparison.
+
+### 5.4 Restore 12-Month Bar Chart
+- Old app: 12-month Income vs Expense bar chart showing trends over time.
+- New app: Single-period comparison with 3 bars (Income, Expense, Net).
+- **Fix**: Query 12 months of data and render stacked monthly bars.
+
+### 5.5 Chart Grid Layout
+- Old app: Equal `1fr 1fr` chart grids.
+- New app: Uneven `2fr 1fr` grids.
+- **Fix**: Match old app's even split.
+
+---
+
+## Phase 6: Backend Performance (P2)
+
+### 6.1 Fix Session Store (HIGH impact)
+- `resave: true` forces a SQLite write on EVERY request, even when session is unchanged.
+- `saveUninitialized: true` creates sessions for unauthenticated users.
+- **Fix**: Set both to `false`. This alone should significantly reduce DB I/O.
+
+### 6.2 Add Composite Transaction Index
+- `CREATE INDEX idx_transactions_profile_date ON transactions(profile_id, date)` — the most common query pattern across the entire app uses both columns.
+
+### 6.3 Remove Debug console.log Statements
+- 6 `console.log` calls in category mappings route handlers. Remove them.
+
+### 6.4 Fix Duplicate Route Registration
+- `GET /api/categories/mappings` is registered twice (lines 1079 and 1258). Remove the duplicate.
+
+### 6.5 Parallelize Dashboard Queries
+- `/api/dashboard` runs 6 queries sequentially. At least 4 of them are independent and can be parallelized with `Promise.all`.
+
+### 6.6 Fix Sync File I/O in Error Logger
+- `logError` uses `fs.readFileSync` + `fs.writeFileSync` — blocking the event loop. Convert to async `fs.promises`.
+
+---
+
+## Phase 7: Emoji & CSS Cleanup (P3)
+
+### 7.1 Remaining Emoji Scan
+- Run a comprehensive emoji scan across all `.tsx` files, replace any remaining emojis with SVG icons or clean text per the old app's classy style.
+
+### 7.2 CSS Parity
+- Review all page layouts against old app `base.css` and `components.css` — match font sizes, spacing, card padding, and grid layouts exactly.
+
+---
+
+## Phase 8: Verification
+
+- `npm run build` — zero errors
+- `npm run lint` — clean
+- Visual comparison against old app screenshots
+- Test: Transactions page loads data, filters work, sorting works
+- Test: Settings PDF exports generate correctly
+- Test: Loan calculator charts render without infinite scroll
+- Test: Budget page loads without double API calls
+- Test: Dashboard shows 4 stat cards with correct data
+- Git commit + push per phase
+
+---
+
+## Files to Modify (Summary)
+
+| File | Phase | Changes |
+|------|-------|---------|
+| `frontend/src/features/Transactions.tsx` | 1 | Filters, pagination, recurring, selection bug |
+| `frontend/src/components/FilterBar.tsx` | 1 | Fix category filter, wire presets, add reconcile toggle |
+| `frontend/src/components/TransactionTable.tsx` | 1 | Add reconcile column, delete button, category dot, sort |
+| `frontend/src/components/TransactionSummaryBar.tsx` | 1 | Add Total Amount, Transaction Count |
+| `frontend/src/components/Pagination.tsx` | 1 | Add info text, fix totalItems |
+| `frontend/src/features/Settings.tsx` | 2 | Add annual report, dynamic years, full-year option |
+| `frontend/src/components/SettingsDialog.tsx` | 2 | Remove or wire duplicate theme toggle |
+| `frontend/src/components/Chart.tsx` | 3 | Fix height:100% → explicit pixel height |
+| `frontend/src/components/LoanAmortizationTable.tsx` | 3 | Add scroll wrapper to basic table |
+| `frontend/src/components/LoansPage.module.css` | 3 | Clean duplicates |
+| `frontend/src/features/Budgets.tsx` | 4 | Fix double-fire, debounce, move improvements |
+| `backend/database.js` | 4,6 | Add composite indexes |
+| `frontend/src/features/Dashboard.tsx` | 5 | 4-card grid, net worth source, 12-month chart |
+| `frontend/src/components/DashboardPage.module.css` | 5 | Grid layout, chart proportions |
+| `backend/index.js` | 6 | Session config, debug logs, parallel queries, async I/O |
+| `frontend/export-monthly.html` | 2 | Copy from old app |
+| `frontend/export.html` | 2 | Copy from old app |
