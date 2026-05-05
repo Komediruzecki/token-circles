@@ -34,11 +34,25 @@ import { setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 
 function Reports() {
-  const currentYear = new Date().getFullYear()
-  const [reportYear, setReportYear] = createSignal(currentYear)
+  const [reportYear, setReportYear] = createSignal(new Date().getFullYear())
   const [reportMonth, setReportMonth] = createSignal(new Date().getMonth() + 1)
-  const [reportType, setReportType] = createSignal<'monthly' | 'tax' | 'pl'>('monthly')
+  const [reportType, setReportType] = createSignal<'monthly' | 'tax' | 'pl' | 'annual'>('monthly')
   const [reportLoading, setReportLoading] = createSignal<string | null>(null)
+  const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
+
+  onMount(() => {
+    const currentYear = new Date().getFullYear()
+    fetch('/api/analytics/distinct-years', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((data) => {
+        const years: number[] = data.years || []
+        if (!years.includes(currentYear)) years.unshift(currentYear)
+        setAvailableYears(years.sort((a, b) => b - a))
+      })
+      .catch(() => {
+        setAvailableYears([currentYear])
+      })
+  })
 
   const downloadReport = async (endpoint: string, filename: string) => {
     setReportLoading(filename)
@@ -61,10 +75,12 @@ function Reports() {
 
   const handleGenerate = () => {
     const y = reportYear()
-    const m = String(reportMonth()).padStart(2, '0')
 
     if (reportType() === 'monthly') {
+      const m = String(reportMonth()).padStart(2, '0')
       downloadReport(`/api/reports/monthly-pdf?year=${y}&month=${m}`, `report-${y}-${m}.pdf`)
+    } else if (reportType() === 'annual') {
+      downloadReport(`/api/reports/annual-pdf?year=${y}`, `annual-report-${y}.pdf`)
     } else if (reportType() === 'tax') {
       downloadReport(`/api/reports/tax-summary-pdf?year=${y}`, `tax-summary-${y}.pdf`)
     } else {
@@ -79,10 +95,11 @@ function Reports() {
         <select
           class={styles.formControl}
           value={reportType()}
-          onchange={(e) => setReportType(e.currentTarget.value as 'monthly' | 'tax' | 'pl')}
+          onchange={(e) => setReportType(e.currentTarget.value as 'monthly' | 'tax' | 'pl' | 'annual')}
           style="max-width: 250px;"
         >
           <option value="monthly">Monthly Financial Report</option>
+          <option value="annual">Annual Financial Report</option>
           <option value="tax">Year-End Tax Summary</option>
           <option value="pl">Year-End Profit &amp; Loss</option>
         </select>
@@ -95,10 +112,7 @@ function Reports() {
           onchange={(e) => setReportYear(Number(e.currentTarget.value))}
           style="max-width: 250px;"
         >
-          {Array.from({ length: 5 }, (_, i) => {
-            const y = currentYear - 2 + i
-            return <option value={y}>{y}</option>
-          })}
+          <For each={availableYears()}>{(y) => <option value={y}>{y}</option>}</For>
         </select>
       </div>
       {reportType() === 'monthly' && (
@@ -110,6 +124,7 @@ function Reports() {
             onchange={(e) => setReportMonth(Number(e.currentTarget.value))}
             style="max-width: 250px;"
           >
+            <option value="0">All Months (Full Year)</option>
             {Array.from({ length: 12 }, (_, i) => (
               <option value={i + 1}>
                 {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
@@ -213,6 +228,7 @@ export default function Settings() {
   }
 
   const [csvExporting, setCsvExporting] = createSignal<string | null>(null)
+  const [exportFormat, setExportFormat] = createSignal('csv')
 
   // Data Management
   const handleExport = async () => {
@@ -238,9 +254,10 @@ export default function Settings() {
   }
 
   const handleCsvExport = async (type: string) => {
+    const fmt = exportFormat()
     setCsvExporting(type)
     try {
-      const response = await fetch(`/api/export/${type}?format=csv`, {
+      const response = await fetch(`/api/export/${type}?format=${fmt}`, {
         method: 'GET',
         credentials: 'include',
       })
@@ -249,7 +266,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${type}-${new Date().toISOString().split('T')[0]}.csv`
+      a.download = `${type}-${new Date().toISOString().split('T')[0]}.${fmt}`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -467,24 +484,36 @@ export default function Settings() {
             <div class={styles.card} style="margin-top: 24px;">
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Data Management</div>
-                <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px;">
+                <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 13px; color: var(--text-secondary);">Export Format:</label>
+                  <select
+                    class={styles.formControl}
+                    value={exportFormat()}
+                    onchange={(e) => setExportFormat(e.currentTarget.value)}
+                    style="max-width: 120px;"
+                  >
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                   <button class={styles.btnSecondary} onclick={handleExport}>
                     Export All (JSON)
                   </button>
                   {[
-                    { type: 'transactions', label: 'Transactions CSV' },
-                    { type: 'categories', label: 'Categories CSV' },
-                    { type: 'budgets', label: 'Budgets CSV' },
-                    { type: 'accounts', label: 'Accounts CSV' },
-                    { type: 'loans', label: 'Loans CSV' },
-                    { type: 'recurring', label: 'Recurring CSV' },
+                    { type: 'transactions', label: 'Transactions' },
+                    { type: 'categories', label: 'Categories' },
+                    { type: 'budgets', label: 'Budgets' },
+                    { type: 'accounts', label: 'Accounts' },
+                    { type: 'loans', label: 'Loans' },
+                    { type: 'recurring', label: 'Recurring' },
                   ].map(({ type, label }) => (
                     <button
                       class={styles.btnSecondary}
                       onclick={() => handleCsvExport(type)}
                       disabled={csvExporting() === type}
                     >
-                      {csvExporting() === type ? 'Exporting...' : label}
+                      {csvExporting() === type ? 'Exporting...' : `${label} (${exportFormat().toUpperCase()})`}
                     </button>
                   ))}
                 </div>

@@ -23,7 +23,6 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   const [activeTab, setActiveTab] = createSignal<SettingTab>('general')
 
   // Settings state
-  const [theme, setTheme] = createSignal<'light' | 'dark'>('light')
   const [language, setLanguage] = createSignal('en')
   const [currency, setCurrency] = createSignal('USD')
   const [primaryCurrency, setPrimaryCurrency] = createSignal('USD')
@@ -37,7 +36,6 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       const response = await fetch('/api/settings')
       if (response.ok) {
         const settings = await response.json()
-        setTheme(settings.theme !== undefined ? settings.theme : 'light')
         setLanguage(settings.language !== undefined ? settings.language : 'en')
         setCurrency(settings.currency !== undefined ? settings.currency : 'USD')
         setPrimaryCurrency(
@@ -66,7 +64,6 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          theme: theme(),
           language: language(),
           currency: currency(),
           primary_currency: primaryCurrency(),
@@ -210,29 +207,6 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
 
         {/* General Settings */}
         <div class={`${styles.tabContent} ${activeTab() === 'general' ? styles.active : ''}`}>
-          {/* Theme */}
-          <div class={styles.settingGroup}>
-            <label class={styles.settingLabel}>Theme</label>
-            <div class={styles.themeSelector}>
-              <button
-                class={`${styles.themeBtn} ${theme() === 'light' ? styles.active : ''}`}
-                onClick={() => {
-                  setTheme('light')
-                }}
-              >
-                <span>Light</span>
-              </button>
-              <button
-                class={`${styles.themeBtn} ${theme() === 'dark' ? styles.active : ''}`}
-                onClick={() => {
-                  setTheme('dark')
-                }}
-              >
-                <span>Dark</span>
-              </button>
-            </div>
-          </div>
-
           {/* Language */}
           <div class={styles.settingGroup}>
             <label class={styles.settingLabel}>Language</label>
