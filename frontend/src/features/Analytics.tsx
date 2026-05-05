@@ -29,6 +29,7 @@
 import { createEffect, createSignal, onMount } from 'solid-js'
 import styles from '../components/AnalyticsPage.module.css'
 import Chart from '../components/Chart'
+import D3HeatmapChart from '../components/D3HeatmapChart'
 import SankeyChart from '../components/SankeyChart'
 import { formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../utils/api'
@@ -458,120 +459,12 @@ export default function Analytics() {
                 {heatmapData().size === 0 ? (
                   <div class={styles.emptyState}>No data available for this year</div>
                 ) : (
-                  <>
-                    <div class={styles.heatmapContainer}>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}>
-                        Mon
-                      </div>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}>
-                        Wed
-                      </div>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}>
-                        Fri
-                      </div>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
-                      <div class={styles.heatmapCell} classList={{ [styles.dayLabel]: true }}></div>
-
-                      {/* Week container */}
-                      <div class={styles.heatmapWeeks}>
-                        {Array.from({ length: 52 }, (_, weekIndex) => {
-                          const weekCells: Array<{
-                            day: number
-                            date: Date
-                            amount: number
-                          }> = []
-                          for (let d = 0; d < 7; d++) {
-                            const date = new Date(heatmapYear(), 0, 1)
-                            date.setDate(date.getDate() + weekIndex * 7 + d + 1)
-                            const dateStr = date.toISOString().split('T')[0]
-                            const amount = heatmapData().get(dateStr) || 0
-                            if (date.getFullYear() === heatmapYear()) {
-                              weekCells.push({ day: d, date, amount })
-                            }
-                          }
-                          if (weekCells.length === 0) return null
-
-                          return (
-                            <div class={styles.heatmapWeek}>
-                              {weekCells.map((cell) => {
-                                const maxAmount = Math.max(...Array.from(heatmapData().values()), 0)
-                                const cellSize = 14
-                                const intensity =
-                                  maxAmount > 0 && cell.amount > 0
-                                    ? Math.round((cell.amount / maxAmount) * 100)
-                                    : 0
-                                const bgColor =
-                                  heatmapType() === 'income'
-                                    ? `rgba(74, 222, 128, ${0.1 + intensity / 400})`
-                                    : intensity > 0
-                                      ? `rgba(34, 197, 94, ${0.1 + intensity / 400})`
-                                      : 'rgba(239, 68, 68, 0.1)'
-                                return (
-                                  <div
-                                    class={styles.heatmapCell}
-                                    style={{
-                                      width: `${cellSize}px`,
-                                      height: `${cellSize}px`,
-                                      'background-color': bgColor,
-                                    }}
-                                    title={`${cell.date.toLocaleDateString()}: ${formatCurrency(cell.amount)}`}
-                                  />
-                                )
-                              })}
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      {/* Month labels */}
-                      <div class={styles.monthLabel}></div>
-                    </div>
-
-                    {/* Legend */}
-                    <div class={styles.heatmapLegend}>
-                      <span class={styles.heatmapLegendLabel}>{heatmapType()} Amount</span>
-                      <div class={styles.heatmapScale}>
-                        <span
-                          class={styles.heatmapScaleColor}
-                          style={{
-                            'background-color':
-                              heatmapType() === 'income'
-                                ? 'rgba(74, 222, 128, 0.1)'
-                                : 'rgba(34, 197, 94, 0.1)',
-                          }}
-                        />
-                        <span
-                          class={styles.heatmapScaleColor}
-                          style={{
-                            'background-color':
-                              heatmapType() === 'income'
-                                ? 'rgba(74, 222, 128, 0.4)'
-                                : 'rgba(34, 197, 94, 0.4)',
-                          }}
-                        />
-                        <span
-                          class={styles.heatmapScaleColor}
-                          style={{
-                            'background-color':
-                              heatmapType() === 'income'
-                                ? 'rgba(74, 222, 128, 0.7)'
-                                : 'rgba(34, 197, 94, 0.7)',
-                          }}
-                        />
-                        <span
-                          class={styles.heatmapScaleColor}
-                          style={{
-                            'background-color':
-                              heatmapType() === 'income'
-                                ? 'rgba(74, 222, 128, 1)'
-                                : 'rgba(34, 197, 94, 1)',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </>
+                  <D3HeatmapChart
+                    data={heatmapData()}
+                    year={heatmapYear()}
+                    type={heatmapType()}
+                    height={180}
+                  />
                 )}
               </div>
             </div>

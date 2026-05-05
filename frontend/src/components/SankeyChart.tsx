@@ -129,9 +129,13 @@ export default function SankeyChart(props: Props) {
 
   onMount(() => {
     renderSankey()
-    const observer = new ResizeObserver(() => { renderSankey(); })
+    const observer = new ResizeObserver(() => {
+      renderSankey()
+    })
     if (containerRef) observer.observe(containerRef)
-    onCleanup(() => { observer.disconnect(); })
+    onCleanup(() => {
+      observer.disconnect()
+    })
   })
 
   createEffect(() => {
