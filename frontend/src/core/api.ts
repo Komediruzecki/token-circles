@@ -933,6 +933,32 @@ export class ApiClient {
       body: { name, color },
     })
   }
+
+  // ============ RECURRING TRANSACTIONS ============
+
+  getRecurring(): Promise<any[]> {
+    return this.request('/recurring')
+  }
+
+  getRecurringById(id: number): Promise<any> {
+    return this.request(`/recurring/${id}`)
+  }
+
+  createRecurring(data: Record<string, unknown>): Promise<any> {
+    return this.request('/recurring', { method: 'POST', body: data })
+  }
+
+  updateRecurring(id: number, data: Record<string, unknown>): Promise<any> {
+    return this.request(`/recurring/${id}`, { method: 'PUT', body: data })
+  }
+
+  deleteRecurring(id: number): Promise<any> {
+    return this.request(`/recurring/${id}`, { method: 'DELETE' })
+  }
+
+  populateRecurring(id: number): Promise<any> {
+    return this.request(`/recurring/${id}/populate`, { method: 'POST' })
+  }
 }
 
 // Export singleton instance

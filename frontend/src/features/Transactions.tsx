@@ -37,6 +37,7 @@ import { CategoryMultiSelect } from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
 import Pagination from '../components/Pagination'
 import ReconciliationModal from '../components/ReconciliationModal'
+import RecurringSection from '../components/RecurringSection'
 import styles from '../components/TransactionsPage.module.css'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
@@ -565,6 +566,9 @@ export default function Transactions() {
           Transfer
         </button>
       </div>
+
+      {/* Recurring Transactions */}
+      <RecurringSection categories={categories()} onRefreshTransactions={refreshTransactions} />
 
       {/* Transaction Modal */}
       <div
