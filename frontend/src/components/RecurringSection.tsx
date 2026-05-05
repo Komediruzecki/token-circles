@@ -136,7 +136,11 @@ export default function RecurringSection(props: RecurringSectionProps) {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
   }
 
   return (
@@ -162,7 +166,14 @@ export default function RecurringSection(props: RecurringSectionProps) {
             openAddModal()
           }}
         >
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
             <path d="M12 5v14M5 12h14" />
           </svg>
           Add
@@ -173,7 +184,15 @@ export default function RecurringSection(props: RecurringSectionProps) {
         <div class={styles.list}>
           {items().length === 0 ? (
             <div class={styles.emptyState}>
-              <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity: 0.3">
+              <svg
+                width="40"
+                height="40"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+                style="opacity: 0.3"
+              >
                 <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               <p>No recurring items</p>
@@ -201,7 +220,14 @@ export default function RecurringSection(props: RecurringSectionProps) {
                       onClick={() => handlePopulate(item)}
                       title="Add to transactions"
                     >
-                      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <svg
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M12 5v14M5 12h14" />
                       </svg>
                     </button>
@@ -210,7 +236,14 @@ export default function RecurringSection(props: RecurringSectionProps) {
                       onClick={() => openEditModal(item)}
                       title="Edit"
                     >
-                      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <svg
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
@@ -220,7 +253,14 @@ export default function RecurringSection(props: RecurringSectionProps) {
                       onClick={() => handleDelete(item)}
                       title="Delete"
                     >
-                      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <svg
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
@@ -235,11 +275,23 @@ export default function RecurringSection(props: RecurringSectionProps) {
       {/* Modal */}
       {isModalOpen() && (
         <div class={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
-          <div class={styles.modal} onClick={(e) => { e.stopPropagation() }}>
+          <div
+            class={styles.modal}
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <h3>{editingId() ? 'Edit Recurring' : 'Add Recurring'}</h3>
               <button class={styles.closeBtn} onClick={() => setIsModalOpen(false)}>
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <svg
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>

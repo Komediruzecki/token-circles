@@ -198,9 +198,7 @@ export default function Dashboard() {
           <div class={styles.metricsGrid}>
             <div class={`${styles.metricCard} ${styles.networth}`}>
               <div class={styles.metricLabel}>Net Worth</div>
-              <div class={styles.metricValue}>
-                {formatCurrency(metrics()!.balance)}
-              </div>
+              <div class={styles.metricValue}>{formatCurrency(metrics()!.balance)}</div>
               <div class={styles.metricSubtext}>Total account balances</div>
               {/* eslint-disable-next-line eqeqeq */}
               {metrics()!.momBalanceDelta != null && (
@@ -285,11 +283,13 @@ export default function Dashboard() {
             </div>
             <div class={`${styles.metricCard} ${styles.balance}`}>
               <div class={styles.metricLabel}>Balance</div>
-              <div class={`${styles.metricValue} ${
-                (metrics()!.totalIncome - metrics()!.totalExpenses) >= 0
-                  ? styles.positive
-                  : styles.expense
-              }`}>
+              <div
+                class={`${styles.metricValue} ${
+                  metrics()!.totalIncome - metrics()!.totalExpenses >= 0
+                    ? styles.positive
+                    : styles.expense
+                }`}
+              >
                 {formatCurrency(metrics()!.totalIncome - metrics()!.totalExpenses)}
               </div>
               <div class={styles.metricSubtext}>Monthly net</div>

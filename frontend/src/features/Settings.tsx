@@ -95,7 +95,9 @@ function Reports() {
         <select
           class={styles.formControl}
           value={reportType()}
-          onchange={(e) => setReportType(e.currentTarget.value as 'monthly' | 'tax' | 'pl' | 'annual')}
+          onchange={(e) =>
+            setReportType(e.currentTarget.value as 'monthly' | 'tax' | 'pl' | 'annual')
+          }
           style="max-width: 250px;"
         >
           <option value="monthly">Monthly Financial Report</option>
@@ -485,7 +487,9 @@ export default function Settings() {
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Data Management</div>
                 <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                  <label style="font-size: 13px; color: var(--text-secondary);">Export Format:</label>
+                  <label style="font-size: 13px; color: var(--text-secondary);">
+                    Export Format:
+                  </label>
                   <select
                     class={styles.formControl}
                     value={exportFormat()}
@@ -513,7 +517,9 @@ export default function Settings() {
                       onclick={() => handleCsvExport(type)}
                       disabled={csvExporting() === type}
                     >
-                      {csvExporting() === type ? 'Exporting...' : `${label} (${exportFormat().toUpperCase()})`}
+                      {csvExporting() === type
+                        ? 'Exporting...'
+                        : `${label} (${exportFormat().toUpperCase()})`}
                     </button>
                   ))}
                 </div>

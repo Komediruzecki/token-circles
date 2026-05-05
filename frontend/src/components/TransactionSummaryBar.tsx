@@ -16,7 +16,9 @@ interface TransactionSummaryBarProps {
 export default function TransactionSummaryBar(props: TransactionSummaryBarProps) {
   const isPositive = props.netBalance >= 0
   const fmt = (n: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: props.currency || 'USD' }).format(n)
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: props.currency || 'USD' }).format(
+      n
+    )
 
   return (
     <div class={styles.summaryBar}>
@@ -27,12 +29,16 @@ export default function TransactionSummaryBar(props: TransactionSummaryBarProps)
       <div class={styles.summaryDivider} />
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Income</span>
-        <span class={`${styles.summaryValue} ${styles.positive}`}>+{props.totalIncome.toFixed(2)}</span>
+        <span class={`${styles.summaryValue} ${styles.positive}`}>
+          +{props.totalIncome.toFixed(2)}
+        </span>
       </div>
       <div class={styles.summaryDivider} />
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Expenses</span>
-        <span class={`${styles.summaryValue} ${styles.negative}`}>-{props.totalExpenses.toFixed(2)}</span>
+        <span class={`${styles.summaryValue} ${styles.negative}`}>
+          -{props.totalExpenses.toFixed(2)}
+        </span>
       </div>
       <div class={styles.summaryDivider} />
       <div class={styles.summaryItem}>

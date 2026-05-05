@@ -41,9 +41,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     const all = props.categories()
     const term = searchTerm().toLowerCase()
 
-    setFilteredCategories(
-      term ? all.filter((cat) => cat.name.toLowerCase().includes(term)) : all
-    )
+    setFilteredCategories(term ? all.filter((cat) => cat.name.toLowerCase().includes(term)) : all)
   })
 
   const toggleCategory = (categoryId: number) => {
