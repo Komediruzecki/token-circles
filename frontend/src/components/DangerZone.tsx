@@ -3,9 +3,10 @@ import styles from './DangerZone.module.css'
 
 export interface DangerZoneProps {
   onReset: () => Promise<void>
+  onDeleteProfile: () => Promise<void>
 }
 
-type ConfirmAction = 'reset' | 'transactions' | 'categories' | 'profile' | null
+type ConfirmAction = 'reset' | 'transactions' | 'categories' | 'profile' | 'profile-delete' | null
 
 export default function DangerZone(props: DangerZoneProps) {
   const [confirming, setConfirming] = createSignal<ConfirmAction>(null)
@@ -165,6 +166,53 @@ export default function DangerZone(props: DangerZoneProps) {
               disabled={loading()}
             >
               {loading() ? 'Clearing...' : 'Yes, Clear Profile Data'}
+            </button>
+          </div>
+        </div>
+      </Show>
+
+      {/* Delete Current Profile */}
+      <div class={styles['danger-zone-item']}>
+        <div>
+          <div class={styles['danger-zone-item-title']}>Delete Current Profile</div>
+          <div class={styles['danger-zone-item-desc']}>
+            Permanently delete the current profile and all its data. You will be switched to another
+            profile if one exists. The default profile cannot be deleted.
+          </div>
+        </div>
+        <Show when={confirming() !== 'profile-delete'}>
+          <button
+            class={styles['danger-zone-button']}
+            onClick={() => setConfirming('profile-delete')}
+            disabled={loading()}
+          >
+            Delete Profile
+          </button>
+        </Show>
+      </div>
+
+      <Show when={confirming() === 'profile-delete'}>
+        <div class={styles['danger-zone-item']}>
+          <div>
+            <div class={styles['danger-zone-item-title']}>Delete this profile?</div>
+            <div class={styles['danger-zone-item-desc']}>
+              This will permanently delete the current profile and all its data. This cannot be
+              undone.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+              Cancel
+            </button>
+            <button
+              class={styles['danger-zone-button']}
+              onClick={() => {
+                setConfirming(null)
+                void props.onDeleteProfile()
+              }}
+              disabled={loading()}
+            >
+              {loading() ? 'Deleting...' : 'Yes, Delete Profile'}
             </button>
           </div>
         </div>

@@ -26,7 +26,7 @@
  * Settings Component
  * Application configuration and preferences with storage switching
  */
-import { createEffect, createSignal, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
@@ -63,10 +63,7 @@ function Reports() {
     const m = String(reportMonth()).padStart(2, '0')
 
     if (reportType() === 'monthly') {
-      downloadReport(
-        `/api/reports/monthly-pdf?year=${y}&month=${m}`,
-        `report-${y}-${m}.pdf`
-      )
+      downloadReport(`/api/reports/monthly-pdf?year=${y}&month=${m}`, `report-${y}-${m}.pdf`)
     } else if (reportType() === 'tax') {
       downloadReport(`/api/reports/tax-summary-pdf?year=${y}`, `tax-summary-${y}.pdf`)
     } else {
@@ -162,6 +159,8 @@ export default function Settings() {
     } else {
       setLocalStorageMode('self-hosted')
     }
+
+    void loadHouseholdProfiles()
   })
 
   // Sync local currency changes
@@ -281,6 +280,85 @@ export default function Settings() {
     window.location.reload()
   }
 
+  const handleDeleteProfile = async () => {
+    const profileId = localStorage.getItem('currentProfileId') || '1'
+    try {
+      const res = await fetch(`/api/profiles/${profileId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || 'Failed to delete profile')
+        return
+      }
+      // Switch to the next available profile
+      const profilesRes = await fetch('/api/profiles', { credentials: 'include' })
+      const profiles = await profilesRes.json()
+      if (profiles.length > 0) {
+        localStorage.setItem('currentProfileId', profiles[0].id.toString())
+        localStorage.setItem('selectedProfileIds', JSON.stringify([profiles[0].id]))
+      }
+      window.location.reload()
+    } catch {
+      alert('Failed to delete profile')
+    }
+  }
+
+  // Household View state
+  const [allProfiles, setAllProfiles] = createSignal<Array<{ id: number; name: string }>>([])
+  const [householdIds, setHouseholdIds] = createSignal<number[]>(
+    (() => {
+      const stored = localStorage.getItem('selectedProfileIds')
+      return stored
+        ? (JSON.parse(stored) as number[])
+        : [parseInt(localStorage.getItem('currentProfileId') || '1', 10)]
+    })()
+  )
+
+  const loadHouseholdProfiles = async () => {
+    try {
+      const res = await fetch('/api/profiles', { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setAllProfiles(data)
+      }
+    } catch {
+      /* non-critical */
+    }
+  }
+
+  const toggleHouseholdProfile = (id: number) => {
+    const current = householdIds()
+    const idx = current.indexOf(id)
+    let newIds: number[]
+    if (idx !== -1) {
+      newIds = current.filter((pid) => pid !== id)
+    } else {
+      newIds = [...current, id]
+    }
+    if (newIds.length === 0) {
+      newIds = [parseInt(localStorage.getItem('currentProfileId') || '1')]
+    }
+    setHouseholdIds(newIds)
+    localStorage.setItem('selectedProfileIds', JSON.stringify(newIds))
+    window.location.reload()
+  }
+
+  const selectAllHousehold = () => {
+    const all = allProfiles()
+    setHouseholdIds(all.map((p) => p.id))
+    localStorage.setItem('selectedProfileIds', JSON.stringify(all.map((p) => p.id)))
+    window.location.reload()
+  }
+
+  const clearHousehold = () => {
+    const currentId = parseInt(localStorage.getItem('currentProfileId') || '1')
+    setHouseholdIds([currentId])
+    localStorage.setItem('selectedProfileIds', JSON.stringify([currentId]))
+    window.location.reload()
+  }
+
   return (
     <div class={`page page-settings page-enter ${styles.settingsPage}`}>
       <div class={styles.pageHeader}>
@@ -336,6 +414,71 @@ export default function Settings() {
 
             <div class={styles.card} style="margin-top: 24px;">
               <div class={styles.settingsSection}>
+                <div class={styles.settingsSectionTitle}>Household View</div>
+                <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
+                  Select multiple profiles to view combined data across your household.
+                </p>
+                <Show
+                  when={allProfiles().length > 0}
+                  fallback={
+                    <button class={styles.btnSecondary} onclick={loadHouseholdProfiles}>
+                      Load Profiles
+                    </button>
+                  }
+                >
+                  <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+                    <button
+                      class={styles.btnSecondary}
+                      style="padding: 4px 12px; font-size: 12px;"
+                      onclick={selectAllHousehold}
+                    >
+                      Select All
+                    </button>
+                    <button
+                      class={styles.btnSecondary}
+                      style="padding: 4px 12px; font-size: 12px;"
+                      onclick={clearHousehold}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div style="max-height: 200px; overflow-y: auto;">
+                    <For each={allProfiles()}>
+                      {(profile) => (
+                        <label
+                          style={{
+                            display: 'flex',
+                            'align-items': 'center',
+                            gap: '10px',
+                            padding: '8px 0',
+                            cursor: 'pointer',
+                            'border-bottom': '1px solid var(--border)',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={householdIds().includes(profile.id)}
+                            onchange={() => {
+                              toggleHouseholdProfile(profile.id)
+                            }}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                          <span style="font-size: 14px; color: var(--text);">{profile.name}</span>
+                          <Show when={householdIds().length === 1 && householdIds().length > 0}>
+                            <span style="font-size: 11px; color: var(--text-secondary); margin-left: auto;">
+                              Current
+                            </span>
+                          </Show>
+                        </label>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            <div class={styles.card} style="margin-top: 24px;">
+              <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Data Management</div>
                 <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px;">
                   <button class={styles.btnSecondary} onclick={handleExport}>
@@ -359,7 +502,7 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
-              <DangerZone onReset={handleReset} />
+              <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
             </div>
 
             <div class={styles.card} style="margin-top: 24px;">
