@@ -196,7 +196,7 @@ export default function Dashboard() {
 
           {/* Metrics Grid */}
           <div class={styles.metricsGrid}>
-            <div class={styles.metricCard}>
+            <div class={styles.metricCard} style="--metric-top-color: var(--success)">
               <div class={styles.metricLabel}>Net Worth</div>
               <div class={`${styles.metricValue} ${styles.networth}`}>
                 {formatCurrency(metrics()!.balance)}
@@ -225,7 +225,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            <div class={styles.metricCard}>
+            <div class={styles.metricCard} style="--metric-top-color: var(--income)">
               <div class={styles.metricLabel}>Income</div>
               <div class={`${styles.metricValue} ${styles.positive}`}>
                 {formatCurrency(metrics()!.totalIncome)}
@@ -254,7 +254,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-            <div class={styles.metricCard}>
+            <div class={styles.metricCard} style="--metric-top-color: var(--expense)">
               <div class={styles.metricLabel}>Expenses</div>
               <div class={`${styles.metricValue} ${styles.expense}`}>
                 {formatCurrency(metrics()!.totalExpenses)}

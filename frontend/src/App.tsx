@@ -111,8 +111,8 @@ export function App() {
     logger.init()
 
     // Initialize theme
-    const savedDarkMode = localStorage.getItem('darkMode')
-    if (savedDarkMode === 'true') {
+    const savedTheme = localStorage.getItem('finance-theme')
+    if (savedTheme === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark')
     } else {
       document.documentElement.setAttribute('data-theme', 'light')

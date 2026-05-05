@@ -52,7 +52,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: var(--primary);
+  background: var(--metric-top-color, var(--primary));
 }
 
 .metric-label {
@@ -64,10 +64,22 @@
 }
 
 .metric-value {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 700;
   margin-top: 4px;
   color: var(--text);
+}
+
+@media (max-width: 768px) {
+  .metric-value {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 380px) {
+  .metric-value {
+    font-size: 20px;
+  }
 }
 
 .metric-value.positive {
