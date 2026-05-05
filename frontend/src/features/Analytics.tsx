@@ -29,6 +29,7 @@
 import { createEffect, createSignal, onMount } from 'solid-js'
 import styles from '../components/AnalyticsPage.module.css'
 import Chart from '../components/Chart'
+import SankeyChart from '../components/SankeyChart'
 import { formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../utils/api'
 
@@ -43,11 +44,17 @@ export default function Analytics() {
   const [data, setData] = createSignal<AnalyticsData | null>(null)
   const [loading, setLoading] = createSignal(true)
   const [selectedChart, setSelectedChart] = createSignal<
-    'category' | 'monthly' | 'savings' | 'heatmap'
+    'category' | 'monthly' | 'savings' | 'heatmap' | 'sankey'
   >('category')
   const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
   const [heatmapType, setHeatmapType] = createSignal<'income' | 'expense'>('expense')
   const [heatmapData, setHeatmapData] = createSignal<Map<string, number>>(new Map())
+  const [sankeyYear, setSankeyYear] = createSignal(new Date().getFullYear())
+  const [sankeyMonth, setSankeyMonth] = createSignal(new Date().getMonth() + 1)
+  const [sankeyData, setSankeyData] = createSignal<{ nodes: any[]; links: any[] }>({
+    nodes: [],
+    links: [],
+  })
 
   // Load analytics data
   const loadData = async () => {
@@ -107,6 +114,19 @@ export default function Analytics() {
     }
   }
 
+  // Load sankey data
+  const loadSankeyData = async () => {
+    try {
+      const res = await apiGet<any>(
+        `/api/analytics/sankey?year=${sankeyYear()}&month=${sankeyMonth()}`
+      )
+      setSankeyData({ nodes: res.nodes || [], links: res.links || [] })
+    } catch (err) {
+      console.error('Failed to load sankey data', err)
+      setSankeyData({ nodes: [], links: [] })
+    }
+  }
+
   // Get total income
   const totalIncome = () => {
     return data()?.byMonth.reduce((sum, m) => sum + m.income, 0) || 0
@@ -138,6 +158,9 @@ export default function Analytics() {
   Effect(() => {
     if (selectedChart() === 'heatmap') {
       loadHeatmapData()
+    }
+    if (selectedChart() === 'sankey') {
+      loadSankeyData()
     }
   })
 
@@ -216,6 +239,15 @@ export default function Analytics() {
               onClick={() => setSelectedChart('heatmap')}
             >
               Spending Heatmap
+            </button>
+            <button
+              class={`${styles.tab} ${selectedChart() === 'sankey' ? styles.active : ''}`}
+              onClick={() => {
+                setSelectedChart('sankey')
+                loadSankeyData()
+              }}
+            >
+              Budget Flow
             </button>
           </div>
 
@@ -540,6 +572,53 @@ export default function Analytics() {
                       </div>
                     </div>
                   </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sankey Diagram */}
+          {selectedChart() === 'sankey' && (
+            <div class={styles.analyticsChart}>
+              <div class={styles.heatmapHeader}>
+                <h3 class={styles.chartTitle}>Budget Flow Diagram</h3>
+                <div class={styles.heatmapControls}>
+                  <select
+                    class={styles.heatmapYearSelect}
+                    value={sankeyYear()}
+                    onchange={(e) => {
+                      setSankeyYear(Number(e.currentTarget.value))
+                      loadSankeyData()
+                    }}
+                  >
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const year = new Date().getFullYear() - 2 + i
+                      return <option value={year}>{year}</option>
+                    })}
+                  </select>
+                  <select
+                    class={styles.heatmapTypeSelect}
+                    value={sankeyMonth()}
+                    onchange={(e) => {
+                      setSankeyMonth(Number(e.currentTarget.value))
+                      loadSankeyData()
+                    }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option value={i + 1}>
+                        {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div class={styles.chartContainer}>
+                {sankeyData().nodes.length === 0 ? (
+                  <div class={styles.emptyState}>
+                    No budget data for this month. Set budgets to see the flow diagram.
+                  </div>
+                ) : (
+                  <SankeyChart data={sankeyData()} height={400} />
                 )}
               </div>
             </div>

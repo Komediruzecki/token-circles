@@ -939,7 +939,12 @@ export default function Loans() {
                 if (e.target === e.currentTarget) setShowPrepayments(false)
               }}
             >
-              <div class={styles.modal} onclick={(e) => { e.stopPropagation() }}>
+              <div
+                class={styles.modal}
+                onclick={(e) => {
+                  e.stopPropagation()
+                }}
+              >
                 <div class={styles.modalHeader}>
                   <h3 class={styles.modalTitle}>Prepayments - {loan.name}</h3>
                   <button class={styles.modalClose} onClick={() => setShowPrepayments(false)}>
