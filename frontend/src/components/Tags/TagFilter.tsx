@@ -17,7 +17,7 @@ export function TagFilter(props: TagFilterProps) {
   const [filterText, setFilterText] = createSignal('')
   const tags = props.availableTags()
   const tagsResult = props.selectedTags()
-   
+
   const selectedTags: Set<string> = (tagsResult as any)[0]
 
   const filteredTags = () => {
@@ -79,7 +79,9 @@ export function TagFilter(props: TagFilterProps) {
                   if (allSelected()) {
                     props.onClear()
                   } else {
-                    tags.forEach((tag) => { props.onToggle(tag); })
+                    tags.forEach((tag) => {
+                      props.onToggle(tag)
+                    })
                   }
                 }}
                 type="button"
@@ -125,11 +127,7 @@ export function TagFilter(props: TagFilterProps) {
           </div>
 
           <div class={tagFilterStyles.footer}>
-            <button
-              class={tagFilterStyles.clearButton}
-              onClick={props.onClear}
-              type="button"
-            >
+            <button class={tagFilterStyles.clearButton} onClick={props.onClear} type="button">
               Clear Selection
             </button>
           </div>

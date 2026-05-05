@@ -234,7 +234,6 @@ function deleteProfileData(id: number): void {
   Object.keys(data.budgets).forEach((key) => {
     const budget = data.budgets[Number(key)]
     if (budget.profile_id === id) {
-       
       // @ts-expect-error - Allow undefined assignment for clean up
       data.budgets[Number(key)] = undefined
     }
@@ -243,7 +242,6 @@ function deleteProfileData(id: number): void {
   Object.keys(data.goals).forEach((key) => {
     const goal = data.goals[Number(key)]
     if (goal.profile_id === id) {
-       
       // @ts-expect-error - Allow undefined assignment for clean up
       data.goals[Number(key)] = undefined
     }
@@ -252,7 +250,6 @@ function deleteProfileData(id: number): void {
   Object.keys(data.loans).forEach((key) => {
     const loan = data.loans[Number(key)]
     if (loan.profile_id === id) {
-       
       // @ts-expect-error - Allow undefined assignment for clean up
       data.loans[Number(key)] = undefined
     }
@@ -265,14 +262,12 @@ function deleteProfileData(id: number): void {
       // Check if account belongs to this profile
       const account = Object.values(data.accounts).find((a) => a.id === entry.account_id)
       if (account && account.profile_id === id) {
-         
         // @ts-expect-error - Allow undefined assignment for clean up
         data.balanceHistory[Number(key)] = undefined
       }
     }
   })
 
-   
   // @ts-expect-error - Allow undefined assignment for clean up
   data.profiles[id] = undefined
   saveData()
@@ -666,7 +661,6 @@ function deleteCategoryData(id: number): void {
     throw new Error(`Category ${id} not found`)
   }
 
-   
   // @ts-expect-error - Allow undefined assignment for clean up
   data.categories[id] = undefined
   saveData()
@@ -787,7 +781,14 @@ function getAccounts(filterProfileId?: number): AccountData[] {
 /**
  * Create an account
  */
-function createAccountData(name: string, type: AccountData['type'], currency: string, balance: number, profileId: number, notes?: string): AccountData {
+function createAccountData(
+  name: string,
+  type: AccountData['type'],
+  currency: string,
+  balance: number,
+  profileId: number,
+  notes?: string
+): AccountData {
   const id = counters.accounts++
   const account: AccountData = {
     id,

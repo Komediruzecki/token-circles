@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test } from '@playwright/test'
 
 test.beforeEach(async ({ page }) => {
   // Add localStorage data before page loads
@@ -13,11 +13,11 @@ test.beforeEach(async ({ page }) => {
 test('should have elements', async ({ page }) => {
   const dataTestElements = await page.locator('[data-test-]').count()
   console.log('Data-test- elements:', dataTestElements)
-  
+
   // Look for account-specific elements
   const accountsHeader = await page.locator('[data-test-id="accounts-header"]').count()
   console.log('accounts-header:', accountsHeader)
-  
+
   // Get page HTML
   const html = await page.content()
   console.log('HTML length:', html.length)

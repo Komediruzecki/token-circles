@@ -26,7 +26,8 @@ export default function DangerZone(props: DangerZoneProps) {
         <div>
           <div class={styles['danger-zone-item-title']}>Reset All Data</div>
           <div class={styles['danger-zone-item-desc']}>
-            Permanently delete all transactions, budgets, goals, loans, bills, housing expenses, and accounts. This action cannot be undone.
+            Permanently delete all transactions, budgets, goals, loans, bills, housing expenses, and
+            accounts. This action cannot be undone.
           </div>
         </div>
         <Show when={!confirming()}>

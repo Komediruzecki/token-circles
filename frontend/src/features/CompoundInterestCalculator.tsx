@@ -235,7 +235,8 @@ export default function CompoundInterestCalculator() {
                 scales: {
                   y: {
                     ticks: {
-                      callback: (v: number | string) => formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
+                      callback: (v: number | string) =>
+                        formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
                       color: 'var(--text)',
                     },
                     grid: { color: 'var(--border)' },
@@ -306,7 +307,8 @@ export default function CompoundInterestCalculator() {
                 scales: {
                   y: {
                     ticks: {
-                      callback: (v: number | string) => formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
+                      callback: (v: number | string) =>
+                        formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
                       color: 'var(--text)',
                     },
                     grid: { color: 'var(--border)' },
@@ -336,26 +338,31 @@ export default function CompoundInterestCalculator() {
             <div class={styles.scenariosGrid}>
               <For each={summary()?.scenarios || []}>
                 {(s) => (
-                <div class={styles.scenarioCard} style={`--color: ${s.color || '#6366f1'};` as any}>
-                  <div class={styles.scenarioName}>{s.name}</div>
-                  <div class={styles.scenarioStats}>
-                    <div class={styles.stat}>
-                      <span class={styles.statLabel}>Return Rate</span>
-                      <span class={styles.statValue}>{s.return}%</span>
-                    </div>
-                    <div class={styles.stat}>
-                      <span class={styles.statLabel}>Final Balance</span>
-                      <span class={styles.statValue}>{formatCurrency(s.finalBalance, 'EUR')}</span>
-                    </div>
-                    <div class={styles.stat}>
-                      <span class={styles.statLabel}>Interest Earned</span>
-                      <span class={`${styles.statValue} success`}>
-                        {formatCurrency(s.interest, 'EUR')}
-                      </span>
+                  <div
+                    class={styles.scenarioCard}
+                    style={`--color: ${s.color || '#6366f1'};` as any}
+                  >
+                    <div class={styles.scenarioName}>{s.name}</div>
+                    <div class={styles.scenarioStats}>
+                      <div class={styles.stat}>
+                        <span class={styles.statLabel}>Return Rate</span>
+                        <span class={styles.statValue}>{s.return}%</span>
+                      </div>
+                      <div class={styles.stat}>
+                        <span class={styles.statLabel}>Final Balance</span>
+                        <span class={styles.statValue}>
+                          {formatCurrency(s.finalBalance, 'EUR')}
+                        </span>
+                      </div>
+                      <div class={styles.stat}>
+                        <span class={styles.statLabel}>Interest Earned</span>
+                        <span class={`${styles.statValue} success`}>
+                          {formatCurrency(s.interest, 'EUR')}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
               </For>
             </div>
           </div>

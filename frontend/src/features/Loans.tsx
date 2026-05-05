@@ -183,7 +183,9 @@ export default function Loans() {
         start_month: rp.start_month,
         end_month: rp.end_month || null,
       }))
-    } catch { /* use empty rate periods */ }
+    } catch {
+      /* use empty rate periods */
+    }
     setFormData({
       name: loan.name,
       principal: loan.principal.toString(),
@@ -261,14 +263,20 @@ export default function Loans() {
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="loans-header">Loans</h1>
-          <button data-test-id="add-loan-btn" class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button
+            data-test-id="add-loan-btn"
+            class={styles.btnPrimary}
+            onClick={() => setShowAddModal(true)}
+          >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Loan
           </button>
         </div>
-        <p data-test-id="loans-subtitle" class={styles.pageSubtitle}>Track your loans and manage payments</p>
+        <p data-test-id="loans-subtitle" class={styles.pageSubtitle}>
+          Track your loans and manage payments
+        </p>
       </div>
 
       {/* Summary Cards */}
@@ -294,7 +302,9 @@ export default function Loans() {
       </div>
 
       {loading() ? (
-        <div data-test-id="loading-state" class={styles.emptyState}>Loading loans...</div>
+        <div data-test-id="loading-state" class={styles.emptyState}>
+          Loading loans...
+        </div>
       ) : loans().length === 0 ? (
         <div class={styles.emptyState}>
           <p>No loans yet</p>
@@ -314,101 +324,105 @@ export default function Loans() {
               const progress = getProgress(loan)
 
               return (
-              <div class={styles.loanCard}>
-                <div class={styles.loanHeader}>
-                  <div class={styles.loanIcon}>🏦</div>
-                  <div class={styles.loanInfo}>
-                    <h3 class={styles.loanName}>{loan.name}</h3>
-                    <Badge status={getLoanBadgeStatus(loan.status)}>
-                      {getStatusLabel(loan.status)}
-                    </Badge>
-                  </div>
-                  <div class={styles.loanActions}>
-                    <button
-                      class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                      title="View Amortization"
-                      onClick={() => {
-                        setShowAmortizationId(loan.id)
-                        setShowAmortization(true)
-                      }}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                <div class={styles.loanCard}>
+                  <div class={styles.loanHeader}>
+                    <div class={styles.loanIcon}>🏦</div>
+                    <div class={styles.loanInfo}>
+                      <h3 class={styles.loanName}>{loan.name}</h3>
+                      <Badge status={getLoanBadgeStatus(loan.status)}>
+                        {getStatusLabel(loan.status)}
+                      </Badge>
+                    </div>
+                    <div class={styles.loanActions}>
+                      <button
+                        class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                        title="View Amortization"
+                        onClick={() => {
+                          setShowAmortizationId(loan.id)
+                          setShowAmortization(true)
+                        }}
                       >
-                        <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </button>
-                    <button
-                      class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                      onClick={() => {
-                        editLoan(loan)
-                      }}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </button>
+                      <button
+                        class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                        onClick={() => {
+                          editLoan(loan)
+                        }}
                       >
-                        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <ConfirmButton
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onConfirm={() => deleteLoan(loan.id)}
-                      label={<svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>}
-                    />
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <ConfirmButton
+                        class={`${styles.btnSm} ${styles.btnGhost}`}
+                        onConfirm={() => deleteLoan(loan.id)}
+                        label={
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div class={styles.loanBalance}>
+                    <div class={styles.balanceLabel}>Remaining Balance</div>
+                    <div class={styles.balanceAmount}>{formatAmount(remaining)}</div>
+                  </div>
+                  <div class={styles.loanDetails}>
+                    <div class={styles.detailRow}>
+                      <span class={styles.detailLabel}>Principal</span>
+                      <span class={styles.detailValue}>{formatAmount(loan.principal)}</span>
+                    </div>
+                    <div class={styles.detailRow}>
+                      <span class={styles.detailLabel}>Interest Rate</span>
+                      <span class={styles.detailValue}>{loan.interest_rate}%</span>
+                    </div>
+                    <div class={styles.detailRow}>
+                      <span class={styles.detailLabel}>Monthly Payment</span>
+                      <span class={styles.detailValue}>{formatAmount(monthly)}</span>
+                    </div>
+                    <div class={styles.detailRow}>
+                      <span class={styles.detailLabel}>Next Payment</span>
+                      <span class={styles.detailValue}>
+                        {loan.next_payment_date ? formatDate(loan.next_payment_date) : 'Not set'}
+                      </span>
+                    </div>
+                  </div>
+                  <div class={styles.loanProgress}>
+                    <div class={styles.progressBar}>
+                      <div class={styles.progressFill} style={{ width: `${progress}%` }} />
+                    </div>
+                    <div class={styles.progressStats}>
+                      <span class={styles.progressPercent}>{progress}% paid</span>
+                      <span class={styles.progressCurrent}>
+                        {formatAmount(loan.total_paid)} paid
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div class={styles.loanBalance}>
-                  <div class={styles.balanceLabel}>Remaining Balance</div>
-                  <div class={styles.balanceAmount}>{formatAmount(remaining)}</div>
-                </div>
-                <div class={styles.loanDetails}>
-                  <div class={styles.detailRow}>
-                    <span class={styles.detailLabel}>Principal</span>
-                    <span class={styles.detailValue}>{formatAmount(loan.principal)}</span>
-                  </div>
-                  <div class={styles.detailRow}>
-                    <span class={styles.detailLabel}>Interest Rate</span>
-                    <span class={styles.detailValue}>{loan.interest_rate}%</span>
-                  </div>
-                  <div class={styles.detailRow}>
-                    <span class={styles.detailLabel}>Monthly Payment</span>
-                    <span class={styles.detailValue}>{formatAmount(monthly)}</span>
-                  </div>
-                  <div class={styles.detailRow}>
-                    <span class={styles.detailLabel}>Next Payment</span>
-                    <span class={styles.detailValue}>
-                      {loan.next_payment_date ? formatDate(loan.next_payment_date) : 'Not set'}
-                    </span>
-                  </div>
-                </div>
-                <div class={styles.loanProgress}>
-                  <div class={styles.progressBar}>
-                    <div class={styles.progressFill} style={{ width: `${progress}%` }} />
-                  </div>
-                  <div class={styles.progressStats}>
-                    <span class={styles.progressPercent}>{progress}% paid</span>
-                    <span class={styles.progressCurrent}>{formatAmount(loan.total_paid)} paid</span>
-                  </div>
-                </div>
-              </div>
-            )
-          }}
+              )
+            }}
           </For>
         </div>
       )}
@@ -419,7 +433,16 @@ export default function Loans() {
           <h3>Loan Overview</h3>
           <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '16px' }}>
             <div class={styles.amortizationChartWrapper}>
-              <h4 style={{ 'font-size': '13px', 'font-weight': 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>Principal vs Remaining</h4>
+              <h4
+                style={{
+                  'font-size': '13px',
+                  'font-weight': 600,
+                  margin: '0 0 12px 0',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Principal vs Remaining
+              </h4>
               <Chart
                 type="line"
                 data={{
@@ -470,7 +493,16 @@ export default function Loans() {
               />
             </div>
             <div class={styles.amortizationChartWrapper}>
-              <h4 style={{ 'font-size': '13px', 'font-weight': 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>Debt Distribution</h4>
+              <h4
+                style={{
+                  'font-size': '13px',
+                  'font-weight': 600,
+                  margin: '0 0 12px 0',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Debt Distribution
+              </h4>
               <Chart
                 type="doughnut"
                 data={{
@@ -479,8 +511,14 @@ export default function Loans() {
                     {
                       data: loans().map((l) => l.principal),
                       backgroundColor: [
-                        '#22c55e', '#3b82f6', '#f59e0b', '#ef4444',
-                        '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+                        '#22c55e',
+                        '#3b82f6',
+                        '#f59e0b',
+                        '#ef4444',
+                        '#8b5cf6',
+                        '#ec4899',
+                        '#06b6d4',
+                        '#84cc16',
                       ],
                       borderColor: 'var(--card-bg)',
                       borderWidth: 2,
@@ -634,16 +672,41 @@ export default function Loans() {
               {/* Rate Periods */}
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Rate Periods</label>
-                <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px', 'margin-bottom': '8px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    'flex-direction': 'column',
+                    gap: '8px',
+                    'margin-bottom': '8px',
+                  }}
+                >
                   <For each={formData().rate_periods}>
                     {(rp: RatePeriod, idx) => (
-                      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', padding: '8px', background: 'var(--bg)', 'border-radius': '8px', 'font-size': '13px' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          'align-items': 'center',
+                          gap: '8px',
+                          padding: '8px',
+                          background: 'var(--bg)',
+                          'border-radius': '8px',
+                          'font-size': '13px',
+                        }}
+                      >
                         <input
                           type="number"
                           step="0.01"
                           placeholder="Rate %"
                           value={rp.rate}
-                          style={{ width: '80px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
+                          style={{
+                            width: '80px',
+                            padding: '6px',
+                            border: '1px solid var(--border)',
+                            'border-radius': '4px',
+                            background: 'var(--bg)',
+                            color: 'var(--text)',
+                            'font-size': '13px',
+                          }}
                           oninput={(e) => {
                             const i = idx()
                             const updated = [...formData().rate_periods]
@@ -651,16 +714,29 @@ export default function Loans() {
                             setFormData({ ...formData(), rate_periods: updated })
                           }}
                         />
-                        <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>from month</span>
+                        <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
+                          from month
+                        </span>
                         <input
                           type="number"
                           placeholder="Start"
                           value={rp.start_month}
-                          style={{ width: '60px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
+                          style={{
+                            width: '60px',
+                            padding: '6px',
+                            border: '1px solid var(--border)',
+                            'border-radius': '4px',
+                            background: 'var(--bg)',
+                            color: 'var(--text)',
+                            'font-size': '13px',
+                          }}
                           oninput={(e) => {
                             const i = idx()
                             const updated = [...formData().rate_periods]
-                            updated[i] = { ...updated[i], start_month: parseInt(e.target.value) || 0 }
+                            updated[i] = {
+                              ...updated[i],
+                              start_month: parseInt(e.target.value) || 0,
+                            }
                             setFormData({ ...formData(), rate_periods: updated })
                           }}
                         />
@@ -668,7 +744,15 @@ export default function Loans() {
                           type="number"
                           placeholder="End (opt)"
                           value={rp.end_month ?? ''}
-                          style={{ width: '70px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
+                          style={{
+                            width: '70px',
+                            padding: '6px',
+                            border: '1px solid var(--border)',
+                            'border-radius': '4px',
+                            background: 'var(--bg)',
+                            color: 'var(--text)',
+                            'font-size': '13px',
+                          }}
                           oninput={(e) => {
                             const i = idx()
                             const val = e.target.value
@@ -679,14 +763,29 @@ export default function Loans() {
                         />
                         <button
                           type="button"
-                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px', 'border-radius': '4px' }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--danger)',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            'border-radius': '4px',
+                          }}
                           onClick={() => {
                             const i = idx()
-                            const updated = formData().rate_periods.filter((_: RatePeriod, j: number) => j !== i)
+                            const updated = formData().rate_periods.filter(
+                              (_: RatePeriod, j: number) => j !== i
+                            )
                             setFormData({ ...formData(), rate_periods: updated })
                           }}
                         >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg
+                            width="14"
+                            height="14"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
                             <path d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -696,11 +795,29 @@ export default function Loans() {
                 </div>
                 <button
                   type="button"
-                  style={{ display: 'flex', 'align-items': 'center', gap: '6px', padding: '6px 12px', 'font-size': '12px', background: 'var(--bg)', border: '1px solid var(--border)', 'border-radius': 'var(--radius)', color: 'var(--text)', cursor: 'pointer' }}
+                  style={{
+                    display: 'flex',
+                    'align-items': 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    'font-size': '12px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    'border-radius': 'var(--radius)',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                  }}
                   onClick={() => {
                     setFormData({
                       ...formData(),
-                      rate_periods: [...formData().rate_periods, { rate: parseFloat(formData().interest_rate) || 0, start_month: 1, end_month: null }],
+                      rate_periods: [
+                        ...formData().rate_periods,
+                        {
+                          rate: parseFloat(formData().interest_rate) || 0,
+                          start_month: 1,
+                          end_month: null,
+                        },
+                      ],
                     })
                   }}
                 >

@@ -25,7 +25,10 @@ test.describe('Bills', () => {
     await page.waitForTimeout(500)
 
     // There's no explicit summary cards in the current design, just the sections
-    const hasSections = await page.getByTestId('bills-upcoming-section').isVisible().catch(() => false)
+    const hasSections = await page
+      .getByTestId('bills-upcoming-section')
+      .isVisible()
+      .catch(() => false)
     expect(hasSections).toBeTruthy()
   })
 

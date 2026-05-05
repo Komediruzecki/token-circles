@@ -359,7 +359,9 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
             <label class={styles.settingLabel}>Danger Zone</label>
             <ConfirmButton
               class={styles.btnDanger}
-              onConfirm={() => { void _handleReset() }}
+              onConfirm={() => {
+                void _handleReset()
+              }}
               confirmLabel="This will permanently delete all your data. Continue?"
               label="Reset All Data"
             />

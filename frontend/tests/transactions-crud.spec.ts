@@ -25,23 +25,32 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should open add transaction modal', async ({ page }) => {
     // Click on Add Transaction button (if exists) or open modal via data-action
-    const addBtn = page.locator('[data-test-id="add-transaction-btn"], .pageHeader button:has-text("Add")').first()
+    const addBtn = page
+      .locator('[data-test-id="add-transaction-btn"], .pageHeader button:has-text("Add")')
+      .first()
     if (await addBtn.isVisible()) {
       await addBtn.click()
     } else {
       // Try data-action
       await page.locator('[data-test-id="add-transaction-btn"]').first().click()
     }
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 5000 })
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 5000,
+    })
   })
 
   test('should open modal via close button', async ({ page }) => {
     // Ensure modal is not open
-    await page.locator('#tx-modal').isVisible().then((isOpen) => {
-      if (isOpen) {
-        page.locator('[data-action="transactions:setType"]').first().click()
-      }
-    }).catch(() => {})
+    await page
+      .locator('#tx-modal')
+      .isVisible()
+      .then((isOpen) => {
+        if (isOpen) {
+          page.locator('[data-action="transactions:setType"]').first().click()
+        }
+      })
+      .catch(() => {})
 
     // Try data-action to open
     const saveBtn = page.locator('[data-test-id="add-transaction-btn"]')
@@ -49,10 +58,12 @@ test.describe('Transactions CRUD Operations', () => {
       await saveBtn.click()
     }
 
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 5000 }).catch(() => {
-      // Try alternative method
-      page.locator('.modalOverlay[data-action=""]').first().click()
-    })
+    await page
+      .waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {
+        // Try alternative method
+        page.locator('.modalOverlay[data-action=""]').first().click()
+      })
   })
 
   test('should have transaction form fields', async ({ page }) => {
@@ -67,10 +78,16 @@ test.describe('Transactions CRUD Operations', () => {
       await expect(page.locator('#tx-currency')).toBeVisible()
     } else {
       // Modal is closed, check for potential add button
-      const addBtn = page.locator('button:has-text("Add")').filter({ hasText: /Transaction|Add/ }).first()
+      const addBtn = page
+        .locator('button:has-text("Add")')
+        .filter({ hasText: /Transaction|Add/ })
+        .first()
       if (await addBtn.isVisible().catch(() => false)) {
         await addBtn.click()
-        await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+        await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+          state: 'visible',
+          timeout: 3000,
+        })
         await expect(page.locator('#tx-description')).toBeVisible()
         await expect(page.locator('#tx-amount')).toBeVisible()
         await expect(page.locator('#tx-date')).toBeVisible()
@@ -90,15 +107,24 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should have date field populated', async ({ page }) => {
     // Try to open modal if not already open
-    const addBtn = page.locator('[data-test-id="add-transaction-btn"], button:has-text("Add")').first()
+    const addBtn = page
+      .locator('[data-test-id="add-transaction-btn"], button:has-text("Add")')
+      .first()
     if (!(await addBtn.isVisible().catch(() => false))) {
-      await page.locator('[data-test-id="add-transaction-btn"]').first().click().catch(() => {})
+      await page
+        .locator('[data-test-id="add-transaction-btn"]')
+        .first()
+        .click()
+        .catch(() => {})
     } else {
       await addBtn.click()
     }
 
     // Wait for modal to open
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const dateInput = page.locator('#tx-date')
     await expect(dateInput).toBeVisible()
@@ -141,7 +167,9 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should have receipt upload area', async ({ page }) => {
-    const receiptLabel = page.locator('label[for="tx-receipt"], .receipt-placeholder, [data-test-id="tx-receipt-label"]')
+    const receiptLabel = page.locator(
+      'label[for="tx-receipt"], .receipt-placeholder, [data-test-id="tx-receipt-label"]'
+    )
     if (await receiptLabel.isVisible().catch(() => false)) {
       await expect(receiptLabel).toHaveText(/Click to upload receipt/i)
     }
@@ -158,8 +186,14 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should have modal close button', async ({ page }) => {
     // Open the transaction modal first
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const modal = page.locator('#tx-modal, [data-test-id="tx-modal"]')
     await expect(modal).toBeVisible()
@@ -170,8 +204,14 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should have modal footer with cancel and save buttons', async ({ page }) => {
     // Open the transaction modal first
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const modal = page.locator('#tx-modal, [data-test-id="tx-modal"]')
     await expect(modal).toBeVisible()
@@ -182,8 +222,14 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should close modal when clicking overlay', async ({ page }) => {
     // Open the modal
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const modal = page.locator('#tx-modal, [data-test-id="tx-modal"]')
     await expect(modal).toBeVisible()
@@ -194,8 +240,14 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should close modal when clicking cancel button', async ({ page }) => {
     // Open the modal
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const modal = page.locator('#tx-modal, [data-test-id="tx-modal"]')
     await expect(modal).toBeVisible()
@@ -248,7 +300,10 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should highlight income type when selected', async ({ page }) => {
     // Use JavaScript to click the income button directly
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
     await page.waitForTimeout(500)
 
     const incomeBtn = page.locator('#tx-type-selector .income')
@@ -262,7 +317,10 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should highlight transfer type when selected', async ({ page }) => {
     // Open the transaction modal first
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
     await page.waitForTimeout(500)
 
     const transferBtn = page.locator('#tx-type-selector .transfer')
@@ -276,10 +334,17 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should toggle between types', async ({ page }) => {
     // Open the transaction modal first
-    await page.locator('[data-test-id="add-transaction-btn"]').first().click().catch(() => {})
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .first()
+      .click()
+      .catch(() => {})
 
     // Wait for modal
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 5000 })
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 5000,
+    })
 
     // Now click on the type selector buttons
     const buttons = page.locator('#tx-type-selector button')
@@ -299,9 +364,16 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should prevent form submission with empty required fields', async ({ page }) => {
     // Open the transaction modal first
-    await page.locator('[data-test-id="add-transaction-btn"]').first().click().catch(() => {})
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .first()
+      .click()
+      .catch(() => {})
 
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     // Try to submit form without filling required fields
     const saveBtn = page.locator('[data-test-id="tx-save-btn"], button:has-text("Save")').first()
@@ -309,18 +381,27 @@ test.describe('Transactions CRUD Operations', () => {
 
     // Form should still be open or show validation errors
     await page.waitForTimeout(500)
-    const isModalOpen = await page.locator('#tx-modal, [data-test-id="tx-modal"]').isVisible({ timeout: 1000 }).catch(() => false)
+    const isModalOpen = await page
+      .locator('#tx-modal, [data-test-id="tx-modal"]')
+      .isVisible({ timeout: 1000 })
+      .catch(() => false)
     expect(isModalOpen).toBeTruthy()
   })
 
   test('should display error messages for invalid data', async ({ page }) => {
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 2000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 2000,
+    })
 
     // Try with invalid amount
     const amountInput = page.locator('#tx-amount')
     if (await amountInput.isVisible().catch(() => false)) {
-      await amountInput.evaluate((input: HTMLInputElement) => input.value = 'invalid')
+      await amountInput.evaluate((input: HTMLInputElement) => (input.value = 'invalid'))
       const saveBtn = page.locator('#tx-save-btn, [data-test-id="tx-save-btn"]')
       await saveBtn.click()
       await page.waitForTimeout(300)
@@ -328,8 +409,14 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should support date selection', async ({ page }) => {
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const dateInput = page.locator('#tx-date')
     await expect(dateInput).toBeVisible()
@@ -339,8 +426,14 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should support category selection', async ({ page }) => {
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const categorySelect = page.locator('#tx-category')
     await expect(categorySelect).toBeVisible()
@@ -351,8 +444,13 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should be visible on page', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
-    await page.waitForSelector('.page-transactions, [data-test-id="page-transactions"]', { state: 'attached', timeout: 5000 })
-    await expect(page.locator('.page-transactions, [data-test-id="page-transactions"]')).toBeVisible()
+    await page.waitForSelector('.page-transactions, [data-test-id="page-transactions"]', {
+      state: 'attached',
+      timeout: 5000,
+    })
+    await expect(
+      page.locator('.page-transactions, [data-test-id="page-transactions"]')
+    ).toBeVisible()
   })
 
   test('should load transactions list', async ({ page }) => {
@@ -383,14 +481,20 @@ test.describe('Transactions CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     // Open modal
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
 
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     // Fill in form fields using JS to bypass input type restrictions
     const dateInput = page.locator('#tx-date')
     if (await dateInput.isVisible().catch(() => false)) {
-      await dateInput.evaluate((input: HTMLInputElement) => input.value = '2026-05-02')
+      await dateInput.evaluate((input: HTMLInputElement) => (input.value = '2026-05-02'))
     }
 
     const descInput = page.locator('#tx-description')
@@ -412,17 +516,29 @@ test.describe('Transactions CRUD Operations', () => {
       await page.waitForTimeout(500)
 
       // Check if modal still exists or was closed
-      await page.locator('#tx-modal, [data-test-id="tx-modal"]').isVisible({ timeout: 1000 }).catch(() => false)
+      await page
+        .locator('#tx-modal, [data-test-id="tx-modal"]')
+        .isVisible({ timeout: 1000 })
+        .catch(() => false)
       // Modal may close after save, which is acceptable
     }
   })
 
   test('should handle form reset on cancel', async ({ page }) => {
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 5000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 5000,
+    })
 
     // Cancel the modal
-    const cancelBtn = page.locator('button').filter({ hasText: /cancel/i }).first()
+    const cancelBtn = page
+      .locator('button')
+      .filter({ hasText: /cancel/i })
+      .first()
     await expect(cancelBtn).toBeVisible()
 
     // Just verify cancel button exists
@@ -430,8 +546,14 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should support switching between Add and Edit modes', async ({ page }) => {
-    await page.locator('[data-test-id="add-transaction-btn"]').click().catch(() => {})
-    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', { state: 'visible', timeout: 3000 })
+    await page
+      .locator('[data-test-id="add-transaction-btn"]')
+      .click()
+      .catch(() => {})
+    await page.waitForSelector('#tx-modal, [data-test-id="tx-modal"]', {
+      state: 'visible',
+      timeout: 3000,
+    })
 
     const modal = page.locator('#tx-modal, [data-test-id="tx-modal"]')
     await expect(modal).toBeVisible()

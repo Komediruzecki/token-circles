@@ -34,7 +34,12 @@ export default function ProfileModal(props: ProfileModalProps) {
   }
 
   return (
-    <div class={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}>
+    <div
+      class={styles.overlay}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) props.onClose()
+      }}
+    >
       <div class={styles.modal} onKeyDown={handleKeyDown}>
         <h3 class={styles.title}>Create Profile</h3>
         <div class={styles.field}>

@@ -224,13 +224,9 @@ function getLogStats(): {
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  const last24h = logs.filter(
-    (log) => new Date(log.timestamp) >= yesterday
-  ).length
+  const last24h = logs.filter((log) => new Date(log.timestamp) >= yesterday).length
 
-  const last7d = logs.filter(
-    (log) => new Date(log.timestamp) >= weekAgo
-  ).length
+  const last7d = logs.filter((log) => new Date(log.timestamp) >= weekAgo).length
 
   return {
     total: logs.length,
@@ -268,12 +264,7 @@ export function initLogging(): void {
 /**
  * Add a log entry
  */
-export function log(
-  level: LogLevel,
-  message: string,
-  details?: unknown,
-  component?: string
-): void {
+export function log(level: LogLevel, message: string, details?: unknown, component?: string): void {
   const entry = createLogEntry(level, message, details, component)
   addLogEntry(entry)
   writeLogToConsole(entry)

@@ -283,14 +283,20 @@ export default function Retirement() {
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="retirement-header">Retirement Planning</h1>
-          <button data-test-id="add-retirement-goal-btn" class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button
+            data-test-id="add-retirement-goal-btn"
+            class={styles.btnPrimary}
+            onClick={() => setShowAddModal(true)}
+          >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Goal
           </button>
         </div>
-        <p data-test-id="retirement-subtitle" class={styles.pageSubtitle}>Plan your retirement and track your savings progress</p>
+        <p data-test-id="retirement-subtitle" class={styles.pageSubtitle}>
+          Plan your retirement and track your savings progress
+        </p>
       </div>
 
       {/* Projection Cards */}
@@ -340,7 +346,9 @@ export default function Retirement() {
               </div>
               <div class={styles.detailRow}>
                 <span class={styles.detailLabel}>Remaining to Save</span>
-                <span class={`${styles.detailValue} ${remainingToSave() > 0 ? styles.positive : ''}`}>
+                <span
+                  class={`${styles.detailValue} ${remainingToSave() > 0 ? styles.positive : ''}`}
+                >
                   {formatAmount(remainingToSave())}
                 </span>
               </div>
@@ -353,7 +361,9 @@ export default function Retirement() {
       <div data-test-id="retirement-goals" class={styles.retirementGoals}>
         <h2 class={styles.sectionTitle}>Retirement Goals</h2>
         {loading() ? (
-          <div data-test-id="loading-state" class={styles.emptyState}>Loading goals...</div>
+          <div data-test-id="loading-state" class={styles.emptyState}>
+            Loading goals...
+          </div>
         ) : goals().length === 0 ? (
           <div class={styles.emptyState}>
             <p>No retirement goals yet</p>
@@ -370,9 +380,13 @@ export default function Retirement() {
                 return (
                   <div data-test-id="retirement-goal-card" class={styles.goalCard}>
                     <div class={styles.goalHeader}>
-                      <div data-test-id="retirement-goal-icon" class={styles.goalIcon}>🎯</div>
+                      <div data-test-id="retirement-goal-icon" class={styles.goalIcon}>
+                        🎯
+                      </div>
                       <div class={styles.goalInfo}>
-                        <h3 data-test-id="retirement-goal-name" class={styles.goalName}>{goal.name}</h3>
+                        <h3 data-test-id="retirement-goal-name" class={styles.goalName}>
+                          {goal.name}
+                        </h3>
                         <Badge status={getRetirementBadgeStatus(goal.retirement_age)}>
                           Retire at {formatAge(goal.retirement_age)}
                         </Badge>
@@ -398,15 +412,17 @@ export default function Retirement() {
                         <ConfirmButton
                           class={`${styles.btnSm} ${styles.btnGhost}`}
                           onConfirm={() => deleteGoal(goal.id)}
-                          label={<svg
-                            width="16"
-                            height="16"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>}
+                          label={
+                            <svg
+                              width="16"
+                              height="16"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          }
                         />
                       </div>
                     </div>
@@ -419,8 +435,16 @@ export default function Retirement() {
                         <div class={styles.progressFill} style={{ width: `${progress}%` }} />
                       </div>
                       <div class={styles.progressStats}>
-                        <span data-test-id="retirement-progress-percent" class={styles.progressPercent}>{progress}%</span>
-                        <span data-test-id="retirement-progress-target" class={styles.progressTarget}>
+                        <span
+                          data-test-id="retirement-progress-percent"
+                          class={styles.progressPercent}
+                        >
+                          {progress}%
+                        </span>
+                        <span
+                          data-test-id="retirement-progress-target"
+                          class={styles.progressTarget}
+                        >
                           {formatAmount(goal.target_amount)} target
                         </span>
                       </div>
@@ -428,17 +452,24 @@ export default function Retirement() {
                     <div class={styles.goalDetails}>
                       <div data-test-id="retirement-detail-item" class={styles.detailItem}>
                         <span class={styles.detailLabel}>Monthly</span>
-                        <span data-test-id="retirement-monthly-contribution" class={styles.detailValue}>
+                        <span
+                          data-test-id="retirement-monthly-contribution"
+                          class={styles.detailValue}
+                        >
                           {formatAmount(goal.monthly_contribution)}
                         </span>
                       </div>
                       <div data-test-id="retirement-detail-item" class={styles.detailItem}>
                         <span class={styles.detailLabel}>Expected Return</span>
-                        <span data-test-id="retirement-expected-return" class={styles.detailValue}>{goal.expected_return_rate}%</span>
+                        <span data-test-id="retirement-expected-return" class={styles.detailValue}>
+                          {goal.expected_return_rate}%
+                        </span>
                       </div>
                       <div data-test-id="retirement-detail-item" class={styles.detailItem}>
                         <span class={styles.detailLabel}>Target Date</span>
-                        <span data-test-id="retirement-target-date" class={styles.detailValue}>{formatDate(goal.target_date)}</span>
+                        <span data-test-id="retirement-target-date" class={styles.detailValue}>
+                          {formatDate(goal.target_date)}
+                        </span>
                       </div>
                     </div>
                   </div>

@@ -170,12 +170,16 @@ export default function Analytics() {
             </div>
             <div class={styles.statCard}>
               <div class={styles.statLabel}>Total Income</div>
-              <div class={`${styles.statValue} ${styles.positive}`}>{formatAmount(totalIncome())}</div>
+              <div class={`${styles.statValue} ${styles.positive}`}>
+                {formatAmount(totalIncome())}
+              </div>
               <div class={styles.statDesc}>Last 6 months</div>
             </div>
             <div class={styles.statCard}>
               <div class={styles.statLabel}>Total Expense</div>
-              <div class={`${styles.statValue} ${styles.negative}`}>{formatAmount(totalExpense())}</div>
+              <div class={`${styles.statValue} ${styles.negative}`}>
+                {formatAmount(totalExpense())}
+              </div>
               <div class={styles.statDesc}>Last 6 months</div>
             </div>
             <div class={styles.statCard}>
@@ -499,28 +503,36 @@ export default function Analytics() {
                       <div class={styles.heatmapScale}>
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{ 'background-color': heatmapType() === 'income'
+                          style={{
+                            'background-color':
+                              heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 0.1)'
                                 : 'rgba(34, 197, 94, 0.1)',
                           }}
                         />
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{ 'background-color': heatmapType() === 'income'
+                          style={{
+                            'background-color':
+                              heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 0.4)'
                                 : 'rgba(34, 197, 94, 0.4)',
                           }}
                         />
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{ 'background-color': heatmapType() === 'income'
+                          style={{
+                            'background-color':
+                              heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 0.7)'
                                 : 'rgba(34, 197, 94, 0.7)',
                           }}
                         />
                         <span
                           class={styles.heatmapScaleColor}
-                          style={{ 'background-color': heatmapType() === 'income'
+                          style={{
+                            'background-color':
+                              heatmapType() === 'income'
                                 ? 'rgba(74, 222, 128, 1)'
                                 : 'rgba(34, 197, 94, 1)',
                           }}
@@ -553,7 +565,9 @@ export default function Analytics() {
                       {new Date(tx.date).toLocaleDateString()} • {tx.category_name || 'No category'}
                     </div>
                   </div>
-                  <div class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}>
+                  <div
+                    class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                  >
                     {tx.type === 'expense' ? '-' : '+'}
                     {formatAmount(tx.amount)}
                   </div>

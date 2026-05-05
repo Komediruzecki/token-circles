@@ -116,7 +116,9 @@ export default function Accounts() {
   }
 
   // Get account type badge status
-  const getAccountBadgeStatus = (type: string): 'primary' | 'success' | 'warning' | 'info' | 'default' => {
+  const getAccountBadgeStatus = (
+    type: string
+  ): 'primary' | 'success' | 'warning' | 'info' | 'default' => {
     const statusMap: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'default'> = {
       checking: 'primary',
       savings: 'success',
@@ -249,22 +251,22 @@ export default function Accounts() {
                     </p>
                   </div>
                   <div class={styles.accountActions}>
-                    <Badge status={getAccountBadgeStatus(account.type)}>
-                      {account.type}
-                    </Badge>
+                    <Badge status={getAccountBadgeStatus(account.type)}>{account.type}</Badge>
                     <ConfirmButton
                       class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                       onConfirm={() => deleteAccount(account.id)}
                       confirmLabel="Delete? This will remove all related transactions."
-                      label={<svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>}
+                      label={
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      }
                     />
                   </div>
                 </div>

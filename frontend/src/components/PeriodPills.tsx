@@ -35,12 +35,12 @@ export function PeriodPills(props: PeriodPillsProps) {
       {periods.map((period) => (
         <button
           class={`${periodPillsStyles.pill} ${props.value === period.id ? periodPillsStyles.pillActive : ''}`}
-          onClick={() => { props.onChange(period.id); }}
+          onClick={() => {
+            props.onChange(period.id)
+          }}
           type="button"
         >
-          {period.icon && (
-            <span class={periodPillsStyles.pillIcon}>{period.icon}</span>
-          )}
+          {period.icon && <span class={periodPillsStyles.pillIcon}>{period.icon}</span>}
           <span class={periodPillsStyles.pillLabel}>{period.label}</span>
         </button>
       ))}

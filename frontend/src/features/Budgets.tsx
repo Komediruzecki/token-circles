@@ -160,10 +160,13 @@ export default function Budgets() {
   const duplicateLastMonth = async () => {
     const [year, mon] = month().split('-')
     try {
-      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>('/api/budgets/duplicate-last', {
-        year: parseInt(year),
-        month: parseInt(mon),
-      })
+      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>(
+        '/api/budgets/duplicate-last',
+        {
+          year: parseInt(year),
+          month: parseInt(mon),
+        }
+      )
       if (result.ok) {
         showToast(`Duplicated ${result.count} budgets from last month`, 'success')
         await loadData()
@@ -179,10 +182,13 @@ export default function Budgets() {
   const setFromExpenses = async () => {
     const [year, mon] = month().split('-')
     try {
-      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>('/api/budgets/from-expenses', {
-        year: parseInt(year),
-        month: parseInt(mon),
-      })
+      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>(
+        '/api/budgets/from-expenses',
+        {
+          year: parseInt(year),
+          month: parseInt(mon),
+        }
+      )
       if (result.ok) {
         showToast(`Set ${result.count} budgets from last month's expenses`, 'success')
         await loadData()
@@ -295,7 +301,9 @@ export default function Budgets() {
                 />
               </svg>
             </button>
-            <span data-test-id="month-display" class={styles.monthDisplay}>{month()}</span>
+            <span data-test-id="month-display" class={styles.monthDisplay}>
+              {month()}
+            </span>
             <button
               class={styles.btnGhost}
               onclick={() => {
@@ -316,7 +324,9 @@ export default function Budgets() {
             </button>
           </div>
         </div>
-        <p data-test-id="budgets-subtitle" class={styles.pageSubtitle}>Zero-based budgeting: allocate every dollar to a category</p>
+        <p data-test-id="budgets-subtitle" class={styles.pageSubtitle}>
+          Zero-based budgeting: allocate every dollar to a category
+        </p>
       </div>
 
       {/* Budget Summary Cards */}
@@ -387,7 +397,12 @@ export default function Budgets() {
 
       {/* Additional Charts Toggle */}
       <div class={styles.forecastToggleSection}>
-        <button class={`${styles.btnOutline} ${styles.btnLarge}`} onClick={() => { setShowCharts(!showCharts()) }}>
+        <button
+          class={`${styles.btnOutline} ${styles.btnLarge}`}
+          onClick={() => {
+            setShowCharts(!showCharts())
+          }}
+        >
           {showCharts() ? 'Hide Charts' : 'Show Charts'}
         </button>
       </div>
@@ -564,26 +579,26 @@ export default function Budgets() {
                 </div>
                 <For each={forecastData()!.forecast}>
                   {(fm) => (
-                  <div class={styles.chartRow} data-index={fm.month}>
-                    <span class={styles.chartLabel}>{fm.label}</span>
-                    <span class={`${styles.chartValue} ${styles.budgetVal}`}>
-                      {formatCurrency(fm.budget_amount)}
-                    </span>
-                    <span class={`${styles.chartValue} ${styles.actualVal}`}>
-                      {formatCurrency(fm.predicted_spent)}
-                    </span>
-                    <span class={styles.chartValue}>{Math.round(fm.adherence)}%</span>
-                    <span
-                      class={`${styles.chartStatus} ${styles[`chartStatus${fm.status.charAt(0).toUpperCase() + fm.status.slice(1)}`]}`}
-                    >
-                      {fm.status === 'over'
-                        ? 'Over'
-                        : fm.status === 'warning'
-                          ? 'Warning'
-                          : 'On Track'}
-                    </span>
-                  </div>
-                )}
+                    <div class={styles.chartRow} data-index={fm.month}>
+                      <span class={styles.chartLabel}>{fm.label}</span>
+                      <span class={`${styles.chartValue} ${styles.budgetVal}`}>
+                        {formatCurrency(fm.budget_amount)}
+                      </span>
+                      <span class={`${styles.chartValue} ${styles.actualVal}`}>
+                        {formatCurrency(fm.predicted_spent)}
+                      </span>
+                      <span class={styles.chartValue}>{Math.round(fm.adherence)}%</span>
+                      <span
+                        class={`${styles.chartStatus} ${styles[`chartStatus${fm.status.charAt(0).toUpperCase() + fm.status.slice(1)}`]}`}
+                      >
+                        {fm.status === 'over'
+                          ? 'Over'
+                          : fm.status === 'warning'
+                            ? 'Warning'
+                            : 'On Track'}
+                      </span>
+                    </div>
+                  )}
                 </For>
               </div>
 
@@ -608,13 +623,23 @@ export default function Budgets() {
           <div class={styles.actions}>
             <button class={styles.btnOutline} onClick={duplicateLastMonth}>
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
+                />
               </svg>
               Duplicate Last Month
             </button>
             <button class={styles.btnOutline} onClick={setFromExpenses}>
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                />
               </svg>
               From Expenses
             </button>
@@ -642,7 +667,9 @@ export default function Budgets() {
         </div>
 
         {loading() ? (
-          <div data-test-id="loading-state" class={styles.emptyState}>Loading budgets...</div>
+          <div data-test-id="loading-state" class={styles.emptyState}>
+            Loading budgets...
+          </div>
         ) : allocations().length === 0 ? (
           <div class={styles.emptyState}>
             <p>No allocations for this month yet.</p>
@@ -707,15 +734,15 @@ export default function Budgets() {
                         {item.status === 'over' && <Badge status="over">Over Budget</Badge>}
                         {item.status === 'warning' && <Badge status="warning">Near Limit</Badge>}
                         {item.status === 'ok' && <Badge status="ok">On Track</Badge>}
-                        {item.is_fully_allocated && (
-                          <Badge status="ok">Fully Allocated</Badge>
-                        )}
+                        {item.is_fully_allocated && <Badge status="ok">Fully Allocated</Badge>}
                       </td>
                       <td class={styles.actionsCol}>
                         {item.budget_id ? (
                           <button
                             class={item.rollover_enabled ? styles.rolloverOn : styles.rolloverOff}
-                            onClick={() => { toggleRollover(item.budget_id!, !item.rollover_enabled) }}
+                            onClick={() => {
+                              toggleRollover(item.budget_id!, !item.rollover_enabled)
+                            }}
                             title={item.rollover_enabled ? 'Disable rollover' : 'Enable rollover'}
                           >
                             {item.rollover_enabled ? 'ON' : 'OFF'}

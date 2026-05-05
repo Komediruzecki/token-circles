@@ -173,14 +173,20 @@ export default function Goals() {
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="goals-header">Savings Goals</h1>
-          <button data-test-id="add-goal-btn" class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button
+            data-test-id="add-goal-btn"
+            class={styles.btnPrimary}
+            onClick={() => setShowAddModal(true)}
+          >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             New Goal
           </button>
         </div>
-        <p data-test-id="goals-subtitle" class={styles.pageSubtitle}>Track your savings progress towards financial goals</p>
+        <p data-test-id="goals-subtitle" class={styles.pageSubtitle}>
+          Track your savings progress towards financial goals
+        </p>
       </div>
 
       {loading() ? (
@@ -197,65 +203,74 @@ export default function Goals() {
         <div data-test-id="goals-grid" class={styles.goalsGrid}>
           <For each={goals()}>
             {(goal) => {
-            const progress = getProgress(goal)
-            return (
-              <div data-test-id="goal-card" class={styles.goalCard}>
-                <div class={styles.goalHeader}>
-                  <div data-test-id="goal-icon" class={styles.goalIcon}>🎯</div>
-                  <div class={styles.goalInfo}>
-                    <h3 data-test-id="goal-name" class={styles.goalName}>{goal.name}</h3>
-                    <p data-test-id="goal-date" class={styles.goalDate}>
-                      {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
-                    </p>
+              const progress = getProgress(goal)
+              return (
+                <div data-test-id="goal-card" class={styles.goalCard}>
+                  <div class={styles.goalHeader}>
+                    <div data-test-id="goal-icon" class={styles.goalIcon}>
+                      🎯
+                    </div>
+                    <div class={styles.goalInfo}>
+                      <h3 data-test-id="goal-name" class={styles.goalName}>
+                        {goal.name}
+                      </h3>
+                      <p data-test-id="goal-date" class={styles.goalDate}>
+                        {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
+                      </p>
+                    </div>
+                    <div data-test-id="goal-actions" class={styles.goalActions}>
+                      <button
+                        data-test-id="goal-edit-btn"
+                        class={styles.btnSm}
+                        onClick={() => {
+                          editGoal(goal)
+                        }}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <ConfirmButton
+                        class={styles.btnSm}
+                        onConfirm={() => deleteGoal(goal.id)}
+                        label={
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        }
+                      />
+                    </div>
                   </div>
-                  <div data-test-id="goal-actions" class={styles.goalActions}>
-                    <button
-                      data-test-id="goal-edit-btn"
-                      class={styles.btnSm}
-                      onClick={() => {
-                        editGoal(goal)
-                      }}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <ConfirmButton
-                      class={styles.btnSm}
-                      onConfirm={() => deleteGoal(goal.id)}
-                      label={<svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>}
-                    />
+                  <div class={styles.goalProgress}>
+                    <div data-test-id="goal-progress-bar" class={styles.progressBar}>
+                      <div class={styles.progressFill} style={{ width: `${progress}%` }} />
+                    </div>
+                    <div class={styles.progressStats}>
+                      <span data-test-id="goal-progress-percent" class={styles.progressPercent}>
+                        {progress}%
+                      </span>
+                      <span data-test-id="goal-progress-current" class={styles.progressCurrent}>
+                        {formatCurrency(goal.current_amount)} of{' '}
+                        {formatCurrency(goal.target_amount)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div class={styles.goalProgress}>
-                  <div data-test-id="goal-progress-bar" class={styles.progressBar}>
-                    <div class={styles.progressFill} style={{ width: `${progress}%` }} />
-                  </div>
-                  <div class={styles.progressStats}>
-                    <span data-test-id="goal-progress-percent" class={styles.progressPercent}>{progress}%</span>
-                    <span data-test-id="goal-progress-current" class={styles.progressCurrent}>
-                      {formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )
-          }}
-        </For>
+              )
+            }}
+          </For>
         </div>
       )}
 
@@ -336,7 +351,12 @@ export default function Goals() {
                 onClick={() => {
                   setShowAddModal(false)
                   setEditingGoal(null)
-                  setFormData({ name: '', target_amount: '', target_date: '', monthly_contribution: '' })
+                  setFormData({
+                    name: '',
+                    target_amount: '',
+                    target_date: '',
+                    monthly_contribution: '',
+                  })
                 }}
               >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -398,7 +418,12 @@ export default function Goals() {
                   onClick={() => {
                     setShowAddModal(false)
                     setEditingGoal(null)
-                    setFormData({ name: '', target_amount: '', target_date: '', monthly_contribution: '' })
+                    setFormData({
+                      name: '',
+                      target_amount: '',
+                      target_date: '',
+                      monthly_contribution: '',
+                    })
                   }}
                 >
                   Cancel

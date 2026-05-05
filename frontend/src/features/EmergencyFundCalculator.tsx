@@ -157,23 +157,23 @@ export default function EmergencyFundCalculator() {
               <div class={styles.coverageGrid}>
                 <For each={coverage()}>
                   {(c) => (
-                  <div class={`${styles.coverageItem} ${styles[c.status] || ''}`}>
-                    <div class={styles.coverageTitle}>{c.label} Fund</div>
-                    <div class={styles.coverageBars}>
-                      <div class={styles.progressBar}>
-                        <div
-                          class={styles.progressFill}
-                          style={{ width: `${c.coveragePct}%` }}
-                        ></div>
+                    <div class={`${styles.coverageItem} ${styles[c.status] || ''}`}>
+                      <div class={styles.coverageTitle}>{c.label} Fund</div>
+                      <div class={styles.coverageBars}>
+                        <div class={styles.progressBar}>
+                          <div
+                            class={styles.progressFill}
+                            style={{ width: `${c.coveragePct}%` }}
+                          ></div>
+                        </div>
+                        <div class={styles.progressStats}>
+                          <span>{formatCurrency(c.current, 'EUR')}</span>
+                          <span>of {formatCurrency(c.required, 'EUR')}</span>
+                        </div>
                       </div>
-                      <div class={styles.progressStats}>
-                        <span>{formatCurrency(c.current, 'EUR')}</span>
-                        <span>of {formatCurrency(c.required, 'EUR')}</span>
-                      </div>
+                      <div class={styles.coverageStatus}>{c.status}</div>
                     </div>
-                    <div class={styles.coverageStatus}>{c.status}</div>
-                  </div>
-                )}
+                  )}
                 </For>
               </div>
             )}

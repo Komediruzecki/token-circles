@@ -95,7 +95,10 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
   const uncategorized = props.uncategorizedTransactions()
 
   return (
-    <div class={autoCategorizeModalStyles.overlay} classList={{ [autoCategorizeModalStyles.isOpen]: props.isOpen() }}>
+    <div
+      class={autoCategorizeModalStyles.overlay}
+      classList={{ [autoCategorizeModalStyles.isOpen]: props.isOpen() }}
+    >
       <div class={autoCategorizeModalStyles.modal}>
         <div class={autoCategorizeModalStyles.header}>
           <h2 class={autoCategorizeModalStyles.title}>Auto Categorize</h2>
@@ -106,7 +109,14 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             type="button"
             aria-label="Close modal"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -126,7 +136,14 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             <div class={autoCategorizeModalStyles.loading}>Loading category suggestions...</div>
           ) : uncategorized.length === 0 ? (
             <div class={autoCategorizeModalStyles.empty}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p>All transactions are categorized!</p>
@@ -142,44 +159,59 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
                     <div
                       class={`${autoCategorizeModalStyles.transactionItem} ${isSelected ? autoCategorizeModalStyles.selected : ''}`}
                     >
-                    <div class={autoCategorizeModalStyles.txInfo}>
-                      <p class={autoCategorizeModalStyles.txDescription}>{tx.description}</p>
-                      {matching ? (
-                        <span class={`${autoCategorizeModalStyles.badge} ${autoCategorizeModalStyles.confidenceHigh}`}>
-                          {matching.category_name}
-                        </span>
-                      ) : (
-                        <span class={autoCategorizeModalStyles.badge}>
-                          No match
-                        </span>
-                      )}
+                      <div class={autoCategorizeModalStyles.txInfo}>
+                        <p class={autoCategorizeModalStyles.txDescription}>{tx.description}</p>
+                        {matching ? (
+                          <span
+                            class={`${autoCategorizeModalStyles.badge} ${autoCategorizeModalStyles.confidenceHigh}`}
+                          >
+                            {matching.category_name}
+                          </span>
+                        ) : (
+                          <span class={autoCategorizeModalStyles.badge}>No match</span>
+                        )}
+                      </div>
+                      <button
+                        class={autoCategorizeModalStyles.selectBtn}
+                        onClick={() => {
+                          if (matching) {
+                            applyCategory(tx.id, matching.category_id)
+                          }
+                        }}
+                        disabled={applying() || !matching}
+                        type="button"
+                        aria-label={`Apply ${matching?.category_name}`}
+                      >
+                        {applying() && tx.id in pendingUpdates() ? (
+                          <svg class={autoCategorizeModalStyles.spinnerIcon} viewBox="0 0 24 24">
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              stroke-width="3"
+                              stroke-dasharray="30"
+                              stroke-dashoffset="60"
+                            />
+                          </svg>
+                        ) : isSelected ? (
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : (
+                          '+'
+                        )}
+                      </button>
                     </div>
-                    <button
-                      class={autoCategorizeModalStyles.selectBtn}
-                      onClick={() => {
-                        if (matching) {
-                          applyCategory(tx.id, matching.category_id)
-                        }
-                      }}
-                      disabled={applying() || !matching}
-                      type="button"
-                      aria-label={`Apply ${matching?.category_name}`}
-                    >
-                      {applying() && tx.id in pendingUpdates() ? (
-                        <svg class={autoCategorizeModalStyles.spinnerIcon} viewBox="0 0 24 24">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
-                        </svg>
-                      ) : isSelected ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      ) : (
-                        '+'
-                      )}
-                    </button>
-                  </div>
-                </>
-              )
+                  </>
+                )
               })}
             </div>
           )}
@@ -203,7 +235,15 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             {applying() ? (
               <span class={autoCategorizeModalStyles.spinner}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-dasharray="30"
+                    stroke-dashoffset="60"
+                  />
                 </svg>
               </span>
             ) : (

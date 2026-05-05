@@ -195,7 +195,11 @@ export default function Categories() {
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="categories-header">Categories</h1>
-          <button data-test-id="add-category-btn" class={styles.addCategoryBtn} onClick={() => setShowAddModal(true)}>
+          <button
+            data-test-id="add-category-btn"
+            class={styles.addCategoryBtn}
+            onClick={() => setShowAddModal(true)}
+          >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -225,7 +229,9 @@ export default function Categories() {
       </div>
 
       {loading() ? (
-        <div data-test-id="loading-state" class={styles.emptyState}>Loading categories...</div>
+        <div data-test-id="loading-state" class={styles.emptyState}>
+          Loading categories...
+        </div>
       ) : categories().length === 0 ? (
         <div class={styles.emptyState}>
           <p>No categories yet</p>
@@ -238,124 +244,126 @@ export default function Categories() {
         <div class={styles.categoriesGrid}>
           <For each={categories()}>
             {(category) => {
-            const iconClass = getIconClass(category.color)
-            const spent = (category as ExpenseCategory).spent || 0
-            const budget = (category as ExpenseCategory).budget || 0
-            const remaining = (category as ExpenseCategory).remaining ?? budget - spent
-            const percentUsed = (category as ExpenseCategory).percent_used || 0
-            const isOverBudget = percentUsed > 100
+              const iconClass = getIconClass(category.color)
+              const spent = (category as ExpenseCategory).spent || 0
+              const budget = (category as ExpenseCategory).budget || 0
+              const remaining = (category as ExpenseCategory).remaining ?? budget - spent
+              const percentUsed = (category as ExpenseCategory).percent_used || 0
+              const isOverBudget = percentUsed > 100
 
-            return (
-              <div class={styles.categoryCard}>
-                <div class={styles.categoryHeader}>
-                  <div class={`${styles.categoryIcon} ${iconClass}`}>{category.icon || '📝'}</div>
-                  <div class={styles.categoryInfo}>
-                    <h3 class={styles.categoryName}>{category.name}</h3>
-                    <span class={styles.categoryType}>{category.type}</span>
-                  </div>
-                  <div class={styles.categoryActions}>
-                    <button
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onClick={() => {
-                        openBudgetModal(category)
-                      }}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Budget
-                    </button>
-                    <button
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onClick={() => {
-                        editCategory(category)
-                      }}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <ConfirmButton
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onConfirm={() => deleteCategory(category.id)}
-                      label={<svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>}
-                    />
-                  </div>
-                </div>
-                <div class={styles.categorySpending}>
-                  <div class={styles.spendingHeader}>
-                    <span class={styles.spendingLabel}>Spent</span>
-                    <span class={`${styles.spendingAmount} ${isOverBudget ? styles.over : ''}`}>
-                      {formatCurrency(spent)}
-                    </span>
-                  </div>
-                  {category.type === 'expense' && budget > 0 && (
-                    <>
-                      <div class={styles.progressBar}>
-                        <div
-                          class={`${styles.progressFill} ${isOverBudget ? styles.over : ''}`}
-                          style={{ width: `${Math.min(100, percentUsed)}%` }}
-                        />
-                      </div>
-                      <div class={styles.spendingFooter}>
-                        <span class={styles.budgetLimits}>{formatCurrency(budget)} limit</span>
-                        <span
-                          class={`${styles.remainingAmount} ${isOverBudget ? styles.over : ''}`}
-                        >
-                          {formatCurrency(remaining)} remaining
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div class={styles.categoryColors}>
-                  <span class={styles.colorLabel}>Color:</span>
-                  <div class={styles.colorPicker}>
-                    {[
-                      '#ef4444',
-                      '#f97316',
-                      '#eab308',
-                      '#22c55e',
-                      '#3b82f6',
-                      '#8b5cf6',
-                      '#ec4899',
-                      '#6b7280',
-                    ].map((color) => (
+              return (
+                <div class={styles.categoryCard}>
+                  <div class={styles.categoryHeader}>
+                    <div class={`${styles.categoryIcon} ${iconClass}`}>{category.icon || '📝'}</div>
+                    <div class={styles.categoryInfo}>
+                      <h3 class={styles.categoryName}>{category.name}</h3>
+                      <span class={styles.categoryType}>{category.type}</span>
+                    </div>
+                    <div class={styles.categoryActions}>
                       <button
-                        class={`${styles.colorBtn} ${category.color === color ? styles.active : ''}`}
-                        style={{ background: color }}
-                        onClick={() => updateColor(category.id, color)}
-                        title={color}
+                        class={`${styles.btnSm} ${styles.btnGhost}`}
+                        onClick={() => {
+                          openBudgetModal(category)
+                        }}
                       >
-                        {color}
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Budget
                       </button>
-                    ))}
+                      <button
+                        class={`${styles.btnSm} ${styles.btnGhost}`}
+                        onClick={() => {
+                          editCategory(category)
+                        }}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <ConfirmButton
+                        class={`${styles.btnSm} ${styles.btnGhost}`}
+                        onConfirm={() => deleteCategory(category.id)}
+                        label={
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div class={styles.categorySpending}>
+                    <div class={styles.spendingHeader}>
+                      <span class={styles.spendingLabel}>Spent</span>
+                      <span class={`${styles.spendingAmount} ${isOverBudget ? styles.over : ''}`}>
+                        {formatCurrency(spent)}
+                      </span>
+                    </div>
+                    {category.type === 'expense' && budget > 0 && (
+                      <>
+                        <div class={styles.progressBar}>
+                          <div
+                            class={`${styles.progressFill} ${isOverBudget ? styles.over : ''}`}
+                            style={{ width: `${Math.min(100, percentUsed)}%` }}
+                          />
+                        </div>
+                        <div class={styles.spendingFooter}>
+                          <span class={styles.budgetLimits}>{formatCurrency(budget)} limit</span>
+                          <span
+                            class={`${styles.remainingAmount} ${isOverBudget ? styles.over : ''}`}
+                          >
+                            {formatCurrency(remaining)} remaining
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div class={styles.categoryColors}>
+                    <span class={styles.colorLabel}>Color:</span>
+                    <div class={styles.colorPicker}>
+                      {[
+                        '#ef4444',
+                        '#f97316',
+                        '#eab308',
+                        '#22c55e',
+                        '#3b82f6',
+                        '#8b5cf6',
+                        '#ec4899',
+                        '#6b7280',
+                      ].map((color) => (
+                        <button
+                          class={`${styles.colorBtn} ${category.color === color ? styles.active : ''}`}
+                          style={{ background: color }}
+                          onClick={() => updateColor(category.id, color)}
+                          title={color}
+                        >
+                          {color}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          }}
-        </For>
+              )
+            }}
+          </For>
         </div>
       )}
 

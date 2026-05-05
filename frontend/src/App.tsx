@@ -39,7 +39,7 @@ export function App() {
     try {
       const data = await api.getProfiles()
       setProfiles(data)
-      
+
       if (autoSelect && data.length > 0) {
         const savedId = localStorage.getItem('currentProfileId')
         let activeProfile = null
@@ -118,18 +118,17 @@ export function App() {
       document.documentElement.setAttribute('data-theme', 'light')
     }
 
-    await api.checkLogin()
-      .then(async (loggedIn) => {
-        if (loggedIn) {
-          await loadProfiles(true)
-        } else {
-          await loadProfiles(false)
-          // Default to first profile if not strictly logged in but profiles exist
-          if (profiles().length > 0) {
-            setCurrentProfile(profiles()[0])
-          }
+    await api.checkLogin().then(async (loggedIn) => {
+      if (loggedIn) {
+        await loadProfiles(true)
+      } else {
+        await loadProfiles(false)
+        // Default to first profile if not strictly logged in but profiles exist
+        if (profiles().length > 0) {
+          setCurrentProfile(profiles()[0])
         }
-      })
+      }
+    })
 
     // Parse initial hash from URL
     const hash = window.location.hash.slice(1)
@@ -143,7 +142,9 @@ export function App() {
     try {
       const cats = await api.getCategories()
       if (Array.isArray(cats)) setQuickAddCategories(cats as Category[])
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
 
     // Quick Add keyboard shortcut: Ctrl/Cmd+Shift+T
     const handleQuickAddKey = (e: KeyboardEvent) => {
@@ -153,7 +154,9 @@ export function App() {
       }
     }
     document.addEventListener('keydown', handleQuickAddKey)
-    onCleanup(() => { document.removeEventListener('keydown', handleQuickAddKey) })
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleQuickAddKey)
+    })
   })
 
   // Listen for hash changes (back/forward buttons, manual URL edits)
@@ -164,7 +167,9 @@ export function App() {
     }
   }
   window.addEventListener('hashchange', handleHashChange)
-  onCleanup(() => { window.removeEventListener('hashchange', handleHashChange); })
+  onCleanup(() => {
+    window.removeEventListener('hashchange', handleHashChange)
+  })
 
   // Listen for unauthorized API calls
   const handleAuthRequired = () => {
@@ -174,7 +179,9 @@ export function App() {
     handleLogin()
   }
   window.addEventListener('auth:required', handleAuthRequired)
-  onCleanup(() => { window.removeEventListener('auth:required', handleAuthRequired); })
+  onCleanup(() => {
+    window.removeEventListener('auth:required', handleAuthRequired)
+  })
 
   _setIsLoading?.(false)
 
@@ -296,7 +303,10 @@ export function App() {
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <div class={layoutStyles.sidebar} classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}>
+      <div
+        class={layoutStyles.sidebar}
+        classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}
+      >
         <div class={layoutStyles.sidebarLogo}>
           <h1>
             Finance<span>.</span>
@@ -305,24 +315,55 @@ export function App() {
         </div>
         <div class={profileStyles.profileSelector}>
           <div class={profileStyles.profileDropdown}>
-            <button 
-              class={profileStyles.profileDropdownBtn} 
+            <button
+              class={profileStyles.profileDropdownBtn}
               onClick={toggleDropdown}
-              style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', width: '100%' }}
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                'justify-content': 'space-between',
+                width: '100%',
+              }}
             >
               <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-                <div style={{ width: '24px', height: '24px', 'border-radius': '50%', background: 'var(--primary)', color: 'white', display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'font-size': '12px', 'font-weight': 'bold' }}>
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    'border-radius': '50%',
+                    background: 'var(--primary)',
+                    color: 'white',
+                    display: 'flex',
+                    'align-items': 'center',
+                    'justify-content': 'center',
+                    'font-size': '12px',
+                    'font-weight': 'bold',
+                  }}
+                >
                   {currentProfile() ? currentProfile().name.charAt(0).toUpperCase() : '?'}
                 </div>
                 <span class={profileStyles.profileName} style={{ 'font-weight': 600 }}>
                   {currentProfile() ? currentProfile().name : 'Not Logged In'}
                 </span>
               </div>
-              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style={{ width: '16px', height: '16px', transition: 'transform 0.2s', transform: showDropdown() ? 'rotate(180deg)' : 'none' }}>
+              <svg
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  transition: 'transform 0.2s',
+                  transform: showDropdown() ? 'rotate(180deg)' : 'none',
+                }}
+              >
                 <path d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            <div class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}>
+            <div
+              class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
+            >
               <div class={profileStyles.profileDropdownHeader}>Switch Profile</div>
               {profiles().length > 0 ? (
                 <For each={profiles()}>
@@ -331,7 +372,20 @@ export function App() {
                       class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
                       onClick={() => selectProfile(profile.id)}
                     >
-                      <div style={{ width: '8px', height: '8px', 'border-radius': '50%', background: currentProfile()?.id === profile.id ? 'var(--primary)' : 'transparent', border: currentProfile()?.id === profile.id ? 'none' : '1px solid var(--border)', 'margin-right': '8px' }}></div>
+                      <div
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          'border-radius': '50%',
+                          background:
+                            currentProfile()?.id === profile.id ? 'var(--primary)' : 'transparent',
+                          border:
+                            currentProfile()?.id === profile.id
+                              ? 'none'
+                              : '1px solid var(--border)',
+                          'margin-right': '8px',
+                        }}
+                      ></div>
                       {profile.name}
                     </div>
                   )}
@@ -341,9 +395,20 @@ export function App() {
                   Sign In
                 </div>
               )}
-              
-              <div class={profileStyles.profileDropdownItem} onClick={() => setIsProfileModalOpen(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ 'margin-right': '8px' }}>
+
+              <div
+                class={profileStyles.profileDropdownItem}
+                onClick={() => setIsProfileModalOpen(true)}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style={{ 'margin-right': '8px' }}
+                >
                   <path d="M12 4v16m8-8H4" />
                 </svg>
                 Create Profile
@@ -352,8 +417,20 @@ export function App() {
               {currentProfile() && (
                 <>
                   <div class={profileStyles.profileDropdownDivider}></div>
-                  <div class={profileStyles.profileDropdownItem} onClick={handleLogin} style={{ color: 'var(--text-secondary)' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ 'margin-right': '8px' }}>
+                  <div
+                    class={profileStyles.profileDropdownItem}
+                    onClick={handleLogin}
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      style={{ 'margin-right': '8px' }}
+                    >
                       <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
                       <circle cx="12" cy="7" r="4" />
                     </svg>
@@ -452,7 +529,14 @@ export function App() {
         onClick={() => setSidebarCollapsed((v) => !v)}
         aria-label="Toggle sidebar"
       >
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <svg
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
           <path d={sidebarCollapsed() ? 'M4 6h16M4 12h16M4 18h16' : 'M6 18L18 6M6 6l12 12'} />
         </svg>
       </button>
@@ -466,10 +550,7 @@ export function App() {
       </main>
 
       <Show when={isLoginModalOpen()}>
-        <LoginModal
-          onClose={() => setIsLoginModalOpen(false)}
-          onSuccess={handleLoginSuccess}
-        />
+        <LoginModal onClose={() => setIsLoginModalOpen(false)} onSuccess={handleLoginSuccess} />
       </Show>
 
       <Show when={isProfileModalOpen()}>

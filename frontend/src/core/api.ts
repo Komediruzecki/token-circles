@@ -111,7 +111,11 @@ export class ApiClient {
           error: `HTTP ${response.status}`,
         }))
         const errorMsg = (errorData.error || errorData.message) ?? `HTTP ${response.status}`
-        logger.error('API Error', { status: response.status, endpoint, message: errorMsg }, 'ApiClient')
+        logger.error(
+          'API Error',
+          { status: response.status, endpoint, message: errorMsg },
+          'ApiClient'
+        )
         throw new Error(errorMsg)
       }
 
@@ -885,7 +889,10 @@ export class ApiClient {
   /**
    * Bulk reconcile transactions by date range
    */
-  async reconcileByDateRange(dateFrom: string, dateTo: string): Promise<{ message: string; count: number }> {
+  async reconcileByDateRange(
+    dateFrom: string,
+    dateTo: string
+  ): Promise<{ message: string; count: number }> {
     return this.request(`/transactions/reconcile/bulk`, {
       method: 'POST',
       body: { date_from: dateFrom, date_to: dateTo },
@@ -917,7 +924,10 @@ export class ApiClient {
   /**
    * Create a new tag
    */
-  async createTag(name: string, color?: string): Promise<{ id: number; name: string; color: string }> {
+  async createTag(
+    name: string,
+    color?: string
+  ): Promise<{ id: number; name: string; color: string }> {
     return this.request('/tags', {
       method: 'POST',
       body: { name, color },

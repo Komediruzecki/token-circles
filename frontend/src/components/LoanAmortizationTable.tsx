@@ -134,25 +134,31 @@ export default function LoanAmortizationTable(props: Props) {
               <div style="display: flex; flex-direction: column; gap: 8px;">
                 <For each={props.loan.prepayments}>
                   {(p) => {
-                  const loanStart = new Date(props.loan.start_date)
-                  const prepayDate = new Date(loanStart)
-                  prepayDate.setMonth(prepayDate.getMonth() + p.month - 1)
-                  return (
-                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
-                      <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
-                        {formatDate(prepayDate.toISOString().split('T')[0])}
-                      </span>
-                      <span style={{ 'font-weight': 600, color: 'var(--success)' }}>
-                        +{formatCurrency(p.amount)}
-                      </span>
-                      {p.note && (
-                        <span style={{ 'font-size': '11px', color: 'var(--warning)', 'font-weight': '600' }}>
-                          {p.note}
+                    const loanStart = new Date(props.loan.start_date)
+                    const prepayDate = new Date(loanStart)
+                    prepayDate.setMonth(prepayDate.getMonth() + p.month - 1)
+                    return (
+                      <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
+                        <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
+                          {formatDate(prepayDate.toISOString().split('T')[0])}
                         </span>
-                      )}
-                    </div>
-                  )
-                }}
+                        <span style={{ 'font-weight': 600, color: 'var(--success)' }}>
+                          +{formatCurrency(p.amount)}
+                        </span>
+                        {p.note && (
+                          <span
+                            style={{
+                              'font-size': '11px',
+                              color: 'var(--warning)',
+                              'font-weight': '600',
+                            }}
+                          >
+                            {p.note}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  }}
                 </For>
               </div>
             </div>
@@ -165,31 +171,54 @@ export default function LoanAmortizationTable(props: Props) {
               <div style="display: flex; flex-direction: column; gap: 8px;">
                 <For each={props.loan.rate_periods}>
                   {(rp) => {
-                  const loanStart = new Date(props.loan.start_date)
-                  const rateDate = new Date(loanStart)
-                  rateDate.setMonth(rateDate.getMonth() + rp.start_month - 1)
-                  return (
-                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
-                      <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
-                        {formatDate(rateDate.toISOString().split('T')[0])}
-                      </span>
-                      <span style={{ 'font-size': '11px', color: 'var(--text-secondary)' }}>
-                        ({rp.start_month}
-                        {rp.end_month ? ` - ${rp.end_month}` : '+'} mo)
-                      </span>
-                      <span style={{ 'font-weight': 600 }}>{rp.rate}%</span>
-                    </div>
-                  )
-                }}
+                    const loanStart = new Date(props.loan.start_date)
+                    const rateDate = new Date(loanStart)
+                    rateDate.setMonth(rateDate.getMonth() + rp.start_month - 1)
+                    return (
+                      <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
+                        <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
+                          {formatDate(rateDate.toISOString().split('T')[0])}
+                        </span>
+                        <span style={{ 'font-size': '11px', color: 'var(--text-secondary)' }}>
+                          ({rp.start_month}
+                          {rp.end_month ? ` - ${rp.end_month}` : '+'} mo)
+                        </span>
+                        <span style={{ 'font-weight': 600 }}>{rp.rate}%</span>
+                      </div>
+                    )
+                  }}
                 </For>
               </div>
             </div>
           )}
 
           {/* Charts */}
-          <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '16px', 'margin-bottom': '24px' }}>
-            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', 'border-radius': 'var(--radius)', padding: '12px' }}>
-              <h4 style={{ 'font-size': '13px', 'font-weight': 600, margin: '0 0 8px 0', color: 'var(--text-secondary)' }}>Monthly Payment Breakdown</h4>
+          <div
+            style={{
+              display: 'grid',
+              'grid-template-columns': '1fr 1fr',
+              gap: '16px',
+              'margin-bottom': '24px',
+            }}
+          >
+            <div
+              style={{
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border)',
+                'border-radius': 'var(--radius)',
+                padding: '12px',
+              }}
+            >
+              <h4
+                style={{
+                  'font-size': '13px',
+                  'font-weight': 600,
+                  margin: '0 0 8px 0',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Monthly Payment Breakdown
+              </h4>
               <Chart
                 type="bar"
                 data={{
@@ -217,19 +246,46 @@ export default function LoanAmortizationTable(props: Props) {
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
-                    x: { stacked: true, grid: { display: false }, ticks: { 'font': { size: 10 }, maxTicksLimit: 12, autoSkip: true } },
-                    y: { stacked: true, beginAtZero: true, ticks: { callback: (v: any) => formatCurrency(v) } },
+                    x: {
+                      stacked: true,
+                      grid: { display: false },
+                      ticks: { font: { size: 10 }, maxTicksLimit: 12, autoSkip: true },
+                    },
+                    y: {
+                      stacked: true,
+                      beginAtZero: true,
+                      ticks: { callback: (v: any) => formatCurrency(v) },
+                    },
                   },
                   plugins: {
-                    legend: { position: 'top', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
+                    legend: {
+                      position: 'top',
+                      labels: { usePointStyle: true, padding: 12, font: { size: 11 } },
+                    },
                   },
                 }}
                 height={240}
                 width="100%"
               />
             </div>
-            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', 'border-radius': 'var(--radius)', padding: '12px' }}>
-              <h4 style={{ 'font-size': '13px', 'font-weight': 600, margin: '0 0 8px 0', color: 'var(--text-secondary)' }}>Balance Over Time</h4>
+            <div
+              style={{
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border)',
+                'border-radius': 'var(--radius)',
+                padding: '12px',
+              }}
+            >
+              <h4
+                style={{
+                  'font-size': '13px',
+                  'font-weight': 600,
+                  margin: '0 0 8px 0',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Balance Over Time
+              </h4>
               <Chart
                 type="line"
                 data={{
@@ -267,8 +323,16 @@ export default function LoanAmortizationTable(props: Props) {
           <div style={{ display: 'flex', gap: '8px', 'margin-bottom': '16px' }}>
             <button
               class={styles.btnSm}
-              style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'font-size': '12px', padding: '6px 12px' }}
-              onClick={() => { exportAmortizationCSV(schedule, props.loan.name) }}
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '6px',
+                'font-size': '12px',
+                padding: '6px 12px',
+              }}
+              onClick={() => {
+                exportAmortizationCSV(schedule, props.loan.name)
+              }}
             >
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -300,53 +364,59 @@ export default function LoanAmortizationTable(props: Props) {
                 <tbody>
                   <For each={schedule}>
                     {(row, index) => {
-                    const prev = index() > 0 ? schedule[index() - 1] : null
-                    const rateChanged = prev && prev.rate !== row.rate
-                    const hasPrepayment = row.prepayment && row.prepayment > 0
-                    const note = hasPrepayment
-                      ? 'Prepayment'
-                      : rateChanged
-                        ? `Rate: ${row.rate}%`
-                        : ''
+                      const prev = index() > 0 ? schedule[index() - 1] : null
+                      const rateChanged = prev && prev.rate !== row.rate
+                      const hasPrepayment = row.prepayment && row.prepayment > 0
+                      const note = hasPrepayment
+                        ? 'Prepayment'
+                        : rateChanged
+                          ? `Rate: ${row.rate}%`
+                          : ''
 
-                    return (
-                      <tr
-                        classList={{
-                          [styles.prepaymentRow]: !!hasPrepayment,
-                          [styles.rateChangeRow]: !!rateChanged,
-                        }}
-                      >
-                        <td>{row.month}</td>
-                        <td>{formatDate(row.date)}</td>
-                        <td class={styles.tdAmount}>{formatCurrency(row.payment)}</td>
-                        <td class={`${styles.tdAmount} ${styles.income}`}>
-                          {formatCurrency(row.principal)}
-                        </td>
-                        <td class={`${styles.tdAmount} ${styles.expense}`}>
-                          {formatCurrency(row.interest)}
-                        </td>
-                        <td style={{ 'font-weight': 600 }}>{formatCurrency(row.balance)}</td>
-                        <td>{row.rate.toFixed(3)}%</td>
-                        {hasPrepayment ? (
-                          <td
-                            class={styles.tdAmount}
-                            style={{ color: 'var(--success)', 'font-weight': 600 }}
-                          >
-                            {formatCurrency(row.prepayment as number)}
+                      return (
+                        <tr
+                          classList={{
+                            [styles.prepaymentRow]: !!hasPrepayment,
+                            [styles.rateChangeRow]: !!rateChanged,
+                          }}
+                        >
+                          <td>{row.month}</td>
+                          <td>{formatDate(row.date)}</td>
+                          <td class={styles.tdAmount}>{formatCurrency(row.payment)}</td>
+                          <td class={`${styles.tdAmount} ${styles.income}`}>
+                            {formatCurrency(row.principal)}
                           </td>
-                        ) : (
-                          <td>-</td>
-                        )}
-                        {note ? (
-                          <td style={{ 'font-size': '11px', color: 'var(--warning)', 'font-weight': 600 }}>
-                            {note}
+                          <td class={`${styles.tdAmount} ${styles.expense}`}>
+                            {formatCurrency(row.interest)}
                           </td>
-                        ) : (
-                          <td></td>
-                        )}
-                      </tr>
-                    )
-                  }}
+                          <td style={{ 'font-weight': 600 }}>{formatCurrency(row.balance)}</td>
+                          <td>{row.rate.toFixed(3)}%</td>
+                          {hasPrepayment ? (
+                            <td
+                              class={styles.tdAmount}
+                              style={{ color: 'var(--success)', 'font-weight': 600 }}
+                            >
+                              {formatCurrency(row.prepayment as number)}
+                            </td>
+                          ) : (
+                            <td>-</td>
+                          )}
+                          {note ? (
+                            <td
+                              style={{
+                                'font-size': '11px',
+                                color: 'var(--warning)',
+                                'font-weight': 600,
+                              }}
+                            >
+                              {note}
+                            </td>
+                          ) : (
+                            <td></td>
+                          )}
+                        </tr>
+                      )
+                    }}
                   </For>
                 </tbody>
               </table>
@@ -423,27 +493,27 @@ export default function LoanAmortizationTable(props: Props) {
                     <tbody>
                       <For each={generateDetailedRows(schedule, formatCurrency)}>
                         {(row) => (
-                        <tr class={row.isYearMarker ? styles.yearMarker : ''}>
-                          <td>{row.month}</td>
-                          <td>{row.date}</td>
-                          <td class={styles.tdAmount}>{row.payment}</td>
-                          <td class={`${styles.tdAmount} ${styles.income}`}>{row.principal}</td>
-                          <td class={`${styles.tdAmount} ${styles.expense}`}>{row.interest}</td>
-                          <td style={{ 'font-weight': 600 }}>{row.balance}</td>
-                          <td>{row.rate}</td>
-                          {row.prepayment > 0 ? (
-                            <td
-                              class={styles.tdAmount}
-                              style={{ color: 'var(--success)', 'font-weight': 600 }}
-                            >
-                              {row.prepayment}
-                            </td>
-                          ) : (
-                            <td>-</td>
-                          )}
-                          <td>{row.cumPrincipal}</td>
-                          <td>{row.cumInterest}</td>
-                        </tr>
+                          <tr class={row.isYearMarker ? styles.yearMarker : ''}>
+                            <td>{row.month}</td>
+                            <td>{row.date}</td>
+                            <td class={styles.tdAmount}>{row.payment}</td>
+                            <td class={`${styles.tdAmount} ${styles.income}`}>{row.principal}</td>
+                            <td class={`${styles.tdAmount} ${styles.expense}`}>{row.interest}</td>
+                            <td style={{ 'font-weight': 600 }}>{row.balance}</td>
+                            <td>{row.rate}</td>
+                            {row.prepayment > 0 ? (
+                              <td
+                                class={styles.tdAmount}
+                                style={{ color: 'var(--success)', 'font-weight': 600 }}
+                              >
+                                {row.prepayment}
+                              </td>
+                            ) : (
+                              <td>-</td>
+                            )}
+                            <td>{row.cumPrincipal}</td>
+                            <td>{row.cumInterest}</td>
+                          </tr>
                         )}
                       </For>
                     </tbody>
@@ -487,27 +557,27 @@ export default function LoanAmortizationTable(props: Props) {
                   <tbody>
                     <For each={generateDetailedRows(schedule, formatCurrency)}>
                       {(row) => (
-                      <tr class={row.isYearMarker ? styles.yearMarker : ''}>
-                        <td>{row.month}</td>
-                        <td>{row.date}</td>
-                        <td class={styles.tdAmount}>{row.payment}</td>
-                        <td class={`${styles.tdAmount} ${styles.income}`}>{row.principal}</td>
-                        <td class={`${styles.tdAmount} ${styles.expense}`}>{row.interest}</td>
-                        <td style={{ 'font-weight': 600 }}>{row.balance}</td>
-                        <td>{row.rate}</td>
-                        {row.prepayment > 0 ? (
-                          <td
-                            class={styles.tdAmount}
-                            style={{ color: 'var(--success)', 'font-weight': 600 }}
-                          >
-                            {row.prepayment}
-                          </td>
-                        ) : (
-                          <td>-</td>
-                        )}
-                        <td>{row.cumPrincipal}</td>
-                        <td>{row.cumInterest}</td>
-                      </tr>
+                        <tr class={row.isYearMarker ? styles.yearMarker : ''}>
+                          <td>{row.month}</td>
+                          <td>{row.date}</td>
+                          <td class={styles.tdAmount}>{row.payment}</td>
+                          <td class={`${styles.tdAmount} ${styles.income}`}>{row.principal}</td>
+                          <td class={`${styles.tdAmount} ${styles.expense}`}>{row.interest}</td>
+                          <td style={{ 'font-weight': 600 }}>{row.balance}</td>
+                          <td>{row.rate}</td>
+                          {row.prepayment > 0 ? (
+                            <td
+                              class={styles.tdAmount}
+                              style={{ color: 'var(--success)', 'font-weight': 600 }}
+                            >
+                              {row.prepayment}
+                            </td>
+                          ) : (
+                            <td>-</td>
+                          )}
+                          <td>{row.cumPrincipal}</td>
+                          <td>{row.cumInterest}</td>
+                        </tr>
                       )}
                     </For>
                   </tbody>
@@ -556,7 +626,17 @@ export default function LoanAmortizationTable(props: Props) {
 }
 
 function exportAmortizationCSV(schedule: AmortizationRow[], loanName: string) {
-  const headers = ['Month', 'Date', 'Payment', 'Principal', 'Interest', 'Balance', 'Rate', 'Prepayment', 'Note']
+  const headers = [
+    'Month',
+    'Date',
+    'Payment',
+    'Principal',
+    'Interest',
+    'Balance',
+    'Rate',
+    'Prepayment',
+    'Note',
+  ]
   const rows = schedule.map((r) => [
     r.month,
     r.date,
@@ -568,8 +648,14 @@ function exportAmortizationCSV(schedule: AmortizationRow[], loanName: string) {
     r.prepayment ? r.prepayment.toFixed(2) : '0',
     r.note || '',
   ])
-  const escapeCsv = (v: string | number) => { const s = String(v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
-  const csv = [headers.map(escapeCsv).join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\n')
+  const escapeCsv = (v: string | number) => {
+    const s = String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = [
+    headers.map(escapeCsv).join(','),
+    ...rows.map((r) => r.map(escapeCsv).join(',')),
+  ].join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')

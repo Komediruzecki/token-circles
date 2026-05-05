@@ -9,40 +9,17 @@
     "css/components.css": "6d942c38"
   },
   "pages": {
-    "dashboard": [
-      "dashboard"
-    ],
-    "transactions": [
-      "transactions"
-    ],
-    "budgets": [
-      "budgets"
-    ],
-    "loans": [
-      "loans"
-    ],
-    "goals": [
-      "savingsGoals"
-    ],
-    "bills": [
-      "bills"
-    ],
-    "import": [
-      "import"
-    ],
-    "retirement": [
-      "retirement"
-    ],
-    "housing": [
-      "housingCalc"
-    ],
-    "analytics": [
-      "analytics",
-      "heatmap"
-    ],
-    "settings": [
-      "settings-reports"
-    ]
+    "dashboard": ["dashboard"],
+    "transactions": ["transactions"],
+    "budgets": ["budgets"],
+    "loans": ["loans"],
+    "goals": ["savingsGoals"],
+    "bills": ["bills"],
+    "import": ["import"],
+    "retirement": ["retirement"],
+    "housing": ["housingCalc"],
+    "analytics": ["analytics", "heatmap"],
+    "settings": ["settings-reports"]
   },
   "timestamp": 1777631870166
 }

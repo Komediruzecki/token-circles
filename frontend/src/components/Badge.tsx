@@ -7,7 +7,17 @@ import styles from './Badge.module.css'
 import type { JSX } from 'solid-js'
 
 interface BadgeProps {
-  status?: 'ok' | 'warning' | 'over' | 'income' | 'expense' | 'transfer' | 'default' | 'primary' | 'success' | 'info'
+  status?:
+    | 'ok'
+    | 'warning'
+    | 'over'
+    | 'income'
+    | 'expense'
+    | 'transfer'
+    | 'default'
+    | 'primary'
+    | 'success'
+    | 'info'
   children: JSX.Element
   class?: string
 }
@@ -29,7 +39,9 @@ export default function Badge(props: BadgeProps) {
   const merged = mergeProps({ status: 'default' }, props)
 
   return (
-    <span class={`${styles.badge} ${statusClassMap[merged.status] ?? ''} ${merged.class ?? ''}`.trim()}>
+    <span
+      class={`${styles.badge} ${statusClassMap[merged.status] ?? ''} ${merged.class ?? ''}`.trim()}
+    >
       {merged.children}
     </span>
   )

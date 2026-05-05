@@ -78,7 +78,10 @@ test.describe('Retirement Planning CRUD Operations', () => {
 
     const goalCards = page.getByTestId('retirement-goal-card')
     const icons = goalCards.getByTestId('retirement-goal-icon')
-    const hasIcon = await icons.first().isVisible({ timeout: 2000 }).catch(() => false)
+    const hasIcon = await icons
+      .first()
+      .isVisible({ timeout: 2000 })
+      .catch(() => false)
     expect(hasIcon).toBeTruthy()
   })
 
@@ -207,7 +210,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
 
     const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const nameInput = modal.locator('input[type="text"], input[placeholder*="Full"], input[placeholder*="Early"]')
+      const nameInput = modal.locator(
+        'input[type="text"], input[placeholder*="Full"], input[placeholder*="Early"]'
+      )
       await expect(nameInput).toBeVisible()
     }
   })
@@ -408,7 +413,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
 
     const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.locator('.modalOverlay, [data-testid="modal-overlay"]').click({ position: { x: 0, y: 0 } })
+      await page
+        .locator('.modalOverlay, [data-testid="modal-overlay"]')
+        .click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -478,7 +485,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await navigateToRoute(page, 'retirement')
     await page.waitForTimeout(500)
 
-    const criticalErrors = errors.filter(msg => msg.includes('Error') && !msg.includes('Failed to fetch'))
+    const criticalErrors = errors.filter(
+      (msg) => msg.includes('Error') && !msg.includes('Failed to fetch')
+    )
     expect(criticalErrors.length).toBeLessThan(3)
   })
 
@@ -515,15 +524,22 @@ test.describe('Retirement Planning CRUD Operations', () => {
 
   test('should be visible on page', async ({ page }) => {
     await navigateToRoute(page, 'retirement')
-    await page.waitForSelector('.page.page-retirement, [data-test-id="page-retirement"]', { state: 'attached', timeout: 5000 })
-    await expect(page.locator('.page.page-retirement, [data-test-id="page-retirement"]')).toBeVisible()
+    await page.waitForSelector('.page.page-retirement, [data-test-id="page-retirement"]', {
+      state: 'attached',
+      timeout: 5000,
+    })
+    await expect(
+      page.locator('.page.page-retirement, [data-test-id="page-retirement"]')
+    ).toBeVisible()
   })
 
   test('should render all page elements correctly', async ({ page }) => {
     await navigateToRoute(page, 'retirement')
     await page.waitForTimeout(500)
 
-    await expect(page.locator('.page.page-retirement, [data-test-id="page-retirement"]')).toBeVisible()
+    await expect(
+      page.locator('.page.page-retirement, [data-test-id="page-retirement"]')
+    ).toBeVisible()
     await expect(page.locator('.pageHeader')).toBeVisible()
     await expect(page.locator('.pageSubtitle')).toBeVisible()
   })
@@ -531,7 +547,9 @@ test.describe('Retirement Planning CRUD Operations', () => {
   test('should format currency correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const currencyValues = page.locator('.card-value, .detail-value, .goal-progress .progress-target')
+    const currencyValues = page.locator(
+      '.card-value, .detail-value, .goal-progress .progress-target'
+    )
     const count = await currencyValues.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })

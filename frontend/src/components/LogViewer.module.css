@@ -138,7 +138,7 @@
 
 .levelBtn.active {
   border-color: var(--primary);
-  background: var(--primary)15;
+  background: var(--primary) 15;
   color: var(--primary);
 }
 
@@ -178,7 +178,7 @@
 }
 
 .row.error {
-  background: var(--danger)10;
+  background: var(--danger) 10;
 }
 
 .colTime {

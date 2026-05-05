@@ -56,7 +56,10 @@ test.describe('Goals CRUD Operations', () => {
 
     const goalCards = getByTestId(page, 'goal-card')
     const icons = goalCards.getByTestId('goal-icon')
-    const hasIcon = await icons.first().isVisible({ timeout: 2000 }).catch(() => false)
+    const hasIcon = await icons
+      .first()
+      .isVisible({ timeout: 2000 })
+      .catch(() => false)
     expect(hasIcon).toBeTruthy()
   })
 
@@ -218,7 +221,9 @@ test.describe('Goals CRUD Operations', () => {
 
     const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const nameInput = modal.locator('input[placeholder*="Goal"], input[placeholder*="vacation"], input[placeholder*="fund"]')
+      const nameInput = modal.locator(
+        'input[placeholder*="Goal"], input[placeholder*="vacation"], input[placeholder*="fund"]'
+      )
       await expect(nameInput).toBeVisible()
     }
   })
@@ -308,7 +313,9 @@ test.describe('Goals CRUD Operations', () => {
 
     const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
     if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page.locator('.modalOverlay, [data-testid="modal-overlay"]').click({ position: { x: 0, y: 0 } })
+      await page
+        .locator('.modalOverlay, [data-testid="modal-overlay"]')
+        .click({ position: { x: 0, y: 0 } })
       await page.waitForTimeout(200)
 
       const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
@@ -360,7 +367,10 @@ test.describe('Goals CRUD Operations', () => {
   test('should calculate days until target', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const hasDayCalculations = await page.locator('text=/Due \d+ days/').isVisible({ timeout: 2000 }).catch(() => false)
+    const hasDayCalculations = await page
+      .locator('text=/Due \d+ days/')
+      .isVisible({ timeout: 2000 })
+      .catch(() => false)
     expect(hasDayCalculations).toBeTruthy()
   })
 
@@ -391,7 +401,9 @@ test.describe('Goals CRUD Operations', () => {
     await navigateToRoute(page, 'goals')
     await page.waitForTimeout(500)
 
-    const criticalErrors = errors.filter(msg => msg.includes('Error') && !msg.includes('Failed to fetch'))
+    const criticalErrors = errors.filter(
+      (msg) => msg.includes('Error') && !msg.includes('Failed to fetch')
+    )
     expect(criticalErrors.length).toBeLessThan(3)
   })
 
@@ -428,7 +440,10 @@ test.describe('Goals CRUD Operations', () => {
 
   test('should be visible on page', async ({ page }) => {
     await navigateToRoute(page, 'goals')
-    await page.waitForSelector('.page.page-goals, [data-test-id="page-goals"]', { state: 'attached', timeout: 5000 })
+    await page.waitForSelector('.page.page-goals, [data-test-id="page-goals"]', {
+      state: 'attached',
+      timeout: 5000,
+    })
     await expect(page.locator('.page.page-goals, [data-test-id="page-goals"]')).toBeVisible()
   })
 

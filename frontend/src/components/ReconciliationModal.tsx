@@ -82,7 +82,9 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
     if (e.key === 'Escape') props.onClose()
   }
   document.addEventListener('keydown', handleKeyDown)
-  onCleanup(() => { document.removeEventListener('keydown', handleKeyDown) })
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown)
+  })
 
   return (
     <div style={{ display: props.isOpen() ? 'block' : 'none' }}>
@@ -108,9 +110,18 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
             width: '100%',
             'box-shadow': '0 20px 60px rgba(0,0,0,0.3)',
           }}
-          onClick={(e) => { e.stopPropagation() }}
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
         >
-          <div style={{ display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '20px' }}>
+          <div
+            style={{
+              display: 'flex',
+              'justify-content': 'space-between',
+              'align-items': 'center',
+              'margin-bottom': '20px',
+            }}
+          >
             <h2 style={{ margin: 0, 'font-size': '18px', 'font-weight': 700 }}>Reconciliation</h2>
             <button
               onClick={props.onClose}
@@ -123,7 +134,14 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
                 'border-radius': '4px',
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -131,31 +149,69 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
 
           <Show when={isLoading()}>
             <div style={{ display: 'flex', 'justify-content': 'center', padding: '20px' }}>
-              <div style={{
-                width: '24px', height: '24px',
-                border: '3px solid var(--border)',
-                'border-top-color': 'var(--primary)',
-                'border-radius': '50%',
-                animation: 'spin 0.6s linear infinite',
-              }} />
+              <div
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  border: '3px solid var(--border)',
+                  'border-top-color': 'var(--primary)',
+                  'border-radius': '50%',
+                  animation: 'spin 0.6s linear infinite',
+                }}
+              />
             </div>
           </Show>
 
           <Show when={!isLoading() && summary()}>
-            <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '12px', 'margin-bottom': '20px' }}>
-              <div style={{
-                padding: '12px', background: 'var(--bg)',
-                'border-radius': '8px', 'text-align': 'center',
-              }}>
-                <div style={{ 'font-size': '12px', color: 'var(--text-secondary)', 'margin-bottom': '4px' }}>Reconciled</div>
-                <div style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--success)' }}>{summary()!.reconciled_count}</div>
+            <div
+              style={{
+                display: 'grid',
+                'grid-template-columns': '1fr 1fr',
+                gap: '12px',
+                'margin-bottom': '20px',
+              }}
+            >
+              <div
+                style={{
+                  padding: '12px',
+                  background: 'var(--bg)',
+                  'border-radius': '8px',
+                  'text-align': 'center',
+                }}
+              >
+                <div
+                  style={{
+                    'font-size': '12px',
+                    color: 'var(--text-secondary)',
+                    'margin-bottom': '4px',
+                  }}
+                >
+                  Reconciled
+                </div>
+                <div style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--success)' }}>
+                  {summary()!.reconciled_count}
+                </div>
               </div>
-              <div style={{
-                padding: '12px', background: 'var(--bg)',
-                'border-radius': '8px', 'text-align': 'center',
-              }}>
-                <div style={{ 'font-size': '12px', color: 'var(--text-secondary)', 'margin-bottom': '4px' }}>Unreconciled</div>
-                <div style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--warning)' }}>{summary()!.unreconciled_count}</div>
+              <div
+                style={{
+                  padding: '12px',
+                  background: 'var(--bg)',
+                  'border-radius': '8px',
+                  'text-align': 'center',
+                }}
+              >
+                <div
+                  style={{
+                    'font-size': '12px',
+                    color: 'var(--text-secondary)',
+                    'margin-bottom': '4px',
+                  }}
+                >
+                  Unreconciled
+                </div>
+                <div style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--warning)' }}>
+                  {summary()!.unreconciled_count}
+                </div>
               </div>
             </div>
           </Show>
@@ -166,7 +222,10 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
               disabled={props.selectedTransactionIds.length === 0 || isReconciling()}
               style={{
                 padding: '10px 16px',
-                background: props.selectedTransactionIds.length > 0 ? 'var(--primary)' : 'var(--bg-secondary)',
+                background:
+                  props.selectedTransactionIds.length > 0
+                    ? 'var(--primary)'
+                    : 'var(--bg-secondary)',
                 color: props.selectedTransactionIds.length > 0 ? '#fff' : 'var(--text-secondary)',
                 border: 'none',
                 'border-radius': 'var(--radius)',

@@ -2,7 +2,7 @@
  * Bulk Type Modal Component
  * Modal for changing type (income/expense) of selected transactions
  */
-import { createEffect,createSignal } from 'solid-js'
+import { createEffect, createSignal } from 'solid-js'
 import bulkTypeModalStyles from './BulkTypeModal.module.css'
 
 export interface BulkTypeModalProps {
@@ -42,7 +42,10 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
   }
 
   return (
-    <div class={bulkTypeModalStyles.overlay} classList={{ [bulkTypeModalStyles.isOpen]: props.isOpen() }}>
+    <div
+      class={bulkTypeModalStyles.overlay}
+      classList={{ [bulkTypeModalStyles.isOpen]: props.isOpen() }}
+    >
       <div class={bulkTypeModalStyles.modal}>
         <div class={bulkTypeModalStyles.header}>
           <h2 class={bulkTypeModalStyles.title}>Change Transaction Type</h2>
@@ -53,7 +56,14 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
             type="button"
             aria-label="Close modal"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -75,19 +85,38 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
               type="button"
             >
               <div class={bulkTypeModalStyles.typeIcon}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                  />
                 </svg>
               </div>
               <div class={bulkTypeModalStyles.typeInfo}>
                 <div class={bulkTypeModalStyles.typeTitle}>Income</div>
                 <div class={bulkTypeModalStyles.typeDescription}>
-                  {props.selectedTransactions().filter((t) => t.currentType === 'income').length} already income
+                  {props.selectedTransactions().filter((t) => t.currentType === 'income').length}{' '}
+                  already income
                 </div>
               </div>
               {selectedType() === 'income' && (
                 <div class={bulkTypeModalStyles.checkIcon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
@@ -104,19 +133,38 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
               type="button"
             >
               <div class={bulkTypeModalStyles.typeIcon}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"
+                  />
                 </svg>
               </div>
               <div class={bulkTypeModalStyles.typeInfo}>
                 <div class={bulkTypeModalStyles.typeTitle}>Expense</div>
                 <div class={bulkTypeModalStyles.typeDescription}>
-                  {props.selectedTransactions().filter((t) => t.currentType === 'expense').length} already expense
+                  {props.selectedTransactions().filter((t) => t.currentType === 'expense').length}{' '}
+                  already expense
                 </div>
               </div>
               {selectedType() === 'expense' && (
                 <div class={bulkTypeModalStyles.checkIcon}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
@@ -143,7 +191,15 @@ export function BulkTypeModal(props: BulkTypeModalProps) {
             {isSubmitting() ? (
               <span class={bulkTypeModalStyles.spinner}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-dasharray="30"
+                    stroke-dashoffset="60"
+                  />
                 </svg>
               </span>
             ) : (

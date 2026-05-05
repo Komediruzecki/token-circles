@@ -1,6 +1,6 @@
 import { createSignal, Show } from 'solid-js'
 import styles from './ConfirmButton.module.css'
-import type { JSX} from 'solid-js';
+import type { JSX } from 'solid-js'
 
 export interface ConfirmButtonProps {
   onConfirm: () => void | Promise<void>
@@ -34,8 +34,12 @@ export default function ConfirmButton(props: ConfirmButtonProps) {
     >
       <span class={styles.wrapper}>
         <span class={styles.confirmLabel}>{props.confirmLabel || 'Confirm?'}</span>
-        <button class={styles.btnYes} onClick={handleConfirm}>Yes</button>
-        <button class={styles.btnNo} onClick={handleCancel}>No</button>
+        <button class={styles.btnYes} onClick={handleConfirm}>
+          Yes
+        </button>
+        <button class={styles.btnNo} onClick={handleCancel}>
+          No
+        </button>
       </span>
     </Show>
   )

@@ -15,9 +15,7 @@ export interface TagChipsProps {
 
 export function TagChips(props: TagChipsProps) {
   const tags = props.tags()
-  const displayedTags = props.maxSize && props.maxSize > 0
-    ? tags.slice(0, props.maxSize)
-    : tags
+  const displayedTags = props.maxSize && props.maxSize > 0 ? tags.slice(0, props.maxSize) : tags
 
   if (displayedTags.length === 0) {
     return null
@@ -26,7 +24,9 @@ export function TagChips(props: TagChipsProps) {
   return (
     <div class={tagChipsStyles.tagChips}>
       <Show when={displayedTags.length > (props.maxSize || 0)}>
-        <span class={tagChipsStyles.moreTags}>+{displayedTags.length - (props.maxSize || 0)} more</span>
+        <span class={tagChipsStyles.moreTags}>
+          +{displayedTags.length - (props.maxSize || 0)} more
+        </span>
       </Show>
       <For each={displayedTags}>
         {(tag) => (

@@ -52,7 +52,7 @@ test.describe('Page Loading Tests', () => {
       expect(rejectionErrors.length).toBe(0)
 
       // Verify page content loaded (at least the main heading exists)
-      const hasContent = await page.locator('h1, h2, h3').count() > 0
+      const hasContent = (await page.locator('h1, h2, h3').count()) > 0
       expect(hasContent).toBe(true)
     })
   }
@@ -160,7 +160,9 @@ test.describe('Form Loading Tests', () => {
     await page.goto('/#transactions')
 
     // Find all form inputs
-    const formInputs = page.locator('input[type="text"], input[type="number"], input[type="date"], select')
+    const formInputs = page.locator(
+      'input[type="text"], input[type="number"], input[type="date"], select'
+    )
     const count = await formInputs.count()
 
     // At least some inputs should exist

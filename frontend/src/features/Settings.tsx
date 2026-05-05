@@ -35,7 +35,9 @@ import { setStorageMode } from '../core/storage/storageFactory'
 export default function Settings() {
   const [localCurrency, setLocalCurrency] = createSignal('USD')
   const [darkMode, setDarkMode] = createSignal(false)
-  const [storageMode, setLocalStorageMode] = createSignal<'serverless' | 'self-hosted'>('self-hosted')
+  const [storageMode, setLocalStorageMode] = createSignal<'serverless' | 'self-hosted'>(
+    'self-hosted'
+  )
   const [showStorageWarning, setShowStorageWarning] = createSignal(false)
 
   // Load saved settings
@@ -48,7 +50,10 @@ export default function Settings() {
     const savedDarkMode = localStorage.getItem('darkMode')
     if (savedDarkMode) {
       setDarkMode(savedDarkMode === 'true')
-      document.documentElement.setAttribute('data-theme', savedDarkMode === 'true' ? 'dark' : 'light')
+      document.documentElement.setAttribute(
+        'data-theme',
+        savedDarkMode === 'true' ? 'dark' : 'light'
+      )
     }
 
     const savedStorage = localStorage.getItem('finance_storage_mode')
@@ -111,7 +116,9 @@ export default function Settings() {
       })
       setStorageMode(storageMode())
       setShowStorageWarning(false)
-      alert(`Database switched to ${storageMode() === 'serverless' ? 'Browser LocalStorage' : 'Backend SQLite'} successfully.`)
+      alert(
+        `Database switched to ${storageMode() === 'serverless' ? 'Browser LocalStorage' : 'Backend SQLite'} successfully.`
+      )
       window.location.reload()
     } catch (error) {
       console.error('Failed to switch storage:', error)
@@ -201,8 +208,9 @@ export default function Settings() {
                   <div class={styles.warningBox}>
                     <strong>Serverless Mode uses Browser LocalStorage.</strong>
                     <p style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
-                      Your data will be completely offline and stored securely in your local browser cache. 
-                      You will not be able to sync across devices unless you export/import manually.
+                      Your data will be completely offline and stored securely in your local browser
+                      cache. You will not be able to sync across devices unless you export/import
+                      manually.
                     </p>
                     <button
                       class={styles.btnPrimary}
@@ -225,7 +233,7 @@ export default function Settings() {
                 )}
               </div>
             </div>
-            
+
             <div class={styles.card} style="margin-top: 24px;">
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Data Management</div>
@@ -272,7 +280,8 @@ export default function Settings() {
                     View Logs
                   </button>
                   <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                    Access log viewer to debug issues on mobile devices or when console is not available.
+                    Access log viewer to debug issues on mobile devices or when console is not
+                    available.
                   </p>
                 </div>
               </div>
@@ -281,11 +290,13 @@ export default function Settings() {
             <Show when={window.location.hash.includes('#logs')}>
               <div class={styles.card} style="margin-top: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                  <div class={styles.settingsSectionTitle} style="margin-bottom: 0;">Application Logs</div>
+                  <div class={styles.settingsSectionTitle} style="margin-bottom: 0;">
+                    Application Logs
+                  </div>
                   <button
                     class={styles.btnSecondary}
                     style="padding: 4px 10px; font-size: 12px;"
-                    onclick={() => window.location.hash = '#settings'}
+                    onclick={() => (window.location.hash = '#settings')}
                   >
                     Close
                   </button>

@@ -423,7 +423,9 @@ export default function RentBuyCalculator(props: Props) {
               <div class={styles.summaryTitle}>Comparison</div>
               <div class={styles.summaryRow}>
                 <span>Winner</span>
-                <span class={`${styles.summaryValue} ${summary.winner === 'buy' ? styles.success : styles.warning}`}>
+                <span
+                  class={`${styles.summaryValue} ${summary.winner === 'buy' ? styles.success : styles.warning}`}
+                >
                   {summary.winner === 'buy' ? 'Buying' : 'Renting'}
                 </span>
               </div>
@@ -499,7 +501,8 @@ export default function RentBuyCalculator(props: Props) {
                 scales: {
                   y: {
                     ticks: {
-                      callback: (v: number | string) => formatCurrency(typeof v === 'number' ? v : Number(v), currency as any),
+                      callback: (v: number | string) =>
+                        formatCurrency(typeof v === 'number' ? v : Number(v), currency as any),
                       color: 'var(--text)',
                     },
                     grid: {

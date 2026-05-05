@@ -90,7 +90,9 @@ test.describe('Budgets CRUD Operations', () => {
     await navigateToRoute(page, 'budgets')
     await page.waitForTimeout(500)
 
-    const criticalErrors = errors.filter(msg => msg.includes('Error') && !msg.includes('Failed to fetch'))
+    const criticalErrors = errors.filter(
+      (msg) => msg.includes('Error') && !msg.includes('Failed to fetch')
+    )
     expect(criticalErrors.length).toBeLessThan(3)
   })
 

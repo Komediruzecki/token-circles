@@ -43,7 +43,10 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
   }
 
   return (
-    <div class={bulkCategoryModalStyles.overlay} classList={{ [bulkCategoryModalStyles.isOpen]: props.isOpen() }}>
+    <div
+      class={bulkCategoryModalStyles.overlay}
+      classList={{ [bulkCategoryModalStyles.isOpen]: props.isOpen() }}
+    >
       <div class={bulkCategoryModalStyles.modal}>
         <div class={bulkCategoryModalStyles.header}>
           <h2 class={bulkCategoryModalStyles.title}>Change Category</h2>
@@ -54,7 +57,14 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
             type="button"
             aria-label="Close modal"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -105,7 +115,15 @@ export function BulkCategoryModal(props: BulkCategoryModalProps) {
             {isSubmitting() ? (
               <span class={bulkCategoryModalStyles.spinner}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-dasharray="30"
+                    stroke-dashoffset="60"
+                  />
                 </svg>
               </span>
             ) : (

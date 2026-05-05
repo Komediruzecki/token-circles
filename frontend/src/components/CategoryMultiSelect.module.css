@@ -186,7 +186,7 @@
   background-color: rgba(99, 102, 241, 0.1);
 }
 
-.categoryItem input[type="checkbox"] {
+.categoryItem input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;

@@ -590,12 +590,7 @@ export default function Transactions() {
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Date</label>
-                  <input
-                    type="date"
-                    class={styles.formControl}
-                    value={formDate()}
-                    required
-                  />
+                  <input type="date" class={styles.formControl} value={formDate()} required />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Category</label>
@@ -609,9 +604,7 @@ export default function Transactions() {
                   >
                     <option value=""></option>
                     <For each={categories()}>
-                      {(cat) => (
-                        <option value={cat.id}>{cat.name}</option>
-                      )}
+                      {(cat) => <option value={cat.id}>{cat.name}</option>}
                     </For>
                   </select>
                 </div>
@@ -821,9 +814,14 @@ export default function Transactions() {
                 try {
                   const txId = formId()
                   if (txId) {
-                    await api.updateTransaction(parseInt(txId), txData as Parameters<typeof api.updateTransaction>[1])
+                    await api.updateTransaction(
+                      parseInt(txId),
+                      txData as Parameters<typeof api.updateTransaction>[1]
+                    )
                   } else {
-                    await api.createTransaction(txData as Parameters<typeof api.createTransaction>[0])
+                    await api.createTransaction(
+                      txData as Parameters<typeof api.createTransaction>[0]
+                    )
                   }
                   await refreshTransactions()
                   setTransactionModalOpen(false)

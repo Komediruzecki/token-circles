@@ -36,7 +36,12 @@ export default function LoginModal(props: LoginModalProps) {
   }
 
   return (
-    <div class={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}>
+    <div
+      class={styles.overlay}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) props.onClose()
+      }}
+    >
       <div class={styles.modal} onKeyDown={handleKeyDown}>
         <h3 class={styles.title}>Sign In</h3>
         <div class={styles.field}>

@@ -2,7 +2,7 @@
  * Chart Wrapper Component
  * Wrapper for Chart.js with reactive updates and export functionality
  */
-import { createContext,createEffect, createSignal, onCleanup } from 'solid-js'
+import { createContext, createEffect, createSignal, onCleanup } from 'solid-js'
 import ChartContainer from './ChartContainer.module.css'
 import ExportChartButton from './ExportChartButton'
 import type * as ChartJS from 'chart.js/auto'

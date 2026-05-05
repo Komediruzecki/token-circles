@@ -54,7 +54,10 @@ export async function navigateToRoute(page: any, route: string) {
     localStorage.setItem('currentProfileId', '1')
     localStorage.setItem('darkMode', 'false')
   })
-  await page.goto(`http://localhost:3800/#${route}`, { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`http://localhost:3800/#${route}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000,
+  })
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 }
 
@@ -62,21 +65,13 @@ export async function navigateToRoute(page: any, route: string) {
  * Helper to find elements by data-test-id
  * Uses data-test-id attribute (matches source code)
  */
-export function getByTestId(
-  page: any,
-  testId: string,
-  options: any = {}
-) {
+export function getByTestId(page: any, testId: string, options: any = {}) {
   return page.locator(`[data-test-id="${testId}"]`, options)
 }
 
 /**
  * Helper to find multiple elements by data-test-id
  */
-export function getByTestIdMulti(
-  page: any,
-  testId: string,
-  options: any = {}
-) {
+export function getByTestIdMulti(page: any, testId: string, options: any = {}) {
   return page.locator(`[data-test-id="${testId}"]`, options)
 }

@@ -42,9 +42,9 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     const term = searchTerm().toLowerCase()
 
     setFilteredCategories(
-      all.filter((cat) =>
-        cat.name.toLowerCase().includes(term) &&
-        props.selectedCategoryIds().includes(cat.id)
+      all.filter(
+        (cat) =>
+          cat.name.toLowerCase().includes(term) && props.selectedCategoryIds().includes(cat.id)
       )
     )
   })
@@ -52,7 +52,8 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   const toggleCategory = (categoryId: number) => {
     const selected = props.selectedCategoryIds()
     const index = selected.indexOf(categoryId)
-    const newSelected = index >= 0 ? selected.filter((id) => id !== categoryId) : [...selected, categoryId]
+    const newSelected =
+      index >= 0 ? selected.filter((id) => id !== categoryId) : [...selected, categoryId]
     props.onChange(newSelected)
   }
 
@@ -124,7 +125,9 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   return (
     <div
       class={categoryMultiSelectStyles.container}
-      ref={(el: HTMLDivElement) => { setContainerRef(el) }}
+      ref={(el: HTMLDivElement) => {
+        setContainerRef(el)
+      }}
       onKeyDown={handleKeyDown}
       tabIndex={0}
       onClick={handleToggleDropdown}
@@ -132,7 +135,9 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     >
       <button
         class={categoryMultiSelectStyles.selectBtn}
-        ref={(el: HTMLButtonElement) => { setContainerRef(el) }}
+        ref={(el: HTMLButtonElement) => {
+          setContainerRef(el)
+        }}
       >
         <span class={categoryMultiSelectStyles.selectValue}>{countText()}</span>
         <svg
@@ -152,7 +157,9 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
         <div class={categoryMultiSelectStyles.dropdown}>
           <div class={categoryMultiSelectStyles.header}>
             <button class={categoryMultiSelectStyles.selectAllBtn} onClick={toggleAll}>
-              {props.selectedCategoryIds().length === props.categories().length ? 'Deselect All' : 'Select All'}
+              {props.selectedCategoryIds().length === props.categories().length
+                ? 'Deselect All'
+                : 'Select All'}
             </button>
             <button class={categoryMultiSelectStyles.deselectAllBtn} onClick={deselectAll}>
               Clear
@@ -187,7 +194,10 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
                     checked={props.selectedCategoryIds().includes(category.id)}
                     readOnly
                   />
-                  <span class={categoryMultiSelectStyles.categoryColor} style={{ 'background-color': category.color }} />
+                  <span
+                    class={categoryMultiSelectStyles.categoryColor}
+                    style={{ 'background-color': category.color }}
+                  />
                   <span class={categoryMultiSelectStyles.categoryName}>{category.name}</span>
                 </button>
               ))

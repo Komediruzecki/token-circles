@@ -4,11 +4,11 @@
  * Accessible from Settings page
  */
 
-import { createSignal, For, onMount,Show } from 'solid-js'
-import {  logger  } from '../core/logger'
+import { createSignal, For, onMount, Show } from 'solid-js'
+import { logger } from '../core/logger'
 import ConfirmButton from './ConfirmButton'
 import css from './LogViewer.module.css'
-import type {LogEntry, LogLevel} from '../core/logger';
+import type { LogEntry, LogLevel } from '../core/logger'
 
 export function LogViewer() {
   const [logs, setLogs] = createSignal<LogEntry[]>([])
@@ -79,9 +79,7 @@ export function LogViewer() {
       result = result.filter((log) => log.component === componentFilter())
     }
 
-    return result.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )
+    return result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
   }
 
   onMount(() => {
@@ -94,8 +92,13 @@ export function LogViewer() {
   })
 
   const filtered = getFilteredLogs()
-  const allComponents = Array.from(new Set(logs().map((l) => l.component).filter(Boolean) as string[]))
-    .sort()
+  const allComponents = Array.from(
+    new Set(
+      logs()
+        .map((l) => l.component)
+        .filter(Boolean) as string[]
+    )
+  ).sort()
 
   return (
     <div class={css.container}>
@@ -103,14 +106,28 @@ export function LogViewer() {
         <h2>Log Viewer</h2>
         <div class={css.actions}>
           <button class={css.btn} onClick={refreshLogs}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M23 4v6h-6M1 20v-6h6" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
             Refresh
           </button>
           <button class={css.btn} onClick={exportLogs}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
@@ -120,15 +137,28 @@ export function LogViewer() {
           <ConfirmButton
             class={css.btn}
             onConfirm={clearLogs}
-            label={<>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-              Clear
-            </>}
+            label={
+              <>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Clear
+              </>
+            }
           />
-          <button class={css.btn} onClick={toggleDebugMode} style={{ color: debugMode() ? 'var(--primary)' : undefined }}>
+          <button
+            class={css.btn}
+            onClick={toggleDebugMode}
+            style={{ color: debugMode() ? 'var(--primary)' : undefined }}
+          >
             {debugMode() ? 'Debug: ON' : 'Debug: OFF'}
           </button>
         </div>
@@ -141,11 +171,15 @@ export function LogViewer() {
         </div>
         <div class={css.stat}>
           <span class={css.statLabel}>Errors</span>
-          <span class={css.statValue} style={{ color: '#ef4444' }}>{stats().errors}</span>
+          <span class={css.statValue} style={{ color: '#ef4444' }}>
+            {stats().errors}
+          </span>
         </div>
         <div class={css.stat}>
           <span class={css.statLabel}>Warnings</span>
-          <span class={css.statValue} style={{ color: '#f59e0b' }}>{stats().warnings}</span>
+          <span class={css.statValue} style={{ color: '#f59e0b' }}>
+            {stats().warnings}
+          </span>
         </div>
         <div class={css.stat}>
           <span class={css.statLabel}>Last 24h</span>
@@ -165,11 +199,13 @@ export function LogViewer() {
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.target.value)}
         />
-        <select class={css.select} value={componentFilter()} onChange={(e) => setComponentFilter(e.target.value)}>
+        <select
+          class={css.select}
+          value={componentFilter()}
+          onChange={(e) => setComponentFilter(e.target.value)}
+        >
           <option value="">All Components</option>
-          <For each={allComponents}>
-            {(comp) => <option value={comp}>{comp}</option>}
-          </For>
+          <For each={allComponents}>{(comp) => <option value={comp}>{comp}</option>}</For>
         </select>
       </div>
 
@@ -186,9 +222,19 @@ export function LogViewer() {
                 setLevelFilter(newFilter)
               }}
             >
-              <span style={{ width: '8px', height: '8px', 'border-radius': '50%', background: level.color } as Record<string,string>} />
+              <span
+                style={
+                  {
+                    width: '8px',
+                    height: '8px',
+                    'border-radius': '50%',
+                    background: level.color,
+                  } as Record<string, string>
+                }
+              />
               {level.label}
-              {levelFilter().includes(level.value) && `(${filteredLogs().filter((l) => l.level === level.value).length})`}
+              {levelFilter().includes(level.value) &&
+                `(${filteredLogs().filter((l) => l.level === level.value).length})`}
             </button>
           )}
         </For>
@@ -208,15 +254,14 @@ export function LogViewer() {
               {(log) => (
                 <div class={`${css.row} ${log.level}`}>
                   <div class={css.colTime}>
-                    <div class={css.timeText}>
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </div>
-                    <div class={css.dateText}>
-                      {new Date(log.timestamp).toLocaleDateString()}
-                    </div>
+                    <div class={css.timeText}>{new Date(log.timestamp).toLocaleTimeString()}</div>
+                    <div class={css.dateText}>{new Date(log.timestamp).toLocaleDateString()}</div>
                   </div>
                   <div class={css.colLevel}>
-                    <span class={css.levelBadge} style={{ background: levels.find((l) => l.value === log.level)?.color }}>
+                    <span
+                      class={css.levelBadge}
+                      style={{ background: levels.find((l) => l.value === log.level)?.color }}
+                    >
                       {log.level.toUpperCase()}
                     </span>
                   </div>
@@ -246,7 +291,14 @@ export function LogViewer() {
 
             <Show when={filtered.length === 0}>
               <div class={css.empty}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <svg
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1"
+                >
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>

@@ -82,7 +82,7 @@ export default function TransactionTable(props: TransactionTableProps) {
             : (valB as string).localeCompare(valA)
         }
         if (typeof valA === 'number' && typeof valB === 'number') {
-          return direction === 'asc' ? (valA > valB ? 1 : -1) : (valB > valA ? 1 : -1)
+          return direction === 'asc' ? (valA > valB ? 1 : -1) : valB > valA ? 1 : -1
         }
         return 0
       }
@@ -226,10 +226,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                   </span>
                 </td>
                 <td class={styles.actionsCol}>
-                  <button
-                    class={styles.actionBtn}
-                    onClick={() => props.onEdit?.(transaction)}
-                  >
+                  <button class={styles.actionBtn} onClick={() => props.onEdit?.(transaction)}>
                     <svg
                       width="14"
                       height="14"

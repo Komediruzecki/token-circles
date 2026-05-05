@@ -86,7 +86,10 @@ export function QuickAddModal(props: QuickAddModalProps) {
   })
 
   return (
-    <div class={quickAddModalStyles.overlay} classList={{ [quickAddModalStyles.isOpen]: props.isOpen() }}>
+    <div
+      class={quickAddModalStyles.overlay}
+      classList={{ [quickAddModalStyles.isOpen]: props.isOpen() }}
+    >
       <div class={quickAddModalStyles.modal}>
         <div class={quickAddModalStyles.header}>
           <h2 class={quickAddModalStyles.title}>Quick Add</h2>
@@ -97,7 +100,14 @@ export function QuickAddModal(props: QuickAddModalProps) {
             type="button"
             aria-label="Close modal"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -116,7 +126,9 @@ export function QuickAddModal(props: QuickAddModalProps) {
                   step="0.01"
                   placeholder="0.00"
                   value={formData().amount.toString()}
-                  onInput={(e) => setFormData({ ...formData(), amount: Number(e.currentTarget.value) })}
+                  onInput={(e) =>
+                    setFormData({ ...formData(), amount: Number(e.currentTarget.value) })
+                  }
                   disabled={isSubmitting()}
                 />
               </div>
@@ -147,14 +159,17 @@ export function QuickAddModal(props: QuickAddModalProps) {
               <select
                 class={quickAddModalStyles.categorySelect}
                 value={formData().category_id?.toString() || ''}
-                onChange={(e) => setFormData({ ...formData(), category_id: e.currentTarget.value ? Number(e.currentTarget.value) : null })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData(),
+                    category_id: e.currentTarget.value ? Number(e.currentTarget.value) : null,
+                  })
+                }
                 disabled={isSubmitting()}
               >
                 <option value="">Select a category</option>
                 <For each={props.categories()}>
-                  {(category) => (
-                    <option value={category.id}>{category.name}</option>
-                  )}
+                  {(category) => <option value={category.id}>{category.name}</option>}
                 </For>
               </select>
             </div>
@@ -202,7 +217,15 @@ export function QuickAddModal(props: QuickAddModalProps) {
             {isSubmitting() ? (
               <span class={quickAddModalStyles.spinner}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30" stroke-dashoffset="60" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-dasharray="30"
+                    stroke-dashoffset="60"
+                  />
                 </svg>
               </span>
             ) : (

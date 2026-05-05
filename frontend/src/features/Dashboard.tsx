@@ -56,7 +56,8 @@ export default function Dashboard() {
   })
 
   createEffect(() => {
-    month(); year() // track dependencies
+    month()
+    year() // track dependencies
     void loadDashboard()
   })
 
@@ -157,10 +158,7 @@ export default function Dashboard() {
             Refresh
           </button>
           <div class={styles.periodPills}>
-            <PeriodPills
-              value={pillPeriod()}
-              onChange={handlePillChange}
-            />
+            <PeriodPills value={pillPeriod()} onChange={handlePillChange} />
           </div>
         </div>
       </div>
@@ -207,8 +205,20 @@ export default function Dashboard() {
               {/* eslint-disable-next-line eqeqeq */}
               {metrics()!.momBalanceDelta != null && (
                 <div class={styles.metricDelta}>
-                  <span class={metrics()!.momBalanceDelta! > 0 ? styles.positive : metrics()!.momBalanceDelta! < 0 ? styles.negative : styles.neutral}>
-                    {metrics()!.momBalanceDelta! > 0 ? '↑' : metrics()!.momBalanceDelta! < 0 ? '↓' : '→'}
+                  <span
+                    class={
+                      metrics()!.momBalanceDelta! > 0
+                        ? styles.positive
+                        : metrics()!.momBalanceDelta! < 0
+                          ? styles.negative
+                          : styles.neutral
+                    }
+                  >
+                    {metrics()!.momBalanceDelta! > 0
+                      ? '↑'
+                      : metrics()!.momBalanceDelta! < 0
+                        ? '↓'
+                        : '→'}
                     {Math.abs(metrics()!.momBalanceDelta!).toFixed(2)}
                   </span>
                   <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -224,8 +234,20 @@ export default function Dashboard() {
               {/* eslint-disable-next-line eqeqeq */}
               {metrics()!.momIncomeDelta != null && (
                 <div class={styles.metricDelta}>
-                  <span class={metrics()!.momIncomeDelta! > 0 ? styles.positive : metrics()!.momIncomeDelta! < 0 ? styles.negative : styles.neutral}>
-                    {metrics()!.momIncomeDelta! > 0 ? '↑' : metrics()!.momIncomeDelta! < 0 ? '↓' : '→'}
+                  <span
+                    class={
+                      metrics()!.momIncomeDelta! > 0
+                        ? styles.positive
+                        : metrics()!.momIncomeDelta! < 0
+                          ? styles.negative
+                          : styles.neutral
+                    }
+                  >
+                    {metrics()!.momIncomeDelta! > 0
+                      ? '↑'
+                      : metrics()!.momIncomeDelta! < 0
+                        ? '↓'
+                        : '→'}
                     {Math.abs(metrics()!.momIncomeDelta!).toFixed(2)}
                   </span>
                   <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -241,8 +263,20 @@ export default function Dashboard() {
               {/* eslint-disable-next-line eqeqeq */}
               {metrics()!.momExpenseDelta != null && (
                 <div class={styles.metricDelta}>
-                  <span class={metrics()!.momExpenseDelta! > 0 ? styles.positive : metrics()!.momExpenseDelta! < 0 ? styles.negative : styles.neutral}>
-                    {metrics()!.momExpenseDelta! > 0 ? '↑' : metrics()!.momExpenseDelta! < 0 ? '↓' : '→'}
+                  <span
+                    class={
+                      metrics()!.momExpenseDelta! > 0
+                        ? styles.positive
+                        : metrics()!.momExpenseDelta! < 0
+                          ? styles.negative
+                          : styles.neutral
+                    }
+                  >
+                    {metrics()!.momExpenseDelta! > 0
+                      ? '↑'
+                      : metrics()!.momExpenseDelta! < 0
+                        ? '↓'
+                        : '→'}
                     {Math.abs(metrics()!.momExpenseDelta!).toFixed(2)}
                   </span>
                   <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -331,7 +365,9 @@ export default function Dashboard() {
             <div class={styles.widgetCard}>
               <div class={styles.widgetHeader}>
                 <div class={styles.widgetTitle}>Budget Alerts</div>
-                <a href="#budgets" class={styles.widgetLink}>View All</a>
+                <a href="#budgets" class={styles.widgetLink}>
+                  View All
+                </a>
               </div>
               <BudgetAlertsCard />
             </div>
@@ -339,7 +375,9 @@ export default function Dashboard() {
             <div class={styles.widgetCard}>
               <div class={styles.widgetHeader}>
                 <div class={styles.widgetTitle}>Savings Rate</div>
-                <a href="#budgets" class={styles.widgetLink}>Details</a>
+                <a href="#budgets" class={styles.widgetLink}>
+                  Details
+                </a>
               </div>
               <SavingsRateCard />
             </div>
@@ -514,15 +552,21 @@ export default function Dashboard() {
           {/* Widget Settings Modal */}
           <Show when={showSettingsModal()}>
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
-              <div class={`${styles.modal} ${styles.modalMd}`} onClick={(e) => { e.stopPropagation(); }}>
+              <div
+                class={`${styles.modal} ${styles.modalMd}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                }}
+              >
                 <div class={styles.modalHeader}>
                   <div class={styles.modalTitle}>Dashboard Settings</div>
-                  <button
-                    class={styles.modalClose}
-                    onClick={() => setShowSettingsModal(false)}
-                  >
+                  <button class={styles.modalClose} onClick={() => setShowSettingsModal(false)}>
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
                     </svg>
                   </button>
                 </div>
