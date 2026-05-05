@@ -64,6 +64,12 @@ export default function Analytics() {
     labels: string[]
     datasets: Array<{ category: string; color: string; data: number[] }>
   }>({ labels: [], datasets: [] })
+  const [compareEnabled, setCompareEnabled] = createSignal(false)
+  const [compareMonth, setCompareMonth] = createSignal(new Date().getMonth() + 1)
+  const [compareData, setCompareData] = createSignal<{
+    labels: string[]
+    datasets: Array<{ category: string; color: string; data: number[] }>
+  } | null>(null)
 
   // Load analytics data
   const loadData = async () => {
@@ -151,9 +157,32 @@ export default function Analytics() {
         labels: res.labels || [],
         datasets: res.datasets || [],
       })
+
+      if (compareEnabled()) {
+        const cmpParams = new URLSearchParams({
+          year: String(stackedYear()),
+          type: categoryType(),
+        })
+        cmpParams.set('month', String(compareMonth()))
+        try {
+          const cmpRes = await apiGet<any>(
+            `/api/analytics/category-trends?${cmpParams.toString()}`
+          )
+          setCompareData({
+            labels: cmpRes.labels || [],
+            datasets: cmpRes.datasets || [],
+          })
+        } catch (_e) {
+          console.error('Failed to load comparison data')
+          setCompareData(null)
+        }
+      } else {
+        setCompareData(null)
+      }
     } catch (err) {
       console.error('Failed to load stacked data', err)
       setStackedData({ labels: [], datasets: [] })
+      setCompareData(null)
     }
   }
 
@@ -385,7 +414,7 @@ export default function Analytics() {
                               <div class={styles.barTrack}>
                                 <div
                                   class={styles.barFill}
-                                  style={{ width: `${Math.min(pct, 100)}%` }}
+                                  style={{ width: `${Math.min(Number(pct), 100)}%` }}
                                 />
                               </div>
                               <div class={styles.barAmount}>{formatAmount(item.amount)}</div>
@@ -444,7 +473,8 @@ export default function Analytics() {
             <div class={styles.analyticsChart}>
               <div class={styles.heatmapHeader}>
                 <h3 class={styles.chartTitle}>
-                  Category Trends ({stackedView() === 'year' ? stackedYear() : new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})
+                  Category Trends ({stackedView() === 'year' ? stackedYear() : new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  {compareEnabled() && ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`})
                 </h3>
                 <div class={styles.heatmapControls}>
                   <select
@@ -498,6 +528,32 @@ export default function Analytics() {
                       ))}
                     </select>
                   )}
+                  <button
+                    class={`${styles.tab} ${compareEnabled() ? styles.active : ''}`}
+                    onClick={() => {
+                      setCompareEnabled(!compareEnabled())
+                      loadStackedData()
+                    }}
+                    style="white-space:nowrap;padding:8px 12px;font-size:13px;"
+                  >
+                    Compare
+                  </button>
+                  {compareEnabled() && (
+                    <select
+                      class={styles.heatmapTypeSelect}
+                      value={compareMonth()}
+                      onchange={(e) => {
+                        setCompareMonth(Number(e.currentTarget.value))
+                        loadStackedData()
+                      }}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option value={i + 1}>
+                          {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
               <div class={styles.chartContainer}>
@@ -508,12 +564,24 @@ export default function Analytics() {
                     type="bar"
                     data={{
                       labels: stackedData().labels,
-                      datasets: stackedData().datasets.map((ds) => ({
-                        label: ds.category,
-                        data: ds.data,
-                        backgroundColor: ds.color || '#6366f1',
-                        borderWidth: 0,
-                      })),
+                      datasets: [
+                        ...stackedData().datasets.map((ds) => ({
+                          label: ds.category,
+                          data: ds.data,
+                          backgroundColor: ds.color || '#6366f1',
+                          borderWidth: 0,
+                        })),
+                        ...(compareData()
+                          ? compareData()!.datasets.map((ds) => ({
+                              label: `${ds.category} (Compare)`,
+                              data: ds.data,
+                              backgroundColor: ds.color ? `${ds.color  }66` : '#6366f166',
+                              borderColor: ds.color || '#6366f1',
+                              borderWidth: 2,
+                              borderDash: [4, 4],
+                            }))
+                          : []),
+                      ],
                     }}
                     options={{
                       responsive: true,
