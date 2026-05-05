@@ -31,6 +31,7 @@ import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
 import { setStorageMode } from '../core/storage/storageFactory'
+import { theme } from '../core/theme'
 
 function Reports() {
   const currentYear = new Date().getFullYear()
@@ -144,14 +145,8 @@ export default function Settings() {
       setLocalCurrency(savedCurrency)
     }
 
-    const savedDarkMode = localStorage.getItem('darkMode')
-    if (savedDarkMode) {
-      setDarkMode(savedDarkMode === 'true')
-      document.documentElement.setAttribute(
-        'data-theme',
-        savedDarkMode === 'true' ? 'dark' : 'light'
-      )
-    }
+    const isDark = theme.isDark()
+    setDarkMode(isDark)
 
     const savedStorage = localStorage.getItem('finance_storage_mode')
     if (savedStorage === 'serverless') {
@@ -179,15 +174,7 @@ export default function Settings() {
     const target = event.target as HTMLInputElement
     const checked = target.checked
     setDarkMode(checked)
-
-    // Save theme preference
-    if (checked) {
-      localStorage.setItem('darkMode', 'true')
-      document.documentElement.setAttribute('data-theme', 'dark')
-    } else {
-      localStorage.setItem('darkMode', 'false')
-      document.documentElement.setAttribute('data-theme', 'light')
-    }
+    theme.setTheme(checked ? 'dark' : 'light')
   }
 
   // Handle storage type change
