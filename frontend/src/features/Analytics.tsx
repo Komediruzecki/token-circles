@@ -70,6 +70,25 @@ export default function Analytics() {
     labels: string[]
     datasets: Array<{ category: string; color: string; data: number[] }>
   } | null>(null)
+  const [weeks, setWeeks] = createSignal<Array<{ week: number; label: string }>>([])
+  const [selectedWeek, setSelectedWeek] = createSignal('')
+
+  // Load weeks for month drill-down
+  const loadWeeks = async () => {
+    const year = stackedYear()
+    const month = stackedMonth()
+    if (!month) {
+      setWeeks([])
+      return
+    }
+    try {
+      const res = await apiGet<any>(`/api/analytics/weeks?year=${year}&month=${month}`)
+      setWeeks(res.weeks || [])
+    } catch (_e) {
+      console.error('Failed to load weeks')
+      setWeeks([])
+    }
+  }
 
   // Load analytics data
   const loadData = async () => {
@@ -152,6 +171,8 @@ export default function Analytics() {
       if (stackedView() === 'month') {
         params.set('month', String(stackedMonth()))
       }
+      const week = selectedWeek()
+      if (week) params.set('week', week)
       const res = await apiGet<any>(`/api/analytics/category-trends?${params.toString()}`)
       setStackedData({
         labels: res.labels || [],
@@ -164,6 +185,8 @@ export default function Analytics() {
           type: categoryType(),
         })
         cmpParams.set('month', String(compareMonth()))
+        const week = selectedWeek()
+        if (week) cmpParams.set('week', week)
         try {
           const cmpRes = await apiGet<any>(
             `/api/analytics/category-trends?${cmpParams.toString()}`
@@ -223,6 +246,7 @@ export default function Analytics() {
     }
     if (selectedChart() === 'stacked') {
       loadStackedData()
+      if (stackedView() === 'month') loadWeeks()
     }
     if (selectedChart() === 'category') {
       loadData()
@@ -513,20 +537,39 @@ export default function Analytics() {
                     })}
                   </select>
                   {stackedView() === 'month' && (
-                    <select
-                      class={styles.heatmapTypeSelect}
-                      value={stackedMonth()}
-                      onchange={(e) => {
-                        setStackedMonth(Number(e.currentTarget.value))
-                        loadStackedData()
-                      }}
-                    >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option value={i + 1}>
-                          {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        class={styles.heatmapTypeSelect}
+                        value={stackedMonth()}
+                        onchange={(e) => {
+                          setStackedMonth(Number(e.currentTarget.value))
+                          setSelectedWeek('')
+                          loadStackedData()
+                          loadWeeks()
+                        }}
+                      >
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <option value={i + 1}>
+                            {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
+                          </option>
+                        ))}
+                      </select>
+                      {weeks().length > 0 && (
+                        <select
+                          class={styles.heatmapTypeSelect}
+                          value={selectedWeek()}
+                          onchange={(e) => {
+                            setSelectedWeek(e.currentTarget.value)
+                            loadStackedData()
+                          }}
+                        >
+                          <option value="">All Weeks</option>
+                          {weeks().map((w) => (
+                            <option value={w.week}>{w.label}</option>
+                          ))}
+                        </select>
+                      )}
+                    </>
                   )}
                   <button
                     class={`${styles.tab} ${compareEnabled() ? styles.active : ''}`}
