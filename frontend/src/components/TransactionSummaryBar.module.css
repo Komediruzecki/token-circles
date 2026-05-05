@@ -36,6 +36,10 @@
   color: var(--danger);
 }
 
+.summaryValue.total {
+  color: var(--text-primary);
+}
+
 .summaryDivider {
   width: 1px;
   height: 32px;

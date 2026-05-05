@@ -27,6 +27,9 @@ interface FilterBarProps {
   selectedTags: number[] | undefined
   dateRange: { from: string; to: string }
   selectedPreset: string
+  showReconciled?: boolean
+  reconciledCount?: number
+  onToggleReconciled?: () => void
   onChange: (filters: FilterState) => void
 }
 
@@ -276,6 +279,29 @@ export default function FilterBar(props: FilterBarProps) {
               />
             </div>
           </div>
+        )}
+
+        {props.onToggleReconciled !== undefined && (
+          <button
+            class={`${styles.reconcileToggle} ${props.showReconciled ? '' : styles.reconcileToggleActive}`}
+            onClick={props.onToggleReconciled}
+            title={props.showReconciled ? 'Hide reconciled' : 'Show reconciled'}
+          >
+            <svg
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Reconciled
+            {(props.reconciledCount ?? 0) > 0 && (
+              <span class={styles.reconcileBadge}>{props.reconciledCount}</span>
+            )}
+          </button>
         )}
       </div>
     </div>

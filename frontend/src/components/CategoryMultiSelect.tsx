@@ -42,10 +42,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     const term = searchTerm().toLowerCase()
 
     setFilteredCategories(
-      all.filter(
-        (cat) =>
-          cat.name.toLowerCase().includes(term) && props.selectedCategoryIds().includes(cat.id)
-      )
+      term ? all.filter((cat) => cat.name.toLowerCase().includes(term)) : all
     )
   })
 

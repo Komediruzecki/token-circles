@@ -167,3 +167,42 @@
 .filter-dropdown-content.hidden {
   display: none;
 }
+
+.reconcileToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.reconcileToggle:hover {
+  border-color: var(--primary);
+}
+
+.reconcileToggleActive {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.reconcileBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--badge-expense-bg);
+  color: var(--badge-expense-text);
+  font-size: 10px;
+  font-weight: 700;
+}

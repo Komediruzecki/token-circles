@@ -45,72 +45,78 @@ export default function Pagination(props: PaginationProps) {
 
   return (
     <div class={styles.pagination}>
-      <button
-        class={`${styles.pageBtn} ${styles.pageBtnPrev}`}
-        onClick={() => {
-          goToPage(props.currentPage - 1)
-        }}
-        disabled={props.currentPage === 1}
-      >
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
+      <div class={styles.paginationInfo}>
+        {props.totalItems ?? 0} transaction{(props.totalItems ?? 0) !== 1 ? 's' : ''} (page{' '}
+        {props.currentPage}/{props.totalPages})
+      </div>
+      <div class={styles.paginationControls}>
+        <button
+          class={`${styles.pageBtn} ${styles.pageBtnPrev}`}
+          onClick={() => {
+            goToPage(props.currentPage - 1)
+          }}
+          disabled={props.currentPage === 1}
+        >
+          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
 
-      {visiblePages[0] > 1 && (
-        <>
-          <button
-            class={styles.pageBtn}
-            onClick={() => {
-              goToPage(1)
-            }}
-          >
-            1
-          </button>
-          {visiblePages[0] > 2 && <span class={styles.ellipsis}>...</span>}
-        </>
-      )}
+        {visiblePages[0] > 1 && (
+          <>
+            <button
+              class={styles.pageBtn}
+              onClick={() => {
+                goToPage(1)
+              }}
+            >
+              1
+            </button>
+            {visiblePages[0] > 2 && <span class={styles.ellipsis}>...</span>}
+          </>
+        )}
 
-      {visiblePages.map((page) => (
-        <>
-          <button
-            class={`${styles.pageBtn} ${page === props.currentPage ? styles.pageBtnActive : ''}`}
-            onClick={() => {
-              goToPage(page)
-            }}
-          >
-            {page}
-          </button>
-        </>
-      ))}
+        {visiblePages.map((page) => (
+          <>
+            <button
+              class={`${styles.pageBtn} ${page === props.currentPage ? styles.pageBtnActive : ''}`}
+              onClick={() => {
+                goToPage(page)
+              }}
+            >
+              {page}
+            </button>
+          </>
+        ))}
 
-      {visiblePages[visiblePages.length - 1] < props.totalPages && (
-        <>
-          {visiblePages[visiblePages.length - 1] < props.totalPages - 1 && (
-            <span class={styles.ellipsis}>...</span>
-          )}
-          <button
-            class={styles.pageBtn}
-            onClick={() => {
-              goToPage(props.totalPages)
-            }}
-          >
-            {props.totalPages}
-          </button>
-        </>
-      )}
+        {visiblePages[visiblePages.length - 1] < props.totalPages && (
+          <>
+            {visiblePages[visiblePages.length - 1] < props.totalPages - 1 && (
+              <span class={styles.ellipsis}>...</span>
+            )}
+            <button
+              class={styles.pageBtn}
+              onClick={() => {
+                goToPage(props.totalPages)
+              }}
+            >
+              {props.totalPages}
+            </button>
+          </>
+        )}
 
-      <button
-        class={`${styles.pageBtn} ${styles.pageBtnNext}`}
-        onClick={() => {
-          goToPage(props.currentPage + 1)
-        }}
-        disabled={props.currentPage === props.totalPages}
-      >
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
+        <button
+          class={`${styles.pageBtn} ${styles.pageBtnNext}`}
+          onClick={() => {
+            goToPage(props.currentPage + 1)
+          }}
+          disabled={props.currentPage === props.totalPages}
+        >
+          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }

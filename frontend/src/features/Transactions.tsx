@@ -32,6 +32,7 @@
  */
 import { createEffect, createSignal, For, onMount } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
+import BulkActionBar from '../components/BulkActionBar'
 import { CategoryMultiSelect } from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
 import Pagination from '../components/Pagination'
@@ -67,13 +68,13 @@ export default function Transactions() {
   const [formMeans, setFormMeans] = createSignal('')
   const [formAmountLocal, setFormAmountLocal] = createSignal('')
   const [categories, setCategories] = createSignal<Category[]>([])
-  const [tags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
+  const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
   const [dateRange, setDateRange] = createSignal<{ from: string; to: string }>({ from: '', to: '' })
   const [selectedPreset, setSelectedPreset] = createSignal<string>('')
   const [currentPage, setCurrentPage] = createSignal(1)
-  const [itemsPerPage] = createSignal(10)
+  const [itemsPerPage] = createSignal(50)
   const [sortField, setSortField] = createSignal<string>('date')
   const [sortOrder, setSortOrder] = createSignal<'asc' | 'desc'>('desc')
   const [filterType, setFilterType] = createSignal<string>('all')
@@ -82,6 +83,8 @@ export default function Transactions() {
   const [totalIncome, setTotalIncome] = createSignal(0)
   const [totalExpenses, setTotalExpenses] = createSignal(0)
   const [netBalance, setNetBalance] = createSignal(0)
+  const [totalAmount, setTotalAmount] = createSignal(0)
+  const [showReconciled, setShowReconciled] = createSignal(true)
 
   // Calculate transaction totals
   createEffect(() => {
@@ -92,9 +95,11 @@ export default function Transactions() {
     const expenses = txs
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    const total = txs.reduce((sum, t) => sum + Math.abs(t.amount), 0)
     setTotalIncome(income)
     setTotalExpenses(expenses)
     setNetBalance(income - expenses)
+    setTotalAmount(total)
   })
 
   // _loadTransactionReceipt - placeholder for receipt loading
@@ -160,8 +165,6 @@ export default function Transactions() {
   // Handle selection changes
   const handleSelectionChange = (ids: number[]) => {
     setSelectedTransactions(ids)
-    // Re-fetch to update transaction data
-    refreshTransactions()
   }
 
   // Handle sort changes
@@ -174,13 +177,55 @@ export default function Transactions() {
     }
   }
 
+  const handleDeleteTransaction = async (transaction: Transaction) => {
+    if (!confirm(`Delete transaction "${transaction.description}"?`)) return
+    try {
+      await api.deleteTransaction(transaction.id)
+      await refreshTransactions()
+    } catch (error) {
+      console.error('Failed to delete transaction:', error)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = selectedTransactions()
+    if (ids.length === 0) return
+    if (!confirm(`Delete ${ids.length} selected transaction${ids.length !== 1 ? 's' : ''}?`)) return
+    try {
+      for (const id of ids) {
+        await api.deleteTransaction(id)
+      }
+      setSelectedTransactions([])
+      await refreshTransactions()
+    } catch (error) {
+      console.error('Failed to bulk delete transactions:', error)
+    }
+  }
+
+  const handleBulkReconcile = () => {
+    setReconciliationModalOpen(true)
+  }
+
+  const handleReconcileToggle = async (transaction: Transaction) => {
+    try {
+      await api.updateTransaction(transaction.id, { reconciled: !transaction.reconciled })
+      await refreshTransactions()
+    } catch (error) {
+      console.error('Failed to toggle reconcile:', error)
+    }
+  }
+
   // Handle filter changes
   const handleFilterChange = (filters: any) => {
     setSelectedCategories(filters.selectedCategories || [])
     setSelectedTags(filters.selectedTags || [])
-    setDateRange(filters.dateRange || { from: '', to: '' })
-    setSelectedPreset(filters.selectedPreset || 'month')
     setCurrentPage(1)
+    if (filters.selectedPreset) {
+      applyDatePreset(filters.selectedPreset)
+    }
+    if (filters.dateRange) {
+      setDateRange(filters.dateRange)
+    }
   }
 
   // Handle pagination changes
@@ -233,6 +278,11 @@ export default function Transactions() {
         return false
       }
 
+      // Filter by reconciled status
+      if (!showReconciled() && tx.reconciled) {
+        return false
+      }
+
       return true
     })
   }
@@ -251,6 +301,8 @@ export default function Transactions() {
   }
 
   const totalPages = () => Math.ceil(filteredTransactions().length / itemsPerPage())
+
+  const reconciledCount = () => transactions().filter((t) => t.reconciled).length
 
   // Auto-categorize handler
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
@@ -279,32 +331,30 @@ export default function Transactions() {
     }
   }
 
-  // _applyDatePreset - unused (functionality can be extended)
-  // @ts-expect-error unused but used by event delegation
-  const _applyDatePreset = (_preset: string) => {
+  // Apply date preset — recalculates date range from preset
+  const applyDatePreset = (preset: string) => {
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
 
-    const formatDate = (date: Date) => date.toISOString().slice(0, 7)
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
-    switch (_preset) {
+    switch (preset) {
       case 'month':
-        setDateRange({ from: formatDate(startOfMonth), to: formatDate(endOfMonth) })
+        setDateRange({ from: fmt(startOfMonth), to: fmt(endOfMonth) })
         break
       case 'lastMonth':
-        setDateRange({ from: formatDate(startOfLastMonth), to: formatDate(endOfLastMonth) })
+        setDateRange({ from: fmt(startOfLastMonth), to: fmt(endOfLastMonth) })
         break
       case 'year':
         setDateRange({ from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })
         break
       case 'custom':
-        // Keep current range
         break
     }
-    setSelectedPreset(_preset)
+    setSelectedPreset(preset)
     setCurrentPage(1)
   }
 
@@ -355,6 +405,12 @@ export default function Transactions() {
       if (Array.isArray(cats)) setCategories(cats as Category[])
     } catch {
       // Categories will remain empty
+    }
+    try {
+      const tagData = await api.getTags()
+      if (Array.isArray(tagData)) setTags(tagData as any[])
+    } catch {
+      // Tags will remain empty
     }
   })
 
@@ -435,15 +491,28 @@ export default function Transactions() {
           selectedTags={selectedTags()}
           dateRange={dateRange()}
           selectedPreset={selectedPreset()}
+          showReconciled={showReconciled()}
+          reconciledCount={reconciledCount()}
+          onToggleReconciled={() => setShowReconciled(!showReconciled())}
           onChange={handleFilterChange}
         />
       </div>
 
       {/* Transaction Summary Bar */}
       <TransactionSummaryBar
+        totalAmount={totalAmount()}
         totalIncome={totalIncome()}
         totalExpenses={totalExpenses()}
         netBalance={netBalance()}
+        transactionCount={filteredTransactions().length}
+      />
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedCount={selectedTransactions().length}
+        onClearSelection={() => setSelectedTransactions([])}
+        onDeleteSelected={handleBulkDelete}
+        onReconcileSelected={handleBulkReconcile}
       />
 
       {/* Search */}
@@ -509,7 +578,7 @@ export default function Transactions() {
         <div class={styles.modal}>
           <div class={styles.modalHeader}>
             <div class={styles.modalTitle} id="tx-modal-title">
-              Add Transaction
+              {formId() ? 'Edit Transaction' : 'Add Transaction'}
             </div>
             <button class={styles.btnGhost} onclick={_closeModals as any} aria-label="Close modal">
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -938,13 +1007,15 @@ export default function Transactions() {
             sortField={sortField()}
             sortOrder={sortOrder()}
             onEdit={handleEditTransaction}
+            onDelete={handleDeleteTransaction}
+            onReconcileToggle={handleReconcileToggle}
           />
           {totalPages() > 1 && (
             <Pagination
               currentPage={currentPage()}
               totalPages={totalPages()}
               itemsPerPage={itemsPerPage()}
-              totalItems={transactions().length}
+              totalItems={filteredTransactions().length}
               onPageChange={handlePageChange}
             />
           )}

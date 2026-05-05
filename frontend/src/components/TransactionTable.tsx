@@ -15,6 +15,8 @@ interface TransactionTableProps {
   sortOrder?: 'asc' | 'desc'
   loading?: boolean
   onEdit?: (transaction: Transaction) => void
+  onDelete?: (transaction: Transaction) => void
+  onReconcileToggle?: (transaction: Transaction) => void
 }
 
 export default function TransactionTable(props: TransactionTableProps) {
@@ -130,6 +132,11 @@ export default function TransactionTable(props: TransactionTableProps) {
                 }}
               />
             </th>
+            <th class={styles.reconcileCol} title="Reconciled">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </th>
             <th
               class={`${styles.col} ${styles.dateCol}`}
               onClick={() => {
@@ -148,7 +155,16 @@ export default function TransactionTable(props: TransactionTableProps) {
               {sortConfig().field === 'description' &&
                 (sortConfig().direction === 'asc' ? '↑' : '↓')}
             </th>
-            <th class={`${styles.col} ${styles.categoryCol}`}>Category</th>
+            <th
+              class={`${styles.col} ${styles.categoryCol}`}
+              onClick={() => {
+                handleSort('category')
+              }}
+            >
+              Category{' '}
+              {sortConfig().field === 'category' &&
+                (sortConfig().direction === 'asc' ? '↑' : '↓')}
+            </th>
             <th
               class={`${styles.col} ${styles.amountCol}`}
               onClick={() => {
@@ -165,7 +181,7 @@ export default function TransactionTable(props: TransactionTableProps) {
         <tbody>
           <For each={filtered()}>
             {(transaction) => (
-              <tr>
+              <tr class={transaction.reconciled ? styles.reconciled : ''}>
                 <td class={styles.checkboxCol}>
                   <input
                     type="checkbox"
@@ -183,22 +199,18 @@ export default function TransactionTable(props: TransactionTableProps) {
                     }}
                   />
                 </td>
+                <td class={styles.reconcileCol}>
+                  <input
+                    type="checkbox"
+                    class={styles.reconcileCheckbox}
+                    checked={transaction.reconciled}
+                    onChange={() => props.onReconcileToggle?.(transaction)}
+                    title={transaction.reconciled ? 'Mark unreconciled' : 'Mark reconciled'}
+                  />
+                </td>
                 <td class={styles.dateCol}>{new Date(transaction.date).toLocaleDateString()}</td>
                 <td class={styles.descriptionCol}>
                   <div class={styles.description}>{transaction.description}</div>
-                  {transaction.beneficiary !== undefined && transaction.beneficiary !== '' && (
-                    <div class={styles.beneficiary}>Pay to: {transaction.beneficiary}</div>
-                  )}
-                  {transaction.payor !== undefined && transaction.payor !== '' && (
-                    <div class={styles.payor}>From: {transaction.payor}</div>
-                  )}
-                  {transaction.means_of_payment !== undefined &&
-                    transaction.means_of_payment !== '' && (
-                      <div class={styles.paymentMethod}>{transaction.means_of_payment}</div>
-                    )}
-                </td>
-                <td class={styles.categoryCol}>
-                  <div class={styles.categoryName}>{transaction.category_name}</div>
                   {transaction.tags !== undefined && transaction.tags.length > 0 && (
                     <div class={styles.tags}>
                       <For each={transaction.tags.slice(0, 2)}>
@@ -212,6 +224,24 @@ export default function TransactionTable(props: TransactionTableProps) {
                         <span class={styles.tagCount}>+{transaction.tags.length - 2}</span>
                       )}
                     </div>
+                  )}
+                </td>
+                <td class={styles.categoryCol}>
+                  <div class={styles.categoryName}>
+                    <span
+                      class={styles.categoryDot}
+                      style={{ 'background-color': transaction.category_color || '#94a3b8' }}
+                    />
+                    {transaction.category_name || '—'}
+                  </div>
+                </td>
+                <td class={styles.counterPartyCol}>
+                  {transaction.type === 'expense' && transaction.beneficiary ? (
+                    <span>{transaction.beneficiary}</span>
+                  ) : transaction.type === 'income' && transaction.payor ? (
+                    <span>{transaction.payor}</span>
+                  ) : (
+                    <span class={styles.muted}>—</span>
                   )}
                 </td>
                 <td class={styles.amountCol}>
@@ -239,6 +269,25 @@ export default function TransactionTable(props: TransactionTableProps) {
                         stroke-linejoin="round"
                         stroke-width={2}
                         d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    class={styles.actionBtn}
+                    onClick={() => props.onDelete?.(transaction)}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                       />
                     </svg>
                   </button>

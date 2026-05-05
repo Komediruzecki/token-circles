@@ -46,6 +46,18 @@
   height: 16px;
 }
 
+.reconcileCol {
+  width: 44px;
+  text-align: center;
+}
+
+.reconcileCheckbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--success);
+}
+
 .date-col {
   width: 110px;
   font-size: 13px;
@@ -158,6 +170,32 @@
 .empty-state {
   padding: 40px;
   text-align: center;
+  color: var(--text-secondary);
+}
+
+.reconciled {
+  opacity: 0.6;
+}
+
+.reconciled td {
+  color: var(--text-secondary);
+}
+
+.categoryDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.counterPartyCol {
+  width: 130px;
+  font-size: 13px;
+}
+
+.muted {
   color: var(--text-secondary);
 }
 
