@@ -254,7 +254,7 @@ export default function Categories() {
               return (
                 <div class={styles.categoryCard}>
                   <div class={styles.categoryHeader}>
-                    <div class={`${styles.categoryIcon} ${iconClass}`}>{category.icon || '📝'}</div>
+                    <div class={`${styles.categoryIcon} ${iconClass}`}>{category.icon || (<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>)}</div>
                     <div class={styles.categoryInfo}>
                       <h3 class={styles.categoryName}>{category.name}</h3>
                       <span class={styles.categoryType}>{category.type}</span>
@@ -430,7 +430,7 @@ export default function Categories() {
                 <input
                   type="text"
                   class={styles.formControl}
-                  placeholder="e.g., 🍔, 🏠, 🚗"
+                  placeholder="e.g., food, home, car"
                   value={formData().icon}
                   oninput={(e) => setFormData({ ...formData(), icon: e.target.value })}
                   maxlength="2"

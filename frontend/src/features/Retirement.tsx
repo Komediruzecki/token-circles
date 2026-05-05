@@ -381,7 +381,7 @@ export default function Retirement() {
                   <div data-test-id="retirement-goal-card" class={styles.goalCard}>
                     <div class={styles.goalHeader}>
                       <div data-test-id="retirement-goal-icon" class={styles.goalIcon}>
-                        🎯
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4a6 6 0 100 12 6 6 0 000-12zm0 3a3 3 0 100 6 3 3 0 000-6z" /></svg>
                       </div>
                       <div class={styles.goalInfo}>
                         <h3 data-test-id="retirement-goal-name" class={styles.goalName}>
