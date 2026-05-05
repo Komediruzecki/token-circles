@@ -673,8 +673,9 @@ export class ApiClient {
   /**
    * Get dashboard metrics
    */
-  async getDashboard(): Promise<Models.DashboardMetrics> {
-    return this.request<Models.DashboardMetrics>('/dashboard')
+  async getDashboard(month?: number, year?: number): Promise<Models.DashboardMetrics> {
+    const params = month && year ? `?month=${month}&year=${year}` : ''
+    return this.request<Models.DashboardMetrics>(`/dashboard${params}`)
   }
 
   /**

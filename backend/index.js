@@ -4099,14 +4099,23 @@ app.get('/api/dashboard', apiRateLimiter, async (req, res) => {
     const currency = currencyRow ? currencyRow.value : 'EUR';
 
     // Get summary (income, expenses, balance, recent transactions)
-    const year = new Date().getFullYear();
-    const monthPart = null;
-    const startDate = `${year}-01-01`;
-    const endDate = `${year + 1}-01-01`;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    // Last day of the current month
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    // Previous month calculation
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevStartDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+    const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+    const prevEndDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
 
     const monthly = db
       .prepare(
-        `SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? GROUP BY type`
+        `SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`
       )
       .all(...pids, startDate, endDate);
 
@@ -4117,16 +4126,34 @@ app.get('/api/dashboard', apiRateLimiter, async (req, res) => {
       else if (r.type === 'transfer') summary.balance += r.total;
     }
 
+    // Get previous month summary for MoM delta
+    const prevMonthly = db
+      .prepare(
+        `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`
+      )
+      .all(...pids, prevStartDate, prevEndDate);
+
+    const prevSummary = { income: 0, expense: 0, balance: 0 };
+    for (const r of prevMonthly) {
+      if (r.type === 'income') prevSummary.income = r.total;
+      else if (r.type === 'expense') prevSummary.expense = r.total;
+      else if (r.type === 'transfer') prevSummary.balance += r.total;
+    }
+
+    const momIncomeDelta = summary.income - prevSummary.income;
+    const momExpenseDelta = summary.expense - prevSummary.expense;
+    const momBalanceDelta = (summary.income - summary.expense) - (prevSummary.income - prevSummary.expense);
+
     const recent = db
       .prepare(
-        `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date < ? ORDER BY t.date DESC, t.id DESC LIMIT 10`
+        `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id DESC LIMIT 10`
       )
       .all(...pids, startDate, endDate);
 
     // Get category breakdown for expenses
     const expenseByCategory = db
       .prepare(
-        `SELECT c.name as category_name, c.color as category_color, SUM(COALESCE(t.amount_local, t.amount)) as total FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date < ? GROUP BY c.id, c.name, c.color ORDER BY total DESC`
+        `SELECT c.name as category_name, c.color as category_color, SUM(COALESCE(t.amount_local, t.amount)) as total FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ? GROUP BY c.id, c.name, c.color ORDER BY total DESC`
       )
       .all(...pids, startDate, endDate);
 
@@ -4158,6 +4185,9 @@ app.get('/api/dashboard', apiRateLimiter, async (req, res) => {
       expenseByCategory,
       recentTransactions: recent,
       upcomingBills,
+      momIncomeDelta,
+      momExpenseDelta,
+      momBalanceDelta,
     });
   } catch (err) {
     console.error(err.message);

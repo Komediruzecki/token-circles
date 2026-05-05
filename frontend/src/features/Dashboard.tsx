@@ -30,7 +30,7 @@
  * Dashboard Component
  */
 
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import ChartWrapper from '../components/ChartWrapper'
 import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
 import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
@@ -52,14 +52,18 @@ export default function Dashboard() {
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
 
   onMount(() => {
-    void loadDashboard()
     void loadMonthlyData()
+  })
+
+  createEffect(() => {
+    month(); year() // track dependencies
+    void loadDashboard()
   })
 
   const loadDashboard = async () => {
     setLoading(true)
     try {
-      const data = await api.getDashboard()
+      const data = await api.getDashboard(month(), year())
       setMetrics(data)
     } catch {
       toast('Failed to load dashboard', 'error')
