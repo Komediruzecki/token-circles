@@ -80,6 +80,9 @@ function migrate() {
     );
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_profile ON budgets(profile_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_start_date ON budgets(start_date)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_budgets_profile_date ON budgets(profile_id, start_date)');
 
   // Create savings_goals table
   db.exec(`

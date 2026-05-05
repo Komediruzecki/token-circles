@@ -264,14 +264,9 @@ export default function Budgets() {
     setShowAllocateModal(true)
   }
 
-  // Initialize
-  onMount(() => {
-    loadData()
-    loadImprovements()
-  })
-
-  // Refresh on month change
+  // Load data on mount and when month changes
   createEffect(() => {
+    void month() // track month dependency
     loadData()
     loadImprovements()
   })
