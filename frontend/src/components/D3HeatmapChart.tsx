@@ -1,6 +1,7 @@
 /**
  * D3HeatmapChart Component
  * D3-based calendar heatmap for daily spending visualization
+ * with HTML tooltip and click drill-down
  */
 import * as d3 from 'd3'
 import { createEffect, onCleanup, onMount } from 'solid-js'
@@ -10,10 +11,16 @@ interface Props {
   year: number
   type: 'income' | 'expense'
   height?: number
+  onDayClick?: (dateStr: string, amount: number) => void
 }
 
 export default function D3HeatmapChart(props: Props) {
   let containerRef: HTMLDivElement | undefined
+  let tooltipEl: HTMLDivElement | undefined
+
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(amount)
+  }
 
   const renderHeatmap = () => {
     const container = containerRef
@@ -80,7 +87,7 @@ export default function D3HeatmapChart(props: Props) {
         .text(label)
     })
 
-    // Cells
+    // Cells with mouse events
     g.selectAll('.cell')
       .data(day)
       .join('rect')
@@ -94,10 +101,31 @@ export default function D3HeatmapChart(props: Props) {
         const val = getValue(d)
         return val > 0 ? colorFn(val) : 'var(--bg-secondary, rgba(128,128,128,0.1))'
       })
-      .append('title')
-      .text((d: Date) => {
+      .on('mouseover', (event: MouseEvent, d: Date) => {
+        if (!tooltipEl) return
         const val = getValue(d)
-        return `${d3.timeFormat('%b %d, %Y')(d)}: ${d3.format(',.2f')(val)}`
+        const dateLabel = d3.timeFormat('%b %d, %Y')(d)
+        const amountLabel = formatCurrency(val)
+        tooltipEl.innerHTML = val > 0
+          ? `${dateLabel}: ${amountLabel} ${props.type}`
+          : `${dateLabel}: No ${props.type}`
+        tooltipEl.style.display = 'block'
+        tooltipEl.style.left = `${event.pageX + 12}px`
+        tooltipEl.style.top = `${event.pageY - 40}px`
+      })
+      .on('mousemove', (event: MouseEvent) => {
+        if (!tooltipEl) return
+        tooltipEl.style.left = `${event.pageX + 12}px`
+        tooltipEl.style.top = `${event.pageY - 40}px`
+      })
+      .on('mouseout', () => {
+        if (!tooltipEl) return
+        tooltipEl.style.display = 'none'
+      })
+      .on('click', (_event: MouseEvent, d: Date) => {
+        const dateStr = d3.timeFormat('%Y-%m-%d')(d)
+        const val = getValue(d)
+        if (props.onDayClick) props.onDayClick(dateStr, val)
       })
 
     // Legend
@@ -128,11 +156,26 @@ export default function D3HeatmapChart(props: Props) {
       .text(d3.format(',.0f')(maxVal))
   }
 
+  // Create tooltip element
   onMount(() => {
+    // Create tooltip element
+    if (containerRef) {
+      tooltipEl = document.createElement('div')
+      tooltipEl.id = 'heatmap-tooltip'
+      tooltipEl.style.cssText =
+        'position:fixed;display:none;background:var(--card-bg,#1f2937);color:var(--text,#e5e7eb);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:1px solid var(--border,#374151);white-space:nowrap;'
+      document.body.appendChild(tooltipEl)
+    }
+
     renderHeatmap()
     const observer = new ResizeObserver(() => { renderHeatmap(); })
     if (containerRef) observer.observe(containerRef)
-    onCleanup(() => { observer.disconnect(); })
+    onCleanup(() => {
+      observer.disconnect()
+      if (tooltipEl && tooltipEl.parentNode) {
+        tooltipEl.parentNode.removeChild(tooltipEl)
+      }
+    })
   })
 
   createEffect(() => {

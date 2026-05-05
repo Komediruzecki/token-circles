@@ -72,6 +72,12 @@ export default function Analytics() {
   } | null>(null)
   const [weeks, setWeeks] = createSignal<Array<{ week: number; label: string }>>([])
   const [selectedWeek, setSelectedWeek] = createSignal('')
+  const [heatmapModal, setHeatmapModal] = createSignal<{
+    dateStr: string
+    amount: number
+    transactions: any[]
+    loading: boolean
+  } | null>(null)
 
   // Load weeks for month drill-down
   const loadWeeks = async () => {
@@ -89,6 +95,28 @@ export default function Analytics() {
       setWeeks([])
     }
   }
+
+  // Handle heatmap day click drill-down
+  const handleHeatmapDayClick = async (dateStr: string, amount: number) => {
+    setHeatmapModal({ dateStr, amount, transactions: [], loading: true })
+    try {
+      const type = heatmapType()
+      const res = await apiGet<any>(
+        `/api/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`
+      )
+      const list = Array.isArray(res?.transactions)
+        ? res.transactions
+        : Array.isArray(res?.rows)
+          ? res.rows
+          : []
+      setHeatmapModal({ dateStr, amount, transactions: list, loading: false })
+    } catch (_e) {
+      console.error('Failed to load day transactions')
+      setHeatmapModal({ dateStr, amount, transactions: [], loading: false })
+    }
+  }
+
+  const closeHeatmapModal = () => setHeatmapModal(null)
 
   // Load analytics data
   const loadData = async () => {
@@ -824,10 +852,77 @@ export default function Analytics() {
                     year={heatmapYear()}
                     type={heatmapType()}
                     height={180}
+                    onDayClick={handleHeatmapDayClick}
                   />
                 )}
               </div>
             </div>
+          )}
+
+          {/* Heatmap Day Detail Modal */}
+          {heatmapModal() && (
+            <>
+              <div
+                style="position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:9998;"
+                onClick={closeHeatmapModal}
+              />
+              <div
+                style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow-lg,0 4px 20px rgba(0,0,0,0.3));z-index:9999;min-width:300px;max-width:400px;max-height:80vh;overflow-y:auto;"
+              >
+                {heatmapModal()!.loading ? (
+                  <div style="text-align:center;padding:20px;color:var(--text-secondary);">
+                    Loading...
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      style="font-weight:600;font-size:14px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px;color:var(--text);"
+                    >
+                      {new Date(heatmapModal()!.dateStr).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}{' '}
+                      &mdash; {formatAmount(heatmapModal()!.amount)}
+                    </div>
+                    {heatmapModal()!.transactions.length === 0 ? (
+                      <p style="color:var(--text-secondary);font-size:13px;">
+                        No {heatmapType()} transactions for this day
+                      </p>
+                    ) : (
+                      <div style="max-height:200px;overflow-y:auto;">
+                        {heatmapModal()!.transactions.slice(0, 10).map((tx: any) => (
+                          <div
+                            style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;"
+                          >
+                            <span style="color:var(--text);">
+                              {tx.description || tx.category || '-'}
+                            </span>
+                            <span
+                              style={`font-weight:600;color:${tx.type === 'income' ? 'var(--income)' : 'var(--expense)'};`}
+                            >
+                              {tx.type === 'income' ? '+' : '-'}
+                              {formatAmount(Math.abs(tx.amount || 0))}
+                            </span>
+                          </div>
+                        ))}
+                        {heatmapModal()!.transactions.length > 10 && (
+                          <div style="padding:5px 0;font-size:12px;color:var(--text-secondary);">
+                            +{heatmapModal()!.transactions.length - 10} more
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <button
+                      style="margin-top:12px;width:100%;padding:8px;background:var(--btn-secondary-bg,var(--bg-secondary));color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;"
+                      onClick={closeHeatmapModal}
+                    >
+                      Close
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
           )}
 
           {/* Sankey Diagram */}
