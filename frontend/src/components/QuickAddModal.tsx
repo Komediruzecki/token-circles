@@ -15,6 +15,7 @@ export interface QuickAddModalProps {
 }
 
 export function QuickAddModal(props: QuickAddModalProps) {
+  let amountRef: HTMLInputElement | undefined
   const [isSubmitting, setIsSubmitting] = createSignal(false)
   const [isMounted, setIsMounted] = createSignal(false)
 
@@ -76,8 +77,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
       document.addEventListener('keydown', handler)
       // Auto-focus amount field on open
       setTimeout(() => {
-        const amountInput = document.getElementById('quick-add-amount')
-        if (amountInput) amountInput.focus()
+        amountRef?.focus()
       }, 100)
       return () => {
         document.removeEventListener('keydown', handler)
@@ -110,7 +110,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
                 <label class={quickAddModalStyles.label}>Amount</label>
                 <div class={quickAddModalStyles.currencyPrefix}>€</div>
                 <input
-                  id="quick-add-amount"
+                  ref={amountRef}
                   class={quickAddModalStyles.amountInput}
                   type="number"
                   step="0.01"

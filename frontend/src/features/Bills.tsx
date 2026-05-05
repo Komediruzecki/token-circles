@@ -56,8 +56,9 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import styles from '../components/BillsPage.module.css'
+import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
@@ -206,7 +207,6 @@ export default function Bills() {
 
   // Delete bill
   const deleteBill = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this bill?')) return
     try {
       await apiDelete(`/api/bills/${id}`)
       showToast('Bill deleted successfully', 'success')
@@ -285,44 +285,46 @@ export default function Bills() {
             <span class={styles.sectionSubtitle}>{upcoming().length} bills</span>
           </h2>
           <div data-test-id="bills-list" class={styles.billsList}>
-            {upcoming().map((bill) => (
-              <div
-                data-test-id="bill-card"
-                class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
-              >
-                <div class={styles.billMain}>
-                  <div data-test-id="bill-icon" class={styles.billIcon}>
-                    {bill.autopay ? '🤖' : '📝'}
-                  </div>
-                  <div class={styles.billInfo}>
-                    <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
-                    <p data-test-id="bill-details" class={styles.billDetails}>
-                      {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
-                      {bill.frequency === 'monthly'
-                        ? 'Monthly'
-                        : bill.frequency === 'weekly'
-                          ? 'Weekly'
-                          : 'Biweekly'}
-                    </p>
-                  </div>
-                </div>
+            <For each={upcoming()}>
+              {(bill) => (
                 <div
-                  data-test-id="bill-amount-container"
-                  class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                  data-test-id="bill-card"
+                  class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
                 >
-                  <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                  {!bill.paid && (
-                    <button
-                      data-test-id="bill-mark-paid-btn"
-                      class={`${styles.btnPrimary} ${styles.btnSm}`}
-                      onClick={() => markPaid(bill.id)}
-                    >
-                      Mark Paid
-                    </button>
-                  )}
+                  <div class={styles.billMain}>
+                    <div data-test-id="bill-icon" class={styles.billIcon}>
+                      {bill.autopay ? '🤖' : '📝'}
+                    </div>
+                    <div class={styles.billInfo}>
+                      <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
+                      <p data-test-id="bill-details" class={styles.billDetails}>
+                        {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
+                        {bill.frequency === 'monthly'
+                          ? 'Monthly'
+                          : bill.frequency === 'weekly'
+                            ? 'Weekly'
+                            : 'Biweekly'}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    data-test-id="bill-amount-container"
+                    class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                  >
+                    <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                    {!bill.paid && (
+                      <button
+                        data-test-id="bill-mark-paid-btn"
+                        class={`${styles.btnPrimary} ${styles.btnSm}`}
+                        onClick={() => markPaid(bill.id)}
+                      >
+                        Mark Paid
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
+            </For>
           </div>
         </div>
       )}
@@ -335,35 +337,35 @@ export default function Bills() {
             <span class={styles.sectionSubtitle}>{paid().length} bills</span>
           </h2>
           <div data-test-id="bills-list" class={styles.billsList}>
-            {paid().map((bill) => (
-              <div data-test-id="bill-card" class={`${styles.billCard} ${styles.paid}`}>
-                <div class={styles.billMain}>
-                  <div data-test-id="bill-icon" class={styles.billIcon}>✅</div>
-                  <div class={styles.billInfo}>
-                    <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
-                    <p data-test-id="bill-details" class={styles.billDetails}>Paid {formatDate(bill.due_date)}</p>
+            <For each={paid()}>
+              {(bill) => (
+                <div data-test-id="bill-card" class={`${styles.billCard} ${styles.paid}`}>
+                  <div class={styles.billMain}>
+                    <div data-test-id="bill-icon" class={styles.billIcon}>✅</div>
+                    <div class={styles.billInfo}>
+                      <h3 data-test-id="bill-name" class={styles.billName}>{bill.name}</h3>
+                      <p data-test-id="bill-details" class={styles.billDetails}>Paid {formatDate(bill.due_date)}</p>
+                    </div>
+                  </div>
+                  <div class={styles.billAmount}>
+                    <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                    <ConfirmButton
+                      class={`${styles.btnSm} ${styles.btnGhost}`}
+                      onConfirm={() => deleteBill(bill.id)}
+                      label={<svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M6 18L18 6M6 6l12 12" />
+                      </svg>}
+                    />
                   </div>
                 </div>
-                <div class={styles.billAmount}>
-                  <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                  <button
-                    data-test-id="bill-delete-btn"
-                    class={`${styles.btnSm} ${styles.btnGhost}`}
-                    onClick={() => deleteBill(bill.id)}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
+              )}
+            </For>
           </div>
         </div>
       )}
@@ -392,7 +394,8 @@ export default function Bills() {
           </div>
         ) : (
           <div class={styles.billsList}>
-            {bills().map((bill) => (
+            <For each={bills()}>
+              {(bill) => (
               <div class={styles.billCard}>
                 <div class={styles.billMain}>
                   <div data-test-id="bill-icon" class={styles.billIcon}>{bill.autopay ? '🤖' : '📝'}</div>
@@ -421,12 +424,10 @@ export default function Bills() {
                         {isOverdue(bill.due_date) ? 'Mark as Paid (Overdue)' : 'Mark Paid'}
                       </button>
                     ) : (
-                      <button
-                        data-test-id="bill-delete-btn"
+                      <ConfirmButton
                         class={`${styles.btnSm} ${styles.btnGhost}`}
-                        onClick={() => deleteBill(bill.id)}
-                      >
-                        <svg
+                        onConfirm={() => deleteBill(bill.id)}
+                        label={<svg
                           width="16"
                           height="16"
                           fill="none"
@@ -434,13 +435,14 @@ export default function Bills() {
                           viewBox="0 0 24 24"
                         >
                           <path d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                        </svg>}
+                      />
                     )}
                   </div>
                 </div>
               </div>
-            ))}
+              )}
+            </For>
           </div>
         )}
       </div>
@@ -509,9 +511,9 @@ export default function Bills() {
                   oninput={(e) => setFormData({ ...formData(), category: e.target.value })}
                 >
                   <option value="">No category</option>
-                  {categories().map((cat) => (
-                    <option value={cat.name}>{cat.name}</option>
-                  ))}
+                  <For each={categories()}>
+                    {(cat) => <option value={cat.name}>{cat.name}</option>}
+                  </For>
                 </select>
                 <button
                   type="button"

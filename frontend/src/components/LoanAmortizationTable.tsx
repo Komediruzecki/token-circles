@@ -2,7 +2,7 @@
  * LoanAmortizationTable Component
  * Displays detailed amortization schedule for a loan
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import { api as _api, formatCurrency } from '../core/api'
 import { apiPost, showToast } from '../utils/api'
@@ -132,7 +132,8 @@ export default function LoanAmortizationTable(props: Props) {
             <div style="margin-bottom: 16px;">
               <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Prepayments</h4>
               <div style="display: flex; flex-direction: column; gap: 8px;">
-                {props.loan.prepayments.map((p) => {
+                <For each={props.loan.prepayments}>
+                  {(p) => {
                   const loanStart = new Date(props.loan.start_date)
                   const prepayDate = new Date(loanStart)
                   prepayDate.setMonth(prepayDate.getMonth() + p.month - 1)
@@ -151,7 +152,8 @@ export default function LoanAmortizationTable(props: Props) {
                       )}
                     </div>
                   )
-                })}
+                }}
+                </For>
               </div>
             </div>
           )}
@@ -161,7 +163,8 @@ export default function LoanAmortizationTable(props: Props) {
             <div style="margin-bottom: 16px;">
               <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Rate Periods</h4>
               <div style="display: flex; flex-direction: column; gap: 8px;">
-                {props.loan.rate_periods.map((rp) => {
+                <For each={props.loan.rate_periods}>
+                  {(rp) => {
                   const loanStart = new Date(props.loan.start_date)
                   const rateDate = new Date(loanStart)
                   rateDate.setMonth(rateDate.getMonth() + rp.start_month - 1)
@@ -177,7 +180,8 @@ export default function LoanAmortizationTable(props: Props) {
                       <span style={{ 'font-weight': 600 }}>{rp.rate}%</span>
                     </div>
                   )
-                })}
+                }}
+                </For>
               </div>
             </div>
           )}
@@ -294,8 +298,9 @@ export default function LoanAmortizationTable(props: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {schedule.map((row, idx) => {
-                    const prev = idx > 0 ? schedule[idx - 1] : null
+                  <For each={schedule}>
+                    {(row, index) => {
+                    const prev = index() > 0 ? schedule[index() - 1] : null
                     const rateChanged = prev && prev.rate !== row.rate
                     const hasPrepayment = row.prepayment && row.prepayment > 0
                     const note = hasPrepayment
@@ -341,7 +346,8 @@ export default function LoanAmortizationTable(props: Props) {
                         )}
                       </tr>
                     )
-                  })}
+                  }}
+                  </For>
                 </tbody>
               </table>
             </div>
@@ -415,7 +421,8 @@ export default function LoanAmortizationTable(props: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {generateDetailedRows(schedule, formatCurrency).map((row) => (
+                      <For each={generateDetailedRows(schedule, formatCurrency)}>
+                        {(row) => (
                         <tr class={row.isYearMarker ? styles.yearMarker : ''}>
                           <td>{row.month}</td>
                           <td>{row.date}</td>
@@ -437,7 +444,8 @@ export default function LoanAmortizationTable(props: Props) {
                           <td>{row.cumPrincipal}</td>
                           <td>{row.cumInterest}</td>
                         </tr>
-                      ))}
+                        )}
+                      </For>
                     </tbody>
                     <tfoot>
                       <tr class={styles.totalsRow}>
@@ -477,7 +485,8 @@ export default function LoanAmortizationTable(props: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {generateDetailedRows(schedule, formatCurrency).map((row) => (
+                    <For each={generateDetailedRows(schedule, formatCurrency)}>
+                      {(row) => (
                       <tr class={row.isYearMarker ? styles.yearMarker : ''}>
                         <td>{row.month}</td>
                         <td>{row.date}</td>
@@ -499,7 +508,8 @@ export default function LoanAmortizationTable(props: Props) {
                         <td>{row.cumPrincipal}</td>
                         <td>{row.cumInterest}</td>
                       </tr>
-                    ))}
+                      )}
+                    </For>
                   </tbody>
                   <tfoot>
                     <tr class={styles.totalsRow}>
@@ -558,7 +568,8 @@ function exportAmortizationCSV(schedule: AmortizationRow[], loanName: string) {
     r.prepayment ? r.prepayment.toFixed(2) : '0',
     r.note || '',
   ])
-  const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+  const escapeCsv = (v: string | number) => { const s = String(v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
+  const csv = [headers.map(escapeCsv).join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')

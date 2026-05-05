@@ -562,7 +562,8 @@ export default function Budgets() {
                   <span class={styles.chartLabel}>Adherence</span>
                   <span class={styles.chartLabel}>Status</span>
                 </div>
-                {forecastData()!.forecast.map((fm) => (
+                <For each={forecastData()!.forecast}>
+                  {(fm) => (
                   <div class={styles.chartRow} data-index={fm.month}>
                     <span class={styles.chartLabel}>{fm.label}</span>
                     <span class={`${styles.chartValue} ${styles.budgetVal}`}>
@@ -582,7 +583,8 @@ export default function Budgets() {
                           : 'On Track'}
                     </span>
                   </div>
-                ))}
+                )}
+                </For>
               </div>
 
               {/* Refresh Forecast Button */}
@@ -706,7 +708,7 @@ export default function Budgets() {
                         {item.status === 'warning' && <Badge status="warning">Near Limit</Badge>}
                         {item.status === 'ok' && <Badge status="ok">On Track</Badge>}
                         {item.is_fully_allocated && (
-                          <span class={styles.badgeOk}>Fully Allocated</span>
+                          <Badge status="ok">Fully Allocated</Badge>
                         )}
                       </td>
                       <td class={styles.actionsCol}>

@@ -26,7 +26,9 @@
  * Housing Component
  * Manages housing-related expenses and property information
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
+import Badge from '../components/Badge'
+import ConfirmButton from '../components/ConfirmButton'
 import styles from '../components/HousingPage.module.css'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
@@ -107,7 +109,6 @@ export default function HousingForm() {
 
   // Delete housing expense
   const deleteHousing = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this expense?')) return
     try {
       await apiDelete(`/api/housing/${id}`)
       showToast('Housing expense deleted', 'success')
@@ -201,8 +202,8 @@ export default function HousingForm() {
         </div>
       ) : (
         <div class={styles.housingList}>
-          {Array.isArray(housings()) &&
-            housings().map((housing) => (
+          <For each={housings()}>
+            {(housing) => (
               <div class={styles.housingCard}>
                 <div class={styles.housingHeader}>
                   <div class={styles.housingIcon}>{getTypeIcon(housing.type)}</div>
@@ -211,14 +212,11 @@ export default function HousingForm() {
                     <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
                   </div>
                   <div class={styles.housingActions}>
-                    <span class={`badge ${housing.autopay ? 'badge-success' : 'badge-default'}`}>
-                      {housing.autopay ? '🔄 Autopay' : 'Manual'}
-                    </span>
-                    <button
+                    {housing.autopay ? <Badge status="success">Autopay</Badge> : <Badge status="default">Manual</Badge>}
+                    <ConfirmButton
                       class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onClick={() => deleteHousing(housing.id)}
-                    >
-                      <svg
+                      onConfirm={() => deleteHousing(housing.id)}
+                      label={<svg
                         width="16"
                         height="16"
                         fill="none"
@@ -226,8 +224,8 @@ export default function HousingForm() {
                         viewBox="0 0 24 24"
                       >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      </svg>}
+                    />
                   </div>
                 </div>
                 <div class={styles.housingAmount}>
@@ -249,7 +247,8 @@ export default function HousingForm() {
                   )}
                 </div>
               </div>
-            ))}
+            )}
+          </For>
         </div>
       )}
 

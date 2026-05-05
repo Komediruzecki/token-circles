@@ -18,7 +18,7 @@
  * Emergency Fund Tracker Component
  * Calculates monthly expenses and compares against savings account balances
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import { formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../utils/api'
@@ -155,8 +155,9 @@ export default function EmergencyFundCalculator() {
 
             {showDetails() && (
               <div class={styles.coverageGrid}>
-                {coverage().map((c) => (
-                  <div class={`coverage-item ${c.status}`}>
+                <For each={coverage()}>
+                  {(c) => (
+                  <div class={`${styles.coverageItem} ${styles[c.status] || ''}`}>
                     <div class={styles.coverageTitle}>{c.label} Fund</div>
                     <div class={styles.coverageBars}>
                       <div class={styles.progressBar}>
@@ -172,7 +173,8 @@ export default function EmergencyFundCalculator() {
                     </div>
                     <div class={styles.coverageStatus}>{c.status}</div>
                   </div>
-                ))}
+                )}
+                </For>
               </div>
             )}
           </div>

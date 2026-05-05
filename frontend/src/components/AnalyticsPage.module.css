@@ -121,6 +121,9 @@
 .analytics-page .stat-value.positive {
   color: var(--income);
 }
+.analytics-page .stat-value.warning {
+  color: var(--warning);
+}
 .analytics-page .stat-value.negative {
   color: var(--expense);
 }
@@ -502,6 +505,10 @@
 
 .stat-value.positive {
   color: var(--income);
+}
+
+.stat-value.warning {
+  color: var(--warning);
 }
 
 .stat-value.negative {

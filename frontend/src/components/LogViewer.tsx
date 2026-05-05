@@ -6,6 +6,7 @@
 
 import { createSignal, For, onMount,Show } from 'solid-js'
 import {  logger  } from '../core/logger'
+import ConfirmButton from './ConfirmButton'
 import css from './LogViewer.module.css'
 import type {LogEntry, LogLevel} from '../core/logger';
 
@@ -33,10 +34,8 @@ export function LogViewer() {
   }
 
   const clearLogs = () => {
-    if (confirm('Are you sure you want to clear all logs?')) {
-      logger.clear()
-      refreshLogs()
-    }
+    logger.clear()
+    refreshLogs()
   }
 
   const toggleDebugMode = () => {
@@ -118,13 +117,17 @@ export function LogViewer() {
             </svg>
             Export
           </button>
-          <button class={css.btn} onClick={clearLogs}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            Clear
-          </button>
+          <ConfirmButton
+            class={css.btn}
+            onConfirm={clearLogs}
+            label={<>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              Clear
+            </>}
+          />
           <button class={css.btn} onClick={toggleDebugMode} style={{ color: debugMode() ? 'var(--primary)' : undefined }}>
             {debugMode() ? 'Debug: ON' : 'Debug: OFF'}
           </button>

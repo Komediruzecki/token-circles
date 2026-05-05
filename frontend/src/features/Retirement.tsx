@@ -30,8 +30,10 @@
  * Retirement Component
  * Tracks retirement savings, calculates projected growth, and sets retirement goals
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
+import Badge from '../components/Badge'
 import Chart from '../components/Chart'
+import ConfirmButton from '../components/ConfirmButton'
 import styles from '../components/RetirementPage.module.css'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
@@ -177,7 +179,6 @@ export default function Retirement() {
 
   // Delete goal
   const deleteGoal = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this retirement goal?')) return
     try {
       await apiDelete(`/api/retirement-goals/${id}`)
       showToast('Goal deleted successfully', 'success')
@@ -264,12 +265,12 @@ export default function Retirement() {
     return formatCurrency(amount)
   }
 
-  // Get retirement age status
-  const getRetirementStatus = (age: number): string => {
-    if (age < 40) return 'badge-default'
-    if (age < 50) return 'badge-warning'
-    if (age < 60) return 'badge-info'
-    return 'badge-success'
+  // Get retirement age badge status
+  const getRetirementBadgeStatus = (age: number): 'default' | 'warning' | 'info' | 'success' => {
+    if (age < 40) return 'default'
+    if (age < 50) return 'warning'
+    if (age < 60) return 'info'
+    return 'success'
   }
 
   onMount(() => {
@@ -339,7 +340,7 @@ export default function Retirement() {
               </div>
               <div class={styles.detailRow}>
                 <span class={styles.detailLabel}>Remaining to Save</span>
-                <span class={`${styles.detailValue} ${remainingToSave() > 0 ? 'positive' : ''}`}>
+                <span class={`${styles.detailValue} ${remainingToSave() > 0 ? styles.positive : ''}`}>
                   {formatAmount(remainingToSave())}
                 </span>
               </div>
@@ -363,8 +364,8 @@ export default function Retirement() {
           </div>
         ) : (
           <div data-test-id="retirement-goals-grid" class={styles.goalsGrid}>
-            {Array.isArray(goals()) &&
-              goals().map((goal) => {
+            <For each={goals()}>
+              {(goal) => {
                 const progress = getProgress(goal)
                 return (
                   <div data-test-id="retirement-goal-card" class={styles.goalCard}>
@@ -372,9 +373,9 @@ export default function Retirement() {
                       <div data-test-id="retirement-goal-icon" class={styles.goalIcon}>🎯</div>
                       <div class={styles.goalInfo}>
                         <h3 data-test-id="retirement-goal-name" class={styles.goalName}>{goal.name}</h3>
-                        <span class={`badge ${getRetirementStatus(goal.retirement_age)}`}>
+                        <Badge status={getRetirementBadgeStatus(goal.retirement_age)}>
                           Retire at {formatAge(goal.retirement_age)}
-                        </span>
+                        </Badge>
                       </div>
                       <div class={styles.goalActions}>
                         <button
@@ -394,12 +395,10 @@ export default function Retirement() {
                             <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button
-                          data-test-id="retirement-goal-delete-btn"
+                        <ConfirmButton
                           class={`${styles.btnSm} ${styles.btnGhost}`}
-                          onClick={() => deleteGoal(goal.id)}
-                        >
-                          <svg
+                          onConfirm={() => deleteGoal(goal.id)}
+                          label={<svg
                             width="16"
                             height="16"
                             fill="none"
@@ -407,8 +406,8 @@ export default function Retirement() {
                             viewBox="0 0 24 24"
                           >
                             <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                          </svg>}
+                        />
                       </div>
                     </div>
                     <div data-test-id="retirement-goal-balance" class={styles.goalBalance}>
@@ -444,7 +443,8 @@ export default function Retirement() {
                     </div>
                   </div>
                 )
-              })}
+              }}
+            </For>
           </div>
         )}
       </div>

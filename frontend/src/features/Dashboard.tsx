@@ -204,7 +204,7 @@ export default function Dashboard() {
                 {formatCurrency(metrics()!.balance)}
               </div>
               <div class={styles.metricSubtext}>Total available</div>
-              {metrics() && (
+              {metrics()!.momBalanceDelta != null && (
                 <div class={styles.metricDelta}>
                   <span class={metrics()!.momBalanceDelta! > 0 ? styles.positive : metrics()!.momBalanceDelta! < 0 ? styles.negative : styles.neutral}>
                     {metrics()!.momBalanceDelta! > 0 ? '↑' : metrics()!.momBalanceDelta! < 0 ? '↓' : '→'}
@@ -220,7 +220,7 @@ export default function Dashboard() {
                 {formatCurrency(metrics()!.totalIncome)}
               </div>
               <div class={styles.metricSubtext}>For this period</div>
-              {metrics() && (
+              {metrics()!.momIncomeDelta != null && (
                 <div class={styles.metricDelta}>
                   <span class={metrics()!.momIncomeDelta! > 0 ? styles.positive : metrics()!.momIncomeDelta! < 0 ? styles.negative : styles.neutral}>
                     {metrics()!.momIncomeDelta! > 0 ? '↑' : metrics()!.momIncomeDelta! < 0 ? '↓' : '→'}
@@ -236,7 +236,7 @@ export default function Dashboard() {
                 {formatCurrency(metrics()!.totalExpenses)}
               </div>
               <div class={styles.metricSubtext}>For this period</div>
-              {metrics() && (
+              {metrics()!.momExpenseDelta != null && (
                 <div class={styles.metricDelta}>
                   <span class={metrics()!.momExpenseDelta! > 0 ? styles.positive : metrics()!.momExpenseDelta! < 0 ? styles.negative : styles.neutral}>
                     {metrics()!.momExpenseDelta! > 0 ? '↑' : metrics()!.momExpenseDelta! < 0 ? '↓' : '→'}

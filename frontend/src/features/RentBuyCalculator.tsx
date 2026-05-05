@@ -391,7 +391,7 @@ export default function RentBuyCalculator(props: Props) {
                   {formatCurrency(summary.rentInvestmentValue, currency)}
                 </span>
               </div>
-              <div class={`${styles.summaryRow} highlight`}>
+              <div class={`${styles.summaryRow} ${styles.highlight}`}>
                 <span>Net Cost</span>
                 <span class={styles.summaryValue}>
                   {formatCurrency(summary.rentNetCost, currency)}
@@ -412,18 +412,18 @@ export default function RentBuyCalculator(props: Props) {
                   {formatCurrency(summary.buyEquity, currency)}
                 </span>
               </div>
-              <div class={`${styles.summaryRow} highlight`}>
+              <div class={`${styles.summaryRow} ${styles.highlight}`}>
                 <span>Net Cost</span>
                 <span class={styles.summaryValue}>
                   {formatCurrency(summary.buyNetCost, currency)}
                 </span>
               </div>
             </div>
-            <div class={`${styles.summaryCard} verdict`}>
+            <div class={`${styles.summaryCard} ${styles.verdict}`}>
               <div class={styles.summaryTitle}>Comparison</div>
               <div class={styles.summaryRow}>
                 <span>Winner</span>
-                <span class={`summaryValue ${summary.winner === 'buy' ? 'success' : 'warning'}`}>
+                <span class={`${styles.summaryValue} ${summary.winner === 'buy' ? styles.success : styles.warning}`}>
                   {summary.winner === 'buy' ? 'Buying' : 'Renting'}
                 </span>
               </div>

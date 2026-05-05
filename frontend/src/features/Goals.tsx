@@ -30,8 +30,9 @@
  * Goals Component
  * Handles savings goals with progress tracking
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
+import ConfirmButton from '../components/ConfirmButton'
 import styles from '../components/GoalsPage.module.css'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
@@ -116,7 +117,6 @@ export default function Goals() {
 
   // Delete goal
   const deleteGoal = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this goal?')) return
     try {
       await apiDelete(`/api/savings-goals/${id}`)
       showToast('Goal deleted successfully', 'success')
@@ -195,7 +195,8 @@ export default function Goals() {
         </div>
       ) : (
         <div data-test-id="goals-grid" class={styles.goalsGrid}>
-          {goals().map((goal) => {
+          <For each={goals()}>
+            {(goal) => {
             const progress = getProgress(goal)
             return (
               <div data-test-id="goal-card" class={styles.goalCard}>
@@ -225,8 +226,10 @@ export default function Goals() {
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button data-test-id="goal-delete-btn" class={styles.btnSm} onClick={() => deleteGoal(goal.id)}>
-                      <svg
+                    <ConfirmButton
+                      class={styles.btnSm}
+                      onConfirm={() => deleteGoal(goal.id)}
+                      label={<svg
                         width="16"
                         height="16"
                         fill="none"
@@ -234,8 +237,8 @@ export default function Goals() {
                         viewBox="0 0 24 24"
                       >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      </svg>}
+                    />
                   </div>
                 </div>
                 <div class={styles.goalProgress}>
@@ -251,7 +254,8 @@ export default function Goals() {
                 </div>
               </div>
             )
-          })}
+          }}
+        </For>
         </div>
       )}
 

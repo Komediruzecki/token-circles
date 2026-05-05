@@ -499,9 +499,9 @@ export default function Transactions() {
 
       {/* Transaction Modal */}
       <div
-        class={`modal-overlay ${isTransactionModalOpen() ? 'show' : ''}`}
+        class={`${styles.modalOverlay} ${isTransactionModalOpen() ? styles.show : ''}`}
         onclick={(e) => {
-          if ((e.target as HTMLElement).classList.contains('modal-overlay')) {
+          if ((e.target as HTMLElement).classList.contains(styles.modalOverlay)) {
             _closeModals()
           }
         }}
@@ -525,21 +525,21 @@ export default function Transactions() {
                 <div class={styles.typeSelector}>
                   <button
                     type="button"
-                    class={`expense ${type() === 'expense' ? 'active' : ''}`}
+                    class={`${styles.expense} ${type() === 'expense' ? styles.active : ''}`}
                     onClick={() => setType('expense')}
                   >
                     Expense
                   </button>
                   <button
                     type="button"
-                    class={`income ${type() === 'income' ? 'active' : ''}`}
+                    class={`${styles.income} ${type() === 'income' ? styles.active : ''}`}
                     onClick={() => setType('income')}
                   >
                     Income
                   </button>
                   <button
                     type="button"
-                    class={`transfer ${type() === 'transfer' ? 'active' : ''}`}
+                    class={`${styles.transfer} ${type() === 'transfer' ? styles.active : ''}`}
                     onClick={() => setType('transfer')}
                   >
                     Transfer
@@ -841,10 +841,10 @@ export default function Transactions() {
       {/* Receipt View Modal */}
       {isReceiptModalOpen() && selectedReceipt() && (
         <div
-          class={`modal-overlay show ${styles.receiptModal}`}
+          class={`${styles.modalOverlay} ${styles.show} ${styles.receiptModal}`}
           id="receipt-modal"
           onclick={(e) => {
-            if ((e.target as HTMLElement).classList.contains('modal-overlay')) {
+            if ((e.target as HTMLElement).classList.contains(styles.modalOverlay)) {
               closeReceiptModal()
             }
           }}

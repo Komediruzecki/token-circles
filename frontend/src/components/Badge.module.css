@@ -42,3 +42,23 @@
   background: var(--badge-transfer-bg);
   color: var(--badge-transfer-text);
 }
+
+.badgePrimary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.badgeSuccess {
+  background: var(--success);
+  color: #fff;
+}
+
+.badgeInfo {
+  background: var(--info, #3b82f6);
+  color: #fff;
+}
+
+.badgeDefault {
+  background: var(--bg);
+  color: var(--text-secondary);
+}

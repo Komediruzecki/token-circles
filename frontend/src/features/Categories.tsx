@@ -30,8 +30,9 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import styles from '../components/CategoriesPage.module.css'
+import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 
@@ -58,6 +59,7 @@ export default function Categories() {
   const [showBudgetModal, setShowBudgetModal] = createSignal(false)
   const [editingCategory, setEditingCategory] = createSignal<Category | null>(null)
   const [selectedCategory, setSelectedCategory] = createSignal<Category | null>(null)
+  const [budgetAmount, setBudgetAmount] = createSignal('')
   const [formData, setFormData] = createSignal({
     name: '',
     type: 'expense' as 'expense' | 'income',
@@ -109,7 +111,6 @@ export default function Categories() {
 
   // Delete category
   const deleteCategory = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this category?')) return
     try {
       await apiDelete(`/api/categories/${id}`)
       showToast('Category deleted successfully', 'success')
@@ -146,6 +147,7 @@ export default function Categories() {
   // Open budget modal
   const openBudgetModal = (category: Category) => {
     setSelectedCategory(category)
+    setBudgetAmount('')
     setShowBudgetModal(true)
   }
 
@@ -234,7 +236,8 @@ export default function Categories() {
         </div>
       ) : (
         <div class={styles.categoriesGrid}>
-          {categories().map((category) => {
+          <For each={categories()}>
+            {(category) => {
             const iconClass = getIconClass(category.color)
             const spent = (category as ExpenseCategory).spent || 0
             const budget = (category as ExpenseCategory).budget || 0
@@ -284,11 +287,10 @@ export default function Categories() {
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button
+                    <ConfirmButton
                       class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onClick={() => deleteCategory(category.id)}
-                    >
-                      <svg
+                      onConfirm={() => deleteCategory(category.id)}
+                      label={<svg
                         width="16"
                         height="16"
                         fill="none"
@@ -296,8 +298,8 @@ export default function Categories() {
                         viewBox="0 0 24 24"
                       >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      </svg>}
+                    />
                   </div>
                 </div>
                 <div class={styles.categorySpending}>
@@ -352,7 +354,8 @@ export default function Categories() {
                 </div>
               </div>
             )
-          })}
+          }}
+        </For>
         </div>
       )}
 
@@ -503,7 +506,8 @@ export default function Categories() {
                   step="0.01"
                   class={styles.formControl}
                   placeholder="500.00"
-                  id="budget-input"
+                  value={budgetAmount()}
+                  onInput={(e) => setBudgetAmount((e.target as HTMLInputElement).value)}
                 />
               </div>
             </div>
@@ -514,8 +518,7 @@ export default function Categories() {
               <button
                 class={styles.btnPrimary}
                 onClick={() => {
-                  const input = document.getElementById('budget-input') as HTMLInputElement
-                  updateBudget(parseFloat(input?.value) || 0)
+                  updateBudget(parseFloat(budgetAmount()) || 0)
                 }}
               >
                 Save Budget

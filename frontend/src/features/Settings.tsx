@@ -27,6 +27,7 @@
  * Application configuration and preferences with storage switching
  */
 import { createEffect, createSignal, onMount, Show } from 'solid-js'
+import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
 import { setStorageMode } from '../core/storage/storageFactory'
@@ -118,6 +119,8 @@ export default function Settings() {
     }
   }
 
+  const [csvExporting, setCsvExporting] = createSignal<string | null>(null)
+
   // Data Management
   const handleExport = async () => {
     try {
@@ -136,26 +139,39 @@ export default function Settings() {
       a.download = `finance-export-${new Date().toISOString().split('T')[0]}.json`
       a.click()
       URL.revokeObjectURL(url)
-      alert('Data exported successfully')
     } catch {
       alert('Failed to export data')
     }
   }
 
-  const handleReset = async () => {
-    if (!confirm('Are you sure you want to reset all data? This cannot be undone.')) return
-    if (!confirm('This will permanently delete all your data. Continue?')) return
-
+  const handleCsvExport = async (type: string) => {
+    setCsvExporting(type)
     try {
-      await fetch('/api/clear-all', {
-        method: 'DELETE',
+      const response = await fetch(`/api/export/${type}?format=csv`, {
+        method: 'GET',
         credentials: 'include',
       })
-      alert('All data has been reset')
-      window.location.reload()
+      if (!response.ok) throw new Error('Export failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${type}-${new Date().toISOString().split('T')[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch {
-      alert('Failed to reset data')
+      alert(`Failed to export ${type}`)
+    } finally {
+      setCsvExporting(null)
     }
+  }
+
+  const handleReset = async () => {
+    await fetch('/api/clear-all', {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    window.location.reload()
   }
 
   return (
@@ -213,15 +229,29 @@ export default function Settings() {
             <div class={styles.card} style="margin-top: 24px;">
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Data Management</div>
-                <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px;">
                   <button class={styles.btnSecondary} onclick={handleExport}>
-                    Export Data (JSON)
+                    Export All (JSON)
                   </button>
-                  <button class={styles.btnDanger} onclick={handleReset}>
-                    Reset All Data
-                  </button>
+                  {[
+                    { type: 'transactions', label: 'Transactions CSV' },
+                    { type: 'categories', label: 'Categories CSV' },
+                    { type: 'budgets', label: 'Budgets CSV' },
+                    { type: 'accounts', label: 'Accounts CSV' },
+                    { type: 'loans', label: 'Loans CSV' },
+                    { type: 'recurring', label: 'Recurring CSV' },
+                  ].map(({ type, label }) => (
+                    <button
+                      class={styles.btnSecondary}
+                      onclick={() => handleCsvExport(type)}
+                      disabled={csvExporting() === type}
+                    >
+                      {csvExporting() === type ? 'Exporting...' : label}
+                    </button>
+                  ))}
                 </div>
               </div>
+              <DangerZone onReset={handleReset} />
             </div>
 
             <div class={styles.card} style="margin-top: 24px;">

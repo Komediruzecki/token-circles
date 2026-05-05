@@ -6,6 +6,7 @@
 import { createSignal, For } from 'solid-js'
 import { toast } from '../core/api.js'
 import { setStorageMode } from '../core/storage/storageFactory.js'
+import ConfirmButton from './ConfirmButton.js'
 import { Modal } from './Modal.js'
 import styles from './SettingsDialog.module.css'
 import type { Component } from 'solid-js'
@@ -150,14 +151,6 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
 
   // Reset data
   const _handleReset = async () => {
-    if (!confirm('Are you sure you want to reset all data? This cannot be undone.')) {
-      return
-    }
-
-    if (!confirm('This will permanently delete all your data. Continue?')) {
-      return
-    }
-
     try {
       await fetch('/api/clear-all', {
         method: 'DELETE',
@@ -364,14 +357,12 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
           {/* Reset */}
           <div class={styles.settingGroup}>
             <label class={styles.settingLabel}>Danger Zone</label>
-            <button
+            <ConfirmButton
               class={styles.btnDanger}
-              onClick={() => {
-                void _handleReset()
-              }}
-            >
-              Reset All Data
-            </button>
+              onConfirm={() => { void _handleReset() }}
+              confirmLabel="This will permanently delete all your data. Continue?"
+              label="Reset All Data"
+            />
           </div>
         </div>
       </Modal>

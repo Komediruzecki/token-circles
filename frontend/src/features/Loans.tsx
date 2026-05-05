@@ -30,8 +30,10 @@
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
+import Badge from '../components/Badge'
 import Chart from '../components/Chart'
+import ConfirmButton from '../components/ConfirmButton'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
 import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
@@ -146,7 +148,6 @@ export default function Loans() {
 
   // Delete loan
   const deleteLoan = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this loan?')) return
     try {
       await apiDelete(`/api/loans/${id}`)
       showToast('Loan deleted successfully', 'success')
@@ -227,14 +228,14 @@ export default function Loans() {
     return formatCurrency(amount)
   }
 
-  // Get status badge
-  const getStatusBadge = (status: string): string => {
-    const badges: Record<string, string> = {
-      active: 'badge-primary',
-      paid: 'badge-success',
-      deferred: 'badge-warning',
+  // Get status for Badge component
+  const getLoanBadgeStatus = (status: string): 'primary' | 'success' | 'warning' | 'default' => {
+    const statusMap: Record<string, 'primary' | 'success' | 'warning' | 'default'> = {
+      active: 'primary',
+      paid: 'success',
+      deferred: 'warning',
     }
-    return badges[status] || 'badge-default'
+    return statusMap[status] || 'default'
   }
 
   // Get status label
@@ -304,22 +305,23 @@ export default function Loans() {
         </div>
       ) : (
         <div class={styles.loansGrid}>
-          {loans().map((loan) => {
-            const remaining = calculateRemaining(loan)
-            const monthly =
-              loan.monthly_payment ||
-              calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
-            const progress = getProgress(loan)
+          <For each={loans()}>
+            {(loan) => {
+              const remaining = calculateRemaining(loan)
+              const monthly =
+                loan.monthly_payment ||
+                calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
+              const progress = getProgress(loan)
 
-            return (
+              return (
               <div class={styles.loanCard}>
                 <div class={styles.loanHeader}>
                   <div class={styles.loanIcon}>🏦</div>
                   <div class={styles.loanInfo}>
                     <h3 class={styles.loanName}>{loan.name}</h3>
-                    <span class={`badge ${getStatusBadge(loan.status)}`}>
+                    <Badge status={getLoanBadgeStatus(loan.status)}>
                       {getStatusLabel(loan.status)}
-                    </span>
+                    </Badge>
                   </div>
                   <div class={styles.loanActions}>
                     <button
@@ -356,11 +358,10 @@ export default function Loans() {
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    <button
+                    <ConfirmButton
                       class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onClick={() => deleteLoan(loan.id)}
-                    >
-                      <svg
+                      onConfirm={() => deleteLoan(loan.id)}
+                      label={<svg
                         width="16"
                         height="16"
                         fill="none"
@@ -368,8 +369,8 @@ export default function Loans() {
                         viewBox="0 0 24 24"
                       >
                         <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      </svg>}
+                    />
                   </div>
                 </div>
                 <div class={styles.loanBalance}>
@@ -407,7 +408,8 @@ export default function Loans() {
                 </div>
               </div>
             )
-          })}
+          }}
+          </For>
         </div>
       )}
 
@@ -633,58 +635,64 @@ export default function Loans() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Rate Periods</label>
                 <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px', 'margin-bottom': '8px' }}>
-                  {formData().rate_periods.map((rp: RatePeriod, idx: number) => (
-                    <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', padding: '8px', background: 'var(--bg)', 'border-radius': '8px', 'font-size': '13px' }}>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Rate %"
-                        value={rp.rate}
-                        style={{ width: '80px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
-                        oninput={(e) => {
-                          const updated = [...formData().rate_periods]
-                          updated[idx] = { ...updated[idx], rate: parseFloat(e.target.value) || 0 }
-                          setFormData({ ...formData(), rate_periods: updated })
-                        }}
-                      />
-                      <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>from month</span>
-                      <input
-                        type="number"
-                        placeholder="Start"
-                        value={rp.start_month}
-                        style={{ width: '60px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
-                        oninput={(e) => {
-                          const updated = [...formData().rate_periods]
-                          updated[idx] = { ...updated[idx], start_month: parseInt(e.target.value) || 0 }
-                          setFormData({ ...formData(), rate_periods: updated })
-                        }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="End (opt)"
-                        value={rp.end_month ?? ''}
-                        style={{ width: '70px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
-                        oninput={(e) => {
-                          const val = e.target.value
-                          const updated = [...formData().rate_periods]
-                          updated[idx] = { ...updated[idx], end_month: val ? parseInt(val) : null }
-                          setFormData({ ...formData(), rate_periods: updated })
-                        }}
-                      />
-                      <button
-                        type="button"
-                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px', 'border-radius': '4px' }}
-                        onClick={() => {
-                          const updated = formData().rate_periods.filter((_: RatePeriod, i: number) => i !== idx)
-                          setFormData({ ...formData(), rate_periods: updated })
-                        }}
-                      >
-                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
+                  <For each={formData().rate_periods}>
+                    {(rp: RatePeriod, idx) => (
+                      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', padding: '8px', background: 'var(--bg)', 'border-radius': '8px', 'font-size': '13px' }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Rate %"
+                          value={rp.rate}
+                          style={{ width: '80px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
+                          oninput={(e) => {
+                            const i = idx()
+                            const updated = [...formData().rate_periods]
+                            updated[i] = { ...updated[i], rate: parseFloat(e.target.value) || 0 }
+                            setFormData({ ...formData(), rate_periods: updated })
+                          }}
+                        />
+                        <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>from month</span>
+                        <input
+                          type="number"
+                          placeholder="Start"
+                          value={rp.start_month}
+                          style={{ width: '60px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
+                          oninput={(e) => {
+                            const i = idx()
+                            const updated = [...formData().rate_periods]
+                            updated[i] = { ...updated[i], start_month: parseInt(e.target.value) || 0 }
+                            setFormData({ ...formData(), rate_periods: updated })
+                          }}
+                        />
+                        <input
+                          type="number"
+                          placeholder="End (opt)"
+                          value={rp.end_month ?? ''}
+                          style={{ width: '70px', padding: '6px', border: '1px solid var(--border)', 'border-radius': '4px', background: 'var(--bg)', color: 'var(--text)', 'font-size': '13px' }}
+                          oninput={(e) => {
+                            const i = idx()
+                            const val = e.target.value
+                            const updated = [...formData().rate_periods]
+                            updated[i] = { ...updated[i], end_month: val ? parseInt(val) : null }
+                            setFormData({ ...formData(), rate_periods: updated })
+                          }}
+                        />
+                        <button
+                          type="button"
+                          style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px', 'border-radius': '4px' }}
+                          onClick={() => {
+                            const i = idx()
+                            const updated = formData().rate_periods.filter((_: RatePeriod, j: number) => j !== i)
+                            setFormData({ ...formData(), rate_periods: updated })
+                          }}
+                        >
+                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </For>
                 </div>
                 <button
                   type="button"

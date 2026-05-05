@@ -22,7 +22,7 @@
  * Compound Interest Projector Component
  * Calculates investment growth with scenario comparisons
  */
-import { createSignal } from 'solid-js'
+import { createSignal, For } from 'solid-js'
 import Chart from '../components/Chart'
 import { formatCurrency } from '../core/api'
 import { apiPost, showToast } from '../utils/api'
@@ -334,7 +334,8 @@ export default function CompoundInterestCalculator() {
           <div class={styles.scenariosSection}>
             <h3 class={styles.scenariosTitle}>Scenario Details</h3>
             <div class={styles.scenariosGrid}>
-              {summary()?.scenarios.map((s) => (
+              <For each={summary()?.scenarios || []}>
+                {(s) => (
                 <div class={styles.scenarioCard} style={`--color: ${s.color || '#6366f1'};` as any}>
                   <div class={styles.scenarioName}>{s.name}</div>
                   <div class={styles.scenarioStats}>
@@ -354,7 +355,8 @@ export default function CompoundInterestCalculator() {
                     </div>
                   </div>
                 </div>
-              ))}
+              )}
+              </For>
             </div>
           </div>
         </>

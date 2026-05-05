@@ -5,10 +5,12 @@
 import { createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import layoutStyles from './components/Layout.module.css'
+import LoginModal from './components/LoginModal'
 import profileStyles from './components/Profile.module.css'
+import ProfileModal from './components/ProfileModal'
 import QuickAddModal from './components/QuickAddModal'
 import { api, toast } from './core/api.js'
-import { authLogin, authLogout, handlers, receipts, transactions } from './core/handlers.js'
+import { authLogout, handlers, receipts, transactions } from './core/handlers.js'
 import { logger } from './core/logger.js'
 import { pages as allPages } from './router.tsx'
 import type { PageName } from './router.tsx'
@@ -18,7 +20,6 @@ import type { Category } from './types/models'
 window.receipts = receipts
 window.transactions = transactions
 window.handlers = handlers as any
-window.handlers.authLogin = () => authLogin()
 window.handlers.authLogout = () => authLogout()
 
 export function App() {
@@ -28,7 +29,10 @@ export function App() {
   const [profiles, setProfiles] = createSignal<any[]>([])
   const [currentProfile, setCurrentProfile] = createSignal<any>(null)
   const [showDropdown, setShowDropdown] = createSignal(false)
+  const [isLoginModalOpen, setIsLoginModalOpen] = createSignal(false)
+  const [isProfileModalOpen, setIsProfileModalOpen] = createSignal(false)
   const [isQuickAddOpen, setIsQuickAddOpen] = createSignal(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false)
   const [quickAddCategories, setQuickAddCategories] = createSignal<Category[]>([])
 
   const loadProfiles = async (autoSelect = false) => {
@@ -70,26 +74,25 @@ export function App() {
     setShowDropdown((prev) => !prev)
   }
 
-  const handleLogin = async () => {
-    try {
-      await authLogin()
-      await loadProfiles()
-      // Select the first available profile after login
-      if (profiles().length > 0) {
-        const savedProfileId = localStorage.getItem('currentProfileId')
-        const selectedProfile = profiles().find(
-          (p) => p.id === (savedProfileId ? parseInt(savedProfileId) : null) || p.id === 1
-        )
-        if (selectedProfile) {
-          setCurrentProfile(selectedProfile)
-        } else {
-          setCurrentProfile(profiles()[0])
-        }
+  const handleLogin = () => {
+    setIsLoginModalOpen(true)
+  }
+
+  const handleLoginSuccess = async () => {
+    setIsLoginModalOpen(false)
+    await loadProfiles()
+    if (profiles().length > 0) {
+      const savedProfileId = localStorage.getItem('currentProfileId')
+      const selectedProfile = profiles().find(
+        (p) => p.id === (savedProfileId ? parseInt(savedProfileId) : null) || p.id === 1
+      )
+      if (selectedProfile) {
+        setCurrentProfile(selectedProfile)
+      } else {
+        setCurrentProfile(profiles()[0])
       }
-      setShowDropdown(false)
-    } catch {
-      console.error('Login failed')
     }
+    setShowDropdown(false)
   }
 
   const handleLogout = async () => {
@@ -293,7 +296,7 @@ export function App() {
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <div class={layoutStyles.sidebar}>
+      <div class={layoutStyles.sidebar} classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}>
         <div class={layoutStyles.sidebarLogo}>
           <h1>
             Finance<span>.</span>
@@ -339,12 +342,7 @@ export function App() {
                 </div>
               )}
               
-              <div class={profileStyles.profileDropdownItem} onClick={() => {
-                const name = prompt('Enter new profile name:');
-                if (name && name.trim()) {
-                  api.createProfile(name).then(() => loadProfiles(true));
-                }
-              }}>
+              <div class={profileStyles.profileDropdownItem} onClick={() => setIsProfileModalOpen(true)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{ 'margin-right': '8px' }}>
                   <path d="M12 4v16m8-8H4" />
                 </svg>
@@ -444,6 +442,21 @@ export function App() {
           ))}
         </nav>
       </div>
+
+      <Show when={sidebarCollapsed()}>
+        <div class={layoutStyles['sidebar-overlay']} onClick={() => setSidebarCollapsed(false)} />
+      </Show>
+
+      <button
+        class={layoutStyles['mobile-toggle']}
+        onClick={() => setSidebarCollapsed((v) => !v)}
+        aria-label="Toggle sidebar"
+      >
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d={sidebarCollapsed() ? 'M4 6h16M4 12h16M4 18h16' : 'M6 18L18 6M6 6l12 12'} />
+        </svg>
+      </button>
+
       <main class={layoutStyles.main}>
         {Object.entries(allPages).map(([name, page]) => (
           <Show when={activePage() === name}>
@@ -451,6 +464,23 @@ export function App() {
           </Show>
         ))}
       </main>
+
+      <Show when={isLoginModalOpen()}>
+        <LoginModal
+          onClose={() => setIsLoginModalOpen(false)}
+          onSuccess={handleLoginSuccess}
+        />
+      </Show>
+
+      <Show when={isProfileModalOpen()}>
+        <ProfileModal
+          onClose={() => setIsProfileModalOpen(false)}
+          onSuccess={() => {
+            setIsProfileModalOpen(false)
+            loadProfiles(true)
+          }}
+        />
+      </Show>
 
       <QuickAddModal
         isOpen={isQuickAddOpen}

@@ -379,3 +379,18 @@
   width: 100%;
   justify-content: flex-start;
 }
+
+/* modal overlay */
+.modalOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalOverlay.show {
+  display: flex;
+}

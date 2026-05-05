@@ -7,7 +7,7 @@ import styles from './Badge.module.css'
 import type { JSX } from 'solid-js'
 
 interface BadgeProps {
-  status?: 'ok' | 'warning' | 'over' | 'income' | 'expense' | 'transfer' | 'default'
+  status?: 'ok' | 'warning' | 'over' | 'income' | 'expense' | 'transfer' | 'default' | 'primary' | 'success' | 'info'
   children: JSX.Element
   class?: string
 }
@@ -19,6 +19,10 @@ const statusClassMap: Record<string, string> = {
   income: styles['badge-income'],
   expense: styles['badge-expense'],
   transfer: styles['badge-transfer'],
+  primary: styles.badgePrimary,
+  success: styles.badgeSuccess,
+  info: styles.badgeInfo,
+  default: styles.badgeDefault,
 }
 
 export default function Badge(props: BadgeProps) {

@@ -31,8 +31,10 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import styles from '../components/AccountsPage.module.css'
+import Badge from '../components/Badge'
+import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
@@ -103,12 +105,6 @@ export default function Accounts() {
 
   // Delete account
   const deleteAccount = async (id: number) => {
-    if (
-      !confirm(
-        'Are you sure you want to delete this account? All associated transactions will be lost.'
-      )
-    )
-      return
     try {
       await apiDelete(`/api/accounts/${id}`)
       showToast('Account deleted successfully', 'success')
@@ -119,15 +115,15 @@ export default function Accounts() {
     }
   }
 
-  // Get account type badge
-  const getTypeBadge = (type: string): string => {
-    const badges: Record<string, string> = {
-      checking: 'badge-primary',
-      savings: 'badge-success',
-      credit: 'badge-warning',
-      investment: 'badge-info',
+  // Get account type badge status
+  const getAccountBadgeStatus = (type: string): 'primary' | 'success' | 'warning' | 'info' | 'default' => {
+    const statusMap: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'default'> = {
+      checking: 'primary',
+      savings: 'success',
+      credit: 'warning',
+      investment: 'info',
     }
-    return badges[type] || 'badge-default'
+    return statusMap[type] || 'default'
   }
 
   // Get type icon
@@ -237,83 +233,81 @@ export default function Accounts() {
         </div>
       ) : (
         <div data-test-id="accounts-grid" class={styles.accountsGrid}>
-          {accounts().map((account) => (
-            <div data-test-id="account-card" class={styles.accountCard}>
-              <div class={styles.accountHeader}>
-                <div data-test-id="account-icon" class={styles.accountIcon}>
-                  {getTypeIcon(account.type)}
+          <For each={accounts()}>
+            {(account) => (
+              <div data-test-id="account-card" class={styles.accountCard}>
+                <div class={styles.accountHeader}>
+                  <div data-test-id="account-icon" class={styles.accountIcon}>
+                    {getTypeIcon(account.type)}
+                  </div>
+                  <div class={styles.accountInfo}>
+                    <h3 data-test-id="account-name" class={styles.accountName}>
+                      {account.name}
+                    </h3>
+                    <p data-test-id="account-bank" class={styles.accountBank}>
+                      {account.bank_name || 'No bank listed'}
+                    </p>
+                  </div>
+                  <div class={styles.accountActions}>
+                    <Badge status={getAccountBadgeStatus(account.type)}>
+                      {account.type}
+                    </Badge>
+                    <ConfirmButton
+                      class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                      onConfirm={() => deleteAccount(account.id)}
+                      confirmLabel="Delete? This will remove all related transactions."
+                      label={<svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>}
+                    />
+                  </div>
                 </div>
-                <div class={styles.accountInfo}>
-                  <h3 data-test-id="account-name" class={styles.accountName}>
-                    {account.name}
-                  </h3>
-                  <p data-test-id="account-bank" class={styles.accountBank}>
-                    {account.bank_name || 'No bank listed'}
-                  </p>
+                <div data-test-id="current-balance-card" class={styles.accountBalance}>
+                  <div class={styles.balanceLabel}>Current Balance</div>
+                  <div data-test-id="account-balance" class={styles.balanceAmount}>
+                    {formatAmount(account.balance)}
+                  </div>
                 </div>
-                <div class={styles.accountActions}>
-                  <span
-                    data-test-id="account-type"
-                    class={`${styles.badge} ${getTypeBadge(account.type)}`}
-                  >
-                    {account.type}
-                  </span>
-                  <button
-                    data-test-id="account-delete-btn"
-                    class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                    onClick={() => deleteAccount(account.id)}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div data-test-id="current-balance-card" class={styles.accountBalance}>
-                <div class={styles.balanceLabel}>Current Balance</div>
-                <div data-test-id="account-balance" class={styles.balanceAmount}>
-                  {formatAmount(account.balance)}
-                </div>
-              </div>
-              <div data-test-id="activity-section" class={styles.accountActivity}>
-                <div class={styles.activityHeader}>
-                  <span class={styles.activityLabel}>Recent Activity</span>
-                  <a href="#transactions" class={styles.btnLink}>
-                    View All →
-                  </a>
-                </div>
-                <div data-test-id="activity-list" class={styles.activityList}>
-                  {getAccountTransactions(account.id)
-                    .slice(0, 3)
-                    .map((tx: any) => (
-                      <div data-test-id="activity-item" class={styles.activityItem}>
-                        <div data-test-id="activity-desc" class={styles.activityContent}>
-                          <div data-test-id="activity-desc" class={styles.activityDesc}>
-                            {tx.description}
+                <div data-test-id="activity-section" class={styles.accountActivity}>
+                  <div class={styles.activityHeader}>
+                    <span class={styles.activityLabel}>Recent Activity</span>
+                    <a href="#transactions" class={styles.btnLink}>
+                      View All →
+                    </a>
+                  </div>
+                  <div data-test-id="activity-list" class={styles.activityList}>
+                    <For each={getAccountTransactions(account.id).slice(0, 3)}>
+                      {(tx: any) => (
+                        <div data-test-id="activity-item" class={styles.activityItem}>
+                          <div data-test-id="activity-desc" class={styles.activityContent}>
+                            <div data-test-id="activity-desc" class={styles.activityDesc}>
+                              {tx.description}
+                            </div>
+                            <div data-test-id="activity-date" class={styles.activityDate}>
+                              {new Date(tx.date).toLocaleDateString()}
+                            </div>
                           </div>
-                          <div data-test-id="activity-date" class={styles.activityDate}>
-                            {new Date(tx.date).toLocaleDateString()}
+                          <div
+                            data-test-id="activity-amount"
+                            class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                          >
+                            {tx.type === 'expense' ? '-' : '+'}
+                            {formatAmount(tx.amount)}
                           </div>
                         </div>
-                        <div
-                          data-test-id="activity-amount"
-                          class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
-                        >
-                          {tx.type === 'expense' ? '-' : '+'}
-                          {formatAmount(tx.amount)}
-                        </div>
-                      </div>
-                    ))}
+                      )}
+                    </For>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )}
+          </For>
         </div>
       )}
 
