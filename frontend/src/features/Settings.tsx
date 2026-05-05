@@ -32,6 +32,106 @@ import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
 import { setStorageMode } from '../core/storage/storageFactory'
 
+function Reports() {
+  const currentYear = new Date().getFullYear()
+  const [reportYear, setReportYear] = createSignal(currentYear)
+  const [reportMonth, setReportMonth] = createSignal(new Date().getMonth() + 1)
+  const [reportType, setReportType] = createSignal<'monthly' | 'tax' | 'pl'>('monthly')
+  const [reportLoading, setReportLoading] = createSignal<string | null>(null)
+
+  const downloadReport = async (endpoint: string, filename: string) => {
+    setReportLoading(filename)
+    try {
+      const res = await fetch(endpoint, { credentials: 'include' })
+      if (!res.ok) throw new Error('Report generation failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Failed to generate report')
+    } finally {
+      setReportLoading(null)
+    }
+  }
+
+  const handleGenerate = () => {
+    const y = reportYear()
+    const m = String(reportMonth()).padStart(2, '0')
+
+    if (reportType() === 'monthly') {
+      downloadReport(
+        `/api/reports/monthly-pdf?year=${y}&month=${m}`,
+        `report-${y}-${m}.pdf`
+      )
+    } else if (reportType() === 'tax') {
+      downloadReport(`/api/reports/tax-summary-pdf?year=${y}`, `tax-summary-${y}.pdf`)
+    } else {
+      downloadReport(`/api/reports/pl-summary-pdf?year=${y}`, `pl-summary-${y}.pdf`)
+    }
+  }
+
+  return (
+    <>
+      <div class={styles.formGroup}>
+        <label class={styles.formLabel}>Report Type</label>
+        <select
+          class={styles.formControl}
+          value={reportType()}
+          onchange={(e) => setReportType(e.currentTarget.value as 'monthly' | 'tax' | 'pl')}
+          style="max-width: 250px;"
+        >
+          <option value="monthly">Monthly Financial Report</option>
+          <option value="tax">Year-End Tax Summary</option>
+          <option value="pl">Year-End Profit &amp; Loss</option>
+        </select>
+      </div>
+      <div class={styles.formGroup}>
+        <label class={styles.formLabel}>Year</label>
+        <select
+          class={styles.formControl}
+          value={reportYear()}
+          onchange={(e) => setReportYear(Number(e.currentTarget.value))}
+          style="max-width: 250px;"
+        >
+          {Array.from({ length: 5 }, (_, i) => {
+            const y = currentYear - 2 + i
+            return <option value={y}>{y}</option>
+          })}
+        </select>
+      </div>
+      {reportType() === 'monthly' && (
+        <div class={styles.formGroup}>
+          <label class={styles.formLabel}>Month</label>
+          <select
+            class={styles.formControl}
+            value={reportMonth()}
+            onchange={(e) => setReportMonth(Number(e.currentTarget.value))}
+            style="max-width: 250px;"
+          >
+            {Array.from({ length: 12 }, (_, i) => (
+              <option value={i + 1}>
+                {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <button
+        class={styles.btnPrimary}
+        onclick={handleGenerate}
+        disabled={reportLoading() !== null}
+        style="margin-top: 8px;"
+      >
+        {reportLoading() ? 'Generating...' : 'Generate PDF Report'}
+      </button>
+    </>
+  )
+}
+
 export default function Settings() {
   const [localCurrency, setLocalCurrency] = createSignal('USD')
   const [darkMode, setDarkMode] = createSignal(false)
@@ -309,6 +409,12 @@ export default function Settings() {
           </div>
 
           <div class={styles.settingsCol}>
+            <div class={styles.card}>
+              <div class={styles.settingsSection}>
+                <div class={styles.settingsSectionTitle}>Reports</div>
+                <Reports />
+              </div>
+            </div>
             <div class={styles.card}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>General</div>
