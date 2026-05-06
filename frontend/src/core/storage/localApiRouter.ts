@@ -171,12 +171,32 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/analytics$/,
     methods: ['GET'],
-    handler: stub('/api/analytics'),
+    handler: dispatch({ GET: (ctx) => h.analyticsCategoryTrends(ctx.query) }),
   },
   {
-    pattern: /^\/analytics\/(category-trends|daily-heatmap|sankey|weeks|distinct-years)$/,
+    pattern: /^\/analytics\/category-trends$/,
     methods: ['GET'],
-    handler: stub('/api/analytics/*'),
+    handler: dispatch({ GET: (ctx) => h.analyticsCategoryTrends(ctx.query) }),
+  },
+  {
+    pattern: /^\/analytics\/daily-heatmap$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.analyticsDailyHeatmap(ctx.query) }),
+  },
+  {
+    pattern: /^\/analytics\/sankey$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.analyticsSankey(ctx.query) }),
+  },
+  {
+    pattern: /^\/analytics\/weeks$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.analyticsWeeks(ctx.query) }),
+  },
+  {
+    pattern: /^\/analytics\/distinct-years$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.analyticsDistinctYears() }),
   },
 
   // ── Transactions ──
