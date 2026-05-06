@@ -2,7 +2,7 @@
  * Storage Factory - Creates the appropriate storage adapter based on mode
  */
 
-import { LocalStorageAdapter } from './localStorageAdapter.js'
+import { IndexedDBAdapter } from './idb.js'
 import type {
   Account,
   BalanceEntry,
@@ -85,7 +85,7 @@ export async function getStorageAdapter(): Promise<StorageAdapter> {
   const mode = getStorageMode()
 
   if (mode === 'serverless') {
-    currentAdapter = new LocalStorageAdapter()
+    currentAdapter = new IndexedDBAdapter()
   } else {
     currentAdapter = new SelfHostedAdapter()
   }
@@ -98,6 +98,37 @@ export async function getStorageAdapter(): Promise<StorageAdapter> {
  */
 export function resetAdapter(): void {
   currentAdapter = null
+}
+
+/**
+ * Migrate all data from the current storage mode to a different one.
+ * Exports from the current adapter, switches mode, imports into the new adapter.
+ * If import fails, reverts the mode back.
+ */
+export async function migrateData(targetMode: StorageMode): Promise<{ success: boolean; error?: string }> {
+  const originalMode = getStorageMode()
+  if (originalMode === targetMode) return { success: true }
+
+  try {
+    const sourceAdapter = await getStorageAdapter()
+    const data = await sourceAdapter.exportData()
+
+    setStorageMode(targetMode)
+    resetAdapter()
+
+    try {
+      const targetAdapter = await getStorageAdapter()
+      await targetAdapter.importData(data)
+      return { success: true }
+    } catch (importError) {
+      // Revert on import failure
+      setStorageMode(originalMode)
+      resetAdapter()
+      return { success: false, error: `Import failed: ${(importError as Error).message}` }
+    }
+  } catch (exportError) {
+    return { success: false, error: `Export failed: ${(exportError as Error).message}` }
+  }
 }
 
 /**
