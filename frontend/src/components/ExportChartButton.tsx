@@ -2,7 +2,7 @@
  * Export Chart Button Component
  * Button with icons to export chart as PNG or SVG
  */
-import { downloadBlob } from '../utils/chartExport'
+import { exportChartAsPNG } from '../utils/chartExport'
 import styles from './ExportChartButton.module.css'
 
 export interface ExportChartButtonProps {
@@ -11,26 +11,22 @@ export interface ExportChartButtonProps {
   variant?: 'icon' | 'inline'
 }
 
-export default function ExportChartButton({
-  chart,
-  filename,
-  variant = 'icon',
-}: ExportChartButtonProps) {
+export default function ExportChartButton(props: ExportChartButtonProps) {
   const handleExportPNG = () => {
-    if (!chart) return
-    downloadBlob(new Blob([chart.toBase64Image()]), `${filename}.png`)
+    if (!props.chart) return
+    exportChartAsPNG(props.chart, props.filename)
   }
 
   const handleExportSVG = () => {
-    const canvas = chart.canvas
+    const canvas = props.chart?.canvas as HTMLCanvasElement | undefined
     if (!canvas) return
-    downloadBlob(
-      new Blob([canvas.outerHTML], { type: 'image/svg+xml;charset=utf-8' }),
-      `${filename}.svg`
-    )
+    const link = document.createElement('a')
+    link.download = `${props.filename}.svg`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
   }
 
-  if (variant === 'inline') {
+  if (props.variant === 'inline') {
     return (
       <div class={styles.inlineWrapper}>
         <button class={styles.exportBtn} onClick={handleExportPNG} title="Export as PNG">

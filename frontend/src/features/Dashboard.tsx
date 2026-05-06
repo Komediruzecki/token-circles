@@ -55,8 +55,7 @@ export default function Dashboard() {
     return stored ? parseFloat(stored) : 20
   })
 
-  const handleSavingsGoalChange = (value: string) => {
-    const num = parseFloat(value)
+  const handleSavingsGoalChange = (num: number) => {
     if (!isNaN(num) && num >= 0) {
       setSavingsGoal(num)
       localStorage.setItem('savingsGoal', String(num))
