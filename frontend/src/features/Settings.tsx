@@ -30,6 +30,7 @@ import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
+import { apiFetch } from '../core/apiFetch'
 import { setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 
@@ -42,7 +43,7 @@ function Reports() {
 
   onMount(() => {
     const currentYear = new Date().getFullYear()
-    fetch('/api/analytics/distinct-years', { credentials: 'include' })
+    apiFetch('/api/analytics/distinct-years', { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         const years: number[] = data.years || []
@@ -57,7 +58,7 @@ function Reports() {
   const downloadReport = async (endpoint: string, filename: string) => {
     setReportLoading(filename)
     try {
-      const res = await fetch(endpoint, { credentials: 'include' })
+      const res = await apiFetch(endpoint, { credentials: 'include' })
       if (!res.ok) throw new Error('Report generation failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -211,7 +212,7 @@ export default function Settings() {
   // Apply storage type
   const applyStorageMode = async () => {
     try {
-      await fetch('/api/storage-mode', {
+      await apiFetch('/api/storage-mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -235,7 +236,7 @@ export default function Settings() {
   // Data Management
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/export', {
+      const response = await apiFetch('/api/export', {
         method: 'GET',
         credentials: 'include',
       })
@@ -259,7 +260,7 @@ export default function Settings() {
     const fmt = exportFormat()
     setCsvExporting(type)
     try {
-      const response = await fetch(`/api/export/${type}?format=${fmt}`, {
+      const response = await apiFetch(`/api/export/${type}?format=${fmt}`, {
         method: 'GET',
         credentials: 'include',
       })
@@ -279,7 +280,7 @@ export default function Settings() {
   }
 
   const handleReset = async () => {
-    await fetch('/api/clear-all', {
+    await apiFetch('/api/clear-all', {
       method: 'DELETE',
       credentials: 'include',
     })
@@ -289,7 +290,7 @@ export default function Settings() {
   const handleDeleteProfile = async () => {
     const profileId = localStorage.getItem('currentProfileId') || '1'
     try {
-      const res = await fetch(`/api/profiles/${profileId}`, {
+      const res = await apiFetch(`/api/profiles/${profileId}`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -299,7 +300,7 @@ export default function Settings() {
         return
       }
       // Switch to the next available profile
-      const profilesRes = await fetch('/api/profiles', { credentials: 'include' })
+      const profilesRes = await apiFetch('/api/profiles', { credentials: 'include' })
       const profiles = await profilesRes.json()
       if (profiles.length > 0) {
         localStorage.setItem('currentProfileId', profiles[0].id.toString())
@@ -324,7 +325,7 @@ export default function Settings() {
 
   const loadHouseholdProfiles = async () => {
     try {
-      const res = await fetch('/api/profiles', { credentials: 'include' })
+      const res = await apiFetch('/api/profiles', { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setAllProfiles(data)

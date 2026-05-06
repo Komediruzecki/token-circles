@@ -139,8 +139,9 @@ function flushLogs(): void {
  */
 async function sendLogsToBackend(logs: LogEntry[]): Promise<void> {
   try {
-    // Use fetch to avoid circular dependency with ApiClient
-    const response = await fetch('/api/logs', {
+    // Use apiFetch to support serverless mode
+    const { apiFetch } = await import('./apiFetch')
+    const response = await apiFetch('/api/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

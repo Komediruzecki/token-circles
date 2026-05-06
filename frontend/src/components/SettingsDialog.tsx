@@ -5,6 +5,7 @@
 
 import { createSignal, For } from 'solid-js'
 import { toast } from '../core/api.js'
+import { apiFetch } from '../core/apiFetch'
 import { setStorageMode } from '../core/storage/storageFactory.js'
 import ConfirmButton from './ConfirmButton.js'
 import { Modal } from './Modal.js'
@@ -33,7 +34,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   // Load current settings
   const loadSettings = async () => {
     try {
-      const response = await fetch('/api/settings')
+      const response = await apiFetch('/api/settings')
       if (response.ok) {
         const settings = await response.json()
         setLanguage(settings.language !== undefined ? settings.language : 'en')
@@ -47,7 +48,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
     }
 
     try {
-      const response = await fetch('/api/storage-mode')
+      const response = await apiFetch('/api/storage-mode')
       if (response.ok) {
         setCurrentMode(await response.json())
       }
@@ -59,7 +60,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   // Save settings
   const saveSettings = async () => {
     try {
-      await fetch('/api/settings', {
+      await apiFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -79,7 +80,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   // Set storage mode
   const handleSetMode = async (mode: StorageMode) => {
     try {
-      await fetch('/api/storage-mode', {
+      await apiFetch('/api/storage-mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -96,7 +97,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   // Export data
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/export', {
+      const response = await apiFetch('/api/export', {
         method: 'GET',
         credentials: 'include',
       })
@@ -128,7 +129,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/import', {
+      const response = await apiFetch('/api/import', {
         method: 'POST',
         credentials: 'include',
         body: formData,
@@ -149,7 +150,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
   // Reset data
   const _handleReset = async () => {
     try {
-      await fetch('/api/clear-all', {
+      await apiFetch('/api/clear-all', {
         method: 'DELETE',
         credentials: 'include',
       })

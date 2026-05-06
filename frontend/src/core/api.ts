@@ -2,6 +2,7 @@
  * API Client - Type-safe HTTP client for backend API
  */
 
+import { apiFetch } from './apiFetch'
 import { logger } from './logger.js'
 import type * as ApiTypes from '../types/api.js'
 import type * as Models from '../types/models.js'
@@ -101,7 +102,7 @@ export class ApiClient {
     }
 
     try {
-      const response = await fetch(url, requestOptions)
+      const response = await apiFetch(url, requestOptions)
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -704,7 +705,7 @@ export class ApiClient {
     if (params?.date_from !== undefined) queryParams.append('date_from', params.date_from)
     if (params?.date_to !== undefined) queryParams.append('date_to', params.date_to)
 
-    const response = await fetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
+    const response = await apiFetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
       headers: this.headers,
       credentials: 'include',
     })
@@ -723,7 +724,7 @@ export class ApiClient {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await fetch(`${API_BASE}/import`, {
+    const response = await apiFetch(`${API_BASE}/import`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
@@ -823,7 +824,7 @@ export class ApiClient {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await fetch(`${API_BASE}/receipts`, {
+    const response = await apiFetch(`${API_BASE}/receipts`, {
       method: 'POST',
       headers: { 'X-Profile-Id': this.getCurrentProfileId().toString() },
       body: formData,
@@ -858,7 +859,7 @@ export class ApiClient {
    */
   async getReceiptFile(id: number): Promise<Blob> {
     const url = `${API_BASE}/receipts/${id}/file`
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       headers: this.headers,
       credentials: 'include',
     })

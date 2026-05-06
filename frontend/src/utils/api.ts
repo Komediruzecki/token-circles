@@ -1,3 +1,5 @@
+import { apiFetch } from '../core/apiFetch'
+
 /**
  * API Utilities
  * Centralized fetch helpers with error handling
@@ -64,7 +66,7 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
  * GET request helper
  */
 export async function apiGet<T = unknown>(url: string): Promise<T> {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'GET',
     headers: getHeaders(),
@@ -81,7 +83,7 @@ export async function apiPost<T = unknown>(
   body: unknown,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'POST',
     headers: getHeaders(),
@@ -100,7 +102,7 @@ export async function apiPut<T = unknown>(
   body: unknown,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'PUT',
     headers: getHeaders(),
@@ -115,7 +117,7 @@ export async function apiPut<T = unknown>(
  * DELETE request helper
  */
 export async function apiDelete<T = unknown>(url: string): Promise<T> {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...DEFAULT_FETCH_OPTIONS,
     method: 'DELETE',
     headers: getProfileHeader() !== '1' ? { 'X-Profile-Id': getProfileHeader() } : {},
@@ -133,7 +135,7 @@ export async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       ...DEFAULT_FETCH_OPTIONS,
       headers: getHeaders(),
       ...options,

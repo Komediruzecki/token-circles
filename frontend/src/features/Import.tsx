@@ -36,6 +36,7 @@
  */
 
 import { createSignal, For, onMount, Show } from 'solid-js'
+import { apiFetch } from '../core/apiFetch'
 import styles from './Import.module.css'
 
 // Column field names for mapping
@@ -223,7 +224,7 @@ export default function Import() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/import/upload', {
+      const response = await apiFetch('/api/import/upload', {
         method: 'POST',
         headers: getProfileHeaders(),
         body: formData,
@@ -281,7 +282,7 @@ export default function Import() {
         return { 'X-Profile-Id': pid }
       }
 
-      const response = await fetch('/api/import/googlesheet', {
+      const response = await apiFetch('/api/import/googlesheet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
         body: JSON.stringify({ url, sheetName: selectedSheet() }),
@@ -402,7 +403,7 @@ export default function Import() {
       // Server-side duplicate detection for new-only mode
       const dupCount = hasDuplicateCount() ?? 0
       if (mode === 'new' && dupCount > 0) {
-        const previewResponse = await fetch('/api/import/file-sheet', {
+        const previewResponse = await apiFetch('/api/import/file-sheet', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
           body: JSON.stringify({
@@ -418,7 +419,7 @@ export default function Import() {
         }
       }
 
-      const response = await fetch('/api/import/execute', {
+      const response = await apiFetch('/api/import/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
         body: JSON.stringify({
