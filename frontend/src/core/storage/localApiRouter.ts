@@ -530,11 +530,12 @@ const routes: RouteDef[] = [
   },
 
   // Import (LS13)
-  { pattern: /^\/import\/upload$/, methods: ['POST'], handler: stub('/api/import/upload') },
-  { pattern: /^\/import\/googlesheet$/, methods: ['POST'], handler: stub('/api/import/googlesheet') },
-  { pattern: /^\/import\/file-sheet$/, methods: ['POST'], handler: stub('/api/import/file-sheet') },
-  { pattern: /^\/import\/execute$/, methods: ['POST'], handler: stub('/api/import/execute') },
-  { pattern: /^\/import\/preview$/, methods: ['POST'], handler: stub('/api/import/preview') },
+  { pattern: /^\/import\/upload$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }) },
+  { pattern: /^\/import\/googlesheet$/, methods: ['POST'], handler: dispatch({ POST: () => h.importGoogleSheet() }) },
+  { pattern: /^\/import\/file-sheet$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importFileSheet(ctx.body) }) },
+  { pattern: /^\/import\/execute$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importExecute(ctx.body) }) },
+  { pattern: /^\/import\/preview$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importBulk(ctx.body) }) },
+  { pattern: /^\/import$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }) },
 
   // Exchange rates
   { pattern: /^\/exchange-rates$/, methods: ['GET'], handler: stub('/api/exchange-rates') },

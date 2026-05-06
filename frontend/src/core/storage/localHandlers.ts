@@ -1,6 +1,7 @@
 /**
  * Local API Handlers — IndexedDB-backed route handlers for serverless mode
  */
+import * as XLSX from 'xlsx'
 import { getDB, IndexedDBAdapter, seedDefaultCategories } from './idb'
 import { getStorageMode, setStorageMode } from './storageFactory'
 import type { StorageMode } from './storageFactory'
@@ -2702,4 +2703,245 @@ export async function receiptsGetFileByName(params: Record<string, string>): Pro
       'Content-Disposition': `inline; filename="${receipt.original_name || receipt.filename}"`,
     },
   })
+}
+
+// ── Import (LS13) ───────────────────────────────────────────────────────────
+
+function toStr(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') return ''
+  return String(v)
+}
+
+interface ImportSession {
+  workbook: XLSX.WorkBook
+  uploadedAt: number
+}
+
+const importSessions = new Map<string, ImportSession>()
+
+function parseSheetData(workbook: XLSX.WorkBook) {
+  const sheetName = workbook.SheetNames[0] || 'Sheet1'
+  const sheet = workbook.Sheets[sheetName]
+  const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+  const results: Record<string, unknown>[] = []
+  for (const row of raw) {
+    const cleaned: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(row)) {
+      const lk = key.toLowerCase().trim()
+      if (lk === 'date' || lk === 'datum') {
+        cleaned.date = value
+      } else if (lk === 'description' || lk === 'desc') {
+        cleaned.description = value
+      } else if (lk === 'amount' || lk === 'bedrag') {
+        cleaned.amount = value
+      } else if (lk === 'type') {
+        cleaned.type = value
+      } else if (lk === 'category' || lk === 'categorie') {
+        cleaned.category = value
+      } else if (lk === 'notes' || lk === 'note' || lk === 'notities') {
+        cleaned.notes = value
+      } else if (lk === 'beneficiary' || lk === 'begunstigde') {
+        cleaned.beneficiary = value
+      } else if (lk === 'payor' || lk === 'betaler') {
+        cleaned.payor = value
+      } else {
+        cleaned[key] = value
+      }
+    }
+    if (cleaned.date || cleaned.description || cleaned.amount) {
+      results.push(cleaned)
+    }
+  }
+  return results
+}
+
+async function detectDuplicates(
+  rows: Record<string, unknown>[],
+): Promise<{ duplicates: number[]; clean: Record<string, unknown>[] }> {
+  const db = await getDB()
+  const profileId = getProfileIdFromStorage()
+  const existing = await db.getAllFromIndex('transactions', 'by_profile', profileId)
+  const duplicates: number[] = []
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const date = toStr(row.date)
+    const desc = toStr(row.description).toLowerCase().trim()
+    const amount = parseFloat(toStr(row.amount) || '0')
+
+    const match = existing.find(
+      (t) =>
+        t.date === date &&
+        t.description.toLowerCase().trim() === desc &&
+        Math.abs(Number(t.amount) - amount) < 0.01,
+    )
+    if (match) duplicates.push(i)
+  }
+
+  const clean = rows.filter((_, i) => !duplicates.includes(i))
+  return { duplicates, clean }
+}
+
+export async function importUpload(body: unknown): Promise<Response> {
+  try {
+    const formData = body as FormData
+    const file = formData.get('file') as File | null
+    if (!file) return json({ error: 'No file uploaded' }, 400)
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const buffer = await file.arrayBuffer()
+    let workbook: XLSX.WorkBook
+
+    if (ext === 'csv') {
+      const text = new TextDecoder().decode(buffer)
+      workbook = XLSX.read(text, { type: 'string', raw: true })
+    } else {
+      workbook = XLSX.read(buffer, { type: 'array' })
+    }
+
+    const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    importSessions.set(sessionId, { workbook, uploadedAt: Date.now() })
+
+    const rows = parseSheetData(workbook)
+    return json({ session_id: sessionId, filename: file.name, rows, row_count: rows.length })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function importFileSheet(body: unknown): Promise<Response> {
+  try {
+    const data = body as Record<string, unknown>
+    const sessionId = toStr(data.session_id)
+    const session = importSessions.get(sessionId)
+    if (!session) return json({ error: 'Session expired or not found' }, 404)
+
+    const rows = parseSheetData(session.workbook)
+    const { duplicates, clean } = await detectDuplicates(rows)
+    return json({ rows, total: rows.length, new_items: clean.length, duplicate_indices: duplicates })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function importGoogleSheet(): Promise<Response> {
+  return json({
+    error: 'Google Sheets import is not available in serverless mode due to CORS restrictions.',
+    message: 'Please download your sheet as CSV or Excel and import the file instead.',
+    serverlessMode: true,
+  }, 501)
+}
+
+export async function importExecute(body: unknown): Promise<Response> {
+  try {
+    const data = body as Record<string, unknown>
+    const sessionId = toStr(data.session_id)
+    const session = importSessions.get(sessionId)
+    if (!session) return json({ error: 'Session expired or not found' }, 404)
+
+    const mapping = (data.mapping as Record<string, string>) || {}
+    const defaultType = toStr(data.default_type) || 'expense'
+    const dryRun = Boolean(data.dry_run)
+
+    const rows = parseSheetData(session.workbook)
+    const { clean } = await detectDuplicates(rows)
+
+    const profileId = getProfileIdFromStorage()
+    const db = await getDB()
+    const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
+
+    const imported: number[] = []
+    const skipped: { index: number; reason: string }[] = []
+
+    for (let i = 0; i < clean.length; i++) {
+      const row = clean[i]
+      const description = mapping.description ? toStr(row[mapping.description]) || toStr(row.description) : toStr(row.description)
+      const date = mapping.date ? toStr(row[mapping.date]) || toStr(row.date) : toStr(row.date)
+      const amount = parseFloat(mapping.amount ? toStr(row[mapping.amount]) || toStr(row.amount) || '0' : toStr(row.amount) || '0')
+      const type = mapping.type ? toStr(row[mapping.type]) || defaultType : defaultType
+
+      if (!description || !date || isNaN(amount)) {
+        skipped.push({ index: i, reason: `Missing required fields (description, date, amount) for row ${i + 1}` })
+        continue
+      }
+
+      let categoryId: number | null = null
+      if (mapping.category && row[mapping.category]) {
+        const catName = toStr(row[mapping.category]).toLowerCase().trim()
+        const cat = categories.find(
+          (c) => c.name.toLowerCase().trim() === catName && c.type === type,
+        )
+        if (cat) categoryId = cat.id
+      }
+
+      const transaction = {
+        profile_id: profileId,
+        type,
+        description,
+        date,
+        amount: type === 'income' ? Math.abs(amount) : -Math.abs(amount),
+        category_id: categoryId,
+        notes: mapping.notes ? toStr(row[mapping.notes]) : '',
+        beneficiary: mapping.beneficiary ? toStr(row[mapping.beneficiary]) : '',
+        payor: mapping.payor ? toStr(row[mapping.payor]) : '',
+        account_id: data.account_id ? Number(data.account_id) : null,
+        created_at: new Date().toISOString(),
+      }
+
+      if (!dryRun) {
+        const id = await db.add('transactions', transaction)
+        imported.push(id as number)
+      } else {
+        imported.push(-1)
+      }
+    }
+
+    return json({
+      imported: imported.length,
+      skipped: skipped.length,
+      dry_run: dryRun,
+      imported_ids: dryRun ? [] : imported,
+      skipped_items: skipped,
+    })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function importBulk(body: unknown): Promise<Response> {
+  try {
+    const data = body as Record<string, unknown>
+    const items = data.items as Record<string, unknown>[] | undefined
+    if (!items || !Array.isArray(items)) {
+      return json({ error: 'No items array provided' }, 400)
+    }
+
+    const profileId = getProfileIdFromStorage()
+    const db = await getDB()
+    const imported: number[] = []
+
+    for (const item of items) {
+      const transaction = {
+        profile_id: profileId,
+        type: toStr(item.type) || 'expense',
+        description: toStr(item.description),
+        date: toStr(item.date) || new Date().toISOString().slice(0, 10),
+        amount: Number(item.amount) || 0,
+        category_id: item.category_id ? Number(item.category_id) : null,
+        notes: toStr(item.notes),
+        beneficiary: toStr(item.beneficiary),
+        payor: toStr(item.payor),
+        account_id: item.account_id ? Number(item.account_id) : null,
+        created_at: new Date().toISOString(),
+      }
+      const id = await db.add('transactions', transaction)
+      imported.push(id as number)
+    }
+
+    return json({ imported: imported.length, imported_ids: imported })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
 }
