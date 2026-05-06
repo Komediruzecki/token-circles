@@ -65,7 +65,7 @@ function upgradeSchema(db: IDBPDatabase) {
 
 let dbPromise: ReturnType<typeof openDB> | null = null
 
-function getDB() {
+export function getDB() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, { upgrade: upgradeSchema })
   }

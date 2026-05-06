@@ -297,6 +297,18 @@ const routes: RouteDef[] = [
       DELETE: (ctx) => h.budgetsDelete(ctx.params),
     }),
   },
+  // Budget computations
+  { pattern: /^\/budgets\/alerts$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsAlerts(ctx.query) }) },
+  { pattern: /^\/budgets\/forecast$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsForecast(ctx.query) }) },
+  { pattern: /^\/budgets\/history$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsHistory(ctx.query) }) },
+  { pattern: /^\/budgets\/improvements$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsImprovements(ctx.query) }) },
+  { pattern: /^\/budgets\/summary$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsSummary(ctx.query) }) },
+  { pattern: /^\/budgets\/zero-based$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsZeroBased(ctx.query) }) },
+  { pattern: /^\/budgets\/zero-based\/summary$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsZeroBasedSummary(ctx.query) }) },
+  { pattern: /^\/budgets\/allocate$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.budgetsAllocate(ctx.query, ctx.body) }) },
+  { pattern: /^\/budgets\/duplicate-last$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.budgetsDuplicateLast(ctx.body) }) },
+  { pattern: /^\/budgets\/from-expenses$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.budgetsFromExpenses(ctx.body) }) },
+  { pattern: /^\/budgets\/(\d+)\/rollover$/, methods: ['PUT'], handler: dispatch({ PUT: (ctx) => h.budgetsRollover(ctx.params, ctx.body) }) },
 
   // ── Savings goals ──
   {
@@ -429,18 +441,6 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: stub('/api/accounts/:id/reconciliation-summary'),
   },
-
-  // Budgets: alerts, forecast, history, improvements, summary, zero-based, allocate, duplicate, from-expenses
-  {
-    pattern: /^\/budgets\/(alerts|forecast|history|improvements|summary|zero-based)$/,
-    methods: ['GET'],
-    handler: stub('/api/budgets/*'),
-  },
-  { pattern: /^\/budgets\/zero-based\/summary$/, methods: ['GET'], handler: stub('/api/budgets/zero-based/summary') },
-  { pattern: /^\/budgets\/allocate$/, methods: ['POST'], handler: stub('/api/budgets/allocate') },
-  { pattern: /^\/budgets\/duplicate-last$/, methods: ['POST'], handler: stub('/api/budgets/duplicate-last') },
-  { pattern: /^\/budgets\/from-expenses$/, methods: ['POST'], handler: stub('/api/budgets/from-expenses') },
-  { pattern: /^\/budgets\/(\d+)\/rollover$/, methods: ['PUT'], handler: stub('/api/budgets/:id/rollover') },
 
   // Loans: calculate
   {
