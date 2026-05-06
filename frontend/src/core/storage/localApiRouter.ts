@@ -578,11 +578,11 @@ const routes: RouteDef[] = [
     handler: dispatch({ GET: () => h.emergencyFund() }),
   },
 
-  // Reports (LS12)
+  // Reports
   {
     pattern: /^\/reports\/(annual-pdf|monthly-pdf|pl-summary|pl-summary-pdf|tax-summary|tax-summary-pdf)$/,
     methods: ['GET'],
-    handler: stub('/api/reports/*'),
+    handler: dispatch({ GET: (ctx) => h.reportHandler(ctx) }),
   },
   { pattern: /^\/reports\/custom$/, methods: ['POST'], handler: stub('/api/reports/custom') },
 
