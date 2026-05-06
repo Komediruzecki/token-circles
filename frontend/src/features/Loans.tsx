@@ -976,7 +976,7 @@ export default function Loans() {
                     <div style={{ 'margin-bottom': '16px' }}>
                       <label class={styles.formLabel}>Existing Prepayments</label>
                       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
-                        {prepayments().map((p: any) => (
+                        <For each={prepayments()}>{(p: any) => (
                           <div
                             style={{
                               display: 'flex',
@@ -1027,7 +1027,7 @@ export default function Loans() {
                               </svg>
                             </button>
                           </div>
-                        ))}
+                        )}</For>
                       </div>
                     </div>
                   ) : (

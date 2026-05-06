@@ -26,7 +26,7 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createEffect, createSignal, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import styles from '../components/AnalyticsPage.module.css'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
@@ -963,9 +963,7 @@ export default function Analytics() {
                       </p>
                     ) : (
                       <div style="max-height:200px;overflow-y:auto;">
-                        {heatmapModal()!
-                          .transactions.slice(0, 10)
-                          .map((tx: any) => (
+                        <For each={heatmapModal()!.transactions.slice(0, 10)}>{(tx: any) => (
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
                               <span style="color:var(--text);">
                                 {tx.description || tx.category || '-'}
@@ -977,7 +975,7 @@ export default function Analytics() {
                                 {formatAmount(Math.abs(tx.amount || 0))}
                               </span>
                             </div>
-                          ))}
+                          )}</For>
                         {heatmapModal()!.transactions.length > 10 && (
                           <div style="padding:5px 0;font-size:12px;color:var(--text-secondary);">
                             +{heatmapModal()!.transactions.length - 10} more
@@ -1065,7 +1063,7 @@ export default function Analytics() {
           <div class={styles.analyticsRecent}>
             <h3 class={styles.sectionTitle}>Recent Transactions</h3>
             <div class={styles.transactionList}>
-              {data()!.recentTransactions.map((tx: any) => (
+              <For each={data()!.recentTransactions}>{(tx: any) => (
                 <div class={styles.transactionItem}>
                   <div
                     class={styles.transactionIcon}
@@ -1088,7 +1086,7 @@ export default function Analytics() {
                     {formatAmount(tx.amount)}
                   </div>
                 </div>
-              ))}
+              )}</For>
             </div>
             <div class={styles.viewAllLink}>
               <a href="#transactions">View All Transactions →</a>

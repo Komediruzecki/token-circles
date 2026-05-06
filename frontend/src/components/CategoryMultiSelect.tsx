@@ -2,7 +2,7 @@
  * Category Multi-Select Component
  * Dropdown with checkbox-style category selection
  */
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, For } from 'solid-js'
 import categoryMultiSelectStyles from './CategoryMultiSelect.module.css'
 import type { Category } from '../types/models'
 
@@ -173,7 +173,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
             {filteredCategories().length === 0 ? (
               <div class={categoryMultiSelectStyles.noResults}>No categories match</div>
             ) : (
-              filteredCategories().map((category, index) => (
+              <For each={filteredCategories()}>{(category, index) => (
                 <button
                   class={`${categoryMultiSelectStyles.categoryItem} ${
                     hoverIndex() === index ? categoryMultiSelectStyles.hovered : ''
@@ -195,7 +195,7 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
                   />
                   <span class={categoryMultiSelectStyles.categoryName}>{category.name}</span>
                 </button>
-              ))
+              )}</For>
             )}
           </div>
         </div>
