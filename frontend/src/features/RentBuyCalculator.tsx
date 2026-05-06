@@ -24,6 +24,7 @@
  */
 import { createSignal, onMount } from 'solid-js'
 import Chart from '../components/Chart'
+import ExportChartButton from '../components/ExportChartButton'
 import { formatCurrency } from '../core/api'
 import sharedStyles from './CalculatorShared.module.css'
 import styles from './RentBuyCalculator.module.css'
@@ -219,15 +220,7 @@ export default function RentBuyCalculator(props: Props) {
 
   const summary = getSummary()
 
-  const downloadChart = () => {
-    const canvas = document.getElementById('rentBuyChart') as HTMLCanvasElement
-    if (!canvas) return
-    const url = canvas.toDataURL('image/png')
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'rent-buy-comparison.png'
-    a.click()
-  }
+  let chartRef: any = null
 
   return (
     <div class={sharedStyles.page}>
@@ -467,9 +460,7 @@ export default function RentBuyCalculator(props: Props) {
 
           {/* Chart */}
           <div class={styles.chartSection}>
-            <button class={styles.btnSecondary} onClick={downloadChart}>
-              Download Chart
-            </button>
+            <ExportChartButton chart={chartRef} filename="rent-buy-comparison" variant="inline" />
             <Chart
               id="rentBuyChart"
               type="line"
@@ -526,6 +517,9 @@ export default function RentBuyCalculator(props: Props) {
               }}
               height={300}
               width="100%"
+              onReady={(chart: any) => {
+                chartRef = chart
+              }}
             />
           </div>
         </>

@@ -20,6 +20,7 @@
  */
 import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
+import ExportChartButton from '../components/ExportChartButton'
 import { formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../utils/api'
 import sharedStyles from './CalculatorShared.module.css'
@@ -54,15 +55,7 @@ export default function EmergencyFundCalculator() {
 
   // _coverageData - placeholder (functionality can be extended)
 
-  const downloadChart = () => {
-    const canvas = document.getElementById('emergencyFundChart') as HTMLCanvasElement
-    if (!canvas) return
-    const url = canvas.toDataURL('image/png')
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'emergency-fund-chart.png'
-    a.click()
-  }
+  let chartRef: any = null
 
   return (
     <div class={sharedStyles.page}>
@@ -139,10 +132,11 @@ export default function EmergencyFundCalculator() {
               }}
               height={300}
               width="100%"
+              onReady={(chart: any) => {
+                chartRef = chart
+              }}
             />
-            <button class={styles.btnSecondary} onClick={downloadChart}>
-              Download Chart
-            </button>
+            <ExportChartButton chart={chartRef} filename="emergency-fund-chart" variant="inline" />
           </div>
 
           {/* Coverage Details */}
