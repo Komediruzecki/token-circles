@@ -69,7 +69,10 @@ export async function profilesGet(params: Record<string, string>): Promise<Respo
   return json(profile)
 }
 
-export async function profilesUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+export async function profilesUpdate(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
   if (body && typeof body === 'object' && 'name' in body) {
     await adapter.updateProfile(idParam(params), (body as Record<string, unknown>).name as string)
     return ok()
@@ -138,7 +141,9 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
   if (cat) filters.category_id = parseInt(cat, 10)
   if (type) filters.type = type
   if (search) filters.search = search
-  const txns = await adapter.listTransactions(filters as Parameters<typeof adapter.listTransactions>[0])
+  const txns = await adapter.listTransactions(
+    filters as Parameters<typeof adapter.listTransactions>[0]
+  )
   return json(txns)
 }
 
@@ -159,7 +164,7 @@ export async function transactionsGet(params: Record<string, string>): Promise<R
 
 export async function transactionsUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   await adapter.updateTransaction(idParam(params), body as Record<string, unknown>)
@@ -177,16 +182,29 @@ export async function transactionsExport(query: URLSearchParams): Promise<Respon
   const dt = query.get('date_to')
   if (df) filters.date_from = df
   if (dt) filters.date_to = dt
-  const txns = await adapter.listTransactions(filters as Parameters<typeof adapter.listTransactions>[0] | undefined)
+  const txns = await adapter.listTransactions(
+    filters as Parameters<typeof adapter.listTransactions>[0] | undefined
+  )
   const csv = ['date,type,description,amount,currency,category_id,notes']
   for (const t of txns) {
     csv.push(
-      [t.date, t.type, `"${t.description}"`, t.amount, t.currency || 'EUR', t.category_id || '', `"${t.notes || ''}"`].join(','),
+      [
+        t.date,
+        t.type,
+        `"${t.description}"`,
+        t.amount,
+        t.currency || 'EUR',
+        t.category_id || '',
+        `"${t.notes || ''}"`,
+      ].join(',')
     )
   }
   return new Response(csv.join('\n'), {
     status: 200,
-    headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=transactions.csv' },
+    headers: {
+      'Content-Type': 'text/csv',
+      'Content-Disposition': 'attachment; filename=transactions.csv',
+    },
   })
 }
 
@@ -287,7 +305,7 @@ export async function categoriesGet(params: Record<string, string>): Promise<Res
 
 export async function categoriesUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   await adapter.updateCategory(idParam(params), body as Record<string, unknown>)
@@ -323,7 +341,7 @@ export async function accountsGet(params: Record<string, string>): Promise<Respo
 
 export async function accountsUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   await adapter.updateAccount(idParam(params), body as Record<string, unknown>)
@@ -342,7 +360,7 @@ export async function accountsHistory(params: Record<string, string>): Promise<R
 
 export async function accountsHistoryRecord(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const balance = (body as Record<string, unknown>).balance as number
@@ -381,7 +399,7 @@ export async function budgetsGet(params: Record<string, string>): Promise<Respon
 
 export async function budgetsUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   await adapter.updateBudget(idParam(params), body as Record<string, unknown>)
@@ -418,14 +436,17 @@ export async function budgetsAlerts(query: URLSearchParams): Promise<Response> {
       endDate = monthStart(nm.year, nm.month)
     }
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate)
+    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate
+    )
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'expense' && t.category_id !== null &&
-        (t.date as string) >= startDate && (t.date as string) < endDate,
-      )
+    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+      (t: Record<string, unknown>) =>
+        t.type === 'expense' &&
+        t.category_id !== null &&
+        (t.date as string) >= startDate &&
+        (t.date as string) < endDate
+    )
 
     const spentMap: Record<number, number> = {}
     for (const t of txns) {
@@ -457,8 +478,9 @@ export async function budgetsAlerts(query: URLSearchParams): Promise<Response> {
         }
       })
       .filter((b: Record<string, unknown>) => (b.percentage as number) >= threshold)
-      .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-        (b.percentage as number) - (a.percentage as number),
+      .sort(
+        (a: Record<string, unknown>, b: Record<string, unknown>) =>
+          (b.percentage as number) - (a.percentage as number)
       )
 
     return json({ alerts, threshold, startDate, endDate })
@@ -479,20 +501,19 @@ export async function budgetsHistory(query: URLSearchParams): Promise<Response> 
     const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
       .filter((b: Record<string, unknown>) => b.category_id === categoryId)
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-        (b.start_date as string).localeCompare(a.start_date as string),
+        (b.start_date as string).localeCompare(a.start_date as string)
       )
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'expense' && t.category_id === categoryId,
-      )
+    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+      (t: Record<string, unknown>) => t.type === 'expense' && t.category_id === categoryId
+    )
 
     const history = budgets.slice(0, months).map((b: Record<string, unknown>) => {
       const start = b.start_date as string
       const end = endOfNextMonth(start)
       const spent = txns
-        .filter((t: Record<string, unknown>) =>
-          (t.date as string) >= start && (t.date as string) < end,
+        .filter(
+          (t: Record<string, unknown>) => (t.date as string) >= start && (t.date as string) < end
         )
         .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
       return { month: start, budget_amount: b.amount, spent }
@@ -512,8 +533,14 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
     const pid = await adapter.getCurrentProfileId()
     const numMonths = parseInt(query.get('months')!) || 6
 
-    const budgets = await db.getAllFromIndex('budgets', 'by_profile', pid) as Record<string, unknown>[]
-    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid) as Record<string, unknown>[]
+    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)) as Record<
+      string,
+      unknown
+    >[]
+    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
+      string,
+      unknown
+    >[]
 
     // Aggregate monthly budget + spent
     const monthlyMap: Record<string, { budget: number; spent: number }> = {}
@@ -554,7 +581,7 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
       for (const c of cats) catMap[c.id as number] = c
 
       const latestBudgets = budgets.filter(
-        (b: Record<string, unknown>) => (b.start_date as string).slice(0, 7) === latestMo,
+        (b: Record<string, unknown>) => (b.start_date as string).slice(0, 7) === latestMo
       )
       const catBreakdown = latestBudgets
         .map((b: Record<string, unknown>) => {
@@ -565,8 +592,9 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
             budget_amount: b.amount,
           }
         })
-        .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-          (b.budget_amount as number) - (a.budget_amount as number),
+        .sort(
+          (a: Record<string, unknown>, b: Record<string, unknown>) =>
+            (b.budget_amount as number) - (a.budget_amount as number)
         )
       history[0].category_budgets = JSON.stringify(catBreakdown)
     }
@@ -585,7 +613,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
     const pid = await adapter.getCurrentProfileId()
     const now = new Date()
     const y = parseInt(query.get('year')!) || now.getFullYear()
-    const m = parseInt(query.get('month')!) || (now.getMonth() + 1)
+    const m = parseInt(query.get('month')!) || now.getMonth() + 1
 
     const startDate = monthStart(y, m)
     const nm = nextMonth(y, m)
@@ -594,20 +622,25 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
     const pm = prevMonth(y, m)
     const prevStart = monthStart(pm.year, pm.month)
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate)
+    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate
+    )
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'expense' && t.category_id !== null &&
-        (t.date as string) >= startDate && (t.date as string) < endDate,
-      )
+    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+      (t: Record<string, unknown>) =>
+        t.type === 'expense' &&
+        t.category_id !== null &&
+        (t.date as string) >= startDate &&
+        (t.date as string) < endDate
+    )
 
-    const prevTxns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'expense' && t.category_id !== null &&
-        (t.date as string) >= prevStart && (t.date as string) < startDate,
-      )
+    const prevTxns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+      (t: Record<string, unknown>) =>
+        t.type === 'expense' &&
+        t.category_id !== null &&
+        (t.date as string) >= prevStart &&
+        (t.date as string) < startDate
+    )
 
     const spentMap: Record<number, number> = {}
     for (const t of txns) {
@@ -622,14 +655,17 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
     }
 
     // Previous month budgets for auto-rollover
-    const prevBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) =>
-        (b.start_date as string) >= prevStart && (b.start_date as string) < startDate,
-      )
+    const prevBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) =>
+        (b.start_date as string) >= prevStart && (b.start_date as string) < startDate
+    )
 
     const prevUnusedMap: Record<number, { unused: number; rollover_enabled: boolean }> = {}
     for (const pb of prevBudgets) {
-      const unused = Math.max(0, (pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0))
+      const unused = Math.max(
+        0,
+        (pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0)
+      )
       prevUnusedMap[pb.category_id as number] = {
         unused,
         rollover_enabled: !!(pb as Record<string, unknown>).rollover_enabled,
@@ -655,9 +691,9 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
           auto_rollover = prevInfo.unused
         }
         rollover_contribution =
-          ((b as Record<string, unknown>).rollover_amount as number || 0) +
+          (((b as Record<string, unknown>).rollover_amount as number) || 0) +
           auto_rollover -
-          ((b as Record<string, unknown>).rollover_used as number || 0)
+          (((b as Record<string, unknown>).rollover_used as number) || 0)
       }
 
       const effective_budget = (b.amount as number) + Math.max(0, rollover_contribution)
@@ -675,7 +711,8 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         effective_remaining,
         rollover_contribution: Math.max(0, rollover_contribution),
         auto_rollover,
-        percentage: (b.amount as number) > 0 ? Math.min(100, (spentAmt / (b.amount as number)) * 100) : 0,
+        percentage:
+          (b.amount as number) > 0 ? Math.min(100, (spentAmt / (b.amount as number)) * 100) : 0,
       }
     })
 
@@ -698,33 +735,35 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
     const cats = (await db.getAllFromIndex('categories', 'by_profile', pid))
       .filter((c: Record<string, unknown>) => c.type === 'expense')
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-        (a.name as string).localeCompare(b.name as string),
+        (a.name as string).localeCompare(b.name as string)
       )
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) =>
+    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) =>
         (b.start_date as string) >= startOfMonth &&
         (b.start_date as string) < endOfMonth &&
-        b.period === 'monthly',
-      )
+        b.period === 'monthly'
+    )
 
     const budgetMap: Record<number, Record<string, unknown>> = {}
     for (const b of budgets) budgetMap[b.category_id as number] = b
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
+    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
     const spentMap: Record<number, number> = {}
     for (const t of txns) {
       if (t.type !== 'expense' || !t.category_id) continue
       if ((t.date as string) >= startOfMonth && (t.date as string) < endOfMonth) {
-        spentMap[t.category_id as number] = (spentMap[t.category_id as number] || 0) + Math.abs(getAmount(t))
+        spentMap[t.category_id as number] =
+          (spentMap[t.category_id as number] || 0) + Math.abs(getAmount(t))
       }
     }
 
     const income = txns
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'income' &&
-        (t.date as string) >= startOfMonth &&
-        (t.date as string) < endOfMonth,
+      .filter(
+        (t: Record<string, unknown>) =>
+          t.type === 'income' &&
+          (t.date as string) >= startOfMonth &&
+          (t.date as string) < endOfMonth
       )
       .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
 
@@ -784,27 +823,29 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
     const startOfMonth = `${month}-01`
     const endOfMonth = endOfNextMonth(startOfMonth)
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) =>
+    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) =>
         (b.start_date as string) >= startOfMonth &&
         (b.start_date as string) < endOfMonth &&
-        b.period === 'monthly',
-      )
+        b.period === 'monthly'
+    )
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
+    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
     const spentMap: Record<number, number> = {}
     for (const t of txns) {
       if (t.type !== 'expense' || !t.category_id) continue
       if ((t.date as string) >= startOfMonth && (t.date as string) < endOfMonth) {
-        spentMap[t.category_id as number] = (spentMap[t.category_id as number] || 0) + Math.abs(getAmount(t))
+        spentMap[t.category_id as number] =
+          (spentMap[t.category_id as number] || 0) + Math.abs(getAmount(t))
       }
     }
 
     const income = txns
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'income' &&
-        (t.date as string) >= startOfMonth &&
-        (t.date as string) < endOfMonth,
+      .filter(
+        (t: Record<string, unknown>) =>
+          t.type === 'income' &&
+          (t.date as string) >= startOfMonth &&
+          (t.date as string) < endOfMonth
       )
       .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
 
@@ -812,7 +853,10 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
     const catMap: Record<number, Record<string, unknown>> = {}
     for (const c of cats) catMap[c.id as number] = c
 
-    const totalBudget = budgets.reduce((sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0), 0)
+    const totalBudget = budgets.reduce(
+      (sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0),
+      0
+    )
     const totalSpent = Object.values(spentMap).reduce((sum: number, val: number) => sum + val, 0)
     const remaining = totalBudget - totalSpent
     const zero_based_remaining = income - totalBudget
@@ -901,17 +945,18 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
 
     // Check if budget already exists
     const db = await getDB()
-    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .find((b: Record<string, unknown>) =>
-        b.category_id === category_id &&
-        b.start_date === start_date &&
-        b.period === budgetPeriod,
-      )
+    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid)).find(
+      (b: Record<string, unknown>) =>
+        b.category_id === category_id && b.start_date === start_date && b.period === budgetPeriod
+    )
 
     if (existing) {
-      return json({
-        error: `Budget already exists for ${month}. Use PUT /api/budgets/${existing.id} to update it.`,
-      }, 400)
+      return json(
+        {
+          error: `Budget already exists for ${month}. Use PUT /api/budgets/${existing.id} to update it.`,
+        },
+        400
+      )
     }
 
     const id = await adapter.createBudget({
@@ -940,7 +985,10 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
 
 // ── Budget rollover ──────────────────────────────────────────────────────────
 
-export async function budgetsRollover(params: Record<string, string>, body: unknown): Promise<Response> {
+export async function budgetsRollover(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
   try {
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
@@ -949,7 +997,11 @@ export async function budgetsRollover(params: Record<string, string>, body: unkn
     if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
     const { rollover_amount, rollover_used, rollover_enabled } = body as Record<string, unknown>
 
-    if (rollover_amount === undefined && rollover_used === undefined && rollover_enabled === undefined) {
+    if (
+      rollover_amount === undefined &&
+      rollover_used === undefined &&
+      rollover_enabled === undefined
+    ) {
       return json({ error: 'No rollover fields provided' }, 400)
     }
 
@@ -981,18 +1033,20 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
     const { year, month } = body as Record<string, unknown>
 
     const targetYear = (year as number) || new Date().getFullYear()
-    const targetMonth = (month as number) || (new Date().getMonth() + 1)
+    const targetMonth = (month as number) || new Date().getMonth() + 1
 
     const pm = prevMonth(targetYear, targetMonth)
     const prevStart = monthStart(pm.year, pm.month)
     const prevEnd = monthStart(targetYear, targetMonth)
 
     // Get expenses by category for previous month
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid))
-      .filter((t: Record<string, unknown>) =>
-        t.type === 'expense' && t.category_id !== null &&
-        (t.date as string) >= prevStart && (t.date as string) < prevEnd,
-      )
+    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+      (t: Record<string, unknown>) =>
+        t.type === 'expense' &&
+        t.category_id !== null &&
+        (t.date as string) >= prevStart &&
+        (t.date as string) < prevEnd
+    )
 
     const expensesByCat: Record<number, number> = {}
     for (const t of txns) {
@@ -1008,13 +1062,15 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
     // Clear existing budgets for target month
     const currStart = monthStart(targetYear, targetMonth)
     const currEnd = monthStart(
-      ...(targetMonth === 12 ? [targetYear + 1, 1] : [targetYear, targetMonth + 1] as [number, number]),
+      ...(targetMonth === 12
+        ? [targetYear + 1, 1]
+        : ([targetYear, targetMonth + 1] as [number, number]))
     )
 
-    const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) =>
-        (b.start_date as string) >= currStart && (b.start_date as string) < currEnd,
-      )
+    const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) =>
+        (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
+    )
 
     const tx = db.transaction('budgets', 'readwrite')
     for (const b of existingBudgets) await tx.store.delete(b.id as number)
@@ -1049,17 +1105,17 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
     const { year, month } = body as Record<string, unknown>
 
     const targetYear = (year as number) || new Date().getFullYear()
-    const targetMonth = (month as number) || (new Date().getMonth() + 1)
+    const targetMonth = (month as number) || new Date().getMonth() + 1
 
     const pm = prevMonth(targetYear, targetMonth)
     const prevStart = monthStart(pm.year, pm.month)
     const prevEnd = monthStart(targetYear, targetMonth)
 
     // Get previous month's budgets
-    const prevBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) =>
-        (b.start_date as string) >= prevStart && (b.start_date as string) < prevEnd,
-      )
+    const prevBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) =>
+        (b.start_date as string) >= prevStart && (b.start_date as string) < prevEnd
+    )
 
     if (prevBudgets.length === 0) {
       return json({ ok: false, message: 'No budgets found for previous month' })
@@ -1069,13 +1125,13 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
     const currStart = monthStart(targetYear, targetMonth)
     const currEnd = monthStart(
       targetMonth === 12 ? targetYear + 1 : targetYear,
-      targetMonth === 12 ? 1 : targetMonth + 1,
+      targetMonth === 12 ? 1 : targetMonth + 1
     )
 
-    const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
-      .filter((b: Record<string, unknown>) =>
-        (b.start_date as string) >= currStart && (b.start_date as string) < currEnd,
-      )
+    const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (b: Record<string, unknown>) =>
+        (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
+    )
 
     const tx = db.transaction('budgets', 'readwrite')
     for (const b of existingBudgets) await tx.store.delete(b.id as number)
@@ -1110,7 +1166,7 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
     const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
       .filter((b: Record<string, unknown>) => (b.start_date as string) <= month)
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-        (b.start_date as string).localeCompare(a.start_date as string),
+        (b.start_date as string).localeCompare(a.start_date as string)
       )
 
     if (budgets.length === 0) {
@@ -1123,7 +1179,10 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       })
     }
 
-    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid) as Record<string, unknown>[]
+    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
+      string,
+      unknown
+    >[]
 
     // Historical averages by category
     const catAvgs: Record<number, { total: number; count: number; avgAmount: number }> = {}
@@ -1134,9 +1193,12 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       const bStart = b.start_date as string
       const bEnd = endOfNextMonth(bStart)
       const spent = txns
-        .filter((t: Record<string, unknown>) =>
-          t.type === 'expense' && t.category_id === cid &&
-          (t.date as string) >= bStart && (t.date as string) < bEnd,
+        .filter(
+          (t: Record<string, unknown>) =>
+            t.type === 'expense' &&
+            t.category_id === cid &&
+            (t.date as string) >= bStart &&
+            (t.date as string) < bEnd
         )
         .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
       if (spent > 0) {
@@ -1162,9 +1224,12 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
     const forecastData = forecastMonths.map((fm) => {
       const fmMonthStr = `${fm.month}-01`
       const currentBudget =
-        budgets.find((b: Record<string, unknown>) => b.start_date === fmMonthStr) || budgets[budgets.length - 1]
+        budgets.find((b: Record<string, unknown>) => b.start_date === fmMonthStr) ||
+        budgets[budgets.length - 1]
       const cid = currentBudget.category_id as number
-      const avgSpending = catAvgs[cid] ? catAvgs[cid].avgAmount : (currentBudget.amount as number) * 0.5
+      const avgSpending = catAvgs[cid]
+        ? catAvgs[cid].avgAmount
+        : (currentBudget.amount as number) * 0.5
 
       const monthDiff =
         (parseInt(fm.month.slice(0, 4)) - now.getFullYear()) * 12 +
@@ -1212,22 +1277,32 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       const d = histMap[mo]
       return {
         month: mo,
-        label: new Date(`${mo}-01`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        label: new Date(`${mo}-01`).toLocaleDateString('en-US', {
+          month: 'short',
+          year: 'numeric',
+        }),
         total_budget: d.budget,
         total_spent: d.spent,
         adherence: d.budget > 0 ? Math.min(100, (d.spent / d.budget) * 100) : 0,
       }
     })
 
-    const avgAdherence = history.length > 0
-      ? history.reduce((sum: number, h: Record<string, unknown>) => sum + (h.adherence as number), 0) / history.length
-      : 0
+    const avgAdherence =
+      history.length > 0
+        ? history.reduce(
+            (sum: number, h: Record<string, unknown>) => sum + (h.adherence as number),
+            0
+          ) / history.length
+        : 0
 
     return json({
       period: month,
       history,
       forecast: forecastData,
-      total_budget: budgets.reduce((sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0), 0),
+      total_budget: budgets.reduce(
+        (sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0),
+        0
+      ),
       avg_adherence: Math.round(avgAdherence),
     })
   } catch (err) {
@@ -1267,7 +1342,7 @@ export async function goalsGet(params: Record<string, string>): Promise<Response
 
 export async function goalsUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   await adapter.updateGoal(idParam(params), body as Record<string, unknown>)
@@ -1281,7 +1356,7 @@ export async function goalsDelete(params: Record<string, string>): Promise<Respo
 
 export async function goalsContribute(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   const db = await getDB()
   const goal = await db.get('goals', idParam(params))
@@ -1319,7 +1394,7 @@ export async function loansGet(params: Record<string, string>): Promise<Response
 
 export async function loansUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   await adapter.updateLoan(idParam(params), body as Record<string, unknown>)
@@ -1341,7 +1416,7 @@ export async function loanRates(params: Record<string, string>): Promise<Respons
 
 export async function loanRatesAdd(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   const db = await getDB()
   const loan = await db.get('loans', idParam(params))
@@ -1356,7 +1431,7 @@ export async function loanRatesAdd(
 
 export async function loanRateUpdate(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   const db = await getDB()
   const loan = await db.get('loans', idParam(params))
@@ -1398,7 +1473,7 @@ export async function loanPrepayments(params: Record<string, string>): Promise<R
 
 export async function loanPrepaymentAdd(
   params: Record<string, string>,
-  body: unknown,
+  body: unknown
 ): Promise<Response> {
   const db = await getDB()
   const loan = await db.get('loans', idParam(params))
@@ -1433,7 +1508,10 @@ export async function exportAll(): Promise<Response> {
   return json(data)
 }
 
-export async function exportByType(params: Record<string, string>, query: URLSearchParams): Promise<Response> {
+export async function exportByType(
+  params: Record<string, string>,
+  query: URLSearchParams
+): Promise<Response> {
   const type = params.p1
   const fmt = query.get('format') || 'json'
   const data = await adapter.exportData()
@@ -1442,11 +1520,14 @@ export async function exportByType(params: Record<string, string>, query: URLSea
     const csv = ['date,type,description,amount,currency,category_id,notes']
     for (const t of data.transactions) {
       csv.push(
-        [t.date, t.type, `"${t.description}"`, t.amount, t.currency, `"${t.notes || ''}"`].join(','),
+        [t.date, t.type, `"${t.description}"`, t.amount, t.currency, `"${t.notes || ''}"`].join(',')
       )
     }
     return new Response(csv.join('\n'), {
-      headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename=${type}.csv` },
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename=${type}.csv`,
+      },
     })
   }
 
@@ -1489,7 +1570,7 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
     const pid = await adapter.getCurrentProfileId()
     const now = new Date()
     const year = parseInt(query.get('year')!) || now.getFullYear()
-    const month = parseInt(query.get('month')!) || (now.getMonth() + 1)
+    const month = parseInt(query.get('month')!) || now.getMonth() + 1
 
     const startDate = monthStart(year, month)
     const pm = prevMonth(year, month)
@@ -1504,13 +1585,21 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
 
     // Current month
     const currentTxns = profileTxns.filter((t) => t.date >= startDate && t.date <= endDate)
-    const currentIncome = currentTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-    const currentExpense = currentTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const currentIncome = currentTxns
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const currentExpense = currentTxns
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
 
     // Previous month
     const prevTxns = profileTxns.filter((t) => t.date >= prevStart && t.date <= prevEnd)
-    const prevIncome = prevTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-    const prevExpense = prevTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const prevIncome = prevTxns
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const prevExpense = prevTxns
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
 
     // Recent transactions (top 10)
     const recent = [...currentTxns]
@@ -1520,7 +1609,10 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
     // Category breakdown (expenses)
     const cats = await adapter.listCategories()
     const catMap = new Map(cats.map((c) => [c.id, c]))
-    const expenseByCat: Record<string, { category_name: string; category_color: string; total: number }> = {}
+    const expenseByCat: Record<
+      string,
+      { category_name: string; category_color: string; total: number }
+    > = {}
     for (const t of currentTxns.filter((t) => t.type === 'expense')) {
       const cat = catMap.get(t.category_id)
       const key = String(t.category_id || 0)
@@ -1549,7 +1641,7 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       upcomingBills: [],
       momIncomeDelta: currentIncome - prevIncome,
       momExpenseDelta: currentExpense - prevExpense,
-      momBalanceDelta: (currentIncome - currentExpense) - (prevIncome - prevExpense),
+      momBalanceDelta: currentIncome - currentExpense - (prevIncome - prevExpense),
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
@@ -1581,9 +1673,15 @@ export async function dashboardSummary(query: URLSearchParams): Promise<Response
     const profileTxns = allTxns.filter((t) => t.profile_id === pid)
     const periodTxns = profileTxns.filter((t) => t.date >= startDate && t.date < endDate)
 
-    const income = periodTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-    const expense = periodTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-    const transfer = periodTxns.filter((t) => t.type === 'transfer').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const income = periodTxns
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const expense = periodTxns
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const transfer = periodTxns
+      .filter((t) => t.type === 'transfer')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
 
     // Previous period
     let prevStart: string, prevEnd: string
@@ -1598,14 +1696,22 @@ export async function dashboardSummary(query: URLSearchParams): Promise<Response
     }
 
     const prevTxns = profileTxns.filter((t) => t.date >= prevStart && t.date < prevEnd)
-    const prevIncome = prevTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-    const prevExpense = prevTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const prevIncome = prevTxns
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const prevExpense = prevTxns
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
 
     // YTD
     const ytdStart = `${y}-01-01`
     const ytdTxns = profileTxns.filter((t) => t.date >= ytdStart)
-    const ytdIncome = ytdTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-    const ytdExpense = ytdTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const ytdIncome = ytdTxns
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const ytdExpense = ytdTxns
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
 
     // Recent
     const recent = [...periodTxns]
@@ -1643,7 +1749,10 @@ export async function dashboardCharts(query: URLSearchParams): Promise<Response>
     // By category
     const cats = await adapter.listCategories()
     const catMap = new Map(cats.map((c) => [c.id, c]))
-    const byCat: Record<string, { name: string; color: string; icon: string | null; total: number; count: number }> = {}
+    const byCat: Record<
+      string,
+      { name: string; color: string; icon: string | null; total: number; count: number }
+    > = {}
     for (const t of rangeTxns.filter((t) => t.type === 'expense')) {
       const cat = catMap.get(t.category_id)
       const key = String(t.category_id || 0)
@@ -1666,8 +1775,10 @@ export async function dashboardCharts(query: URLSearchParams): Promise<Response>
     for (const t of rangeTxns.filter((t) => t.type === 'income' || t.type === 'expense')) {
       const mo = t.date.substring(0, 7)
       if (!monthlyMap[mo]) monthlyMap[mo] = { month: mo, income: 0, expense: 0 }
-      if (t.type === 'income') monthlyMap[mo].income += getAmount(t as unknown as Record<string, unknown>)
-      if (t.type === 'expense') monthlyMap[mo].expense += getAmount(t as unknown as Record<string, unknown>)
+      if (t.type === 'income')
+        monthlyMap[mo].income += getAmount(t as unknown as Record<string, unknown>)
+      if (t.type === 'expense')
+        monthlyMap[mo].expense += getAmount(t as unknown as Record<string, unknown>)
     }
     const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
 
@@ -1679,7 +1790,10 @@ export async function dashboardCharts(query: URLSearchParams): Promise<Response>
 
     // Get currency
     const settings = await adapter.getSettings()
-    const currency = (settings as Record<string, unknown>).local_currency || (settings as Record<string, unknown>).currency || 'EUR'
+    const currency =
+      (settings as Record<string, unknown>).local_currency ||
+      (settings as Record<string, unknown>).currency ||
+      'EUR'
 
     return json({ byCategory, monthly, cashFlow, currency })
   } catch (err) {
@@ -1695,7 +1809,9 @@ export async function dashboardNetWorth(): Promise<Response> {
 
     // Monthly net flow from all transactions
     const allTxns = await adapter.listTransactions()
-    const profileTxns = allTxns.filter((t) => t.profile_id === pid && (t.type === 'income' || t.type === 'expense'))
+    const profileTxns = allTxns.filter(
+      (t) => t.profile_id === pid && (t.type === 'income' || t.type === 'expense')
+    )
     const monthlyMap: Record<string, { month: string; net: number }> = {}
     for (const t of profileTxns) {
       const mo = t.date.substring(0, 7)
@@ -1733,7 +1849,9 @@ export async function dashboardNetWorth(): Promise<Response> {
 export async function analyticsDistinctYears(): Promise<Response> {
   try {
     const allTxns = await adapter.listTransactions()
-    const years = [...new Set(allTxns.map((t) => parseInt(t.date.substring(0, 4))))].sort((a, b) => b - a)
+    const years = [...new Set(allTxns.map((t) => parseInt(t.date.substring(0, 4))))].sort(
+      (a, b) => b - a
+    )
     const currentYear = new Date().getFullYear()
     if (years.length === 0) years.push(currentYear)
     if (!years.includes(currentYear)) years.unshift(currentYear)
@@ -1751,9 +1869,7 @@ export async function analyticsWeeks(query: URLSearchParams): Promise<Response> 
 
     const weeks: Array<{ week: number; label: string }> = []
     const firstDay = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1)
-    const lastDay = month
-      ? new Date(year, month, 0)
-      : new Date(year, 11, 31)
+    const lastDay = month ? new Date(year, month, 0) : new Date(year, 11, 31)
 
     let w = 1
     const current = new Date(firstDay)
@@ -1841,8 +1957,34 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
     const labels: string[] = []
     const periodMap = new Map<string, number>()
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const monthNamesFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
+    const monthNamesFull = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ]
 
     if (week && month) {
       const lastDay = new Date(year, month, 0).getDate()
@@ -1851,13 +1993,19 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
       for (let d = ws; d <= we; d++) {
         const date = new Date(year, month - 1, d)
         labels.push(dayNames[date.getDay()])
-        periodMap.set(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`, labels.length - 1)
+        periodMap.set(
+          `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+          labels.length - 1
+        )
       }
     } else if (month) {
       const lastDay = new Date(year, month, 0).getDate()
       for (let d = 1; d <= lastDay; d++) {
         labels.push(`${monthNamesFull[month - 1]} ${d}`)
-        periodMap.set(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`, labels.length - 1)
+        periodMap.set(
+          `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+          labels.length - 1
+        )
       }
     } else {
       for (let m = 0; m < 12; m++) {
@@ -1869,7 +2017,11 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
     // Aggregate by category
     const catDataMap: Record<string, { category: string; color: string; data: number[] }> = {}
     for (const c of cats) {
-      catDataMap[c.id] = { category: c.name, color: c.color, data: new Array(labels.length).fill(0) }
+      catDataMap[c.id] = {
+        category: c.name,
+        color: c.color,
+        data: new Array(labels.length).fill(0),
+      }
     }
 
     for (const t of txns) {
@@ -1908,7 +2060,11 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
 
       const cmpCatData: Record<string, { category: string; color: string; data: number[] }> = {}
       for (const c of cats) {
-        cmpCatData[c.id] = { category: c.name, color: c.color, data: new Array(labels.length).fill(0) }
+        cmpCatData[c.id] = {
+          category: c.name,
+          color: c.color,
+          data: new Array(labels.length).fill(0),
+        }
       }
       for (const t of cmpTxns) {
         const dateKey = month ? t.date : t.date.substring(0, 7)
@@ -1950,10 +2106,7 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     const cats = await adapter.listCategories()
 
     // Get budgets for this month
-    const activeBudgets = budgets.filter(
-      (b) =>
-        b.period === 'month' || b.period === 'monthly'
-    )
+    const activeBudgets = budgets.filter((b) => b.period === 'month' || b.period === 'monthly')
 
     // Get actual spending for this month
     const profileTxns = allTxns.filter(
@@ -1968,8 +2121,18 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
 
     const catMap = new Map(cats.map((c) => [c.id, c]))
 
-    interface SankeyNode { name: string; category: string; color?: string }
-    interface SankeyLink { source: string; target: string; value: number; sourceCategory: string; targetCategory: string }
+    interface SankeyNode {
+      name: string
+      category: string
+      color?: string
+    }
+    interface SankeyLink {
+      source: string
+      target: string
+      value: number
+      sourceCategory: string
+      targetCategory: string
+    }
 
     const nodes: SankeyNode[] = []
     const links: SankeyLink[] = []
@@ -2217,9 +2380,24 @@ export async function retirementCalculate(body: unknown): Promise<Response> {
     }
 
     const scenarios = [
-      { name: 'Conservative', ret: 4, fireNumber: Math.round(adjustedExpenses / 0.04), fireAge: null as number | null },
-      { name: 'Moderate', ret: 6, fireNumber: Math.round(adjustedExpenses / 0.06), fireAge: null as number | null },
-      { name: 'Optimistic', ret: 8, fireNumber: Math.round(adjustedExpenses / 0.08), fireAge: null as number | null },
+      {
+        name: 'Conservative',
+        ret: 4,
+        fireNumber: Math.round(adjustedExpenses / 0.04),
+        fireAge: null as number | null,
+      },
+      {
+        name: 'Moderate',
+        ret: 6,
+        fireNumber: Math.round(adjustedExpenses / 0.06),
+        fireAge: null as number | null,
+      },
+      {
+        name: 'Optimistic',
+        ret: 8,
+        fireNumber: Math.round(adjustedExpenses / 0.08),
+        fireAge: null as number | null,
+      },
     ].map((s) => {
       let m = currentSavings as number
       let fa: number | null = null
@@ -2250,7 +2428,7 @@ export async function retirementCalculate(body: unknown): Promise<Response> {
       currentNWAtFire: Math.round(savings),
       traditionalRetirementAge: 65,
       timeline: timeline.filter(
-        (t: Record<string, number>) => t.year % 5 === 0 || t.year === currentAge,
+        (t: Record<string, number>) => t.year % 5 === 0 || t.year === currentAge
       ),
       withdrawalTimeline,
       scenarios,
@@ -2281,8 +2459,7 @@ export async function emergencyFund(): Promise<Response> {
     const dateStr = twelveMonthsAgo.toISOString().split('T')[0]
 
     const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-      (t: Record<string, unknown>) =>
-        t.type === 'expense' && (t.date as string) >= dateStr,
+      (t: Record<string, unknown>) => t.type === 'expense' && (t.date as string) >= dateStr
     )
 
     const monthlyTotals: Record<string, number> = {}
@@ -2303,7 +2480,7 @@ export async function emergencyFund(): Promise<Response> {
 
     const totalBalance = accounts.reduce(
       (s: number, a: Record<string, unknown>) => s + ((a.balance as number) || 0),
-      0,
+      0
     )
 
     const coverage = [
@@ -2319,8 +2496,7 @@ export async function emergencyFund(): Promise<Response> {
         required: Math.round(required),
         current: Math.round(current),
         coveragePct: required > 0 ? Math.min(100, Math.round((current / required) * 100)) : 0,
-        status:
-          current >= required ? 'complete' : current >= required * 0.5 ? 'partial' : 'low',
+        status: current >= required ? 'complete' : current >= required * 0.5 ? 'partial' : 'low',
       }
     })
 
@@ -2342,11 +2518,14 @@ export async function retirementProjection(query: URLSearchParams): Promise<Resp
     const db = await getDB()
 
     const settingsRows = await db.getAll('settings')
-    const settingsRow = settingsRows.find((s: Record<string, unknown>) => s.key === 'retirement_goals')
+    const settingsRow = settingsRows.find(
+      (s: Record<string, unknown>) => s.key === 'retirement_goals'
+    )
     const settings = settingsRow ? settingsRow.value : null
 
     const currentAge = parseFloat(query.get('currentAge') || query.get('age') || '30') || 30
-    const retirementAge = parseFloat(query.get('retirementAge') || query.get('retire') || '65') || 65
+    const retirementAge =
+      parseFloat(query.get('retirementAge') || query.get('retire') || '65') || 65
     const currentSavings =
       parseFloat(query.get('currentSavings') || query.get('savings') || '0') || 0
     const monthlyContribution =
@@ -2363,7 +2542,7 @@ export async function retirementProjection(query: URLSearchParams): Promise<Resp
       annualReturn,
       withdrawalRate,
       country,
-      settings,
+      settings
     )
 
     return json(result)
@@ -2378,7 +2557,9 @@ export async function retirementGoals(): Promise<Response> {
     const db = await getDB()
 
     const settingsRows = await db.getAll('settings')
-    const settingsRow = settingsRows.find((s: Record<string, unknown>) => s.key === 'retirement_goals')
+    const settingsRow = settingsRows.find(
+      (s: Record<string, unknown>) => s.key === 'retirement_goals'
+    )
     const settings = settingsRow ? settingsRow.value : null
 
     const goals = await db.getAllFromIndex('goals', 'by_profile', pid)
@@ -2400,14 +2581,13 @@ function calculateRetirementProjection(
   annualReturn: number,
   withdrawalRate: number,
   country: string,
-  _settings: unknown,
+  _settings: unknown
 ): Record<string, unknown> {
   const monthsToRetirement = (retirementAge - currentAge) * 12
 
   const countryAdjustment = country === 'US' ? 1.0 : 0.9
   const monthlyExpenses = (currentAge >= retirementAge ? 0 : 2500) * countryAdjustment
-  const adjustedExpenses =
-    country === 'US' && currentAge >= retirementAge ? 2500 : monthlyExpenses
+  const adjustedExpenses = country === 'US' && currentAge >= retirementAge ? 2500 : monthlyExpenses
   const annualWithdrawal = adjustedExpenses * 12
 
   let savings = currentSavings
@@ -2462,7 +2642,10 @@ function getProfileIdFromStorage(): number {
 
 // ── Reports ─────────────────────────────────────────────────────────────────
 
-export async function reportHandler(ctx: { path: string; query: URLSearchParams }): Promise<Response> {
+export async function reportHandler(ctx: {
+  path: string
+  query: URLSearchParams
+}): Promise<Response> {
   const path = ctx.path
   const query = ctx.query
 
@@ -2475,7 +2658,7 @@ export async function reportHandler(ctx: { path: string; query: URLSearchParams 
           'Please switch to self-hosted mode (Settings → Storage Mode) to generate PDF reports.',
         serverlessMode: true,
       },
-      501,
+      501
     )
   }
 
@@ -2493,7 +2676,7 @@ export async function reportHandler(ctx: { path: string; query: URLSearchParams 
       const startStr = `${year}-01-01`
       const endStr = `${year}-12-31`
       const rows = txns.filter(
-        (t) => t.type === 'expense' && t.date >= startStr && t.date <= endStr,
+        (t) => t.type === 'expense' && t.date >= startStr && t.date <= endStr
       )
       const catMap = new Map(cats.map((c) => [c.id, c]))
 
@@ -2553,10 +2736,10 @@ export async function reportHandler(ctx: { path: string; query: URLSearchParams 
       }
 
       const incomeByCat = byCategory(
-        income.map((r) => ({ ...r, category_name: catMap.get(r.category_id)?.name || 'Unknown' })),
+        income.map((r) => ({ ...r, category_name: catMap.get(r.category_id)?.name || 'Unknown' }))
       )
       const expenseByCat = byCategory(
-        expenses.map((r) => ({ ...r, category_name: catMap.get(r.category_id)?.name || 'Unknown' })),
+        expenses.map((r) => ({ ...r, category_name: catMap.get(r.category_id)?.name || 'Unknown' }))
       )
 
       const incomeTotal = income.reduce((s, r) => s + r.amount, 0)
@@ -2758,7 +2941,7 @@ function parseSheetData(workbook: XLSX.WorkBook) {
 }
 
 async function detectDuplicates(
-  rows: Record<string, unknown>[],
+  rows: Record<string, unknown>[]
 ): Promise<{ duplicates: number[]; clean: Record<string, unknown>[] }> {
   const db = await getDB()
   const profileId = getProfileIdFromStorage()
@@ -2775,7 +2958,7 @@ async function detectDuplicates(
       (t) =>
         t.date === date &&
         t.description.toLowerCase().trim() === desc &&
-        Math.abs(Number(t.amount) - amount) < 0.01,
+        Math.abs(Number(t.amount) - amount) < 0.01
     )
     if (match) duplicates.push(i)
   }
@@ -2820,18 +3003,26 @@ export async function importFileSheet(body: unknown): Promise<Response> {
 
     const rows = parseSheetData(session.workbook)
     const { duplicates, clean } = await detectDuplicates(rows)
-    return json({ rows, total: rows.length, new_items: clean.length, duplicate_indices: duplicates })
+    return json({
+      rows,
+      total: rows.length,
+      new_items: clean.length,
+      duplicate_indices: duplicates,
+    })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }
 }
 
 export async function importGoogleSheet(): Promise<Response> {
-  return json({
-    error: 'Google Sheets import is not available in serverless mode due to CORS restrictions.',
-    message: 'Please download your sheet as CSV or Excel and import the file instead.',
-    serverlessMode: true,
-  }, 501)
+  return json(
+    {
+      error: 'Google Sheets import is not available in serverless mode due to CORS restrictions.',
+      message: 'Please download your sheet as CSV or Excel and import the file instead.',
+      serverlessMode: true,
+    },
+    501
+  )
 }
 
 export async function importExecute(body: unknown): Promise<Response> {
@@ -2857,13 +3048,22 @@ export async function importExecute(body: unknown): Promise<Response> {
 
     for (let i = 0; i < clean.length; i++) {
       const row = clean[i]
-      const description = mapping.description ? toStr(row[mapping.description]) || toStr(row.description) : toStr(row.description)
+      const description = mapping.description
+        ? toStr(row[mapping.description]) || toStr(row.description)
+        : toStr(row.description)
       const date = mapping.date ? toStr(row[mapping.date]) || toStr(row.date) : toStr(row.date)
-      const amount = parseFloat(mapping.amount ? toStr(row[mapping.amount]) || toStr(row.amount) || '0' : toStr(row.amount) || '0')
+      const amount = parseFloat(
+        mapping.amount
+          ? toStr(row[mapping.amount]) || toStr(row.amount) || '0'
+          : toStr(row.amount) || '0'
+      )
       const type = mapping.type ? toStr(row[mapping.type]) || defaultType : defaultType
 
       if (!description || !date || isNaN(amount)) {
-        skipped.push({ index: i, reason: `Missing required fields (description, date, amount) for row ${i + 1}` })
+        skipped.push({
+          index: i,
+          reason: `Missing required fields (description, date, amount) for row ${i + 1}`,
+        })
         continue
       }
 
@@ -2871,7 +3071,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (mapping.category && row[mapping.category]) {
         const catName = toStr(row[mapping.category]).toLowerCase().trim()
         const cat = categories.find(
-          (c) => c.name.toLowerCase().trim() === catName && c.type === type,
+          (c) => c.name.toLowerCase().trim() === catName && c.type === type
         )
         if (cat) categoryId = cat.id
       }

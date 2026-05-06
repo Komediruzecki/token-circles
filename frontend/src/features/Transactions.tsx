@@ -154,9 +154,8 @@ export default function Transactions() {
     try {
       await api.deleteReceipt(receipt.id)
       // Reload transactions to remove the deleted receipt reference
-      const data = await api.getTransactions()
-      const transactionsData = Array.isArray(data) ? data : data?.rows ?? []
-      setTransactions(transactionsData as unknown as Transaction[])
+      const data = (await api.getTransactions()) as Transaction[]
+      setTransactions(data)
       closeReceiptModal()
     } catch (error) {
       console.error('Failed to delete receipt:', error)
@@ -310,9 +309,8 @@ export default function Transactions() {
     try {
       await api.updateTransaction(transactionId, { category_id: categoryId })
       // Reload transactions to update the view
-      const data = await api.getTransactions()
-      const transactionsData: any[] = Array.isArray(data) ? data : data?.rows ?? []
-      setTransactions(transactionsData as unknown as Transaction[])
+      const data = (await api.getTransactions()) as Transaction[]
+      setTransactions(data)
     } catch (error) {
       console.error('Failed to apply category:', error)
     }
@@ -324,7 +322,7 @@ export default function Transactions() {
     try {
       const data = (await api.getTransactions()) as any
       // Backend returns { rows, total, limit, offset } for paginated responses
-      const transactionsData: any[] = Array.isArray(data) ? data : data?.rows ?? []
+      const transactionsData: any[] = Array.isArray(data) ? data : (data?.rows ?? [])
       setTransactions(transactionsData as unknown as Transaction[])
     } catch (error) {
       console.error('Failed to reload transactions:', error)
@@ -574,9 +572,16 @@ export default function Transactions() {
       {/* Transaction Modal */}
       <div
         class={`${styles.modalOverlay} ${isTransactionModalOpen() ? styles.show : ''}`}
-        onclick={() => { _closeModals(); }}
+        onclick={() => {
+          _closeModals()
+        }}
       >
-        <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
+        <div
+          class={styles.modal}
+          onclick={(e) => {
+            e.stopPropagation()
+          }}
+        >
           <div class={styles.modalHeader}>
             <div class={styles.modalTitle} id="tx-modal-title">
               {formId() ? 'Edit Transaction' : 'Add Transaction'}
@@ -911,9 +916,16 @@ export default function Transactions() {
         <div
           class={`${styles.modalOverlay} ${styles.show} ${styles.receiptModal}`}
           id="receipt-modal"
-          onclick={() => { closeReceiptModal(); }}
+          onclick={() => {
+            closeReceiptModal()
+          }}
         >
-          <div class={`${styles.modal} ${styles.modalLg}`} onclick={(e) => { e.stopPropagation(); }}>
+          <div
+            class={`${styles.modal} ${styles.modalLg}`}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <div class={styles.modalTitle}>Receipt</div>
               <button class={styles.btnGhost} onclick={closeReceiptModal} aria-label="Close modal">

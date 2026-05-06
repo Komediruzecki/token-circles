@@ -173,29 +173,31 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
             {filteredCategories().length === 0 ? (
               <div class={categoryMultiSelectStyles.noResults}>No categories match</div>
             ) : (
-              <For each={filteredCategories()}>{(category, index) => (
-                <button
-                  class={`${categoryMultiSelectStyles.categoryItem} ${
-                    hoverIndex() === index ? categoryMultiSelectStyles.hovered : ''
-                  }`}
-                  onMouseEnter={() => setHoverIndex(index)}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleCategory(category.id)
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={props.selectedCategoryIds().includes(category.id)}
-                    readOnly
-                  />
-                  <span
-                    class={categoryMultiSelectStyles.categoryColor}
-                    style={{ 'background-color': category.color }}
-                  />
-                  <span class={categoryMultiSelectStyles.categoryName}>{category.name}</span>
-                </button>
-              )}</For>
+              <For each={filteredCategories()}>
+                {(category, index) => (
+                  <button
+                    class={`${categoryMultiSelectStyles.categoryItem} ${
+                      hoverIndex() === index() ? categoryMultiSelectStyles.hovered : ''
+                    }`}
+                    onMouseEnter={() => setHoverIndex(index)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleCategory(category.id)
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={props.selectedCategoryIds().includes(category.id)}
+                      readOnly
+                    />
+                    <span
+                      class={categoryMultiSelectStyles.categoryColor}
+                      style={{ 'background-color': category.color }}
+                    />
+                    <span class={categoryMultiSelectStyles.categoryName}>{category.name}</span>
+                  </button>
+                )}
+              </For>
             )}
           </div>
         </div>

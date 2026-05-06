@@ -50,10 +50,12 @@ export default function Dashboard() {
   const [loading, setLoading] = createSignal(true)
   const [pillPeriod, setPillPeriod] = createSignal('month')
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
-  const [savingsGoal, setSavingsGoal] = createSignal(() => {
-    const stored = localStorage.getItem('savingsGoal')
-    return stored ? parseFloat(stored) : 20
-  })
+  const [savingsGoal, setSavingsGoal] = createSignal(
+    (() => {
+      const stored = localStorage.getItem('savingsGoal')
+      return stored ? parseFloat(stored) : 20
+    })(),
+  )
 
   const handleSavingsGoalChange = (num: number) => {
     if (!isNaN(num) && num >= 0) {
@@ -404,7 +406,9 @@ export default function Dashboard() {
               <SavingsRateCard
                 savingsRate={
                   metrics()!.totalIncome > 0
-                    ? ((metrics()!.totalIncome - metrics()!.totalExpenses) / metrics()!.totalIncome) * 100
+                    ? ((metrics()!.totalIncome - metrics()!.totalExpenses) /
+                        metrics()!.totalIncome) *
+                      100
                     : 0
                 }
                 monthlySavings={metrics()!.totalIncome - metrics()!.totalExpenses}
@@ -521,7 +525,8 @@ export default function Dashboard() {
                         <div class={styles.transactionName}>{tx.description}</div>
                         <div class={styles.transactionMeta}>
                           {formatDate(tx.date)} •{' '}
-                          {tx.category_name || (tx.category_id ? `#${tx.category_id}` : 'No category')}
+                          {tx.category_name ||
+                            (tx.category_id ? `#${tx.category_id}` : 'No category')}
                         </div>
                       </div>
                       <div

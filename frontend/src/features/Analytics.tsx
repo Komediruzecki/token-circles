@@ -84,7 +84,9 @@ export default function Analytics() {
   const [stackedChart, setStackedChart] = createSignal<any>(undefined)
   const [monthlyChart, setMonthlyChart] = createSignal<any>(undefined)
   const [sankeyContainer, setSankeyContainer] = createSignal<HTMLDivElement | undefined>(undefined)
-  const [heatmapContainer, setHeatmapContainer] = createSignal<HTMLDivElement | undefined>(undefined)
+  const [heatmapContainer, setHeatmapContainer] = createSignal<HTMLDivElement | undefined>(
+    undefined
+  )
 
   // Load weeks for month drill-down
   const loadWeeks = async () => {
@@ -884,10 +886,18 @@ export default function Analytics() {
                 <div class={styles.heatmapControls}>
                   <button
                     class={styles.exportButton}
-                    onClick={() => { exportSvgAsPng(heatmapContainer(), 'spending-heatmap'); }}
+                    onClick={() => {
+                      exportSvgAsPng(heatmapContainer(), 'spending-heatmap')
+                    }}
                     title="Export as PNG"
                   >
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -916,10 +926,7 @@ export default function Analytics() {
                   </select>
                 </div>
               </div>
-              <div
-                class={styles.chartContainer}
-                ref={setHeatmapContainer}
-              >
+              <div class={styles.chartContainer} ref={setHeatmapContainer}>
                 {heatmapData().size === 0 ? (
                   <div class={styles.emptyState}>No data available for this year</div>
                 ) : (
@@ -963,7 +970,8 @@ export default function Analytics() {
                       </p>
                     ) : (
                       <div style="max-height:200px;overflow-y:auto;">
-                        <For each={heatmapModal()!.transactions.slice(0, 10)}>{(tx: any) => (
+                        <For each={heatmapModal()!.transactions.slice(0, 10)}>
+                          {(tx: any) => (
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
                               <span style="color:var(--text);">
                                 {tx.description || tx.category || '-'}
@@ -975,7 +983,8 @@ export default function Analytics() {
                                 {formatAmount(Math.abs(tx.amount || 0))}
                               </span>
                             </div>
-                          )}</For>
+                          )}
+                        </For>
                         {heatmapModal()!.transactions.length > 10 && (
                           <div style="padding:5px 0;font-size:12px;color:var(--text-secondary);">
                             +{heatmapModal()!.transactions.length - 10} more
@@ -1003,10 +1012,18 @@ export default function Analytics() {
                 <div class={styles.heatmapControls}>
                   <button
                     class={styles.exportButton}
-                    onClick={() => { exportSvgAsPng(sankeyContainer(), 'budget-flow'); }}
+                    onClick={() => {
+                      exportSvgAsPng(sankeyContainer(), 'budget-flow')
+                    }}
                     title="Export as PNG"
                   >
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -1044,10 +1061,7 @@ export default function Analytics() {
                   </select>
                 </div>
               </div>
-              <div
-                class={styles.chartContainer}
-                ref={setSankeyContainer}
-              >
+              <div class={styles.chartContainer} ref={setSankeyContainer}>
                 {sankeyData().nodes.length === 0 ? (
                   <div class={styles.emptyState}>
                     No budget data for this month. Set budgets to see the flow diagram.
@@ -1063,30 +1077,33 @@ export default function Analytics() {
           <div class={styles.analyticsRecent}>
             <h3 class={styles.sectionTitle}>Recent Transactions</h3>
             <div class={styles.transactionList}>
-              <For each={data()!.recentTransactions}>{(tx: any) => (
-                <div class={styles.transactionItem}>
-                  <div
-                    class={styles.transactionIcon}
-                    style={{
-                      background: tx.type === 'expense' ? 'var(--danger)' : 'var(--income)',
-                    }}
-                  >
-                    {tx.type === 'expense' ? '↓' : '↑'}
-                  </div>
-                  <div class={styles.transactionDetails}>
-                    <div class={styles.transactionName}>{tx.description}</div>
-                    <div class={styles.transactionMeta}>
-                      {new Date(tx.date).toLocaleDateString()} • {tx.category_name || 'No category'}
+              <For each={data()!.recentTransactions}>
+                {(tx: any) => (
+                  <div class={styles.transactionItem}>
+                    <div
+                      class={styles.transactionIcon}
+                      style={{
+                        background: tx.type === 'expense' ? 'var(--danger)' : 'var(--income)',
+                      }}
+                    >
+                      {tx.type === 'expense' ? '↓' : '↑'}
+                    </div>
+                    <div class={styles.transactionDetails}>
+                      <div class={styles.transactionName}>{tx.description}</div>
+                      <div class={styles.transactionMeta}>
+                        {new Date(tx.date).toLocaleDateString()} •{' '}
+                        {tx.category_name || 'No category'}
+                      </div>
+                    </div>
+                    <div
+                      class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                    >
+                      {tx.type === 'expense' ? '-' : '+'}
+                      {formatAmount(tx.amount)}
                     </div>
                   </div>
-                  <div
-                    class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
-                  >
-                    {tx.type === 'expense' ? '-' : '+'}
-                    {formatAmount(tx.amount)}
-                  </div>
-                </div>
-              )}</For>
+                )}
+              </For>
             </div>
             <div class={styles.viewAllLink}>
               <a href="#transactions">View All Transactions →</a>

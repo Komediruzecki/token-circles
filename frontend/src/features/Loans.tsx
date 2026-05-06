@@ -976,58 +976,62 @@ export default function Loans() {
                     <div style={{ 'margin-bottom': '16px' }}>
                       <label class={styles.formLabel}>Existing Prepayments</label>
                       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
-                        <For each={prepayments()}>{(p: any) => (
-                          <div
-                            style={{
-                              display: 'flex',
-                              'align-items': 'center',
-                              'justify-content': 'space-between',
-                              padding: '10px 12px',
-                              background: 'var(--bg)',
-                              'border-radius': '8px',
-                              'font-size': '13px',
-                              border: '1px solid var(--border)',
-                            }}
-                          >
-                            <div style={{ display: 'flex', gap: '16px', 'align-items': 'center' }}>
-                              <span style={{ 'font-weight': 600, color: 'var(--text)' }}>
-                                Month {p.month}
-                              </span>
-                              <span style={{ color: 'var(--primary)' }}>
-                                {formatCurrency(p.amount)}
-                              </span>
-                              {p.note ? (
-                                <span
-                                  style={{ color: 'var(--text-secondary)', 'font-size': '12px' }}
-                                >
-                                  {p.note}
-                                </span>
-                              ) : null}
-                            </div>
-                            <button
-                              type="button"
+                        <For each={prepayments()}>
+                          {(p: any) => (
+                            <div
                               style={{
-                                background: 'none',
-                                border: 'none',
-                                color: 'var(--danger)',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                'border-radius': '4px',
+                                display: 'flex',
+                                'align-items': 'center',
+                                'justify-content': 'space-between',
+                                padding: '10px 12px',
+                                background: 'var(--bg)',
+                                'border-radius': '8px',
+                                'font-size': '13px',
+                                border: '1px solid var(--border)',
                               }}
-                              onClick={() => deletePrepayment(loan.id, p.id)}
                             >
-                              <svg
-                                width="14"
-                                height="14"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
+                              <div
+                                style={{ display: 'flex', gap: '16px', 'align-items': 'center' }}
                               >
-                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}</For>
+                                <span style={{ 'font-weight': 600, color: 'var(--text)' }}>
+                                  Month {p.month}
+                                </span>
+                                <span style={{ color: 'var(--primary)' }}>
+                                  {formatCurrency(p.amount)}
+                                </span>
+                                {p.note ? (
+                                  <span
+                                    style={{ color: 'var(--text-secondary)', 'font-size': '12px' }}
+                                  >
+                                    {p.note}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: 'var(--danger)',
+                                  cursor: 'pointer',
+                                  padding: '4px',
+                                  'border-radius': '4px',
+                                }}
+                                onClick={() => deletePrepayment(loan.id, p.id)}
+                              >
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </For>
                       </div>
                     </div>
                   ) : (

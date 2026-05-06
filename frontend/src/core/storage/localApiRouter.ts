@@ -45,7 +45,9 @@ function stub(path: string): Handler {
 // ── Dispatcher helper ────────────────────────────────────────────────────────
 
 /** Create a handler that dispatches based on HTTP method to named handlers */
-function dispatch(handlers: Partial<Record<string, (ctx: RouteContext) => Promise<Response>>>): Handler {
+function dispatch(
+  handlers: Partial<Record<string, (ctx: RouteContext) => Promise<Response>>>
+): Handler {
   return (ctx: RouteContext) => {
     const fn = handlers[ctx.method]
     if (fn) return fn(ctx)
@@ -72,7 +74,7 @@ const routes: RouteDef[] = [
           version: '4.0.0',
           mode: 'serverless',
           storage: 'indexeddb',
-        }),
+        })
       ),
   },
 
@@ -222,11 +224,31 @@ const routes: RouteDef[] = [
     methods: ['PATCH'],
     handler: dispatch({ PATCH: (ctx) => h.reconcileToggle(ctx.params) }),
   },
-  { pattern: /^\/transactions\/reconcile\/bulk$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.reconcileBulk(ctx.body) }) },
-  { pattern: /^\/transactions\/reconcile\/summary$/, methods: ['GET'], handler: dispatch({ GET: () => h.reconcileSummary() }) },
-  { pattern: /^\/transactions\/reconcile-batch$/, methods: ['PUT'], handler: dispatch({ PUT: (ctx) => h.reconcileBatch(ctx.body) }) },
-  { pattern: /^\/transactions\/export$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.transactionsExport(ctx.query) }) },
-  { pattern: /^\/transactions\/summary$/, methods: ['GET'], handler: dispatch({ GET: () => h.transactionsSummary() }) },
+  {
+    pattern: /^\/transactions\/reconcile\/bulk$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.reconcileBulk(ctx.body) }),
+  },
+  {
+    pattern: /^\/transactions\/reconcile\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.reconcileSummary() }),
+  },
+  {
+    pattern: /^\/transactions\/reconcile-batch$/,
+    methods: ['PUT'],
+    handler: dispatch({ PUT: (ctx) => h.reconcileBatch(ctx.body) }),
+  },
+  {
+    pattern: /^\/transactions\/export$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.transactionsExport(ctx.query) }),
+  },
+  {
+    pattern: /^\/transactions\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.transactionsSummary() }),
+  },
 
   // ── Categories ──
   {
@@ -298,17 +320,61 @@ const routes: RouteDef[] = [
     }),
   },
   // Budget computations
-  { pattern: /^\/budgets\/alerts$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsAlerts(ctx.query) }) },
-  { pattern: /^\/budgets\/forecast$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsForecast(ctx.query) }) },
-  { pattern: /^\/budgets\/history$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsHistory(ctx.query) }) },
-  { pattern: /^\/budgets\/improvements$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsImprovements(ctx.query) }) },
-  { pattern: /^\/budgets\/summary$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsSummary(ctx.query) }) },
-  { pattern: /^\/budgets\/zero-based$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsZeroBased(ctx.query) }) },
-  { pattern: /^\/budgets\/zero-based\/summary$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.budgetsZeroBasedSummary(ctx.query) }) },
-  { pattern: /^\/budgets\/allocate$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.budgetsAllocate(ctx.query, ctx.body) }) },
-  { pattern: /^\/budgets\/duplicate-last$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.budgetsDuplicateLast(ctx.body) }) },
-  { pattern: /^\/budgets\/from-expenses$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.budgetsFromExpenses(ctx.body) }) },
-  { pattern: /^\/budgets\/(\d+)\/rollover$/, methods: ['PUT'], handler: dispatch({ PUT: (ctx) => h.budgetsRollover(ctx.params, ctx.body) }) },
+  {
+    pattern: /^\/budgets\/alerts$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsAlerts(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/forecast$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsForecast(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/history$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsHistory(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/improvements$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsImprovements(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsSummary(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/zero-based$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsZeroBased(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/zero-based\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.budgetsZeroBasedSummary(ctx.query) }),
+  },
+  {
+    pattern: /^\/budgets\/allocate$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.budgetsAllocate(ctx.query, ctx.body) }),
+  },
+  {
+    pattern: /^\/budgets\/duplicate-last$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.budgetsDuplicateLast(ctx.body) }),
+  },
+  {
+    pattern: /^\/budgets\/from-expenses$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.budgetsFromExpenses(ctx.body) }),
+  },
+  {
+    pattern: /^\/budgets\/(\d+)\/rollover$/,
+    methods: ['PUT'],
+    handler: dispatch({ PUT: (ctx) => h.budgetsRollover(ctx.params, ctx.body) }),
+  },
 
   // ── Savings goals ──
   {
@@ -404,11 +470,23 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.exportByType(ctx.params, ctx.query) }),
   },
-  { pattern: /^\/import$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importData(ctx.body) }) },
-  { pattern: /^\/clear-all$/, methods: ['DELETE'], handler: dispatch({ DELETE: () => h.clearAll() }) },
+  {
+    pattern: /^\/import$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.importData(ctx.body) }),
+  },
+  {
+    pattern: /^\/clear-all$/,
+    methods: ['DELETE'],
+    handler: dispatch({ DELETE: () => h.clearAll() }),
+  },
 
   // ── Seed ──
-  { pattern: /^\/categories\/seed$/, methods: ['POST'], handler: dispatch({ POST: () => h.seedCategories() }) },
+  {
+    pattern: /^\/categories\/seed$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: () => h.seedCategories() }),
+  },
 
   // ── Stubs for not-yet-implemented routes (LS11-LS14) ──
   // Transactions (extra): tags, by-tag, bulk
@@ -417,7 +495,11 @@ const routes: RouteDef[] = [
     methods: ['GET', 'POST', 'PUT'],
     handler: stub('/api/transactions/:id/tags'),
   },
-  { pattern: /^\/transactions\/by-tag\/(\d+)$/, methods: ['GET'], handler: stub('/api/transactions/by-tag') },
+  {
+    pattern: /^\/transactions\/by-tag\/(\d+)$/,
+    methods: ['GET'],
+    handler: stub('/api/transactions/by-tag'),
+  },
   { pattern: /^\/transactions\/bulk$/, methods: ['PUT'], handler: stub('/api/transactions/bulk') },
 
   // Categories: mappings, auto-map
@@ -431,11 +513,23 @@ const routes: RouteDef[] = [
     methods: ['DELETE'],
     handler: stub('/api/categories/mappings'),
   },
-  { pattern: /^\/categories\/auto-map$/, methods: ['POST'], handler: stub('/api/categories/auto-map') },
-  { pattern: /^\/categories\/apply-mappings$/, methods: ['POST'], handler: stub('/api/categories/apply-mappings') },
+  {
+    pattern: /^\/categories\/auto-map$/,
+    methods: ['POST'],
+    handler: stub('/api/categories/auto-map'),
+  },
+  {
+    pattern: /^\/categories\/apply-mappings$/,
+    methods: ['POST'],
+    handler: stub('/api/categories/apply-mappings'),
+  },
 
   // Accounts: timeline, reconciliation-summary
-  { pattern: /^\/accounts\/history\/timeline$/, methods: ['GET'], handler: stub('/api/accounts/history/timeline') },
+  {
+    pattern: /^\/accounts\/history\/timeline$/,
+    methods: ['GET'],
+    handler: stub('/api/accounts/history/timeline'),
+  },
   {
     pattern: /^\/accounts\/(\d+)\/reconciliation-summary$/,
     methods: ['GET'],
@@ -478,7 +572,11 @@ const routes: RouteDef[] = [
     methods: ['GET', 'PUT', 'DELETE'],
     handler: stub('/api/tags'),
   },
-  { pattern: /^\/tags\/(\d+)\/transactions$/, methods: ['GET'], handler: stub('/api/tags/:id/transactions') },
+  {
+    pattern: /^\/tags\/(\d+)\/transactions$/,
+    methods: ['GET'],
+    handler: stub('/api/tags/:id/transactions'),
+  },
 
   // Recurring (LS6 no store)
   {
@@ -491,8 +589,16 @@ const routes: RouteDef[] = [
     methods: ['GET', 'PUT', 'DELETE'],
     handler: stub('/api/recurring'),
   },
-  { pattern: /^\/recurring\/upcoming$/, methods: ['GET'], handler: stub('/api/recurring/upcoming') },
-  { pattern: /^\/recurring\/(\d+)\/populate$/, methods: ['POST'], handler: stub('/api/recurring/:id/populate') },
+  {
+    pattern: /^\/recurring\/upcoming$/,
+    methods: ['GET'],
+    handler: stub('/api/recurring/upcoming'),
+  },
+  {
+    pattern: /^\/recurring\/(\d+)\/populate$/,
+    methods: ['POST'],
+    handler: stub('/api/recurring/:id/populate'),
+  },
 
   // Receipts
   {
@@ -530,12 +636,36 @@ const routes: RouteDef[] = [
   },
 
   // Import (LS13)
-  { pattern: /^\/import\/upload$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }) },
-  { pattern: /^\/import\/googlesheet$/, methods: ['POST'], handler: dispatch({ POST: () => h.importGoogleSheet() }) },
-  { pattern: /^\/import\/file-sheet$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importFileSheet(ctx.body) }) },
-  { pattern: /^\/import\/execute$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importExecute(ctx.body) }) },
-  { pattern: /^\/import\/preview$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importBulk(ctx.body) }) },
-  { pattern: /^\/import$/, methods: ['POST'], handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }) },
+  {
+    pattern: /^\/import\/upload$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }),
+  },
+  {
+    pattern: /^\/import\/googlesheet$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: () => h.importGoogleSheet() }),
+  },
+  {
+    pattern: /^\/import\/file-sheet$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.importFileSheet(ctx.body) }),
+  },
+  {
+    pattern: /^\/import\/execute$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.importExecute(ctx.body) }),
+  },
+  {
+    pattern: /^\/import\/preview$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.importBulk(ctx.body) }),
+  },
+  {
+    pattern: /^\/import$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }),
+  },
 
   // Exchange rates
   { pattern: /^\/exchange-rates$/, methods: ['GET'], handler: stub('/api/exchange-rates') },
@@ -581,7 +711,8 @@ const routes: RouteDef[] = [
 
   // Reports
   {
-    pattern: /^\/reports\/(annual-pdf|monthly-pdf|pl-summary|pl-summary-pdf|tax-summary|tax-summary-pdf)$/,
+    pattern:
+      /^\/reports\/(annual-pdf|monthly-pdf|pl-summary|pl-summary-pdf|tax-summary|tax-summary-pdf)$/,
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.reportHandler(ctx) }),
   },

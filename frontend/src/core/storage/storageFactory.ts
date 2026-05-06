@@ -105,7 +105,9 @@ export function resetAdapter(): void {
  * Exports from the current adapter, switches mode, imports into the new adapter.
  * If import fails, reverts the mode back.
  */
-export async function migrateData(targetMode: StorageMode): Promise<{ success: boolean; error?: string }> {
+export async function migrateData(
+  targetMode: StorageMode
+): Promise<{ success: boolean; error?: string }> {
   const originalMode = getStorageMode()
   if (originalMode === targetMode) return { success: true }
 
