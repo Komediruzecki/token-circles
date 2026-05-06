@@ -147,9 +147,24 @@ const routes: RouteDef[] = [
 
   // ── Dashboard (LS7) ──
   {
-    pattern: /^\/dashboard(\/charts|\/net-worth|\/summary)?$/,
+    pattern: /^\/dashboard$/,
     methods: ['GET'],
-    handler: stub('/api/dashboard'),
+    handler: dispatch({ GET: (ctx) => h.dashboardMain(ctx.query) }),
+  },
+  {
+    pattern: /^\/dashboard\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.dashboardSummary(ctx.query) }),
+  },
+  {
+    pattern: /^\/dashboard\/charts$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.dashboardCharts(ctx.query) }),
+  },
+  {
+    pattern: /^\/dashboard\/net-worth$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.dashboardNetWorth() }),
   },
 
   // ── Analytics (LS8) ──

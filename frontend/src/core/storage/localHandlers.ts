@@ -613,6 +613,270 @@ export async function clearAll(): Promise<Response> {
   return ok({ message: 'All data cleared' })
 }
 
+// ── Dashboard aggregation ────────────────────────────────────────────────────
+
+function getAmount(t: Record<string, unknown>): number {
+  return (t.amount_local as number) ?? (t.amount as number) ?? 0
+}
+
+function monthStart(y: number, m: number): string {
+  return `${y}-${String(m).padStart(2, '0')}-01`
+}
+
+function nextMonth(y: number, m: number): { year: number; month: number } {
+  if (m === 12) return { year: y + 1, month: 1 }
+  return { year: y, month: m + 1 }
+}
+
+function prevMonth(y: number, m: number): { year: number; month: number } {
+  if (m === 1) return { year: y - 1, month: 12 }
+  return { year: y, month: m - 1 }
+}
+
+export async function dashboardMain(query: URLSearchParams): Promise<Response> {
+  try {
+    const pid = await adapter.getCurrentProfileId()
+    const now = new Date()
+    const year = parseInt(query.get('year')!) || now.getFullYear()
+    const month = parseInt(query.get('month')!) || (now.getMonth() + 1)
+
+    const startDate = monthStart(year, month)
+    const pm = prevMonth(year, month)
+    const lastDay = new Date(year, month, 0).getDate()
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    const prevStart = monthStart(pm.year, pm.month)
+    const prevLastDay = new Date(pm.year, pm.month, 0).getDate()
+    const prevEnd = `${pm.year}-${String(pm.month).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`
+
+    const allTxns = await adapter.listTransactions()
+    const profileTxns = allTxns.filter((t) => t.profile_id === pid)
+
+    // Current month
+    const currentTxns = profileTxns.filter((t) => t.date >= startDate && t.date <= endDate)
+    const currentIncome = currentTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const currentExpense = currentTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+
+    // Previous month
+    const prevTxns = profileTxns.filter((t) => t.date >= prevStart && t.date <= prevEnd)
+    const prevIncome = prevTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const prevExpense = prevTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+
+    // Recent transactions (top 10)
+    const recent = [...currentTxns]
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+      .slice(0, 10)
+
+    // Category breakdown (expenses)
+    const cats = await adapter.listCategories()
+    const catMap = new Map(cats.map((c) => [c.id, c]))
+    const expenseByCat: Record<string, { category_name: string; category_color: string; total: number }> = {}
+    for (const t of currentTxns.filter((t) => t.type === 'expense')) {
+      const cat = catMap.get(t.category_id)
+      const key = String(t.category_id || 0)
+      if (!expenseByCat[key]) {
+        expenseByCat[key] = {
+          category_name: cat?.name || 'Uncategorized',
+          category_color: cat?.color || '#999',
+          total: 0,
+        }
+      }
+      expenseByCat[key].total += getAmount(t as unknown as Record<string, unknown>)
+    }
+    const expenseByCategory = Object.values(expenseByCat).sort((a, b) => b.total - a.total)
+
+    // Account balances
+    const accts = await adapter.listAccounts()
+    const balance = accts.reduce((s, a) => s + (a.balance || 0), 0)
+
+    return json({
+      totalIncome: currentIncome,
+      totalExpenses: currentExpense,
+      balance,
+      incomeByCategory: [],
+      expenseByCategory,
+      recentTransactions: recent,
+      upcomingBills: [],
+      momIncomeDelta: currentIncome - prevIncome,
+      momExpenseDelta: currentExpense - prevExpense,
+      momBalanceDelta: (currentIncome - currentExpense) - (prevIncome - prevExpense),
+    })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function dashboardSummary(query: URLSearchParams): Promise<Response> {
+  try {
+    const pid = await adapter.getCurrentProfileId()
+    const now = new Date()
+    const y = parseInt(query.get('year')!) || now.getFullYear()
+    const mRaw = query.get('month')
+    let m: number | null = null
+    if (mRaw) {
+      m = parseInt(mRaw.includes('-') ? mRaw.split('-')[1] : mRaw, 10)
+    }
+
+    let startDate: string, endDate: string
+    if (m) {
+      startDate = monthStart(y, m)
+      const nm = nextMonth(y, m)
+      endDate = monthStart(nm.year, nm.month)
+    } else {
+      startDate = `${y}-01-01`
+      endDate = `${y + 1}-01-01`
+    }
+
+    const allTxns = await adapter.listTransactions()
+    const profileTxns = allTxns.filter((t) => t.profile_id === pid)
+    const periodTxns = profileTxns.filter((t) => t.date >= startDate && t.date < endDate)
+
+    const income = periodTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const expense = periodTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const transfer = periodTxns.filter((t) => t.type === 'transfer').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+
+    // Previous period
+    let prevStart: string, prevEnd: string
+    if (m) {
+      const pm = prevMonth(y, m)
+      prevStart = monthStart(pm.year, pm.month)
+      const nm = nextMonth(pm.year, pm.month)
+      prevEnd = monthStart(nm.year, nm.month)
+    } else {
+      prevStart = `${y - 1}-01-01`
+      prevEnd = `${y}-01-01`
+    }
+
+    const prevTxns = profileTxns.filter((t) => t.date >= prevStart && t.date < prevEnd)
+    const prevIncome = prevTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const prevExpense = prevTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+
+    // YTD
+    const ytdStart = `${y}-01-01`
+    const ytdTxns = profileTxns.filter((t) => t.date >= ytdStart)
+    const ytdIncome = ytdTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+    const ytdExpense = ytdTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+
+    // Recent
+    const recent = [...periodTxns]
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+      .slice(0, 10)
+
+    return json({
+      summary: { income, expense, transfer, balance: income - expense },
+      prevSummary: { income: prevIncome, expense: prevExpense },
+      recent,
+      ytd: { income: ytdIncome, expense: ytdExpense, net: ytdIncome - ytdExpense },
+      month: m ? `${y}-${String(m).padStart(2, '0')}` : String(y),
+      currency: 'EUR',
+    })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function dashboardCharts(query: URLSearchParams): Promise<Response> {
+  try {
+    const pid = await adapter.getCurrentProfileId()
+    const monthsCount = parseInt(query.get('months')!) || 12
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setMonth(startDate.getMonth() - monthsCount + 1)
+    startDate.setDate(1)
+    const startStr = startDate.toISOString().split('T')[0]
+    const endStr = endDate.toISOString().split('T')[0]
+
+    const allTxns = await adapter.listTransactions()
+    const profileTxns = allTxns.filter((t) => t.profile_id === pid)
+    const rangeTxns = profileTxns.filter((t) => t.date >= startStr && t.date <= endStr)
+
+    // By category
+    const cats = await adapter.listCategories()
+    const catMap = new Map(cats.map((c) => [c.id, c]))
+    const byCat: Record<string, { name: string; color: string; icon: string | null; total: number; count: number }> = {}
+    for (const t of rangeTxns.filter((t) => t.type === 'expense')) {
+      const cat = catMap.get(t.category_id)
+      const key = String(t.category_id || 0)
+      if (!byCat[key]) {
+        byCat[key] = {
+          name: cat?.name || 'Uncategorized',
+          color: cat?.color || '#999',
+          icon: cat?.icon || null,
+          total: 0,
+          count: 0,
+        }
+      }
+      byCat[key].total += getAmount(t as unknown as Record<string, unknown>)
+      byCat[key].count++
+    }
+    const byCategory = Object.values(byCat).sort((a, b) => b.total - a.total)
+
+    // Monthly cash flow
+    const monthlyMap: Record<string, { month: string; income: number; expense: number }> = {}
+    for (const t of rangeTxns.filter((t) => t.type === 'income' || t.type === 'expense')) {
+      const mo = t.date.substring(0, 7)
+      if (!monthlyMap[mo]) monthlyMap[mo] = { month: mo, income: 0, expense: 0 }
+      if (t.type === 'income') monthlyMap[mo].income += getAmount(t as unknown as Record<string, unknown>)
+      if (t.type === 'expense') monthlyMap[mo].expense += getAmount(t as unknown as Record<string, unknown>)
+    }
+    const monthly = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
+
+    let running = 0
+    const cashFlow = monthly.map((m) => {
+      running += m.income - m.expense
+      return { ...m, cumulative: running }
+    })
+
+    // Get currency
+    const settings = await adapter.getSettings()
+    const currency = (settings as Record<string, unknown>).local_currency || (settings as Record<string, unknown>).currency || 'EUR'
+
+    return json({ byCategory, monthly, cashFlow, currency })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function dashboardNetWorth(): Promise<Response> {
+  try {
+    const pid = await adapter.getCurrentProfileId()
+    const accts = await adapter.listAccounts()
+    const totalNetWorth = accts.reduce((s, a) => s + (a.balance || 0), 0)
+
+    // Monthly net flow from all transactions
+    const allTxns = await adapter.listTransactions()
+    const profileTxns = allTxns.filter((t) => t.profile_id === pid && (t.type === 'income' || t.type === 'expense'))
+    const monthlyMap: Record<string, { month: string; net: number }> = {}
+    for (const t of profileTxns) {
+      const mo = t.date.substring(0, 7)
+      if (!monthlyMap[mo]) monthlyMap[mo] = { month: mo, net: 0 }
+      const amt = getAmount(t as unknown as Record<string, unknown>)
+      monthlyMap[mo].net += t.type === 'income' ? amt : -amt
+    }
+
+    const sortedMonths = Object.keys(monthlyMap).sort()
+    const totalNet = Object.values(monthlyMap).reduce((s, m) => s + m.net, 0)
+    const opening = totalNetWorth - totalNet
+
+    let balance = opening
+    const timeline = sortedMonths.map((mo) => {
+      balance += monthlyMap[mo].net
+      return {
+        month: mo,
+        balance: Math.round(balance * 100) / 100,
+        netChange: Math.round(monthlyMap[mo].net * 100) / 100,
+      }
+    })
+
+    return json({
+      totalNetWorth: Math.round(totalNetWorth * 100) / 100,
+      accounts: accts,
+      timeline,
+    })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
 // ── Seed default categories ──────────────────────────────────────────────────
 
 export async function seedCategories(): Promise<Response> {
