@@ -124,7 +124,9 @@ export default function SankeyChart(props: Props) {
   onMount(() => {
     const observer = new ResizeObserver(() => {
       clearTimeout(resizeDebounce)
-      resizeDebounce = setTimeout(() => { renderSankey() }, 150)
+      resizeDebounce = setTimeout(() => {
+        renderSankey()
+      }, 150)
     })
     if (containerRef) observer.observe(containerRef)
     onCleanup(() => {

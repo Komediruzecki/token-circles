@@ -40,7 +40,9 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
       <div class={styles.savingsRateContainer}>
         <div class={styles.savingsRateValue}>
           <span class={styles.rateLabel}>Monthly Savings:</span>
-          <span class={`${styles.rateValue} ${props.monthlySavings >= 0 ? styles.rateGood : styles.rateBad}`}>
+          <span
+            class={`${styles.rateValue} ${props.monthlySavings >= 0 ? styles.rateGood : styles.rateBad}`}
+          >
             {formatCurrency(props.monthlySavings)}
           </span>
         </div>
@@ -49,22 +51,22 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
 
         <div class={styles.savingsRateValue}>
           <span class={styles.rateLabel}>Savings Rate:</span>
-          <span class={`${styles.rateValue} ${rateColor()}`}>
-            {props.savingsRate.toFixed(1)}%
-          </span>
+          <span class={`${styles.rateValue} ${rateColor()}`}>{props.savingsRate.toFixed(1)}%</span>
         </div>
 
         <div class={styles.goalSection}>
           <div class={styles.goalInfo}>
             <span class={styles.rateLabel}>Goal: {props.goal}%</span>
             <span class={`${styles.goalStatus} ${goalStatus()}`}>
-              {props.savingsRate >= props.goal ? 'Goal met' : `${(props.goal - props.savingsRate).toFixed(1)}% to go`}
+              {props.savingsRate >= props.goal
+                ? 'Goal met'
+                : `${(props.goal - props.savingsRate).toFixed(1)}% to go`}
             </span>
           </div>
           <div class={styles.goalBar}>
             <div
               class={styles.goalBarFill}
-              style={{ width: `${Math.min(props.savingsRate / props.goal * 100, 100)}%` }}
+              style={{ width: `${Math.min((props.savingsRate / props.goal) * 100, 100)}%` }}
             />
           </div>
           <div class={styles.goalInput}>

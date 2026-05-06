@@ -424,7 +424,11 @@ export default function Settings() {
                       disabled={migrating()}
                       style="margin-top: 12px;"
                     >
-                      {migrating() ? 'Migrating...' : migrateDataEnabled() ? 'Migrate & Switch' : 'Apply Serverless Mode'}
+                      {migrating()
+                        ? 'Migrating...'
+                        : migrateDataEnabled()
+                          ? 'Migrate & Switch'
+                          : 'Apply Serverless Mode'}
                     </button>
                   </div>
                 )}
@@ -452,7 +456,11 @@ export default function Settings() {
                       disabled={migrating()}
                       style="margin-top: 12px;"
                     >
-                      {migrating() ? 'Migrating...' : migrateDataEnabled() ? 'Migrate & Switch' : 'Switch to Self-Hosted'}
+                      {migrating()
+                        ? 'Migrating...'
+                        : migrateDataEnabled()
+                          ? 'Migrate & Switch'
+                          : 'Switch to Self-Hosted'}
                     </button>
                   </div>
                 )}

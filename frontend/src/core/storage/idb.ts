@@ -156,7 +156,7 @@ export class IndexedDBAdapter implements StorageAdapter {
             t.description.toLowerCase().includes(q) ||
             t.notes?.toLowerCase().includes(q) ||
             t.beneficiary?.toLowerCase().includes(q) ||
-            t.payor?.toLowerCase().includes(q),
+            t.payor?.toLowerCase().includes(q)
         )
       }
     }
@@ -393,15 +393,17 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async exportData(): Promise<ExportData> {
     const db = await getDB()
-    const [transactions, categories, accounts, budgets, goals, loans, settings] = await Promise.all([
-      db.getAll('transactions'),
-      db.getAll('categories'),
-      db.getAll('accounts'),
-      db.getAll('budgets'),
-      db.getAll('goals'),
-      db.getAll('loans'),
-      this.getSettings(),
-    ])
+    const [transactions, categories, accounts, budgets, goals, loans, settings] = await Promise.all(
+      [
+        db.getAll('transactions'),
+        db.getAll('categories'),
+        db.getAll('accounts'),
+        db.getAll('budgets'),
+        db.getAll('goals'),
+        db.getAll('loans'),
+        this.getSettings(),
+      ]
+    )
 
     return {
       version: '2.0.0',
