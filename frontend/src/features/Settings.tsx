@@ -31,7 +31,7 @@ import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
 import { apiFetch } from '../core/apiFetch'
-import { setStorageMode } from '../core/storage/storageFactory'
+import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 
 function Reports() {
@@ -155,6 +155,8 @@ export default function Settings() {
     'self-hosted'
   )
   const [showStorageWarning, setShowStorageWarning] = createSignal(false)
+  const [migrateDataEnabled, setMigrateDataEnabled] = createSignal(false)
+  const [migrating, setMigrating] = createSignal(false)
 
   // Load saved settings
   onMount(() => {
@@ -200,25 +202,32 @@ export default function Settings() {
     const target = event.target as HTMLSelectElement
     const newMode = target.value as 'serverless' | 'self-hosted'
 
-    if (newMode === 'serverless') {
-      setLocalStorageMode('serverless')
-      setShowStorageWarning(true)
-    } else {
-      setShowStorageWarning(false)
-      setLocalStorageMode('self-hosted')
-    }
+    setMigrateDataEnabled(false)
+    setLocalStorageMode(newMode)
+    setShowStorageWarning(true)
   }
 
-  // Apply storage type
+  // Apply storage type with optional data migration
   const applyStorageMode = async () => {
+    setMigrating(true)
     try {
-      await apiFetch('/api/storage-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ mode: storageMode() }),
-      })
-      setStorageMode(storageMode())
+      if (migrateDataEnabled()) {
+        const result = await migrateData(storageMode())
+        if (!result.success) {
+          alert(`Migration failed: ${result.error || 'Unknown error'}`)
+          setMigrating(false)
+          return
+        }
+      } else {
+        await apiFetch('/api/storage-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ mode: storageMode() }),
+        })
+        setStorageMode(storageMode())
+      }
+
       setShowStorageWarning(false)
       alert(
         `Database switched to ${storageMode() === 'serverless' ? 'Browser LocalStorage' : 'Backend SQLite'} successfully.`
@@ -227,6 +236,8 @@ export default function Settings() {
     } catch (error) {
       console.error('Failed to switch storage:', error)
       alert('Failed to switch storage mode.')
+    } finally {
+      setMigrating(false)
     }
   }
 
@@ -389,20 +400,59 @@ export default function Settings() {
                     <option value="serverless">Serverless (Browser LocalStorage)</option>
                   </select>
                 </div>
-                {showStorageWarning() && (
+                {showStorageWarning() && storageMode() === 'serverless' && (
                   <div class={styles.warningBox}>
-                    <strong>Serverless Mode uses Browser LocalStorage.</strong>
+                    <strong>Switch to Serverless Mode</strong>
                     <p style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
-                      Your data will be completely offline and stored securely in your local browser
-                      cache. You will not be able to sync across devices unless you export/import
-                      manually.
+                      Your data will be completely offline and stored in your browser's IndexedDB.
+                      You will not be able to sync across devices unless you export/import manually.
                     </p>
+                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;">
+                      <input
+                        type="checkbox"
+                        checked={migrateDataEnabled()}
+                        onchange={(e) => setMigrateDataEnabled(e.currentTarget.checked)}
+                        style="width: 16px; height: 16px; cursor: pointer;"
+                      />
+                      <span style="font-size: 13px; color: var(--text-secondary);">
+                        Migrate existing data from the backend to browser storage
+                      </span>
+                    </label>
                     <button
                       class={styles.btnPrimary}
                       onclick={applyStorageMode}
+                      disabled={migrating()}
                       style="margin-top: 12px;"
                     >
-                      Apply Serverless Mode
+                      {migrating() ? 'Migrating...' : migrateDataEnabled() ? 'Migrate & Switch' : 'Apply Serverless Mode'}
+                    </button>
+                  </div>
+                )}
+                {showStorageWarning() && storageMode() === 'self-hosted' && (
+                  <div class={styles.warningBox}>
+                    <strong>Switch to Self-Hosted Mode</strong>
+                    <p style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
+                      Your data will be stored on the backend SQLite server. You need the backend
+                      server running for this mode to work.
+                    </p>
+                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;">
+                      <input
+                        type="checkbox"
+                        checked={migrateDataEnabled()}
+                        onchange={(e) => setMigrateDataEnabled(e.currentTarget.checked)}
+                        style="width: 16px; height: 16px; cursor: pointer;"
+                      />
+                      <span style="font-size: 13px; color: var(--text-secondary);">
+                        Migrate existing browser data to the backend server
+                      </span>
+                    </label>
+                    <button
+                      class={styles.btnPrimary}
+                      onclick={applyStorageMode}
+                      disabled={migrating()}
+                      style="margin-top: 12px;"
+                    >
+                      {migrating() ? 'Migrating...' : migrateDataEnabled() ? 'Migrate & Switch' : 'Switch to Self-Hosted'}
                     </button>
                   </div>
                 )}
