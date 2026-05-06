@@ -111,12 +111,12 @@ export function App() {
     // Initialize logging system
     logger.init()
 
-    // Initialize theme
+    // Initialize theme (dark by default)
     const savedTheme = localStorage.getItem('finance-theme')
-    if (savedTheme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark')
-    } else {
+    if (savedTheme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light')
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark')
     }
 
     await api.checkLogin().then(async (loggedIn) => {

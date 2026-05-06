@@ -10,7 +10,7 @@ type Theme = 'light' | 'dark'
  * Theme store - handles theme state and CSS variable updates
  */
 export class ThemeStore {
-  private currentTheme: Theme = 'light'
+  private currentTheme: Theme = 'dark'
 
   /**
    * Check if dark theme is active
@@ -50,7 +50,7 @@ export class ThemeStore {
    */
   init(): void {
     const saved = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
-    const themeToUse = saved || 'light'
+    const themeToUse = saved || 'dark'
     this.currentTheme = themeToUse
     document.documentElement.setAttribute('data-theme', themeToUse)
   }
