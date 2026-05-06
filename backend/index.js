@@ -413,16 +413,18 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==================== LOGS API ====================
-app.get('/api/logs', (req, res) => {
+app.get('/api/logs', async (req, res) => {
   try {
     const level = req.query.level;
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
 
     let logs = { version: '1.0', max_entries: 500, entries: [] };
-    if (fs.existsSync(LOGS_FILE)) {
-      const data = fs.readFileSync(LOGS_FILE, 'utf-8');
+    try {
+      const data = await fs.promises.readFile(LOGS_FILE, 'utf-8');
       logs = JSON.parse(data);
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
     }
 
     let filteredLogs = logs.entries;
@@ -444,9 +446,9 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
-app.post('/api/logs/clear', (req, res) => {
+app.post('/api/logs/clear', async (req, res) => {
   try {
-    fs.writeFileSync(LOGS_FILE, JSON.stringify({ version: '1.0', max_entries: 500, entries: [] }));
+    await fs.promises.writeFile(LOGS_FILE, JSON.stringify({ version: '1.0', max_entries: 500, entries: [] }));
     res.json(toCamelCase({ ok: true }));
   } catch (err) {
     res.status(500).json({ error: err.message });
