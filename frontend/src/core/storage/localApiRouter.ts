@@ -494,25 +494,40 @@ const routes: RouteDef[] = [
   { pattern: /^\/recurring\/upcoming$/, methods: ['GET'], handler: stub('/api/recurring/upcoming') },
   { pattern: /^\/recurring\/(\d+)\/populate$/, methods: ['POST'], handler: stub('/api/recurring/:id/populate') },
 
-  // Receipts (LS11)
+  // Receipts
   {
-    pattern: /^\/receipts$/,
+    pattern: /^\/receipts\/upload$/,
     methods: ['POST'],
-    handler: stub('/api/receipts'),
+    handler: dispatch({ POST: (ctx) => h.receiptsUpload(ctx.body) }),
   },
-  { pattern: /^\/receipts\/upload$/, methods: ['POST'], handler: stub('/api/receipts/upload') },
-  {
-    pattern: /^\/receipts\/(\d+)$/,
-    methods: ['GET', 'DELETE'],
-    handler: stub('/api/receipts'),
-  },
-  { pattern: /^\/receipts\/(\d+)\/file$/, methods: ['GET'], handler: stub('/api/receipts/:id/file') },
   {
     pattern: /^\/receipts\/transaction\/(\d+)$/,
     methods: ['GET'],
-    handler: stub('/api/receipts/transaction'),
+    handler: dispatch({ GET: (ctx) => h.receiptsGetByTransaction(ctx.params) }),
   },
-  { pattern: /^\/receipts\/file\/(.+)$/, methods: ['GET'], handler: stub('/api/receipts/file') },
+  {
+    pattern: /^\/receipts\/file\/(.+)$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.receiptsGetFileByName(ctx.params) }),
+  },
+  {
+    pattern: /^\/receipts\/(\d+)\/file$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.receiptsGetFile(ctx.params) }),
+  },
+  {
+    pattern: /^\/receipts\/(\d+)$/,
+    methods: ['GET', 'DELETE'],
+    handler: dispatch({
+      GET: (ctx) => h.receiptsGet(ctx.params),
+      DELETE: (ctx) => h.receiptsDelete(ctx.params),
+    }),
+  },
+  {
+    pattern: /^\/receipts$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.receiptsUpload(ctx.body) }),
+  },
 
   // Import (LS13)
   { pattern: /^\/import\/upload$/, methods: ['POST'], handler: stub('/api/import/upload') },

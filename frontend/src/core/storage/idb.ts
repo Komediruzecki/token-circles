@@ -19,7 +19,7 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 // ---- Schema Helpers ----
 
@@ -58,6 +58,11 @@ function upgradeSchema(db: IDBPDatabase) {
   // Balance History
   const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
   bh.createIndex('by_account', 'account_id')
+
+  // Receipts
+  const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
+  receipts.createIndex('by_profile', 'profile_id')
+  receipts.createIndex('by_transaction', 'transaction_id')
 
   // Settings (key-value)
   db.createObjectStore('settings', { keyPath: 'key' })
@@ -424,6 +429,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'goals',
       'loans',
       'balanceHistory',
+      'receipts',
       'profiles',
     ]
     for (const store of stores) {
@@ -457,6 +463,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'goals',
       'loans',
       'balanceHistory',
+      'receipts',
       'profiles',
       'settings',
     ]
