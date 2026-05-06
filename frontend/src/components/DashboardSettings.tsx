@@ -6,8 +6,23 @@ import { createSignal, onMount } from 'solid-js'
 import styles from './DashboardSettings.module.css'
 import type { Component } from 'solid-js'
 
-export const DashboardSettings: Component = () => {
-  const [selectedWidget, setSelectedWidget] = createSignal<string | null>(null)
+const ALL_WIDGET_IDS = [
+  'metrics',
+  'category-chart',
+  'recent-transactions',
+  'upcoming-bills',
+  'savings-rate',
+  'budget-alerts',
+]
+
+export interface DashboardSettingsProps {
+  onSave?: () => void
+}
+
+export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
+  const [selectedWidget, setSelectedWidget] = createSignal<string>(
+    ALL_WIDGET_IDS.join(','),
+  )
 
   // Widget configuration
   const widgets = [
@@ -115,10 +130,8 @@ export const DashboardSettings: Component = () => {
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved)
-        if (parsed.visibleWidgets !== undefined) {
-          parsed.visibleWidgets.forEach((id: string) => {
-            setSelectedWidget((prev) => (prev ? `${prev},${id}` : id))
-          })
+        if (parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)) {
+          setSelectedWidget(parsed.visibleWidgets.join(','))
         }
       } catch (e) {
         console.error('Failed to load dashboard settings:', e)
@@ -129,35 +142,42 @@ export const DashboardSettings: Component = () => {
   // Toggle widget visibility
   const toggleWidget = (widgetId: string) => {
     const current = selectedWidget()
-    if (current !== null && current.split(',').includes(widgetId)) {
-      setSelectedWidget(current.replace(new RegExp(`(^|,)${widgetId}(,|$)`), '$1$2'))
+    const ids = current ? current.split(',').filter(Boolean) : []
+    if (ids.includes(widgetId)) {
+      setSelectedWidget(ids.filter((id) => id !== widgetId).join(','))
     } else {
-      setSelectedWidget(current !== null ? `${current},${widgetId}` : widgetId)
+      setSelectedWidget([...ids, widgetId].join(','))
     }
+  }
+
+  const isVisible = (widgetId: string) => {
+    const current = selectedWidget()
+    return current ? current.split(',').includes(widgetId) : false
   }
 
   // Save preferences
   const saveSettings = () => {
     const current = selectedWidget()
+    const ids = current ? current.split(',').filter(Boolean) : []
     localStorage.setItem(
       'dashboard_widgets',
       JSON.stringify({
-        visibleWidgets: current !== null ? current.split(',') : [],
-        widgetOrder: [], // Can add ordering in future
-      })
+        visibleWidgets: ids,
+        widgetOrder: [],
+      }),
     )
+    props.onSave?.()
   }
 
   // Reset to default
   const resetSettings = () => {
-    setSelectedWidget('metrics,category-chart,recent-transactions,upcoming-bills')
-    saveSettings()
+    setSelectedWidget(ALL_WIDGET_IDS.join(','))
   }
 
   return (
     <div class={styles.dashboardSettings}>
       <div class={styles.settingsHeader}>
-        <h3>Dashboard Settings</h3>
+        <h3>Dashboard Views</h3>
         <button class={`${styles.btnSm} ${styles.btnSecondary}`} onClick={resetSettings}>
           Reset Default
         </button>
@@ -168,8 +188,7 @@ export const DashboardSettings: Component = () => {
             <button
               class={styles.widgetToggle}
               classList={{
-                [styles.active]:
-                  selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id),
+                [styles.active]: isVisible(widget.id),
               }}
               onClick={() => {
                 toggleWidget(widget.id)
@@ -178,9 +197,7 @@ export const DashboardSettings: Component = () => {
               <span class={styles.widgetIcon}>{widget.icon}</span>
               <span class={styles.widgetName}>{widget.name}</span>
               <span class={styles.widgetStatus}>
-                {selectedWidget() !== null && selectedWidget()!.split(',').includes(widget.id)
-                  ? 'Visible'
-                  : 'Hidden'}
+                {isVisible(widget.id) ? 'Visible' : 'Hidden'}
               </span>
             </button>
           </div>
@@ -188,7 +205,7 @@ export const DashboardSettings: Component = () => {
       </div>
       <div class={styles.settingsFooter}>
         <button class={`${styles.btnSm} ${styles.btnPrimary}`} onClick={saveSettings}>
-          Save Settings
+          Save & Close
         </button>
       </div>
     </div>

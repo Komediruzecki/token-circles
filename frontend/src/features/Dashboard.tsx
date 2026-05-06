@@ -50,6 +50,22 @@ export default function Dashboard() {
   const [loading, setLoading] = createSignal(true)
   const [pillPeriod, setPillPeriod] = createSignal('month')
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
+  const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(
+    (() => {
+      const saved = localStorage.getItem('dashboard_widgets')
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          if (parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)) {
+            return parsed.visibleWidgets
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      return ['metrics', 'category-chart', 'recent-transactions', 'upcoming-bills', 'savings-rate', 'budget-alerts']
+    })(),
+  )
   const [savingsGoal, setSavingsGoal] = createSignal(
     (() => {
       const stored = localStorage.getItem('savingsGoal')
@@ -141,6 +157,23 @@ export default function Dashboard() {
 
   const showSettings = () => setShowSettingsModal(true)
 
+  const handleSettingsSave = () => {
+    const saved = localStorage.getItem('dashboard_widgets')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)) {
+          setVisibleWidgets(parsed.visibleWidgets)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    setShowSettingsModal(false)
+  }
+
+  const isWidgetVisible = (id: string) => visibleWidgets().includes(id)
+
   return (
     <div data-test-id="dashboard-container">
       <div class={styles.pageHeader} data-test-id="dashboard-header">
@@ -158,7 +191,7 @@ export default function Dashboard() {
               />
               <circle cx="12" cy="12" r="3" />
             </svg>
-            Settings
+            Dashboard Views
           </button>
           <button class={styles.btnPrimary} onClick={loadDashboard}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -208,6 +241,7 @@ export default function Dashboard() {
           </div>
 
           {/* Metrics Grid */}
+          <Show when={isWidgetVisible('metrics')}>
           <div class={styles.metricsGrid}>
             <div class={`${styles.metricCard} ${styles.networth}`}>
               <div class={styles.metricLabel}>Net Worth</div>
@@ -308,6 +342,7 @@ export default function Dashboard() {
               <div class={styles.metricSubtext}>Monthly net</div>
             </div>
           </div>
+          </Show>
 
           {/* Charts Section */}
           <div class={styles.chartsGrid} role="region" aria-label="charts overview">
@@ -386,6 +421,7 @@ export default function Dashboard() {
 
           {/* Widget Cards */}
           <div class={styles.widgetsGrid}>
+            <Show when={isWidgetVisible('budget-alerts')}>
             <div class={styles.widgetCard}>
               <div class={styles.widgetHeader}>
                 <div class={styles.widgetTitle}>Budget Alerts</div>
@@ -395,7 +431,9 @@ export default function Dashboard() {
               </div>
               <BudgetAlertsCard />
             </div>
+            </Show>
 
+            <Show when={isWidgetVisible('savings-rate')}>
             <div class={styles.widgetCard}>
               <div class={styles.widgetHeader}>
                 <div class={styles.widgetTitle}>Savings Rate</div>
@@ -416,6 +454,7 @@ export default function Dashboard() {
                 onGoalChange={handleSavingsGoalChange}
               />
             </div>
+            </Show>
 
             <div class={styles.widgetCard}>
               <div class={styles.widgetHeader}>
@@ -427,6 +466,7 @@ export default function Dashboard() {
 
           {/* Charts Section */}
           <div class={styles.chartsGrid}>
+            <Show when={isWidgetVisible('category-chart')}>
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Spending by Category</div>
@@ -466,6 +506,7 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
+            </Show>
 
             <div class={styles.card}>
               <div class={styles.cardHeader}>
@@ -503,7 +544,7 @@ export default function Dashboard() {
           </div>
 
           {/* Recent Transactions */}
-          {metrics()!.recentTransactions && metrics()!.recentTransactions.length > 0 && (
+          <Show when={isWidgetVisible('recent-transactions') && metrics()!.recentTransactions && metrics()!.recentTransactions.length > 0}>
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Recent Transactions</div>
@@ -540,10 +581,10 @@ export default function Dashboard() {
                 </For>
               </div>
             </div>
-          )}
+          </Show>
 
           {/* Upcoming Bills */}
-          {(metrics()!.upcomingBills?.length ?? 0) > 0 && (
+          <Show when={isWidgetVisible('upcoming-bills') && (metrics()!.upcomingBills?.length ?? 0) > 0}>
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Upcoming Bills</div>
@@ -581,7 +622,7 @@ export default function Dashboard() {
                 </For>
               </div>
             </div>
-          )}
+          </Show>
 
           {/* Widget Settings Modal */}
           <Show when={showSettingsModal()}>
@@ -593,7 +634,7 @@ export default function Dashboard() {
                 }}
               >
                 <div class={styles.modalHeader}>
-                  <div class={styles.modalTitle}>Dashboard Settings</div>
+                  <div class={styles.modalTitle}>Dashboard Views</div>
                   <button class={styles.modalClose} onClick={() => setShowSettingsModal(false)}>
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path
@@ -605,7 +646,7 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <div class={styles.modalBody}>
-                  <DashboardSettings />
+                  <DashboardSettings onSave={handleSettingsSave} />
                 </div>
               </div>
             </div>

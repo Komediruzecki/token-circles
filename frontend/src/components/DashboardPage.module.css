@@ -160,7 +160,8 @@
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   padding: 16px;
-  height: 200px;
+  min-height: 200px;
+  overflow: hidden;
 }
 
 .widgetHeader {
@@ -192,6 +193,16 @@
   grid-template-columns: 2fr 1fr;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .chartsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .widgetsGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card {
