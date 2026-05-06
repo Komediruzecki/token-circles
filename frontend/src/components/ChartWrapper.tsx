@@ -90,7 +90,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
                     },
                     ticks: {
                       color: isDarkValue ? '#E5E7EB' : '#374151',
-                      callback: (value: number) => `$${value.toLocaleString()}` as any,
+                      callback: (value: number) => value.toLocaleString() as any,
                     },
                   },
                 },

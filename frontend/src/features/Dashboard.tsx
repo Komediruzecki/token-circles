@@ -522,9 +522,7 @@ export default function Dashboard() {
                         <div class={styles.transactionName}>{tx.description}</div>
                         <div class={styles.transactionMeta}>
                           {formatDate(tx.date)} •{' '}
-                          {tx.category_name || tx.category_id
-                            ? `#${tx.category_id}`
-                            : 'No category'}
+                          {tx.category_name || (tx.category_id ? `#${tx.category_id}` : 'No category')}
                         </div>
                       </div>
                       <div
