@@ -574,13 +574,9 @@ export default function Transactions() {
       {/* Transaction Modal */}
       <div
         class={`${styles.modalOverlay} ${isTransactionModalOpen() ? styles.show : ''}`}
-        onclick={(e) => {
-          if ((e.target as HTMLElement).classList.contains(styles.modalOverlay)) {
-            _closeModals()
-          }
-        }}
+        onclick={() => { _closeModals(); }}
       >
-        <div class={styles.modal}>
+        <div class={styles.modal} onclick={(e) => { e.stopPropagation(); }}>
           <div class={styles.modalHeader}>
             <div class={styles.modalTitle} id="tx-modal-title">
               {formId() ? 'Edit Transaction' : 'Add Transaction'}
@@ -915,13 +911,9 @@ export default function Transactions() {
         <div
           class={`${styles.modalOverlay} ${styles.show} ${styles.receiptModal}`}
           id="receipt-modal"
-          onclick={(e) => {
-            if ((e.target as HTMLElement).classList.contains(styles.modalOverlay)) {
-              closeReceiptModal()
-            }
-          }}
+          onclick={() => { closeReceiptModal(); }}
         >
-          <div class={`${styles.modal} ${styles.modalLg}`}>
+          <div class={`${styles.modal} ${styles.modalLg}`} onclick={(e) => { e.stopPropagation(); }}>
             <div class={styles.modalHeader}>
               <div class={styles.modalTitle}>Receipt</div>
               <button class={styles.btnGhost} onclick={closeReceiptModal} aria-label="Close modal">
