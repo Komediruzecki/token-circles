@@ -4060,12 +4060,12 @@ app.get('/api/dashboard', apiRateLimiter, async (req, res) => {
     const dateTo = req.query.date_to;
     let startDate;
     let endDate;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
     if (dateFrom && dateTo) {
       startDate = dateFrom;
       endDate = dateTo;
     } else {
-      const year = parseInt(req.query.year) || new Date().getFullYear();
-      const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
       startDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
