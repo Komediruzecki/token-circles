@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Financial Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #f8fafc;
+    color: #1e293b;
+    padding: 30px;
+    width: 700px;
+    margin: 0 auto;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 4px;
+  }
+
+  .header .subtitle {
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .summary-box {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin-bottom: 18px;
+  }
+
+  .summary-box h3 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  .summary-stats {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .stat-income .stat-value { color: #059669; }
+  .stat-expense .stat-value { color: #dc2626; }
+  .stat-net .stat-value { color: #059669; }
+  .stat-net.negative .stat-value { color: #dc2626; }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .chart-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .chart-card h3 {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .chart-card canvas {
+    max-width: 100%;
+  }
+
+  .breakdown-table {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .breakdown-table h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  thead th {
+    background: #f1f5f9;
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+    padding: 7px 10px;
+    text-align: right;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  thead th:first-child { text-align: left; }
+
+  tbody tr:nth-child(even) { background: #f8fafc; }
+
+  tbody td {
+    padding: 6px 10px;
+    text-align: right;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  tbody td:first-child { text-align: left; font-weight: 500; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .val-income { color: #059669; font-weight: 600; }
+  .val-expense { color: #dc2626; font-weight: 600; }
+  .val-positive { color: #059669; font-weight: 600; }
+  .val-negative { color: #dc2626; font-weight: 600; }
+
+  .footer {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 10px;
+    color: #94a3b8;
+  }
+
+  @media print {
+    body { background: white; padding: 15px; }
+    .chart-card { break-inside: avoid; }
+    table { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Monthly Financial Report — <span id="report-month"></span></h1>
+  <div class="subtitle">Finance Manager &nbsp;|&nbsp; Generated: <span id="gen-date"></span></div>
+</div>
+
+<div class="summary-box">
+  <h3>Monthly Summary</h3>
+  <div class="summary-stats">
+    <div class="stat-income">
+      <div class="stat-label">Total Income</div>
+      <div class="stat-value" id="total-income">—</div>
+    </div>
+    <div class="stat-expense">
+      <div class="stat-label">Total Expenses</div>
+      <div class="stat-value" id="total-expense">—</div>
+    </div>
+    <div class="stat-net" id="net-wrap">
+      <div class="stat-label">Net Savings</div>
+      <div class="stat-value" id="net-savings">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="charts-grid">
+  <div class="chart-card">
+    <h3>Income by Category</h3>
+    <canvas id="chart-income" width="300" height="180"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Expenses by Category</h3>
+    <canvas id="chart-expense" width="300" height="180"></canvas>
+  </div>
+</div>
+
+<div class="breakdown-table">
+  <h3>Category Breakdown</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th style="text-align:right">Income</th>
+        <th style="text-align:right">Expenses</th>
+        <th style="text-align:right">Net</th>
+      </tr>
+    </thead>
+    <tbody id="breakdown-tbody"></tbody>
+  </table>
+</div>
+
+<div class="footer">Generated by Finance Manager</div>
+
+<script>
+(function() {
+  const symbols = { EUR: '\u20ac', USD: '$', GBP: '\u00a3', CHF: 'CHF ' };
+  const currency = window.__DATA__ ? window.__DATA__.currency : 'USD';
+  const sym = symbols[currency] || (currency + ' ');
+
+  function fmt(amt) {
+    return sym + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  const data = window.__DATA__;
+  if (!data) {
+    document.body.innerHTML = '<p style="padding:40px;text-align:center;color:#dc2626;">Error: No data provided.</p>';
+    window.__RENDER_DONE__ = true;
+    return;
+  }
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const [year, month] = (data.yearMonth || '').split('-');
+  const monthName = monthNames[parseInt(month) - 1] || data.yearMonth;
+  document.getElementById('report-month').textContent = `${monthName} ${year}`;
+  document.getElementById('gen-date').textContent = new Date().toLocaleDateString();
+
+  const totalIncome = data.summary.totalIncome;
+  const totalExpense = data.summary.totalExpense;
+  const netSavings = data.summary.netSavings;
+
+  document.getElementById('total-income').textContent = fmt(totalIncome);
+  document.getElementById('total-expense').textContent = fmt(totalExpense);
+  document.getElementById('net-savings').textContent = fmt(netSavings);
+
+  const netWrap = document.getElementById('net-wrap');
+  if (netSavings < 0) netWrap.classList.add('negative');
+
+  // --- Income Doughnut Chart ---
+  const incomeCtx = document.getElementById('chart-income').getContext('2d');
+  const incomeData = data.incomeByCategory || [];
+  const incomeFiltered = incomeData.filter(c => c.total > 0);
+  if (incomeFiltered.length > 0) {
+    new Chart(incomeCtx, {
+      type: 'doughnut',
+      data: {
+        labels: incomeFiltered.map(c => c.name),
+        datasets: [{
+          data: incomeFiltered.map(c => c.total),
+          backgroundColor: incomeFiltered.map(c => c.color || '#059669'),
+          borderWidth: 2,
+          borderColor: '#ffffff',
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { font: { size: 10 }, boxWidth: 10, padding: 6 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const val = ctx.raw;
+                const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = sum > 0 ? ((val / sum) * 100).toFixed(1) : 0;
+                return ' ' + ctx.label + ': ' + fmt(val) + ' (' + pct + '%)';
+              }
+            }
+          }
+        },
+        animation: { duration: 0 }
+      }
+    });
+  }
+
+  // --- Expense Doughnut Chart ---
+  const expenseCtx = document.getElementById('chart-expense').getContext('2d');
+  const expenseData = data.expenseByCategory || [];
+  const expenseFiltered = expenseData.filter(c => c.total > 0);
+  if (expenseFiltered.length > 0) {
+    new Chart(expenseCtx, {
+      type: 'doughnut',
+      data: {
+        labels: expenseFiltered.map(c => c.name),
+        datasets: [{
+          data: expenseFiltered.map(c => c.total),
+          backgroundColor: expenseFiltered.map(c => c.color || '#dc2626'),
+          borderWidth: 2,
+          borderColor: '#ffffff',
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { font: { size: 10 }, boxWidth: 10, padding: 6 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const val = ctx.raw;
+                const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = sum > 0 ? ((val / sum) * 100).toFixed(1) : 0;
+                return ' ' + ctx.label + ': ' + fmt(val) + ' (' + pct + '%)';
+              }
+            }
+          }
+        },
+        animation: { duration: 0 }
+      }
+    });
+  }
+
+  // --- Category Breakdown Table ---
+  const tbody = document.getElementById('breakdown-tbody');
+  const allCategories = {};
+
+  // Collect all category names
+  incomeData.forEach(c => { if (!allCategories[c.name]) allCategories[c.name] = { name: c.name, color: c.color, income: 0, expense: 0 }; });
+  expenseData.forEach(c => { if (!allCategories[c.name]) allCategories[c.name] = { name: c.name, color: c.color, income: 0, expense: 0 }; });
+
+  // Fill in values
+  incomeData.forEach(c => { if (allCategories[c.name]) allCategories[c.name].income = c.total; });
+  expenseData.forEach(c => { if (allCategories[c.name]) allCategories[c.name].expense = c.total; });
+
+  // Sort by total (income + expense)
+  const sortedCats = Object.values(allCategories)
+    .filter(c => c.income > 0 || c.expense > 0)
+    .sort((a, b) => (b.income + b.expense) - (a.income + a.expense));
+
+  sortedCats.forEach(c => {
+    const net = c.income - c.expense;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (c.color || '#6b7280') + ';margin-right:6px;"></span>' + c.name + '</td>' +
+      '<td class="val-income">' + fmt(c.income) + '</td>' +
+      '<td class="val-expense">' + fmt(c.expense) + '</td>' +
+      '<td class="' + (net >= 0 ? 'val-positive' : 'val-negative') + '">' + fmt(net) + '</td>';
+    tbody.appendChild(tr);
+  });
+
+  if (sortedCats.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4" style="text-align:center;color:#64748b;padding:20px;">No transactions this month</td>';
+    tbody.appendChild(tr);
+  }
+
+  // Signal that rendering is done (small delay to ensure charts fully render)
+  window.__CHART_RENDER_DONE__ = true;
+  setTimeout(() => { window.__RENDER_DONE__ = true; }, 500);
+})();
+</script>
+</body>
+</html>
