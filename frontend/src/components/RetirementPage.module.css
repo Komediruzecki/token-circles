@@ -276,6 +276,10 @@
   margin-bottom: 16px;
 }
 
+.page-retirement {
+  display: block;
+}
+
 /* retirement projections */
 .retirement-projections {
   margin-bottom: 24px;

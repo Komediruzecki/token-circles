@@ -55,18 +55,39 @@ function Reports() {
       })
   })
 
+  const getProfileHeaders = (): Record<string, string> => {
+    const currentProfileId = localStorage.getItem('currentProfileId')
+    const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
+    const headers: Record<string, string> = {}
+    if (currentProfileId) {
+      headers['X-Profile-Id'] = currentProfileId
+    }
+    if (selectedProfileIds.length > 1) {
+      headers['X-Profile-Ids'] = JSON.stringify(selectedProfileIds)
+    }
+    return headers
+  }
+
   const downloadReport = async (endpoint: string, filename: string) => {
     setReportLoading(filename)
     try {
-      const res = await apiFetch(endpoint, { credentials: 'include' })
+      const headers = getProfileHeaders()
+      // Also append profile_ids to URL as query param fallback
+      const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
+      let url = endpoint
+      if (selectedProfileIds.length > 1) {
+        const sep = endpoint.includes('?') ? '&' : '?'
+        url = endpoint + sep + 'profile_ids=' + selectedProfileIds.join(',')
+      }
+      const res = await apiFetch(url, { credentials: 'include', headers })
       if (!res.ok) throw new Error('Report generation failed')
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
+      const downloadUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
+      a.href = downloadUrl
       a.download = filename
       a.click()
-      URL.revokeObjectURL(url)
+      URL.revokeObjectURL(downloadUrl)
     } catch {
       alert('Failed to generate report')
     } finally {
