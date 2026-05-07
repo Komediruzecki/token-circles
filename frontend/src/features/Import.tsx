@@ -757,24 +757,43 @@ export default function Import() {
         {/* Category type review */}
         <div class={styles.categoryReview}>
           <h3 class={styles.categoryReviewTitle}>Category Types</h3>
-          <div class={styles.categoryChips}>
-            <For each={detectCategories()}>
-              {(category) => (
-                <div class={styles.categoryChip}>
-                  <span class={styles.categoryChipName}>{category}</span>
-                  <select
-                    class={styles.categoryChipSelect}
-                    value={categoryTypes()[category] || 'expense'}
-                    onChange={(e) => {
-                      handleCategoryTypeToggle(category, e.target.value as 'income' | 'expense')
-                    }}
-                  >
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                  </select>
-                </div>
-              )}
-            </For>
+          <div style="max-height: 280px; overflow-y: auto;">
+            <table class={styles.categoryTable}>
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class={styles.categoryTableType}>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={detectCategories()}>
+                  {(category) => {
+                    const currentType = () => categoryTypes()[category] || 'expense'
+                    return (
+                      <tr>
+                        <td class={styles.categoryTableName}>{category}</td>
+                        <td class={styles.categoryTableType}>
+                          <div class={styles.pillGroup}>
+                            <button
+                              class={`${styles.pill} ${currentType() === 'expense' ? styles.expenseActive : ''}`}
+                              onClick={() => { handleCategoryTypeToggle(category, 'expense') }}
+                            >
+                              Expense
+                            </button>
+                            <button
+                              class={`${styles.pill} ${currentType() === 'income' ? styles.incomeActive : ''}`}
+                              onClick={() => { handleCategoryTypeToggle(category, 'income') }}
+                            >
+                              Income
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }}
+                </For>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -808,8 +827,8 @@ export default function Import() {
 
     return (
       <>
-        {/* Stats */}
-        <div class={styles.previewHeader}>
+        {/* Stats + Import actions */}
+        <div class={styles.actionBar}>
           <div class={styles.previewStats}>
             <div class={styles.statItem}>
               <span class={styles.statLabel}>Total Rows</span>
@@ -828,8 +847,29 @@ export default function Import() {
               </div>
             )}
           </div>
-          <div class={styles.previewActions}>
-            <button class={`${styles.btn} ${styles.btnOutline}`} onClick={resetForm}>
+          <div class={styles.importButtons}>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={() => handleImport('selected')}
+              disabled={selectedRows().size === 0}
+            >
+              Import Selected ({selected})
+            </button>
+            {duplicates > 0 && (
+              <button
+                class={`${styles.btn} ${styles.btnSecondary}`}
+                onClick={() => handleImport('new')}
+              >
+                Import Only New (Skip {duplicates} Duplicates)
+              </button>
+            )}
+            <button
+              class={`${styles.btn} ${styles.btnOutline}`}
+              onClick={() => handleImport('all')}
+            >
+              Import All
+            </button>
+            <button class={`${styles.btn} ${styles.btnGhost}`} onClick={resetForm}>
               Cancel
             </button>
           </div>
@@ -912,33 +952,6 @@ export default function Import() {
             </select>
           </div>
         )}
-
-        {/* Import actions */}
-        <div class={styles.actionBar}>
-          <div class={styles.importButtons}>
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={() => handleImport('selected')}
-              disabled={selectedRows().size === 0}
-            >
-              Import Selected ({selected})
-            </button>
-            {duplicates > 0 && (
-              <button
-                class={`${styles.btn} ${styles.btnSecondary}`}
-                onClick={() => handleImport('new')}
-              >
-                Import Only New (Skip {duplicates} Duplicates)
-              </button>
-            )}
-            <button
-              class={`${styles.btn} ${styles.btnOutline}`}
-              onClick={() => handleImport('all')}
-            >
-              Import All
-            </button>
-          </div>
-        </div>
       </>
     )
   }

@@ -193,6 +193,35 @@ export default function Dashboard() {
           <p>Your financial overview</p>
         </div>
         <div class={styles.pageHeaderActions}>
+          <PeriodNavigator
+            month={month}
+            year={year}
+            onMonthChange={setMonth}
+            onYearChange={setYear}
+            onPrev={() => {
+              const m = month()
+              const y = year()
+              if (m === 1) {
+                setMonth(12)
+                setYear(y - 1)
+              } else {
+                setMonth(m - 1)
+              }
+            }}
+            onNext={() => {
+              const m = month()
+              const y = year()
+              if (m === 12) {
+                setMonth(1)
+                setYear(y + 1)
+              } else {
+                setMonth(m + 1)
+              }
+            }}
+          />
+          <div class={styles.periodPills}>
+            <PeriodPills value={pillPeriod()} onChange={handlePillChange} />
+          </div>
           <button class={styles.btnSecondary} onClick={showSettings}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path
@@ -214,9 +243,6 @@ export default function Dashboard() {
             </svg>
             Refresh
           </button>
-          <div class={styles.periodPills}>
-            <PeriodPills value={pillPeriod()} onChange={handlePillChange} />
-          </div>
         </div>
       </div>
 
@@ -224,33 +250,6 @@ export default function Dashboard() {
         <div class={styles.emptyState}>Loading...</div>
       ) : metrics() ? (
         <>
-          {/* Period Navigator */}
-          <div class={styles.card}>
-            <div class={styles.cardHeader}>
-              <div class={styles.cardTitle}>Period Navigator</div>
-            </div>
-            <div class={styles.periodNavigatorContainer}>
-              <PeriodNavigator
-                month={month}
-                year={year}
-                onMonthChange={setMonth}
-                onYearChange={setYear}
-                onPrev={() => {
-                  const m = month()
-                  const y = year()
-                  setMonth(m === 1 ? 12 : m - 1)
-                  setYear(y === 1 ? y - 1 : y)
-                }}
-                onNext={() => {
-                  const m = month()
-                  const y = year()
-                  setMonth(m === 12 ? 1 : m + 1)
-                  setYear(m === 12 ? y + 1 : y)
-                }}
-              />
-            </div>
-          </div>
-
           {/* Metrics Grid */}
           <Show when={isWidgetVisible('metrics')}>
           <div class={styles.metricsGrid}>
