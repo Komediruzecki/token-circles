@@ -13,6 +13,12 @@ export interface PeriodNavigatorProps {
   onNext: () => void
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function getMonthName(m: number) {
+  return MONTHS[(m - 1 + 12) % 12]
+}
+
 export function PeriodNavigator(props: PeriodNavigatorProps) {
   return (
     <div class={styles.periodNavigator}>
@@ -35,7 +41,7 @@ export function PeriodNavigator(props: PeriodNavigatorProps) {
       </button>
 
       <div class={styles.periodDisplay}>
-        <span class={styles.month}>{props.month()}</span>
+        <span class={styles.month}>{getMonthName(props.month())}</span>
         <span class={styles.year}>{props.year()}</span>
       </div>
 
