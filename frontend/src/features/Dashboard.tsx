@@ -94,13 +94,14 @@ export default function Dashboard() {
   createEffect(() => {
     month()
     year() // track dependencies
+    // When PeriodNavigator changes month/year, use standard month-based filtering
     void loadDashboard()
   })
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (dateFrom?: string, dateTo?: string) => {
     setLoading(true)
     try {
-      const data = await api.getDashboard(month(), year())
+      const data = await api.getDashboard(month(), year(), dateFrom, dateTo)
       setMetrics(data)
     } catch {
       toast('Failed to load dashboard', 'error')
@@ -134,45 +135,59 @@ export default function Dashboard() {
   const handlePillChange = async (pillId: string) => {
     setPillPeriod(pillId)
     const now = new Date()
-    const m = now.getMonth() + 1
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+    let dateFrom = ''
+    let dateTo = ''
+    let m = now.getMonth() + 1
     const y = now.getFullYear()
 
     switch (pillId) {
       case 'today':
-        setMonth(m)
-        setYear(y)
+        dateFrom = fmt(now)
+        dateTo = fmt(now)
         break
-      case 'week':
-        setMonth(m)
-        setYear(y)
+      case 'week': {
+        const dayOfWeek = now.getDay()
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+        const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
+        const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
+        dateFrom = fmt(monday)
+        dateTo = fmt(sunday)
         break
+      }
       case 'month':
-        setMonth(m)
-        setYear(y)
+        dateFrom = fmt(new Date(y, m - 1, 1))
+        dateTo = fmt(new Date(y, m, 0))
         break
-      case 'quarter':
-        setMonth(m)
-        setYear(y)
+      case 'quarter': {
+        const qStartMonth = Math.floor((m - 1) / 3) * 3
+        dateFrom = fmt(new Date(y, qStartMonth, 1))
+        dateTo = fmt(new Date(y, qStartMonth + 3, 0))
+        m = qStartMonth + 1
         break
+      }
       case 'year':
-        setMonth(m)
-        setYear(y)
+        dateFrom = fmt(new Date(y, 0, 1))
+        dateTo = fmt(new Date(y, 11, 31))
         break
       case 'last7':
-        setMonth(m)
-        setYear(y)
+        dateFrom = fmt(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))
+        dateTo = fmt(now)
         break
       case 'last30':
-        setMonth(m)
-        setYear(y)
+        dateFrom = fmt(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
+        dateTo = fmt(now)
         break
       case 'last90':
-        setMonth(m)
-        setYear(y)
+        dateFrom = fmt(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000))
+        dateTo = fmt(now)
         break
     }
 
-    void loadMonthlyData()
+    setMonth(m)
+    setYear(y)
+    await loadDashboard(dateFrom, dateTo)
   }
 
   const showSettings = () => setShowSettingsModal(true)
@@ -210,6 +225,7 @@ export default function Dashboard() {
             onPrev={() => {
               const m = month()
               const y = year()
+              setPillPeriod('custom')
               if (m === 1) {
                 setMonth(12)
                 setYear(y - 1)
@@ -220,6 +236,7 @@ export default function Dashboard() {
             onNext={() => {
               const m = month()
               const y = year()
+              setPillPeriod('custom')
               if (m === 12) {
                 setMonth(1)
                 setYear(y + 1)

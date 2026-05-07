@@ -137,7 +137,7 @@ function flushLogs(): void {
 /**
  * Send logs to backend API
  */
-async function sendLogsToBackend(logs: LogEntry[]): Promise<void> {
+async function _sendLogsToBackend(logs: LogEntry[]): Promise<void> {
   try {
     // Use apiFetch to support serverless mode
     const { apiFetch } = await import('./apiFetch')
@@ -256,9 +256,9 @@ export function initLogging(): void {
   // Log initialization
   log('info', 'Logging system initialized')
 
-  // Send any pending logs to backend
+  // Flush any pending logs to localStorage
   if (logBuffer.length > 0) {
-    sendLogsToBackend(logBuffer)
+    flushLogs()
   }
 }
 

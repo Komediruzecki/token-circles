@@ -703,15 +703,24 @@ app.get('/api/profiles', apiRateLimiter, (req, res) => {
       // Not logged in: return all example profiles (1, 2, 3)
       profiles = db.prepare('SELECT * FROM profiles WHERE id IN (1, 2, 3) ORDER BY id').all();
     }
-    // Include transaction counts
-    const counts = {};
-    const txCount = db
-      .prepare('SELECT profile_id, COUNT(*) as c FROM transactions GROUP BY profile_id')
-      .all();
-    for (const r of txCount) counts[r.profile_id] = r.c;
+    // Include transaction, account, and budget counts
+    const txCounts = {};
+    db.prepare('SELECT profile_id, COUNT(*) as c FROM transactions GROUP BY profile_id')
+      .all()
+      .forEach((r) => { txCounts[r.profile_id] = r.c; });
+    const acctCounts = {};
+    db.prepare('SELECT profile_id, COUNT(*) as c FROM accounts GROUP BY profile_id')
+      .all()
+      .forEach((r) => { acctCounts[r.profile_id] = r.c; });
+    const budgetCounts = {};
+    db.prepare('SELECT profile_id, COUNT(*) as c FROM budgets GROUP BY profile_id')
+      .all()
+      .forEach((r) => { budgetCounts[r.profile_id] = r.c; });
     const result = profiles.map((p) => ({
       ...p,
-      transaction_count: counts[p.id] || 0,
+      transaction_count: txCounts[p.id] || 0,
+      account_count: acctCounts[p.id] || 0,
+      budget_count: budgetCounts[p.id] || 0,
     }));
     res.json(result);
   } catch (err) {
@@ -741,6 +750,8 @@ app.post('/api/profiles', apiRateLimiter, (req, res) => {
       id: db.prepare('SELECT last_insert_rowid() as id').get().id,
       name: name.trim(),
       transaction_count: 0,
+      account_count: 0,
+      budget_count: 0,
     });
   } catch (err) {
     console.error(err.message);
@@ -4045,12 +4056,20 @@ app.get('/api/dashboard', apiRateLimiter, async (req, res) => {
     const currency = currencyRow ? currencyRow.value : 'EUR';
 
     // Get summary (income, expenses, balance, recent transactions)
-    const year = parseInt(req.query.year) || new Date().getFullYear();
-    const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    // Last day of the current month
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const dateFrom = req.query.date_from;
+    const dateTo = req.query.date_to;
+    let startDate;
+    let endDate;
+    if (dateFrom && dateTo) {
+      startDate = dateFrom;
+      endDate = dateTo;
+    } else {
+      const year = parseInt(req.query.year) || new Date().getFullYear();
+      const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
+      startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
 
     // Previous month calculation
     const prevMonth = month === 1 ? 12 : month - 1;

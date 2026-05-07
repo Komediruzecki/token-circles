@@ -152,7 +152,7 @@ export default function Analytics() {
       const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d: any, i: number) => ({
         category_id: i,
         category_name: d.category,
-        amount: d.data[d.data.length - 1] || 0,
+        amount: Array.isArray(d.data) ? d.data.reduce((sum: number, v: number) => sum + v, 0) : 0,
       }))
 
       // Monthly data from /api/stats/monthly

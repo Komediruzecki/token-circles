@@ -10,27 +10,17 @@
   width: 100%;
   padding: 0.75rem 1rem;
   font-size: 0.95rem;
-  color: #1f2937;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
+  color: var(--text);
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
 }
 
-.dark-mode .selectBtn {
-  background: #1f2937;
-  border-color: #374151;
-  color: #f3f4f6;
-}
-
 .selectBtn:hover {
-  border-color: #6366f1;
-}
-
-.dark-mode .selectBtn:hover {
-  background: #374151;
+  border-color: var(--primary);
 }
 
 .selectValue {
@@ -43,6 +33,7 @@
 
 .arrow {
   transition: transform 0.2s ease;
+  color: var(--text-secondary);
 }
 
 .arrowOpen {
@@ -55,19 +46,13 @@
   left: 0;
   right: 0;
   max-height: 400px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
   z-index: 100;
   overflow: hidden;
   animation: fadeIn 0.15s ease-out;
-}
-
-.dark-mode .dropdown {
-  background: #1f2937;
-  border-color: #374151;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
 }
 
 @keyframes fadeIn {
@@ -85,11 +70,7 @@
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.dark-mode .header {
-  border-bottom-color: #374151;
+  border-bottom: 1px solid var(--border);
 }
 
 .selectAllBtn,
@@ -99,30 +80,18 @@
   font-size: 0.8rem;
   font-weight: 600;
   background: transparent;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.dark-mode .selectAllBtn,
-.dark-mode .deselectAllBtn {
-  background: transparent;
-  border-color: #4b5563;
-  color: #9ca3af;
-}
-
 .selectAllBtn:hover,
 .deselectAllBtn:hover {
-  border-color: #6366f1;
-  background: #f5f3ff;
-  color: #6366f1;
-}
-
-.dark-mode .selectAllBtn:hover,
-.dark-mode .deselectAllBtn:hover {
-  background: #374151;
+  border-color: var(--primary);
+  background: var(--primary-bg);
+  color: var(--primary);
 }
 
 .searchInput {
@@ -130,20 +99,15 @@
   padding: 0.75rem 1rem;
   font-size: 0.95rem;
   border: none;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
   outline: none;
   transition: background 0.15s ease;
 }
 
-.dark-mode .searchInput {
-  background: #111827;
-  border-bottom-color: #374151;
-  color: #f3f4f6;
-}
-
 .searchInput::placeholder {
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 
 .categoryList {
@@ -163,34 +127,19 @@
   cursor: pointer;
   transition: background-color 0.1s ease;
   font-size: 0.9rem;
-  color: #1f2937;
+  color: var(--text);
 }
 
-.dark-mode .categoryItem {
-  color: #d1d5db;
-}
-
-.categoryItem:hover {
-  background-color: #f9fafb;
-}
-
-.dark-mode .categoryItem:hover {
-  background-color: #374151;
-}
-
+.categoryItem:hover,
 .categoryItem.hovered {
-  background-color: #f5f3ff;
-}
-
-.dark-mode .categoryItem.hovered {
-  background-color: rgba(99, 102, 241, 0.1);
+  background-color: var(--surface-hover);
 }
 
 .categoryItem input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #6366f1;
+  accent-color: var(--primary);
 }
 
 .categoryColor {
@@ -210,12 +159,8 @@
 .noResults {
   padding: 2rem;
   text-align: center;
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.875rem;
-}
-
-.dark-mode .noResults {
-  color: #6b7280;
 }
 
 /* Custom scrollbar */
@@ -228,14 +173,10 @@
 }
 
 .categoryList::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
-.dark-mode .categoryList::-webkit-scrollbar-thumb {
-  background: #4b5563;
-}
-
 .categoryList::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--scrollbar-thumb-hover);
 }

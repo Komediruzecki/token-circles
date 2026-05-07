@@ -43,7 +43,12 @@ function Reports() {
 
   onMount(() => {
     const currentYear = new Date().getFullYear()
-    apiFetch('/api/analytics/distinct-years', { credentials: 'include' })
+    const headers: Record<string, string> = {}
+    const currentProfileId = localStorage.getItem('currentProfileId')
+    const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
+    if (currentProfileId) headers['X-Profile-Id'] = currentProfileId
+    if (selectedProfileIds.length > 1) headers['X-Profile-Ids'] = JSON.stringify(selectedProfileIds)
+    apiFetch('/api/analytics/distinct-years', { credentials: 'include', headers })
       .then((r) => r.json())
       .then((data) => {
         const years: number[] = data.years || []
@@ -77,7 +82,7 @@ function Reports() {
       let url = endpoint
       if (selectedProfileIds.length > 1) {
         const sep = endpoint.includes('?') ? '&' : '?'
-        url = endpoint + sep + 'profile_ids=' + selectedProfileIds.join(',')
+        url = `${endpoint}${sep}profile_ids=${selectedProfileIds.join(',')}`
       }
       const res = await apiFetch(url, { credentials: 'include', headers })
       if (!res.ok) throw new Error('Report generation failed')
@@ -344,8 +349,18 @@ export default function Settings() {
     }
   }
 
+  // Log viewer toggle state (reactive hash tracking)
+  const [showLogs, setShowLogs] = createSignal(false)
+
+  onMount(() => {
+    const checkHash = () => setShowLogs(window.location.hash.includes('#logs'))
+    checkHash()
+    window.addEventListener('hashchange', checkHash)
+    return () => { window.removeEventListener('hashchange', checkHash) }
+  })
+
   // Household View state
-  const [allProfiles, setAllProfiles] = createSignal<Array<{ id: number; name: string }>>([])
+  const [allProfiles, setAllProfiles] = createSignal<Array<{ id: number; name: string; transaction_count?: number; account_count?: number; budget_count?: number }>>([])
   const [householdIds, setHouseholdIds] = createSignal<number[]>(
     (() => {
       const stored = localStorage.getItem('selectedProfileIds')
@@ -560,6 +575,49 @@ export default function Settings() {
                     </For>
                   </div>
                 </Show>
+                <Show when={allProfiles().length > 0}>
+                  <div style="margin-top: 16px;">
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                      Household Overview
+                    </div>
+                    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                      <thead>
+                        <tr style="border-bottom: 2px solid var(--border);">
+                          <th style="text-align: left; padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Profile</th>
+                          <th style="text-align: right; padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Txns</th>
+                          <th style="text-align: right; padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Accts</th>
+                          <th style="text-align: right; padding: 6px 8px; color: var(--text-secondary); font-weight: 600;">Budgets</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={allProfiles().filter((p) => householdIds().includes(p.id))}>
+                          {(profile) => (
+                            <tr style="border-bottom: 1px solid var(--border);">
+                              <td style="padding: 6px 8px; color: var(--text);">{profile.name}</td>
+                              <td style="padding: 6px 8px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums;">{profile.transaction_count ?? 0}</td>
+                              <td style="padding: 6px 8px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums;">{profile.account_count ?? 0}</td>
+                              <td style="padding: 6px 8px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums;">{profile.budget_count ?? 0}</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                      <tfoot>
+                        <tr style="border-top: 2px solid var(--border); font-weight: 600;">
+                          <td style="padding: 6px 8px; color: var(--text);">Total</td>
+                          <td style="padding: 6px 8px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums;">
+                            {allProfiles().filter((p) => householdIds().includes(p.id)).reduce((sum, p) => sum + (p.transaction_count ?? 0), 0)}
+                          </td>
+                          <td style="padding: 6px 8px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums;">
+                            {allProfiles().filter((p) => householdIds().includes(p.id)).reduce((sum, p) => sum + (p.account_count ?? 0), 0)}
+                          </td>
+                          <td style="padding: 6px 8px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums;">
+                            {allProfiles().filter((p) => householdIds().includes(p.id)).reduce((sum, p) => sum + (p.budget_count ?? 0), 0)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </Show>
               </div>
             </div>
 
@@ -614,15 +672,10 @@ export default function Settings() {
                   <button
                     class={styles.btnSecondary}
                     onclick={() => {
-                      const hash = window.location.hash.replace('#', '')
-                      if (hash === 'settings') {
-                        window.location.hash = '#logs'
-                      } else {
-                        window.location.hash = '#settings#logs'
-                      }
+                      window.location.hash = showLogs() ? '#settings' : '#logs'
                     }}
                   >
-                    View Logs
+                    {showLogs() ? 'Hide Logs' : 'View Logs'}
                   </button>
                   <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
                     Access log viewer to debug issues on mobile devices or when console is not
@@ -632,7 +685,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <Show when={window.location.hash.includes('#logs')}>
+            <Show when={showLogs()}>
               <div class={styles.card} style="margin-top: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                   <div class={styles.settingsSectionTitle} style="margin-bottom: 0;">

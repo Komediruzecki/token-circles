@@ -12,40 +12,24 @@
   padding: 0.5rem 0.875rem;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #6b7280;
-  background: white;
-  border: 2px solid #e5e7eb;
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  border: 2px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.dark-mode .pill {
-  background: #1f2937;
-  border-color: #374151;
-  color: #9ca3af;
-}
-
 .pill:hover {
-  border-color: #9ca3af;
-  background: #f9fafb;
-  color: #374151;
-}
-
-.dark-mode .pill:hover {
-  background: #374151;
-  color: #d1d5db;
+  border-color: var(--text-secondary);
+  background: var(--bg);
+  color: var(--text);
 }
 
 .pillActive {
-  border-color: #6366f1;
-  background: #f5f3ff;
-  color: #6366f1;
-}
-
-.dark-mode .pillActive {
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
+  border-color: var(--primary);
+  background: var(--primary-light, rgba(99, 102, 241, 0.1));
+  color: var(--primary);
 }
 
 .pillIcon {

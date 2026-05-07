@@ -22,6 +22,16 @@ export default function D3HeatmapChart(props: Props) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(amount)
   }
 
+  const ensureTooltip = () => {
+    if (!tooltipEl || !tooltipEl.parentNode) {
+      tooltipEl = document.createElement('div')
+      tooltipEl.id = 'heatmap-tooltip'
+      tooltipEl.style.cssText =
+        'position:fixed;display:none;background:var(--card-bg,#1f2937);color:var(--text,#e5e7eb);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:1px solid var(--border,#374151);white-space:nowrap;'
+      document.body.appendChild(tooltipEl)
+    }
+  }
+
   const renderHeatmap = () => {
     const container = containerRef
     if (!container) return
@@ -32,6 +42,8 @@ export default function D3HeatmapChart(props: Props) {
     const margin = { top: 20, right: 20, bottom: 10, left: 40 }
 
     d3.select(container).selectAll('svg').remove()
+
+    ensureTooltip()
 
     const svg = d3
       .select(container)
@@ -130,7 +142,7 @@ export default function D3HeatmapChart(props: Props) {
 
     // Legend
     const legendX = margin.left
-    const legendY = height - 5
+    const legendY = height - 16
     const legendWidth = 120
     const legendHeight = 10
 

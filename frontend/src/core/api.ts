@@ -678,8 +678,16 @@ export class ApiClient {
   /**
    * Get dashboard metrics
    */
-  async getDashboard(month?: number, year?: number): Promise<Models.DashboardMetrics> {
-    const params = month && year ? `?month=${month}&year=${year}` : ''
+  async getDashboard(month?: number, year?: number, dateFrom?: string, dateTo?: string): Promise<Models.DashboardMetrics> {
+    const qs = new URLSearchParams()
+    if (dateFrom && dateTo) {
+      qs.set('date_from', dateFrom)
+      qs.set('date_to', dateTo)
+    } else if (month && year) {
+      qs.set('month', String(month))
+      qs.set('year', String(year))
+    }
+    const params = qs.toString() ? `?${qs.toString()}` : ''
     return this.request<Models.DashboardMetrics>(`/dashboard${params}`)
   }
 
