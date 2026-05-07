@@ -5,11 +5,15 @@
 
 .chart-container {
   position: relative;
-  height: 280px;
+  height: 100%;
 }
 
 .chart-container.tall {
   height: 320px;
+}
+
+.chart-container.medium {
+  height: 300px;
 }
 
 .chart-container.short {

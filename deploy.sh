@@ -28,8 +28,11 @@ SWREG
 echo "Deploying frontend to production..."
 # Remove old hashed assets
 rm -rf "$LIVE_FRONTEND/assets"
-# Copy new dist contents
+# Copy new dist contents to live frontend root (for Apache direct serving)
 cp -r "$FRONTEND_DIR/dist"/* "$LIVE_FRONTEND/"
+# Also ensure dist subdirectory exists with export templates (for Puppeteer/PDF rendering)
+mkdir -p "$LIVE_FRONTEND/dist"
+cp -r "$FRONTEND_DIR/dist"/* "$LIVE_FRONTEND/dist/"
 
 echo "Syncing backend..."
 rsync -a --exclude='node_modules' --exclude='db/finance.db' --exclude='db/sessions.db' --exclude='db/*.db-backup*' "$BACKEND_DIR/" "$LIVE_BACKEND/"
