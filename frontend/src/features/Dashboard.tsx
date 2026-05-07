@@ -543,39 +543,40 @@ export default function Dashboard() {
                 </div>
               </div>
             </Show>
+          </div>
 
-            <div class={styles.card}>
-              <div class={styles.cardHeader}>
-                <div class={styles.cardTitle}>Income vs Expenses</div>
-              </div>
-              <div class={styles.chartContainer}>
-                <ChartWrapper
-                  type="bar"
-                  data={{
-                    labels: ['Income', 'Expenses', 'Net'],
-                    datasets: [
-                      {
-                        data: [
-                          metrics()!.totalIncome || 0,
-                          metrics()!.totalExpenses || 0,
-                          (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
-                        ],
-                        backgroundColor: [
-                          '#22C55E',
-                          '#DC2626',
-                          (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
-                            ? '#22C55E'
-                            : '#DC2626',
-                        ],
-                        borderRadius: 8,
-                      },
-                    ],
-                  }}
-                  height={250}
-                  showExport
-                  filename="income-vs-expenses"
-                />
-              </div>
+          {/* Income vs Expenses */}
+          <div class={styles.card} style="margin-bottom: 16px;">
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Income vs Expenses</div>
+            </div>
+            <div class={styles.chartContainer}>
+              <ChartWrapper
+                type="bar"
+                data={{
+                  labels: ['Income', 'Expenses', 'Net'],
+                  datasets: [
+                    {
+                      data: [
+                        metrics()!.totalIncome || 0,
+                        metrics()!.totalExpenses || 0,
+                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
+                      ],
+                      backgroundColor: [
+                        '#22C55E',
+                        '#DC2626',
+                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
+                          ? '#22C55E'
+                          : '#DC2626',
+                      ],
+                      borderRadius: 8,
+                    },
+                  ],
+                }}
+                height={250}
+                showExport
+                filename="income-vs-expenses"
+              />
             </div>
           </div>
 
