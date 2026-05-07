@@ -952,7 +952,7 @@ app.post('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
     const {
       name,
       color = '#6b7280',
-      icon = 'tag',
+      icon = null,
       type = 'expense',
       parent_id: parentIdParam,
       tax_deductible,

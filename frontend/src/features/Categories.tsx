@@ -55,7 +55,9 @@ export default function Categories() {
   const [selectedCategory, setSelectedCategory] = createSignal<Category | null>(null)
   const [budgetAmount, setBudgetAmount] = createSignal('')
   const [filterType, setFilterType] = createSignal<'all' | 'expense' | 'income'>('all')
-  const [budgetSummary, setBudgetSummary] = createSignal<Record<number, { spent: number; budget: number; remaining: number; percent_used: number }>>({})
+  const [budgetSummary, setBudgetSummary] = createSignal<
+    Record<number, { spent: number; budget: number; remaining: number; percent_used: number }>
+  >({})
   const [formData, setFormData] = createSignal({
     name: '',
     type: 'expense' as 'expense' | 'income',
@@ -72,7 +74,10 @@ export default function Categories() {
         apiGet<any[]>('/api/budgets/summary').catch(() => [] as any[]),
       ])
       setCategories(allRes)
-      const summary: Record<number, { spent: number; budget: number; remaining: number; percent_used: number }> = {}
+      const summary: Record<
+        number,
+        { spent: number; budget: number; remaining: number; percent_used: number }
+      > = {}
       if (Array.isArray(budgetRes)) {
         for (const b of budgetRes) {
           summary[b.category_id] = {
@@ -275,7 +280,9 @@ export default function Categories() {
                 <div class={styles.categoryCard}>
                   <div class={styles.categoryHeader}>
                     <div class={`${styles.categoryIcon} ${iconClass}`}>
-                      {category.icon || (
+                      {category.icon && category.icon !== 'tag' ? (
+                        category.icon
+                      ) : (
                         <svg
                           width="18"
                           height="18"
@@ -389,7 +396,14 @@ export default function Categories() {
                           title={color}
                         >
                           {category.color === color && (
-                            <svg width="12" height="12" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24">
+                            <svg
+                              width="12"
+                              height="12"
+                              fill="none"
+                              stroke="white"
+                              stroke-width="3"
+                              viewBox="0 0 24 24"
+                            >
                               <path d="M20 6L9 17l-5-5" />
                             </svg>
                           )}
@@ -493,7 +507,14 @@ export default function Categories() {
                       title={color}
                     >
                       {formData().color === color && (
-                        <svg width="14" height="14" fill="none" stroke="white" stroke-width="3" viewBox="0 0 24 24">
+                        <svg
+                          width="14"
+                          height="14"
+                          fill="none"
+                          stroke="white"
+                          stroke-width="3"
+                          viewBox="0 0 24 24"
+                        >
                           <path d="M20 6L9 17l-5-5" />
                         </svg>
                       )}

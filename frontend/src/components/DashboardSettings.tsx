@@ -20,9 +20,7 @@ export interface DashboardSettingsProps {
 }
 
 export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
-  const [selectedWidget, setSelectedWidget] = createSignal<string>(
-    ALL_WIDGET_IDS.join(','),
-  )
+  const [selectedWidget, setSelectedWidget] = createSignal<string>(ALL_WIDGET_IDS.join(','))
 
   // Widget configuration
   const widgets = [
@@ -164,7 +162,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
       JSON.stringify({
         visibleWidgets: ids,
         widgetOrder: [],
-      }),
+      })
     )
     props.onSave?.()
   }
@@ -196,9 +194,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
             >
               <span class={styles.widgetIcon}>{widget.icon}</span>
               <span class={styles.widgetName}>{widget.name}</span>
-              <span class={styles.widgetStatus}>
-                {isVisible(widget.id) ? 'Visible' : 'Hidden'}
-              </span>
+              <span class={styles.widgetStatus}>{isVisible(widget.id) ? 'Visible' : 'Hidden'}</span>
             </button>
           </div>
         ))}

@@ -306,7 +306,9 @@ export default function Bills() {
               <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
             </svg>{' '}
             Upcoming Bills
-            <span class={styles.sectionSubtitle}>{upcoming().filter((b) => !b.paid).length} bills</span>
+            <span class={styles.sectionSubtitle}>
+              {upcoming().filter((b) => !b.paid).length} bills
+            </span>
           </h2>
           <div data-test-id="bills-list" class={styles.billsList}>
             <For each={upcoming().filter((b) => !b.paid)}>
@@ -482,7 +484,9 @@ export default function Bills() {
           <div class={styles.billsList}>
             <For each={bills()}>
               {(bill) => (
-                <div class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}>
+                <div
+                  class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
+                >
                   <div class={styles.billMain}>
                     <div data-test-id="bill-icon" class={styles.billIcon}>
                       {bill.autopay ? (
@@ -535,7 +539,11 @@ export default function Bills() {
                           onClick={() => markPaid(bill.id)}
                           disabled={markingPaid().has(bill.id)}
                         >
-                          {markingPaid().has(bill.id) ? 'Paying...' : isOverdue(bill.due_date) ? 'Mark as Paid (Overdue)' : 'Mark Paid'}
+                          {markingPaid().has(bill.id)
+                            ? 'Paying...'
+                            : isOverdue(bill.due_date)
+                              ? 'Mark as Paid (Overdue)'
+                              : 'Mark Paid'}
                         </button>
                       ) : (
                         <ConfirmButton

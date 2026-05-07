@@ -35,7 +35,9 @@ test.describe('Bills Reactive CRUD', () => {
     const upcomingSection = page.locator('[data-test-id="bills-upcoming-section"]')
     await expect(upcomingSection).toBeVisible({ timeout: 5000 })
 
-    const billCard = upcomingSection.locator('[data-test-id="bill-card"]').filter({ hasText: billName })
+    const billCard = upcomingSection
+      .locator('[data-test-id="bill-card"]')
+      .filter({ hasText: billName })
     await expect(billCard.first()).toBeVisible({ timeout: 5000 })
 
     const billNameEl = billCard.first().locator('[data-test-id="bill-name"]')
@@ -58,9 +60,10 @@ test.describe('Bills Reactive CRUD', () => {
     await page.waitForTimeout(1500)
 
     // Verify bill appears in upcoming section
-    const upcomingBill = page.locator(
-      '[data-test-id="bills-upcoming-section"] [data-test-id="bill-card"]'
-    ).filter({ hasText: billName }).first()
+    const upcomingBill = page
+      .locator('[data-test-id="bills-upcoming-section"] [data-test-id="bill-card"]')
+      .filter({ hasText: billName })
+      .first()
     await expect(upcomingBill).toBeVisible({ timeout: 5000 })
 
     // Click Mark Paid button (scoped to this specific card)
@@ -72,15 +75,16 @@ test.describe('Bills Reactive CRUD', () => {
     await page.waitForTimeout(2000)
 
     // Verify bill now appears in paid section
-    const paidBill = page.locator(
-      '[data-test-id="bills-paid-section"] [data-test-id="bill-card"]'
-    ).filter({ hasText: billName }).first()
+    const paidBill = page
+      .locator('[data-test-id="bills-paid-section"] [data-test-id="bill-card"]')
+      .filter({ hasText: billName })
+      .first()
     await expect(paidBill).toBeVisible({ timeout: 5000 })
 
     // Verify the bill is no longer in upcoming section as unpaid
-    const upcomingAfter = page.locator(
-      '[data-test-id="bills-upcoming-section"] [data-test-id="bill-card"]'
-    ).filter({ hasText: billName })
+    const upcomingAfter = page
+      .locator('[data-test-id="bills-upcoming-section"] [data-test-id="bill-card"]')
+      .filter({ hasText: billName })
     await expect(upcomingAfter).toHaveCount(0, { timeout: 3000 })
   })
 })
@@ -202,7 +206,9 @@ test.describe('Transactions CRUD', () => {
     await page.waitForTimeout(500)
 
     // Verify modal is open
-    const modalTitle = page.locator('#tx-modal-title, [class*="modalTitle"]').filter({ hasText: 'Add Transaction' })
+    const modalTitle = page
+      .locator('#tx-modal-title, [class*="modalTitle"]')
+      .filter({ hasText: 'Add Transaction' })
     await expect(modalTitle.first()).toBeVisible({ timeout: 3000 })
 
     // Fill form fields
@@ -256,8 +262,14 @@ test.describe('Transactions CRUD', () => {
     const incomeBtn = page.locator('button').filter({ hasText: 'Income' })
 
     // At least one should be visible
-    const allVisible = await allBtn.first().isVisible().catch(() => false)
-    const incomeVisible = await incomeBtn.first().isVisible().catch(() => false)
+    const allVisible = await allBtn
+      .first()
+      .isVisible()
+      .catch(() => false)
+    const incomeVisible = await incomeBtn
+      .first()
+      .isVisible()
+      .catch(() => false)
 
     expect(allVisible || incomeVisible).toBeTruthy()
   })

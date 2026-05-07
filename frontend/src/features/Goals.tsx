@@ -322,9 +322,10 @@ export default function Goals() {
                     callbacks: {
                       label: (context: any) => {
                         const goal = goals()[context.dataIndex]
-                        const progress = goal.target_amount > 0
-                          ? Math.round((goal.current_amount / goal.target_amount) * 100)
-                          : 0
+                        const progress =
+                          goal.target_amount > 0
+                            ? Math.round((goal.current_amount / goal.target_amount) * 100)
+                            : 0
                         return `${goal.name}: ${formatCurrency(goal.current_amount)} of ${formatCurrency(goal.target_amount)} (${progress}%)`
                       },
                     },

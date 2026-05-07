@@ -66,7 +66,9 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
           <div class={styles.goalBar}>
             <div
               class={styles.goalBarFill}
-              style={{ width: `${props.goal > 0 ? Math.min((props.savingsRate / props.goal) * 100, 100) : 0}%` }}
+              style={{
+                width: `${props.goal > 0 ? Math.min((props.savingsRate / props.goal) * 100, 100) : 0}%`,
+              }}
             />
           </div>
           <div class={styles.goalInput}>

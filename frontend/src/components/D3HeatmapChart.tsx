@@ -27,6 +27,7 @@ export default function D3HeatmapChart(props: Props) {
     if (!container) return
 
     const width = container.clientWidth || 800
+    if (width <= 0) return
     const height = props.height || 160
     const margin = { top: 20, right: 20, bottom: 10, left: 40 }
 
@@ -180,7 +181,7 @@ export default function D3HeatmapChart(props: Props) {
   })
 
   createEffect(() => {
-    if (props.data) renderHeatmap()
+    if (props.data && props.year && props.type) renderHeatmap()
   })
 
   return <div ref={containerRef} style={{ width: '100%' }} />

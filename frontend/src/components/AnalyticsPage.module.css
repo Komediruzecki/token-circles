@@ -871,14 +871,19 @@
   }
 }
 
-/* legacy class mappings for analytics page */
-.page-subtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
+.chartsTwoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
-/* legacy class mappings for analytics page */
-.page-subtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
+.chartsFullWidth {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .chartsTwoCol {
+    grid-template-columns: 1fr;
+  }
 }

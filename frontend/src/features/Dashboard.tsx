@@ -63,14 +63,21 @@ export default function Dashboard() {
           /* ignore */
         }
       }
-      return ['metrics', 'category-chart', 'recent-transactions', 'upcoming-bills', 'savings-rate', 'budget-alerts']
-    })(),
+      return [
+        'metrics',
+        'category-chart',
+        'recent-transactions',
+        'upcoming-bills',
+        'savings-rate',
+        'budget-alerts',
+      ]
+    })()
   )
   const [savingsGoal, setSavingsGoal] = createSignal(
     (() => {
       const stored = localStorage.getItem('savingsGoal')
       return stored ? parseFloat(stored) : 20
-    })(),
+    })()
   )
 
   const handleSavingsGoalChange = (num: number) => {
@@ -114,8 +121,10 @@ export default function Dashboard() {
         return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
       })
       const netWorth = netWorthData.timeline.map((t) => t.balance)
-      const income = netWorthData.timeline.map((t) => t.netChange > 0 ? t.netChange : 0)
-      const expenses = netWorthData.timeline.map((t) => t.netChange < 0 ? Math.abs(t.netChange) : 0)
+      const income = netWorthData.timeline.map((t) => (t.netChange > 0 ? t.netChange : 0))
+      const expenses = netWorthData.timeline.map((t) =>
+        t.netChange < 0 ? Math.abs(t.netChange) : 0
+      )
       setMonthlyData({ labels, income, expenses, netWorth })
     } catch {
       // Don't show error for monthly data - it's optional
@@ -252,106 +261,106 @@ export default function Dashboard() {
         <>
           {/* Metrics Grid */}
           <Show when={isWidgetVisible('metrics')}>
-          <div class={styles.metricsGrid}>
-            <div class={`${styles.metricCard} ${styles.networth}`}>
-              <div class={styles.metricLabel}>Net Worth</div>
-              <div class={styles.metricValue}>{formatCurrency(metrics()!.balance)}</div>
-              <div class={styles.metricSubtext}>Total account balances</div>
-              {/* eslint-disable-next-line eqeqeq */}
-              {metrics()!.momBalanceDelta != null && (
-                <div class={styles.metricDelta}>
-                  <span
-                    class={
-                      metrics()!.momBalanceDelta! > 0
-                        ? styles.positive
+            <div class={styles.metricsGrid}>
+              <div class={`${styles.metricCard} ${styles.networth}`}>
+                <div class={styles.metricLabel}>Net Worth</div>
+                <div class={styles.metricValue}>{formatCurrency(metrics()!.balance)}</div>
+                <div class={styles.metricSubtext}>Total account balances</div>
+                {/* eslint-disable-next-line eqeqeq */}
+                {metrics()!.momBalanceDelta != null && (
+                  <div class={styles.metricDelta}>
+                    <span
+                      class={
+                        metrics()!.momBalanceDelta! > 0
+                          ? styles.positive
+                          : metrics()!.momBalanceDelta! < 0
+                            ? styles.negative
+                            : styles.neutral
+                      }
+                    >
+                      {metrics()!.momBalanceDelta! > 0
+                        ? '↑'
                         : metrics()!.momBalanceDelta! < 0
-                          ? styles.negative
-                          : styles.neutral
-                    }
-                  >
-                    {metrics()!.momBalanceDelta! > 0
-                      ? '↑'
-                      : metrics()!.momBalanceDelta! < 0
-                        ? '↓'
-                        : '→'}
-                    {Math.abs(metrics()!.momBalanceDelta!).toFixed(2)}
-                  </span>
-                  <span class={styles.metricDeltaLabel}>vs last month</span>
-                </div>
-              )}
-            </div>
-            <div class={`${styles.metricCard} ${styles.income}`}>
-              <div class={styles.metricLabel}>Income</div>
-              <div class={`${styles.metricValue} ${styles.positive}`}>
-                {formatCurrency(metrics()!.totalIncome)}
+                          ? '↓'
+                          : '→'}
+                      {Math.abs(metrics()!.momBalanceDelta!).toFixed(2)}
+                    </span>
+                    <span class={styles.metricDeltaLabel}>vs last month</span>
+                  </div>
+                )}
               </div>
-              <div class={styles.metricSubtext}>For this period</div>
-              {/* eslint-disable-next-line eqeqeq */}
-              {metrics()!.momIncomeDelta != null && (
-                <div class={styles.metricDelta}>
-                  <span
-                    class={
-                      metrics()!.momIncomeDelta! > 0
-                        ? styles.positive
+              <div class={`${styles.metricCard} ${styles.income}`}>
+                <div class={styles.metricLabel}>Income</div>
+                <div class={`${styles.metricValue} ${styles.positive}`}>
+                  {formatCurrency(metrics()!.totalIncome)}
+                </div>
+                <div class={styles.metricSubtext}>For this period</div>
+                {/* eslint-disable-next-line eqeqeq */}
+                {metrics()!.momIncomeDelta != null && (
+                  <div class={styles.metricDelta}>
+                    <span
+                      class={
+                        metrics()!.momIncomeDelta! > 0
+                          ? styles.positive
+                          : metrics()!.momIncomeDelta! < 0
+                            ? styles.negative
+                            : styles.neutral
+                      }
+                    >
+                      {metrics()!.momIncomeDelta! > 0
+                        ? '↑'
                         : metrics()!.momIncomeDelta! < 0
-                          ? styles.negative
-                          : styles.neutral
-                    }
-                  >
-                    {metrics()!.momIncomeDelta! > 0
-                      ? '↑'
-                      : metrics()!.momIncomeDelta! < 0
-                        ? '↓'
-                        : '→'}
-                    {Math.abs(metrics()!.momIncomeDelta!).toFixed(2)}
-                  </span>
-                  <span class={styles.metricDeltaLabel}>vs last month</span>
-                </div>
-              )}
-            </div>
-            <div class={`${styles.metricCard} ${styles.expense}`}>
-              <div class={styles.metricLabel}>Expenses</div>
-              <div class={`${styles.metricValue} ${styles.expense}`}>
-                {formatCurrency(metrics()!.totalExpenses)}
+                          ? '↓'
+                          : '→'}
+                      {Math.abs(metrics()!.momIncomeDelta!).toFixed(2)}
+                    </span>
+                    <span class={styles.metricDeltaLabel}>vs last month</span>
+                  </div>
+                )}
               </div>
-              <div class={styles.metricSubtext}>For this period</div>
-              {/* eslint-disable-next-line eqeqeq */}
-              {metrics()!.momExpenseDelta != null && (
-                <div class={styles.metricDelta}>
-                  <span
-                    class={
-                      metrics()!.momExpenseDelta! > 0
-                        ? styles.positive
+              <div class={`${styles.metricCard} ${styles.expense}`}>
+                <div class={styles.metricLabel}>Expenses</div>
+                <div class={`${styles.metricValue} ${styles.expense}`}>
+                  {formatCurrency(metrics()!.totalExpenses)}
+                </div>
+                <div class={styles.metricSubtext}>For this period</div>
+                {/* eslint-disable-next-line eqeqeq */}
+                {metrics()!.momExpenseDelta != null && (
+                  <div class={styles.metricDelta}>
+                    <span
+                      class={
+                        metrics()!.momExpenseDelta! > 0
+                          ? styles.positive
+                          : metrics()!.momExpenseDelta! < 0
+                            ? styles.negative
+                            : styles.neutral
+                      }
+                    >
+                      {metrics()!.momExpenseDelta! > 0
+                        ? '↑'
                         : metrics()!.momExpenseDelta! < 0
-                          ? styles.negative
-                          : styles.neutral
-                    }
-                  >
-                    {metrics()!.momExpenseDelta! > 0
-                      ? '↑'
-                      : metrics()!.momExpenseDelta! < 0
-                        ? '↓'
-                        : '→'}
-                    {Math.abs(metrics()!.momExpenseDelta!).toFixed(2)}
-                  </span>
-                  <span class={styles.metricDeltaLabel}>vs last month</span>
-                </div>
-              )}
-            </div>
-            <div class={`${styles.metricCard} ${styles.balance}`}>
-              <div class={styles.metricLabel}>Balance</div>
-              <div
-                class={`${styles.metricValue} ${
-                  metrics()!.totalIncome - metrics()!.totalExpenses >= 0
-                    ? styles.positive
-                    : styles.expense
-                }`}
-              >
-                {formatCurrency(metrics()!.totalIncome - metrics()!.totalExpenses)}
+                          ? '↓'
+                          : '→'}
+                      {Math.abs(metrics()!.momExpenseDelta!).toFixed(2)}
+                    </span>
+                    <span class={styles.metricDeltaLabel}>vs last month</span>
+                  </div>
+                )}
               </div>
-              <div class={styles.metricSubtext}>Monthly net</div>
+              <div class={`${styles.metricCard} ${styles.balance}`}>
+                <div class={styles.metricLabel}>Balance</div>
+                <div
+                  class={`${styles.metricValue} ${
+                    metrics()!.totalIncome - metrics()!.totalExpenses >= 0
+                      ? styles.positive
+                      : styles.expense
+                  }`}
+                >
+                  {formatCurrency(metrics()!.totalIncome - metrics()!.totalExpenses)}
+                </div>
+                <div class={styles.metricSubtext}>Monthly net</div>
+              </div>
             </div>
-          </div>
           </Show>
 
           {/* Charts Section */}
@@ -432,38 +441,38 @@ export default function Dashboard() {
           {/* Widget Cards */}
           <div class={styles.widgetsGrid}>
             <Show when={isWidgetVisible('budget-alerts')}>
-            <div class={styles.widgetCard}>
-              <div class={styles.widgetHeader}>
-                <div class={styles.widgetTitle}>Budget Alerts</div>
-                <a href="#budgets" class={styles.widgetLink}>
-                  View All
-                </a>
+              <div class={styles.widgetCard}>
+                <div class={styles.widgetHeader}>
+                  <div class={styles.widgetTitle}>Budget Alerts</div>
+                  <a href="#budgets" class={styles.widgetLink}>
+                    View All
+                  </a>
+                </div>
+                <BudgetAlertsCard />
               </div>
-              <BudgetAlertsCard />
-            </div>
             </Show>
 
             <Show when={isWidgetVisible('savings-rate')}>
-            <div class={styles.widgetCard}>
-              <div class={styles.widgetHeader}>
-                <div class={styles.widgetTitle}>Savings Rate</div>
-                <a href="#budgets" class={styles.widgetLink}>
-                  Details
-                </a>
+              <div class={styles.widgetCard}>
+                <div class={styles.widgetHeader}>
+                  <div class={styles.widgetTitle}>Savings Rate</div>
+                  <a href="#budgets" class={styles.widgetLink}>
+                    Details
+                  </a>
+                </div>
+                <SavingsRateCard
+                  savingsRate={
+                    metrics()!.totalIncome > 0
+                      ? ((metrics()!.totalIncome - metrics()!.totalExpenses) /
+                          metrics()!.totalIncome) *
+                        100
+                      : 0
+                  }
+                  monthlySavings={metrics()!.totalIncome - metrics()!.totalExpenses}
+                  goal={savingsGoal()}
+                  onGoalChange={handleSavingsGoalChange}
+                />
               </div>
-              <SavingsRateCard
-                savingsRate={
-                  metrics()!.totalIncome > 0
-                    ? ((metrics()!.totalIncome - metrics()!.totalExpenses) /
-                        metrics()!.totalIncome) *
-                      100
-                    : 0
-                }
-                monthlySavings={metrics()!.totalIncome - metrics()!.totalExpenses}
-                goal={savingsGoal()}
-                onGoalChange={handleSavingsGoalChange}
-              />
-            </div>
             </Show>
 
             <div class={styles.widgetCard}>
@@ -477,45 +486,45 @@ export default function Dashboard() {
           {/* Charts Section */}
           <div class={styles.chartsGrid}>
             <Show when={isWidgetVisible('category-chart')}>
-            <div class={styles.card}>
-              <div class={styles.cardHeader}>
-                <div class={styles.cardTitle}>Spending by Category</div>
+              <div class={styles.card}>
+                <div class={styles.cardHeader}>
+                  <div class={styles.cardTitle}>Spending by Category</div>
+                </div>
+                <div class={styles.chartContainer}>
+                  {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
+                    <ChartWrapper
+                      type="doughnut"
+                      data={{
+                        labels: metrics()!.expenseByCategory.map(
+                          (item: any) => item.category_name || 'Uncategorized'
+                        ),
+                        datasets: [
+                          {
+                            data: metrics()!.expenseByCategory.map((item: any) => item.total),
+                            backgroundColor: [
+                              '#dc2626',
+                              '#f97316',
+                              '#eab308',
+                              '#22c55e',
+                              '#06b6d4',
+                              '#3b82f6',
+                              '#8b5cf6',
+                              '#ec4899',
+                              '#6b7280',
+                              '#14b8a6',
+                            ],
+                          },
+                        ],
+                      }}
+                      height={300}
+                      showExport
+                      filename="spending-by-category"
+                    />
+                  ) : (
+                    <div class={styles.emptyState}>No expense data to display</div>
+                  )}
+                </div>
               </div>
-              <div class={styles.chartContainer}>
-                {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
-                  <ChartWrapper
-                    type="doughnut"
-                    data={{
-                      labels: metrics()!.expenseByCategory.map(
-                        (item: any) => item.category_name || 'Uncategorized'
-                      ),
-                      datasets: [
-                        {
-                          data: metrics()!.expenseByCategory.map((item: any) => item.total),
-                          backgroundColor: [
-                            '#dc2626',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#06b6d4',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                            '#14b8a6',
-                          ],
-                        },
-                      ],
-                    }}
-                    height={300}
-                    showExport
-                    filename="spending-by-category"
-                  />
-                ) : (
-                  <div class={styles.emptyState}>No expense data to display</div>
-                )}
-              </div>
-            </div>
             </Show>
 
             <div class={styles.card}>
@@ -554,7 +563,13 @@ export default function Dashboard() {
           </div>
 
           {/* Recent Transactions */}
-          <Show when={isWidgetVisible('recent-transactions') && metrics()!.recentTransactions && metrics()!.recentTransactions.length > 0}>
+          <Show
+            when={
+              isWidgetVisible('recent-transactions') &&
+              metrics()!.recentTransactions &&
+              metrics()!.recentTransactions.length > 0
+            }
+          >
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Recent Transactions</div>
@@ -594,7 +609,9 @@ export default function Dashboard() {
           </Show>
 
           {/* Upcoming Bills */}
-          <Show when={isWidgetVisible('upcoming-bills') && (metrics()!.upcomingBills?.length ?? 0) > 0}>
+          <Show
+            when={isWidgetVisible('upcoming-bills') && (metrics()!.upcomingBills?.length ?? 0) > 0}
+          >
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Upcoming Bills</div>

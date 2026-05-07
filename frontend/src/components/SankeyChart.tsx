@@ -35,6 +35,7 @@ export default function SankeyChart(props: Props) {
     if (!container || !props.data?.nodes?.length) return
 
     const width = props.width || container.clientWidth || 800
+    if (width <= 0) return
     const height = props.height || 400
     const margin = { top: 10, right: 20, bottom: 10, left: 20 }
 
