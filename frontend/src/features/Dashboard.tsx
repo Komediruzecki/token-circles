@@ -259,7 +259,7 @@ export default function Dashboard() {
             </svg>
             Dashboard Views
           </button>
-          <button class={styles.btnPrimary} onClick={loadDashboard}>
+          <button class={styles.btnPrimary} onClick={() => loadDashboard()}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"

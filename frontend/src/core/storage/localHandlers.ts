@@ -151,7 +151,7 @@ export async function transactionsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid transaction data' }, 400)
   const tx = body as Record<string, unknown>
   tx.profile_id = adapter.getCurrentProfileId ? await adapter.getCurrentProfileId() : 1
-  const id = await adapter.createTransaction(tx as Parameters<typeof adapter.createTransaction>[0])
+  const id = await adapter.createTransaction(tx as unknown as Parameters<typeof adapter.createTransaction>[0])
   return json({ id, ...tx }, 201)
 }
 
@@ -292,7 +292,7 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid category data' }, 400)
   const cat = body as Record<string, unknown>
   cat.profile_id = await adapter.getCurrentProfileId()
-  const id = await adapter.createCategory(cat as Parameters<typeof adapter.createCategory>[0])
+  const id = await adapter.createCategory(cat as unknown as Parameters<typeof adapter.createCategory>[0])
   return json({ id, ...cat }, 201)
 }
 
@@ -328,7 +328,7 @@ export async function accountsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid account data' }, 400)
   const acct = body as Record<string, unknown>
   acct.profile_id = await adapter.getCurrentProfileId()
-  const id = await adapter.createAccount(acct as Parameters<typeof adapter.createAccount>[0])
+  const id = await adapter.createAccount(acct as unknown as Parameters<typeof adapter.createAccount>[0])
   return json({ id, ...acct }, 201)
 }
 
@@ -386,7 +386,7 @@ export async function budgetsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid budget data' }, 400)
   const budget = body as Record<string, unknown>
   budget.profile_id = await adapter.getCurrentProfileId()
-  const id = await adapter.createBudget(budget as Parameters<typeof adapter.createBudget>[0])
+  const id = await adapter.createBudget(budget as unknown as Parameters<typeof adapter.createBudget>[0])
   return json({ id, ...budget }, 201)
 }
 
@@ -596,7 +596,7 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
           (a: Record<string, unknown>, b: Record<string, unknown>) =>
             (b.budget_amount as number) - (a.budget_amount as number)
         )
-      history[0].category_budgets = JSON.stringify(catBreakdown)
+      ;(history[0] as Record<string, unknown>).category_budgets = JSON.stringify(catBreakdown)
     }
 
     return json(history)
@@ -880,13 +880,14 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
         is_fully_allocated: amt > 0 && s <= amt,
         rollover_enabled: !!(b as Record<string, unknown>).rollover_enabled,
         alerts: [] as string[],
+        is_unallocated: false,
       }
     })
 
     // Unallocated income
     if (zero_based_remaining > 0) {
       summary.push({
-        // @ts-expect-error partial fields
+        budget_id: 0,
         category_id: 0,
         category_name: 'Unallocated / Future',
         category_color: '#9ca3af',
@@ -897,6 +898,7 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
         percent_used: 0,
         status: 'ok',
         is_fully_allocated: true,
+        rollover_enabled: false,
         alerts: [
           'You have unallocated income. Consider adding a savings allocation or increase existing budgets.',
         ],
@@ -1061,11 +1063,9 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
 
     // Clear existing budgets for target month
     const currStart = monthStart(targetYear, targetMonth)
-    const currEnd = monthStart(
-      ...(targetMonth === 12
-        ? [targetYear + 1, 1]
-        : ([targetYear, targetMonth + 1] as [number, number]))
-    )
+    const currEnd = targetMonth === 12
+      ? monthStart(targetYear + 1, 1)
+      : monthStart(targetYear, targetMonth + 1)
 
     const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
       (b: Record<string, unknown>) =>
@@ -1329,7 +1329,7 @@ export async function goalsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
   const goal = body as Record<string, unknown>
   goal.profile_id = await adapter.getCurrentProfileId()
-  const id = await adapter.createGoal(goal as Parameters<typeof adapter.createGoal>[0])
+  const id = await adapter.createGoal(goal as unknown as Parameters<typeof adapter.createGoal>[0])
   return json({ id, ...goal }, 201)
 }
 
@@ -1381,7 +1381,7 @@ export async function loansCreate(body: unknown): Promise<Response> {
   loan.profile_id = await adapter.getCurrentProfileId()
   loan.rate_periods = loan.rate_periods || []
   loan.prepayments = loan.prepayments || []
-  const id = await adapter.createLoan(loan as Parameters<typeof adapter.createLoan>[0])
+  const id = await adapter.createLoan(loan as unknown as Parameters<typeof adapter.createLoan>[0])
   return json({ id, ...loan }, 201)
 }
 
@@ -1614,7 +1614,7 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       { category_name: string; category_color: string; total: number }
     > = {}
     for (const t of currentTxns.filter((t) => t.type === 'expense')) {
-      const cat = catMap.get(t.category_id)
+      const cat = catMap.get(t.category_id!)
       const key = String(t.category_id || 0)
       if (!expenseByCat[key]) {
         expenseByCat[key] = {
@@ -1754,7 +1754,7 @@ export async function dashboardCharts(query: URLSearchParams): Promise<Response>
       { name: string; color: string; icon: string | null; total: number; count: number }
     > = {}
     for (const t of rangeTxns.filter((t) => t.type === 'expense')) {
-      const cat = catMap.get(t.category_id)
+      const cat = catMap.get(t.category_id!)
       const key = String(t.category_id || 0)
       if (!byCat[key]) {
         byCat[key] = {
@@ -2027,8 +2027,9 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
     for (const t of txns) {
       const dateKey = month ? t.date : t.date.substring(0, 7)
       const idx = periodMap.get(dateKey)
-      if (idx !== undefined && catDataMap[t.category_id]) {
-        catDataMap[t.category_id].data[idx] += getAmount(t as unknown as Record<string, unknown>)
+      const catId = t.category_id
+      if (idx !== undefined && catId !== undefined && catDataMap[catId]) {
+        catDataMap[catId].data[idx] += getAmount(t as unknown as Record<string, unknown>)
       }
     }
 
@@ -2069,8 +2070,9 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
       for (const t of cmpTxns) {
         const dateKey = month ? t.date : t.date.substring(0, 7)
         const idx = periodMap.get(dateKey)
-        if (idx !== undefined && cmpCatData[t.category_id]) {
-          cmpCatData[t.category_id].data[idx] += getAmount(t as unknown as Record<string, unknown>)
+        const cmpCatId = t.category_id
+        if (idx !== undefined && cmpCatId !== undefined && cmpCatData[cmpCatId]) {
+          cmpCatData[cmpCatId].data[idx] += getAmount(t as unknown as Record<string, unknown>)
         }
       }
       const cmpDatasets = Object.values(cmpCatData).filter((d) => d.data.some((v) => v > 0))
@@ -2108,7 +2110,7 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     // Get budgets for this month (deduplicate by category_id — listBudgets returns all historical records)
     const budgetMap = new Map<number, (typeof budgets)[number]>()
     for (const b of budgets) {
-      if ((b.period === 'month' || b.period === 'monthly') && !budgetMap.has(b.category_id)) {
+      if (b.period === 'monthly' && !budgetMap.has(b.category_id)) {
         budgetMap.set(b.category_id, b)
       }
     }
@@ -2121,8 +2123,8 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
 
     const actualMap = new Map<number, number>()
     for (const t of profileTxns) {
-      const prev = actualMap.get(t.category_id) || 0
-      actualMap.set(t.category_id, prev + getAmount(t as unknown as Record<string, unknown>))
+      const prev = actualMap.get(t.category_id!) || 0
+      actualMap.set(t.category_id!, prev + getAmount(t as unknown as Record<string, unknown>))
     }
 
     const catMap = new Map(cats.map((c) => [c.id, c]))

@@ -344,7 +344,7 @@ export default function Budgets() {
             <button
               data-test-id="month-prev-btn"
               class={styles.btnGhost}
-              onclick={goToPrevMonth}
+              onClick={goToPrevMonth}
               aria-label="Previous month"
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,7 +360,7 @@ export default function Budgets() {
               <button
                 data-test-id="month-display"
                 class={styles.monthBtn}
-                onclick={() => {
+                onClick={() => {
                   setShowMonthPicker(!showMonthPicker())
                   setShowYearPicker(false)
                 }}
@@ -376,7 +376,7 @@ export default function Budgets() {
                     <button
                       class={styles.dropdownItem}
                       classList={{ [styles.selected]: i + 1 === currentMonthNum() }}
-                      onclick={() => {
+                      onClick={() => {
                         setMonthNum(i + 1)
                         setShowMonthPicker(false)
                       }}
@@ -390,7 +390,7 @@ export default function Budgets() {
             <div class={styles.dropdownWrapper}>
               <button
                 class={styles.yearBtn}
-                onclick={() => {
+                onClick={() => {
                   setShowYearPicker(!showYearPicker())
                   setShowMonthPicker(false)
                 }}
@@ -406,7 +406,7 @@ export default function Budgets() {
                     <button
                       class={styles.dropdownItem}
                       classList={{ [styles.selected]: y === currentYearNum() }}
-                      onclick={() => {
+                      onClick={() => {
                         setYearNum(y)
                         setShowYearPicker(false)
                       }}
@@ -417,7 +417,7 @@ export default function Budgets() {
                 </div>
               )}
             </div>
-            <button class={styles.btnGhost} onclick={goToNextMonth} aria-label="Next month">
+            <button class={styles.btnGhost} onClick={goToNextMonth} aria-label="Next month">
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -430,7 +430,7 @@ export default function Budgets() {
             {(showMonthPicker() || showYearPicker()) && (
               <div
                 class={styles.overlay}
-                onclick={() => {
+                onClick={() => {
                   setShowMonthPicker(false)
                   setShowYearPicker(false)
                 }}
@@ -482,7 +482,7 @@ export default function Budgets() {
                 labels: allocations().map((a) => a.category_name),
                 datasets: [
                   {
-                    data: allocations().map((a) => a.amount),
+                    data: allocations().map((a) => a.allocated),
                     backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
                     borderWidth: 0,
                   },
@@ -514,7 +514,7 @@ export default function Budgets() {
       <div class={styles.forecastToggleSection}>
         <button
           class={`${styles.btnOutline} ${styles.btnLarge}`}
-          onclick={() => {
+          onClick={() => {
             setShowCharts(!showCharts())
           }}
         >
@@ -534,7 +534,7 @@ export default function Budgets() {
                 datasets: [
                   {
                     label: 'Budget',
-                    data: allocations().map((a) => a.amount),
+                    data: allocations().map((a) => a.allocated),
                     backgroundColor: 'rgba(59, 130, 246, 0.6)',
                     borderColor: 'rgba(59, 130, 246, 1)',
                     borderWidth: 1,
@@ -652,7 +652,7 @@ export default function Budgets() {
 
       {/* Forecast Toggle Button */}
       <div data-test-id="forecast-toggle-section" class={styles.forecastToggleSection}>
-        <button class={`${styles.btnOutline} ${styles.btnLarge}`} onclick={toggleForecast}>
+        <button class={`${styles.btnOutline} ${styles.btnLarge}`} onClick={toggleForecast}>
           {showForecast() ? 'Hide Budget Forecast' : 'Show Budget Forecast'}
         </button>
       </div>
@@ -672,7 +672,7 @@ export default function Budgets() {
               </svg>
               <span>Budget Forecast</span>
             </div>
-            <Button variant="ghost" size="sm" onclick={toggleForecast}>
+            <Button variant="ghost" size="sm" onClick={toggleForecast}>
               Hide
             </Button>
           </div>
@@ -733,7 +733,7 @@ export default function Budgets() {
               </div>
 
               {/* Refresh Forecast Button */}
-              <Button variant="outline" onclick={loadData}>
+              <Button variant="outline" onClick={loadData}>
                 Refresh Forecast
               </Button>
             </>
@@ -751,7 +751,7 @@ export default function Budgets() {
         <div data-test-id="table-header" class={styles.tableHeader}>
           <h2>Category Allocations</h2>
           <div class={styles.actions}>
-            <button class={styles.btnOutline} onclick={duplicateLastMonth}>
+            <button class={styles.btnOutline} onClick={duplicateLastMonth}>
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -762,7 +762,7 @@ export default function Budgets() {
               </svg>
               Duplicate Last Month
             </button>
-            <button class={styles.btnOutline} onclick={setFromExpenses}>
+            <button class={styles.btnOutline} onClick={setFromExpenses}>
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -775,7 +775,7 @@ export default function Budgets() {
             </button>
             <button
               class={styles.btnPrimary}
-              onclick={() => {
+              onClick={() => {
                 const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
                 if (firstUnallocated) {
                   openAllocateModal(firstUnallocated)
@@ -806,7 +806,7 @@ export default function Budgets() {
             <p>Start by allocating income to expense categories.</p>
             <button
               class={styles.btnPrimary}
-              onclick={() => {
+              onClick={() => {
                 const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
                 if (firstUnallocated) {
                   openAllocateModal(firstUnallocated)
@@ -846,7 +846,7 @@ export default function Budgets() {
                           <span class={styles.categoryName}>{item.category_name}</span>
                         </div>
                       </td>
-                      <td class={styles.amountCol}>{formatCurrency(item.amount)}</td>
+                      <td class={styles.amountCol}>{formatCurrency(item.allocated)}</td>
                       <td class={styles.amountCol}>{formatCurrency(item.spent)}</td>
                       <td class={`${styles.amountCol} ${styles.statusOk}`}>
                         {formatCurrency(item.remaining_budget)}
@@ -872,7 +872,7 @@ export default function Budgets() {
                         {item.budget_id ? (
                           <button
                             class={item.rollover_enabled ? styles.rolloverOn : styles.rolloverOff}
-                            onclick={() => {
+                            onClick={() => {
                               toggleRollover(item.budget_id!, !item.rollover_enabled)
                             }}
                             title={item.rollover_enabled ? 'Disable rollover' : 'Enable rollover'}
@@ -888,7 +888,7 @@ export default function Budgets() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onclick={() => {
+                            onClick={() => {
                               openAllocateModal(item)
                             }}
                           >
@@ -911,13 +911,13 @@ export default function Budgets() {
       {showAllocateModal() && selectedCategory() && (
         <div
           class={styles.modalOverlay}
-          onclick={(e) => {
+          onClick={(e) => {
             if (e.target === e.currentTarget) setShowAllocateModal(false)
           }}
         >
           <div
             class={`${styles.modal} ${styles.modalSmall}`}
-            onclick={(e) => {
+            onClick={(e) => {
               e.stopPropagation()
             }}
           >
@@ -925,7 +925,7 @@ export default function Budgets() {
               <h3>Allocate Budget</h3>
               <button
                 class={styles.modalClose}
-                onclick={() => setShowAllocateModal(false)}
+                onClick={() => setShowAllocateModal(false)}
                 aria-label="Close modal"
               >
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -958,12 +958,12 @@ export default function Budgets() {
               </p>
             </div>
             <div class={styles.modalFooter}>
-              <button class={styles.btnGhost} onclick={() => setShowAllocateModal(false)}>
+              <button class={styles.btnGhost} onClick={() => setShowAllocateModal(false)}>
                 Cancel
               </button>
               <button
                 class={styles.btnPrimary}
-                onclick={allocateBudget}
+                onClick={allocateBudget}
                 disabled={parseFloat(allocateAmount()) <= 0 || !allocateAmount()}
               >
                 Allocate

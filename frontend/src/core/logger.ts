@@ -135,29 +135,6 @@ function flushLogs(): void {
 }
 
 /**
- * Send logs to backend API
- */
-async function _sendLogsToBackend(logs: LogEntry[]): Promise<void> {
-  try {
-    // Use apiFetch to support serverless mode
-    const { apiFetch } = await import('./apiFetch')
-    const response = await apiFetch('/api/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ logs }),
-    })
-
-    if (response.ok) {
-      // Clear logs after successful send
-      localStorage.removeItem(STORAGE_KEY)
-    }
-  } catch {
-    // Ignore network errors
-  }
-}
-
-/**
  * Clear all logs
  */
 function clearLogs(): void {

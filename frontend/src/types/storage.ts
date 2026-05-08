@@ -94,6 +94,8 @@ export interface Transaction {
   means: string
   notes: string
   tags: string[]
+  reconciled?: number
+  reconciled_at?: string
 }
 
 export interface Category {
@@ -102,6 +104,7 @@ export interface Category {
   type: 'income' | 'expense'
   name: string
   color: string
+  icon: string
   tax_deductible: boolean
 }
 
@@ -173,6 +176,8 @@ export interface Settings {
   language: string
   currency: string
   primary_currency: string
+  local_currency?: string
+  [key: string]: unknown
 }
 
 export interface ExportData {

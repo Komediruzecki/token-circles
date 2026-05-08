@@ -59,7 +59,7 @@ export class ThemeStore {
    * Get chart colors based on current theme
    */
   getChartColors() {
-    const cs = getComputedStyle(document.documentElement)
+    const cs = window.getComputedStyle(document.documentElement)
     return {
       income: '#22c55e',
       expense: '#ef4444',
