@@ -959,13 +959,6 @@ export default function Budgets() {
         </div>
       )}
 
-      {/* Traditional View (placeholder) */}
-      <div class={styles.budgetTraditional}>
-        <div class={styles.emptyState}>
-          <p>Traditional view coming soon</p>
-          <p>View budget vs actual reports and past budgets.</p>
-        </div>
-      </div>
     </div>
   )
 }
