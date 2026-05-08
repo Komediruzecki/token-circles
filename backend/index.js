@@ -4853,12 +4853,17 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
 
         // Determine transaction type
         let validatedType;
+        const catName = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
+        const catType = catName ? categoryTypes?.[String(catName).trim()] : null;
+
         if (mapping.type) {
           const rawType = String(row[mapping.type] || '')
             .trim()
             .toLowerCase();
           if (['income', 'expense', 'transfer'].includes(rawType)) {
             validatedType = rawType;
+          } else if (catType && (catType === 'income' || catType === 'expense')) {
+            validatedType = catType;
           } else {
             // Auto-detect based on amount sign or common keywords
             validatedType =
@@ -4874,6 +4879,8 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
                   ? 'income'
                   : 'expense';
           }
+        } else if (catType && (catType === 'income' || catType === 'expense')) {
+          validatedType = catType;
         } else {
           // No type mapped — auto-detect from amount sign
           validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';

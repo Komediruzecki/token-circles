@@ -3039,7 +3039,6 @@ export async function importExecute(body: unknown): Promise<Response> {
     if (!session) return json({ error: 'Session expired or not found' }, 404)
 
     const mapping = (data.mapping as Record<string, string>) || {}
-    const defaultType = toStr(data.default_type) || 'expense'
     const dryRun = Boolean(data.dry_run)
     const categoryTypes = (data.categoryTypes as Record<string, string>) || {}
     const accountTypes = (data.accountTypes as Record<string, string>) || {}
@@ -3088,7 +3087,30 @@ export async function importExecute(body: unknown): Promise<Response> {
           ? toStr(row[mapping.amount]) || toStr(row.amount) || '0'
           : toStr(row.amount) || '0'
       )
-      const type = mapping.type ? toStr(row[mapping.type]) || defaultType : defaultType
+      // Determine transaction type: use type column > categoryTypes > amount sign
+      let type = 'expense'
+      if (mapping.type) {
+        const rawType = toStr(row[mapping.type]).trim().toLowerCase()
+        if (['income', 'expense', 'transfer'].includes(rawType)) {
+          type = rawType
+        } else {
+          const catName = mapping.category ? toStr(row[mapping.category]).toLowerCase().trim() : ''
+          const catType = categoryTypes[catName]
+          if (catType && (catType === 'income' || catType === 'expense')) {
+            type = catType
+          } else {
+            type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
+          }
+        }
+      } else {
+        const catName = mapping.category ? toStr(row[mapping.category]).toLowerCase().trim() : ''
+        const catType = categoryTypes[catName]
+        if (catType && (catType === 'income' || catType === 'expense')) {
+          type = catType
+        } else {
+          type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
+        }
+      }
 
       if (!description || !date || isNaN(amount)) {
         skipped.push({
@@ -3102,9 +3124,22 @@ export async function importExecute(body: unknown): Promise<Response> {
       let accountId: number | null = null
       if (mapping.category && row[mapping.category]) {
         const catName = toStr(row[mapping.category]).toLowerCase().trim()
-        const cat = categories.find(
-          (c) => c.name.toLowerCase().trim() === catName && c.type === type
+        let cat = categories.find(
+          (c) => c.name.toLowerCase().trim() === catName
         )
+        // Auto-create category if not found
+        if (!cat) {
+          const defaultColor = '#6366f1'
+          const id = await db.add('categories', {
+            name: catName.charAt(0).toUpperCase() + catName.slice(1),
+            type,
+            color: defaultColor,
+            icon: 'tag',
+            profile_id: profileId,
+          })
+          cat = { id: id as number, name: catName, type, color: defaultColor, icon: 'tag' } as any
+          categories.push(cat)
+        }
         if (cat) categoryId = cat.id
         // Check if this category maps to a created account
         if (accountIdMap.has(catName)) {
