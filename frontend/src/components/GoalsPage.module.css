@@ -94,6 +94,7 @@
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 1px solid var(--border);
+  overflow: hidden;
 }
 .goals-page .goals-chart-section h3 {
   margin: 0 0 16px 0;
@@ -102,6 +103,8 @@
 .goals-page .chart-wrapper {
   position: relative;
   height: 250px;
+  max-width: 100%;
+  overflow: hidden;
 }
 .goals-page .modal-overlay {
   position: fixed;
@@ -385,6 +388,8 @@
   border-radius: var(--radius);
   padding: 16px;
   margin-top: 16px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 /* legacy class mappings for goals page */

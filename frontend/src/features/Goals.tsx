@@ -42,6 +42,7 @@ interface Goal {
   name: string
   target_amount: number
   current_amount: number
+  monthly_contribution: number
   target_date: string
   profile_id: number
   created_at: string
@@ -70,6 +71,7 @@ export default function Goals() {
           name: s.name,
           target_amount: s.target_amount || 0,
           current_amount: s.current_amount || 0,
+          monthly_contribution: s.monthly_contribution || 0,
           target_date: s.deadline || s.target_date || new Date().toISOString().split('T')[0],
           profile_id: s.profile_id,
           created_at: s.created_at,
@@ -175,7 +177,7 @@ export default function Goals() {
           <button
             data-test-id="add-goal-btn"
             class={styles.btnPrimary}
-            onClick={() => setShowAddModal(true)}
+            onclick={() => setShowAddModal(true)}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -194,7 +196,7 @@ export default function Goals() {
         <div class={styles.emptyState}>
           <p>No goals yet</p>
           <p>Create your first savings goal to start tracking.</p>
-          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
             Create Goal
           </button>
         </div>
@@ -230,7 +232,7 @@ export default function Goals() {
                       <button
                         data-test-id="goal-edit-btn"
                         class={styles.btnSm}
-                        onClick={() => {
+                        onclick={() => {
                           editGoal(goal)
                         }}
                       >
@@ -340,6 +342,93 @@ export default function Goals() {
         </div>
       )}
 
+      {/* Goal Projection Timeline */}
+      {goals().length > 0 && goals().some((g) => g.monthly_contribution > 0) && (
+        <div class={styles.goalsChartSection}>
+          <h3>Goal Projections</h3>
+          <div class={styles.chartWrapper}>
+            <Chart
+              id="goals-projection-chart"
+              type="line"
+              data={{
+                labels: (() => {
+                  const maxMonths = Math.max(
+                    ...goals()
+                      .filter((g) => g.monthly_contribution > 0)
+                      .map((g) => {
+                        const remaining = g.target_amount - g.current_amount
+                        const monthly = g.monthly_contribution || 1
+                        return Math.ceil(remaining / monthly)
+                      }),
+                    1
+                  )
+                  return Array.from({ length: maxMonths + 1 }, (_, i) => `Month ${i}`)
+                })(),
+                datasets: goals()
+                  .filter((g) => g.monthly_contribution > 0)
+                  .map((g, idx) => {
+                    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+                    const color = colors[idx % colors.length]
+                    const monthly = g.monthly_contribution || 0
+                    const remaining = g.target_amount - g.current_amount
+                    const monthsNeeded = Math.ceil(remaining / monthly)
+                    const data: (number | null)[] = [g.current_amount]
+                    for (let m = 1; m <= monthsNeeded; m++) {
+                      data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
+                    }
+                    return {
+                      label: g.name,
+                      data,
+                      borderColor: color,
+                      backgroundColor: `${color}20`,
+                      fill: true,
+                      tension: 0.3,
+                      borderWidth: 2,
+                      pointRadius: 0,
+                    }
+                  }),
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    ticks: {
+                      callback: (v: number | string) =>
+                        formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
+                      color: 'var(--text)',
+                    },
+                    grid: { color: 'var(--border)' },
+                    title: {
+                      display: true,
+                      text: 'Balance',
+                      color: 'var(--text)',
+                    },
+                  },
+                  x: {
+                    ticks: { color: 'var(--text)', maxTicksLimit: 12 },
+                    grid: { color: 'var(--border)' },
+                    title: {
+                      display: true,
+                      text: 'Months from now',
+                      color: 'var(--text)',
+                    },
+                  },
+                },
+                plugins: {
+                  legend: {
+                    position: 'top',
+                    labels: { color: 'var(--text)', usePointStyle: true },
+                  },
+                },
+              }}
+              height={300}
+              width="100%"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
@@ -358,7 +447,7 @@ export default function Goals() {
               <h3 class={styles.modalTitle}>{editingGoal() ? 'Edit Goal' : 'New Goal'}</h3>
               <button
                 class={styles.modalClose}
-                onClick={() => {
+                onclick={() => {
                   setShowAddModal(false)
                   setEditingGoal(null)
                   setFormData({
@@ -374,7 +463,7 @@ export default function Goals() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
+            <form class={styles.modalBody} onsubmit={handleSubmit}>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Goal Name</label>
                 <input
@@ -425,7 +514,7 @@ export default function Goals() {
                 <button
                   type="button"
                   class={styles.btnSecondary}
-                  onClick={() => {
+                  onclick={() => {
                     setShowAddModal(false)
                     setEditingGoal(null)
                     setFormData({
