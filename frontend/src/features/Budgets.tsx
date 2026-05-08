@@ -102,9 +102,8 @@ export default function Budgets() {
   const [allocateAmount, setAllocateAmount] = createSignal('')
   const [budgetMessage, setBudgetMessage] = createSignal<string>('')
   const [forecastData, setForecastData] = createSignal<ForecastData | null>(null)
-  const [showForecast, setShowForecast] = createSignal(false)
+
   const [improvements, setImprovements] = createSignal<any[]>([])
-  const [showCharts, setShowCharts] = createSignal(true)
   const [showMonthPicker, setShowMonthPicker] = createSignal(false)
   const [showYearPicker, setShowYearPicker] = createSignal(false)
 
@@ -190,14 +189,6 @@ export default function Budgets() {
       showToast('Failed to load budget data', 'error')
     } finally {
       setLoading(false)
-    }
-  }
-
-  // Toggle forecast view
-  const toggleForecast = () => {
-    setShowForecast(!showForecast())
-    if (!showForecast() && !forecastData()) {
-      loadData()
     }
   }
 
@@ -510,20 +501,8 @@ export default function Budgets() {
         </div>
       </div>
 
-      {/* Additional Charts Toggle */}
-      <div class={styles.forecastToggleSection}>
-        <button
-          class={`${styles.btnOutline} ${styles.btnLarge}`}
-          onClick={() => {
-            setShowCharts(!showCharts())
-          }}
-        >
-          {showCharts() ? 'Hide Charts' : 'Show Charts'}
-        </button>
-      </div>
-
       {/* Spending vs Budget Bar Chart */}
-      {showCharts() && allocations().length > 0 && (
+      {allocations().length > 0 && (
         <div class={styles.categoryChartSection}>
           <h3>Spending vs Budget</h3>
           <div class={styles.chartWrapper}>
@@ -589,7 +568,7 @@ export default function Budgets() {
       )}
 
       {/* Historical Adherence Trend Chart */}
-      {showCharts() && improvements().length > 0 && (
+      {improvements().length > 0 && (
         <div class={styles.categoryChartSection}>
           <h3>Monthly Adherence Trend</h3>
           <div class={styles.chartWrapper}>
@@ -650,15 +629,7 @@ export default function Budgets() {
         </div>
       )}
 
-      {/* Forecast Toggle Button */}
-      <div data-test-id="forecast-toggle-section" class={styles.forecastToggleSection}>
-        <button class={`${styles.btnOutline} ${styles.btnLarge}`} onClick={toggleForecast}>
-          {showForecast() ? 'Hide Budget Forecast' : 'Show Budget Forecast'}
-        </button>
-      </div>
-
       {/* Forecast Section */}
-      {showForecast() && (
         <div class={styles.budgetForecast}>
           <div class={styles.forecastHeader}>
             <div class={styles.forecastTitle}>
@@ -672,9 +643,6 @@ export default function Budgets() {
               </svg>
               <span>Budget Forecast</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={toggleForecast}>
-              Hide
-            </Button>
           </div>
 
           {forecastData() ? (
@@ -741,7 +709,6 @@ export default function Budgets() {
             <div class={styles.emptyState}>Loading forecast...</div>
           )}
         </div>
-      )}
 
       {/* Error */}
       {error() && <div class={styles.toastError}>{error()}</div>}
