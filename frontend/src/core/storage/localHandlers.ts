@@ -3041,6 +3041,10 @@ export async function importExecute(body: unknown): Promise<Response> {
     const mapping = (data.mapping as Record<string, string>) || {}
     const defaultType = toStr(data.default_type) || 'expense'
     const dryRun = Boolean(data.dry_run)
+    const categoryTypes = (data.categoryTypes as Record<string, string>) || {}
+    const accountTypes = (data.accountTypes as Record<string, string>) || {}
+    const accountBalances = (data.accountBalances as Record<string, string>) || {}
+    const accountBalanceDates = (data.accountBalanceDates as Record<string, string>) || {}
 
     const rows = parseSheetData(session.workbook)
     const { clean } = await detectDuplicates(rows)
@@ -3048,6 +3052,27 @@ export async function importExecute(body: unknown): Promise<Response> {
     const profileId = getProfileIdFromStorage()
     const db = await getDB()
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
+
+    // Create accounts for categories marked as 'account' type
+    const accountIdMap = new Map<string, number>()
+    if (!dryRun) {
+      for (const [catName, catType] of Object.entries(categoryTypes)) {
+        if (catType !== 'account') continue
+        const accType = (accountTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib'
+        const balance = parseFloat(accountBalances[catName]) || 0
+        const balanceDate = accountBalanceDates[catName] || new Date().toISOString().split('T')[0]
+        const account = {
+          name: catName,
+          type: accType,
+          balance,
+          balance_date: balanceDate,
+          profile_id: profileId,
+          created_at: new Date().toISOString(),
+        }
+        const id = await db.add('accounts', account)
+        accountIdMap.set(catName, id as number)
+      }
+    }
 
     const imported: number[] = []
     const skipped: { index: number; reason: string }[] = []
@@ -3074,12 +3099,17 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
 
       let categoryId: number | null = null
+      let accountId: number | null = null
       if (mapping.category && row[mapping.category]) {
         const catName = toStr(row[mapping.category]).toLowerCase().trim()
         const cat = categories.find(
           (c) => c.name.toLowerCase().trim() === catName && c.type === type
         )
         if (cat) categoryId = cat.id
+        // Check if this category maps to a created account
+        if (accountIdMap.has(catName)) {
+          accountId = accountIdMap.get(catName)!
+        }
       }
 
       const transaction = {
@@ -3092,7 +3122,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         notes: mapping.notes ? toStr(row[mapping.notes]) : '',
         beneficiary: mapping.beneficiary ? toStr(row[mapping.beneficiary]) : '',
         payor: mapping.payor ? toStr(row[mapping.payor]) : '',
-        account_id: data.account_id ? Number(data.account_id) : null,
+        account_id: accountId || data.account_id ? Number(accountId || data.account_id) : null,
         created_at: new Date().toISOString(),
       }
 
@@ -3110,6 +3140,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       dry_run: dryRun,
       imported_ids: dryRun ? [] : imported,
       skipped_items: skipped,
+      accounts_created: dryRun ? 0 : accountIdMap.size,
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)

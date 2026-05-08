@@ -4755,13 +4755,13 @@ app.post('/api/import/googlesheet', apiRateLimiter, (req, res) => {
 app.post('/api/import/execute', apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { rows, mapping, categoryTypes } = req.body;
+    const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } = req.body;
     if (!rows || !mapping) return res.status(400).json({ error: 'Missing data' });
 
     const insert = db.prepare(`
       INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const getCat = db.prepare(
@@ -4770,6 +4770,28 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
     const insertCat = db.prepare(
       'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
     );
+    const insertAccount = db.prepare(
+      'INSERT INTO accounts (name, type, currency, balance, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    const insertBalanceHistory = db.prepare(
+      'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)'
+    );
+
+    // Create accounts for categories marked as 'account' type
+    const accountIdMap = new Map();
+    if (categoryTypes) {
+      for (const [catName, catType] of Object.entries(categoryTypes)) {
+        if (catType !== 'account') continue;
+        const accType = (accountTypes && accountTypes[catName]) || 'giro';
+        const balance = parseFloat((accountBalances && accountBalances[catName]) || '0') || 0;
+        const balanceDate = (accountBalanceDates && accountBalanceDates[catName]) || new Date().toISOString().split('T')[0];
+        const result = insertAccount.run(catName, accType, 'USD', balance, '', pid);
+        const accountId = result.lastInsertRowid;
+        accountIdMap.set(catName, accountId);
+        // Record initial balance history
+        insertBalanceHistory.run(accountId, balance, balanceDate);
+      }
+    }
 
     // Diverse color palette for new categories
     const newCategoryColors = [
@@ -4857,6 +4879,10 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
           validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
         }
 
+        // Determine account_id from category mapping
+        const catNameForAccount = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
+        const accountId = catNameForAccount ? accountIdMap.get(String(catNameForAccount).trim()) || null : null;
+
         insert.run(
           row[mapping.description] || row[mapping.Description] || row[mapping.DESCRIPTION] || '',
           amount,
@@ -4873,7 +4899,8 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
           parseFloat(row[mapping.exchange_rate] || row[mapping.ExchangeRate] || 1.0) || 1.0,
           validatedType,
           row[mapping.notes] || row[mapping.Notes] || row[mapping.NOTES] || '',
-          pid
+          pid,
+          accountId
         );
         imported++;
       }
@@ -4882,6 +4909,7 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
     insertMany(rows);
     res.json({
       imported,
+      accounts_created: accountIdMap.size,
       message: `Successfully imported ${imported} transactions`,
     });
   } catch (err) {

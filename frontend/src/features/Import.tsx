@@ -123,7 +123,10 @@ export default function Import() {
 
   // Column mapping
   const [columnMapping, setColumnMapping] = createSignal<Record<string, number>>({})
-  const [categoryTypes, setCategoryTypes] = createSignal<Record<string, 'income' | 'expense'>>({})
+  const [categoryTypes, setCategoryTypes] = createSignal<Record<string, 'income' | 'expense' | 'account'>>({})
+  const [accountTypes, setAccountTypes] = createSignal<Record<string, string>>({})
+  const [accountBalances, setAccountBalances] = createSignal<Record<string, string>>({})
+  const [accountBalanceDates, setAccountBalanceDates] = createSignal<Record<string, string>>({})
 
   // Preview state
   const [_rows, setRows] = createSignal<string[][]>([])
@@ -341,7 +344,7 @@ export default function Import() {
 
     // Detect category types when category column changes
     if (field === 'category') {
-      const newCategoryTypes: Record<string, 'income' | 'expense'> = {}
+      const newCategoryTypes: Record<string, 'income' | 'expense' | 'account'> = {}
       const allCategories = detectCategories()
       allCategories.forEach((cat) => {
         newCategoryTypes[cat] = classifyCategory(cat)
@@ -351,7 +354,7 @@ export default function Import() {
   }
 
   // Category type toggle
-  const handleCategoryTypeToggle = (category: string, type: 'income' | 'expense') => {
+  const handleCategoryTypeToggle = (category: string, type: 'income' | 'expense' | 'account') => {
     const types = { ...categoryTypes() }
     types[category] = type
     setCategoryTypes(types)
@@ -435,6 +438,9 @@ export default function Import() {
           rows: rowsToImport,
           mapping,
           categoryTypes: types,
+          accountTypes: accountTypes(),
+          accountBalances: accountBalances(),
+          accountBalanceDates: accountBalanceDates(),
         }),
       })
 
@@ -461,7 +467,7 @@ export default function Import() {
   }
 
   // Auto-detect income categories based on keywords in the category name
-  const classifyCategory = (name: string): 'income' | 'expense' => {
+  const classifyCategory = (name: string): 'income' | 'expense' | 'account' => {
     const lower = name.toLowerCase()
     const incomeKeywords = ['salary', 'income', 'wages', 'wage', 'payroll', 'revenue',
       'dividend', 'refund', 'bonus', 'paycheck', 'pay cheque', 'interest',
@@ -472,7 +478,7 @@ export default function Import() {
   onMount(() => {
     // Initialize default category types with discovered categories
     const categories = detectCategories()
-    const types: Record<string, 'income' | 'expense'> = {}
+    const types: Record<string, 'income' | 'expense' | 'account'> = {}
     categories.forEach((cat) => {
       types[cat] = classifyCategory(cat)
     })
@@ -1071,18 +1077,20 @@ export default function Import() {
         {/* Category type review */}
         <div class={styles.categoryReview}>
           <h3 class={styles.categoryReviewTitle}>Category Types</h3>
-          <div style="max-height: 280px; overflow-y: auto;">
+          <div style="max-height: 400px; overflow-y: auto;">
             <table class={styles.categoryTable}>
               <thead>
                 <tr>
                   <th>Category</th>
                   <th class={styles.categoryTableType}>Type</th>
+                  <th class={styles.categoryTableConfig}>Account Setup</th>
                 </tr>
               </thead>
               <tbody>
                 <For each={detectCategories()}>
                   {(category) => {
                     const currentType = () => categoryTypes()[category] || 'expense'
+                    const isAccount = () => currentType() === 'account'
                     return (
                       <tr>
                         <td class={styles.categoryTableName}>{category}</td>
@@ -1104,7 +1112,58 @@ export default function Import() {
                             >
                               Income
                             </button>
+                            <button
+                              class={`${styles.pill} ${isAccount() ? styles.accountActive : ''}`}
+                              onClick={() => {
+                                handleCategoryTypeToggle(category, 'account')
+                              }}
+                            >
+                              Account
+                            </button>
                           </div>
+                        </td>
+                        <td class={styles.categoryTableConfig}>
+                          {isAccount() ? (
+                            <div class={styles.accountConfig}>
+                              <select
+                                class={styles.accountTypeSelect}
+                                value={accountTypes()[category] || 'giro'}
+                                onchange={(e) => {
+                                  const v = { ...accountTypes() }
+                                  v[category] = e.currentTarget.value
+                                  setAccountTypes(v)
+                                }}
+                              >
+                                <option value="giro">Giro</option>
+                                <option value="savings">Savings</option>
+                                <option value="ib">Investment</option>
+                              </select>
+                              <input
+                                type="text"
+                                inputmode="decimal"
+                                class={styles.accountBalanceInput}
+                                placeholder="Starting balance"
+                                value={accountBalances()[category] || ''}
+                                oninput={(e) => {
+                                  const v = { ...accountBalances() }
+                                  v[category] = e.currentTarget.value
+                                  setAccountBalances(v)
+                                }}
+                              />
+                              <input
+                                type="date"
+                                class={styles.accountDateInput}
+                                value={accountBalanceDates()[category] || ''}
+                                onchange={(e) => {
+                                  const v = { ...accountBalanceDates() }
+                                  v[category] = e.currentTarget.value
+                                  setAccountBalanceDates(v)
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <span style="color:var(--text-secondary);font-size:12px;">&mdash;</span>
+                          )}
                         </td>
                       </tr>
                     )

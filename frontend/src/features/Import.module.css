@@ -326,6 +326,56 @@
   font-weight: 600;
 }
 
+.pill.accountActive {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+/* Category table config column */
+.categoryTableConfig {
+  text-align: left;
+}
+
+/* Account config fields */
+.accountConfig {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.accountTypeSelect {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg, var(--bg-secondary));
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.accountBalanceInput {
+  width: 110px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg, var(--bg-secondary));
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.accountDateInput {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg, var(--bg-secondary));
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
 /* Preview section */
 .previewHeader {
   display: flex;

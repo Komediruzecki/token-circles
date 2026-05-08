@@ -464,6 +464,13 @@ function migrate() {
     } catch (e) {}
   }
 
+  // Migration: Add account_id column to transactions table
+  if (!columnExists('transactions', 'account_id')) {
+    try {
+      db.exec('ALTER TABLE transactions ADD COLUMN account_id INTEGER');
+    } catch (e) {}
+  }
+
   // Seed demo user if no users exist
   const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
   if (userCount.c === 0) {
