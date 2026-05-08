@@ -57,7 +57,7 @@ export default function EmergencyFundCalculator() {
 
   // _coverageData - placeholder (functionality can be extended)
 
-  let chartRef: any = null
+  const [chartRef, setChartRef] = createSignal<any>(undefined)
 
   return (
     <div class={sharedStyles.page}>
@@ -135,10 +135,10 @@ export default function EmergencyFundCalculator() {
               height={300}
               width="100%"
               onReady={(chart: any) => {
-                chartRef = chart
+                setChartRef(chart)
               }}
             />
-            <ExportChartButton chart={chartRef} filename="emergency-fund-chart" variant="inline" />
+            <ExportChartButton chart={chartRef()} filename="emergency-fund-chart" variant="inline" />
           </div>
 
           {/* Coverage Details */}

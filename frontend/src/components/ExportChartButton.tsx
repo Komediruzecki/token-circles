@@ -2,7 +2,7 @@
  * Export Chart Button Component
  * Button with icons to export chart as PNG or SVG
  */
-import { exportChartAsPNG } from '../utils/chartExport'
+import { exportChartAsPNG, exportChartAsSVG } from '../utils/chartExport'
 import {
   loadChartExportSettings,
   resolveBackgroundColor,
@@ -27,7 +27,7 @@ export default function ExportChartButton(props: ExportChartButtonProps) {
     if (!props.chart) return
     const settings = loadChartExportSettings()
     const bg = resolveBackgroundColor(settings.background)
-    exportChartAsPNG(props.chart, `${props.filename}-svg`, bg)
+    exportChartAsSVG(props.chart, props.filename, bg)
   }
 
   if (props.variant === 'inline') {

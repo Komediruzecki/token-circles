@@ -153,7 +153,7 @@ export default function RentBuyCalculator(props: Props) {
       let cumulativeRent = 0
       let cumulativeBuyCost = 0
       let investmentBalance = downPayment
-      let cumulativePrincipal = downPayment
+      let cumulativePrincipal = 0
       let _cumulativeInterest = 0
       let principalBalance = homePrice - downPayment
 

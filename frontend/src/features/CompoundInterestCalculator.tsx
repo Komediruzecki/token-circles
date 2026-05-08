@@ -113,7 +113,7 @@ export default function CompoundInterestCalculator() {
     }
   }
 
-  let chartRef: any = null
+  const [chartRef, setChartRef] = createSignal<any>(undefined)
 
   return (
     <div class={sharedStyles.page}>
@@ -332,11 +332,11 @@ export default function CompoundInterestCalculator() {
               height={300}
               width="100%"
               onReady={(chart: any) => {
-                chartRef = chart
+                setChartRef(chart)
               }}
             />
             <ExportChartButton
-              chart={chartRef}
+              chart={chartRef()}
               filename="compound-interest-chart"
               variant="inline"
             />

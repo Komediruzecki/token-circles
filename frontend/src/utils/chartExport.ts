@@ -31,10 +31,24 @@ export function exportChartAsPNG(
   }
 }
 
-export function exportChartAsSVG(canvasEl: HTMLCanvasElement, filename: string): void {
+export function exportChartAsSVG(
+  chart: ChartJS.Chart,
+  filename: string,
+  backgroundColor?: string | null
+): void {
   try {
-    const svgData = new XMLSerializer().serializeToString(canvasEl)
-    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+    const canvas = chart.canvas as HTMLCanvasElement
+    const width = canvas.width
+    const height = canvas.height
+    const dataUrl = canvas.toDataURL('image/png')
+
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  ${backgroundColor ? `<rect width="100%" height="100%" fill="${backgroundColor}"/>` : ''}
+  <image x="0" y="0" width="${width}" height="${height}" xlink:href="${dataUrl}"/>
+</svg>`
+
+    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.download = `${filename}.svg`
