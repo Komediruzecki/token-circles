@@ -488,7 +488,7 @@
 
         for (let m = 1; m <= 12; m++) {
           const monthStr = String(m).padStart(2, '0')
-          const row = monthlyMap[monthStr]
+          const row = monthlyMap[data.year + '-' + monthStr]
           const income = row ? row.income : 0
           const expense = row ? row.expense : 0
           const net = income - expense
