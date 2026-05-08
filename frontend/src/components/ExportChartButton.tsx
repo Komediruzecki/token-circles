@@ -3,6 +3,10 @@
  * Button with icons to export chart as PNG or SVG
  */
 import { exportChartAsPNG } from '../utils/chartExport'
+import {
+  loadChartExportSettings,
+  resolveBackgroundColor,
+} from '../utils/chartExportSettings'
 import styles from './ExportChartButton.module.css'
 
 export interface ExportChartButtonProps {
@@ -14,7 +18,9 @@ export interface ExportChartButtonProps {
 export default function ExportChartButton(props: ExportChartButtonProps) {
   const handleExportPNG = () => {
     if (!props.chart) return
-    exportChartAsPNG(props.chart, props.filename)
+    const settings = loadChartExportSettings()
+    const bg = resolveBackgroundColor(settings.background)
+    exportChartAsPNG(props.chart, props.filename, bg)
   }
 
   const handleExportSVG = () => {
@@ -29,7 +35,7 @@ export default function ExportChartButton(props: ExportChartButtonProps) {
   if (props.variant === 'inline') {
     return (
       <div class={styles.inlineWrapper}>
-        <button class={styles.exportBtn} onClick={handleExportPNG} title="Export as PNG">
+        <button class={styles.exportBtn} onclick={handleExportPNG} title="Export as PNG">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
@@ -39,7 +45,7 @@ export default function ExportChartButton(props: ExportChartButtonProps) {
             />
           </svg>
         </button>
-        <button class={styles.exportBtn} onClick={handleExportSVG} title="Export as SVG">
+        <button class={styles.exportBtn} onclick={handleExportSVG} title="Export as SVG">
           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
@@ -54,7 +60,7 @@ export default function ExportChartButton(props: ExportChartButtonProps) {
   }
 
   return (
-    <button class={styles.exportBtn} onClick={handleExportPNG}>
+    <button class={styles.exportBtn} onclick={handleExportPNG}>
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           stroke-linecap="round"

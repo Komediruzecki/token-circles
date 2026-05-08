@@ -4,12 +4,31 @@
  */
 import type * as ChartJS from 'chart.js/auto'
 
-export function exportChartAsPNG(chart: ChartJS.Chart, filename: string): void {
-  const canvas = chart.canvas
-  const link = document.createElement('a')
-  link.download = `${filename}.png`
-  link.href = canvas.toDataURL('image/png')
-  link.click()
+export function exportChartAsPNG(
+  chart: ChartJS.Chart,
+  filename: string,
+  backgroundColor?: string | null
+): void {
+  const canvas = chart.canvas as HTMLCanvasElement
+  if (backgroundColor) {
+    // Create a temporary canvas to layer background + chart
+    const tempCanvas = document.createElement('canvas')
+    tempCanvas.width = canvas.width
+    tempCanvas.height = canvas.height
+    const ctx = tempCanvas.getContext('2d')!
+    ctx.fillStyle = backgroundColor
+    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height)
+    ctx.drawImage(canvas, 0, 0)
+    const link = document.createElement('a')
+    link.download = `${filename}.png`
+    link.href = tempCanvas.toDataURL('image/png')
+    link.click()
+  } else {
+    const link = document.createElement('a')
+    link.download = `${filename}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  }
 }
 
 export function exportChartAsSVG(canvasEl: HTMLCanvasElement, filename: string): void {

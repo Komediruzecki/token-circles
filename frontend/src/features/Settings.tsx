@@ -33,6 +33,8 @@ import styles from '../components/SettingsPage.module.css'
 import { apiFetch } from '../core/apiFetch'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
+import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
+import type { ChartExportSettings } from '../utils/chartExportSettings'
 
 function Reports() {
   const [reportYear, setReportYear] = createSignal(new Date().getFullYear())
@@ -177,6 +179,9 @@ function Reports() {
 export default function Settings() {
   const [localCurrency, setLocalCurrency] = createSignal('USD')
   const [darkMode, setDarkMode] = createSignal(false)
+  const [chartExportSettings, setChartExportSettings] = createSignal<ChartExportSettings>(
+    loadChartExportSettings()
+  )
   const [storageMode, setLocalStorageMode] = createSignal<'serverless' | 'self-hosted'>(
     'self-hosted'
   )
@@ -766,6 +771,39 @@ export default function Settings() {
                     </label>
                     <span style="font-size: 14px; color: var(--text-secondary);">Dark</span>
                   </div>
+                </div>
+              </div>
+            </div>
+            <div class={styles.card}>
+              <div class={styles.settingsSection}>
+                <div class={styles.settingsSectionTitle}>Chart Export</div>
+                <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
+                  Configure how charts are exported across the application.
+                </p>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Background</label>
+                  <select
+                    class={styles.formControl}
+                    value={chartExportSettings().background}
+                    onchange={(e) => {
+                      const updated: ChartExportSettings = {
+                        ...chartExportSettings(),
+                        background: e.currentTarget.value as ChartExportSettings['background'],
+                      }
+                      setChartExportSettings(updated)
+                      saveChartExportSettings(updated)
+                    }}
+                    style="max-width: 250px;"
+                  >
+                    <option value="transparent">Transparent</option>
+                    <option value="white">White</option>
+                    <option value="dark">Dark</option>
+                    <option value="theme">Match Theme</option>
+                  </select>
+                  <p style="margin-top: 6px; color: var(--text-secondary); font-size: 12px;">
+                    Sets the background color when exporting charts as PNG. Transparent works best
+                    for light backgrounds; choose White or Dark for consistent appearance.
+                  </p>
                 </div>
               </div>
             </div>
