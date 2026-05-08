@@ -52,17 +52,17 @@ export default function RentBuyCalculator(props: Props) {
 
   // Form state
   const [formData, setFormData] = createSignal({
-    rentMonthly: 1200,
-    rentIncrease: 3,
-    investReturn: 7,
-    homePrice: 300000,
-    downPayment: 60000,
-    loanTerm: 30,
-    interestRate: 4,
-    propertyTax: 3000,
-    insurance: 1200,
-    maintenance: 1,
-    hoa: 200,
+    rentMonthly: '1200',
+    rentIncrease: '3',
+    investReturn: '7',
+    homePrice: '300000',
+    downPayment: '60000',
+    loanTerm: '30',
+    interestRate: '4',
+    propertyTax: '3000',
+    insurance: '1200',
+    maintenance: '1',
+    hoa: '200',
   })
 
   const [showResults, setShowResults] = createSignal(false)
@@ -73,7 +73,13 @@ export default function RentBuyCalculator(props: Props) {
     const saved = localStorage.getItem('rentBuyCalculatorSettings')
     if (saved) {
       try {
-        setFormData({ ...formData(), ...JSON.parse(saved) })
+        const parsed = JSON.parse(saved)
+        // Convert stored numbers to strings for the string-based form
+        const strForm: Record<string, string> = {}
+        for (const key of Object.keys(parsed)) {
+          strForm[key] = String(parsed[key] ?? formData()[key as keyof typeof formData])
+        }
+        setFormData({ ...formData(), ...strForm })
       } catch (_e) {
         console.error('Failed to load calculator settings')
       }
@@ -92,30 +98,36 @@ export default function RentBuyCalculator(props: Props) {
     }, 400)
   }
 
-  function handleInput(field: keyof typeof formData, value: number | string) {
+  function handleInput(field: keyof typeof formData, value: string) {
     setFormData({ ...formData(), [field]: value })
     scheduleUpdate()
   }
 
   const calculate = () => {
     setLoading(true)
-    // Save settings
-    localStorage.setItem('rentBuyCalculatorSettings', JSON.stringify(formData()))
+    const raw = formData()
+    // Helper for locale-aware number parsing (supports both . and , as decimal separator)
+    const n = (s: string) => parseFloat(s.replace(',', '.')) || 0
+    // Save numeric values to localStorage
+    const numForm: Record<string, number> = {}
+    for (const key of Object.keys(raw)) {
+      numForm[key] = n(raw[key as keyof typeof raw])
+    }
+    localStorage.setItem('rentBuyCalculatorSettings', JSON.stringify(numForm))
 
     try {
-      const r = formData()
-      const rentMonthly = r.rentMonthly
-      const rentIncrease = (r.rentIncrease || 0) / 100
-      const investReturn = (r.investReturn || 7) / 100
+      const rentMonthly = n(raw.rentMonthly)
+      const rentIncrease = n(raw.rentIncrease) / 100
+      const investReturn = n(raw.investReturn || '7') / 100
 
-      const homePrice = r.homePrice
-      const downPayment = r.downPayment
-      const loanTerm = r.loanTerm
-      const interestRate = (r.interestRate || 0) / 100
-      const propertyTax = r.propertyTax
-      const insurance = r.insurance
-      const maintenancePct = (r.maintenance || 0) / 100
-      const hoa = r.hoa
+      const homePrice = n(raw.homePrice)
+      const downPayment = n(raw.downPayment)
+      const loanTerm = parseInt(raw.loanTerm) || 0
+      const interestRate = n(raw.interestRate) / 100
+      const propertyTax = n(raw.propertyTax)
+      const insurance = n(raw.insurance)
+      const maintenancePct = n(raw.maintenance) / 100
+      const hoa = n(raw.hoa)
 
       const years = 30
       const monthlyRate = interestRate / 12
@@ -238,33 +250,30 @@ export default function RentBuyCalculator(props: Props) {
             <div class={styles.formGroup}>
               <label>Monthly Rent</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().rentMonthly}
                 oninput={(e) => {
-                  handleInput('rentMonthly' as keyof typeof formData, Number(e.target.value))
+                  handleInput('rentMonthly' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Annual Rent Increase (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().rentIncrease}
                 oninput={(e) => {
-                  handleInput('rentIncrease' as keyof typeof formData, Number(e.target.value))
+                  handleInput('rentIncrease' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Investment Return (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().investReturn}
                 oninput={(e) => {
-                  handleInput('investReturn' as keyof typeof formData, Number(e.target.value))
+                  handleInput('investReturn' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
@@ -278,87 +287,80 @@ export default function RentBuyCalculator(props: Props) {
             <div class={styles.formGroup}>
               <label>Home Price</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().homePrice}
                 oninput={(e) => {
-                  handleInput('homePrice' as keyof typeof formData, Number(e.target.value))
+                  handleInput('homePrice' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Down Payment</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().downPayment}
                 oninput={(e) => {
-                  handleInput('downPayment' as keyof typeof formData, Number(e.target.value))
+                  handleInput('downPayment' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Loan Term (years)</label>
               <input
-                type="number"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().loanTerm}
                 oninput={(e) => {
-                  handleInput('loanTerm' as keyof typeof formData, Number(e.target.value))
+                  handleInput('loanTerm' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Interest Rate (%)</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().interestRate}
                 oninput={(e) => {
-                  handleInput('interestRate' as keyof typeof formData, Number(e.target.value))
+                  handleInput('interestRate' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Annual Property Tax</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().propertyTax}
                 oninput={(e) => {
-                  handleInput('propertyTax' as keyof typeof formData, Number(e.target.value))
+                  handleInput('propertyTax' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Annual Insurance</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().insurance}
                 oninput={(e) => {
-                  handleInput('insurance' as keyof typeof formData, Number(e.target.value))
+                  handleInput('insurance' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Maintenance (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().maintenance}
                 oninput={(e) => {
-                  handleInput('maintenance' as keyof typeof formData, Number(e.target.value))
+                  handleInput('maintenance' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Annual HOA Fees</label>
               <input
-                type="number"
-                step="0.01"
+                type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"
                 value={formData().hoa}
                 oninput={(e) => {
-                  handleInput('hoa' as keyof typeof formData, Number(e.target.value))
+                  handleInput('hoa' as keyof typeof formData, e.target.value)
                 }}
               />
             </div>

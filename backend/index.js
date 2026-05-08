@@ -3463,6 +3463,9 @@ app.get('/api/budgets/zero-based/summary', apiRateLimiter, (req, res) => {
       zero_based_remaining,
       income,
       period: month,
+      can_allocate: zero_based_remaining > 0,
+      unassigned_budget: zero_based_remaining,
+      already_budgeted: totalBudget,
     });
   } catch (err) {
     console.error(err.message);

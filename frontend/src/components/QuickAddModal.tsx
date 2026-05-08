@@ -20,7 +20,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
   const [isMounted, setIsMounted] = createSignal(false)
 
   const [formData, setFormData] = createSignal({
-    amount: 0,
+    amount: '',
     category_id: null as number | null,
     description: '',
     type: 'expense' as 'income' | 'expense',
@@ -29,7 +29,8 @@ export function QuickAddModal(props: QuickAddModalProps) {
 
   const handleSubmit = async () => {
     const data = formData()
-    if (data.amount <= 0) {
+    const amountNum = parseFloat(data.amount)
+    if (!amountNum || amountNum <= 0) {
       toast('Please enter a valid amount', 'error')
       return
     }
@@ -41,15 +42,15 @@ export function QuickAddModal(props: QuickAddModalProps) {
     setIsSubmitting(true)
     try {
       const newTransaction = await api.createTransaction({
-        amount: data.amount,
+        amount: amountNum,
         category_id: data.category_id!,
-        description: data.description || (data.amount >= 0 ? 'Quick Add' : 'Quick Add'),
+        description: data.description || (amountNum >= 0 ? 'Quick Add' : 'Quick Add'),
         type: data.type,
         date: data.date,
         beneficiary: '',
         payor: '',
         currency: 'EUR',
-        amount_local: data.amount >= 0 ? data.amount : null,
+        amount_local: amountNum >= 0 ? amountNum : null,
         exchange_rate: 1,
         notes: '',
         profile_id: 1,
@@ -95,7 +96,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
           <h2 class={quickAddModalStyles.title}>Quick Add</h2>
           <button
             class={quickAddModalStyles.closeButton}
-            onClick={props.onClose}
+            onclick={props.onClose}
             disabled={isSubmitting()}
             type="button"
             aria-label="Close modal"
@@ -125,9 +126,9 @@ export function QuickAddModal(props: QuickAddModalProps) {
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  value={formData().amount.toString()}
-                  onInput={(e) =>
-                    setFormData({ ...formData(), amount: Number(e.currentTarget.value) })
+                  value={formData().amount}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), amount: e.currentTarget.value })
                   }
                   disabled={isSubmitting()}
                 />
@@ -138,14 +139,14 @@ export function QuickAddModal(props: QuickAddModalProps) {
                 <div class={quickAddModalStyles.typeButtons}>
                   <button
                     class={`${quickAddModalStyles.typeButton} ${formData().type === 'expense' ? quickAddModalStyles.typeSelected : ''}`}
-                    onClick={() => setFormData({ ...formData(), type: 'expense' })}
+                    onclick={() => setFormData({ ...formData(), type: 'expense' })}
                     type="button"
                   >
                     Expense
                   </button>
                   <button
                     class={`${quickAddModalStyles.typeButton} ${formData().type === 'income' ? quickAddModalStyles.typeSelected : ''}`}
-                    onClick={() => setFormData({ ...formData(), type: 'income' })}
+                    onclick={() => setFormData({ ...formData(), type: 'income' })}
                     type="button"
                   >
                     Income
@@ -159,7 +160,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
               <select
                 class={quickAddModalStyles.categorySelect}
                 value={formData().category_id?.toString() || ''}
-                onChange={(e) =>
+                onchange={(e) =>
                   setFormData({
                     ...formData(),
                     category_id: e.currentTarget.value ? Number(e.currentTarget.value) : null,
@@ -181,7 +182,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
                 type="text"
                 placeholder="Enter description..."
                 value={formData().description}
-                onInput={(e) => setFormData({ ...formData(), description: e.currentTarget.value })}
+                oninput={(e) => setFormData({ ...formData(), description: e.currentTarget.value })}
                 disabled={isSubmitting()}
               />
             </div>
@@ -192,7 +193,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
                 class={quickAddModalStyles.dateInput}
                 type="date"
                 value={formData().date}
-                onChange={(e) => setFormData({ ...formData(), date: e.currentTarget.value })}
+                onchange={(e) => setFormData({ ...formData(), date: e.currentTarget.value })}
                 disabled={isSubmitting()}
               />
             </div>
@@ -202,7 +203,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
         <div class={quickAddModalStyles.footer}>
           <button
             class={quickAddModalStyles.cancelButton}
-            onClick={props.onClose}
+            onclick={props.onClose}
             disabled={isSubmitting()}
             type="button"
           >
@@ -210,7 +211,7 @@ export function QuickAddModal(props: QuickAddModalProps) {
           </button>
           <button
             class={`${quickAddModalStyles.saveButton} ${isSubmitting() ? quickAddModalStyles.disabled : ''}`}
-            onClick={handleSubmit}
+            onclick={handleSubmit}
             disabled={isSubmitting()}
             type="button"
           >

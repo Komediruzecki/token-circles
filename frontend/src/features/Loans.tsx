@@ -37,6 +37,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
 import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
+import { theme } from '../core/theme'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 
 interface Loan {
@@ -70,7 +71,7 @@ export default function Loans() {
     note: '',
   })
   interface RatePeriod {
-    rate: number
+    rate: string
     start_month: number
     end_month: number | null
   }
@@ -171,11 +172,14 @@ export default function Loans() {
     const data = {
       name: formData().name,
       principal: parseFloat(formData().principal),
-      interest_rate: parseFloat(formData().interest_rate),
+      interest_rate: parseFloat(formData().interest_rate.replace(',', '.')) || 0,
       term_months: parseInt(formData().term_months),
       start_date: formData().start_date,
       status: formData().status,
-      rate_periods: formData().rate_periods,
+      rate_periods: formData().rate_periods.map((rp) => ({
+        ...rp,
+        rate: parseFloat(rp.rate.replace(',', '.')) || 0,
+      })),
     }
 
     try {
@@ -230,7 +234,7 @@ export default function Loans() {
     try {
       const full = await apiGet<any>(`/api/loans/${loan.id}`)
       ratePeriods = (full.rate_periods || []).map((rp: any) => ({
-        rate: rp.rate,
+        rate: String(rp.rate),
         start_month: rp.start_month,
         end_month: rp.end_month || null,
       }))
@@ -305,6 +309,8 @@ export default function Loans() {
     loadLoans()
   })
 
+  const chartColors = () => theme.getChartColors()
+
   // Calculate totals
   const totalPrincipal = () => loans().reduce((sum, l) => sum + l.principal, 0)
   const totalRemaining = () => loans().reduce((sum, l) => sum + calculateRemaining(l), 0)
@@ -317,7 +323,7 @@ export default function Loans() {
           <button
             data-test-id="add-loan-btn"
             class={styles.btnPrimary}
-            onClick={() => setShowAddModal(true)}
+            onclick={() => setShowAddModal(true)}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -360,7 +366,7 @@ export default function Loans() {
         <div class={styles.emptyState}>
           <p>No loans yet</p>
           <p>Add your first loan to start tracking your debt.</p>
-          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
             Add Loan
           </button>
         </div>
@@ -399,7 +405,7 @@ export default function Loans() {
                       <button
                         class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                         title="Prepayments"
-                        onClick={() => {
+                        onclick={() => {
                           setPrepaymentsLoanId(loan.id)
                           loadPrepayments(loan.id)
                           setShowPrepayments(true)
@@ -418,7 +424,7 @@ export default function Loans() {
                       <button
                         class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                         title="View Amortization"
-                        onClick={() => {
+                        onclick={() => {
                           setShowAmortizationId(loan.id)
                           setShowAmortization(true)
                         }}
@@ -435,7 +441,7 @@ export default function Loans() {
                       </button>
                       <button
                         class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                        onClick={() => {
+                        onclick={() => {
                           editLoan(loan)
                         }}
                       >
@@ -551,11 +557,14 @@ export default function Loans() {
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
+                    x: { ticks: { color: chartColors().text }, grid: { color: chartColors().grid } },
                     y: {
                       beginAtZero: true,
                       ticks: {
                         callback: (value: any) => formatAmount(value),
+                        color: chartColors().text,
                       },
+                      grid: { color: chartColors().grid },
                     },
                   },
                   plugins: {
@@ -565,6 +574,7 @@ export default function Loans() {
                         usePointStyle: true,
                         padding: 15,
                         font: { size: 12 },
+                        color: chartColors().legend,
                       },
                     },
                   },
@@ -601,7 +611,7 @@ export default function Loans() {
                         '#06b6d4',
                         '#84cc16',
                       ],
-                      borderColor: 'var(--card-bg)',
+                      borderColor: chartColors().grid,
                       borderWidth: 2,
                     },
                   ],
@@ -616,6 +626,7 @@ export default function Loans() {
                         usePointStyle: true,
                         padding: 15,
                         font: { size: 11 },
+                        color: chartColors().legend,
                       },
                     },
                     tooltip: {
@@ -660,7 +671,7 @@ export default function Loans() {
               <h3 class={styles.modalTitle}>{editingLoan() ? 'Edit Loan' : 'Add Loan'}</h3>
               <button
                 class={styles.modalClose}
-                onClick={() => {
+                onclick={() => {
                   setShowAddModal(false)
                   setEditingLoan(null)
                   setFormData({
@@ -706,8 +717,9 @@ export default function Loans() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Interest Rate (%)</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputmode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
                   class={styles.formControl}
                   placeholder="5.5"
                   value={formData().interest_rate}
@@ -741,7 +753,7 @@ export default function Loans() {
                 <select
                   class={styles.formControl}
                   value={formData().status}
-                  oninput={(e) =>
+                  onchange={(e) =>
                     setFormData({ ...formData(), status: e.target.value as Loan['status'] })
                   }
                 >
@@ -775,8 +787,9 @@ export default function Loans() {
                         }}
                       >
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputmode="decimal"
+                          pattern="[0-9]*[.,]?[0-9]*"
                           placeholder="Rate %"
                           value={rp.rate}
                           style={{
@@ -791,7 +804,7 @@ export default function Loans() {
                           oninput={(e) => {
                             const i = idx()
                             const updated = [...formData().rate_periods]
-                            updated[i] = { ...updated[i], rate: parseFloat(e.target.value) || 0 }
+                            updated[i] = { ...updated[i], rate: e.target.value }
                             setFormData({ ...formData(), rate_periods: updated })
                           }}
                         />
@@ -852,7 +865,7 @@ export default function Loans() {
                             padding: '4px',
                             'border-radius': '4px',
                           }}
-                          onClick={() => {
+                          onclick={() => {
                             const i = idx()
                             const updated = formData().rate_periods.filter(
                               (_: RatePeriod, j: number) => j !== i
@@ -888,13 +901,13 @@ export default function Loans() {
                     color: 'var(--text)',
                     cursor: 'pointer',
                   }}
-                  onClick={() => {
+                  onclick={() => {
                     setFormData({
                       ...formData(),
                       rate_periods: [
                         ...formData().rate_periods,
                         {
-                          rate: parseFloat(formData().interest_rate) || 0,
+                          rate: formData().interest_rate,
                           start_month: 1,
                           end_month: null,
                         },
@@ -913,7 +926,7 @@ export default function Loans() {
                 <button
                   type="button"
                   class={styles.btnSecondary}
-                  onClick={() => {
+                  onclick={() => {
                     setShowAddModal(false)
                     setEditingLoan(null)
                     setFormData(emptyForm())
@@ -959,7 +972,7 @@ export default function Loans() {
               >
                 <div class={styles.modalHeader}>
                   <h3 class={styles.modalTitle}>Prepayments - {loan.name}</h3>
-                  <button class={styles.modalClose} onClick={() => setShowPrepayments(false)}>
+                  <button class={styles.modalClose} onclick={() => setShowPrepayments(false)}>
                     <svg
                       width="24"
                       height="24"
@@ -1018,7 +1031,7 @@ export default function Loans() {
                                   padding: '4px',
                                   'border-radius': '4px',
                                 }}
-                                onClick={() => deletePrepayment(loan.id, p.id)}
+                                onclick={() => deletePrepayment(loan.id, p.id)}
                               >
                                 <svg
                                   width="14"
@@ -1088,7 +1101,7 @@ export default function Loans() {
                       type="button"
                       class={styles.btnPrimary}
                       style={{ 'font-size': '13px' }}
-                      onClick={() => addPrepayment(loan.id)}
+                      onclick={() => addPrepayment(loan.id)}
                     >
                       Add Prepayment
                     </button>

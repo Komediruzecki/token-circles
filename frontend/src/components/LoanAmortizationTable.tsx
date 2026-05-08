@@ -5,6 +5,7 @@
 import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import { api as _api, formatCurrency } from '../core/api'
+import { theme } from '../core/theme'
 import { apiPost, showToast } from '../utils/api'
 import styles from './LoansPage.module.css'
 
@@ -53,6 +54,7 @@ export default function LoanAmortizationTable(props: Props) {
   const [loading, setLoading] = createSignal(false)
   const [result, setResult] = createSignal<AmortizationResult | null>(null)
   const [showDetailed, setShowDetailed] = createSignal(props.showDetailed || false)
+  const chartColors = () => theme.getChartColors()
 
   const loadAmortizationData = async () => {
     setLoading(true)
@@ -90,13 +92,13 @@ export default function LoanAmortizationTable(props: Props) {
           <div style="display: flex; gap: 8px; margin-bottom: 16px;">
             <button
               class={`${styles.btnSecondary} ${styles.btnSm}`}
-              onClick={loadAmortizationData}
+              onclick={loadAmortizationData}
               disabled={loading()}
               title="Recalculate with current loan data"
             >
               Recalculate
             </button>
-            <button class={`${styles.btnPrimary} ${styles.btnSm}`} onClick={toggleDetailed}>
+            <button class={`${styles.btnPrimary} ${styles.btnSm}`} onclick={toggleDetailed}>
               {showDetailed() ? 'Hide Amortization' : 'View Amortization'}
             </button>
           </div>
@@ -249,18 +251,19 @@ export default function LoanAmortizationTable(props: Props) {
                     x: {
                       stacked: true,
                       grid: { display: false },
-                      ticks: { font: { size: 10 }, maxTicksLimit: 12, autoSkip: true },
+                      ticks: { font: { size: 10 }, maxTicksLimit: 12, autoSkip: true, color: chartColors().text },
                     },
                     y: {
                       stacked: true,
                       beginAtZero: true,
-                      ticks: { callback: (v: any) => formatCurrency(v) },
+                      ticks: { callback: (v: any) => formatCurrency(v), color: chartColors().text },
+                      grid: { color: chartColors().grid },
                     },
                   },
                   plugins: {
                     legend: {
                       position: 'top',
-                      labels: { usePointStyle: true, padding: 12, font: { size: 11 } },
+                      labels: { usePointStyle: true, padding: 12, font: { size: 11 }, color: chartColors().legend },
                     },
                   },
                 }}
@@ -307,7 +310,8 @@ export default function LoanAmortizationTable(props: Props) {
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
-                    y: { beginAtZero: true, ticks: { callback: (v: any) => formatCurrency(v) } },
+                    x: { ticks: { color: chartColors().text }, grid: { color: chartColors().grid } },
+                    y: { beginAtZero: true, ticks: { callback: (v: any) => formatCurrency(v), color: chartColors().text }, grid: { color: chartColors().grid } },
                   },
                   plugins: {
                     legend: { display: false },
@@ -330,7 +334,7 @@ export default function LoanAmortizationTable(props: Props) {
                 'font-size': '12px',
                 padding: '6px 12px',
               }}
-              onClick={() => {
+              onclick={() => {
                 exportAmortizationCSV(schedule, props.loan.name)
               }}
             >
@@ -466,7 +470,7 @@ export default function LoanAmortizationTable(props: Props) {
                 <div style="display: flex; gap: 8px; align-items: center;">
                   <button
                     class={`${styles.btnSecondary} ${styles.btnSm}`}
-                    onClick={() => setShowDetailed(false)}
+                    onclick={() => setShowDetailed(false)}
                   >
                     Close
                   </button>

@@ -171,10 +171,13 @@ export default function Categories() {
   const updateBudget = async (amount: number) => {
     if (!selectedCategory()) return
     try {
+      const now = new Date()
+      const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
       await apiPost('/api/budgets', {
         category_id: selectedCategory()!.id,
         amount,
         period: 'monthly',
+        start_date: startDate,
       })
       showToast('Budget set successfully', 'success')
       setShowBudgetModal(false)

@@ -316,6 +316,7 @@ export default function Goals() {
                       usePointStyle: true,
                       padding: 15,
                       font: { size: 12 },
+                      color: 'var(--text)',
                     },
                   },
                   tooltip: {

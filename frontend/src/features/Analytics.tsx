@@ -524,13 +524,15 @@ export default function Analytics() {
                       responsive: true,
                       maintainAspectRatio: false,
                       scales: {
-                        x: { stacked: true },
+                        x: { stacked: true, ticks: { color: 'var(--text)' }, grid: { color: 'var(--border)' } },
                         y: {
                           stacked: true,
                           beginAtZero: true,
                           ticks: {
                             callback: (value: any) => formatCurrency(value),
+                            color: 'var(--text)',
                           },
+                          grid: { color: 'var(--border)' },
                         },
                       },
                       plugins: {
@@ -541,6 +543,7 @@ export default function Analytics() {
                             padding: 10,
                             font: { size: 11 },
                             boxWidth: 10,
+                            color: 'var(--text)',
                           },
                         },
                         tooltip: {
@@ -621,6 +624,7 @@ export default function Analytics() {
                             usePointStyle: true,
                             padding: 15,
                             font: { size: 12 },
+                            color: 'var(--text)',
                           },
                         },
                       },
@@ -678,11 +682,14 @@ export default function Analytics() {
                       responsive: true,
                       maintainAspectRatio: false,
                       scales: {
+                        x: { ticks: { color: 'var(--text)' }, grid: { color: 'var(--border)' } },
                         y: {
                           beginAtZero: true,
                           ticks: {
                             callback: (value: any) => formatCurrency(value),
+                            color: 'var(--text)',
                           },
+                          grid: { color: 'var(--border)' },
                         },
                       },
                       plugins: {
@@ -692,6 +699,7 @@ export default function Analytics() {
                             usePointStyle: true,
                             padding: 15,
                             font: { size: 12 },
+                            color: 'var(--text)',
                           },
                         },
                       },

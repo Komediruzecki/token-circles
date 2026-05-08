@@ -532,16 +532,21 @@ export default function Retirement() {
                   title: {
                     display: true,
                     text: 'Age',
+                    color: 'var(--text)',
                   },
                   ticks: {
                     stepSize: 5,
+                    color: 'var(--text)',
                   },
+                  grid: { color: 'var(--border)' },
                 },
                 y: {
                   beginAtZero: true,
                   ticks: {
                     callback: (value: any) => formatAmount(value),
+                    color: 'var(--text)',
                   },
+                  grid: { color: 'var(--border)' },
                 },
               },
               plugins: {
@@ -551,6 +556,7 @@ export default function Retirement() {
                     usePointStyle: true,
                     padding: 15,
                     font: { size: 12 },
+                    color: 'var(--text)',
                   },
                 },
                 tooltip: {

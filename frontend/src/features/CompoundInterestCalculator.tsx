@@ -50,26 +50,34 @@ interface CompoundInterestResult {
 }
 
 interface FormState {
-  principal: number
-  monthlyContribution: number
-  annualReturn: number
-  years: number
+  principal: string
+  monthlyContribution: string
+  annualReturn: string
+  years: string
 }
 
 export default function CompoundInterestCalculator() {
   const [loading, setLoading] = createSignal(false)
   const [results, setResults] = createSignal<CompoundInterestResult | null>(null)
   const [form, setForm] = createSignal<FormState>({
-    principal: 10000,
-    monthlyContribution: 500,
-    annualReturn: 7,
-    years: 10,
+    principal: '10000',
+    monthlyContribution: '500',
+    annualReturn: '7',
+    years: '10',
   })
 
   const calculate = async () => {
     setLoading(true)
     try {
-      const data = await apiPost('/api/calculator/compound-interest', form())
+      const f = form()
+      const n = (s: string) => parseFloat(s.replace(',', '.')) || 0
+      const payload = {
+        principal: n(f.principal),
+        monthlyContribution: n(f.monthlyContribution),
+        annualReturn: n(f.annualReturn),
+        years: parseInt(f.years) || 0,
+      }
+      const data = await apiPost('/api/calculator/compound-interest', payload)
       setResults(data as CompoundInterestResult)
     } catch (e: any) {
       showToast(e.message || 'Calculation failed', 'error')
@@ -87,7 +95,7 @@ export default function CompoundInterestCalculator() {
     debounceTimer = window.setTimeout(() => calculate(), 400)
   }
 
-  const updateForm = (field: keyof FormState, value: number) => {
+  const updateForm = (field: keyof FormState, value: string) => {
     setForm({ ...form(), [field]: value })
     onCalculate()
   }
@@ -124,7 +132,7 @@ export default function CompoundInterestCalculator() {
                 step="100"
                 value={form().principal}
                 oninput={(e) => {
-                  updateForm('principal', Number(e.target.value))
+                  updateForm('principal', e.target.value)
                 }}
               />
             </div>
@@ -135,18 +143,19 @@ export default function CompoundInterestCalculator() {
                 step="100"
                 value={form().monthlyContribution}
                 oninput={(e) => {
-                  updateForm('monthlyContribution', Number(e.target.value))
+                  updateForm('monthlyContribution', e.target.value)
                 }}
               />
             </div>
             <div class={styles.formGroup}>
               <label>Annual Return (%)</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputmode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
                 value={form().annualReturn}
                 oninput={(e) => {
-                  updateForm('annualReturn', Number(e.target.value))
+                  updateForm('annualReturn', e.target.value)
                 }}
               />
             </div>
@@ -158,7 +167,7 @@ export default function CompoundInterestCalculator() {
                 max="50"
                 value={form().years}
                 oninput={(e) => {
-                  updateForm('years', Number(e.target.value))
+                  updateForm('years', e.target.value)
                 }}
               />
             </div>
@@ -205,63 +214,6 @@ export default function CompoundInterestCalculator() {
         <div class={styles.loading}>Calculating...</div>
       ) : results() ? (
         <>
-          {/* Scenario Comparison Chart */}
-          <div class={styles.chartSection}>
-            <h3 class={styles.chartTitle}>Scenario Comparison</h3>
-            <Chart
-              id="compoundInterestChart"
-              type="bar"
-              data={{
-                labels: summary()?.scenarios.map((s) => s.name) || [],
-                datasets: [
-                  {
-                    label: 'Final Balance',
-                    data: summary()?.scenarios.map((s) => s.finalBalance) || [],
-                    backgroundColor: summary()?.scenarios.map((s) => `${s.color}cc`) || [],
-                    borderColor: summary()?.scenarios.map((s) => s.color) || [],
-                    borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    ticks: {
-                      callback: (v: number | string) =>
-                        formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
-                      color: 'var(--text)',
-                    },
-                    grid: { color: 'var(--border)' },
-                    title: {
-                      display: true,
-                      text: 'Final Balance',
-                      color: 'var(--text)',
-                    },
-                  },
-                  x: {
-                    ticks: { color: 'var(--text)' },
-                    grid: { color: 'var(--border)' },
-                  },
-                },
-                plugins: {
-                  legend: { display: false },
-                },
-              }}
-              height={300}
-              width="100%"
-              onReady={(chart: any) => {
-                chartRef = chart
-              }}
-            />
-            <ExportChartButton
-              chart={chartRef}
-              filename="compound-interest-chart"
-              variant="inline"
-            />
-          </div>
-
           {/* Detailed Projection Chart */}
           <div class={styles.chartSection}>
             <h3 class={styles.chartTitle}>Detailed Projection</h3>
@@ -328,6 +280,63 @@ export default function CompoundInterestCalculator() {
               }}
               height={300}
               width="100%"
+            />
+          </div>
+
+          {/* Scenario Comparison Chart */}
+          <div class={styles.chartSection}>
+            <h3 class={styles.chartTitle}>Scenario Comparison</h3>
+            <Chart
+              id="compoundInterestChart"
+              type="bar"
+              data={{
+                labels: summary()?.scenarios.map((s) => s.name) || [],
+                datasets: [
+                  {
+                    label: 'Final Balance',
+                    data: summary()?.scenarios.map((s) => s.finalBalance) || [],
+                    backgroundColor: summary()?.scenarios.map((s) => `${s.color}cc`) || [],
+                    borderColor: summary()?.scenarios.map((s) => s.color) || [],
+                    borderWidth: 2,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    ticks: {
+                      callback: (v: number | string) =>
+                        formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
+                      color: 'var(--text)',
+                    },
+                    grid: { color: 'var(--border)' },
+                    title: {
+                      display: true,
+                      text: 'Final Balance',
+                      color: 'var(--text)',
+                    },
+                  },
+                  x: {
+                    ticks: { color: 'var(--text)' },
+                    grid: { color: 'var(--border)' },
+                  },
+                },
+                plugins: {
+                  legend: { display: false },
+                },
+              }}
+              height={300}
+              width="100%"
+              onReady={(chart: any) => {
+                chartRef = chart
+              }}
+            />
+            <ExportChartButton
+              chart={chartRef}
+              filename="compound-interest-chart"
+              variant="inline"
             />
           </div>
 

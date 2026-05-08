@@ -90,7 +90,8 @@ export function LogViewer() {
     }
   })
 
-  const filtered = createMemo(() => getFilteredLogs().slice(0, expandCount()))
+  const fullFiltered = createMemo(() => getFilteredLogs())
+  const filtered = createMemo(() => fullFiltered().slice(0, expandCount()))
   const allComponents = createMemo(() =>
     Array.from(
       new Set(
@@ -106,7 +107,7 @@ export function LogViewer() {
       <div class={css.header}>
         <h2>Log Viewer</h2>
         <div class={css.actions}>
-          <button class={css.btn} onClick={refreshLogs}>
+          <button class={css.btn} onclick={refreshLogs}>
             <svg
               width="14"
               height="14"
@@ -120,7 +121,7 @@ export function LogViewer() {
             </svg>
             Refresh
           </button>
-          <button class={css.btn} onClick={exportLogs}>
+          <button class={css.btn} onclick={exportLogs}>
             <svg
               width="14"
               height="14"
@@ -157,7 +158,7 @@ export function LogViewer() {
           />
           <button
             class={css.btn}
-            onClick={toggleDebugMode}
+            onclick={toggleDebugMode}
             style={{ color: debugMode() ? 'var(--primary)' : undefined }}
           >
             {debugMode() ? 'Debug: ON' : 'Debug: OFF'}
@@ -198,12 +199,12 @@ export function LogViewer() {
           class={css.searchInput}
           placeholder="Search logs..."
           value={searchTerm()}
-          onInput={(e) => setSearchTerm(e.target.value)}
+          oninput={(e) => setSearchTerm(e.target.value)}
         />
         <select
           class={css.select}
           value={componentFilter()}
-          onChange={(e) => setComponentFilter(e.target.value)}
+          onchange={(e) => setComponentFilter(e.target.value)}
         >
           <option value="">All Components</option>
           <For each={allComponents()}>{(comp) => <option value={comp}>{comp}</option>}</For>
@@ -216,7 +217,7 @@ export function LogViewer() {
             <button
               class={`${css.levelBtn} ${levelFilter().includes(level.value) ? css.active : ''}`}
               style={{ border: `1px solid ${level.color}` }}
-              onClick={() => {
+              onclick={() => {
                 const newFilter = levelFilter().includes(level.value)
                   ? levelFilter().filter((l) => l !== level.value)
                   : [...levelFilter(), level.value]
@@ -235,7 +236,7 @@ export function LogViewer() {
               />
               {level.label}
               {levelFilter().includes(level.value) &&
-                `(${filtered().filter((l) => l.level === level.value).length})`}
+                `(${fullFiltered().filter((l) => l.level === level.value).length})`}
             </button>
           )}
         </For>
@@ -279,7 +280,7 @@ export function LogViewer() {
                   <div class={css.colAction}>
                     <button
                       class={css.viewBtn}
-                      onClick={() => {
+                      onclick={() => {
                         setShowDetails(!showDetails())
                       }}
                     >
@@ -312,9 +313,9 @@ export function LogViewer() {
 
       <div class={css.footer}>
         <span class={css.count}>
-          Showing {filtered().length} of {logs().length} logs
+          Showing {filtered().length} of {fullFiltered().length} logs
         </span>
-        <button class={css.btnSecondary} onClick={() => setExpandCount((c) => c + 10)}>
+        <button class={css.btnSecondary} onclick={() => setExpandCount((c) => c + 10)}>
           Show more
         </button>
       </div>

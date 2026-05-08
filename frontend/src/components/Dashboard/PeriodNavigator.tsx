@@ -2,6 +2,7 @@
  * Period Navigator Component
  * Navigation for month/year selection in dashboard
  */
+import { createSignal, For, Show } from 'solid-js'
 import styles from './PeriodNavigator.module.css'
 
 export interface PeriodNavigatorProps {
@@ -13,13 +14,17 @@ export interface PeriodNavigatorProps {
   onNext: () => void
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function getMonthName(m: number) {
-  return MONTHS[(m - 1 + 12) % 12]
-}
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 
 export function PeriodNavigator(props: PeriodNavigatorProps) {
+  const [showMonthPicker, setShowMonthPicker] = createSignal(false)
+  const [showYearPicker, setShowYearPicker] = createSignal(false)
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
+
   return (
     <div class={styles.periodNavigator}>
       <button
@@ -41,8 +46,69 @@ export function PeriodNavigator(props: PeriodNavigatorProps) {
       </button>
 
       <div class={styles.periodDisplay}>
-        <span class={styles.month}>{getMonthName(props.month())}</span>
-        <span class={styles.year}>{props.year()}</span>
+        <div class={styles.dropdownWrapper}>
+          <button
+            class={styles.monthBtn}
+            onClick={() => { setShowMonthPicker(!showMonthPicker()); setShowYearPicker(false) }}
+            type="button"
+          >
+            {MONTHS[props.month() - 1]}
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+              <path d="M5 6L0 0h10z" />
+            </svg>
+          </button>
+          <Show when={showMonthPicker()}>
+            <div class={styles.dropdown}>
+              <For each={MONTHS}>
+                {(name, i) => (
+                  <button
+                    class={styles.dropdownItem}
+                    classList={{ [styles.selected]: i() + 1 === props.month() }}
+                    onClick={() => {
+                      props.onMonthChange(i() + 1)
+                      setShowMonthPicker(false)
+                    }}
+                    type="button"
+                  >
+                    {name}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+
+        <div class={styles.dropdownWrapper}>
+          <button
+            class={styles.yearBtn}
+            onClick={() => { setShowYearPicker(!showYearPicker()); setShowMonthPicker(false) }}
+            type="button"
+          >
+            {props.year()}
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+              <path d="M5 6L0 0h10z" />
+            </svg>
+          </button>
+          <Show when={showYearPicker()}>
+            <div class={styles.dropdown}>
+              <For each={years}>
+                {(y) => (
+                  <button
+                    class={styles.dropdownItem}
+                    classList={{ [styles.selected]: y === props.year() }}
+                    onClick={() => {
+                      props.onYearChange(y)
+                      setShowYearPicker(false)
+                    }}
+                    type="button"
+                  >
+                    {y}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
       </div>
 
       <button
@@ -62,6 +128,13 @@ export function PeriodNavigator(props: PeriodNavigatorProps) {
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </button>
+
+      <Show when={showMonthPicker() || showYearPicker()}>
+        <div
+          class={styles.overlay}
+          onClick={() => { setShowMonthPicker(false); setShowYearPicker(false) }}
+        />
+      </Show>
     </div>
   )
 }

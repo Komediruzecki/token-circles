@@ -41,7 +41,7 @@ import RecurringSection from '../components/RecurringSection'
 import styles from '../components/TransactionsPage.module.css'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
-import { api } from '../core/api'
+import { api, getLocalCurrency } from '../core/api'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
@@ -59,7 +59,7 @@ export default function Transactions() {
   const [type, setType] = createSignal<TransactionType>('expense')
   const [formDate, setFormDate] = createSignal(new Date().toISOString().slice(0, 10))
   const [formAmount, setFormAmount] = createSignal('')
-  const [formCurrency, setFormCurrency] = createSignal('USD')
+  const [formCurrency, setFormCurrency] = createSignal(getLocalCurrency())
   const [formExchangeRate, setFormExchangeRate] = createSignal('1')
   const [formCategory, setFormCategory] = createSignal<number | null>(null)
   const [formBeneficiary, setFormBeneficiary] = createSignal('')
@@ -386,7 +386,7 @@ export default function Transactions() {
     setFormId(transaction.id.toString())
     setFormDescription(transaction.description)
     setFormAmount(transaction.amount.toString())
-    setFormCurrency(transaction.currency || 'USD')
+    setFormCurrency(transaction.currency || getLocalCurrency())
     setFormExchangeRate('1')
     setFormCategory(transaction.category_id || null)
     setFormBeneficiary(transaction.beneficiary || '')
@@ -876,7 +876,7 @@ export default function Transactions() {
                   date: formDate() || new Date().toISOString().slice(0, 10),
                   type: type(),
                   category_id: formCategory() ?? null,
-                  currency: formCurrency() || 'USD',
+                  currency: formCurrency() || getLocalCurrency(),
                   means_of_payment: formMeans() || undefined,
                   notes: formNotes() || undefined,
                   beneficiary: formBeneficiary() || undefined,
