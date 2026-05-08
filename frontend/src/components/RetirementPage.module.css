@@ -410,6 +410,74 @@
 .retirement-page .empty-state p {
   margin: 8px 0;
 }
+
+/* button variants */
+.retirement-page .btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.retirement-page .btn-sm:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.retirement-page .btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  border: none;
+  cursor: pointer;
+}
+.retirement-page .btn-ghost:hover {
+  background: var(--btn-ghost-hover);
+  color: var(--text);
+}
+
+/* progress */
+.retirement-page .progress-bar {
+  display: flex;
+  align-items: center;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.retirement-page .progress-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s;
+}
+.retirement-page .progress-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.retirement-page .progress-percent {
+  font-weight: 600;
+}
+.retirement-page .progress-target {
+  color: var(--text-secondary);
+}
+
+/* balance */
+.retirement-page .balance-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.retirement-page .balance-value {
+  font-size: 20px;
+  font-weight: 700;
+}
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
