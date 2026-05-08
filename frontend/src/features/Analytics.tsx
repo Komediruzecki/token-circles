@@ -466,10 +466,11 @@ export default function Analytics() {
                   )}
                   <button
                     class={`${styles.tab} ${compareEnabled() ? styles.active : ''}`}
-                    onClick={() => {
+                    onclick={() => {
                       setCompareEnabled(!compareEnabled())
                       loadStackedData()
                     }}
+                    title="Compare category spending with another month"
                     style="white-space:nowrap;padding:8px 12px;font-size:13px;"
                   >
                     Compare
@@ -482,6 +483,7 @@ export default function Analytics() {
                         setCompareMonth(Number(e.currentTarget.value))
                         loadStackedData()
                       }}
+                      title="Select month to compare against"
                     >
                       {Array.from({ length: 12 }, (_, i) => (
                         <option value={i + 1}>
@@ -492,6 +494,11 @@ export default function Analytics() {
                   )}
                 </div>
               </div>
+              {compareEnabled() && compareData() && (
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:0 4px;">
+                  Dashed outlines show {new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} data for comparison
+                </div>
+              )}
               <div class={styles.chartContainer}>
                 {stackedData().datasets.length === 0 ? (
                   <div class={styles.emptyState}>No category trend data available</div>
