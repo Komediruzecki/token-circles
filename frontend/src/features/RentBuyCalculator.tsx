@@ -22,7 +22,7 @@
  * Rent vs Buy Calculator Component
  * Compares 30-year costs of renting vs buying a home
  */
-import { createSignal, onMount } from 'solid-js'
+import { createSignal, onCleanup, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ExportChartButton from '../components/ExportChartButton'
 import { formatCurrency } from '../core/api'
@@ -86,6 +86,10 @@ export default function RentBuyCalculator(props: Props) {
     }
     // Calculate immediately with loaded/default values
     calculate()
+  })
+
+  onCleanup(() => {
+    if (debounceTimer) clearTimeout(debounceTimer)
   })
 
   // Debounced calculation
