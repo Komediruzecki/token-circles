@@ -509,11 +509,6 @@
   font-style: italic;
 }
 
-/* budget traditional */
-.budget-traditional {
-  margin-top: 24px;
-}
-
 /* forecast stats */
 .forecast-stats {
   display: grid;
