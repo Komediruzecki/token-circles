@@ -836,11 +836,12 @@ export class ApiClient {
   /**
    * Upload a receipt for a transaction
    */
-  async uploadReceipt(_transactionId: number, file: File): Promise<Models.Receipt> {
+  async uploadReceipt(transactionId: number, file: File): Promise<Models.Receipt> {
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('receipt', file)
+    formData.append('transaction_id', transactionId.toString())
 
-    const response = await apiFetch(`${API_BASE}/receipts`, {
+    const response = await apiFetch(`${API_BASE}/receipts/upload`, {
       method: 'POST',
       headers: { 'X-Profile-Id': this.getCurrentProfileId().toString() },
       body: formData,

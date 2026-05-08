@@ -472,7 +472,11 @@ export default function Import() {
     const incomeKeywords = ['salary', 'income', 'wages', 'wage', 'payroll', 'revenue',
       'dividend', 'refund', 'bonus', 'paycheck', 'pay cheque', 'interest',
       'credit', 'received', 'royalt']
-    return incomeKeywords.some((kw) => lower.includes(kw)) ? 'income' : 'expense'
+    const accountKeywords = ['account', 'bank', 'checking', 'savings', 'giro',
+      'deposit', 'wallet', 'portfolio', 'investment account', 'credit card account']
+    if (incomeKeywords.some((kw) => lower.includes(kw))) return 'income'
+    if (accountKeywords.some((kw) => lower.includes(kw))) return 'account'
+    return 'expense'
   }
 
   onMount(() => {

@@ -1,438 +1,601 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Annual Financial Report</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Annual Financial Report</title>
+    <script src="/chart.umd.min.js"></script>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --text: #1e293b;
+        --text-secondary: #64748b;
+        --text-muted: #475569;
+        --border: #e2e8f0;
+        --border-light: #f1f5f9;
+        --summary-bg: #f1f5f9;
+        --summary-border: #cbd5e1;
+        --table-header-bg: #f1f5f9;
+        --table-stripe: #f8fafc;
+        --chart-grid: rgba(0, 0, 0, 0.06);
+        --chart-tick: #64748b;
+      }
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: #f8fafc;
-    color: #1e293b;
-    padding: 40px;
-    width: 800px;
-    margin: 0 auto;
-  }
+      [data-theme="dark"] {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --border-light: #1e293b;
+        --summary-bg: #1e293b;
+        --summary-border: #334155;
+        --table-header-bg: #334155;
+        --table-stripe: #1a2332;
+        --chart-grid: rgba(255, 255, 255, 0.08);
+        --chart-tick: #94a3b8;
+      }
 
-  .header {
-    text-align: center;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 2px solid #e2e8f0;
-  }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-  .header h1 {
-    font-size: 26px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 6px;
-  }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 40px;
+        width: 800px;
+        margin: 0 auto;
+      }
 
-  .header .subtitle {
-    font-size: 13px;
-    color: #64748b;
-  }
+      .header {
+        text-align: center;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid var(--border);
+      }
 
-  .summary-box {
-    background: #f1f5f9;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-bottom: 24px;
-  }
+      .header h1 {
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
 
-  .summary-box h3 {
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 12px;
-    text-align: center;
-  }
+      .header .subtitle {
+        font-size: 13px;
+        color: var(--text-secondary);
+        letter-spacing: 0.02em;
+      }
 
-  .summary-stats {
-    display: flex;
-    justify-content: space-around;
-    text-align: center;
-  }
+      .summary-box {
+        background: var(--summary-bg);
+        border: 1px solid var(--summary-border);
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+      }
 
-  .stat-label {
-    font-size: 11px;
-    color: #64748b;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 4px;
-  }
+      .summary-box h3 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        text-align: center;
+        color: var(--text);
+      }
 
-  .stat-value {
-    font-size: 18px;
-    font-weight: 700;
-  }
+      .summary-stats {
+        display: flex;
+        justify-content: space-around;
+        text-align: center;
+      }
 
-  .stat-income .stat-value { color: #059669; }
-  .stat-expense .stat-value { color: #dc2626; }
-  .stat-net .stat-value { color: #059669; }
-  .stat-net.negative .stat-value { color: #dc2626; }
+      .stat-label {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+      }
 
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-  }
+      .stat-value {
+        font-size: 18px;
+        font-weight: 700;
+      }
 
-  .chart-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 16px;
-  }
+      .stat-income .stat-value {
+        color: #059669;
+      }
+      .stat-expense .stat-value {
+        color: #dc2626;
+      }
+      .stat-net .stat-value {
+        color: #059669;
+      }
+      .stat-net.negative .stat-value {
+        color: #dc2626;
+      }
 
-  .chart-card.full-width {
-    grid-column: 1 / -1;
-  }
+      [data-theme="dark"] .stat-income .stat-value {
+        color: #10b981;
+      }
+      [data-theme="dark"] .stat-expense .stat-value {
+        color: #f87171;
+      }
+      [data-theme="dark"] .stat-net .stat-value {
+        color: #10b981;
+      }
+      [data-theme="dark"] .stat-net.negative .stat-value {
+        color: #f87171;
+      }
 
-  .chart-card h3 {
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #e2e8f0;
-  }
+      .charts-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
 
-  .chart-card canvas {
-    max-width: 100%;
-  }
+      .chart-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+      }
 
-  .monthly-table {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-top: 4px;
-  }
+      .chart-card.full-width {
+        grid-column: 1 / -1;
+      }
 
-  .monthly-table h3 {
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-    padding: 12px 16px;
-    border-bottom: 1px solid #e2e8f0;
-  }
+      .chart-card h3 {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+      }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
+      .chart-card canvas {
+        max-width: 100%;
+      }
 
-  thead th {
-    background: #f1f5f9;
-    font-weight: 700;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #475569;
-    padding: 8px 12px;
-    text-align: right;
-    border-bottom: 1px solid #e2e8f0;
-  }
+      .monthly-table {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
 
-  thead th:first-child { text-align: left; }
+      .monthly-table h3 {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
 
-  tbody tr:nth-child(even) { background: #f8fafc; }
-  tbody tr:hover { background: #f1f5f9; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
 
-  tbody td {
-    padding: 7px 12px;
-    text-align: right;
-    border-bottom: 1px solid #f1f5f9;
-  }
+      thead th {
+        background: var(--table-header-bg);
+        font-weight: 700;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        padding: 8px 12px;
+        text-align: right;
+        border-bottom: 1px solid var(--border);
+      }
 
-  tbody td:first-child { text-align: left; font-weight: 500; }
-  tbody tr:last-child td { border-bottom: none; }
+      thead th:first-child {
+        text-align: left;
+      }
 
-  .val-income { color: #059669; font-weight: 600; }
-  .val-expense { color: #dc2626; font-weight: 600; }
-  .val-positive { color: #059669; font-weight: 600; }
-  .val-negative { color: #dc2626; font-weight: 600; }
+      tbody tr:nth-child(even) {
+        background: var(--table-stripe);
+      }
+      tbody tr:hover {
+        background: var(--summary-bg);
+      }
 
-  .footer {
-    margin-top: 20px;
-    text-align: center;
-    font-size: 11px;
-    color: #94a3b8;
-  }
+      tbody td {
+        padding: 7px 12px;
+        text-align: right;
+        border-bottom: 1px solid var(--border-light);
+      }
 
-  @media print {
-    body { background: white; padding: 20px; }
-    .chart-card { break-inside: avoid; }
-    table { break-inside: avoid; }
-    .charts-grid { break-inside: avoid; }
-    .monthly-table { break-before: page; }
-  }
-</style>
-</head>
-<body>
+      tbody td:first-child {
+        text-align: left;
+        font-weight: 500;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
 
-<div class="header">
-  <h1>Annual Financial Report — <span id="report-year"></span></h1>
-  <div class="subtitle">Finance Manager &nbsp;|&nbsp; Generated: <span id="gen-date"></span></div>
-</div>
+      .val-income {
+        color: #059669;
+        font-weight: 600;
+      }
+      .val-expense {
+        color: #dc2626;
+        font-weight: 600;
+      }
+      .val-positive {
+        color: #059669;
+        font-weight: 600;
+      }
+      .val-negative {
+        color: #dc2626;
+        font-weight: 600;
+      }
 
-<div class="summary-box">
-  <h3><span id="summary-year"></span> Annual Summary</h3>
-  <div class="summary-stats">
-    <div class="stat-income">
-      <div class="stat-label">Total Income</div>
-      <div class="stat-value" id="total-income">—</div>
+      [data-theme="dark"] .val-income { color: #10b981; }
+      [data-theme="dark"] .val-expense { color: #f87171; }
+      [data-theme="dark"] .val-positive { color: #10b981; }
+      [data-theme="dark"] .val-negative { color: #f87171; }
+
+      @media print {
+        body {
+          background: white;
+          padding: 20px;
+        }
+        .chart-card {
+          break-inside: avoid;
+        }
+        table {
+          break-inside: avoid;
+        }
+        .charts-grid {
+          break-inside: avoid;
+        }
+        .monthly-table {
+          break-before: page;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Annual Financial Report — <span id="report-year"></span></h1>
+      <div class="subtitle">Finance Manager &nbsp;|&nbsp; <span id="gen-date"></span></div>
     </div>
-    <div class="stat-expense">
-      <div class="stat-label">Total Expenses</div>
-      <div class="stat-value" id="total-expense">—</div>
+
+    <div class="summary-box">
+      <h3><span id="summary-year"></span> Annual Summary</h3>
+      <div class="summary-stats">
+        <div class="stat-income">
+          <div class="stat-label">Total Income</div>
+          <div class="stat-value" id="total-income">—</div>
+        </div>
+        <div class="stat-expense">
+          <div class="stat-label">Total Expenses</div>
+          <div class="stat-value" id="total-expense">—</div>
+        </div>
+        <div class="stat-net" id="net-wrap">
+          <div class="stat-label">Net Savings</div>
+          <div class="stat-value" id="net-savings">—</div>
+        </div>
+        <div class="stat-net" id="rate-wrap">
+          <div class="stat-label">Savings Rate</div>
+          <div class="stat-value" id="savings-rate">—</div>
+        </div>
+      </div>
     </div>
-    <div class="stat-net" id="net-wrap">
-      <div class="stat-label">Net Savings</div>
-      <div class="stat-value" id="net-savings">—</div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Spending by Category</h3>
+        <canvas id="chart-category" width="340" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Monthly Income vs Expenses</h3>
+        <canvas id="chart-monthly" width="340" height="200"></canvas>
+      </div>
+      <div class="chart-card full-width">
+        <h3>Cumulative Cash Flow</h3>
+        <canvas id="chart-cashflow" width="720" height="220"></canvas>
+      </div>
     </div>
-    <div class="stat-net" id="rate-wrap">
-      <div class="stat-label">Savings Rate</div>
-      <div class="stat-value" id="savings-rate">—</div>
+
+    <div class="monthly-table">
+      <h3>Monthly Breakdown</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th style="text-align: right">Income</th>
+            <th style="text-align: right">Expenses</th>
+            <th style="text-align: right">Net</th>
+            <th style="text-align: right">Running Balance</th>
+          </tr>
+        </thead>
+        <tbody id="monthly-tbody"></tbody>
+      </table>
     </div>
-  </div>
-</div>
 
-<div class="charts-grid">
-  <div class="chart-card">
-    <h3>Spending by Category</h3>
-    <canvas id="chart-category" width="340" height="200"></canvas>
-  </div>
-  <div class="chart-card">
-    <h3>Monthly Income vs Expenses</h3>
-    <canvas id="chart-monthly" width="340" height="200"></canvas>
-  </div>
-  <div class="chart-card full-width">
-    <h3>Cumulative Cash Flow</h3>
-    <canvas id="chart-cashflow" width="720" height="220"></canvas>
-  </div>
-</div>
+    <script>
+      ;(function () {
+        const symbols = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF ' }
+        const currency = window.__DATA__ ? window.__DATA__.currency : 'USD'
+        const sym = symbols[currency] || currency + ' '
 
-<div class="monthly-table">
-  <h3>Monthly Breakdown</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Month</th>
-        <th style="text-align:right">Income</th>
-        <th style="text-align:right">Expenses</th>
-        <th style="text-align:right">Net</th>
-        <th style="text-align:right">Running Balance</th>
-      </tr>
-    </thead>
-    <tbody id="monthly-tbody"></tbody>
-  </table>
-</div>
+        function fmt(amt) {
+          return sym + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+        }
 
-<div class="footer">Generated by Finance Manager</div>
-
-<script>
-(function() {
-  const symbols = { EUR: '\u20ac', USD: '$', GBP: '\u00a3', CHF: 'CHF ' };
-  const currency = window.__DATA__ ? window.__DATA__.currency : 'USD';
-  const sym = symbols[currency] || (currency + ' ');
-
-  function fmt(amt) {
-    return sym + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  }
-
-  function fmtMonth(mm) {
-    // Accept both '2024-01' (YYYY-MM) and '01' (MM-only) formats
-    let y, m;
-    if (mm.includes('-')) {
-      [y, m] = mm.split('-');
-    } else {
-      y = new Date().getFullYear();
-      m = mm;
-    }
-    const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  }
-
-  const data = window.__DATA__;
-  if (!data) {
-    document.body.innerHTML = '<p style="padding:40px;text-align:center;color:#dc2626;">Error: No data provided.</p>';
-    window.__RENDER_DONE__ = true;
-    return;
-  }
-
-  document.getElementById('report-year').textContent = data.year;
-  document.getElementById('gen-date').textContent = new Date().toLocaleDateString();
-  document.getElementById('summary-year').textContent = data.year;
-
-  const totalIncome = data.summary.totalIncome;
-  const totalExpense = data.summary.totalExpense;
-  const netSavings = data.summary.netSavings;
-  const savingsRate = data.summary.savingsRate;
-
-  document.getElementById('total-income').textContent = fmt(totalIncome);
-  document.getElementById('total-expense').textContent = fmt(totalExpense);
-  document.getElementById('net-savings').textContent = fmt(netSavings);
-
-  const netWrap = document.getElementById('net-wrap');
-  if (netSavings < 0) netWrap.classList.add('negative');
-  document.getElementById('savings-rate').textContent = savingsRate + '%';
-
-  // --- Category Doughnut Chart ---
-  const catCtx = document.getElementById('chart-category').getContext('2d');
-  const catData = data.byCategory || [];
-  new Chart(catCtx, {
-    type: 'doughnut',
-    data: {
-      labels: catData.map(c => c.name),
-      datasets: [{
-        data: catData.map(c => c.total),
-        backgroundColor: catData.map(c => c.color || '#6b7280'),
-        borderWidth: 2,
-        borderColor: '#ffffff',
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { font: { size: 11 }, boxWidth: 12, padding: 8 }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              const val = ctx.raw;
-              const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
-              const pct = sum > 0 ? ((val / sum) * 100).toFixed(1) : 0;
-              return ' ' + ctx.label + ': ' + fmt(val) + ' (' + pct + '%)';
-            }
+        function fmtMonth(mm) {
+          let y, m
+          if (mm.includes('-')) {
+            ;[y, m] = mm.split('-')
+          } else {
+            y = new Date().getFullYear()
+            m = mm
           }
+          const d = new Date(parseInt(y), parseInt(m) - 1, 1)
+          return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
         }
-      },
-      animation: { duration: 0 }
-    }
-  });
 
-  // --- Monthly Bar Chart ---
-  const monthlyCtx = document.getElementById('chart-monthly').getContext('2d');
-  const monthlyData = data.monthly || [];
-  const monthLabels = monthlyData.map(m => fmtMonth(m.month));
-  new Chart(monthlyCtx, {
-    type: 'bar',
-    data: {
-      labels: monthLabels,
-      datasets: [
-        {
-          label: 'Income',
-          data: monthlyData.map(m => m.income),
-          backgroundColor: 'rgba(5, 150, 105, 0.85)',
-          borderRadius: 3,
-        },
-        {
-          label: 'Expenses',
-          data: monthlyData.map(m => m.expense),
-          backgroundColor: 'rgba(220, 38, 38, 0.75)',
-          borderRadius: 3,
+        const data = window.__DATA__
+        if (!data) {
+          document.body.innerHTML =
+            '<p style="padding:40px;text-align:center;color:#dc2626;">Error: No data provided.</p>'
+          window.__RENDER_DONE__ = true
+          return
         }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { labels: { font: { size: 11 } } },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              return ' ' + ctx.dataset.label + ': ' + fmt(ctx.raw);
-            }
-          }
+
+        // Apply theme
+        const isDark = data.theme === 'dark'
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+
+        document.getElementById('report-year').textContent = data.year
+        document.getElementById('gen-date').textContent = new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+        document.getElementById('summary-year').textContent = data.year
+
+        const totalIncome = data.summary.totalIncome
+        const totalExpense = data.summary.totalExpense
+        const netSavings = data.summary.netSavings
+        const savingsRate = data.summary.savingsRate
+
+        document.getElementById('total-income').textContent = fmt(totalIncome)
+        document.getElementById('total-expense').textContent = fmt(totalExpense)
+        document.getElementById('net-savings').textContent = fmt(netSavings)
+
+        const netWrap = document.getElementById('net-wrap')
+        if (netSavings < 0) netWrap.classList.add('negative')
+        document.getElementById('savings-rate').textContent = savingsRate + '%'
+
+        // Chart.js dark-mode aware defaults
+        const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+        const tickColor = isDark ? '#94a3b8' : '#64748b'
+        const legendColor = isDark ? '#94a3b8' : '#475569'
+        const doughnutBorder = isDark ? '#1e293b' : '#ffffff'
+
+        // --- Category Doughnut Chart ---
+        const catCtx = document.getElementById('chart-category').getContext('2d')
+        const catData = data.byCategory || []
+        new Chart(catCtx, {
+          type: 'doughnut',
+          data: {
+            labels: catData.map((c) => c.name),
+            datasets: [
+              {
+                data: catData.map((c) => c.total),
+                backgroundColor: catData.map((c) => c.color || '#6b7280'),
+                borderWidth: 2,
+                borderColor: doughnutBorder,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: { font: { size: 11 }, boxWidth: 12, padding: 8, color: legendColor },
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    const val = ctx.raw
+                    const sum = ctx.dataset.data.reduce((a, b) => a + b, 0)
+                    const pct = sum > 0 ? ((val / sum) * 100).toFixed(1) : 0
+                    return ' ' + ctx.label + ': ' + fmt(val) + ' (' + pct + '%)'
+                  },
+                },
+              },
+            },
+            animation: { duration: 0 },
+          },
+        })
+
+        // --- Monthly Bar Chart ---
+        const monthlyCtx = document.getElementById('chart-monthly').getContext('2d')
+        const monthlyData = data.monthly || []
+        const monthLabels = monthlyData.map((m) => fmtMonth(m.month))
+        new Chart(monthlyCtx, {
+          type: 'bar',
+          data: {
+            labels: monthLabels,
+            datasets: [
+              {
+                label: 'Income',
+                data: monthlyData.map((m) => m.income),
+                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.85)' : 'rgba(5, 150, 105, 0.85)',
+                borderRadius: 3,
+              },
+              {
+                label: 'Expenses',
+                data: monthlyData.map((m) => m.expense),
+                backgroundColor: isDark ? 'rgba(248, 113, 113, 0.75)' : 'rgba(220, 38, 38, 0.75)',
+                borderRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { labels: { font: { size: 11 }, color: legendColor } },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' ' + ctx.dataset.label + ': ' + fmt(ctx.raw)
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                ticks: { font: { size: 10 }, maxRotation: 45, color: tickColor },
+                grid: { display: false },
+              },
+              y: {
+                ticks: {
+                  font: { size: 10 },
+                  color: tickColor,
+                  callback: function (v) {
+                    return sym + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
+                  },
+                },
+                grid: { color: gridColor },
+              },
+            },
+            animation: { duration: 0 },
+          },
+        })
+
+        // --- Cash Flow Line Chart ---
+        const cfCtx = document.getElementById('chart-cashflow').getContext('2d')
+        const cfData = data.cashFlow || []
+        const lineBlue = isDark ? '#60a5fa' : '#2563eb'
+        const lineFill = isDark ? 'rgba(96, 165, 250, 0.12)' : 'rgba(37, 99, 235, 0.1)'
+        new Chart(cfCtx, {
+          type: 'line',
+          data: {
+            labels: cfData.map((m) => fmtMonth(m.month)),
+            datasets: [
+              {
+                label: 'Cumulative Cash Flow',
+                data: cfData.map((m) => m.cumulative),
+                borderColor: lineBlue,
+                backgroundColor: lineFill,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: lineBlue,
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { labels: { font: { size: 11 }, color: legendColor } },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    return ' ' + fmt(ctx.raw)
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                ticks: { font: { size: 10 }, maxRotation: 45, color: tickColor },
+                grid: { display: false },
+              },
+              y: {
+                ticks: {
+                  font: { size: 10 },
+                  color: tickColor,
+                  callback: function (v) {
+                    return sym + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
+                  },
+                },
+                grid: { color: gridColor },
+              },
+            },
+            animation: { duration: 0 },
+          },
+        })
+
+        // --- Monthly Breakdown Table ---
+        const tbody = document.getElementById('monthly-tbody')
+        let running = 0
+        const monthNames = [
+          'January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December',
+        ]
+        const monthlyMap = {}
+        ;(data.monthly || []).forEach((m) => {
+          monthlyMap[m.month] = m
+        })
+
+        for (let m = 1; m <= 12; m++) {
+          const monthStr = String(m).padStart(2, '0')
+          const row = monthlyMap[data.year + '-' + monthStr]
+          const income = row ? row.income : 0
+          const expense = row ? row.expense : 0
+          const net = income - expense
+          running += net
+
+          const tr = document.createElement('tr')
+          tr.innerHTML =
+            '<td>' +
+            monthNames[m - 1] +
+            '</td>' +
+            '<td class="val-income">' +
+            fmt(income) +
+            '</td>' +
+            '<td class="val-expense">' +
+            fmt(expense) +
+            '</td>' +
+            '<td class="' +
+            (net >= 0 ? 'val-positive' : 'val-negative') +
+            '">' +
+            fmt(net) +
+            '</td>' +
+            '<td class="' +
+            (running >= 0 ? 'val-positive' : 'val-negative') +
+            '">' +
+            fmt(running) +
+            '</td>'
+          tbody.appendChild(tr)
         }
-      },
-      scales: {
-        x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
-        y: { ticks: { font: { size: 10 }, callback: function(v) { return sym + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v); } } }
-      },
-      animation: { duration: 0 }
-    }
-  });
 
-  // --- Cash Flow Line Chart ---
-  const cfCtx = document.getElementById('chart-cashflow').getContext('2d');
-  const cfData = data.cashFlow || [];
-  new Chart(cfCtx, {
-    type: 'line',
-    data: {
-      labels: cfData.map(m => fmtMonth(m.month)),
-      datasets: [{
-        label: 'Cumulative Cash Flow',
-        data: cfData.map(m => m.cumulative),
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointBackgroundColor: '#2563eb',
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { labels: { font: { size: 11 } } },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              return ' ' + fmt(ctx.raw);
-            }
-          }
-        }
-      },
-      scales: {
-        x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
-        y: { ticks: { font: { size: 10 }, callback: function(v) { return sym + (Math.abs(v) >= 1000 ? (v/1000).toFixed(0) + 'k' : v); } } }
-      },
-      animation: { duration: 0 }
-    }
-  });
-
-  // --- Monthly Breakdown Table ---
-  const tbody = document.getElementById('monthly-tbody');
-  let running = 0;
-  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const monthlyMap = {};
-  (data.monthly || []).forEach(m => { monthlyMap[m.month] = m; });
-
-  for (let m = 1; m <= 12; m++) {
-    const monthStr = String(m).padStart(2, '0');
-    const row = monthlyMap[monthStr];
-    const income = row ? row.income : 0;
-    const expense = row ? row.expense : 0;
-    const net = income - expense;
-    running += net;
-
-    const tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td>' + monthNames[m - 1] + '</td>' +
-      '<td class="val-income">' + fmt(income) + '</td>' +
-      '<td class="val-expense">' + fmt(expense) + '</td>' +
-      '<td class="' + (net >= 0 ? 'val-positive' : 'val-negative') + '">' + fmt(net) + '</td>' +
-      '<td class="' + (running >= 0 ? 'val-positive' : 'val-negative') + '">' + fmt(running) + '</td>';
-    tbody.appendChild(tr);
-  }
-
-  // Signal that rendering is done (small delay to ensure charts fully render)
-  window.__CHART_RENDER_DONE__ = true;
-  // Give charts 500ms to fully render before signaling done
-  setTimeout(() => { window.__RENDER_DONE__ = true; }, 500);
-})();
-</script>
-</body>
+        // Signal that rendering is done
+        window.__CHART_RENDER_DONE__ = true
+        setTimeout(() => {
+          window.__RENDER_DONE__ = true
+        }, 500)
+      })()
+    </script>
+  </body>
 </html>

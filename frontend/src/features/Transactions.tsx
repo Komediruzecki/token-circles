@@ -417,59 +417,6 @@ export default function Transactions() {
     <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
       <div class={styles.pageHeader}>
         <h1 data-test-id="transactions-header">Transactions</h1>
-        <div class={styles.pageHeaderActions}>
-          <button
-            class={`${styles.btnPrimary} ${styles.btnSm}`}
-            onClick={openTransactionModal}
-            data-test-id="add-transaction-btn"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Add Transaction
-          </button>
-          <button
-            class={`${styles.btnSecondary} ${styles.btnSm}`}
-            onClick={() => setAutoCategorizeModalOpen(true)}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Auto-categorize
-          </button>
-          <button
-            class={`${styles.btnSecondary} ${styles.btnSm}`}
-            onClick={() => setReconciliationModalOpen(true)}
-            disabled={selectedTransactions().length === 0}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-              <rect x="8" y="2" width="8" height="4" rx="1" />
-            </svg>
-            Reconcile
-          </button>
-        </div>
       </div>
 
       {/* Filter Bar */}
@@ -562,6 +509,61 @@ export default function Transactions() {
           }}
         >
           Transfer
+        </button>
+      </div>
+
+      {/* Table Actions */}
+      <div class={styles.tableActions}>
+        <button
+          class={`${styles.btnPrimary} ${styles.btnSm}`}
+          onClick={openTransactionModal}
+          data-test-id="add-transaction-btn"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add Transaction
+        </button>
+        <button
+          class={`${styles.btnSecondary} ${styles.btnSm}`}
+          onClick={() => setAutoCategorizeModalOpen(true)}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Auto-categorize
+        </button>
+        <button
+          class={`${styles.btnSecondary} ${styles.btnSm}`}
+          onClick={() => setReconciliationModalOpen(true)}
+          disabled={selectedTransactions().length === 0}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" />
+          </svg>
+          Reconcile
         </button>
       </div>
 
@@ -887,18 +889,33 @@ export default function Transactions() {
 
                 try {
                   const txId = formId()
+                  let savedId: number
                   if (txId) {
+                    savedId = parseInt(txId)
                     await api.updateTransaction(
-                      parseInt(txId),
+                      savedId,
                       txData as Parameters<typeof api.updateTransaction>[1]
                     )
                   } else {
-                    await api.createTransaction(
+                    const created = await api.createTransaction(
                       txData as Parameters<typeof api.createTransaction>[0]
                     )
+                    savedId = (created as any).id ?? (created as any).transaction_id ?? 0
                   }
+
+                  const file = selectedFile()
+                  if (file && savedId) {
+                    try {
+                      await api.uploadReceipt(savedId, file)
+                    } catch (receiptErr) {
+                      console.error('Failed to upload receipt:', receiptErr)
+                    }
+                  }
+
                   await refreshTransactions()
                   setTransactionModalOpen(false)
+                  setSelectedFile(null)
+                  setReceiptPreviewUrl(null)
                 } catch (error) {
                   console.error('Failed to save transaction:', error)
                 }

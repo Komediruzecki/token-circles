@@ -1,11 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Annual Financial Report</title>
     <script src="/chart.umd.min.js"></script>
     <style>
+      :root {
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --text: #1e293b;
+        --text-secondary: #64748b;
+        --text-muted: #475569;
+        --border: #e2e8f0;
+        --border-light: #f1f5f9;
+        --summary-bg: #f1f5f9;
+        --summary-border: #cbd5e1;
+        --table-header-bg: #f1f5f9;
+        --table-stripe: #f8fafc;
+        --chart-grid: rgba(0, 0, 0, 0.06);
+        --chart-tick: #64748b;
+      }
+
+      [data-theme="dark"] {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --border-light: #1e293b;
+        --summary-bg: #1e293b;
+        --summary-border: #334155;
+        --table-header-bg: #334155;
+        --table-stripe: #1a2332;
+        --chart-grid: rgba(255, 255, 255, 0.08);
+        --chart-tick: #94a3b8;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -15,8 +47,8 @@
       body {
         font-family:
           -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        background: #f8fafc;
-        color: #1e293b;
+        background: var(--bg);
+        color: var(--text);
         padding: 40px;
         width: 800px;
         margin: 0 auto;
@@ -26,25 +58,25 @@
         text-align: center;
         margin-bottom: 24px;
         padding-bottom: 16px;
-        border-bottom: 2px solid #e2e8f0;
+        border-bottom: 2px solid var(--border);
       }
 
       .header h1 {
         font-size: 26px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text);
         margin-bottom: 6px;
       }
 
       .header .subtitle {
         font-size: 13px;
-        color: #64748b;
+        color: var(--text-secondary);
         letter-spacing: 0.02em;
       }
 
       .summary-box {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
+        background: var(--summary-bg);
+        border: 1px solid var(--summary-border);
         border-radius: 8px;
         padding: 16px 20px;
         margin-bottom: 24px;
@@ -55,6 +87,7 @@
         font-weight: 700;
         margin-bottom: 12px;
         text-align: center;
+        color: var(--text);
       }
 
       .summary-stats {
@@ -65,7 +98,7 @@
 
       .stat-label {
         font-size: 11px;
-        color: #64748b;
+        color: var(--text-secondary);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -90,6 +123,19 @@
         color: #dc2626;
       }
 
+      [data-theme="dark"] .stat-income .stat-value {
+        color: #10b981;
+      }
+      [data-theme="dark"] .stat-expense .stat-value {
+        color: #f87171;
+      }
+      [data-theme="dark"] .stat-net .stat-value {
+        color: #10b981;
+      }
+      [data-theme="dark"] .stat-net.negative .stat-value {
+        color: #f87171;
+      }
+
       .charts-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -98,8 +144,8 @@
       }
 
       .chart-card {
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 16px;
       }
@@ -111,10 +157,10 @@
       .chart-card h3 {
         font-size: 13px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text);
         margin-bottom: 12px;
         padding-bottom: 8px;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--border);
       }
 
       .chart-card canvas {
@@ -122,8 +168,8 @@
       }
 
       .monthly-table {
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
         border-radius: 8px;
         overflow: hidden;
         margin-top: 4px;
@@ -132,9 +178,9 @@
       .monthly-table h3 {
         font-size: 13px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text);
         padding: 12px 16px;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--border);
       }
 
       table {
@@ -144,15 +190,15 @@
       }
 
       thead th {
-        background: #f1f5f9;
+        background: var(--table-header-bg);
         font-weight: 700;
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: #475569;
+        color: var(--text-muted);
         padding: 8px 12px;
         text-align: right;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--border);
       }
 
       thead th:first-child {
@@ -160,16 +206,16 @@
       }
 
       tbody tr:nth-child(even) {
-        background: #f8fafc;
+        background: var(--table-stripe);
       }
       tbody tr:hover {
-        background: #f1f5f9;
+        background: var(--summary-bg);
       }
 
       tbody td {
         padding: 7px 12px;
         text-align: right;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid var(--border-light);
       }
 
       tbody td:first-child {
@@ -196,6 +242,11 @@
         color: #dc2626;
         font-weight: 600;
       }
+
+      [data-theme="dark"] .val-income { color: #10b981; }
+      [data-theme="dark"] .val-expense { color: #f87171; }
+      [data-theme="dark"] .val-positive { color: #10b981; }
+      [data-theme="dark"] .val-negative { color: #f87171; }
 
       @media print {
         body {
@@ -278,7 +329,7 @@
 
     <script>
       ;(function () {
-        const symbols = { EUR: '\u20ac', USD: '$', GBP: '\u00a3', CHF: 'CHF ' }
+        const symbols = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF ' }
         const currency = window.__DATA__ ? window.__DATA__.currency : 'USD'
         const sym = symbols[currency] || currency + ' '
 
@@ -287,7 +338,6 @@
         }
 
         function fmtMonth(mm) {
-          // Accept both '2024-01' (YYYY-MM) and '01' (MM-only) formats
           let y, m
           if (mm.includes('-')) {
             ;[y, m] = mm.split('-')
@@ -306,6 +356,10 @@
           window.__RENDER_DONE__ = true
           return
         }
+
+        // Apply theme
+        const isDark = data.theme === 'dark'
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
 
         document.getElementById('report-year').textContent = data.year
         document.getElementById('gen-date').textContent = new Date().toLocaleDateString('en-US', {
@@ -328,6 +382,12 @@
         if (netSavings < 0) netWrap.classList.add('negative')
         document.getElementById('savings-rate').textContent = savingsRate + '%'
 
+        // Chart.js dark-mode aware defaults
+        const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+        const tickColor = isDark ? '#94a3b8' : '#64748b'
+        const legendColor = isDark ? '#94a3b8' : '#475569'
+        const doughnutBorder = isDark ? '#1e293b' : '#ffffff'
+
         // --- Category Doughnut Chart ---
         const catCtx = document.getElementById('chart-category').getContext('2d')
         const catData = data.byCategory || []
@@ -340,7 +400,7 @@
                 data: catData.map((c) => c.total),
                 backgroundColor: catData.map((c) => c.color || '#6b7280'),
                 borderWidth: 2,
-                borderColor: '#ffffff',
+                borderColor: doughnutBorder,
               },
             ],
           },
@@ -349,7 +409,7 @@
             plugins: {
               legend: {
                 position: 'right',
-                labels: { font: { size: 11 }, boxWidth: 12, padding: 8 },
+                labels: { font: { size: 11 }, boxWidth: 12, padding: 8, color: legendColor },
               },
               tooltip: {
                 callbacks: {
@@ -378,13 +438,13 @@
               {
                 label: 'Income',
                 data: monthlyData.map((m) => m.income),
-                backgroundColor: 'rgba(5, 150, 105, 0.85)',
+                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.85)' : 'rgba(5, 150, 105, 0.85)',
                 borderRadius: 3,
               },
               {
                 label: 'Expenses',
                 data: monthlyData.map((m) => m.expense),
-                backgroundColor: 'rgba(220, 38, 38, 0.75)',
+                backgroundColor: isDark ? 'rgba(248, 113, 113, 0.75)' : 'rgba(220, 38, 38, 0.75)',
                 borderRadius: 3,
               },
             ],
@@ -392,7 +452,7 @@
           options: {
             responsive: true,
             plugins: {
-              legend: { labels: { font: { size: 11 } } },
+              legend: { labels: { font: { size: 11 }, color: legendColor } },
               tooltip: {
                 callbacks: {
                   label: function (ctx) {
@@ -402,14 +462,19 @@
               },
             },
             scales: {
-              x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
+              x: {
+                ticks: { font: { size: 10 }, maxRotation: 45, color: tickColor },
+                grid: { display: false },
+              },
               y: {
                 ticks: {
                   font: { size: 10 },
+                  color: tickColor,
                   callback: function (v) {
                     return sym + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
                   },
                 },
+                grid: { color: gridColor },
               },
             },
             animation: { duration: 0 },
@@ -419,6 +484,8 @@
         // --- Cash Flow Line Chart ---
         const cfCtx = document.getElementById('chart-cashflow').getContext('2d')
         const cfData = data.cashFlow || []
+        const lineBlue = isDark ? '#60a5fa' : '#2563eb'
+        const lineFill = isDark ? 'rgba(96, 165, 250, 0.12)' : 'rgba(37, 99, 235, 0.1)'
         new Chart(cfCtx, {
           type: 'line',
           data: {
@@ -427,12 +494,12 @@
               {
                 label: 'Cumulative Cash Flow',
                 data: cfData.map((m) => m.cumulative),
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderColor: lineBlue,
+                backgroundColor: lineFill,
                 fill: true,
                 tension: 0.3,
                 pointRadius: 4,
-                pointBackgroundColor: '#2563eb',
+                pointBackgroundColor: lineBlue,
                 borderWidth: 2,
               },
             ],
@@ -440,7 +507,7 @@
           options: {
             responsive: true,
             plugins: {
-              legend: { labels: { font: { size: 11 } } },
+              legend: { labels: { font: { size: 11 }, color: legendColor } },
               tooltip: {
                 callbacks: {
                   label: function (ctx) {
@@ -450,14 +517,19 @@
               },
             },
             scales: {
-              x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
+              x: {
+                ticks: { font: { size: 10 }, maxRotation: 45, color: tickColor },
+                grid: { display: false },
+              },
               y: {
                 ticks: {
                   font: { size: 10 },
+                  color: tickColor,
                   callback: function (v) {
                     return sym + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
                   },
                 },
+                grid: { color: gridColor },
               },
             },
             animation: { duration: 0 },
@@ -518,9 +590,8 @@
           tbody.appendChild(tr)
         }
 
-        // Signal that rendering is done (small delay to ensure charts fully render)
+        // Signal that rendering is done
         window.__CHART_RENDER_DONE__ = true
-        // Give charts 500ms to fully render before signaling done
         setTimeout(() => {
           window.__RENDER_DONE__ = true
         }, 500)

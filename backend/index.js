@@ -7156,9 +7156,11 @@ app.get('/api/reports/monthly-pdf', apiRateLimiter, async (req, res) => {
     const netSavings = totalIncome - totalExpenses;
 
     // Prepare data for export page
+    const theme = req.query.theme === 'dark' ? 'dark' : 'light';
     const exportData = {
       yearMonth: `${year}-${String(month).padStart(2, '0')}`,
       currency,
+      theme,
       summary: { totalIncome, totalExpense: totalExpenses, netSavings },
       incomeByCategory: Object.values(incomeByCat).sort((a, b) => b.total - a.total),
       expenseByCategory: Object.values(expenseByCat).sort((a, b) => b.total - a.total),
@@ -8058,9 +8060,11 @@ app.get('/api/reports/annual-pdf', apiRateLimiter, async (req, res) => {
     const savingsRate = totalIncome > 0 ? Math.round((netSavings / totalIncome) * 100) : 0;
 
     // Prepare data for the export page
+    const theme = req.query.theme === 'dark' ? 'dark' : 'light';
     const exportData = {
       year: parseInt(year),
       currency,
+      theme,
       summary: { totalIncome, totalExpense: totalExpenses, netSavings, savingsRate },
       byCategory,
       monthly: monthlyArr,

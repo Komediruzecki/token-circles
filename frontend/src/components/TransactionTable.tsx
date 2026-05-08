@@ -171,6 +171,7 @@ export default function TransactionTable(props: TransactionTableProps) {
               Category{' '}
               {sortConfig().field === 'category' && (sortConfig().direction === 'asc' ? '↑' : '↓')}
             </th>
+            <th class={`${styles.col} ${styles.counterPartyCol}`}>From/To</th>
             <th
               class={`${styles.col} ${styles.amountCol}`}
               onClick={() => {

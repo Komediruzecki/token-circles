@@ -1,11 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Monthly Financial Report</title>
     <script src="/chart.umd.min.js"></script>
     <style>
+      :root {
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --text: #1e293b;
+        --text-secondary: #64748b;
+        --text-muted: #475569;
+        --border: #e2e8f0;
+        --border-light: #f1f5f9;
+        --summary-bg: #f1f5f9;
+        --summary-border: #cbd5e1;
+        --table-header-bg: #f1f5f9;
+        --table-stripe: #f8fafc;
+        --chart-grid: rgba(0, 0, 0, 0.06);
+        --chart-tick: #64748b;
+      }
+
+      [data-theme="dark"] {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --border-light: #1e293b;
+        --summary-bg: #1e293b;
+        --summary-border: #334155;
+        --table-header-bg: #334155;
+        --table-stripe: #1a2332;
+        --chart-grid: rgba(255, 255, 255, 0.08);
+        --chart-tick: #94a3b8;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -15,8 +47,8 @@
       body {
         font-family:
           -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        background: #f8fafc;
-        color: #1e293b;
+        background: var(--bg);
+        color: var(--text);
         padding: 30px;
         width: 700px;
         margin: 0 auto;
@@ -26,24 +58,24 @@
         text-align: center;
         margin-bottom: 20px;
         padding-bottom: 14px;
-        border-bottom: 2px solid #e2e8f0;
+        border-bottom: 2px solid var(--border);
       }
 
       .header h1 {
         font-size: 22px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text);
         margin-bottom: 4px;
       }
 
       .header .subtitle {
         font-size: 12px;
-        color: #64748b;
+        color: var(--text-secondary);
       }
 
       .summary-box {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
+        background: var(--summary-bg);
+        border: 1px solid var(--summary-border);
         border-radius: 8px;
         padding: 14px 20px;
         margin-bottom: 18px;
@@ -54,6 +86,7 @@
         font-weight: 700;
         margin-bottom: 10px;
         text-align: center;
+        color: var(--text);
       }
 
       .summary-stats {
@@ -64,7 +97,7 @@
 
       .stat-label {
         font-size: 10px;
-        color: #64748b;
+        color: var(--text-secondary);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -89,6 +122,11 @@
         color: #dc2626;
       }
 
+      [data-theme="dark"] .stat-income .stat-value { color: #10b981; }
+      [data-theme="dark"] .stat-expense .stat-value { color: #f87171; }
+      [data-theme="dark"] .stat-net .stat-value { color: #10b981; }
+      [data-theme="dark"] .stat-net.negative .stat-value { color: #f87171; }
+
       .charts-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -97,8 +135,8 @@
       }
 
       .chart-card {
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
         border-radius: 8px;
         padding: 14px;
       }
@@ -106,10 +144,10 @@
       .chart-card h3 {
         font-size: 12px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text);
         margin-bottom: 10px;
         padding-bottom: 6px;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--border);
       }
 
       .chart-card canvas {
@@ -117,8 +155,8 @@
       }
 
       .breakdown-table {
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
         border-radius: 8px;
         overflow: hidden;
       }
@@ -126,9 +164,9 @@
       .breakdown-table h3 {
         font-size: 13px;
         font-weight: 700;
-        color: #1e293b;
+        color: var(--text);
         padding: 12px 16px;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--border);
       }
 
       table {
@@ -138,15 +176,15 @@
       }
 
       thead th {
-        background: #f1f5f9;
+        background: var(--table-header-bg);
         font-weight: 700;
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: #475569;
+        color: var(--text-muted);
         padding: 7px 10px;
         text-align: right;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--border);
       }
 
       thead th:first-child {
@@ -154,13 +192,13 @@
       }
 
       tbody tr:nth-child(even) {
-        background: #f8fafc;
+        background: var(--table-stripe);
       }
 
       tbody td {
         padding: 6px 10px;
         text-align: right;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid var(--border-light);
       }
 
       tbody td:first-child {
@@ -187,6 +225,11 @@
         color: #dc2626;
         font-weight: 600;
       }
+
+      [data-theme="dark"] .val-income { color: #10b981; }
+      [data-theme="dark"] .val-expense { color: #f87171; }
+      [data-theme="dark"] .val-positive { color: #10b981; }
+      [data-theme="dark"] .val-negative { color: #f87171; }
 
       @media print {
         body {
@@ -254,7 +297,7 @@
 
     <script>
       ;(function () {
-        const symbols = { EUR: '\u20ac', USD: '$', GBP: '\u00a3', CHF: 'CHF ' }
+        const symbols = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF ' }
         const currency = window.__DATA__ ? window.__DATA__.currency : 'USD'
         const sym = symbols[currency] || currency + ' '
 
@@ -269,6 +312,10 @@
           window.__RENDER_DONE__ = true
           return
         }
+
+        // Apply theme
+        const isDark = data.theme === 'dark'
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
 
         const monthNames = [
           'January',
@@ -303,6 +350,12 @@
         const netWrap = document.getElementById('net-wrap')
         if (netSavings < 0) netWrap.classList.add('negative')
 
+        // Chart.js dark-mode aware defaults
+        const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+        const tickColor = isDark ? '#94a3b8' : '#64748b'
+        const legendColor = isDark ? '#94a3b8' : '#475569'
+        const doughnutBorder = isDark ? '#1e293b' : '#ffffff'
+
         // --- Income Doughnut Chart ---
         const incomeCtx = document.getElementById('chart-income').getContext('2d')
         const incomeData = data.incomeByCategory || []
@@ -317,7 +370,7 @@
                   data: incomeFiltered.map((c) => c.total),
                   backgroundColor: incomeFiltered.map((c) => c.color || '#059669'),
                   borderWidth: 2,
-                  borderColor: '#ffffff',
+                  borderColor: doughnutBorder,
                 },
               ],
             },
@@ -326,7 +379,7 @@
               plugins: {
                 legend: {
                   position: 'right',
-                  labels: { font: { size: 10 }, boxWidth: 10, padding: 6 },
+                  labels: { font: { size: 10 }, boxWidth: 10, padding: 6, color: legendColor },
                 },
                 tooltip: {
                   callbacks: {
@@ -358,7 +411,7 @@
                   data: expenseFiltered.map((c) => c.total),
                   backgroundColor: expenseFiltered.map((c) => c.color || '#dc2626'),
                   borderWidth: 2,
-                  borderColor: '#ffffff',
+                  borderColor: doughnutBorder,
                 },
               ],
             },
@@ -367,7 +420,7 @@
               plugins: {
                 legend: {
                   position: 'right',
-                  labels: { font: { size: 10 }, boxWidth: 10, padding: 6 },
+                  labels: { font: { size: 10 }, boxWidth: 10, padding: 6, color: legendColor },
                 },
                 tooltip: {
                   callbacks: {
@@ -389,7 +442,6 @@
         const tbody = document.getElementById('breakdown-tbody')
         const allCategories = {}
 
-        // Collect all category names
         incomeData.forEach((c) => {
           if (!allCategories[c.name])
             allCategories[c.name] = { name: c.name, color: c.color, income: 0, expense: 0 }
@@ -399,7 +451,6 @@
             allCategories[c.name] = { name: c.name, color: c.color, income: 0, expense: 0 }
         })
 
-        // Fill in values
         incomeData.forEach((c) => {
           if (allCategories[c.name]) allCategories[c.name].income = c.total
         })
@@ -407,7 +458,6 @@
           if (allCategories[c.name]) allCategories[c.name].expense = c.total
         })
 
-        // Sort by total (income + expense)
         const sortedCats = Object.values(allCategories)
           .filter((c) => c.income > 0 || c.expense > 0)
           .sort((a, b) => b.income + b.expense - (a.income + a.expense))
@@ -442,7 +492,7 @@
           tbody.appendChild(tr)
         }
 
-        // Signal that rendering is done (small delay to ensure charts fully render)
+        // Signal that rendering is done
         window.__CHART_RENDER_DONE__ = true
         setTimeout(() => {
           window.__RENDER_DONE__ = true

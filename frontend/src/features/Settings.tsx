@@ -86,6 +86,14 @@ function Reports() {
         const sep = endpoint.includes('?') ? '&' : '?'
         url = `${endpoint}${sep}profile_ids=${selectedProfileIds.join(',')}`
       }
+      // Append theme from chart export settings
+      const exportSettings = loadChartExportSettings()
+      if (exportSettings.background === 'dark') {
+        url = `${url}${url.includes('?') ? '&' : '?'}theme=dark`
+      } else if (exportSettings.background === 'theme') {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+        url = `${url}${url.includes('?') ? '&' : '?'}theme=${isDark ? 'dark' : 'light'}`
+      }
       const res = await apiFetch(url, { credentials: 'include', headers })
       if (!res.ok) throw new Error('Report generation failed')
       const blob = await res.blob()
