@@ -1,6 +1,6 @@
 /**
  * CategoryIcon Component
- * Maps category names to appropriate SVG icons
+ * Shared SVG icon mapping for category names — used by Categories and Budgets pages
  */
 
 interface CategoryIconProps {
@@ -8,190 +8,121 @@ interface CategoryIconProps {
   size?: number
 }
 
-const iconMap: Record<string, () => { path: string; viewBox?: string }> = {
-  food: () => ({
-    path: 'M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2M7 2v7M3 6h5m11-1v5a2 2 0 01-2 2h-5a2 2 0 01-2-2V5a2 2 0 012-2h5a2 2 0 012 2z',
-  }),
-  grocery: () => ({
-    path: 'M3 6h18l-1.5 8.5A2 2 0 0117.5 16h-11a2 2 0 01-2-1.5L3 6zm4 6h10M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2',
-  }),
-  restaurant: () => ({
-    path: 'M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zm4-4v4m4-4v4m4-4v4',
-  }),
-  rent: () => ({
-    path: 'M3 9.5L12 3l9 6.5V19a2 2 0 01-2 2H5a2 2 0 01-2-2V9.5zM9 21V12h6v9',
-  }),
-  housing: () => ({
-    path: 'M3 9.5L12 3l9 6.5V19a2 2 0 01-2 2H5a2 2 0 01-2-2V9.5zM9 21V12h6v9',
-  }),
-  mortgage: () => ({
-    path: 'M3 9.5L12 3l9 6.5V19a2 2 0 01-2 2H5a2 2 0 01-2-2V9.5zM9 21V12h6v9',
-  }),
-  home: () => ({
-    path: 'M3 9.5L12 3l9 6.5V19a2 2 0 01-2 2H5a2 2 0 01-2-2V9.5zM9 21V12h6v9',
-  }),
-  transport: () => ({
-    path: 'M5 17h14v-2H5v2zm0-4h14V7H5v6zm2-4h4v2H7V9zm6 0h4v2h-4V9zM8 16h8v1H8v-1zM3 3h2l1 1h12l1-1h2v2H3V3z',
-  }),
-  car: () => ({
-    path: 'M5 17h14v-2H5v2zm0-4h14V7H5v6zm2-4h4v2H7V9zm6 0h4v2h-4V9zM8 16h8v1H8v-1zM3 3h2l1 1h12l1-1h2v2H3V3z',
-  }),
-  auto: () => ({
-    path: 'M5 17h14v-2H5v2zm0-4h14V7H5v6zm2-4h4v2H7V9zm6 0h4v2h-4V9zM8 16h8v1H8v-1zM3 3h2l1 1h12l1-1h2v2H3V3z',
-  }),
-  gas: () => ({
-    path: 'M14 11h2v5h-2zM12 7h2v9h-2zM4 21V5a2 2 0 012-2h8a2 2 0 012 2v16l-3-2-3 2-3-2-3 2z',
-  }),
-  fuel: () => ({
-    path: 'M14 11h2v5h-2zM12 7h2v9h-2zM4 21V5a2 2 0 012-2h8a2 2 0 012 2v16l-3-2-3 2-3-2-3 2z',
-  }),
-  utility: () => ({
-    path: 'M13 10V3L4 14h7v7l9-11h-7z',
-  }),
-  electric: () => ({
-    path: 'M13 10V3L4 14h7v7l9-11h-7z',
-  }),
-  power: () => ({
-    path: 'M13 10V3L4 14h7v7l9-11h-7z',
-  }),
-  water: () => ({
-    path: 'M12 3c-3 2.5-7 6.5-7 10a7 7 0 0014 0c0-3.5-4-7.5-7-10z',
-  }),
-  entertainment: () => ({
-    path: 'M19.82 2H4.18C2.98 2 2 2.98 2 4.18v11.64C2 17.02 2.98 18 4.18 18h5.64l2 4 2-4h5.64C20.52 18 22 17.02 22 15.82V4.18C22 2.98 20.52 2 19.82 2zM8 12h.01M12 12h.01M16 12h.01M8 8h.01M12 8h.01M16 8h.01',
-  }),
-  leisure: () => ({
-    path: 'M19.82 2H4.18C2.98 2 2 2.98 2 4.18v11.64C2 17.02 2.98 18 4.18 18h5.64l2 4 2-4h5.64C20.52 18 22 17.02 22 15.82V4.18C22 2.98 20.52 2 19.82 2zM8 12h.01M12 12h.01M16 12h.01M8 8h.01M12 8h.01M16 8h.01',
-  }),
-  movie: () => ({
-    path: 'M19.82 2H4.18C2.98 2 2 2.98 2 4.18v11.64C2 17.02 2.98 18 4.18 18h5.64l2 4 2-4h5.64C20.52 18 22 17.02 22 15.82V4.18C22 2.98 20.52 2 19.82 2zM8 12h.01M12 12h.01M16 12h.01M8 8h.01M12 8h.01M16 8h.01',
-  }),
-  film: () => ({
-    path: 'M19.82 2H4.18C2.98 2 2 2.98 2 4.18v11.64C2 17.02 2.98 18 4.18 18h5.64l2 4 2-4h5.64C20.52 18 22 17.02 22 15.82V4.18C22 2.98 20.52 2 19.82 2zM8 12h.01M12 12h.01M16 12h.01M8 8h.01M12 8h.01M16 8h.01',
-  }),
-  healthcare: () => ({
-    path: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z',
-  }),
-  medical: () => ({
-    path: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z',
-  }),
-  health: () => ({
-    path: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z',
-  }),
-  pharmacy: () => ({
-    path: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z',
-  }),
-  shopping: () => ({
-    path: 'M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0',
-  }),
-  clothing: () => ({
-    path: 'M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0',
-  }),
-  education: () => ({
-    path: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15zM12 6v8m-4-4h8',
-  }),
-  book: () => ({
-    path: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15zM12 6v8m-4-4h8',
-  }),
-  school: () => ({
-    path: 'M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15zM12 6v8m-4-4h8',
-  }),
-  salary: () => ({
-    path: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
-    viewBox: '0 0 24 24',
-  }),
-  income: () => ({
-    path: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
-  }),
-  wage: () => ({
-    path: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
-  }),
-  freelance: () => ({
-    path: 'M20.24 12.24a6 6 0 00-8.48-8.48L12 3.5l-.76-.74a6 6 0 00-8.48 8.48L12 21l9.24-8.76z',
-  }),
-  travel: () => ({
-    path: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.42 19.42 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z',
-    viewBox: '0 0 24 24',
-  }),
-  phone: () => ({
-    path: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.42 19.42 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z',
-  }),
-  internet: () => ({
-    path: 'M1 12h4m6-11v4m6 7h4M5.64 5.64l2.83 2.83m7.07 7.07l2.83 2.83M18.36 5.64l-2.83 2.83m-7.07 7.07l-2.83 2.83M12 2a10 10 0 110 20 10 10 0 010-20z',
-  }),
-  wifi: () => ({
-    path: 'M1 12h4m6-11v4m6 7h4M5.64 5.64l2.83 2.83m7.07 7.07l2.83 2.83M18.36 5.64l-2.83 2.83m-7.07 7.07l-2.83 2.83M12 2a10 10 0 110 20 10 10 0 010-20z',
-  }),
-  subscription: () => ({
-    path: 'M16 4l4 4-4 4M20 8H4M8 20l-4-4 4-4M4 16h16',
-  }),
-  insurance: () => ({
-    path: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-  }),
-  pet: () => ({
-    path: 'M8 7a4 4 0 108 0 4 4 0 00-8 0zm-7 8a5 5 0 015-5h12a5 5 0 015 5v1H1v-1zm4 5h14M8 20v-3m8 3v-3',
-  }),
-  fitness: () => ({
-    path: 'M6.5 6.5l11 11M17.5 6.5l-11 11M3.5 12h2m13 0h2M12 3.5v2m0 13v2',
-  }),
-  gym: () => ({
-    path: 'M6.5 6.5l11 11M17.5 6.5l-11 11M3.5 12h2m13 0h2M12 3.5v2m0 13v2',
-  }),
-  gift: () => ({
-    path: 'M20 12v10H4V12M2 8h20v4H2zM12 8v14M12 8a3 3 0 00-3-3H8a2 2 0 000 4h4zm0 0a3 3 0 013-3h1a2 2 0 010 4h-4z',
-  }),
-  charity: () => ({
-    path: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z',
-  }),
-  saving: () => ({
-    path: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
-    viewBox: '0 0 24 24',
-  }),
-  investment: () => ({
-    path: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
-  }),
-  tax: () => ({
-    path: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z',
-  }),
-  coffee: () => ({
-    path: 'M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3m4-3v3m4-3v3',
-  }),
-  cafe: () => ({
-    path: 'M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3m4-3v3m4-3v3',
-  }),
-  child: () => ({
-    path: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  }),
-  bank: () => ({
-    path: 'M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14v3m4-3v3m4-3v3',
-  }),
-  business: () => ({
-    path: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12l8.73-5.04M12 22.08V12',
-    viewBox: '0 0 24 24',
-  }),
-  office: () => ({
-    path: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12l8.73-5.04M12 22.08V12',
-  }),
+type IconDef = { path: string; viewBox?: string }
+
+const defaultIcon: IconDef = {
+  path: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01',
 }
 
-function findIcon(categoryName: string): (() => { path: string; viewBox?: string }) | null {
+const iconPatterns: [RegExp, IconDef][] = [
+  // Transport / Car
+  [/car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i, {
+    path: 'M5 17h14v-5H5v5zm11.5-5L18 8H6l1.5 4M7 17a1 1 0 100 2 1 1 0 000-2zm10 0a1 1 0 100 2 1 1 0 000-2zM9 4h6',
+  }],
+  // Food / Dining / Groceries
+  [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, {
+    path: 'M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zm4-4v4m4-4v4m4-4v4',
+  }],
+  // Housing / Rent / Mortgage
+  [/hous|rent|mortgage|home|lease|property|real\s*estate/i, {
+    path: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2zM9 22V12h6v10',
+  }],
+  // Utilities
+  [/utilit|electric|water|gas\s*bill|sewer|trash|garbage|recycling|power|energy/i, {
+    path: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  }],
+  // Entertainment / Fun
+  [/entertain|fun|game|movie|cinema|theatre|theater|concert|music|stream|netflix|spotify|hulu|disney|hbo/i, {
+    path: 'M2 3h20v14a2 2 0 01-2 2H4a2 2 0 01-2-2V3zm6 18h8m-4-4v4',
+  }],
+  // Shopping / Retail
+  [/shop|retail|cloth|apparel|mall|amazon|walmart|target|costco/i, {
+    path: 'M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0',
+  }],
+  // Health / Medical
+  [/health|medical|doctor|dentist|pharma|hospital|clinic|therapy|vet|vision|eye|glasses/i, {
+    path: 'M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z',
+  }],
+  // Education
+  [/edu|school|college|university|tuition|book|course|class|learn|study|student/i, {
+    path: 'M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z',
+  }],
+  // Travel
+  [/travel|flight|airfare|airline|hotel|airbnb|vacation|trip|holiday/i, {
+    path: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z',
+  }],
+  // Insurance
+  [/insur/i, {
+    path: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  }],
+  // Savings / Investment
+  [/sav|invest|retire|ira|401|stock|broker|dividend|interest/i, {
+    path: 'M13 11l4-4m-4 4l2 4-5 1-2-4 1-5zM12 10a3 3 0 100 6 3 3 0 000-6zm7-5a2 2 0 100 4 2 2 0 000-4zM5 17a2 2 0 100 4 2 2 0 000-4z',
+  }],
+  // Phone / Internet / Communication
+  [/phone|mobile|cell|internet|wifi|broadband|telecom|data\s*plan/i, {
+    path: 'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z',
+  }],
+  // Gifts / Donations
+  [/gift|donat|charit|present/i, {
+    path: 'M20 12v8H4v-8M22 8H2v4h20V8zM12 8v12M12 8c0-3-2-5-4-5S4 5 4 8m8 0c0-3 2-5 4-5s4 2 4 5',
+  }],
+  // Pets
+  [/pet|dog|cat|animal/i, {
+    path: 'M12 8a3 3 0 100 6 3 3 0 000-6zm-7 8.93A10 10 0 0112 3a10 10 0 017 13.93M7 6.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm10 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-10 8a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm10 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3z',
+  }],
+  // Fitness / Sports
+  [/fit|gym|sport|exercise|workout|yoga|bike|cycling|run/i, {
+    path: 'M18 20V10M12 20V4M6 20v-6',
+  }],
+  // Subscriptions
+  [/subscri|member|recur/i, {
+    path: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+  }],
+  // Kids / Children
+  [/child|kid|baby|daycare|nanny|babysit|school\s*supp/i, {
+    path: 'M8 10a4 4 0 018 0M4 20c0-4 3.6-7 8-7s8 3 8 7',
+  }],
+  // Beauty / Personal Care
+  [/beaut|spa|salon|hair|nail|cosmet|skin|makeup|barber/i, {
+    path: 'M8 10a4 4 0 018 0M4 20c0-4 3.6-7 8-7s8 3 8 7M12 14v4',
+  }],
+  // Business / Work
+  [/business|work|office|supplies|desk/i, {
+    path: 'M2 7h20v14a2 2 0 01-2 2H4a2 2 0 01-2-2V7zm14-2V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2M12 12v.01',
+  }],
+  // Taxes
+  [/tax|irs|government/i, {
+    path: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8m8 4H8m0-8h4',
+  }],
+  // Credit Card / Loans / Debt
+  [/credit|debt|loan|card|payment/i, {
+    path: 'M1 4h22v16a2 2 0 01-2 2H3a2 2 0 01-2-2V4zm0 6h22',
+  }],
+  // Income / Salary / Wages
+  [/income|salary|wage|paycheck|payroll|earn|revenue/i, {
+    path: 'M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+  }],
+  // Miscellaneous / Other / General / Uncategorized
+  [/misc|other|general|uncategor|unknown|various|catch.?all/i, {
+    path: 'M12 8a3 3 0 100 6 3 3 0 000-6zm7.4 7a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z',
+  }],
+]
+
+function findIcon(categoryName: string): IconDef | null {
   const lower = categoryName.toLowerCase()
-  // Direct match first
-  if (iconMap[lower]) return iconMap[lower]
-  // Partial match
-  for (const [key, icon] of Object.entries(iconMap)) {
-    if (lower.includes(key) || key.includes(lower)) return icon
+  for (const [pattern, def] of iconPatterns) {
+    if (pattern.test(lower)) return def
   }
   return null
 }
 
 export function getCategorySvg(name: string, size = 18) {
   const icon = findIcon(name)
-  if (!icon) return null
-  const { path, viewBox = '0 0 24 24' } = icon()
+  const def = icon ?? defaultIcon
   return (
-    <svg width={size} height={size} fill="none" stroke="currentColor" stroke-width="2" viewBox={viewBox}>
-      <path stroke-linecap="round" stroke-linejoin="round" d={path} />
+    <svg width={size} height={size} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox={def.viewBox ?? '0 0 24 24'}>
+      <path d={def.path} />
     </svg>
   )
 }
