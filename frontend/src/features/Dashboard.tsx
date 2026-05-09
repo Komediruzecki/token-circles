@@ -491,23 +491,24 @@ export default function Dashboard() {
                 />
               </div>
             </Show>
-
-            <div class={styles.widgetCard}>
-              <div class={styles.widgetHeader}>
-                <div class={styles.widgetTitle}>Recurring Insights</div>
-              </div>
-              <RecurringInsightsCard />
-            </div>
           </div>
 
-          {/* Charts Section */}
-          <div class={styles.chartsGrid}>
+          {/* Recurring Insights — full-width row */}
+          <div class={styles.card}>
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Recurring Insights</div>
+            </div>
+            <RecurringInsightsCard />
+          </div>
+
+          {/* Spending by Category — full-width with taller chart */}
+          <div class={styles.chartsRow}>
             <Show when={isWidgetVisible('category-chart')}>
               <div class={styles.card}>
                 <div class={styles.cardHeader}>
                   <div class={styles.cardTitle}>Spending by Category</div>
                 </div>
-                <div class={styles.chartContainer}>
+                <div class={styles.chartContainerTall}>
                   {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
                     <ChartWrapper
                       type="doughnut"
@@ -533,6 +534,7 @@ export default function Dashboard() {
                           },
                         ],
                       }}
+                      height={360}
                       showExport
                       filename="spending-by-category"
                     />

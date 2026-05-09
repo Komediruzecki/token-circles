@@ -210,6 +210,13 @@
 
 .chartsGrid {
   display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.chartsRow {
+  display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
   margin-bottom: 16px;
@@ -217,6 +224,10 @@
 
 @media (max-width: 768px) {
   .widgetsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .chartsGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -246,17 +257,17 @@
 
 .chart-container {
   position: relative;
-  height: 250px;
+  height: 300px;
 }
 
 .chart-container-medium {
   position: relative;
-  height: 300px;
+  height: 320px;
 }
 
 .chart-container-tall {
   position: relative;
-  height: 320px;
+  height: 360px;
 }
 
 .periodNavigatorContainer {
