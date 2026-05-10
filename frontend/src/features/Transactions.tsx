@@ -68,7 +68,9 @@ export default function Transactions() {
   const [formNotes, setFormNotes] = createSignal('')
   const [formDescription, setFormDescription] = createSignal('')
   const [formMeans, setFormMeans] = createSignal('')
+  const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
   const [formAmountLocal, setFormAmountLocal] = createSignal('')
+  const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>([])
   const [categories, setCategories] = createSignal<Category[]>([])
   const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
@@ -441,6 +443,7 @@ export default function Transactions() {
     setFormDescription('')
     setFormAmount('')
     setFormMeans('')
+    setFormAccountId(null)
     setFormAmountLocal('')
     setTransactionModalOpen(true)
   }
@@ -458,6 +461,7 @@ export default function Transactions() {
     setFormNotes(transaction.notes || '')
     setFormDate(transaction.date)
     setFormMeans(transaction.means_of_payment || '')
+    setFormAccountId(transaction.account_id || null)
     setTransactionModalOpen(true)
   }
 
@@ -491,6 +495,12 @@ export default function Transactions() {
       if (Array.isArray(tagData)) setTags(tagData as any[])
     } catch {
       // Tags will remain empty
+    }
+    try {
+      const acctData = await api.getAccounts()
+      if (Array.isArray(acctData)) setAccounts(acctData as any[])
+    } catch {
+      // Accounts will remain empty
     }
   })
 
@@ -804,6 +814,28 @@ export default function Transactions() {
                   <option value="Wire Transfer">Wire Transfer</option>
                 </select>
               </div>
+              {accounts().length > 0 && (
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Account</label>
+                  <select
+                    class={styles.formControl}
+                    value={formAccountId() ?? ''}
+                    onInput={(e) => {
+                      const val = (e.target as HTMLSelectElement).value
+                      setFormAccountId(val ? parseInt(val) : null)
+                    }}
+                  >
+                    <option value="">No account</option>
+                    <For each={accounts()}>
+                      {(acct) => (
+                        <option value={String(acct.id)}>
+                          {acct.name} ({acct.type})
+                        </option>
+                      )}
+                    </For>
+                  </select>
+                </div>
+              )}
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Receipt</label>
                 <div class={styles.receiptUploadContainer}>
@@ -911,6 +943,7 @@ export default function Transactions() {
                   category_id: formCategory() ?? null,
                   currency: formCurrency() || getLocalCurrency(),
                   means_of_payment: formMeans() || undefined,
+                  account_id: formAccountId() ?? undefined,
                   notes: formNotes() || undefined,
                   beneficiary: formBeneficiary() || undefined,
                   payor: formPayor() || undefined,
