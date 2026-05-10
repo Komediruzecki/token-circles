@@ -1,50 +1,53 @@
-.filter-bar {
+.filterBar {
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  padding: 16px;
-  margin-bottom: 20px;
-  box-shadow: var(--shadow);
+  padding: 10px 16px;
+  margin-bottom: 16px;
 }
 
-.filters {
-  display: grid;
-  gap: 16px;
-}
-
-.filter-group {
+.filterRow {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.filter-dropdown {
+.filterDropdown {
   position: relative;
 }
 
-.filter-btn {
+.filterBtn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: var(--card-bg);
+  gap: 5px;
+  padding: 6px 10px;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  white-space: nowrap;
+  transition: border-color 0.15s;
 }
 
-.filter-btn:hover {
+.filterBtn:hover {
   border-color: var(--primary);
 }
 
-.filter-dropdown-content {
+.filterLabel {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdownContent {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  right: 0;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -52,27 +55,33 @@
   z-index: 100;
   padding: 8px;
   min-width: 200px;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
-.filter-option {
-  padding: 8px 12px;
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.checkbox-label {
+.checkboxLabel {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 8px;
   cursor: pointer;
   color: var(--text);
   font-size: 13px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
-.checkbox-label .checkbox {
-  width: 16px;
-  height: 16px;
+.checkboxLabel:hover {
+  background: var(--bg);
 }
 
-.cat-dot {
+.catDot, .tagDot {
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -80,31 +89,15 @@
   flex-shrink: 0;
 }
 
-.tag-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.filter-option-list {
-  max-height: 200px;
-  overflow-y: auto;
-  margin-top: 4px;
-  margin-bottom: 4px;
-}
-
-.date-filters {
+.typeBtns {
   display: flex;
-  gap: 8px;
+  gap: 2px;
 }
 
-.preset-btn {
-  padding: 8px 12px;
-  background: var(--card-bg);
+.typeBtn {
+  padding: 6px 10px;
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -112,74 +105,121 @@
   transition: all 0.15s;
 }
 
-.preset-btn:hover {
-  border-color: var(--primary);
+.typeBtn:first-child {
+  border-radius: 6px 0 0 6px;
 }
 
-.preset-btn-active {
+.typeBtn:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.typeBtn:not(:first-child):not(:last-child) {
+  border-radius: 0;
+}
+
+.typeBtn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.typeBtnActive {
   background: var(--primary);
   color: #fff;
   border-color: var(--primary);
 }
 
-.custom-dates {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.date-input {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.input-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
-.input {
-  width: 100%;
-  padding: 8px 12px;
+.searchInput {
+  width: 160px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 13px;
+  background: var(--bg);
   color: var(--text);
-  background: var(--card-bg);
+  font-size: 12px;
   transition: border-color 0.15s;
 }
 
-.input:focus {
+.searchInput:focus {
   outline: none;
   border-color: var(--primary);
 }
 
-.filter-dropdown-content.show {
-  display: block;
+.searchInput::placeholder {
+  color: var(--text-secondary);
 }
 
-.filter-dropdown-content.hidden {
-  display: none;
+.dateFilters {
+  display: flex;
+  gap: 2px;
+}
+
+.presetBtn {
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.presetBtn:first-child { border-radius: 6px 0 0 6px; }
+.presetBtn:last-child { border-radius: 0 6px 6px 0; }
+
+.presetBtn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.presetBtnActive {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.monthYearNav {
+  display: flex;
+  gap: 4px;
+}
+
+.monthYearSelect {
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.monthYearSelect:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.filterActions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
 }
 
 .reconcileToggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: var(--card-bg);
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.15s;
 }
 
@@ -197,55 +237,21 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--badge-expense-bg);
-  color: var(--badge-expense-text);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
   font-size: 10px;
   font-weight: 700;
-}
-
-.monthYearNav {
-  display: flex;
-  gap: 8px;
-}
-
-.monthYearSelect {
-  padding: 8px 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s;
-  appearance: auto;
-}
-
-.monthYearSelect:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.monthYearSelect:hover {
-  border-color: var(--primary);
-}
-
-.filterActions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
 }
 
 .clearBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 6px 10px;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -260,4 +266,39 @@
   background: var(--bg);
   border-color: var(--danger);
   color: var(--danger);
+}
+
+.customDates {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.dateInput {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inputLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
 }
