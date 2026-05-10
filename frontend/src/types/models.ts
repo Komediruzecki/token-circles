@@ -15,7 +15,7 @@ export type BillId = number
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY'
 export type TransactionType = 'income' | 'expense' | 'transfer'
 export type BudgetPeriod = 'monthly' | 'weekly' | 'yearly'
-export type AccountType = 'giro' | 'savings' | 'ib'
+export type AccountType = 'giro' | 'savings' | 'ib' | 'cash'
 
 export type PageName =
   | 'dashboard'
