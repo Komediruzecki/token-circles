@@ -282,6 +282,7 @@ function migrate() {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     profile_id INTEGER NOT NULL DEFAULT 1,
     name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'other',
     monthly_amount REAL NOT NULL,
     due_date TEXT NOT NULL DEFAULT '',
     autopay INTEGER NOT NULL DEFAULT 0,
@@ -290,6 +291,8 @@ function migrate() {
   )
 `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)');
+  // Add type column if upgrading from older schema
+  try { db.exec('ALTER TABLE housings ADD COLUMN type TEXT NOT NULL DEFAULT \'other\''); } catch (_) { /* exists */ }
 
   // Create zero-based budgeting table
   db.exec(`
