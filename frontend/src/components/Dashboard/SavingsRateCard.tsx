@@ -39,7 +39,7 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
     <div class={styles.card}>
       <div class={styles.savingsRateContainer}>
         <div class={styles.savingsRateValue}>
-          <span class={styles.rateLabel}>Monthly Savings:</span>
+          <span class={styles.rateLabel}>Period Savings:</span>
           <span
             class={`${styles.rateValue} ${props.monthlySavings >= 0 ? styles.rateGood : styles.rateBad}`}
           >
