@@ -673,7 +673,7 @@ function seedProfileData(profile) {
   seedEmergencyFundConfig(profileId, tierConfig);
 
   // Create portfolio holdings
-  seedPortfolio(profileId, tierConfig);
+  seedPortfolio(profileId, tier);
 
   // Seed recurring transactions
   seedRecurringTransactions(profileId, tierConfig, catId);
@@ -1534,7 +1534,7 @@ function seedEmergencyFundConfig(profileId, config) {
   insertConfig.run(monthlyExpenses.toFixed(2), profileId);
 }
 
-function seedPortfolio(profileId, config) {
+function seedPortfolio(profileId, tier) {
   const insertHolding = db.prepare(
     'INSERT INTO portfolio_holdings (ticker, shares, purchase_price, purchase_date, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
   );
@@ -1564,7 +1564,7 @@ function seedPortfolio(profileId, config) {
     ],
   };
 
-  const holdings = portfolios[config.tier] || [];
+  const holdings = portfolios[tier] || [];
   for (const h of holdings) {
     insertHolding.run(h.ticker, h.shares, h.price, h.date, h.notes, profileId);
   }
@@ -1633,3 +1633,5 @@ function columnExists(table, column) {
 }
 
 module.exports = db;
+module.exports.seedThreeTierProfiles = seedThreeTierProfiles;
+module.exports.PROFILES_TO_NUKE = [1, 2, 3];

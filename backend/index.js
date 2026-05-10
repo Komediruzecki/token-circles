@@ -7064,7 +7064,8 @@ app.get('/api/portfolio/holdings', apiRateLimiter, async (req, res) => {
     // Try to fetch current prices
     let prices = {};
     try {
-      const yahooFinance = require('yahoo-finance2');
+      const YahooFinance = require('yahoo-finance2').default;
+      const yahooFinance = new YahooFinance();
       const tickers = [...new Set(holdings.map((h) => h.ticker))];
       if (tickers.length > 0) {
         const quotes = await yahooFinance.quote(tickers);
@@ -7128,7 +7129,8 @@ app.get('/api/portfolio/summary', apiRateLimiter, async (req, res) => {
     // Try to fetch current prices
     let prices = {};
     try {
-      const yahooFinance = require('yahoo-finance2');
+      const YahooFinance = require('yahoo-finance2').default;
+      const yahooFinance = new YahooFinance();
       const tickers = [...new Set(holdings.map((h) => h.ticker))];
       if (tickers.length > 0) {
         const quotes = await yahooFinance.quote(tickers);
@@ -7283,7 +7285,8 @@ app.post('/api/portfolio/prices', apiRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'tickers array is required' });
     }
 
-    const yahooFinance = require('yahoo-finance2');
+    const YahooFinance = require('yahoo-finance2').default;
+    const yahooFinance = new YahooFinance();
     const quotes = await yahooFinance.quote(tickers.map((t) => String(t).toUpperCase()));
     const quoteList = Array.isArray(quotes) ? quotes : [quotes];
 
