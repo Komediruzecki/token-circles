@@ -33,7 +33,6 @@
 import { createEffect, createSignal, For, onMount } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
-import { CategoryMultiSelect } from '../components/CategoryMultiSelect'
 import FilterBar from '../components/FilterBar'
 import Pagination from '../components/Pagination'
 import ReconciliationModal from '../components/ReconciliationModal'
@@ -466,32 +465,55 @@ export default function Transactions() {
     <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
       <div class={styles.pageHeader}>
         <h1 data-test-id="transactions-header">Transactions</h1>
+        <div class={styles.tableActions}>
+          <button
+            class={`${styles.btnPrimary} ${styles.btnSm}`}
+            onClick={openTransactionModal}
+            data-test-id="add-transaction-btn"
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add
+          </button>
+          <button class={`${styles.btnSecondary} ${styles.btnSm}`} onClick={() => setAutoCategorizeModalOpen(true)}>
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Auto
+          </button>
+          <button
+            class={`${styles.btnSecondary} ${styles.btnSm}`}
+            onClick={() => setReconciliationModalOpen(true)}
+            disabled={selectedTransactions().length === 0}
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" />
+            </svg>
+            Reconcile
+          </button>
+        </div>
       </div>
 
-      {/* Filter Bar */}
-      <div class={styles.filterSection}>
-        <CategoryMultiSelect
-          categories={() => categories()}
-          selectedCategoryIds={() => selectedCategories()}
-          onChange={(ids) => {
-            setSelectedCategories(ids)
-            setCurrentPage(1)
-          }}
-          placeholder="All categories"
-        />
-        <FilterBar
-          categories={categories() as any}
-          selectedCategories={selectedCategories()}
-          tags={tags() as any}
-          selectedTags={selectedTags()}
-          dateRange={dateRange()}
-          selectedPreset={selectedPreset()}
-          showReconciled={showReconciled()}
-          reconciledCount={reconciledCount()}
-          onToggleReconciled={() => setShowReconciled(!showReconciled())}
-          onChange={handleFilterChange}
-        />
-      </div>
+      {/* Filter Bar — everything in one row */}
+      <FilterBar
+        categories={categories() as any}
+        tags={tags() as any}
+        selectedCategories={selectedCategories()}
+        selectedTags={selectedTags()}
+        dateRange={dateRange()}
+        selectedPreset={selectedPreset()}
+        showReconciled={showReconciled()}
+        reconciledCount={reconciledCount()}
+        onToggleReconciled={() => setShowReconciled(!showReconciled())}
+        onCategoryChange={(ids) => { setSelectedCategories(ids); setCurrentPage(1) }}
+        searchTerm={searchTerm()}
+        onSearchChange={(t) => setSearchTerm(t)}
+        filterType={filterType()}
+        onFilterTypeChange={(t) => { setFilterType(t); setCurrentPage(1) }}
+        onChange={handleFilterChange}
+      />
 
       {/* Transaction Summary Bar */}
       <TransactionSummaryBar
@@ -509,112 +531,6 @@ export default function Transactions() {
         onDeleteSelected={handleBulkDelete}
         onReconcileSelected={handleBulkReconcile}
       />
-
-      {/* Search */}
-      <div class={styles.searchSection}>
-        <input
-          type="text"
-          class={styles.searchInput}
-          placeholder="Search transactions..."
-          value={searchTerm()}
-          onInput={(e) => setSearchTerm((e.target as HTMLInputElement).value)}
-        />
-      </div>
-
-      {/* Type Filter */}
-      <div class={styles.typeFilters}>
-        <button
-          class={`${styles.typeBtn} ${filterType() === 'all' ? styles.typeBtnActive : ''}`}
-          onClick={() => {
-            setFilterType('all')
-            setCurrentPage(1)
-          }}
-        >
-          All
-        </button>
-        <button
-          class={`${styles.typeBtn} ${filterType() === 'income' ? styles.typeBtnActive : ''}`}
-          onClick={() => {
-            setFilterType('income')
-            setCurrentPage(1)
-          }}
-        >
-          Income
-        </button>
-        <button
-          class={`${styles.typeBtn} ${filterType() === 'expense' ? styles.typeBtnActive : ''}`}
-          onClick={() => {
-            setFilterType('expense')
-            setCurrentPage(1)
-          }}
-        >
-          Expense
-        </button>
-        <button
-          class={`${styles.typeBtn} ${filterType() === 'transfer' ? styles.typeBtnActive : ''}`}
-          onClick={() => {
-            setFilterType('transfer')
-            setCurrentPage(1)
-          }}
-        >
-          Transfer
-        </button>
-      </div>
-
-      {/* Table Actions */}
-      <div class={styles.tableActions}>
-        <button
-          class={`${styles.btnPrimary} ${styles.btnSm}`}
-          onClick={openTransactionModal}
-          data-test-id="add-transaction-btn"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add Transaction
-        </button>
-        <button
-          class={`${styles.btnSecondary} ${styles.btnSm}`}
-          onClick={() => setAutoCategorizeModalOpen(true)}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          Auto-categorize
-        </button>
-        <button
-          class={`${styles.btnSecondary} ${styles.btnSm}`}
-          onClick={() => setReconciliationModalOpen(true)}
-          disabled={selectedTransactions().length === 0}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-            <rect x="8" y="2" width="8" height="4" rx="1" />
-          </svg>
-          Reconcile
-        </button>
-      </div>
 
       {/* Recurring Transactions */}
       <RecurringSection categories={categories()} onRefreshTransactions={refreshTransactions} />
