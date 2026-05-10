@@ -2502,8 +2502,8 @@ app.delete('/api/transactions', apiRateLimiter, (req, res) => {
     const pid = getProfileId(req);
     const pids = getProfileIds(req);
     db.prepare('DELETE FROM transactions WHERE profile_id=?').run(pid);
-    // Reset all account balances to 0 since all transactions are deleted
-    db.prepare('UPDATE accounts SET balance = 0 WHERE profile_id IN (?)').run(pids);
+    // Reset all account balances to starting_balance since all transactions are deleted
+    db.prepare("UPDATE accounts SET balance = COALESCE(starting_balance, 0) WHERE profile_id IN (?)").run(pids);
     res.json({ ok: true, message: 'All transactions deleted' });
   } catch (err) {
     console.error(err.message);
@@ -5152,6 +5152,21 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
     });
 
     insertMany(rows);
+
+    // Recompute account balances from all linked transactions
+    for (const [catName, accountId] of accountIdMap) {
+      const account = db.prepare('SELECT starting_balance FROM accounts WHERE id = ?').get(accountId);
+      const startBalance = account ? (account.starting_balance || 0) : 0;
+      const incomeSum = db.prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = ?'
+      ).get(accountId, 'income');
+      const expenseSum = db.prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = ?'
+      ).get(accountId, 'expense');
+      const computedBalance = startBalance + (incomeSum.total || 0) - (expenseSum.total || 0);
+      db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(Math.round(computedBalance * 100) / 100, accountId);
+    }
+
     res.json({
       imported,
       accounts_created: accountIdMap.size,

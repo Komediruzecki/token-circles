@@ -42,6 +42,7 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { showConfirm } from '../core/confirmStore'
+import { apiPut } from '../utils/api'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
@@ -209,6 +210,30 @@ export default function Transactions() {
 
   const handleBulkReconcile = () => {
     setReconciliationModalOpen(true)
+  }
+
+  const handleBulkChangeCategory = async (categoryId: number | null) => {
+    const ids = selectedTransactions()
+    if (ids.length === 0) return
+    try {
+      await apiPut('/api/transactions/bulk', { ids, action: 'update', data: { category_id: categoryId } })
+      setSelectedTransactions([])
+      await refreshTransactions()
+    } catch (error) {
+      console.error('Failed to bulk change category:', error)
+    }
+  }
+
+  const handleBulkChangeType = async (type: string) => {
+    const ids = selectedTransactions()
+    if (ids.length === 0) return
+    try {
+      await apiPut('/api/transactions/bulk', { ids, action: 'update', data: { type } })
+      setSelectedTransactions([])
+      await refreshTransactions()
+    } catch (error) {
+      console.error('Failed to bulk change type:', error)
+    }
   }
 
   // Handle filter changes
@@ -440,7 +465,24 @@ export default function Transactions() {
     refreshTransactions()
     try {
       const cats = await api.getCategories()
-      if (Array.isArray(cats)) setCategories(cats as Category[])
+      if (Array.isArray(cats)) {
+        setCategories(cats as Category[])
+        // Check hash for category filter (e.g. #transactions?category=Erste)
+        const hash = window.location.hash.slice(1)
+        const queryIdx = hash.indexOf('?')
+        if (queryIdx >= 0) {
+          const params = new URLSearchParams(hash.slice(queryIdx + 1))
+          const categoryName = params.get('category')
+          if (categoryName) {
+            const matchedCat = (cats as Category[]).find(
+              (c) => c.name.toLowerCase() === categoryName.toLowerCase()
+            )
+            if (matchedCat) {
+              setSelectedCategories([matchedCat.id])
+            }
+          }
+        }
+      }
     } catch {
       // Categories will remain empty
     }
@@ -548,9 +590,12 @@ export default function Transactions() {
       {/* Bulk Action Bar */}
       <BulkActionBar
         selectedCount={selectedTransactions().length}
+        categories={categories()}
         onClearSelection={() => setSelectedTransactions([])}
         onDeleteSelected={handleBulkDelete}
         onReconcileSelected={handleBulkReconcile}
+        onChangeCategory={handleBulkChangeCategory}
+        onChangeType={handleBulkChangeType}
       />
 
       {/* Recurring Transactions */}

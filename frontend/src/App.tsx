@@ -131,10 +131,11 @@ export function App() {
       }
     })
 
-    // Parse initial hash from URL
-    const hash = window.location.hash.slice(1)
-    if (hash && allPages[hash as PageName]) {
-      setActivePage(hash as PageName)
+    // Parse initial hash from URL (supports #pagename?param=value)
+    const rawHash = window.location.hash.slice(1)
+    const hashPage = rawHash.split('?')[0]
+    if (hashPage && allPages[hashPage as PageName]) {
+      setActivePage(hashPage as PageName)
     } else {
       setActivePage('dashboard')
     }
@@ -164,9 +165,10 @@ export function App() {
 
   // Listen for hash changes (back/forward buttons, manual URL edits)
   const handleHashChange = () => {
-    const newHash = window.location.hash.slice(1)
-    if (newHash && allPages[newHash as PageName]) {
-      setActivePage(newHash as PageName)
+    const newRawHash = window.location.hash.slice(1)
+    const newHashPage = newRawHash.split('?')[0]
+    if (newHashPage && allPages[newHashPage as PageName]) {
+      setActivePage(newHashPage as PageName)
     }
   }
   window.addEventListener('hashchange', handleHashChange)
