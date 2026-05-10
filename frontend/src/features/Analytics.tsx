@@ -944,15 +944,15 @@ export default function Analytics() {
                   </div>
                   <div class={styles.rateInfo}>
                     <div class={styles.rateRow}>
-                      <span>Monthly Income</span>
+                      <span>Period Income</span>
                       <span>{formatAmount(totalIncome())}</span>
                     </div>
                     <div class={styles.rateRow}>
-                      <span>Monthly Expenses</span>
+                      <span>Period Expenses</span>
                       <span>{formatAmount(totalExpense())}</span>
                     </div>
                     <div class={styles.rateRow}>
-                      <span>Monthly Savings</span>
+                      <span>Period Savings</span>
                       <span
                         class={
                           data()!.savingsRate >= 20
@@ -966,9 +966,22 @@ export default function Analytics() {
                       </span>
                     </div>
                     <div class={styles.rateRow}>
+                      <span>Avg Monthly Savings</span>
+                      <span>
+                        {formatAmount(
+                          (totalIncome() - totalExpense()) /
+                            Math.max((data()?.byMonth || []).length, 1)
+                        )}
+                      </span>
+                    </div>
+                    <div class={styles.rateRow}>
                       <span>Projected Annual Savings</span>
                       <span class={styles.rateValue}>
-                        {formatAmount((totalIncome() - totalExpense()) * 12)}
+                        {formatAmount(
+                          ((totalIncome() - totalExpense()) /
+                            Math.max((data()?.byMonth || []).length, 1)) *
+                            12
+                        )}
                       </span>
                     </div>
                     <div class={styles.rateRow}>
