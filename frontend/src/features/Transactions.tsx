@@ -211,15 +211,6 @@ export default function Transactions() {
     setReconciliationModalOpen(true)
   }
 
-  const handleReconcileToggle = async (transaction: Transaction) => {
-    try {
-      await api.updateTransaction(transaction.id, { reconciled: !transaction.reconciled })
-      await refreshTransactions()
-    } catch (error) {
-      console.error('Failed to toggle reconcile:', error)
-    }
-  }
-
   // Handle filter changes
   const handleFilterChange = (filters: any) => {
     setSelectedCategories(filters.selectedCategories || [])
@@ -998,7 +989,6 @@ export default function Transactions() {
             sortOrder={sortOrder()}
             onEdit={handleEditTransaction}
             onDelete={handleDeleteTransaction}
-            onReconcileToggle={handleReconcileToggle}
           />
           {totalPages() > 1 && (
             <Pagination
