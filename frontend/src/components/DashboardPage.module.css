@@ -55,14 +55,22 @@
   margin-bottom: 24px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1000px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 480px) {
   .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-value {
+    font-size: 20px;
+  }
+
+  .chartsGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -224,10 +232,16 @@
 
 @media (max-width: 768px) {
   .widgetsGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .chartsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .widgetsGrid {
     grid-template-columns: 1fr;
   }
 }

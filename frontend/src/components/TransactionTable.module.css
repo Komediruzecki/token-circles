@@ -1,14 +1,15 @@
 .transaction-table {
   width: 100%;
-  border-collapse: collapse;
   background: var(--card-bg);
   border-radius: var(--radius);
-  overflow: hidden;
   box-shadow: var(--shadow);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .transaction-table table {
   width: 100%;
+  min-width: 700px;
   border-collapse: collapse;
 }
 
