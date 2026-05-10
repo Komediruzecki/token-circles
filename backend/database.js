@@ -506,6 +506,29 @@ function migrate() {
     } catch (e) {}
   }
 
+  // Create portfolio_holdings table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS portfolio_holdings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticker TEXT NOT NULL,
+      shares REAL NOT NULL,
+      purchase_price REAL NOT NULL,
+      purchase_date TEXT NOT NULL,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      profile_id INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_portfolio_profile ON portfolio_holdings(profile_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_portfolio_ticker ON portfolio_holdings(profile_id, ticker)');
+
+  // Migration: Add updated_at column to portfolio_holdings
+  if (!columnExists('portfolio_holdings', 'updated_at')) {
+    try {
+      db.exec("ALTER TABLE portfolio_holdings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+    } catch (e) {}
+  }
+
   // Migration: Add starting_balance and starting_date columns to accounts table
   if (!columnExists('accounts', 'starting_balance')) {
     try {
@@ -648,6 +671,9 @@ function seedProfileData(profile) {
 
   // Set emergency fund config
   seedEmergencyFundConfig(profileId, tierConfig);
+
+  // Create portfolio holdings
+  seedPortfolio(profileId, tierConfig);
 
   // Seed recurring transactions
   seedRecurringTransactions(profileId, tierConfig, catId);
@@ -1506,6 +1532,42 @@ function seedEmergencyFundConfig(profileId, config) {
   // Monthly expenses = roughly 80% of salary
   const monthlyExpenses = config.monthlySalary * 0.8;
   insertConfig.run(monthlyExpenses.toFixed(2), profileId);
+}
+
+function seedPortfolio(profileId, config) {
+  const insertHolding = db.prepare(
+    'INSERT INTO portfolio_holdings (ticker, shares, purchase_price, purchase_date, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  // Portfolio configurations per tier
+  const portfolios = {
+    low: [
+      { ticker: 'SPY', shares: 5, price: 420.00, date: '2025-01-15', notes: 'S&P 500 ETF - starter position' },
+      { ticker: 'VTI', shares: 8, price: 210.00, date: '2025-03-10', notes: 'Total US Stock Market ETF' },
+    ],
+    mid: [
+      { ticker: 'SPY', shares: 20, price: 410.00, date: '2024-06-15', notes: 'S&P 500 ETF - core position' },
+      { ticker: 'QQQ', shares: 15, price: 350.00, date: '2024-08-01', notes: 'Nasdaq-100 ETF' },
+      { ticker: 'AMD', shares: 50, price: 120.00, date: '2025-02-20', notes: 'AMD semiconductor growth' },
+      { ticker: 'VTI', shares: 25, price: 215.00, date: '2024-11-10', notes: 'Total US Stock Market ETF' },
+      { ticker: 'AAPL', shares: 30, price: 175.00, date: '2025-01-05', notes: 'Apple Inc.' },
+    ],
+    high: [
+      { ticker: 'SPY', shares: 75, price: 400.00, date: '2024-01-15', notes: 'S&P 500 ETF - large core position' },
+      { ticker: 'QQQ', shares: 60, price: 340.00, date: '2024-03-20', notes: 'Nasdaq-100 ETF' },
+      { ticker: 'NVDA', shares: 100, price: 85.00, date: '2024-05-10', notes: 'NVIDIA - AI/GPU growth' },
+      { ticker: 'AMD', shares: 150, price: 110.00, date: '2024-08-15', notes: 'AMD semiconductor' },
+      { ticker: 'AAPL', shares: 80, price: 170.00, date: '2024-06-01', notes: 'Apple Inc. - core holding' },
+      { ticker: 'VTI', shares: 100, price: 205.00, date: '2024-09-01', notes: 'Total US Stock Market ETF' },
+      { ticker: 'MSFT', shares: 40, price: 380.00, date: '2025-01-10', notes: 'Microsoft - cloud/AI play' },
+      { ticker: 'GOOGL', shares: 35, price: 140.00, date: '2025-02-15', notes: 'Alphabet Inc.' },
+    ],
+  };
+
+  const holdings = portfolios[config.tier] || [];
+  for (const h of holdings) {
+    insertHolding.run(h.ticker, h.shares, h.price, h.date, h.notes, profileId);
+  }
 }
 
 function seedRecurringTransactions(profileId, config, catId) {

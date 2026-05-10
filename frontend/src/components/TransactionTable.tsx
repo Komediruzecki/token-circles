@@ -175,18 +175,18 @@ export default function TransactionTable(props: TransactionTableProps) {
                 </td>
                 <td class={styles.counterPartyCol}>
                   <span>
-                    <span class={styles.fromTo}>
-                      {transaction.means_of_payment || '—'}
-                    </span>
+                    <span class={styles.fromTo}>{transaction.means_of_payment || '—'}</span>
                     <span class={styles.fromToArrow}> → </span>
-                    <span class={styles.fromTo}>
-                      {transaction.category_name || '—'}
-                    </span>
+                    <span class={styles.fromTo}>{transaction.category_name || '—'}</span>
                   </span>
                 </td>
                 <td class={styles.amountCol}>
                   <div class={`${styles.amount} ${styles[transaction.type]}`}>
-                    {transaction.type === 'income' ? '+' : transaction.type === 'transfer' ? '' : '-'}
+                    {transaction.type === 'income'
+                      ? '+'
+                      : transaction.type === 'transfer'
+                        ? ''
+                        : '-'}
                     {formatCurrency(transaction.amount, transaction.currency)}
                   </div>
                 </td>

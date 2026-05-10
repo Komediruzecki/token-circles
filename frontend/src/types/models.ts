@@ -35,6 +35,7 @@ export type PageName =
   | 'emergency'
   | 'rentBuy'
   | 'counterparties'
+  | 'portfolio'
 
 // ============ PROFILE ============
 export interface Profile {
@@ -360,6 +361,41 @@ export interface Receipt {
   uploaded_at: string
   profile_id: ProfileId
   transaction?: Transaction
+}
+
+// ============ PORTFOLIO ============
+export interface PortfolioHolding {
+  id: number
+  ticker: string
+  shares: number
+  purchasePrice: number
+  purchaseDate: string
+  notes: string
+  createdAt: string
+  profileId: ProfileId
+  currentPrice?: number
+  marketValue?: number
+  costBasis?: number
+  gain?: number
+  gainPercent?: number
+}
+
+export interface PortfolioSummary {
+  totalValue: number
+  totalCostBasis: number
+  totalGain: number
+  totalGainPercent: number
+  holdings: PortfolioHolding[]
+  allocation: { ticker: string; value: number; shares: number; percentage: number }[]
+}
+
+export interface StockPrice {
+  price: number
+  change: number
+  changePercent: number
+  dayHigh?: number
+  dayLow?: number
+  name?: string
 }
 
 // ============ COMPONENT TYPES ============

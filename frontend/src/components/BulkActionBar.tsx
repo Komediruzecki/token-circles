@@ -47,10 +47,20 @@ export default function BulkActionBar(props: BulkActionBarProps) {
     <>
       <div class={styles.bulkBar}>
         <span class={styles.bulkCount}>{props.selectedCount} selected</span>
-        <button class={`${styles.btn} ${styles.btnSecondary}`} onClick={() => { setShowCategoryModal(true) }}>
+        <button
+          class={`${styles.btn} ${styles.btnSecondary}`}
+          onClick={() => {
+            setShowCategoryModal(true)
+          }}
+        >
           Change Category
         </button>
-        <button class={`${styles.btn} ${styles.btnSecondary}`} onClick={() => { setShowTypeModal(true) }}>
+        <button
+          class={`${styles.btn} ${styles.btnSecondary}`}
+          onClick={() => {
+            setShowTypeModal(true)
+          }}
+        >
           Change Type
         </button>
         <button class={`${styles.btn} ${styles.btnSecondary}`} onClick={props.onReconcileSelected}>
@@ -66,12 +76,34 @@ export default function BulkActionBar(props: BulkActionBarProps) {
 
       {/* Change Category Modal */}
       {showCategoryModal() && (
-        <div class={styles.modalOverlay} onClick={() => { setShowCategoryModal(false) }}>
-          <div class={styles.modal} onClick={(e) => { e.stopPropagation() }}>
+        <div
+          class={styles.modalOverlay}
+          onClick={() => {
+            setShowCategoryModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <div class={styles.modalTitle}>Change Category</div>
-              <button class={styles.modalClose} onClick={() => { setShowCategoryModal(false) }}>
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <button
+                class={styles.modalClose}
+                onClick={() => {
+                  setShowCategoryModal(false)
+                }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -85,20 +117,29 @@ export default function BulkActionBar(props: BulkActionBarProps) {
                 <select
                   class={styles.formControl}
                   value={selectedCategoryId()}
-                  onInput={(e) => { setSelectedCategoryId((e.target as HTMLSelectElement).value) }}
+                  onInput={(e) => {
+                    setSelectedCategoryId((e.target as HTMLSelectElement).value)
+                  }}
                 >
                   <option value="">No Category</option>
                   <For each={props.categories}>
-                    {(cat) => (
-                      <option value={String(cat.id)}>{cat.name}</option>
-                    )}
+                    {(cat) => <option value={String(cat.id)}>{cat.name}</option>}
                   </For>
                 </select>
               </div>
             </div>
             <div class={styles.modalFooter}>
-              <button class={styles.btnSecondary} onClick={() => { setShowCategoryModal(false) }}>Cancel</button>
-              <button class={styles.btnPrimary} onClick={handleApplyCategory}>Apply</button>
+              <button
+                class={styles.btnSecondary}
+                onClick={() => {
+                  setShowCategoryModal(false)
+                }}
+              >
+                Cancel
+              </button>
+              <button class={styles.btnPrimary} onClick={handleApplyCategory}>
+                Apply
+              </button>
             </div>
           </div>
         </div>
@@ -106,12 +147,34 @@ export default function BulkActionBar(props: BulkActionBarProps) {
 
       {/* Change Type Modal */}
       {showTypeModal() && (
-        <div class={styles.modalOverlay} onClick={() => { setShowTypeModal(false) }}>
-          <div class={styles.modal} onClick={(e) => { e.stopPropagation() }}>
+        <div
+          class={styles.modalOverlay}
+          onClick={() => {
+            setShowTypeModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+          >
             <div class={styles.modalHeader}>
               <div class={styles.modalTitle}>Change Type</div>
-              <button class={styles.modalClose} onClick={() => { setShowTypeModal(false) }}>
-                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <button
+                class={styles.modalClose}
+                onClick={() => {
+                  setShowTypeModal(false)
+                }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -125,7 +188,9 @@ export default function BulkActionBar(props: BulkActionBarProps) {
                 <select
                   class={styles.formControl}
                   value={selectedType()}
-                  onInput={(e) => { setSelectedType((e.target as HTMLSelectElement).value) }}
+                  onInput={(e) => {
+                    setSelectedType((e.target as HTMLSelectElement).value)
+                  }}
                 >
                   <option value="">Select type...</option>
                   <option value="income">Income</option>
@@ -135,8 +200,17 @@ export default function BulkActionBar(props: BulkActionBarProps) {
               </div>
             </div>
             <div class={styles.modalFooter}>
-              <button class={styles.btnSecondary} onClick={() => { setShowTypeModal(false) }}>Cancel</button>
-              <button class={styles.btnPrimary} onClick={handleApplyType}>Apply</button>
+              <button
+                class={styles.btnSecondary}
+                onClick={() => {
+                  setShowTypeModal(false)
+                }}
+              >
+                Cancel
+              </button>
+              <button class={styles.btnPrimary} onClick={handleApplyType}>
+                Apply
+              </button>
             </div>
           </div>
         </div>
