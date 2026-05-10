@@ -310,7 +310,7 @@ export default function Accounts() {
                 <div data-test-id="activity-section" class={styles.accountActivity}>
                   <div class={styles.activityHeader}>
                     <span class={styles.activityLabel}>Recent Activity</span>
-                    <a href="#transactions" class={styles.btnLink}>
+                    <a href={`#transactions?category=${encodeURIComponent(account.name)}`} class={styles.btnLink}>
                       View All →
                     </a>
                   </div>
