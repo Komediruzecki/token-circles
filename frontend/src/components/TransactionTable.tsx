@@ -16,7 +16,6 @@ interface TransactionTableProps {
   loading?: boolean
   onEdit?: (transaction: Transaction) => void
   onDelete?: (transaction: Transaction) => void
-  onReconcileToggle?: (transaction: Transaction) => void
 }
 
 export default function TransactionTable(props: TransactionTableProps) {
@@ -53,18 +52,6 @@ export default function TransactionTable(props: TransactionTableProps) {
                   }
                 }}
               />
-            </th>
-            <th class={styles.reconcileCol} title="Reconciled">
-              <svg
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
             </th>
             <th
               class={`${styles.col} ${styles.dateCol}`}
@@ -144,16 +131,14 @@ export default function TransactionTable(props: TransactionTableProps) {
                     }}
                   />
                 </td>
-                <td class={styles.reconcileCol}>
-                  <input
-                    type="checkbox"
-                    class={styles.reconcileCheckbox}
-                    checked={transaction.reconciled}
-                    onChange={() => props.onReconcileToggle?.(transaction)}
-                    title={transaction.reconciled ? 'Mark unreconciled' : 'Mark reconciled'}
-                  />
+                <td class={styles.dateCol}>
+                  {transaction.reconciled && (
+                    <svg width="12" height="12" fill="none" stroke="#22c55e" stroke-width="2" viewBox="0 0 24 24" style="margin-right: 4px; vertical-align: middle;">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  {new Date(transaction.date).toLocaleDateString()}
                 </td>
-                <td class={styles.dateCol}>{new Date(transaction.date).toLocaleDateString()}</td>
                 <td class={styles.descriptionCol}>
                   <div class={styles.description}>{transaction.description}</div>
                   {transaction.tags !== undefined && transaction.tags.length > 0 && (
