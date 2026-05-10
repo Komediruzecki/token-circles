@@ -192,8 +192,19 @@
 }
 
 .counterPartyCol {
-  width: 130px;
+  width: 200px;
   font-size: 13px;
+  white-space: nowrap;
+}
+
+.fromTo {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.fromToArrow {
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 
 .muted {

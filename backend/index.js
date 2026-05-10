@@ -2141,6 +2141,10 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
         .run(amount, resolvedAccountId, getProfileIds(req));
       db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
         .run(amount, resolvedTransferAccountId, getProfileIds(req));
+    } else if (resolvedAccountId && type === 'transfer') {
+      // Transfer with only FROM account (no TO): subtract from FROM
+      db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+        .run(amount, resolvedAccountId, getProfileIds(req));
     } else if (resolvedAccountId && (type === 'income' || type === 'expense')) {
       const delta = type === 'income' ? amount : -amount;
       db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
@@ -2431,11 +2435,20 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
           .run(oldTx.amount, oldTx.account_id, pids);
         db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
           .run(oldTx.amount, oldTx.transfer_account_id, pids);
+      } else if (oldTx.type === 'transfer') {
+        // Transfer with only FROM: add back to source
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(oldTx.amount, oldTx.account_id, pids);
       } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
         const oldDelta = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
         db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
           .run(oldDelta, oldTx.account_id, pids);
       }
+    }
+    // Reverse old transfer TO effect (money added to transfer_account_id)
+    if (oldTx && oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
+      db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+        .run(oldTx.amount, oldTx.transfer_account_id, pids);
     }
 
     updates.push("updated_at=datetime('now')");
@@ -2453,11 +2466,18 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
             .run(oldTx.amount, oldTx.account_id, pids);
           db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
             .run(oldTx.amount, oldTx.transfer_account_id, pids);
+        } else if (oldTx.type === 'transfer') {
+          db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+            .run(oldTx.amount, oldTx.account_id, pids);
         } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
           const oldDelta = oldTx.type === 'income' ? oldTx.amount : -oldTx.amount;
           db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
             .run(oldDelta, oldTx.account_id, pids);
         }
+      }
+      if (oldTx && oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(oldTx.amount, oldTx.transfer_account_id, pids);
       }
       return res.status(404).json({ error: 'Not found' });
     }
@@ -2473,11 +2493,18 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
           .run(newAmount, newAccountId, pids);
         db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
           .run(newAmount, newTransferAccountId, pids);
+      } else if (newType === 'transfer') {
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+          .run(newAmount, newAccountId, pids);
       } else if (newType === 'income' || newType === 'expense') {
         const newDelta = newType === 'income' ? newAmount : -newAmount;
         db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
           .run(newDelta, newAccountId, pids);
       }
+    }
+    if (!newAccountId && newTransferAccountId && newType === 'transfer') {
+      db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+        .run(newAmount, newTransferAccountId, pids);
     }
 
     // Recalculate linked goal progress
@@ -2508,11 +2535,20 @@ app.delete('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
           .run(tx.amount, tx.account_id, pids);
         db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
           .run(tx.amount, tx.transfer_account_id, pids);
+      } else if (tx.type === 'transfer') {
+        // Transfer with only FROM: add back to source
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(tx.amount, tx.account_id, pids);
       } else if (tx.type === 'income' || tx.type === 'expense') {
         const delta = tx.type === 'income' ? -tx.amount : tx.amount;
         db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
           .run(delta, tx.account_id, pids);
       }
+    }
+    // Reverse transfer TO effect (remove money added to transfer_account_id)
+    if (tx && tx.transfer_account_id && tx.type === 'transfer' && !tx.account_id) {
+      db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+        .run(tx.amount, tx.transfer_account_id, pids);
     }
     if (tx && tx.category_id) recalcGoalsByCategory(tx.category_id);
     res.json(toCamelCase({ ok: true }));
