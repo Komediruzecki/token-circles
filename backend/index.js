@@ -6635,6 +6635,7 @@ app.get('/api/housing', apiRateLimiter, (req, res) => {
       SELECT
         id,
         name,
+        type,
         monthly_amount,
         due_date,
         autopay,
@@ -6668,21 +6669,22 @@ app.post('/api/housing', apiRateLimiter, (req, res) => {
     const pid = getProfileId(req);
     const { type, property_name, monthly_amount, due_day, due_month, autopay, notes } = req.body;
 
-    if (!type || !property_name || monthly_amount === undefined) {
-      return res.status(400).json({ error: 'Type, property name and monthly amount are required' });
+    const amount = parseFloat(monthly_amount);
+    if (!property_name || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Property name and a valid monthly amount are required' });
     }
 
     // Calculate due_date from due_day and due_month
-    const due_date = `${due_month.toString().padStart(2, '0')}-${due_day.toString().padStart(2, '0')}`;
+    const due_date = `${(due_month || 1).toString().padStart(2, '0')}-${(due_day || 1).toString().padStart(2, '0')}`;
 
     const info = db
       .prepare(
         `
-      INSERT INTO housings (profile_id, name, monthly_amount, due_date, autopay, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO housings (profile_id, name, type, monthly_amount, due_date, autopay, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `
       )
-      .run(pid, property_name, parseFloat(monthly_amount), due_date, autopay ? 1 : 0, notes || '');
+      .run(pid, property_name, type || 'other', amount, due_date, autopay ? 1 : 0, notes || '');
 
     res.json({ id: info.lastInsertRowid });
   } catch (err) {

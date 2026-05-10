@@ -246,37 +246,54 @@
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.housing-page .toggle-switch {
-  display: flex;
+.toggleSwitch {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-.housing-page .toggle-slider {
   width: 44px;
   height: 24px;
+  flex-shrink: 0;
+}
+
+.toggleSwitch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleSlider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--bg);
   border-radius: 12px;
-  position: relative;
   transition: background 0.3s;
   border: 2px solid var(--border);
 }
-.housing-page .toggle-slider::before {
+
+.toggleSlider::before {
   content: '';
   position: absolute;
   width: 20px;
   height: 20px;
   background: var(--text);
   border-radius: 50%;
-  top: 2px;
-  left: 2px;
+  top: 0;
+  left: 0;
   transition: transform 0.3s;
 }
-.housing-page .toggle-switch input:checked + .toggle-slider {
+
+.toggleSwitch input:checked + .toggleSlider {
   background: var(--primary);
   border-color: var(--primary);
 }
-.housing-page .toggle-switch input:checked + .toggle-slider::before {
-  transform: translate-x(20px);
+
+.toggleSwitch input:checked + .toggleSlider::before {
+  transform: translateX(20px);
 }
 
 @keyframes fade-in {
@@ -468,43 +485,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-}
-
-.housing-page .toggle-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.housing-page .toggle-slider {
-  width: 44px;
-  height: 24px;
-  background: var(--bg);
-  border-radius: 12px;
-  position: relative;
-  transition: background 0.3s;
-  border: 2px solid var(--border);
-}
-
-.housing-page .toggle-slider::before {
-  content: '';
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  background: var(--text);
-  border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.3s;
-}
-
-.housing-page .toggle-switch input:checked + .toggle-slider {
-  background: var(--primary);
-  border-color: var(--primary);
-}
-
-.housing-page .toggle-switch input:checked + .toggle-slider::before {
-  transform: translate-x(20px);
 }
 
 .page-housing {
