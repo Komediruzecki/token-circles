@@ -41,7 +41,7 @@ import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 interface Account {
   id: number
   name: string
-  type: 'checking' | 'savings' | 'credit' | 'investment'
+  type: 'giro' | 'savings' | 'ib' | 'cash'
   balance: number
   currency: string
   bank_name?: string
@@ -56,7 +56,7 @@ export default function Accounts() {
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [formData, setFormData] = createSignal({
     name: '',
-    type: 'checking',
+    type: 'giro',
     bank_name: '',
     balance: '',
     currency: 'USD',
@@ -103,7 +103,7 @@ export default function Accounts() {
       setShowAddModal(false)
       setFormData({
         name: '',
-        type: 'checking',
+        type: 'giro',
         bank_name: '',
         balance: '',
         currency: 'USD',
@@ -134,10 +134,10 @@ export default function Accounts() {
     type: string
   ): 'primary' | 'success' | 'warning' | 'info' | 'default' => {
     const statusMap: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'default'> = {
-      checking: 'primary',
+      giro: 'primary',
       savings: 'success',
-      credit: 'warning',
-      investment: 'info',
+      ib: 'info',
+      cash: 'warning',
     }
     return statusMap[type] || 'default'
   }
@@ -145,13 +145,13 @@ export default function Accounts() {
   // Get type icon
   const getTypeIcon = (type: string) => {
     const paths: Record<string, string> = {
-      checking:
+      giro:
         'M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01',
       savings:
         'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-      credit:
+      ib: 'M13 17V9m-4 8v-4m8 4v-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+      cash:
         'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
-      investment: 'M13 17V9m-4 8v-4m8 4v-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
     }
     const d =
       paths[type] ||
@@ -385,10 +385,10 @@ export default function Accounts() {
                   value={formData().type}
                   oninput={(e) => setFormData({ ...formData(), type: e.target.value as any })}
                 >
-                  <option value="checking">Checking</option>
+                  <option value="giro">Giro / Checking</option>
                   <option value="savings">Savings</option>
-                  <option value="credit">Credit Card</option>
-                  <option value="investment">Investment</option>
+                  <option value="ib">Investment / Brokerage</option>
+                  <option value="cash">Cash</option>
                 </select>
               </div>
               <div class={styles.formGroup}>
