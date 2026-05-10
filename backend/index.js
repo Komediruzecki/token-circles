@@ -2082,6 +2082,27 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
       return res.status(400).json({ error: 'A valid date is required' });
     }
 
+    // Resolve account_id from means_of_payment (FROM) if not explicitly provided
+    let resolvedAccountId = account_id || null;
+    let resolvedTransferAccountId = transfer_account_id || null;
+    if (!resolvedAccountId && means_of_payment) {
+      const matchedAccount = db.prepare(
+        'SELECT id FROM accounts WHERE LOWER(name) = LOWER(?) AND profile_id IN (?)'
+      ).get(String(means_of_payment).trim(), getProfileIds(req));
+      if (matchedAccount) resolvedAccountId = matchedAccount.id;
+    }
+    // Resolve transfer_account_id from category if the category is an account type
+    if (!resolvedTransferAccountId && category_id) {
+      const cat = db.prepare('SELECT name FROM categories WHERE id = ? AND profile_id IN (?)')
+        .get(category_id, getProfileIds(req));
+      if (cat) {
+        const matchedAccount = db.prepare(
+          'SELECT id FROM accounts WHERE LOWER(name) = LOWER(?) AND profile_id IN (?)'
+        ).get(String(cat.name).trim(), getProfileIds(req));
+        if (matchedAccount) resolvedTransferAccountId = matchedAccount.id;
+      }
+    }
+
     const info = db
       .prepare(
         `
@@ -2104,8 +2125,8 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
         type || 'expense',
         notes || '',
         pid,
-        account_id || null,
-        transfer_account_id || null
+        resolvedAccountId,
+        resolvedTransferAccountId
       );
     // Return created transaction with all fields including timestamps
     const created = db
@@ -2113,17 +2134,22 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
         `SELECT * FROM transactions WHERE id = ? AND profile_id = ?`
       )
       .get(info.lastInsertRowid, pid);
-    // Auto-update linked account balance
-    if (account_id && type === 'transfer' && transfer_account_id) {
-      // Transfer: subtract from source, add to destination
+    // Auto-update linked account balances
+    if (resolvedAccountId && type === 'transfer' && resolvedTransferAccountId) {
+      // Transfer: subtract from source (FROM), add to destination (TO)
       db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
-        .run(amount, account_id, getProfileIds(req));
+        .run(amount, resolvedAccountId, getProfileIds(req));
       db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
-        .run(amount, transfer_account_id, getProfileIds(req));
-    } else if (account_id && (type === 'income' || type === 'expense')) {
+        .run(amount, resolvedTransferAccountId, getProfileIds(req));
+    } else if (resolvedAccountId && (type === 'income' || type === 'expense')) {
       const delta = type === 'income' ? amount : -amount;
       db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
-        .run(delta, account_id, getProfileIds(req));
+        .run(delta, resolvedAccountId, getProfileIds(req));
+    }
+    // If account_id is null but transfer_account_id is set, money flows TO that account
+    if (!resolvedAccountId && resolvedTransferAccountId && (type === 'income' || type === 'transfer')) {
+      db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+        .run(amount, resolvedTransferAccountId, getProfileIds(req));
     }
     // Recalculate linked goal progress
     if (category_id) recalcGoalsByCategory(category_id);
@@ -4992,6 +5018,7 @@ app.post('/api/import/googlesheet', apiRateLimiter, (req, res) => {
 app.post('/api/import/execute', apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
+    const pids = getProfileIds(req);
     const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } = req.body;
     if (!rows || !mapping) return res.status(400).json({ error: 'Missing data' });
 
@@ -5015,16 +5042,28 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
     );
 
     // Create accounts for categories marked as 'account' type
+    // Also populate a name→accountId map for resolving Means of Payment (FROM) and Category (TO)
     const accountIdMap = new Map();
+
+    // First, add existing accounts to the map so they can be referenced by name
+    const existingAccounts = db.prepare(
+      `SELECT id, name FROM accounts WHERE profile_id IN (${pids.map(() => '?').join(',')})`
+    ).all(...pids);
+    for (const acc of existingAccounts) {
+      accountIdMap.set(acc.name.toLowerCase(), acc.id);
+    }
+
     if (categoryTypes) {
       for (const [catName, catType] of Object.entries(categoryTypes)) {
         if (catType !== 'account') continue;
+        // Skip if account with this name already exists
+        if (accountIdMap.has(String(catName).trim().toLowerCase())) continue;
         const accType = (accountTypes && accountTypes[catName]) || 'giro';
         const balance = parseFloat((accountBalances && accountBalances[catName]) || '0') || 0;
         const balanceDate = (accountBalanceDates && accountBalanceDates[catName]) || new Date().toISOString().split('T')[0];
         const result = insertAccount.run(catName, accType, 'USD', balance, '', pid, balance, balanceDate);
         const accountId = result.lastInsertRowid;
-        accountIdMap.set(catName, accountId);
+        accountIdMap.set(catName.toLowerCase(), accountId);
         // Record initial balance history
         insertBalanceHistory.run(accountId, balance, balanceDate);
       }
@@ -5123,9 +5162,18 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
           validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
         }
 
-        // Determine account_id from category mapping
-        const catNameForAccount = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
-        const accountId = catNameForAccount ? accountIdMap.get(String(catNameForAccount).trim()) || null : null;
+        // Determine account_id from Means of Payment (FROM account)
+        const mopName = row[mapping.means_of_payment] ||
+          row[mapping.MeansOfPayment] ||
+          row[mapping.MEANS_OF_PAYMENT] ||
+          '';
+        const accountId = mopName ? accountIdMap.get(String(mopName).trim().toLowerCase()) || null : null;
+
+        // Determine transfer_account_id from Category when it's an account type (TO account)
+        const catNameForTransfer = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
+        const transferAccountId = catNameForTransfer
+          ? accountIdMap.get(String(catNameForTransfer).trim().toLowerCase()) || null
+          : null;
 
         insert.run(
           row[mapping.description] || row[mapping.Description] || row[mapping.DESCRIPTION] || '',
@@ -5145,7 +5193,7 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
           row[mapping.notes] || row[mapping.Notes] || row[mapping.NOTES] || '',
           pid,
           accountId,
-          null
+          transferAccountId
         );
         imported++;
       }
@@ -5154,16 +5202,25 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
     insertMany(rows);
 
     // Recompute account balances from all linked transactions
-    for (const [catName, accountId] of accountIdMap) {
+    for (const [_name, accountId] of accountIdMap) {
       const account = db.prepare('SELECT starting_balance FROM accounts WHERE id = ?').get(accountId);
       const startBalance = account ? (account.starting_balance || 0) : 0;
-      const incomeSum = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = ?'
-      ).get(accountId, 'income');
-      const expenseSum = db.prepare(
-        'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = ?'
-      ).get(accountId, 'expense');
-      const computedBalance = startBalance + (incomeSum.total || 0) - (expenseSum.total || 0);
+      // Money OUT: expense or transfer FROM this account (account_id = this)
+      const moneyOut = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type IN ('expense', 'transfer')"
+      ).get(accountId);
+      // Money IN: income TO this account (account_id = this, type=income)
+      const moneyInDirect = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = 'income'"
+      ).get(accountId);
+      // Money IN: transfer or income TO this account via transfer_account_id
+      const moneyInTransfer = db.prepare(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE transfer_account_id = ? AND type IN ('income', 'transfer')"
+      ).get(accountId);
+      const computedBalance = startBalance
+        - (moneyOut.total || 0)
+        + (moneyInDirect.total || 0)
+        + (moneyInTransfer.total || 0);
       db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(Math.round(computedBalance * 100) / 100, accountId);
     }
 
@@ -5201,7 +5258,7 @@ app.post('/api/accounts', apiRateLimiter, (req, res) => {
     const pid = getProfileId(req);
     const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
-    const validTypes = ['giro', 'ib', 'savings'];
+    const validTypes = ['giro', 'ib', 'savings', 'cash'];
     const accountType = validTypes.includes(type) ? type : 'giro';
     const startBalance = starting_balance !== undefined ? parseFloat(starting_balance) : (parseFloat(balance) || 0);
     const startDate = starting_date || null;
@@ -5226,7 +5283,7 @@ app.put('/api/accounts/:id', apiRateLimiter, (req, res) => {
       .prepare('SELECT id FROM accounts WHERE id = ? AND profile_id = ?')
       .get(req.params.id, pid);
     if (!existing) return res.status(404).json({ error: 'Account not found' });
-    const validTypes = ['giro', 'ib', 'savings'];
+    const validTypes = ['giro', 'ib', 'savings', 'cash'];
     const accountType = validTypes.includes(type) ? type : 'giro';
 
     let updateSql = 'UPDATE accounts SET name = ?, type = ?, currency = ?, balance = ?, notes = ?';
