@@ -61,6 +61,11 @@ export default function FilterBar(props: FilterBarProps) {
   const selectedTags = () => props.selectedTags || []
   const selectedCats = () => props.selectedCategories || []
 
+  const closeAllDropdowns = () => {
+    setIsTagDropdownOpen(false)
+    setIsCatDropdownOpen(false)
+  }
+
   const toggleTagDropdown = () => {
     setIsTagDropdownOpen(!isTagDropdownOpen())
     setIsCatDropdownOpen(false)
@@ -360,6 +365,11 @@ export default function FilterBar(props: FilterBarProps) {
           </button>
         </div>
       </div>
+
+      {/* Click-outside backdrop for dropdowns */}
+      {(isCatDropdownOpen() || isTagDropdownOpen()) && (
+        <div class={styles.dropdownBackdrop} onClick={closeAllDropdowns} />
+      )}
 
       {/* Custom date inputs */}
       {props.selectedPreset === 'custom' && (

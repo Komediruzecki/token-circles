@@ -228,6 +228,13 @@
   transition: all 0.15s;
 }
 
+.dropdownBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: transparent;
+}
+
 .reconcileToggle:hover {
   border-color: var(--primary);
 }

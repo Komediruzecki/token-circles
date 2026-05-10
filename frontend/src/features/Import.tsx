@@ -1167,12 +1167,14 @@ export default function Import() {
                                 <option value="giro">Giro</option>
                                 <option value="savings">Savings</option>
                                 <option value="ib">Investment</option>
+                                <option value="cash">Cash</option>
                               </select>
                               <input
                                 type="text"
                                 inputmode="decimal"
                                 class={styles.accountBalanceInput}
                                 placeholder="Starting balance"
+                                title="Account starting balance"
                                 value={accountBalances()[category] || ''}
                                 oninput={(e) => {
                                   const v = { ...accountBalances() }
@@ -1183,6 +1185,8 @@ export default function Import() {
                               <input
                                 type="date"
                                 class={styles.accountDateInput}
+                                placeholder="Start date"
+                                title="Date the account was opened or when tracking began"
                                 value={accountBalanceDates()[category] || ''}
                                 onchange={(e) => {
                                   const v = { ...accountBalanceDates() }
