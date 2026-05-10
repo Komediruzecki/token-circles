@@ -728,6 +728,13 @@ const routes: RouteDef[] = [
     handler: stub('/api/logs'),
   },
   { pattern: /^\/logs\/clear$/, methods: ['POST'], handler: stub('/api/logs/clear') },
+
+  // ── Counterparties ──
+  {
+    pattern: /^\/counterparties$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.getCounterparties() }),
+  },
 ]
 
 // ── Router ───────────────────────────────────────────────────────────────────

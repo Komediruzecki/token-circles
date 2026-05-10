@@ -7,6 +7,7 @@ import Bills from './features/Bills.tsx'
 import Budgets from './features/Budgets.tsx'
 import Categories from './features/Categories.tsx'
 import CompoundInterestCalculator from './features/CompoundInterestCalculator.tsx'
+import Counterparties from './features/Counterparties.tsx'
 import Dashboard from './features/Dashboard.tsx'
 import EmergencyFundCalculator from './features/EmergencyFundCalculator.tsx'
 import Goals from './features/Goals.tsx'
@@ -39,4 +40,5 @@ export const pages: Record<PageName, PageComponent> = {
   retirement: Retirement,
   housing: Housing,
   analytics: Analytics,
+  counterparties: Counterparties,
 }

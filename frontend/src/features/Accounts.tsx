@@ -60,6 +60,8 @@ export default function Accounts() {
     bank_name: '',
     balance: '',
     currency: 'USD',
+    starting_balance: '',
+    starting_date: '',
   })
 
   // Load accounts and transactions
@@ -83,19 +85,31 @@ export default function Accounts() {
   // Handle form submit
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
-    const data = {
+    const data: Record<string, unknown> = {
       name: formData().name,
       type: formData().type,
       bank_name: formData().bank_name,
-      initial_balance: parseFloat(formData().balance) || 0,
+      balance: parseFloat(formData().balance) || 0,
       currency: formData().currency,
+      starting_balance: formData().starting_balance
+        ? parseFloat(formData().starting_balance)
+        : parseFloat(formData().balance) || 0,
+      starting_date: formData().starting_date || null,
     }
 
     try {
       await apiPost('/api/accounts', data)
       showToast('Account created successfully', 'success')
       setShowAddModal(false)
-      setFormData({ name: '', type: 'checking', bank_name: '', balance: '', currency: 'USD' })
+      setFormData({
+        name: '',
+        type: 'checking',
+        bank_name: '',
+        balance: '',
+        currency: 'USD',
+        starting_balance: '',
+        starting_date: '',
+      })
       loadData()
     } catch (err) {
       console.error('Failed to save account', err)
@@ -388,7 +402,27 @@ export default function Accounts() {
                 />
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Initial Balance</label>
+                <label class={styles.formLabel}>Starting Balance</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  class={styles.formControl}
+                  placeholder="0.00"
+                  value={formData().starting_balance || formData().balance}
+                  oninput={(e) => setFormData({ ...formData(), starting_balance: e.target.value })}
+                />
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Starting Date</label>
+                <input
+                  type="date"
+                  class={styles.formControl}
+                  value={formData().starting_date}
+                  oninput={(e) => setFormData({ ...formData(), starting_date: e.target.value })}
+                />
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Current Balance</label>
                 <input
                   type="number"
                   step="0.01"

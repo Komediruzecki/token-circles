@@ -6,8 +6,18 @@ import { createMemo, createSignal, For } from 'solid-js'
 import styles from './FilterBar.module.css'
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ]
 
 interface FilterOption {
@@ -73,7 +83,8 @@ export default function FilterBar(props: FilterBarProps) {
   const toggleCat = (catId: number) => {
     const idx = selectedCats().indexOf(catId)
     if (idx >= 0) {
-      if (props.onCategoryChange) props.onCategoryChange(selectedCats().filter((id) => id !== catId))
+      if (props.onCategoryChange)
+        props.onCategoryChange(selectedCats().filter((id) => id !== catId))
     } else {
       if (props.onCategoryChange) props.onCategoryChange([...selectedCats(), catId])
     }
@@ -156,12 +167,18 @@ export default function FilterBar(props: FilterBarProps) {
   return (
     <div class={styles.filterBar}>
       <div class={styles.filterRow}>
-
         {/* Category dropdown */}
         <div class={styles.filterDropdown}>
           <button class={styles.filterBtn} onClick={toggleCatDropdown}>
             <span class={styles.filterLabel}>{catLabel()}</span>
-            <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="10"
+              height="10"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -169,14 +186,27 @@ export default function FilterBar(props: FilterBarProps) {
             <div class={styles.dropdownContent}>
               <div class={styles.optionList}>
                 <label class={styles.checkboxLabel}>
-                  <input type="checkbox" checked={selectedCats().length === 0} onChange={clearFilters} />
+                  <input
+                    type="checkbox"
+                    checked={selectedCats().length === 0}
+                    onChange={clearFilters}
+                  />
                   All Categories
                 </label>
                 <For each={props.categories}>
                   {(cat) => (
                     <label class={styles.checkboxLabel}>
-                      <input type="checkbox" checked={selectedCats().includes(cat.id)} onChange={() => { toggleCat(cat.id); }} />
-                      <span class={styles.catDot} style={{ background: `#${cat.color || '94a3b8'}` }} />
+                      <input
+                        type="checkbox"
+                        checked={selectedCats().includes(cat.id)}
+                        onChange={() => {
+                          toggleCat(cat.id)
+                        }}
+                      />
+                      <span
+                        class={styles.catDot}
+                        style={{ background: `#${cat.color || '94a3b8'}` }}
+                      />
                       <span>{cat.name}</span>
                     </label>
                   )}
@@ -190,7 +220,14 @@ export default function FilterBar(props: FilterBarProps) {
         <div class={styles.filterDropdown}>
           <button class={styles.filterBtn} onClick={toggleTagDropdown}>
             <span class={styles.filterLabel}>{tagLabel()}</span>
-            <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="10"
+              height="10"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -198,13 +235,23 @@ export default function FilterBar(props: FilterBarProps) {
             <div class={styles.dropdownContent}>
               <div class={styles.optionList}>
                 <label class={styles.checkboxLabel}>
-                  <input type="checkbox" checked={selectedTags().length === 0} onChange={clearFilters} />
+                  <input
+                    type="checkbox"
+                    checked={selectedTags().length === 0}
+                    onChange={clearFilters}
+                  />
                   All Tags
                 </label>
                 <For each={props.tags}>
                   {(tag) => (
                     <label class={styles.checkboxLabel}>
-                      <input type="checkbox" checked={selectedTags().includes(tag.id)} onChange={() => { toggleTag(tag.id); }} />
+                      <input
+                        type="checkbox"
+                        checked={selectedTags().includes(tag.id)}
+                        onChange={() => {
+                          toggleTag(tag.id)
+                        }}
+                      />
                       <span class={styles.tagDot} style={{ background: `#${tag.color}` }} />
                       <span>{tag.name}</span>
                     </label>
@@ -245,7 +292,9 @@ export default function FilterBar(props: FilterBarProps) {
           {['month', 'lastMonth', 'year'].map((p) => (
             <button
               class={`${styles.presetBtn} ${props.selectedPreset === p ? styles.presetBtnActive : ''}`}
-              onClick={() => { handlePresetClick(p); }}
+              onClick={() => {
+                handlePresetClick(p)
+              }}
             >
               {p === 'month' ? 'This Month' : p === 'lastMonth' ? 'Last Month' : 'This Year'}
             </button>
@@ -254,12 +303,22 @@ export default function FilterBar(props: FilterBarProps) {
 
         {/* Month/Year nav */}
         <div class={styles.monthYearNav}>
-          <select class={styles.monthYearSelect} value={derivedMonth()}
-            onChange={(e) => { handleMonthYearChange(parseInt(e.currentTarget.value), derivedYear()); }}>
+          <select
+            class={styles.monthYearSelect}
+            value={derivedMonth()}
+            onChange={(e) => {
+              handleMonthYearChange(parseInt(e.currentTarget.value), derivedYear())
+            }}
+          >
             <For each={MONTH_NAMES}>{(name, i) => <option value={i()}>{name}</option>}</For>
           </select>
-          <select class={styles.monthYearSelect} value={derivedYear()}
-            onChange={(e) => { handleMonthYearChange(derivedMonth(), parseInt(e.currentTarget.value)); }}>
+          <select
+            class={styles.monthYearSelect}
+            value={derivedYear()}
+            onChange={(e) => {
+              handleMonthYearChange(derivedMonth(), parseInt(e.currentTarget.value))
+            }}
+          >
             <For each={years()}>{(y) => <option value={y}>{y}</option>}</For>
           </select>
         </div>
@@ -272,14 +331,30 @@ export default function FilterBar(props: FilterBarProps) {
               onClick={props.onToggleReconciled}
               title={props.showReconciled ? 'Hide reconciled' : 'Show reconciled'}
             >
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {(props.reconciledCount ?? 0) > 0 && <span class={styles.reconcileBadge}>{props.reconciledCount}</span>}
+              {(props.reconciledCount ?? 0) > 0 && (
+                <span class={styles.reconcileBadge}>{props.reconciledCount}</span>
+              )}
             </button>
           )}
           <button class={styles.clearBtn} onClick={clearFilters}>
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -291,11 +366,21 @@ export default function FilterBar(props: FilterBarProps) {
         <div class={styles.customDates}>
           <div class={styles.dateInput}>
             <label class={styles.inputLabel}>From</label>
-            <input type="date" class={styles.input} value={props.dateRange.from} onInput={handleDateChange('from')} />
+            <input
+              type="date"
+              class={styles.input}
+              value={props.dateRange.from}
+              onInput={handleDateChange('from')}
+            />
           </div>
           <div class={styles.dateInput}>
             <label class={styles.inputLabel}>To</label>
-            <input type="date" class={styles.input} value={props.dateRange.to} onInput={handleDateChange('to')} />
+            <input
+              type="date"
+              class={styles.input}
+              value={props.dateRange.to}
+              onInput={handleDateChange('to')}
+            />
           </div>
         </div>
       )}

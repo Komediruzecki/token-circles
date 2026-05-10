@@ -34,6 +34,7 @@ export type PageName =
   | 'compound'
   | 'emergency'
   | 'rentBuy'
+  | 'counterparties'
 
 // ============ PROFILE ============
 export interface Profile {
@@ -59,6 +60,8 @@ export interface Transaction {
   created_at: string
   updated_at: string
   profile_id: ProfileId
+  account_id?: number | null
+  transfer_account_id?: number | null
   category_name?: string
   category_color?: string
   reconciled?: boolean
@@ -103,6 +106,8 @@ export interface Account {
   balance: number
   notes?: string
   profile_id: ProfileId
+  starting_balance?: number
+  starting_date?: string | null
 }
 
 // ============ BUDGETS ============

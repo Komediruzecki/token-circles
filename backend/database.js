@@ -499,6 +499,29 @@ function migrate() {
     } catch (e) {}
   }
 
+  // Migration: Add transfer_account_id column to transactions table
+  if (!columnExists('transactions', 'transfer_account_id')) {
+    try {
+      db.exec('ALTER TABLE transactions ADD COLUMN transfer_account_id INTEGER');
+    } catch (e) {}
+  }
+
+  // Migration: Add starting_balance and starting_date columns to accounts table
+  if (!columnExists('accounts', 'starting_balance')) {
+    try {
+      db.exec('ALTER TABLE accounts ADD COLUMN starting_balance REAL NOT NULL DEFAULT 0');
+      // Migrate existing accounts: set starting_balance = current balance
+      db.exec('UPDATE accounts SET starting_balance = balance WHERE starting_balance = 0');
+    } catch (e) {}
+  }
+  if (!columnExists('accounts', 'starting_date')) {
+    try {
+      db.exec('ALTER TABLE accounts ADD COLUMN starting_date TEXT DEFAULT NULL');
+      // Migrate existing accounts: set starting_date = created_at
+      db.exec("UPDATE accounts SET starting_date = created_at WHERE starting_date IS NULL");
+    } catch (e) {}
+  }
+
   // Seed demo user if no users exist
   const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
   if (userCount.c === 0) {

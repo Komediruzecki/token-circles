@@ -81,7 +81,8 @@
   background: var(--bg);
 }
 
-.catDot, .tagDot {
+.catDot,
+.tagDot {
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -164,8 +165,12 @@
   transition: all 0.15s;
 }
 
-.presetBtn:first-child { border-radius: 6px 0 0 6px; }
-.presetBtn:last-child { border-radius: 0 6px 6px 0; }
+.presetBtn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.presetBtn:last-child {
+  border-radius: 0 6px 6px 0;
+}
 
 .presetBtn:hover {
   border-color: var(--primary);

@@ -88,6 +88,7 @@ export interface Transaction {
   exchange_rate?: number
   category_id?: number
   account_id?: number
+  transfer_account_id?: number
   beneficiary: string
   payor: string
   date: string
@@ -116,6 +117,8 @@ export interface Account {
   currency: string
   balance: number
   notes: string
+  starting_balance?: number
+  starting_date?: string
 }
 
 export interface Budget {

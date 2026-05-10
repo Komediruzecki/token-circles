@@ -35,7 +35,7 @@ export default function RecurringInsightsCard() {
   const upcoming = () =>
     items()
       .filter((i) => i.next_date)
-      .sort((a, b) => (a.next_date!).localeCompare(b.next_date!))
+      .sort((a, b) => a.next_date!.localeCompare(b.next_date!))
       .slice(0, 5)
 
   const formatCurrency = (amount: number) =>

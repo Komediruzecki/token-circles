@@ -23,7 +23,7 @@ export default function BudgetAlertsCard() {
 
   onMount(async () => {
     try {
-      const data = await apiGet<any[]>('/api/budgets/alerts?threshold=80') as any
+      const data = (await apiGet<any[]>('/api/budgets/alerts?threshold=80')) as any
       if (Array.isArray(data)) {
         setAlerts(data)
       }
@@ -46,7 +46,14 @@ export default function BudgetAlertsCard() {
         <div class={styles.emptyMsg}>Loading...</div>
       ) : alerts().length === 0 ? (
         <div class={`${styles.alertItem} ${styles.ok}`}>
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
             <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div class={styles.alertContent}>
@@ -58,15 +65,21 @@ export default function BudgetAlertsCard() {
         <For each={alerts().slice(0, 5)}>
           {(alert) => (
             <div class={`${styles.alertItem} ${statusClass(alert.status)}`}>
-              <span class={styles.alertDot} style={{ 'background-color': `#${alert.category_color || 'ef4444'}` }} />
+              <span
+                class={styles.alertDot}
+                style={{ 'background-color': `#${alert.category_color || 'ef4444'}` }}
+              />
               <div class={styles.alertContent}>
                 <div class={styles.alertTitle}>{alert.category_name}</div>
                 <div class={styles.alertDescription}>
-                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgeted)} ({alert.percent}%)
+                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgeted)} ({alert.percent}
+                  %)
                 </div>
               </div>
               <span class={`${styles.alertAmount} ${alert.status === 'over' ? styles.over : ''}`}>
-                {alert.remaining < 0 ? `-${formatCurrency(Math.abs(alert.remaining))}` : formatCurrency(alert.remaining)}
+                {alert.remaining < 0
+                  ? `-${formatCurrency(Math.abs(alert.remaining))}`
+                  : formatCurrency(alert.remaining)}
               </span>
             </div>
           )}

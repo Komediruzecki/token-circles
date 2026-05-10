@@ -2066,6 +2066,8 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
       exchange_rate,
       type,
       notes,
+      account_id,
+      transfer_account_id,
     } = req.body;
 
     // Sanitize description to prevent XSS and injection
@@ -2084,8 +2086,8 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
       .prepare(
         `
       INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
       )
       .run(
@@ -2101,7 +2103,9 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
         exchange_rate || 1.0,
         type || 'expense',
         notes || '',
-        pid
+        pid,
+        account_id || null,
+        transfer_account_id || null
       );
     // Return created transaction with all fields including timestamps
     const created = db
@@ -2109,6 +2113,18 @@ app.post('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
         `SELECT * FROM transactions WHERE id = ? AND profile_id = ?`
       )
       .get(info.lastInsertRowid, pid);
+    // Auto-update linked account balance
+    if (account_id && type === 'transfer' && transfer_account_id) {
+      // Transfer: subtract from source, add to destination
+      db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+        .run(amount, account_id, getProfileIds(req));
+      db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+        .run(amount, transfer_account_id, getProfileIds(req));
+    } else if (account_id && (type === 'income' || type === 'expense')) {
+      const delta = type === 'income' ? amount : -amount;
+      db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+        .run(delta, account_id, getProfileIds(req));
+    }
     // Recalculate linked goal progress
     if (category_id) recalcGoalsByCategory(category_id);
     res.json(toCamelCase(created));
@@ -2184,6 +2200,25 @@ app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
     const authParams = [...pids, ...ids];
 
     if (action === 'delete' || action === 'DELETE' || action.toLowerCase() === 'delete') {
+      // Reverse account balance effects before bulk delete
+      const txRows = db.prepare(
+        `SELECT id, account_id, transfer_account_id, type, amount FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
+      ).all(...authParams);
+      for (const tx of txRows) {
+        if (!tx.account_id) continue;
+        if (tx.type === 'transfer' && tx.transfer_account_id) {
+          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+            .run(tx.amount, tx.account_id, pids);
+          db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+            .run(tx.amount, tx.transfer_account_id, pids);
+        } else if (tx.type === 'income') {
+          db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+            .run(tx.amount, tx.account_id, pids);
+        } else if (tx.type === 'expense') {
+          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+            .run(tx.amount, tx.account_id, pids);
+        }
+      }
       const stmt = db.prepare(
         `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
       );
@@ -2253,6 +2288,7 @@ app.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
 app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
+    const pids = getProfileIds(req);
     let hasUpdate = false;
     const {
       description,
@@ -2268,7 +2304,13 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
       type,
       notes,
       reconciled,
+      account_id,
+      transfer_account_id,
     } = req.body;
+
+    // Fetch old transaction for account balance reversal
+    const oldTx = db.prepare('SELECT account_id, transfer_account_id, type, amount FROM transactions WHERE id=? AND profile_id=?')
+      .get(req.params.id, pid);
 
     let updates = [];
     let params = [];
@@ -2340,9 +2382,34 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
       params.push(reconciled ? 1 : 0);
       hasUpdate = true;
     }
+    if (account_id !== undefined) {
+      updates.push('account_id=?');
+      params.push(account_id || null);
+      hasUpdate = true;
+    }
+    if (transfer_account_id !== undefined) {
+      updates.push('transfer_account_id=?');
+      params.push(transfer_account_id || null);
+      hasUpdate = true;
+    }
 
     if (!hasUpdate) {
       return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+
+    // Reverse old transaction effect on old account(s)
+    if (oldTx && oldTx.account_id) {
+      if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
+        // Reverse transfer: add back to source, subtract from destination
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(oldTx.amount, oldTx.account_id, pids);
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+          .run(oldTx.amount, oldTx.transfer_account_id, pids);
+      } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
+        const oldDelta = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(oldDelta, oldTx.account_id, pids);
+      }
     }
 
     updates.push("updated_at=datetime('now')");
@@ -2352,7 +2419,41 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
     const result = db
       .prepare(`UPDATE transactions SET ${updates.join(', ')} WHERE id=? AND profile_id=?`)
       .run(...params);
-    if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+    if (result.changes === 0) {
+      // Re-apply old effect (rollback reversal) since no update happened
+      if (oldTx && oldTx.account_id) {
+        if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
+          db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+            .run(oldTx.amount, oldTx.account_id, pids);
+          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+            .run(oldTx.amount, oldTx.transfer_account_id, pids);
+        } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
+          const oldDelta = oldTx.type === 'income' ? oldTx.amount : -oldTx.amount;
+          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+            .run(oldDelta, oldTx.account_id, pids);
+        }
+      }
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Apply new transaction effect on account(s)
+    const newAccountId = account_id !== undefined ? (account_id || null) : (oldTx ? oldTx.account_id : null);
+    const newTransferAccountId = transfer_account_id !== undefined ? (transfer_account_id || null) : (oldTx ? oldTx.transfer_account_id : null);
+    const newType = type !== undefined ? type : (oldTx ? oldTx.type : 'expense');
+    const newAmount = amount !== undefined ? amount : (oldTx ? oldTx.amount : 0);
+    if (newAccountId) {
+      if (newType === 'transfer' && newTransferAccountId) {
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+          .run(newAmount, newAccountId, pids);
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(newAmount, newTransferAccountId, pids);
+      } else if (newType === 'income' || newType === 'expense') {
+        const newDelta = newType === 'income' ? newAmount : -newAmount;
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(newDelta, newAccountId, pids);
+      }
+    }
+
     // Recalculate linked goal progress
     if (category_id !== undefined) recalcGoalsByCategory(category_id);
     res.json(toCamelCase({ ok: true }));
@@ -2366,12 +2467,27 @@ app.put('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
 app.delete('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
   try {
     const pid = getProfileId(req);
-    // Fetch category_id before delete to recalc linked goals
-    const tx = db.prepare('SELECT category_id FROM transactions WHERE id=? AND profile_id=?').get(req.params.id, pid);
+    const pids = getProfileIds(req);
+    // Fetch full tx before delete for account reversal and goal recalc
+    const tx = db.prepare('SELECT category_id, account_id, transfer_account_id, type, amount FROM transactions WHERE id=? AND profile_id=?').get(req.params.id, pid);
     const result = db
       .prepare('DELETE FROM transactions WHERE id=? AND profile_id=?')
       .run(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+    // Reverse transaction effect on linked account(s)
+    if (tx && tx.account_id) {
+      if (tx.type === 'transfer' && tx.transfer_account_id) {
+        // Reverse transfer: add back to source, subtract from destination
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(tx.amount, tx.account_id, pids);
+        db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (?)')
+          .run(tx.amount, tx.transfer_account_id, pids);
+      } else if (tx.type === 'income' || tx.type === 'expense') {
+        const delta = tx.type === 'income' ? -tx.amount : tx.amount;
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (?)')
+          .run(delta, tx.account_id, pids);
+      }
+    }
     if (tx && tx.category_id) recalcGoalsByCategory(tx.category_id);
     res.json(toCamelCase({ ok: true }));
   } catch (err) {
@@ -2384,7 +2500,10 @@ app.delete('/api/transactions/:id', apiRateLimiter, requireAuth, (req, res) => {
 app.delete('/api/transactions', apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
+    const pids = getProfileIds(req);
     db.prepare('DELETE FROM transactions WHERE profile_id=?').run(pid);
+    // Reset all account balances to 0 since all transactions are deleted
+    db.prepare('UPDATE accounts SET balance = 0 WHERE profile_id IN (?)').run(pids);
     res.json({ ok: true, message: 'All transactions deleted' });
   } catch (err) {
     console.error(err.message);
@@ -4878,8 +4997,8 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
 
     const insert = db.prepare(`
       INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const getCat = db.prepare(
@@ -4889,7 +5008,7 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
       'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
     );
     const insertAccount = db.prepare(
-      'INSERT INTO accounts (name, type, currency, balance, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
     const insertBalanceHistory = db.prepare(
       'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)'
@@ -4903,7 +5022,7 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
         const accType = (accountTypes && accountTypes[catName]) || 'giro';
         const balance = parseFloat((accountBalances && accountBalances[catName]) || '0') || 0;
         const balanceDate = (accountBalanceDates && accountBalanceDates[catName]) || new Date().toISOString().split('T')[0];
-        const result = insertAccount.run(catName, accType, 'USD', balance, '', pid);
+        const result = insertAccount.run(catName, accType, 'USD', balance, '', pid, balance, balanceDate);
         const accountId = result.lastInsertRowid;
         accountIdMap.set(catName, accountId);
         // Record initial balance history
@@ -5025,7 +5144,8 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
           validatedType,
           row[mapping.notes] || row[mapping.Notes] || row[mapping.NOTES] || '',
           pid,
-          accountId
+          accountId,
+          null
         );
         imported++;
       }
@@ -5064,15 +5184,17 @@ app.get('/api/accounts', apiRateLimiter, (req, res) => {
 app.post('/api/accounts', apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { name, type, currency, balance, notes } = req.body;
+    const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
     const validTypes = ['giro', 'ib', 'savings'];
     const accountType = validTypes.includes(type) ? type : 'giro';
+    const startBalance = starting_balance !== undefined ? parseFloat(starting_balance) : (parseFloat(balance) || 0);
+    const startDate = starting_date || null;
     const result = db
       .prepare(
-        'INSERT INTO accounts (name, type, currency, balance, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .run(name.trim(), accountType, currency || 'USD', parseFloat(balance) || 0, notes || '', pid);
+      .run(name.trim(), accountType, currency || 'USD', startBalance, notes || '', pid, startBalance, startDate);
     res.json({ id: result.lastInsertRowid, message: 'Account created' });
   } catch (err) {
     console.error(err.message);
@@ -5084,24 +5206,30 @@ app.post('/api/accounts', apiRateLimiter, (req, res) => {
 app.put('/api/accounts/:id', apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
-    const { name, type, currency, balance, notes } = req.body;
+    const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
     const existing = db
       .prepare('SELECT id FROM accounts WHERE id = ? AND profile_id = ?')
       .get(req.params.id, pid);
     if (!existing) return res.status(404).json({ error: 'Account not found' });
     const validTypes = ['giro', 'ib', 'savings'];
     const accountType = validTypes.includes(type) ? type : 'giro';
-    db.prepare(
-      'UPDATE accounts SET name = ?, type = ?, currency = ?, balance = ?, notes = ? WHERE id = ? AND profile_id = ?'
-    ).run(
-      name.trim(),
-      accountType,
-      currency || 'USD',
-      parseFloat(balance) || 0,
-      notes || '',
-      req.params.id,
-      pid
-    );
+
+    let updateSql = 'UPDATE accounts SET name = ?, type = ?, currency = ?, balance = ?, notes = ?';
+    const params = [name.trim(), accountType, currency || 'USD', parseFloat(balance) || 0, notes || ''];
+
+    if (starting_balance !== undefined) {
+      updateSql += ', starting_balance = ?';
+      params.push(parseFloat(starting_balance) || 0);
+    }
+    if (starting_date !== undefined) {
+      updateSql += ', starting_date = ?';
+      params.push(starting_date || null);
+    }
+
+    updateSql += ' WHERE id = ? AND profile_id = ?';
+    params.push(req.params.id, pid);
+
+    db.prepare(updateSql).run(...params);
     res.json({ message: 'Account updated' });
   } catch (err) {
     console.error(err.message);
@@ -5762,6 +5890,70 @@ app.post('/api/bills/:id/mark-paid', apiRateLimiter, (req, res) => {
     db.prepare('UPDATE bills SET last_paid = ? WHERE id = ?').run(todayStr, req.params.id);
 
     res.json({ ok: true, transactionId: info.lastInsertRowid });
+  } catch (err) {
+    console.error(err.message);
+    logError('error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// COUNTERPARTIES
+// ========================
+app.get('/api/counterparties', apiRateLimiter, (req, res) => {
+  try {
+    const pids = getProfileIds(req);
+    const inClause = pids.map(() => '?').join(',');
+
+    // Aggregate outgoing by beneficiary (we pay them = expense)
+    const outgoing = db.prepare(`
+      SELECT beneficiary AS name, 'outgoing' AS direction, SUM(amount) AS total, COUNT(*) AS count
+      FROM transactions
+      WHERE beneficiary != '' AND type = 'expense'
+        AND profile_id IN (${inClause})
+      GROUP BY beneficiary
+    `).all(...pids);
+
+    // Aggregate incoming by payor (they pay us = income)
+    const incoming = db.prepare(`
+      SELECT payor AS name, 'incoming' AS direction, SUM(amount) AS total, COUNT(*) AS count
+      FROM transactions
+      WHERE payor != '' AND type = 'income'
+        AND profile_id IN (${inClause})
+      GROUP BY payor
+    `).all(...pids);
+
+    // Merge by name to compute net
+    const map = new Map();
+    for (const row of outgoing) {
+      const name = (row.name || '').trim();
+      if (!name) continue;
+      map.set(name, { name, incoming: 0, outgoing: row.total || 0, count: row.count || 0 });
+    }
+    for (const row of incoming) {
+      const name = (row.name || '').trim();
+      if (!name) continue;
+      const existing = map.get(name);
+      if (existing) {
+        existing.incoming = row.total || 0;
+        existing.count += row.count || 0;
+      } else {
+        map.set(name, { name, incoming: row.total || 0, outgoing: 0, count: row.count || 0 });
+      }
+    }
+
+    const result = Array.from(map.values()).map((c) => ({
+      name: c.name,
+      incoming: Math.round(c.incoming * 100) / 100,
+      outgoing: Math.round(c.outgoing * 100) / 100,
+      net: Math.round((c.incoming - c.outgoing) * 100) / 100,
+      transaction_count: c.count,
+    }));
+
+    // Sort by absolute net amount desc
+    result.sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+    res.json(result);
   } catch (err) {
     console.error(err.message);
     logError('error', err);

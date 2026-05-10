@@ -462,13 +462,30 @@ export default function Transactions() {
             onClick={openTransactionModal}
             data-test-id="add-transaction-btn"
           >
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 5v14M5 12h14" />
             </svg>
             Add
           </button>
-          <button class={`${styles.btnSecondary} ${styles.btnSm}`} onClick={() => setAutoCategorizeModalOpen(true)}>
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <button
+            class={`${styles.btnSecondary} ${styles.btnSm}`}
+            onClick={() => setAutoCategorizeModalOpen(true)}
+          >
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             Auto
@@ -478,7 +495,14 @@ export default function Transactions() {
             onClick={() => setReconciliationModalOpen(true)}
             disabled={selectedTransactions().length === 0}
           >
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" />
             </svg>
@@ -498,11 +522,17 @@ export default function Transactions() {
         showReconciled={showReconciled()}
         reconciledCount={reconciledCount()}
         onToggleReconciled={() => setShowReconciled(!showReconciled())}
-        onCategoryChange={(ids) => { setSelectedCategories(ids); setCurrentPage(1) }}
+        onCategoryChange={(ids) => {
+          setSelectedCategories(ids)
+          setCurrentPage(1)
+        }}
         searchTerm={searchTerm()}
         onSearchChange={(t) => setSearchTerm(t)}
         filterType={filterType()}
-        onFilterTypeChange={(t) => { setFilterType(t); setCurrentPage(1) }}
+        onFilterTypeChange={(t) => {
+          setFilterType(t)
+          setCurrentPage(1)
+        }}
         onChange={handleFilterChange}
       />
 

@@ -3224,3 +3224,53 @@ export async function importBulk(body: unknown): Promise<Response> {
     return json({ error: (err as Error).message }, 500)
   }
 }
+
+// ── Counterparties ─────────────────────────────────────────────────────────
+
+export async function getCounterparties(): Promise<Response> {
+  try {
+    const db = await getDB()
+    const txs = await db.getAll('transactions')
+
+    const map = new Map<string, { incoming: number; outgoing: number; count: number }>()
+
+    for (const tx of txs) {
+      if (tx.type === 'expense' && tx.beneficiary) {
+        const name = String(tx.beneficiary).trim()
+        if (!name) continue
+        const existing = map.get(name)
+        if (existing) {
+          existing.outgoing += tx.amount
+          existing.count++
+        } else {
+          map.set(name, { incoming: 0, outgoing: tx.amount, count: 1 })
+        }
+      }
+      if (tx.type === 'income' && tx.payor) {
+        const name = String(tx.payor).trim()
+        if (!name) continue
+        const existing = map.get(name)
+        if (existing) {
+          existing.incoming += tx.amount
+          existing.count++
+        } else {
+          map.set(name, { incoming: tx.amount, outgoing: 0, count: 1 })
+        }
+      }
+    }
+
+    const result = Array.from(map.entries()).map(([name, data]) => ({
+      name,
+      incoming: Math.round(data.incoming * 100) / 100,
+      outgoing: Math.round(data.outgoing * 100) / 100,
+      net: Math.round((data.incoming - data.outgoing) * 100) / 100,
+      transaction_count: data.count,
+    }))
+
+    result.sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+
+    return json(result)
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}

@@ -133,7 +133,15 @@ export default function TransactionTable(props: TransactionTableProps) {
                 </td>
                 <td class={styles.dateCol}>
                   {transaction.reconciled && (
-                    <svg width="12" height="12" fill="none" stroke="#22c55e" stroke-width="2" viewBox="0 0 24 24" style="margin-right: 4px; vertical-align: middle;">
+                    <svg
+                      width="12"
+                      height="12"
+                      fill="none"
+                      stroke="#22c55e"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      style="margin-right: 4px; vertical-align: middle;"
+                    >
                       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   )}

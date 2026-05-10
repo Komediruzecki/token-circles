@@ -137,7 +137,13 @@ export default function Goals() {
       }
       setShowAddModal(false)
       setEditingGoal(null)
-      setFormData({ name: '', target_amount: '', target_date: '', monthly_contribution: '', category_id: '' })
+      setFormData({
+        name: '',
+        target_amount: '',
+        target_date: '',
+        monthly_contribution: '',
+        category_id: '',
+      })
       loadGoals()
     } catch (err) {
       console.error('Failed to save goal:', err)
@@ -259,9 +265,7 @@ export default function Goals() {
                       <p data-test-id="goal-date" class={styles.goalDate}>
                         {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
                         {goal.category_name && (
-                          <span class={styles.goalCategory}>
-                            {' '}• {goal.category_name}
-                          </span>
+                          <span class={styles.goalCategory}> • {goal.category_name}</span>
                         )}
                       </p>
                     </div>
@@ -560,9 +564,7 @@ export default function Goals() {
                 <select
                   class={styles.formControl}
                   value={formData().category_id}
-                  onchange={(e) =>
-                    setFormData({ ...formData(), category_id: e.target.value })
-                  }
+                  onchange={(e) => setFormData({ ...formData(), category_id: e.target.value })}
                 >
                   <option value="">None — manual tracking</option>
                   <For each={categories()}>
@@ -573,7 +575,13 @@ export default function Goals() {
                     )}
                   </For>
                 </select>
-                <p style={{ 'font-size': '11px', color: 'var(--text-secondary)', 'margin-top': '4px' }}>
+                <p
+                  style={{
+                    'font-size': '11px',
+                    color: 'var(--text-secondary)',
+                    'margin-top': '4px',
+                  }}
+                >
                   Transactions to this category will count toward goal progress
                 </p>
               </div>
