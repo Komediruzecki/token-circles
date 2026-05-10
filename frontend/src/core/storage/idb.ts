@@ -19,53 +19,52 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 // ---- Schema Helpers ----
 
-function upgradeSchema(db: IDBPDatabase) {
+function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
   // Profiles
-  db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
+  if (oldVersion < 1) {
+    db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
 
-  // Transactions
-  const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
-  txns.createIndex('by_profile', 'profile_id')
-  txns.createIndex('by_date', 'date')
-  txns.createIndex('by_category', 'category_id')
-  txns.createIndex('by_type', 'type')
+    const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
+    txns.createIndex('by_profile', 'profile_id')
+    txns.createIndex('by_date', 'date')
+    txns.createIndex('by_category', 'category_id')
+    txns.createIndex('by_type', 'type')
 
-  // Categories
-  const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
-  cats.createIndex('by_profile', 'profile_id')
-  cats.createIndex('by_type', 'type')
+    const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
+    cats.createIndex('by_profile', 'profile_id')
+    cats.createIndex('by_type', 'type')
 
-  // Accounts
-  const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
-  accts.createIndex('by_profile', 'profile_id')
+    const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
+    accts.createIndex('by_profile', 'profile_id')
 
-  // Budgets
-  const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
-  budgets.createIndex('by_profile', 'profile_id')
+    const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
+    budgets.createIndex('by_profile', 'profile_id')
 
-  // Goals
-  const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
-  goals.createIndex('by_profile', 'profile_id')
+    const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
+    goals.createIndex('by_profile', 'profile_id')
 
-  // Loans
-  const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
-  loans.createIndex('by_profile', 'profile_id')
+    const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
+    loans.createIndex('by_profile', 'profile_id')
 
-  // Balance History
-  const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
-  bh.createIndex('by_account', 'account_id')
+    const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
+    bh.createIndex('by_account', 'account_id')
 
-  // Receipts
-  const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
-  receipts.createIndex('by_profile', 'profile_id')
-  receipts.createIndex('by_transaction', 'transaction_id')
+    const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
+    receipts.createIndex('by_profile', 'profile_id')
+    receipts.createIndex('by_transaction', 'transaction_id')
 
-  // Settings (key-value)
-  db.createObjectStore('settings', { keyPath: 'key' })
+    db.createObjectStore('settings', { keyPath: 'key' })
+  }
+
+  // Version 3: Add portfolio holdings store
+  if (oldVersion < 3) {
+    const pf = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
+    pf.createIndex('by_profile', 'profile_id')
+  }
 }
 
 let dbPromise: ReturnType<typeof openDB> | null = null
@@ -433,6 +432,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'balanceHistory',
       'receipts',
       'profiles',
+      'portfolioHoldings',
     ]
     for (const store of stores) {
       await db.clear(store)
@@ -487,6 +487,8 @@ export class IndexedDBAdapter implements StorageAdapter {
     if (data.goals) for (const g of data.goals) await db.add('goals', remap(g))
     if (data.loans) for (const l of data.loans) await db.add('loans', remap(l))
     if (data.transactions) for (const t of data.transactions) await db.add('transactions', remap(t))
+    if (data.portfolioHoldings)
+      for (const h of data.portfolioHoldings) await db.add('portfolioHoldings', remap(h))
 
     // Import settings
     for (const [key, value] of Object.entries(data.settings)) {
@@ -508,6 +510,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'balanceHistory',
       'receipts',
       'profiles',
+      'portfolioHoldings',
       'settings',
     ]
     for (const store of stores) {

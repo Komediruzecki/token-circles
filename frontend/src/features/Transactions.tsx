@@ -70,7 +70,9 @@ export default function Transactions() {
   const [formMeans, setFormMeans] = createSignal('')
   const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
   const [formAmountLocal, setFormAmountLocal] = createSignal('')
-  const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>([])
+  const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>(
+    []
+  )
   const [categories, setCategories] = createSignal<Category[]>([])
   const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
@@ -218,7 +220,11 @@ export default function Transactions() {
     const ids = selectedTransactions()
     if (ids.length === 0) return
     try {
-      await apiPut('/api/transactions/bulk', { ids, action: 'update', data: { category_id: categoryId } })
+      await apiPut('/api/transactions/bulk', {
+        ids,
+        action: 'update',
+        data: { category_id: categoryId },
+      })
       setSelectedTransactions([])
       await refreshTransactions()
     } catch (error) {

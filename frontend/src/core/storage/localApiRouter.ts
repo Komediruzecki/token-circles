@@ -735,6 +735,34 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: dispatch({ GET: () => h.getCounterparties() }),
   },
+
+  // ── Portfolio ──
+  {
+    pattern: /^\/portfolio\/holdings$/,
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: () => h.portfolioHoldingsList(),
+      POST: (ctx) => h.portfolioHoldingsCreate(ctx.body),
+    }),
+  },
+  {
+    pattern: /^\/portfolio\/holdings\/(\d+)$/,
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.portfolioHoldingsUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.portfolioHoldingsDelete(ctx.params),
+    }),
+  },
+  {
+    pattern: /^\/portfolio\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.portfolioSummary() }),
+  },
+  {
+    pattern: /^\/portfolio\/prices$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.portfolioPrices(ctx.body) }),
+  },
 ]
 
 // ── Router ───────────────────────────────────────────────────────────────────

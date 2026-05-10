@@ -196,6 +196,7 @@ export interface ExportData {
   goals: ExportGoal[]
   loans: ExportLoan[]
   retirementGoals?: ExportGoal[]
+  portfolioHoldings?: ExportPortfolioHolding[]
 
   settings: ExportSettings
 
@@ -227,5 +228,16 @@ export type ExportBudget = Budget
 export type ExportGoal = Goal
 
 export type ExportLoan = Loan
+
+export interface ExportPortfolioHolding {
+  id: number
+  ticker: string
+  shares: number
+  purchase_price: number
+  purchase_date: string
+  notes: string
+  created_at: string
+  profile_id: number
+}
 
 export type ExportSettings = Settings

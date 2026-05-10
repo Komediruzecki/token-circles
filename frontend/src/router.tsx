@@ -14,6 +14,7 @@ import Goals from './features/Goals.tsx'
 import Housing from './features/Housing.tsx'
 import Import from './features/Import.tsx'
 import Loans from './features/Loans.tsx'
+import Portfolio from './features/Portfolio.tsx'
 import RentBuyCalculator from './features/RentBuyCalculator.tsx'
 import Retirement from './features/Retirement.tsx'
 import Settings from './features/Settings.tsx'
@@ -41,4 +42,5 @@ export const pages: Record<PageName, PageComponent> = {
   housing: Housing,
   analytics: Analytics,
   counterparties: Counterparties,
+  portfolio: Portfolio,
 }
