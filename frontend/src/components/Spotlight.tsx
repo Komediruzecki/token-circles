@@ -93,7 +93,7 @@ export default function Spotlight() {
   const isFirst = createMemo(() => stepIdx() === 0)
   const isLast = createMemo(() => stepIdx() === steps().length - 1)
 
-  const waitForTarget = (selector: string, maxRetries = 30): Promise<HTMLElement | null> => {
+  const waitForTarget = (selector: string, maxRetries = 60): Promise<HTMLElement | null> => {
     return new Promise((resolve) => {
       let attempts = 0
       const check = () => {
@@ -171,12 +171,37 @@ export default function Spotlight() {
     if (!step || !spotlightActive()) return
 
     const selector = step.targetSelector
+    setTargetMissing(false)
+    setTooltipReady(false)
+
     if (!selector) {
+      setTimeout(() => { updatePositions() }, 50)
+      return
+    }
+
+    // Try immediate match first (already on correct page)
+    const immediate = document.querySelector(selector) as HTMLElement
+    if (immediate) {
       updatePositions()
       return
     }
 
-    waitForTarget(selector).then(() => {
+    // Poll for element (page might be loading)
+    waitForTarget(selector).then((el) => {
+      if (!el) {
+        setTargetMissing(true)
+        // Show tooltip centered with "coming soon" message
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        setHighlight({ top: 0, left: 0, width: 0, height: 0, rx: 8, visible: false })
+        setTooltip({
+          top: vh / 2 - 100,
+          left: vw / 2 - TOOLTIP_WIDTH / 2,
+          placement: 'center',
+        })
+        setTooltipReady(true)
+        return
+      }
       updatePositions()
     })
   })
@@ -271,7 +296,7 @@ export default function Spotlight() {
       >
         {targetMissing() && currentStep().targetSelector && (
           <div class={styles.targetMissing}>
-            Navigate to this feature's page to continue the tour.
+            This step's feature isn't visible on the current page. Click Next to continue, or navigate to the relevant page and the highlight will appear.
           </div>
         )}
 
