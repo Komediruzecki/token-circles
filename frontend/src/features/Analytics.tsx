@@ -174,9 +174,9 @@ export default function Analytics() {
         byMonth,
         recentTransactions,
         savingsRate:
-          transactionsRes?.total_income > 0
-            ? ((transactionsRes.total_income - transactionsRes.total_expense) /
-                transactionsRes.total_income) *
+          transactionsRes?.totalIncome > 0
+            ? ((transactionsRes.totalIncome - transactionsRes.totalExpenses) /
+                transactionsRes.totalIncome) *
               100
             : 0,
       })
