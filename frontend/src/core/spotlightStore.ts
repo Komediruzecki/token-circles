@@ -56,17 +56,17 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   },
   {
     title: 'Dashboard Overview',
-    targetSelector: '[data-test-id="dashboard-metrics"]',
-    description: 'See your income, expenses, and net balance at a glance. Compare this month to last month with delta indicators.',
+    targetSelector: '[data-test-id="dashboard-container"]',
+    description: 'See your income, expenses, and net balance at a glance. The top cards show this month vs last month with delta indicators.',
     placement: 'bottom',
     section: 'dashboard',
     requiredPage: 'dashboard',
   },
   {
-    title: 'Budgets & Savings Rate',
-    targetSelector: '[data-test-id="dashboard-widgets"]',
-    description: 'Monitor budget alerts and track your savings rate. The period navigator lets you jump between months.',
-    placement: 'top',
+    title: 'Period Navigator',
+    targetSelector: '[data-test-id="month-selector"]',
+    description: 'Use the month/year selectors to jump to any period. Charts and metrics update automatically.',
+    placement: 'bottom',
     section: 'dashboard',
     requiredPage: 'dashboard',
   },
@@ -75,7 +75,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   {
     title: 'Transaction Management',
     targetSelector: '[data-test-id="transactions-header"]',
-    description: 'Add, edit, and delete transactions. Use bulk actions to change categories or types for multiple transactions at once.',
+    description: 'Add, edit, and delete transactions. The table shows FROM → TO flow, amounts, categories, and tags.',
     placement: 'bottom',
     section: 'transactions',
     requiredPage: 'transactions',
@@ -83,15 +83,15 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   {
     title: 'Smart Filtering',
     targetSelector: '[data-test-id="filter-bar"]',
-    description: 'Filter by category, tags, type, date range, or search. The reconcile toggle helps you track verified transactions.',
+    description: 'Filter by category, tags, type, and date range. Use the search box for text matching and the reconcile toggle for auditing.',
     placement: 'bottom',
     section: 'transactions',
     requiredPage: 'transactions',
   },
   {
-    title: 'Reconciliation',
+    title: 'Bulk Actions',
     targetSelector: '[data-test-id="bulk-action-bar"]',
-    description: 'Select multiple transactions and reconcile them in bulk. Reconciled transactions are visually distinct for easy auditing.',
+    description: 'Select transactions with checkboxes, then use the bulk bar to delete, change categories, or change types all at once.',
     placement: 'top',
     section: 'transactions',
     requiredPage: 'transactions',
@@ -100,7 +100,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   // ── Accounts & Portfolio ──
   {
     title: 'Account Tracking',
-    targetSelector: '[data-test-id="accounts-header"]',
+    targetSelector: '[data-test-id="accounts-summary"]',
     description: 'Manage bank, savings, investment, and cash accounts. Balances auto-update when linked transactions are created.',
     placement: 'bottom',
     section: 'accounts-portfolio',
@@ -108,7 +108,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   },
   {
     title: 'Portfolio Tracker',
-    targetSelector: '[data-test-id="portfolio-header"]',
+    targetSelector: '[data-test-id="portfolio-summary"]',
     description: 'Track your stock and ETF holdings with real-time prices from Yahoo Finance. See gain/loss and allocation breakdown.',
     placement: 'bottom',
     section: 'accounts-portfolio',
@@ -118,7 +118,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   // ── Budgets & Goals ──
   {
     title: 'Category Budgets',
-    targetSelector: '[data-test-id="budgets-header"]',
+    targetSelector: '[data-test-id="budget-summary"]',
     description: 'Set monthly budgets per category with rollover support. Use zero-based budgeting for precise allocation.',
     placement: 'bottom',
     section: 'budgets-goals',
@@ -126,7 +126,7 @@ export const SPOTLIGHT_STEPS: SpotlightStep[] = [
   },
   {
     title: 'Savings Goals',
-    targetSelector: '[data-test-id="goals-header"]',
+    targetSelector: '[data-test-id="goals-grid"]',
     description: 'Set target amounts and deadlines. Track progress with contributions and see how close you are to each goal.',
     placement: 'bottom',
     section: 'budgets-goals',
