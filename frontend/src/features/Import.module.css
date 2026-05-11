@@ -56,6 +56,20 @@
   border-bottom-color: var(--primary);
 }
 
+/* Section header and divider */
+.sectionHeader {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 16px 0;
+}
+
+.sectionDivider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0 20px 0;
+}
+
 /* Upload area */
 .uploadArea {
   display: flex;
