@@ -93,7 +93,7 @@ export default function Spotlight() {
   const isFirst = createMemo(() => stepIdx() === 0)
   const isLast = createMemo(() => stepIdx() === steps().length - 1)
 
-  const waitForTarget = (selector: string, maxRetries = 60): Promise<HTMLElement | null> => {
+  const waitForTarget = (selector: string, maxRetries = 20): Promise<HTMLElement | null> => {
     return new Promise((resolve) => {
       let attempts = 0
       const check = () => {
