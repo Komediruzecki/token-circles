@@ -33,7 +33,10 @@ export default function ChartWrapper(props: ChartWrapperProps) {
     const dark = document.documentElement.getAttribute('data-theme') === 'dark'
     setIsDark(dark)
   })
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
 
   onCleanup(() => {
     themeObserver.disconnect()

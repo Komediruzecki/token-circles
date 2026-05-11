@@ -136,11 +136,23 @@ const CHANGELOG: ChangelogEntry[] = [
 export default function ChangelogModal(props: { onClose: () => void }) {
   return (
     <div class={styles.overlay} onClick={props.onClose}>
-      <div class={styles.modal} onClick={(e) => { e.stopPropagation() }}>
+      <div
+        class={styles.modal}
+        onClick={(e) => {
+          e.stopPropagation()
+        }}
+      >
         <div class={styles.header}>
           <h2>Changelog</h2>
           <button class={styles.closeBtn} onClick={props.onClose}>
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

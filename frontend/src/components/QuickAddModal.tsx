@@ -79,7 +79,9 @@ export function QuickAddModal(props: QuickAddModalProps) {
     const focusTimer = setTimeout(() => {
       amountRef?.focus()
     }, 100)
-    onCleanup(() => { clearTimeout(focusTimer) })
+    onCleanup(() => {
+      clearTimeout(focusTimer)
+    })
   })
 
   return (
