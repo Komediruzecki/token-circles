@@ -22,12 +22,18 @@ function bestPlacement(
   step: SpotlightStep,
   targetRect: DOMRect
 ): { placement: string; top: number; left: number } {
-  const pref = step.placement || 'bottom'
   const vw = window.innerWidth
   const vh = window.innerHeight
   const tw = TOOLTIP_WIDTH
   const th = 140
 
+  // If target is huge (most of the viewport), center the tooltip
+  const tooBig = targetRect.height > vh * 0.55 || targetRect.width > vw * 0.75
+  if (tooBig) {
+    return { placement: 'center', top: vh / 2 - th / 2, left: vw / 2 - tw / 2 }
+  }
+
+  const pref = step.placement || 'bottom'
   const placements = [pref, 'bottom', 'top', 'right', 'left'].filter(
     (v, i, a) => a.indexOf(v) === i
   )
@@ -56,13 +62,19 @@ function bestPlacement(
     }
 
     // Clamp to viewport
-    if (left < 12) left = 12
-    if (left + tw > vw - 12) left = vw - tw - 12
-    if (top < 12) top = 12
-    if (top + th > vh - 12) top = vh - th - 12
+    const minPad = 12
+    if (left < minPad) left = minPad
+    if (left + tw > vw - minPad) left = vw - tw - minPad
+    if (top < minPad) top = minPad
+    if (top + th > vh - minPad) top = vh - th - minPad
 
-    // Check if it fits reasonably
-    if (top > 0 && left > 0 && top + th < vh && left + tw < vw) {
+    // Check if it fits and doesn't overlap the target center
+    const tx = targetRect.left + targetRect.width / 2
+    const ty = targetRect.top + targetRect.height / 2
+    const overlapsCenter =
+      left < tx && left + tw > tx && top < ty && top + th > ty
+
+    if (top > 0 && left > 0 && top + th < vh && left + tw < vw && !overlapsCenter) {
       return { placement: p, top, left }
     }
   }

@@ -278,7 +278,7 @@ export default function Dashboard() {
         <>
           {/* Metrics Grid */}
           <Show when={isWidgetVisible('metrics')}>
-            <div class={styles.metricsGrid}>
+            <div class={styles.metricsGrid} data-test-id="dashboard-metrics">
               <div class={`${styles.metricCard} ${styles.networth}`}>
                 <div class={styles.metricLabel}>Net Worth</div>
                 <div class={styles.metricValue}>{formatCurrency(metrics()!.balance)}</div>
