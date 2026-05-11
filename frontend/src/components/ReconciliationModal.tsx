@@ -79,7 +79,7 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
   })
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') props.onClose()
+    if (e.key === 'Escape' && props.isOpen()) props.onClose()
   }
   document.addEventListener('keydown', handleKeyDown)
   onCleanup(() => {
