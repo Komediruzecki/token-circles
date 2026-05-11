@@ -45,7 +45,7 @@ export default function BulkActionBar(props: BulkActionBarProps) {
 
   return (
     <>
-      <div class={styles.bulkBar}>
+      <div class={styles.bulkBar} data-test-id="bulk-action-bar">
         <span class={styles.bulkCount}>{props.selectedCount} selected</span>
         <button
           class={`${styles.btn} ${styles.btnSecondary}`}
