@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import { createEffect, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
@@ -10,9 +10,16 @@ import LoginModal from './components/LoginModal'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import QuickAddModal from './components/QuickAddModal'
+import Spotlight from './components/Spotlight'
 import ToastContainer from './components/ToastContainer'
 import { api, toast } from './core/api.js'
 import { logger } from './core/logger.js'
+import {
+  spotlightActive,
+  spotlightStep,
+  startSpotlight,
+  tourSteps,
+} from './core/spotlightStore'
 import { pages as allPages } from './router.tsx'
 import type { PageName } from './router.tsx'
 import type { Category } from './types/models'
@@ -174,6 +181,16 @@ export function App() {
   window.addEventListener('hashchange', handleHashChange)
   onCleanup(() => {
     window.removeEventListener('hashchange', handleHashChange)
+  })
+
+  // Auto-navigate to page required by current spotlight step
+  createEffect(() => {
+    if (!spotlightActive()) return
+    const step = tourSteps()[spotlightStep()]
+    if (step?.requiredPage && activePage() !== step.requiredPage) {
+      setActivePage(step.requiredPage as PageName)
+      window.location.hash = step.requiredPage
+    }
   })
 
   // Listen for unauthorized API calls
@@ -557,6 +574,16 @@ export function App() {
               <span>{item.label}</span>
             </a>
           ))}
+          <button
+            class={layoutStyles.sidebarNavLink}
+            style={{ 'margin-top': '8px', 'border-top': '1px solid rgba(255,255,255,0.08)', 'padding-top': '16px' }}
+            onClick={() => { startSpotlight(); setSidebarCollapsed(true) }}
+          >
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            <span>What's New</span>
+          </button>
         </nav>
       </div>
 
@@ -611,6 +638,10 @@ export function App() {
           toast('Transaction added', 'success')
         }}
       />
+
+      <Show when={spotlightActive()}>
+        <Spotlight />
+      </Show>
 
       <ToastContainer />
       <ConfirmDialog />
