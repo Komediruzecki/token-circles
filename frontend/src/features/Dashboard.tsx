@@ -534,7 +534,21 @@ export default function Dashboard() {
                           },
                         ],
                       }}
-                      height={360}
+                      options={{
+                        plugins: {
+                          legend: {
+                            position: 'bottom',
+                            align: 'center',
+                            labels: {
+                              padding: 10,
+                              font: { size: 11 },
+                              usePointStyle: true,
+                              boxWidth: 8,
+                            },
+                          },
+                        },
+                      }}
+                      height={420}
                       showExport
                       filename="spending-by-category"
                     />
