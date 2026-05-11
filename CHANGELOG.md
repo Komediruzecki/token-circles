@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile overflow on all pages: added overflow-x containment, responsive breakpoints for tables/charts
 - SolidJS anti-patterns: replaced createEffect+isMounted with onMount, fixed ChartWrapper reactivity
 
-## [3.0.0] — 2025-02-01
+## [3.0.0] — 2026-04-01
 
 ### Added
 - Serverless mode with full IndexedDB storage adapter
@@ -59,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSS Modules instead of global CSS
 - Hash-based routing with query parameter support
 
-## [2.0.0] — 2024-06-01
+## [2.0.0] — 2026-03-15
 
 ### Added
 - Savings goals with progress tracking and contributions
@@ -74,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Category auto-mapping from transaction descriptions
 - Google Sheets CSV/XLSX import with column mapping and preview
 
-## [1.0.0] — 2024-01-01
+## [1.0.0] — 2026-03-01
 
 ### Added
 - Initial release: vanilla JS SPA with Express/SQLite backend

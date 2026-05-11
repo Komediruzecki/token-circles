@@ -57,7 +57,7 @@ const CHANGELOG: ChangelogEntry[] = [
   },
   {
     version: '3.0.0',
-    date: '2025-02-01',
+    date: '2026-04-01',
     sections: [
       {
         title: 'Added',
@@ -90,7 +90,7 @@ const CHANGELOG: ChangelogEntry[] = [
   },
   {
     version: '2.0.0',
-    date: '2024-06-01',
+    date: '2026-03-15',
     sections: [
       {
         title: 'Added',
@@ -112,7 +112,7 @@ const CHANGELOG: ChangelogEntry[] = [
   },
   {
     version: '1.0.0',
-    date: '2024-01-01',
+    date: '2026-03-01',
     sections: [
       {
         title: 'Added',
