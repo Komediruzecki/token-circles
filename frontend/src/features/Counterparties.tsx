@@ -128,84 +128,84 @@ export default function Counterparties() {
           </div>
 
           <div class={styles.tableWrap}>
-          <table class={styles.table}>
-            <thead>
-              <tr>
-                <th
-                  onClick={() => {
-                    handleSort('name')
-                  }}
-                >
-                  Counterparty{sortIndicator('name')}
-                </th>
-                <th
-                  onClick={() => {
-                    handleSort('incoming')
-                  }}
-                >
-                  Received{sortIndicator('incoming')}
-                </th>
-                <th
-                  onClick={() => {
-                    handleSort('outgoing')
-                  }}
-                >
-                  Paid{sortIndicator('outgoing')}
-                </th>
-                <th
-                  onClick={() => {
-                    handleSort('net')
-                  }}
-                >
-                  Net{sortIndicator('net')}
-                </th>
-                <th
-                  onClick={() => {
-                    handleSort('transaction_count')
-                  }}
-                >
-                  Txs{sortIndicator('transaction_count')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={sorted()}>
-                {(c) => (
-                  <tr>
-                    <td>
-                      <span class={styles.counterpartyName}>{c.name}</span>
-                    </td>
-                    <td>
-                      <span class={`${styles.amount} ${styles.incoming}`}>
-                        {formatCurrency(c.incoming)}
-                      </span>
-                    </td>
-                    <td>
-                      <span class={`${styles.amount} ${styles.outgoing}`}>
-                        {formatCurrency(c.outgoing)}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        class={
-                          c.net > 0
-                            ? styles.netPositive
-                            : c.net < 0
-                              ? styles.netNegative
-                              : styles.netNeutral
-                        }
-                      >
-                        {formatCurrency(c.net)}
-                      </span>
-                    </td>
-                    <td>
-                      <span class={styles.count}>{c.transaction_count}</span>
-                    </td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
+            <table class={styles.table}>
+              <thead>
+                <tr>
+                  <th
+                    onClick={() => {
+                      handleSort('name')
+                    }}
+                  >
+                    Counterparty{sortIndicator('name')}
+                  </th>
+                  <th
+                    onClick={() => {
+                      handleSort('incoming')
+                    }}
+                  >
+                    Received{sortIndicator('incoming')}
+                  </th>
+                  <th
+                    onClick={() => {
+                      handleSort('outgoing')
+                    }}
+                  >
+                    Paid{sortIndicator('outgoing')}
+                  </th>
+                  <th
+                    onClick={() => {
+                      handleSort('net')
+                    }}
+                  >
+                    Net{sortIndicator('net')}
+                  </th>
+                  <th
+                    onClick={() => {
+                      handleSort('transaction_count')
+                    }}
+                  >
+                    Txs{sortIndicator('transaction_count')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={sorted()}>
+                  {(c) => (
+                    <tr>
+                      <td>
+                        <span class={styles.counterpartyName}>{c.name}</span>
+                      </td>
+                      <td>
+                        <span class={`${styles.amount} ${styles.incoming}`}>
+                          {formatCurrency(c.incoming)}
+                        </span>
+                      </td>
+                      <td>
+                        <span class={`${styles.amount} ${styles.outgoing}`}>
+                          {formatCurrency(c.outgoing)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          class={
+                            c.net > 0
+                              ? styles.netPositive
+                              : c.net < 0
+                                ? styles.netNegative
+                                : styles.netNeutral
+                          }
+                        >
+                          {formatCurrency(c.net)}
+                        </span>
+                      </td>
+                      <td>
+                        <span class={styles.count}>{c.transaction_count}</span>
+                      </td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
           </div>
         </>
       )}

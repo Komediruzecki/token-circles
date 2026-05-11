@@ -12,7 +12,7 @@ import {
   tourSteps,
 } from '../core/spotlightStore'
 import styles from './Spotlight.module.css'
-import type {SpotlightStep} from '../core/spotlightStore';
+import type { SpotlightStep } from '../core/spotlightStore'
 
 const GAP = 8
 const TOOLTIP_WIDTH = 320
@@ -70,8 +70,7 @@ function bestPlacement(
     // Check if it fits and doesn't overlap the target center
     const tx = targetRect.left + targetRect.width / 2
     const ty = targetRect.top + targetRect.height / 2
-    const overlapsCenter =
-      left < tx && left + tw > tx && top < ty && top + th > ty
+    const overlapsCenter = left < tx && left + tw > tx && top < ty && top + th > ty
 
     if (top > 0 && left > 0 && top + th < vh && left + tw < vw && !overlapsCenter) {
       return { placement: p, top, left }
@@ -186,7 +185,9 @@ export default function Spotlight() {
     setTooltipReady(false)
 
     if (!selector) {
-      setTimeout(() => { updatePositions() }, 50)
+      setTimeout(() => {
+        updatePositions()
+      }, 50)
       return
     }
 
@@ -221,12 +222,16 @@ export default function Spotlight() {
   createEffect(() => {
     if (!spotlightActive()) return
 
-    const onResize = () => { updatePositions(); }
+    const onResize = () => {
+      updatePositions()
+    }
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onResize, { passive: true })
 
     // Initial position after render
-    setTimeout(() => { updatePositions(); }, 100)
+    setTimeout(() => {
+      updatePositions()
+    }, 100)
 
     onCleanup(() => {
       window.removeEventListener('resize', onResize)
@@ -248,7 +253,9 @@ export default function Spotlight() {
       }
     }
     window.addEventListener('keydown', onKey)
-    onCleanup(() => { window.removeEventListener('keydown', onKey); })
+    onCleanup(() => {
+      window.removeEventListener('keydown', onKey)
+    })
   })
 
   const tooltipStyle = () => {
@@ -307,7 +314,8 @@ export default function Spotlight() {
       >
         {targetMissing() && currentStep().targetSelector && (
           <div class={styles.targetMissing}>
-            This step's feature isn't visible on the current page. Click Next to continue, or navigate to the relevant page and the highlight will appear.
+            This step's feature isn't visible on the current page. Click Next to continue, or
+            navigate to the relevant page and the highlight will appear.
           </div>
         )}
 
