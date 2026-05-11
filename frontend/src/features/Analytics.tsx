@@ -51,8 +51,12 @@ export default function Analytics() {
   const chartColors = () => theme.getChartColors()
   const [heatmapType, setHeatmapType] = createSignal<'income' | 'expense'>('expense')
   const [heatmapData, setHeatmapData] = createSignal<Map<string, number>>(new Map())
-  const [sankeyYear, setSankeyYear] = createSignal(new Date().getFullYear())
-  const [sankeyMonth, setSankeyMonth] = createSignal(new Date().getMonth() + 1)
+  const [sankeyYear, setSankeyYear] = createSignal(
+    new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear()
+  )
+  const [sankeyMonth, setSankeyMonth] = createSignal(
+    new Date().getMonth() === 0 ? 12 : new Date().getMonth()
+  )
   const [sankeyData, setSankeyData] = createSignal<{ nodes: any[]; links: any[] }>({
     nodes: [],
     links: [],
