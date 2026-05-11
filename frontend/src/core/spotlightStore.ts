@@ -33,7 +33,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Dashboard Overview',
         targetSelector: '[data-test-id="dashboard-header"]',
-        description: 'Your financial command center. See income, expenses, and net balance at a glance.',
+        description:
+          'Your financial command center. See income, expenses, and net balance at a glance.',
         placement: 'bottom',
         section: 'dashboard',
         requiredPage: 'dashboard',
@@ -41,7 +42,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Summary Metrics',
         targetSelector: '[data-test-id="dashboard-metrics"]',
-        description: 'Net worth, income, expenses, and month-over-month deltas in the four metric cards.',
+        description:
+          'Net worth, income, expenses, and month-over-month deltas in the four metric cards.',
         placement: 'bottom',
         section: 'dashboard',
         requiredPage: 'dashboard',
@@ -49,7 +51,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Charts Section',
         targetSelector: 'canvas',
-        description: 'Income vs expense trend charts, net worth timeline, and category breakdowns. Hover for details.',
+        description:
+          'Income vs expense trend charts, net worth timeline, and category breakdowns. Hover for details.',
         placement: 'top',
         section: 'dashboard',
         requiredPage: 'dashboard',
@@ -57,7 +60,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Period Navigation',
         targetSelector: '[data-test-id="dashboard-header"] button',
-        description: 'Use the period pills (1M/3M/6M/1Y/ALL) and arrows to switch timeframes. Charts update automatically.',
+        description:
+          'Use the period pills (1M/3M/6M/1Y/ALL) and arrows to switch timeframes. Charts update automatically.',
         placement: 'bottom',
         section: 'dashboard',
         requiredPage: 'dashboard',
@@ -82,7 +86,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Add Transaction',
         targetSelector: '[data-test-id="add-transaction-btn"]',
-        description: 'Click to open the quick-add form. Use Ctrl+Shift+T from anywhere for rapid entry.',
+        description:
+          'Click to open the quick-add form. Use Ctrl+Shift+T from anywhere for rapid entry.',
         placement: 'bottom',
         section: 'transactions',
         requiredPage: 'transactions',
@@ -90,7 +95,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Smart Filters',
         targetSelector: '[data-test-id="filter-bar"]',
-        description: 'Filter by category, tags, type, and date range. Search descriptions, beneficiaries, or payors.',
+        description:
+          'Filter by category, tags, type, and date range. Search descriptions, beneficiaries, or payors.',
         placement: 'bottom',
         section: 'transactions',
         requiredPage: 'transactions',
@@ -98,7 +104,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Transaction Table',
         targetSelector: '[data-test-id="data-table"]',
-        description: 'FROM → TO flow column, sortable headers, inline category badges and tags. Checkboxes enable bulk actions.',
+        description:
+          'FROM → TO flow column, sortable headers, inline category badges and tags. Checkboxes enable bulk actions.',
         placement: 'top',
         section: 'transactions',
         requiredPage: 'transactions',
@@ -106,7 +113,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Bulk Actions',
         targetSelector: '.page-transactions',
-        description: 'Select transactions with checkboxes. The bulk bar appears — delete, recategorize, or change type for all selected.',
+        description:
+          'Select transactions with checkboxes. The bulk bar appears — delete, recategorize, or change type for all selected.',
         placement: 'bottom',
         section: 'transactions',
         requiredPage: 'transactions',
@@ -131,7 +139,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Account Balances',
         targetSelector: '[data-test-id="accounts-summary"]',
-        description: 'Total balance across all accounts, plus income and expense summaries for the current month.',
+        description:
+          'Total balance across all accounts, plus income and expense summaries for the current month.',
         placement: 'bottom',
         section: 'accounts',
         requiredPage: 'accounts',
@@ -139,7 +148,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Account Cards',
         targetSelector: '[data-test-id="accounts-grid"]',
-        description: 'Each account shows type badge, current balance, and recent activity. Click "View All" to filter transactions.',
+        description:
+          'Each account shows type badge, current balance, and recent activity. Click "View All" to filter transactions.',
         placement: 'top',
         section: 'accounts',
         requiredPage: 'accounts',
@@ -147,7 +157,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Add Account',
         targetSelector: '[data-test-id="add-account-btn"]',
-        description: 'Create checking, savings, investment/brokerage, or cash accounts with starting balance and date.',
+        description:
+          'Create checking, savings, investment/brokerage, or cash accounts with starting balance and date.',
         placement: 'bottom',
         section: 'accounts',
         requiredPage: 'accounts',
@@ -164,7 +175,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Portfolio Tracker',
         targetSelector: '[data-test-id="portfolio-header"]',
-        description: 'Track your stock and ETF investments with real-time prices from Yahoo Finance.',
+        description:
+          'Track your stock and ETF investments with real-time prices from Yahoo Finance.',
         placement: 'bottom',
         section: 'portfolio',
         requiredPage: 'portfolio',
@@ -180,7 +192,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Holdings Table',
         targetSelector: '.page-portfolio table',
-        description: 'Ticker, shares, cost per share, current price, market value, and individual gain/loss for each holding.',
+        description:
+          'Ticker, shares, cost per share, current price, market value, and individual gain/loss for each holding.',
         placement: 'top',
         section: 'portfolio',
         requiredPage: 'portfolio',
@@ -188,7 +201,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Refresh Prices',
         targetSelector: '[data-test-id="refresh-prices-btn"]',
-        description: 'Fetch the latest prices from Yahoo Finance. Holdings update with live gain/loss calculations.',
+        description:
+          'Fetch the latest prices from Yahoo Finance. Holdings update with live gain/loss calculations.',
         placement: 'bottom',
         section: 'portfolio',
         requiredPage: 'portfolio',
@@ -205,7 +219,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Budgets Page',
         targetSelector: '[data-test-id="budgets-header"]',
-        description: 'Plan your spending with monthly category budgets. Track budgeted vs actual spending.',
+        description:
+          'Plan your spending with monthly category budgets. Track budgeted vs actual spending.',
         placement: 'bottom',
         section: 'budgets',
         requiredPage: 'budgets',
@@ -213,7 +228,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Budget Summary',
         targetSelector: '[data-test-id="budget-summary"]',
-        description: 'Total budgeted, spent, and remaining across all categories with percentage indicators.',
+        description:
+          'Total budgeted, spent, and remaining across all categories with percentage indicators.',
         placement: 'bottom',
         section: 'budgets',
         requiredPage: 'budgets',
@@ -221,7 +237,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Category Allocations',
         targetSelector: '[data-test-id="budget-allocations"]',
-        description: 'Each category shows a progress bar. Green = on track, yellow = warning, red = over budget.',
+        description:
+          'Each category shows a progress bar. Green = on track, yellow = warning, red = over budget.',
         placement: 'top',
         section: 'budgets',
         requiredPage: 'budgets',
@@ -229,7 +246,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Month Selector',
         targetSelector: '[data-test-id="month-selector"]',
-        description: 'Navigate between months to view and set budgets. Use "Duplicate Last" to quickly copy last month\'s budgets.',
+        description:
+          'Navigate between months to view and set budgets. Use "Duplicate Last" to quickly copy last month\'s budgets.',
         placement: 'bottom',
         section: 'budgets',
         requiredPage: 'budgets',
@@ -246,7 +264,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Savings Goals',
         targetSelector: '[data-test-id="goals-header"]',
-        description: 'Set financial targets with deadlines and track your progress toward each goal.',
+        description:
+          'Set financial targets with deadlines and track your progress toward each goal.',
         placement: 'bottom',
         section: 'goals',
         requiredPage: 'goals',
@@ -254,7 +273,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Goals Grid',
         targetSelector: '[data-test-id="goals-grid"]',
-        description: 'Each goal card shows name, target amount, current progress bar, and deadline date.',
+        description:
+          'Each goal card shows name, target amount, current progress bar, and deadline date.',
         placement: 'top',
         section: 'goals',
         requiredPage: 'goals',
@@ -262,7 +282,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Add Goal',
         targetSelector: '[data-test-id="add-goal-btn"]',
-        description: 'Create a new savings goal with a target amount, optional deadline, and starting balance.',
+        description:
+          'Create a new savings goal with a target amount, optional deadline, and starting balance.',
         placement: 'bottom',
         section: 'goals',
         requiredPage: 'goals',
@@ -279,7 +300,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Loans Page',
         targetSelector: '[data-test-id="loans-header"]',
-        description: 'Track loans with amortization schedules, prepayments, and variable rate periods.',
+        description:
+          'Track loans with amortization schedules, prepayments, and variable rate periods.',
         placement: 'bottom',
         section: 'loans',
         requiredPage: 'loans',
@@ -287,7 +309,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Loan Cards',
         targetSelector: '.page-loans',
-        description: 'Each loan shows principal, interest rate, term, and monthly payment. Click for detailed amortization.',
+        description:
+          'Each loan shows principal, interest rate, term, and monthly payment. Click for detailed amortization.',
         placement: 'bottom',
         section: 'loans',
         requiredPage: 'loans',
@@ -295,7 +318,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Add Loan',
         targetSelector: '[data-test-id="add-loan-btn"]',
-        description: 'Create a new loan with principal amount, interest rate, term in months, and start date.',
+        description:
+          'Create a new loan with principal amount, interest rate, term in months, and start date.',
         placement: 'bottom',
         section: 'loans',
         requiredPage: 'loans',
@@ -312,7 +336,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Bills Page',
         targetSelector: '[data-test-id="bills-header"]',
-        description: 'Track recurring bills with due dates, payment status, and upcoming schedules.',
+        description:
+          'Track recurring bills with due dates, payment status, and upcoming schedules.',
         placement: 'bottom',
         section: 'bills',
         requiredPage: 'bills',
@@ -328,7 +353,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'All Bills',
         targetSelector: '[data-test-id="bills-all-section"]',
-        description: 'Complete list of all recurring bills. Each card shows name, amount, frequency, and next due date.',
+        description:
+          'Complete list of all recurring bills. Each card shows name, amount, frequency, and next due date.',
         placement: 'top',
         section: 'bills',
         requiredPage: 'bills',
@@ -353,7 +379,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Categories Page',
         targetSelector: '[data-test-id="categories-header"]',
-        description: 'Manage income and expense categories with colors, icons, and tax-deductible flags.',
+        description:
+          'Manage income and expense categories with colors, icons, and tax-deductible flags.',
         placement: 'bottom',
         section: 'categories',
         requiredPage: 'categories',
@@ -369,7 +396,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Category List',
         targetSelector: '[data-test-id="categories-subtitle"]',
-        description: 'Each category shows color dot, icon, name, type badge, and tax status. Use tabs to filter by type.',
+        description:
+          'Each category shows color dot, icon, name, type badge, and tax status. Use tabs to filter by type.',
         placement: 'bottom',
         section: 'categories',
         requiredPage: 'categories',
@@ -386,7 +414,26 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Import Page',
         targetSelector: '.page-import h1',
-        description: 'Import transactions from Google Sheets or CSV/XLSX files with smart column mapping.',
+        description:
+          'Import transactions from Google Sheets or CSV/XLSX files with smart column mapping.',
+        placement: 'bottom',
+        section: 'import',
+        requiredPage: 'import',
+      },
+      {
+        title: 'File Upload',
+        targetSelector: '#import-dropzone',
+        description:
+          'Drag and drop or click to upload a CSV, XLSX, or XLS file. Download the sample template for expected format.',
+        placement: 'bottom',
+        section: 'import',
+        requiredPage: 'import',
+      },
+      {
+        title: 'Google Sheets Import',
+        targetSelector: '.page-import input[placeholder*="Google Sheets"]',
+        description:
+          'Paste a Google Sheets link and click Fetch to pull data directly from your spreadsheet.',
         placement: 'bottom',
         section: 'import',
         requiredPage: 'import',
@@ -394,7 +441,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Column Mapping',
         targetSelector: '.page-import',
-        description: 'Map your spreadsheet columns to Finance Manager fields. The preview shows exactly what will be imported.',
+        description:
+          'Map your spreadsheet columns to Finance Manager fields. The preview shows exactly what will be imported.',
         placement: 'bottom',
         section: 'import',
         requiredPage: 'import',
@@ -411,7 +459,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Counterparties Page',
         targetSelector: '.page-counterparties h2',
-        description: 'See who owes who — aggregated from beneficiary and payor fields across all transactions.',
+        description:
+          'See who owes who — aggregated from beneficiary and payor fields across all transactions.',
         placement: 'bottom',
         section: 'counterparties',
         requiredPage: 'counterparties',
@@ -427,7 +476,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Counterparty Table',
         targetSelector: '.page-counterparties table',
-        description: 'Sortable table showing each counterparty name, amounts received and paid, net balance, and transaction count.',
+        description:
+          'Sortable table showing each counterparty name, amounts received and paid, net balance, and transaction count.',
         placement: 'top',
         section: 'counterparties',
         requiredPage: 'counterparties',
@@ -444,7 +494,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Analytics Page',
         targetSelector: '.page-analytics h1',
-        description: 'Deep dive into your spending patterns with charts, heatmaps, and flow diagrams.',
+        description:
+          'Deep dive into your spending patterns with charts, heatmaps, and flow diagrams.',
         placement: 'bottom',
         section: 'analytics',
         requiredPage: 'analytics',
@@ -452,7 +503,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Category Trends',
         targetSelector: '.page-analytics canvas',
-        description: 'Bar charts showing income and expense trends by category over time. Switch between income and expense views.',
+        description:
+          'Bar charts showing income and expense trends by category over time. Switch between income and expense views.',
         placement: 'top',
         section: 'analytics',
         requiredPage: 'analytics',
@@ -460,7 +512,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Daily Heatmap',
         targetSelector: '.page-analytics',
-        description: 'Calendar heatmap showing daily spending intensity. Darker cells = higher spending. Click a day to drill down.',
+        description:
+          'Calendar heatmap showing daily spending intensity. Darker cells = higher spending. Click a day to drill down.',
         placement: 'bottom',
         section: 'analytics',
         requiredPage: 'analytics',
@@ -468,7 +521,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Sankey Diagram',
         targetSelector: '.page-analytics',
-        description: 'Visual flow diagram showing how money moves from income sources to expense categories.',
+        description:
+          'Visual flow diagram showing how money moves from income sources to expense categories.',
         placement: 'bottom',
         section: 'analytics',
         requiredPage: 'analytics',
@@ -493,7 +547,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Retirement Goals',
         targetSelector: '[data-test-id="retirement-goals-grid"]',
-        description: 'Each card shows a retirement goal with target amount, current savings, and progress percentage.',
+        description:
+          'Each card shows a retirement goal with target amount, current savings, and progress percentage.',
         placement: 'top',
         section: 'retirement',
         requiredPage: 'retirement',
@@ -501,7 +556,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Projection Details',
         targetSelector: '[data-test-id="retirement-projection-details"]',
-        description: 'Monthly contribution, expected return rate, and projected retirement savings at target age.',
+        description:
+          'Monthly contribution, expected return rate, and projected retirement savings at target age.',
         placement: 'top',
         section: 'retirement',
         requiredPage: 'retirement',
@@ -509,7 +565,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Add Goal',
         targetSelector: '[data-test-id="add-retirement-goal-btn"]',
-        description: 'Create a new retirement goal with current age, target age, monthly contribution, and expected return.',
+        description:
+          'Create a new retirement goal with current age, target age, monthly contribution, and expected return.',
         placement: 'bottom',
         section: 'retirement',
         requiredPage: 'retirement',
@@ -526,7 +583,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Compound Interest',
         targetSelector: '.page-compound h1',
-        description: 'Model investment growth with compound interest. Adjust principal, monthly contribution, rate, and years.',
+        description:
+          'Model investment growth with compound interest. Adjust principal, monthly contribution, rate, and years.',
         placement: 'bottom',
         section: 'calculators',
         requiredPage: 'compound',
@@ -534,7 +592,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Emergency Fund',
         targetSelector: '.page-emergency h1',
-        description: 'Calculate how much you need for an emergency fund based on your monthly expenses.',
+        description:
+          'Calculate how much you need for an emergency fund based on your monthly expenses.',
         placement: 'bottom',
         section: 'calculators',
         requiredPage: 'emergency',
@@ -550,7 +609,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Housing Calculator',
         targetSelector: '.page-housing h1',
-        description: 'Determine affordable housing costs based on your income, expenses, and savings goals.',
+        description:
+          'Determine affordable housing costs based on your income, expenses, and savings goals.',
         placement: 'bottom',
         section: 'calculators',
         requiredPage: 'housing',
@@ -567,7 +627,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Settings Page',
         targetSelector: '.page-settings h1',
-        description: 'Configure application preferences, theme, currency, storage mode, and data management.',
+        description:
+          'Configure application preferences, theme, currency, storage mode, and data management.',
         placement: 'bottom',
         section: 'settings',
         requiredPage: 'settings',
@@ -575,7 +636,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Theme & Currency',
         targetSelector: '.page-settings',
-        description: 'Toggle dark/light mode and set your preferred currency for display throughout the app.',
+        description:
+          'Toggle dark/light mode and set your preferred currency for display throughout the app.',
         placement: 'bottom',
         section: 'settings',
         requiredPage: 'settings',
@@ -583,7 +645,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Data Export',
         targetSelector: '.page-settings',
-        description: 'Export your data as CSV or download PDF reports (monthly, annual, P&L, tax summary).',
+        description:
+          'Export your data as CSV or download PDF reports (monthly, annual, P&L, tax summary).',
         placement: 'bottom',
         section: 'settings',
         requiredPage: 'settings',
@@ -591,7 +654,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
       {
         title: 'Storage Mode',
         targetSelector: '.page-settings',
-        description: 'Switch between self-hosted (SQLite) and serverless (IndexedDB) modes. Migrate data when switching.',
+        description:
+          'Switch between self-hosted (SQLite) and serverless (IndexedDB) modes. Migrate data when switching.',
         placement: 'bottom',
         section: 'settings',
         requiredPage: 'settings',
