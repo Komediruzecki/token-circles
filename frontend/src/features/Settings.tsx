@@ -964,10 +964,7 @@ export default function Settings() {
             <div class={styles.settingsSection}>
               <div class={styles.settingsSectionTitle}>About</div>
               <div class={styles.formGroup} style="margin-top: 16px;">
-                <button
-                  class={styles.btnSecondary}
-                  onclick={() => setShowChangelog(true)}
-                >
+                <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
                   View Changelog
                 </button>
                 <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">

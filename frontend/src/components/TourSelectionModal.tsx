@@ -19,11 +19,13 @@ export default function TourSelectionModal() {
   const totalCount = getTotalTourCount()
 
   return (
-    <div
-      class={styles.overlay}
-      onClick={() => setShowTourSelection(false)}
-    >
-      <div class={styles.modal} onClick={(e) => { e.stopPropagation() }}>
+    <div class={styles.overlay} onClick={() => setShowTourSelection(false)}>
+      <div
+        class={styles.modal}
+        onClick={(e) => {
+          e.stopPropagation()
+        }}
+      >
         <div class={styles.header}>
           <div>
             <h2>Take a Tour</h2>
@@ -33,9 +35,18 @@ export default function TourSelectionModal() {
           </div>
           <button
             class={styles.closeBtn}
-            onClick={() => { setShowTourSelection(false) }}
+            onClick={() => {
+              setShowTourSelection(false)
+            }}
           >
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -44,7 +55,14 @@ export default function TourSelectionModal() {
         <div class={styles.body}>
           {/* Full Tour */}
           <button class={styles.fullTourBtn} onClick={startFullTour}>
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
             Take Full Tour (All {totalCount} pages)
@@ -59,7 +77,9 @@ export default function TourSelectionModal() {
                   <button
                     class={styles.tourCard}
                     classList={{ [styles.completed]: completed }}
-                    onClick={() => { startTour(tour.id); }}
+                    onClick={() => {
+                      startTour(tour.id)
+                    }}
                   >
                     <span class={styles.tourLabel}>{tour.label}</span>
                     <span class={styles.tourBadge}>
@@ -75,7 +95,10 @@ export default function TourSelectionModal() {
         <div class={styles.footer}>
           <button
             class={styles.resetBtn}
-            onClick={() => { resetAllTours(); setShowTourSelection(false) }}
+            onClick={() => {
+              resetAllTours()
+              setShowTourSelection(false)
+            }}
           >
             Reset All Tours
           </button>
