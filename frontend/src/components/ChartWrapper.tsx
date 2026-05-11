@@ -2,12 +2,10 @@
  * Chart Wrapper Component
  * Wrapper for Chart.js with reactive updates and export functionality
  */
-import { createContext, createEffect, createSignal, onCleanup } from 'solid-js'
+import { createEffect, createSignal, onCleanup } from 'solid-js'
 import ChartContainer from './ChartContainer.module.css'
 import ExportChartButton from './ExportChartButton'
 import type * as ChartJS from 'chart.js/auto'
-
-export const ThemeContext = createContext<() => 'light' | 'dark'>(() => 'light' as 'light' | 'dark')
 
 export interface ChartWrapperProps {
   type: 'line' | 'bar' | 'doughnut' | 'pie' | 'polarArea' | 'radar' | 'bubble' | 'scatter'
@@ -21,23 +19,38 @@ export interface ChartWrapperProps {
 }
 
 export default function ChartWrapper(props: ChartWrapperProps) {
-  const getTheme = () => {
-    const el = document.documentElement
-    const dataTheme = el.getAttribute('data-theme')
-    return (dataTheme === 'dark' ? 'dark' : 'light') as 'light' | 'dark'
-  }
-
   const [chartInstance, setChartInstance] = createSignal<ChartJS.Chart | undefined>(undefined)
-  const [isDark] = createSignal(getTheme())
 
   let canvasRef: HTMLCanvasElement | null = null
+  let cancelled = false
+
+  // Watch for theme changes via MutationObserver
+  const [isDark, setIsDark] = createSignal(
+    document.documentElement.getAttribute('data-theme') === 'dark'
+  )
+
+  const themeObserver = new MutationObserver(() => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+    setIsDark(dark)
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
+  onCleanup(() => {
+    themeObserver.disconnect()
+  })
 
   createEffect(() => {
-    const isDarkValue = isDark()
+    const dark = isDark()
+    // Read props BEFORE async to track dependencies
+    const chartType = props.type
+    const chartData = props.data
+
     if (canvasRef === null) return
 
     import('chart.js/auto')
       .then(({ default: ChartJS }) => {
+        if (cancelled) return
+
         // Destroy existing chart
         const existingChart = chartInstance()
         if (existingChart) {
@@ -48,23 +61,28 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         const ctx = canvasRef?.getContext('2d')
         if (!ctx) return
 
+        const textColor = dark ? '#E5E7EB' : '#374151'
+        const gridColor = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        const tooltipBg = dark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)'
+        const tooltipBorder = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+
         const options = props.options || {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: {
               labels: {
-                color: isDarkValue ? '#E5E7EB' : '#374151',
+                color: textColor,
                 font: { size: 12 },
                 padding: 15,
                 usePointStyle: true,
               },
             },
             tooltip: {
-              backgroundColor: isDarkValue ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
-              titleColor: isDarkValue ? '#E5E7EB' : '#374151',
-              bodyColor: isDarkValue ? '#E5E7EB' : '#374151',
-              borderColor: isDarkValue ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+              backgroundColor: tooltipBg,
+              titleColor: textColor,
+              bodyColor: textColor,
+              borderColor: tooltipBorder,
               borderWidth: 1,
               padding: 10,
               cornerRadius: 8,
@@ -73,36 +91,36 @@ export default function ChartWrapper(props: ChartWrapperProps) {
             },
           },
           scales:
-            props.type === 'doughnut' || props.type === 'pie' || props.type === 'polarArea'
+            chartType === 'doughnut' || chartType === 'pie' || chartType === 'polarArea'
               ? {}
               : {
                   x: {
                     grid: {
-                      color: isDarkValue ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                      color: gridColor,
                       drawBorder: false,
                     },
-                    ticks: { color: isDarkValue ? '#E5E7EB' : '#374151' },
+                    ticks: { color: textColor },
                   },
                   y: {
                     grid: {
-                      color: isDarkValue ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                      color: gridColor,
                       drawBorder: false,
                     },
                     ticks: {
-                      color: isDarkValue ? '#E5E7EB' : '#374151',
+                      color: textColor,
                       callback: (value: number) => value.toLocaleString() as any,
                     },
                   },
                 },
           animation: {
             duration: 750,
-            easing: 'easeInOutQuad',
+            easing: 'easeInOutQuad' as const,
           },
         }
 
         const newChart = new ChartJS(ctx, {
-          type: props.type,
-          data: props.data,
+          type: chartType,
+          data: chartData,
           options: options as any,
         })
 
@@ -115,6 +133,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
   })
 
   onCleanup(() => {
+    cancelled = true
     const existingChart = chartInstance()
     if (existingChart) {
       existingChart.destroy()
@@ -145,9 +164,3 @@ export default function ChartWrapper(props: ChartWrapperProps) {
     </div>
   )
 }
-
-interface ThemeContextValue {
-  (): 'light' | 'dark'
-}
-
-export type { ThemeContextValue }

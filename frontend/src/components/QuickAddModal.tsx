@@ -2,7 +2,7 @@
  * Quick Add Modal Component
  * Quick transaction entry (Ctrl+Shift+T shortcut)
  */
-import { createEffect, createSignal, For } from 'solid-js'
+import { createSignal, For, onCleanup, onMount } from 'solid-js'
 import { api, toast } from '../core/api'
 import quickAddModalStyles from './QuickAddModal.module.css'
 import type { Category } from '../types/models'
@@ -17,7 +17,6 @@ export interface QuickAddModalProps {
 export function QuickAddModal(props: QuickAddModalProps) {
   let amountRef: HTMLInputElement | undefined
   const [isSubmitting, setIsSubmitting] = createSignal(false)
-  const [isMounted, setIsMounted] = createSignal(false)
 
   const [formData, setFormData] = createSignal({
     amount: '',
@@ -71,19 +70,16 @@ export function QuickAddModal(props: QuickAddModalProps) {
     }
   }
 
-  createEffect(() => {
-    if (!isMounted()) {
-      setIsMounted(true)
-      const handler = handleKeyDown
-      document.addEventListener('keydown', handler)
-      // Auto-focus amount field on open
-      setTimeout(() => {
-        amountRef?.focus()
-      }, 100)
-      return () => {
-        document.removeEventListener('keydown', handler)
-      }
-    }
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown)
+    })
+    // Auto-focus amount field on open
+    const focusTimer = setTimeout(() => {
+      amountRef?.focus()
+    }, 100)
+    onCleanup(() => { clearTimeout(focusTimer) })
   })
 
   return (

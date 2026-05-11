@@ -2,7 +2,7 @@
  * Category Multi-Select Component
  * Dropdown with checkbox-style category selection
  */
-import { createEffect, createSignal, For } from 'solid-js'
+import { createEffect, createSignal, For, onCleanup, onMount } from 'solid-js'
 import categoryMultiSelectStyles from './CategoryMultiSelect.module.css'
 import type { Category } from '../types/models'
 
@@ -19,7 +19,6 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
   const [filteredCategories, setFilteredCategories] = createSignal<Category[]>([])
   const [selectedIndex, setSelectedIndex] = createSignal(0)
   const [hoverIndex, setHoverIndex] = createSignal(-1)
-  const [isMounted, setIsMounted] = createSignal(false)
   const [getContainerRef, setContainerRef] = createSignal<HTMLElement | null>(null)
 
   const handleToggleDropdown = () => {
@@ -99,15 +98,11 @@ export function CategoryMultiSelect(props: CategoryMultiSelectProps) {
     setTimeout(() => setIsOpen(false), 150)
   }
 
-  createEffect(() => {
-    if (!isMounted()) {
-      setIsMounted(true)
-      const handler = handleClickOutside
-      document.addEventListener('click', handler)
-      return () => {
-        document.removeEventListener('click', handler)
-      }
-    }
+  onMount(() => {
+    document.addEventListener('click', handleClickOutside)
+    onCleanup(() => {
+      document.removeEventListener('click', handleClickOutside)
+    })
   })
 
   const selectedCount = () => props.selectedCategoryIds().length

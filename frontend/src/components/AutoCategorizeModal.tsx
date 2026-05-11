@@ -2,7 +2,7 @@
  * Auto Categorize Modal Component
  * Suggests categories based on description patterns and allows user to accept/reject
  */
-import { createEffect, createSignal } from 'solid-js'
+import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
 import { api } from '../core/api'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
@@ -22,8 +22,6 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
   const [loading, setLoading] = createSignal(false)
   const [applying, setApplying] = createSignal(false)
   const [pendingUpdates, setPendingUpdates] = createSignal<Record<number, number>>({})
-  const [isMounted, setIsMounted] = createSignal(false)
-
   createEffect(() => {
     if (props.isOpen()) {
       loadCategoryMappings()
@@ -81,15 +79,11 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
     }
   }
 
-  createEffect(() => {
-    if (!isMounted()) {
-      setIsMounted(true)
-      const handler = handleKeyDown
-      document.addEventListener('keydown', handler)
-      return () => {
-        document.removeEventListener('keydown', handler)
-      }
-    }
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown)
+    })
   })
 
   const uncategorized = props.uncategorizedTransactions()
