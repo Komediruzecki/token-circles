@@ -165,6 +165,9 @@
 }
 .analytics-page .chart-container {
   margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 .analytics-page .category-bars {
   display: flex;
@@ -426,6 +429,11 @@
   border-color: var(--primary);
 }
 
+.heatmap-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .heatmap-container {
   position: relative;
   min-width: 800px;
@@ -579,6 +587,9 @@
 
 .chart-container {
   margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .savings-rate-display {

@@ -127,6 +127,7 @@ export default function Counterparties() {
             </div>
           </div>
 
+          <div class={styles.tableWrap}>
           <table class={styles.table}>
             <thead>
               <tr>
@@ -205,6 +206,7 @@ export default function Counterparties() {
               </For>
             </tbody>
           </table>
+          </div>
         </>
       )}
     </div>

@@ -1015,3 +1015,38 @@ select.form-control {
 .page-categories {
   display: block;
 }
+
+@media (max-width: 768px) {
+  .categories-page {
+    margin-top: 16px;
+  }
+
+  .categories-page .page-header h1 {
+    font-size: 20px;
+  }
+
+  .categories-page .categories-tabs {
+    flex-wrap: wrap;
+  }
+
+  .categories-page .tab {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .modal {
+    width: 95vw;
+    max-width: 95vw;
+  }
+}
+
+@media (max-width: 480px) {
+  .categories-page .page-header h1 {
+    font-size: 18px;
+  }
+
+  .categories-page .tab {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}

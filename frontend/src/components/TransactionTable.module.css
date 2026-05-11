@@ -237,3 +237,46 @@
   background: var(--badge-transfer-bg);
   color: var(--badge-transfer-text);
 }
+
+@media (max-width: 768px) {
+  .transaction-table table {
+    min-width: 600px;
+  }
+
+  .transaction-table th,
+  .transaction-table td {
+    padding: 8px 10px;
+  }
+
+  .description-col {
+    min-width: 180px;
+  }
+
+  .category-col {
+    min-width: 120px;
+  }
+
+  .counterPartyCol {
+    width: 150px;
+    font-size: 12px;
+  }
+
+  .amount {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .transaction-table th,
+  .transaction-table td {
+    padding: 6px 8px;
+  }
+
+  .transaction-table th {
+    font-size: 10px;
+  }
+
+  .amount {
+    font-size: 11px;
+  }
+}

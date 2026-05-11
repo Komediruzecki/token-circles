@@ -206,7 +206,8 @@
 /* Amortization Table */
 .amortTable {
   max-height: 320px;
-  overflow-y: auto;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .amortTable table {
@@ -277,7 +278,8 @@
 /* Detailed Amortization Table */
 .amortDetailedWrap {
   max-height: 500px;
-  overflow-y: auto;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .amortDetailedTable {
