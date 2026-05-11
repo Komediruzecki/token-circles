@@ -112,7 +112,7 @@ export function App() {
     setCurrentProfile(null)
     await loadProfiles(true)
     setShowDropdown(false)
-    toast('Logged out', 'info')
+    setTimeout(() => { window.location.reload() }, 150)
   }
 
   onMount(async () => {
@@ -578,10 +578,24 @@ export function App() {
           ))}
           <button
             class={layoutStyles.sidebarNavLink}
-            style={{ 'margin-top': '8px', 'border-top': '1px solid rgba(255,255,255,0.08)', 'padding-top': '16px' }}
-            onClick={() => { setShowTourSelection(true); setSidebarCollapsed(true) }}
+            style={{
+              'margin-top': '8px',
+              'border-top': '1px solid rgba(255,255,255,0.08)',
+              'padding-top': '16px',
+            }}
+            onClick={() => {
+              setShowTourSelection(true)
+              setSidebarCollapsed(true)
+            }}
           >
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
             <span>What's New</span>
