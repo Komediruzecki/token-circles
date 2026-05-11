@@ -68,7 +68,8 @@ export default function Analytics() {
   const [stackedData, setStackedData] = createSignal<{
     labels: string[]
     datasets: Array<{ category: string; color: string; data: number[] }>
-  }>({ labels: [], datasets: [] })
+    numDays: number
+  }>({ labels: [], datasets: [], numDays: 0 })
   const [compareEnabled, setCompareEnabled] = createSignal(false)
   const [compareMonth, setCompareMonth] = createSignal(new Date().getMonth() + 1)
   const [compareData, setCompareData] = createSignal<{
@@ -242,6 +243,7 @@ export default function Analytics() {
       setStackedData({
         labels: res.labels || [],
         datasets: res.datasets || [],
+        numDays: res.numDays || 0,
       })
 
       if (compareEnabled()) {
@@ -267,7 +269,7 @@ export default function Analytics() {
       }
     } catch (err) {
       console.error('Failed to load stacked data', err)
-      setStackedData({ labels: [], datasets: [] })
+      setStackedData({ labels: [], datasets: [], numDays: 0 })
       setCompareData(null)
     }
   }
@@ -580,6 +582,48 @@ export default function Analytics() {
                   />
                 )}
               </div>
+              {/* Averages below stacked chart */}
+              {stackedData().numDays > 0 && (
+                <div class={styles.averages}>
+                  <div class={styles.avgCard}>
+                    <div class={styles.avgLabel}>Daily Average</div>
+                    <div class={styles.avgValue}>
+                      {formatAmount(
+                        stackedData().datasets.reduce(
+                          (sum, ds) => sum + ds.data.reduce((a, b) => a + b, 0),
+                          0
+                        ) / stackedData().numDays
+                      )}
+                    </div>
+                  </div>
+                  <div class={styles.avgCard}>
+                    <div class={styles.avgLabel}>Weekly Average</div>
+                    <div class={styles.avgValue}>
+                      {formatAmount(
+                        (stackedData().datasets.reduce(
+                          (sum, ds) => sum + ds.data.reduce((a, b) => a + b, 0),
+                          0
+                        ) /
+                          stackedData().numDays) *
+                          7
+                      )}
+                    </div>
+                  </div>
+                  <div class={styles.avgCard}>
+                    <div class={styles.avgLabel}>Monthly Average</div>
+                    <div class={styles.avgValue}>
+                      {formatAmount(
+                        (stackedData().datasets.reduce(
+                          (sum, ds) => sum + ds.data.reduce((a, b) => a + b, 0),
+                          0
+                        ) /
+                          stackedData().numDays) *
+                          30
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
