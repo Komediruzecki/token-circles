@@ -195,7 +195,18 @@ export default function Import() {
     const headers = currentHeaders()
     if (headers.length === 0) return
     setActiveStep('mapping')
-    setColumnMapping(autoDetectMapping(headers))
+    const mapping = autoDetectMapping(headers)
+    setColumnMapping(mapping)
+
+    // Initialize category types when category column is auto-detected
+    if (mapping['category'] !== undefined) {
+      const categories = detectCategories()
+      const types: Record<string, 'income' | 'expense' | 'account'> = {}
+      categories.forEach((cat) => {
+        types[cat] = classifyCategory(cat)
+      })
+      setCategoryTypes(types)
+    }
   }
 
   const goToPreview = () => {
@@ -486,6 +497,7 @@ export default function Import() {
       'credit',
       'received',
       'royalt',
+      'reimbursement',
     ]
     const accountKeywords = [
       'account',

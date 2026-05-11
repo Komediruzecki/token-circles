@@ -30,6 +30,41 @@ function toCamelCase(obj) {
   return obj;
 }
 
+// Map category name to an appropriate icon key
+function getCategoryIcon(name) {
+  const lower = name.toLowerCase();
+  const patterns = [
+    [/car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i, 'car'],
+    [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, 'coffee'],
+    [/hous|rent|mortgage|home|lease|property|real\s*estate/i, 'home'],
+    [/utilit|electric|water|gas\s*bill|sewer|trash|garbage|recycling|power|energy/i, 'zap'],
+    [/entertain|fun|game|movie|cinema|theatre|theater|concert|music|stream|netflix|spotify|hulu|disney|hbo/i, 'film'],
+    [/shop|retail|cloth|apparel|mall|amazon|walmart|target|costco/i, 'shopping-cart'],
+    [/health|medical|doctor|dentist|pharma|hospital|clinic|therapy|vet|vision|eye|glasses/i, 'heart'],
+    [/edu|school|college|university|tuition|book|course|class|learn|study|student/i, 'book'],
+    [/travel|flight|airfare|airline|hotel|airbnb|vacation|trip|holiday/i, 'plane'],
+    [/insur/i, 'shield'],
+    [/sav|invest|retire|ira|401|stock|broker|dividend|interest/i, 'trending-up'],
+    [/phone|mobile|cell|internet|wifi|broadband|telecom|data\s*plan/i, 'smartphone'],
+    [/gift|donat|charit|present/i, 'gift'],
+    [/pet|dog|cat|animal/i, 'smile'],
+    [/fit|gym|sport|exercise|workout|yoga|bike|cycling|run/i, 'bar-chart-2'],
+    [/subscri|member|recur/i, 'arrow-right'],
+    [/child|kid|baby|daycare|nanny|babysit|school\s*supp/i, 'baby'],
+    [/beaut|spa|salon|hair|nail|cosmet|skin|makeup|barber/i, 'sun'],
+    [/business|work|office|supplies|desk/i, 'briefcase'],
+    [/tax|irs|government/i, 'folder'],
+    [/credit|debt|loan|card|payment/i, 'creditcard'],
+    [/income|salary|wage|paycheck|payroll|earn|revenue|reimbursement/i, 'dollar-sign'],
+    [/misc|other|general|uncategor|unknown|various|catch.?all/i, 'more-horizontal'],
+    [/bill/i, 'file-text'],
+  ];
+  for (const [pattern, icon] of patterns) {
+    if (pattern.test(lower)) return icon;
+  }
+  return 'tag';
+}
+
 // Retirement projection calculation helper function
 function calculateRetirementProjection(
   database,
@@ -5139,13 +5174,13 @@ app.post('/api/import/execute', apiRateLimiter, (req, res) => {
           // Reuse the same diverse color each time a new category is created (consistent within same import)
           const color = newCategoryColors[colorIndex % newCategoryColors.length];
           colorIndex++;
-          const icon = 'tag';
+          const icon = getCategoryIcon(String(catName).trim());
           // Use user-specified type, or auto-detect from category name keywords
           const catType = (categoryTypes && categoryTypes[catName]) || (() => {
             const lower = String(catName).toLowerCase();
             const incomeKeywords = ['salary', 'income', 'wages', 'wage', 'payroll', 'revenue',
               'dividend', 'refund', 'bonus', 'paycheck', 'pay cheque', 'interest',
-              'credit', 'received', 'royalt'];
+              'credit', 'received', 'royalt', 'reimbursement'];
             return incomeKeywords.some(kw => lower.includes(kw)) ? 'income' : 'expense';
           })();
           const r = insertCat.run(String(catName).trim(), catType, color, icon, pid);

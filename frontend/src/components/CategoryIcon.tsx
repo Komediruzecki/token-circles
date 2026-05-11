@@ -140,6 +140,12 @@ const iconNameMap: Record<string, IconDef> = {
   link: {
     path: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71',
   },
+  'more-horizontal': {
+    path: 'M12 13a1 1 0 100-2 1 1 0 000 2zm-7 0a1 1 0 100-2 1 1 0 000 2zm14 0a1 1 0 100-2 1 1 0 000 2z',
+  },
+  'file-text': {
+    path: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8m8 4H8m0-8h4',
+  },
 }
 
 const iconPatterns: [RegExp, IconDef][] = [
@@ -248,9 +254,9 @@ const iconPatterns: [RegExp, IconDef][] = [
       path: 'M18 20V10M12 20V4M6 20v-6',
     },
   ],
-  // Subscriptions
+  // Subscriptions / Bills
   [
-    /subscri|member|recur/i,
+    /subscri|member|recur|bill/i,
     {
       path: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
     },
