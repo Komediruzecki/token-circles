@@ -27,6 +27,7 @@
  * Application configuration and preferences with storage switching
  */
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
+import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
@@ -202,6 +203,7 @@ export default function Settings() {
   const [showStorageWarning, setShowStorageWarning] = createSignal(false)
   const [migrateDataEnabled, setMigrateDataEnabled] = createSignal(false)
   const [migrating, setMigrating] = createSignal(false)
+  const [showChangelog, setShowChangelog] = createSignal(false)
 
   // Load saved settings
   onMount(() => {
@@ -957,8 +959,29 @@ export default function Settings() {
               </div>
             </div>
           </div>
+
+          <div class={styles.card} style="margin-top: 24px;">
+            <div class={styles.settingsSection}>
+              <div class={styles.settingsSectionTitle}>About</div>
+              <div class={styles.formGroup} style="margin-top: 16px;">
+                <button
+                  class={styles.btnSecondary}
+                  onclick={() => setShowChangelog(true)}
+                >
+                  View Changelog
+                </button>
+                <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
+                  See what&apos;s new in each version of Finance Manager.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <Show when={showChangelog()}>
+        <ChangelogModal onClose={() => setShowChangelog(false)} />
+      </Show>
     </div>
   )
 }
