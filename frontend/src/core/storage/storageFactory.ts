@@ -20,9 +20,19 @@ import type {
 // Storage modes
 export type StorageMode = 'serverless' | 'self-hosted'
 
+// Resolve default storage mode from env variable
+// VITE_DEFAULT_STORAGE: "dexie" = client-only IndexedDB, "sqlite" = backend SQLite server
+function getDefaultStorageMode(): StorageMode {
+  const envDefault = import.meta.env.VITE_DEFAULT_STORAGE as string | undefined
+  if (envDefault === 'dexie') return 'serverless'
+  if (envDefault === 'sqlite') return 'self-hosted'
+  // Fallback: detect from environment
+  return detectStorageMode()
+}
+
 // Singleton instance storage
 let currentAdapter: StorageAdapter | null = null
-let currentMode: StorageMode = 'self-hosted'
+let currentMode: StorageMode = getDefaultStorageMode()
 
 // Check if we're running in a serverless environment
 function detectStorageMode(): StorageMode {
@@ -49,11 +59,13 @@ function detectStorageMode(): StorageMode {
  * Get the current storage mode
  */
 export function getStorageMode(): StorageMode {
-  if (currentMode === 'self-hosted') {
+  // If mode is explicitly set to self-hosted via env, skip detection
+  const envDefault = import.meta.env.VITE_DEFAULT_STORAGE as string | undefined
+  if (envDefault === 'sqlite' && currentMode === 'self-hosted') {
     return 'self-hosted'
   }
 
-  // Check localStorage for stored preference
+  // Check localStorage for stored user preference (takes priority)
   const stored = localStorage.getItem('finance_storage_mode')
   if (stored !== null && stored !== '') {
     const mode = stored as StorageMode
@@ -61,6 +73,10 @@ export function getStorageMode(): StorageMode {
       return mode
     }
   }
+
+  // If env default is set, use it as fallback instead of pathname detection
+  if (envDefault === 'dexie') return 'serverless'
+  if (envDefault === 'sqlite') return 'self-hosted'
 
   return detectStorageMode()
 }

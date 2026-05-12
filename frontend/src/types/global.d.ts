@@ -2,6 +2,8 @@
  * Global Window Type Declarations
  */
 
+/// <reference types="vite/client" />
+
 declare global {
   interface Window {
     transactionsSetType?: (type: string) => void
@@ -14,6 +16,17 @@ declare global {
     transactionsSetLoading?: (loading: boolean) => void
     transactionsSave?: () => Promise<void>
   }
+}
+
+interface ImportMetaEnv {
+  readonly VITE_DEFAULT_STORAGE?: string
+  readonly VITE_SITE_DOMAIN?: string
+  readonly VITE_API_BASE_URL?: string
+  readonly VITE_CORS_ORIGINS?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
 }
 
 export {}

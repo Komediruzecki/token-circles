@@ -197,8 +197,10 @@ export default function Settings() {
   const [darkMode, setDarkMode] = createSignal(false)
   const [chartExportSettings, setChartExportSettings] =
     createSignal<ChartExportSettings>(loadChartExportSettings())
+  const defaultStorage: 'serverless' | 'self-hosted' =
+    import.meta.env.VITE_DEFAULT_STORAGE === 'dexie' ? 'serverless' : 'self-hosted'
   const [storageMode, setLocalStorageMode] = createSignal<'serverless' | 'self-hosted'>(
-    'self-hosted'
+    defaultStorage
   )
   const [showStorageWarning, setShowStorageWarning] = createSignal(false)
   const [migrateDataEnabled, setMigrateDataEnabled] = createSignal(false)
@@ -218,8 +220,11 @@ export default function Settings() {
     const savedStorage = localStorage.getItem('finance_storage_mode')
     if (savedStorage === 'serverless') {
       setLocalStorageMode('serverless')
-    } else {
+    } else if (savedStorage === 'self-hosted') {
       setLocalStorageMode('self-hosted')
+    } else {
+      // No stored preference — use env default
+      setLocalStorageMode(defaultStorage)
     }
 
     void loadHouseholdProfiles()

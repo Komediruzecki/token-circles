@@ -284,7 +284,6 @@
 .chart-container-tall {
   position: relative;
   height: 420px;
-  overflow: hidden;
 }
 
 .periodNavigatorContainer {

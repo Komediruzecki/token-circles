@@ -68,17 +68,32 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         const gridColor = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
         const tooltipBg = dark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)'
         const tooltipBorder = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-
+        const isPieOrDoughnut =
+          chartType === 'doughnut' || chartType === 'pie' || chartType === 'polarArea'
         const options = props.options || {
           responsive: true,
           maintainAspectRatio: false,
+          layout: isPieOrDoughnut
+            ? {
+                padding: {
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                },
+              }
+            : undefined,
           plugins: {
             legend: {
+              position: isPieOrDoughnut ? 'right' : 'top',
+              align: isPieOrDoughnut ? 'center' : 'center',
               labels: {
                 color: textColor,
                 font: { size: 12 },
                 padding: 15,
                 usePointStyle: true,
+                boxWidth: 12,
+                boxHeight: 12,
               },
             },
             tooltip: {
