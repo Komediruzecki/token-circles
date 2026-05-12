@@ -17,6 +17,7 @@
     "cloc": "cloc src --exclude-dir=node_modules,dist --by-file-by-lang --not-match-f='(.*[.]d[.]ts|.*[.]stories[.].*|.*[.]test[.].*|.*[.]json)'",
     "lines": "cloc src --exclude-dir=node_modules,dist --by-file-by-lang --not-match-f='(.*[.]d[.]ts|.*[.]stories[.].*|.*[.]test[.].*|.*[.]json)'",
     "test": "playwright test",
+    "test:unit": "vitest run",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "analyze-bundle": "VITE_ANALYZE_BUNDLE=true vite build"
