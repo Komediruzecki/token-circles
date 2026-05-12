@@ -722,7 +722,13 @@ export default function Transactions() {
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Date</label>
-                  <input type="date" class={styles.formControl} data-test-id="tx-date" value={formDate()} required />
+                  <input
+                    type="date"
+                    class={styles.formControl}
+                    data-test-id="tx-date"
+                    value={formDate()}
+                    required
+                  />
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Category</label>

@@ -189,7 +189,7 @@ test.describe('Goals CRUD Operations', () => {
 
       const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
       const chasModal = await modal.count()
-    expect(chasModal).toBeGreaterThanOrEqual(0)
+      expect(chasModal).toBeGreaterThanOrEqual(0)
     }
   })
 

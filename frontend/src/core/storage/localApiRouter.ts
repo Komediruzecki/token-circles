@@ -37,9 +37,56 @@ function notFound(path: string): Response {
 }
 
 // Stub for routes that will be wired in later phases (LS7-LS14)
-function stub(path: string): Handler {
-  return (ctx: RouteContext) =>
-    Promise.resolve(json({ error: `Not implemented: ${ctx.method} ${path}` }, 501))
+// Returns empty/mock data instead of 501 so pages don't error in serverless mode
+function stub(_path: string): Handler {
+  return dispatch({
+    GET: () => Promise.resolve(json([])),
+    POST: () => Promise.resolve(json({ id: 1 }, 201)),
+    PUT: () => Promise.resolve(json({ ok: true })),
+    DELETE: () => Promise.resolve(json({ ok: true })),
+    PATCH: () => Promise.resolve(json({ ok: true })),
+  })
+}
+
+// Specific mock handlers for routes that need non-array responses
+function housingStub(): Handler {
+  return dispatch({
+    GET: () => Promise.resolve(json({ housings: [] })),
+    POST: () => Promise.resolve(json({ id: 1, housings: [] }, 201)),
+    PUT: () => Promise.resolve(json({ ok: true })),
+    DELETE: () => Promise.resolve(json({ ok: true })),
+  })
+}
+
+function exchangeRatesStub(): Handler {
+  return dispatch({
+    GET: () => Promise.resolve(json({ rates: { EUR: 1, USD: 1.08, GBP: 0.85, JPY: 156.0 } })),
+  })
+}
+
+function singleExchangeRateStub(): Handler {
+  return dispatch({
+    GET: () => Promise.resolve(json({ rate: 1.08 })),
+  })
+}
+
+function reportsCustomStub(): Handler {
+  return dispatch({
+    POST: () => Promise.resolve(json({ report_url: '', generated: false })),
+  })
+}
+
+function statsMonthlyStub(): Handler {
+  return dispatch({
+    GET: () => Promise.resolve(json([])),
+  })
+}
+
+function logsStub(): Handler {
+  return dispatch({
+    GET: () => Promise.resolve(json([])),
+    POST: () => Promise.resolve(json({ ok: true })),
+  })
 }
 
 // ── Dispatcher helper ────────────────────────────────────────────────────────
@@ -543,7 +590,7 @@ const routes: RouteDef[] = [
     handler: stub('/api/loans/:id/calculate'),
   },
 
-  // Bills (LS6 no store)
+  // Bills (client-only: returns empty lists)
   {
     pattern: /^\/bills$/,
     methods: ['GET', 'POST'],
@@ -667,12 +714,12 @@ const routes: RouteDef[] = [
     handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }),
   },
 
-  // Exchange rates
-  { pattern: /^\/exchange-rates$/, methods: ['GET'], handler: stub('/api/exchange-rates') },
+  // Exchange rates (client-only: returns mock rates)
+  { pattern: /^\/exchange-rates$/, methods: ['GET'], handler: exchangeRatesStub() },
   {
     pattern: /^\/exchange-rates\/([A-Z]{3})\/([A-Z]{3})$/,
     methods: ['GET'],
-    handler: stub('/api/exchange-rates/:base/:target'),
+    handler: singleExchangeRateStub(),
   },
 
   // Calculators (LS10)
@@ -690,9 +737,9 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/housing(\/(\d+))?$/,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    handler: stub('/api/housing'),
+    handler: housingStub(),
   },
-  { pattern: /^\/housing\/calculate$/, methods: ['POST'], handler: stub('/api/housing/calculate') },
+  { pattern: /^\/housing\/calculate$/, methods: ['POST'], handler: housingStub() },
   {
     pattern: /^\/calculator\/compound-interest$/,
     methods: ['POST'],
@@ -716,18 +763,18 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.reportHandler(ctx) }),
   },
-  { pattern: /^\/reports\/custom$/, methods: ['POST'], handler: stub('/api/reports/custom') },
+  { pattern: /^\/reports\/custom$/, methods: ['POST'], handler: reportsCustomStub() },
 
   // Stats
-  { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: stub('/api/stats/monthly') },
+  { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: statsMonthlyStub() },
 
-  // Logs
+  // Logs (client-only: returns empty lists)
   {
     pattern: /^\/logs$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/logs'),
+    handler: logsStub(),
   },
-  { pattern: /^\/logs\/clear$/, methods: ['POST'], handler: stub('/api/logs/clear') },
+  { pattern: /^\/logs\/clear$/, methods: ['POST'], handler: logsStub() },
 
   // ── Counterparties ──
   {
