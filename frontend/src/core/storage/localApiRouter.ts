@@ -583,11 +583,19 @@ const routes: RouteDef[] = [
     handler: stub('/api/accounts/:id/reconciliation-summary'),
   },
 
-  // Loans: calculate
+  // Loans: calculate (client-only: returns empty amortization)
   {
     pattern: /^\/loans\/(\d+)\/calculate$/,
     methods: ['POST'],
-    handler: stub('/api/loans/:id/calculate'),
+    handler: dispatch({
+      POST: () =>
+        Promise.resolve(
+          json({
+            schedule: [],
+            summary: { totalPaid: 0, totalInterest: 0, payoffDate: null, interestSaved: 0 },
+          })
+        ),
+    }),
   },
 
   // Bills (client-only: returns empty lists)
@@ -731,8 +739,19 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/retirement-goals$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: () => h.retirementGoals() }),
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: () => h.retirementGoals(),
+      POST: (ctx) => h.retirementGoalCreate(ctx.body),
+    }),
+  },
+  {
+    pattern: /^\/retirement-goals\/(\d+)$/,
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.retirementGoalUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.retirementGoalDelete(ctx.params),
+    }),
   },
   {
     pattern: /^\/housing(\/(\d+))?$/,

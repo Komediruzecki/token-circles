@@ -2588,6 +2588,28 @@ export async function retirementGoals(): Promise<Response> {
   }
 }
 
+export async function retirementGoalCreate(body: unknown): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
+  const goal = body as Record<string, unknown>
+  goal.profile_id = await adapter.getCurrentProfileId()
+  const id = await adapter.createGoal(goal as unknown as Parameters<typeof adapter.createGoal>[0])
+  return json({ id, ...goal }, 201)
+}
+
+export async function retirementGoalUpdate(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  await adapter.updateGoal(idParam(params), body as Record<string, unknown>)
+  return ok()
+}
+
+export async function retirementGoalDelete(params: Record<string, string>): Promise<Response> {
+  await adapter.deleteGoal(idParam(params))
+  return ok()
+}
+
 function calculateRetirementProjection(
   currentAge: number,
   retirementAge: number,
