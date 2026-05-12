@@ -798,8 +798,11 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
       const budget = budgetMap[cat.id as number]
       const spentAmt = spentMap[cat.id as number] || 0
       const budgetAmount = (budget?.amount as number) || 0
-      const remainingBudget = budgetAmount - spentAmt
-      const percentUsed = budgetAmount > 0 ? (spentAmt / budgetAmount) * 100 : 0
+      // Fallback: when no budgets exist, use actual spending as the allocation amount
+      // so the doughnut chart has visible segments
+      const effectiveAmount = budgetAmount > 0 ? budgetAmount : spentAmt
+      const remainingBudget = effectiveAmount - spentAmt
+      const percentUsed = effectiveAmount > 0 ? (spentAmt / effectiveAmount) * 100 : 0
 
       return {
         budget_id: budget?.id ?? null,
@@ -807,7 +810,7 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
         category_name: cat.name,
         category_color: cat.color,
         category_icon: cat.icon,
-        amount: budgetAmount,
+        amount: effectiveAmount,
         spent: spentAmt,
         remaining_budget: remainingBudget,
         percent_used: Math.min(100, Math.round(percentUsed)),
