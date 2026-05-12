@@ -107,7 +107,7 @@ test.describe('Transactions CRUD Operations', () => {
     const currencySelect = page.locator('[data-test-id="tx-currency"]')
     const exists = await currencySelect.count()
     // Currency select is inside the modal; if modal is visible, check options
-    if (exists > 0 && await currencySelect.isVisible().catch(() => false)) {
+    if (exists > 0 && (await currencySelect.isVisible().catch(() => false))) {
       const options = page.locator('[data-test-id="tx-currency"] option')
       const count = await options.count()
       expect(count).toBeGreaterThan(0)

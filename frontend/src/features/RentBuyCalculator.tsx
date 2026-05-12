@@ -444,7 +444,10 @@ export default function RentBuyCalculator(props: Props) {
                       {formatCurrency(s.rentInvestmentValue, currency)}
                     </span>
                   </div>
-                  <div class={`${styles.summaryRow} ${styles.highlight}`} data-test-id="rent-net-cost">
+                  <div
+                    class={`${styles.summaryRow} ${styles.highlight}`}
+                    data-test-id="rent-net-cost"
+                  >
                     <span>Net Cost</span>
                     <span class={styles.summaryValue}>
                       {formatCurrency(s.rentNetCost, currency)}
@@ -463,14 +466,20 @@ export default function RentBuyCalculator(props: Props) {
                     <span>Home Equity</span>
                     <span class={styles.summaryValue}>{formatCurrency(s.buyEquity, currency)}</span>
                   </div>
-                  <div class={`${styles.summaryRow} ${styles.highlight}`} data-test-id="buy-net-cost">
+                  <div
+                    class={`${styles.summaryRow} ${styles.highlight}`}
+                    data-test-id="buy-net-cost"
+                  >
                     <span>Net Cost</span>
                     <span class={styles.summaryValue}>
                       {formatCurrency(s.buyNetCost, currency)}
                     </span>
                   </div>
                 </div>
-                <div class={`${styles.summaryCard} ${styles.verdict}`} data-test-id="comparison-card">
+                <div
+                  class={`${styles.summaryCard} ${styles.verdict}`}
+                  data-test-id="comparison-card"
+                >
                   <div class={styles.summaryTitle}>Comparison</div>
                   <div class={styles.summaryRow}>
                     <span>Winner</span>
@@ -498,7 +507,10 @@ export default function RentBuyCalculator(props: Props) {
 
               {/* Break-even message */}
               {s.breakEven && (
-                <div class={`${styles.breakeven} ${s.winner === 'buy' ? '' : styles.neutral}`} data-test-id="break-even-message">
+                <div
+                  class={`${styles.breakeven} ${s.winner === 'buy' ? '' : styles.neutral}`}
+                  data-test-id="break-even-message"
+                >
                   <div class={styles.breakevenIcon}>
                     <svg
                       width="24"

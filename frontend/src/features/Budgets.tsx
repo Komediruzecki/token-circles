@@ -349,7 +349,9 @@ export default function Budgets() {
     try {
       const [allRes, budgetRes] = await Promise.all([
         apiGet<Category[]>('/api/categories'),
-        apiGet<any[]>(`/api/budgets/summary?year=${currentYearNum()}&month=${currentMonthNum()}`).catch(() => [] as any[]),
+        apiGet<any[]>(
+          `/api/budgets/summary?year=${currentYearNum()}&month=${currentMonthNum()}`
+        ).catch(() => [] as any[]),
       ])
       setCategories(allRes)
       const summary: Record<

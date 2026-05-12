@@ -213,7 +213,10 @@ test.describe('Edge Cases & Error Handling', () => {
       const overlay = page.locator('[class*="overlay"], [class*="backdrop"]')
       const overlayCount = await overlay.count()
       if (overlayCount > 0) {
-        await overlay.first().click({ timeout: 5000 }).catch(() => {})
+        await overlay
+          .first()
+          .click({ timeout: 5000 })
+          .catch(() => {})
         await page.waitForTimeout(500)
       }
 

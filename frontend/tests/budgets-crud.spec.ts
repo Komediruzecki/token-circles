@@ -42,7 +42,9 @@ test.describe('Budgets CRUD Operations', () => {
     expect(count).toBeGreaterThanOrEqual(3)
 
     await expect(getByTestId(page, 'budget-summary').getByText('Income')).toBeVisible()
-    await expect(getByTestId(page, 'budget-summary').getByText('Allocated', { exact: true })).toBeVisible()
+    await expect(
+      getByTestId(page, 'budget-summary').getByText('Allocated', { exact: true })
+    ).toBeVisible()
     await expect(getByTestId(page, 'budget-summary').getByText('Spent')).toBeVisible()
   })
 

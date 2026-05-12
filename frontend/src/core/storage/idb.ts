@@ -112,6 +112,17 @@ export class IndexedDBAdapter implements StorageAdapter {
       localStorage.setItem('currentProfileId', String(profiles[0].id))
       return profiles[0].id
     }
+    // No profiles exist — seed demo profiles then return the first one
+    await seedDemoProfiles()
+    const newProfiles = await db.getAll('profiles')
+    if (newProfiles.length > 0) {
+      const stored = localStorage.getItem('currentProfileId')
+      if (stored) {
+        const parsed = parseInt(stored, 10)
+        if (newProfiles.find((p) => p.id === parsed)) return parsed
+      }
+      return newProfiles[0].id
+    }
     return this.createProfile('Main Profile')
   }
 
@@ -527,5 +538,143 @@ export async function seedDefaultCategories(profileId: number): Promise<void> {
 
   for (const cat of DEFAULT_CATEGORIES) {
     await db.add('categories', { ...cat, profile_id: profileId })
+  }
+}
+
+// ── Demo Profile Seeding ──────────────────────────────────────────────────────
+
+const DEMO_PROFILES = [
+  { name: 'Example Low Income', income: 2500, spendFraction: 0.95 },
+  { name: 'Example Mid Income', income: 5500, spendFraction: 0.82 },
+  { name: 'Example High Income', income: 12000, spendFraction: 0.72 },
+]
+
+const DEMO_ACCOUNTS = [
+  { name: 'Checking Account', type: 'checking', currency: 'EUR' },
+  { name: 'Savings Account', type: 'savings', currency: 'EUR' },
+]
+
+// Monthly expense templates — fractions of total monthly spending
+const MONTHLY_EXPENSES = [
+  { name: 'Housing', pct: 0.37 },
+  { name: 'Food', pct: 0.21 },
+  { name: 'Transportation', pct: 0.11 },
+  { name: 'Utilities', pct: 0.08 },
+  { name: 'Entertainment', pct: 0.07 },
+  { name: 'Shopping', pct: 0.06 },
+  { name: 'Insurance', pct: 0.05 },
+  { name: 'Subscriptions', pct: 0.05 },
+]
+
+export async function seedDemoProfiles(): Promise<void> {
+  const db = await getDB()
+  const existingProfiles = await db.getAll('profiles')
+  if (existingProfiles.length > 0) return
+
+  // Inline seed helper so we don't need to import
+  async function seedCats(profileId: number) {
+    const cats = await db.getAllFromIndex('categories', 'by_profile', profileId)
+    if (cats.length > 0) return
+    for (const cat of DEFAULT_CATEGORIES) {
+      await db.add('categories', { ...cat, profile_id: profileId })
+    }
+  }
+
+  let firstProfileId: number | null = null
+
+  for (const profile of DEMO_PROFILES) {
+    const profileId = (await db.add('profiles', {
+      name: profile.name,
+      created_at: new Date().toISOString(),
+    })) as number
+
+    if (firstProfileId === null) firstProfileId = profileId
+
+    // Seed categories
+    await seedCats(profileId)
+    const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
+
+    const catByName = (name: string) => categories.find((c) => c.name === name)
+
+    // Create accounts with profile-specific starting balances
+    const accountIds: number[] = []
+    // Low: barely any savings, Mid: moderate, High: strong savings
+    const savingsMult = profile.name.includes('Low')
+      ? 0.2
+      : profile.name.includes('Mid')
+        ? 1.0
+        : 2.5
+    for (const acct of DEMO_ACCOUNTS) {
+      const multiplier = acct.type === 'checking' ? 0.3 : savingsMult
+      const startingBalance = Math.round(profile.income * multiplier)
+      const id = (await db.add('accounts', {
+        name: acct.name,
+        type: acct.type,
+        currency: acct.currency,
+        balance: startingBalance,
+        starting_balance: startingBalance,
+        starting_balance_date: '2025-01-01',
+        notes: '',
+        profile_id: profileId,
+      })) as number
+      accountIds.push(id)
+    }
+
+    // Generate 3 months of transactions
+    const now = new Date()
+    for (let monthOffset = 2; monthOffset >= 0; monthOffset--) {
+      const year = now.getFullYear()
+      const month = now.getMonth() - monthOffset
+      const date = new Date(year, month, 1)
+      const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+      const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+      // Salary income on the 1st
+      const salaryCat = catByName('Salary')
+      if (salaryCat) {
+        await db.add('transactions', {
+          description: 'Monthly Salary',
+          amount: profile.income,
+          type: 'income',
+          category_id: salaryCat.id,
+          date: `${monthStr}-01`,
+          currency: 'EUR',
+          profile_id: profileId,
+          reconciled: 1,
+          notes: '',
+          account_id: accountIds[0],
+        })
+      }
+
+      // 6-9 expense transactions per month
+      const numTxns = 6 + ((monthOffset * 3) % 4)
+      for (let i = 0; i < numTxns; i++) {
+        const ex = MONTHLY_EXPENSES[i % MONTHLY_EXPENSES.length]
+        const day = ((i * 7 + 3) % daysInMonth) + 1
+        const amount = Math.round(profile.income * ex.pct * (0.7 + (i % 4) * 0.15))
+        const cat = catByName(ex.name)
+        if (!cat) continue
+
+        await db.add('transactions', {
+          description: ex.name,
+          amount,
+          type: 'expense',
+          category_id: cat.id,
+          date: `${monthStr}-${String(day).padStart(2, '0')}`,
+          currency: 'EUR',
+          profile_id: profileId,
+          reconciled: 0,
+          notes: '',
+          account_id: accountIds[0],
+        })
+      }
+    }
+  }
+
+  // Set current profile to the mid-income (second) profile
+  const profiles = await db.getAll('profiles')
+  const midProfile = profiles.find((p) => p.name === 'Example Mid Income')
+  if (midProfile) {
+    localStorage.setItem('currentProfileId', String(midProfile.id))
   }
 }

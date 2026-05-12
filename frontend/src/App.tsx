@@ -112,7 +112,9 @@ export function App() {
     setCurrentProfile(null)
     await loadProfiles(true)
     setShowDropdown(false)
-    setTimeout(() => { window.location.reload() }, 150)
+    setTimeout(() => {
+      window.location.reload()
+    }, 150)
   }
 
   onMount(async () => {

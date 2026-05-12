@@ -286,11 +286,16 @@ export default function Categories() {
               return (
                 <div data-test-id="category-card" class={styles.categoryCard}>
                   <div class={styles.categoryHeader}>
-                    <div data-test-id="category-color" class={`${styles.categoryIcon} ${iconClass}`}>
+                    <div
+                      data-test-id="category-color"
+                      class={`${styles.categoryIcon} ${iconClass}`}
+                    >
                       <CategoryIcon name={category.name} icon={category.icon} size={18} />
                     </div>
                     <div class={styles.categoryInfo}>
-                      <h3 data-test-id="category-name" class={styles.categoryName}>{category.name}</h3>
+                      <h3 data-test-id="category-name" class={styles.categoryName}>
+                        {category.name}
+                      </h3>
                       <span class={styles.categoryType}>{category.type}</span>
                     </div>
                     <div class={styles.categoryActions}>

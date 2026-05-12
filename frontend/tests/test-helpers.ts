@@ -3,7 +3,7 @@
  */
 
 // Track whether the context has been authenticated already
-let contextAuthSetup = new WeakMap<any, boolean>()
+const contextAuthSetup = new WeakMap<any, boolean>()
 
 /**
  * Login to the application

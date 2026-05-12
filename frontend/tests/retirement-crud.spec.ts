@@ -52,8 +52,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const goalsGrid = page.getByTestId('retirement-goals-grid')
-  const gridCount = await goalsGrid.count()
-  expect(gridCount).toBeGreaterThanOrEqual(0)
+    const gridCount = await goalsGrid.count()
+    expect(gridCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal cards', async ({ page }) => {
@@ -77,48 +77,48 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const goalCards = page.getByTestId('retirement-goal-card')
-  const iconCount = await goalCards.getByTestId('retirement-goal-icon').count()
-  expect(iconCount).toBeGreaterThanOrEqual(0)
+    const iconCount = await goalCards.getByTestId('retirement-goal-icon').count()
+    expect(iconCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal name', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const goalNames = page.getByTestId('retirement-goal-name')
-  const nameCount = await goalNames.count()
-  expect(nameCount).toBeGreaterThanOrEqual(0)
+    const nameCount = await goalNames.count()
+    expect(nameCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal balance', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const goalBalance = page.getByTestId('retirement-goal-balance')
-  const balCount = await goalBalance.count()
-  expect(balCount).toBeGreaterThanOrEqual(0)
+    const balCount = await goalBalance.count()
+    expect(balCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should have progress bar for goal', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const progressBars = page.getByTestId('retirement-progress-bar')
-  const barCount = await progressBars.count()
-  expect(barCount).toBeGreaterThanOrEqual(0)
+    const barCount = await progressBars.count()
+    expect(barCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display progress percentage', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const progressPercent = page.getByTestId('retirement-progress-percent')
-  const pctCount = await progressPercent.count()
-  expect(pctCount).toBeGreaterThanOrEqual(0)
+    const pctCount = await progressPercent.count()
+    expect(pctCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display progress target', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const progressTarget = page.getByTestId('retirement-progress-target')
-  const tgtCount = await progressTarget.count()
-  expect(tgtCount).toBeGreaterThanOrEqual(0)
+    const tgtCount = await progressTarget.count()
+    expect(tgtCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display detail items', async ({ page }) => {
@@ -133,24 +133,24 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const monthlyDetail = page.getByTestId('retirement-monthly-contribution')
-  const monCount = await monthlyDetail.count()
-  expect(monCount).toBeGreaterThanOrEqual(0)
+    const monCount = await monthlyDetail.count()
+    expect(monCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display expected return detail', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const returnDetail = page.getByTestId('retirement-expected-return')
-  const retCount = await returnDetail.count()
-  expect(retCount).toBeGreaterThanOrEqual(0)
+    const retCount = await returnDetail.count()
+    expect(retCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display target date detail', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const dateDetail = page.getByTestId('retirement-target-date')
-  const dtCount = await dateDetail.count()
-  expect(dtCount).toBeGreaterThanOrEqual(0)
+    const dtCount = await dateDetail.count()
+    expect(dtCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should have edit button on goal card', async ({ page }) => {
@@ -176,8 +176,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
       await page.waitForTimeout(200)
 
       const modal = page.getByRole('dialog')
-    const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasModal).toBeTruthy()
+      const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
+      expect(hasModal).toBeTruthy()
     }
   })
 
@@ -462,8 +462,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const chartLegend = page.getByTestId('retirement-chart-legend')
-  const legendCount = await chartLegend.count()
-  expect(legendCount).toBeGreaterThanOrEqual(0)
+    const legendCount = await chartLegend.count()
+    expect(legendCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should handle console errors gracefully', async ({ page }) => {
@@ -492,18 +492,18 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const loadingText = page.getByTestId('loading-state')
-  const pageContent = page.getByTestId('retirement-projections')
-  const hasLoading = await loadingText.isVisible({ timeout: 500 }).catch(() => false)
-  const hasContent = await pageContent.isVisible({ timeout: 500 }).catch(() => false)
-  expect(hasLoading || hasContent).toBeTruthy()
+    const pageContent = page.getByTestId('retirement-projections')
+    const hasLoading = await loadingText.isVisible({ timeout: 500 }).catch(() => false)
+    const hasContent = await pageContent.isVisible({ timeout: 500 }).catch(() => false)
+    expect(hasLoading || hasContent).toBeTruthy()
   })
 
   test('should have responsive goal cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const goalCards2 = page.getByTestId('retirement-goal-card')
-  const cardCount = await goalCards2.count()
-  expect(cardCount).toBeGreaterThanOrEqual(0)
+    const cardCount = await goalCards2.count()
+    expect(cardCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should have proper form validation', async ({ page }) => {
