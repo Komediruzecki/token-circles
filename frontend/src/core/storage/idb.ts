@@ -582,6 +582,13 @@ export async function seedDemoProfiles(): Promise<void> {
     }
   }
 
+  // Generate a pseudo-random but deterministic number from a seed
+  const pseudoRand = (seed: number, min: number, max: number) => {
+    const x = Math.sin(seed) * 10000
+    const r = x - Math.floor(x)
+    return Math.round(min + r * (max - min))
+  }
+
   let firstProfileId: number | null = null
 
   for (const profile of DEMO_PROFILES) {
@@ -595,81 +602,179 @@ export async function seedDemoProfiles(): Promise<void> {
     // Seed categories
     await seedCats(profileId)
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
-
     const catByName = (name: string) => categories.find((c) => c.name === name)
 
-    // Create accounts with profile-specific starting balances
-    const accountIds: number[] = []
-    // Low: barely any savings, Mid: moderate, High: strong savings
+    // Create accounts
     const savingsMult = profile.name.includes('Low')
       ? 0.2
       : profile.name.includes('Mid')
         ? 1.0
         : 2.5
+    const accountIds: number[] = []
     for (const acct of DEMO_ACCOUNTS) {
       const multiplier = acct.type === 'checking' ? 0.3 : savingsMult
-      const startingBalance = Math.round(profile.income * multiplier)
+      const balance = Math.round(profile.income * multiplier)
       const id = (await db.add('accounts', {
         name: acct.name,
         type: acct.type,
         currency: acct.currency,
-        balance: startingBalance,
-        starting_balance: startingBalance,
-        starting_balance_date: '2025-01-01',
+        balance,
+        starting_balance: balance,
+        starting_balance_date: '2020-01-01',
         notes: '',
         profile_id: profileId,
       })) as number
       accountIds.push(id)
     }
 
-    // Generate 3 months of transactions
+    // Generate transactions from 2020-01 through current month
     const now = new Date()
-    for (let monthOffset = 2; monthOffset >= 0; monthOffset--) {
-      const year = now.getFullYear()
-      const month = now.getMonth() - monthOffset
-      const date = new Date(year, month, 1)
-      const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
-      const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const startYear = 2020
+    const endYear = now.getFullYear()
+    const endMonth = now.getMonth() // 0-indexed
 
-      // Salary income on the 1st
-      const salaryCat = catByName('Salary')
-      if (salaryCat) {
-        await db.add('transactions', {
-          description: 'Monthly Salary',
-          amount: profile.income,
-          type: 'income',
-          category_id: salaryCat.id,
-          date: `${monthStr}-01`,
-          currency: 'EUR',
+    for (let year = startYear; year <= endYear; year++) {
+      const lastMonth = year === endYear ? endMonth : 11
+      for (let month = 0; month <= lastMonth; month++) {
+        const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+        const daysInMonth = new Date(year, month + 1, 0).getDate()
+        const yearIndex = year - startYear
+
+        // Salary income on the 1st — grows 3% per year
+        const salaryGrowth = Math.pow(1.03, yearIndex)
+        const monthlyIncome = Math.round(profile.income * salaryGrowth)
+        const salaryCat = catByName('Salary')
+        if (salaryCat) {
+          await db.add('transactions', {
+            description: 'Monthly Salary',
+            amount: monthlyIncome,
+            type: 'income',
+            category_id: salaryCat.id,
+            date: `${monthStr}-01`,
+            currency: 'EUR',
+            profile_id: profileId,
+            reconciled: 1,
+            notes: '',
+            account_id: accountIds[0],
+          })
+        }
+
+        // Monthly expense transactions
+        const totalMonthlySpend = Math.round(monthlyIncome * profile.spendFraction)
+        for (const ex of MONTHLY_EXPENSES) {
+          const cat = catByName(ex.name)
+          if (!cat) continue
+          // Vary day and amount slightly per month using seed
+          const seed = year * 100 + month + MONTHLY_EXPENSES.indexOf(ex) * 1000
+          const day = Math.min(pseudoRand(seed, 2, 28), daysInMonth - 1)
+          const amount = Math.round(
+            totalMonthlySpend * ex.pct * (0.85 + pseudoRand(seed + 1, 0, 30) / 100)
+          )
+          if (amount <= 0) continue
+
+          await db.add('transactions', {
+            description: ex.description,
+            amount,
+            type: 'expense',
+            category_id: cat.id,
+            date: `${monthStr}-${String(day).padStart(2, '0')}`,
+            currency: 'EUR',
+            profile_id: profileId,
+            reconciled: year < endYear || month < endMonth ? 1 : 0,
+            notes: '',
+            account_id: accountIds[0],
+          })
+        }
+      }
+    }
+
+    // ── Portfolio holdings (Mid and High income only) ──
+    if (!profile.name.includes('Low')) {
+      const portfolioStocks = profile.name.includes('High')
+        ? [
+            { ticker: 'AAPL', shares: 50, price: 175, name: 'Apple Inc.' },
+            { ticker: 'MSFT', shares: 30, price: 380, name: 'Microsoft Corp.' },
+            { ticker: 'VWCE.DE', shares: 80, price: 95, name: 'Vanguard FTSE All-World' },
+            { ticker: 'AMZN', shares: 20, price: 185, name: 'Amazon.com Inc.' },
+          ]
+        : [
+            { ticker: 'VWCE.DE', shares: 25, price: 95, name: 'Vanguard FTSE All-World' },
+            { ticker: 'AAPL', shares: 15, price: 175, name: 'Apple Inc.' },
+          ]
+
+      for (const holding of portfolioStocks) {
+        await db.add('portfolioHoldings', {
+          ticker: holding.ticker,
+          name: holding.name,
+          shares: holding.shares,
+          purchase_price: holding.price,
+          purchase_date: '2022-06-15',
           profile_id: profileId,
-          reconciled: 1,
-          notes: '',
-          account_id: accountIds[0],
         })
       }
+    }
 
-      // 6-9 expense transactions per month
-      const numTxns = 6 + ((monthOffset * 3) % 4)
-      for (let i = 0; i < numTxns; i++) {
-        const ex = MONTHLY_EXPENSES[i % MONTHLY_EXPENSES.length]
-        const day = ((i * 7 + 3) % daysInMonth) + 1
-        const amount = Math.round(profile.income * ex.pct * (0.7 + (i % 4) * 0.15))
-        const cat = catByName(ex.name)
-        if (!cat) continue
+    // ── Loans ──
+    if (profile.name.includes('High')) {
+      // Mortgage
+      await db.add('loans', {
+        name: 'Home Mortgage',
+        principal: 250000,
+        interest_rate: 3.5,
+        start_date: '2021-03-01',
+        term_months: 240,
+        profile_id: profileId,
+      })
+    }
+    if (profile.name.includes('Mid')) {
+      // Car loan
+      await db.add('loans', {
+        name: 'Car Loan',
+        principal: 18000,
+        interest_rate: 4.9,
+        start_date: '2022-08-01',
+        term_months: 60,
+        profile_id: profileId,
+      })
+    }
 
-        await db.add('transactions', {
-          description: ex.description,
-          amount,
-          type: 'expense',
-          category_id: cat.id,
-          date: `${monthStr}-${String(day).padStart(2, '0')}`,
-          currency: 'EUR',
-          profile_id: profileId,
-          reconciled: 0,
-          notes: '',
-          account_id: accountIds[0],
-        })
-      }
+    // ── Savings goals ──
+    const goals = profile.name.includes('High')
+      ? [
+          {
+            name: 'Emergency Fund',
+            target_amount: 30000,
+            current_amount: 18000,
+            notes: '6 months expenses',
+          },
+          { name: 'Vacation', target_amount: 5000, current_amount: 2500, notes: 'Summer trip' },
+        ]
+      : profile.name.includes('Mid')
+        ? [
+            {
+              name: 'Emergency Fund',
+              target_amount: 10000,
+              current_amount: 4000,
+              notes: 'Safety net',
+            },
+          ]
+        : [
+            {
+              name: 'Emergency Fund',
+              target_amount: 3000,
+              current_amount: 500,
+              notes: 'Get started',
+            },
+          ]
+
+    for (const g of goals) {
+      await db.add('goals', {
+        name: g.name,
+        target_amount: g.target_amount,
+        current_amount: g.current_amount,
+        notes: g.notes,
+        profile_id: profileId,
+      })
     }
   }
 
