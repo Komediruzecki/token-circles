@@ -112,7 +112,7 @@ export default function D3HeatmapChart(props: Props) {
       .attr('rx', 2)
       .attr('fill', (d: Date) => {
         const val = getValue(d)
-        return val > 0 ? colorFn(val) : 'var(--bg-secondary, rgba(128,128,128,0.1))'
+        return val > 0 ? colorFn(val) : '#ffffff'
       })
       .on('mouseover', (event: MouseEvent, d: Date) => {
         if (!tooltipEl) return
