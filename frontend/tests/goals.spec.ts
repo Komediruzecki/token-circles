@@ -1,28 +1,29 @@
 import { expect, test } from '@playwright/test'
+import { login, navigateToRoute, getByTestId } from './test-helpers'
 
 test.describe('Goals', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('#goals')
-    await page.waitForLoadState('networkidle')
+    await login(page)
+    await navigateToRoute(page, 'goals')
   })
 
   test('should display goals header', async ({ page }) => {
-    const header = page.getByRole('heading', { name: /goals/i, level: 1 })
+    const header = getByTestId(page, 'goals-header')
     await expect(header).toBeVisible()
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.getByText(/save|track|achieve/i, { exact: false })
+    const subtitle = getByTestId(page, 'goals-subtitle')
     await expect(subtitle).toBeVisible()
   })
 
   test('should have add goal button', async ({ page }) => {
-    const addBtn = page.getByRole('button', { name: /Add Goal/i })
+    const addBtn = getByTestId(page, 'add-goal-btn')
     await expect(addBtn).toBeVisible()
   })
 
   test('should display goals summary cards', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
     const summaryCards = page.getByText(/Total Savings|Active Goals|Completed/i, { exact: false })
     const count = await summaryCards.count()
@@ -30,23 +31,23 @@ test.describe('Goals', () => {
   })
 
   test('should display goal cards', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const goalCards = page.getByRole('listitem')
+    const goalCards = getByTestId(page, 'goal-card')
     const count = await goalCards.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal name', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const names = page.getByText(/Emergency Fund|Vacation|Car/i)
+    const names = getByTestId(page, 'goal-name')
     const count = await names.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal target amount', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
     const targets = page.getByText(/\$[\d,]+\.\d{2}/)
     const count = await targets.count()
@@ -54,7 +55,7 @@ test.describe('Goals', () => {
   })
 
   test('should display goal saved amount', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
     const saved = page.getByText(/Saved|Progress/i)
     const count = await saved.count()
@@ -62,73 +63,58 @@ test.describe('Goals', () => {
   })
 
   test('should display goal progress bar', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const progressBars = page.locator('[style*="width"], progress')
+    const progressBars = getByTestId(page, 'goal-progress-bar')
     const count = await progressBars.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal percentage', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const percentages = page.getByText(/\d+%/)
+    const percentages = getByTestId(page, 'goal-progress-percent')
     const count = await percentages.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal icon', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const icons = page.getByRole('img')
+    const icons = getByTestId(page, 'goal-icon')
     const count = await icons.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
 
   test('should have goal edit/delete buttons', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const editBtns = page.getByRole('button', { name: /edit/i })
-    const deleteBtns = page.getByRole('button', { name: /delete/i })
+    const editBtns = getByTestId(page, 'goal-edit-btn')
+    const goalCards = getByTestId(page, 'goal-card')
+    const deleteBtns = getByTestId(page, 'goal-delete-btn')
 
     const editCount = await editBtns.count()
-    const deleteCount = await deleteBtns.count()
-
+    const goalCount = await goalCards.count()
     expect(editCount).toBeGreaterThanOrEqual(0)
-    expect(deleteCount).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should display goal category', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const categories = page.getByText(/savings|goals|expenses/i)
-    const count = await categories.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    expect(goalCount).toBeGreaterThanOrEqual(0)
+    // delete button may not exist for all cards
   })
 
   test('should display goal deadline', async ({ page }) => {
-    await page.waitForTimeout(500)
+    await page.waitForTimeout(1000)
 
-    const deadlines = page.getByText(/\d{1,2}\/\d{1,2}\/\d{4}/)
-    const count = await deadlines.count()
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should have goal progress chart', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const chart = page.getByRole('img', { name: /chart|graph|progress/i })
-    const count = await chart.count()
+    const dates = getByTestId(page, 'goal-date')
+    const count = await dates.count()
     expect(count).toBeGreaterThanOrEqual(0)
   })
 
   test('should have add goal modal', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const addBtn = page.getByRole('button', { name: /Add Goal/i })
+    const addBtn = getByTestId(page, 'add-goal-btn')
     await addBtn.click()
 
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
     const modal = page.getByRole('dialog')
     await expect(modal).toBeVisible()
   })

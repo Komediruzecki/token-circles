@@ -260,6 +260,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="rent-monthly-input"
                 value={formData().rentMonthly}
                 oninput={(e) => {
                   handleInput('rentMonthly' as keyof typeof formData, e.target.value)
@@ -272,6 +273,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="rent-increase-input"
                 value={formData().rentIncrease}
                 oninput={(e) => {
                   handleInput('rentIncrease' as keyof typeof formData, e.target.value)
@@ -284,6 +286,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="invest-return-input"
                 value={formData().investReturn}
                 oninput={(e) => {
                   handleInput('investReturn' as keyof typeof formData, e.target.value)
@@ -296,6 +299,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*"
+                data-test-id="horizon-input"
                 value={formData().horizon}
                 oninput={(e) => {
                   handleInput('horizon' as keyof typeof formData, e.target.value)
@@ -315,6 +319,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="home-price-input"
                 value={formData().homePrice}
                 oninput={(e) => {
                   handleInput('homePrice' as keyof typeof formData, e.target.value)
@@ -327,6 +332,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="down-payment-input"
                 value={formData().downPayment}
                 oninput={(e) => {
                   handleInput('downPayment' as keyof typeof formData, e.target.value)
@@ -339,6 +345,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="loan-term-input"
                 value={formData().loanTerm}
                 oninput={(e) => {
                   handleInput('loanTerm' as keyof typeof formData, e.target.value)
@@ -351,6 +358,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="interest-rate-input"
                 value={formData().interestRate}
                 oninput={(e) => {
                   handleInput('interestRate' as keyof typeof formData, e.target.value)
@@ -363,6 +371,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="property-tax-input"
                 value={formData().propertyTax}
                 oninput={(e) => {
                   handleInput('propertyTax' as keyof typeof formData, e.target.value)
@@ -375,6 +384,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="insurance-input"
                 value={formData().insurance}
                 oninput={(e) => {
                   handleInput('insurance' as keyof typeof formData, e.target.value)
@@ -387,6 +397,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="maintenance-input"
                 value={formData().maintenance}
                 oninput={(e) => {
                   handleInput('maintenance' as keyof typeof formData, e.target.value)
@@ -399,6 +410,7 @@ export default function RentBuyCalculator(props: Props) {
                 type="text"
                 inputmode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
+                data-test-id="hoa-input"
                 value={formData().hoa}
                 oninput={(e) => {
                   handleInput('hoa' as keyof typeof formData, e.target.value)
@@ -418,9 +430,9 @@ export default function RentBuyCalculator(props: Props) {
             <>
               {/* Summary Cards */}
               <div class={styles.summaryGrid}>
-                <div class={styles.summaryCard}>
+                <div class={styles.summaryCard} data-test-id="rent-scenario-card">
                   <div class={styles.summaryTitle}>Rent Scenario ({formData().horizon} years)</div>
-                  <div class={styles.summaryRow}>
+                  <div class={styles.summaryRow} data-test-id="total-rent-paid">
                     <span>Total Rent Paid</span>
                     <span class={styles.summaryValue}>
                       {formatCurrency(s.rentCumulative, currency)}
@@ -432,16 +444,16 @@ export default function RentBuyCalculator(props: Props) {
                       {formatCurrency(s.rentInvestmentValue, currency)}
                     </span>
                   </div>
-                  <div class={`${styles.summaryRow} ${styles.highlight}`}>
+                  <div class={`${styles.summaryRow} ${styles.highlight}`} data-test-id="rent-net-cost">
                     <span>Net Cost</span>
                     <span class={styles.summaryValue}>
                       {formatCurrency(s.rentNetCost, currency)}
                     </span>
                   </div>
                 </div>
-                <div class={styles.summaryCard}>
+                <div class={styles.summaryCard} data-test-id="buy-scenario-card">
                   <div class={styles.summaryTitle}>Buy Scenario ({formData().horizon} years)</div>
-                  <div class={styles.summaryRow}>
+                  <div class={styles.summaryRow} data-test-id="total-mortgage-costs">
                     <span>Total Mortgage + Costs</span>
                     <span class={styles.summaryValue}>
                       {formatCurrency(s.buyCumulative, currency)}
@@ -451,32 +463,33 @@ export default function RentBuyCalculator(props: Props) {
                     <span>Home Equity</span>
                     <span class={styles.summaryValue}>{formatCurrency(s.buyEquity, currency)}</span>
                   </div>
-                  <div class={`${styles.summaryRow} ${styles.highlight}`}>
+                  <div class={`${styles.summaryRow} ${styles.highlight}`} data-test-id="buy-net-cost">
                     <span>Net Cost</span>
                     <span class={styles.summaryValue}>
                       {formatCurrency(s.buyNetCost, currency)}
                     </span>
                   </div>
                 </div>
-                <div class={`${styles.summaryCard} ${styles.verdict}`}>
+                <div class={`${styles.summaryCard} ${styles.verdict}`} data-test-id="comparison-card">
                   <div class={styles.summaryTitle}>Comparison</div>
                   <div class={styles.summaryRow}>
                     <span>Winner</span>
                     <span
                       class={`${styles.summaryValue} ${s.winner === 'buy' ? styles.success : styles.warning}`}
+                      data-test-id="winner-value"
                     >
                       {s.winner === 'buy' ? 'Buying' : 'Renting'}
                     </span>
                   </div>
                   <div class={styles.summaryRow}>
                     <span>Savings</span>
-                    <span class={styles.summaryValue}>
+                    <span class={styles.summaryValue} data-test-id="savings-value">
                       {formatCurrency(Math.abs(s.savings), currency)}
                     </span>
                   </div>
                   <div class={`${styles.summaryRow} highlight`}>
                     <span>Break-even</span>
-                    <span class={styles.summaryValue}>
+                    <span class={styles.summaryValue} data-test-id="break-even-value">
                       {s.breakEven ? `Year ${s.breakEven}` : 'Not reached'}
                     </span>
                   </div>
@@ -485,7 +498,7 @@ export default function RentBuyCalculator(props: Props) {
 
               {/* Break-even message */}
               {s.breakEven && (
-                <div class={`${styles.breakeven} ${s.winner === 'buy' ? '' : styles.neutral}`}>
+                <div class={`${styles.breakeven} ${s.winner === 'buy' ? '' : styles.neutral}`} data-test-id="break-even-message">
                   <div class={styles.breakevenIcon}>
                     <svg
                       width="24"
@@ -508,7 +521,7 @@ export default function RentBuyCalculator(props: Props) {
               )}
 
               {/* Chart */}
-              <div class={styles.chartSection}>
+              <div class={styles.chartSection} data-test-id="rent-buy-chart">
                 <ExportChartButton
                   chart={chartRef()}
                   filename="rent-buy-comparison"

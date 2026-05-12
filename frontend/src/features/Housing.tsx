@@ -178,15 +178,15 @@ export default function HousingForm() {
     <div class={`page page-housing page-enter ${styles.housingPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1>Housing</h1>
-          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <h1 data-test-id="housing-header">Housing</h1>
+          <button data-test-id="add-housing-btn" class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Add Expense
           </button>
         </div>
-        <p class={styles.pageSubtitle}>Track all your housing-related expenses</p>
+        <p data-test-id="housing-subtitle" class={styles.pageSubtitle}>Track all your housing-related expenses</p>
       </div>
 
       {/* Summary Cards */}
@@ -277,6 +277,8 @@ export default function HousingForm() {
       {showAddModal() && (
         <div
           class={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false)
           }}

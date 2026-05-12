@@ -295,7 +295,7 @@ export default function Retirement() {
 
   return (
     <div class={`page page-retirement page-enter ${styles.retirementPage}`}>
-      <div class={styles.pageHeader}>
+      <div class={styles.pageHeader} data-test-id="retirement-page-header">
         <div class={styles.headerTop}>
           <h1 data-test-id="retirement-header">Retirement Planning</h1>
           <button
@@ -315,7 +315,7 @@ export default function Retirement() {
       </div>
 
       {/* Projected Balances Chart */}
-      <div class={styles.retirementProjections}>
+      <div class={styles.retirementProjections} data-test-id="retirement-projections">
         <h2 class={styles.sectionTitle}>Projected Balances Over Time</h2>
         {projection() ? (
           <Chart
@@ -593,6 +593,8 @@ export default function Retirement() {
       {showAddModal() && (
         <div
           class={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
           onclick={(e) => {
             if (e.target === e.currentTarget) {
               setShowAddModal(false)

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { getByTestId } from './test-helpers'
 
 test.describe('Transactions', () => {
   test.beforeEach(async ({ page }) => {
@@ -17,7 +18,7 @@ test.describe('Transactions', () => {
   })
 
   test('should have add transaction button', async ({ page }) => {
-    const addBtn = page.getByRole('button', { name: /Add Transaction/i })
+    const addBtn = getByTestId(page, 'add-transaction-btn')
     await expect(addBtn).toBeVisible()
   })
 

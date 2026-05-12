@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
+import { login, navigateToRoute } from './test-helpers'
 
 test.describe('UI Components', () => {
   test('Dashboard widgets are visible', async ({ page }) => {
-    await page.goto('#dashboard')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     // Check summary cards
     const summaryCards = page.getByRole('region', { name: /summary/i })
@@ -18,9 +18,8 @@ test.describe('UI Components', () => {
   })
 
   test('Transaction table renders correctly', async ({ page }) => {
-    await page.goto('#transactions')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     const table = page.getByRole('table')
     await expect(table).toBeVisible()
@@ -31,9 +30,8 @@ test.describe('UI Components', () => {
   })
 
   test('Pagination works', async ({ page }) => {
-    await page.goto('#transactions')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     const pagination = page.getByRole('navigation', { name: /pagination/i })
     const count = await pagination.count()
@@ -48,9 +46,8 @@ test.describe('UI Components', () => {
   })
 
   test('Filter bar is visible and functional', async ({ page }) => {
-    await page.goto('#transactions')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     const filterBar = page.getByRole('region', { name: /filter|search/i })
     const count = await filterBar.count()
@@ -58,9 +55,8 @@ test.describe('UI Components', () => {
   })
 
   test('Modal opens and closes correctly', async ({ page }) => {
-    await page.goto('#accounts')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'accounts')
 
     const addBtn = page.getByRole('button', { name: /add account/i })
     if (await addBtn.isVisible()) {
@@ -80,9 +76,8 @@ test.describe('UI Components', () => {
   })
 
   test('Tabs work correctly', async ({ page }) => {
-    await page.goto('#categories')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'categories')
 
     const tabs = page.getByRole('tab')
     const count = await tabs.count()
@@ -97,9 +92,8 @@ test.describe('UI Components', () => {
   })
 
   test('Cards display correctly', async ({ page }) => {
-    await page.goto('#bills')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'bills')
 
     const cards = page.getByRole('listitem')
     const count = await cards.count()
@@ -107,9 +101,8 @@ test.describe('UI Components', () => {
   })
 
   test('Badges show correct colors', async ({ page }) => {
-    await page.goto('#accounts')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'accounts')
 
     const badges = page.getByRole('status')
     const count = await badges.count()
@@ -117,9 +110,8 @@ test.describe('UI Components', () => {
   })
 
   test('Search input is accessible', async ({ page }) => {
-    await page.goto('#transactions')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     const searchInput = page.getByPlaceholder(/search|find/i)
     const count = await searchInput.count()
@@ -127,9 +119,8 @@ test.describe('UI Components', () => {
   })
 
   test('Select dropdowns are accessible', async ({ page }) => {
-    await page.goto('#budgets')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'budgets')
 
     const selects = page.getByRole('combobox')
     const count = await selects.count()
@@ -137,9 +128,8 @@ test.describe('UI Components', () => {
   })
 
   test('Toggle switches work', async ({ page }) => {
-    await page.goto('#bills')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'bills')
 
     const toggles = page.getByRole('checkbox', { name: /autopay/i })
     const count = await toggles.count()
@@ -147,9 +137,8 @@ test.describe('UI Components', () => {
   })
 
   test('Form inputs are accessible', async ({ page }) => {
-    await page.goto('#accounts')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'accounts')
 
     const nameInput = page.getByRole('textbox', { name: /name/i })
     const count = await nameInput.count()
@@ -157,9 +146,8 @@ test.describe('UI Components', () => {
   })
 
   test('Toast notifications appear', async ({ page }) => {
-    await page.goto('#accounts')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'accounts')
 
     // Try to trigger a save action
     const addBtn = page.getByRole('button', { name: /add account/i })
@@ -180,9 +168,8 @@ test.describe('UI Components', () => {
   })
 
   test('Sidebar navigation works', async ({ page }) => {
-    await page.goto('#dashboard')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     const sidebarLinks = page.getByRole('link', { name: /dashboard|transactions|accounts/i })
     const count = await sidebarLinks.count()
@@ -194,9 +181,8 @@ test.describe('UI Components', () => {
   })
 
   test('Button states are correct', async ({ page }) => {
-    await page.goto('#budgets')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'budgets')
 
     const buttons = page.getByRole('button')
     const count = await buttons.count()
@@ -204,9 +190,8 @@ test.describe('UI Components', () => {
   })
 
   test('Progress bars render correctly', async ({ page }) => {
-    await page.goto('#goals')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'goals')
 
     const progressBars = page.locator('[style*="width"], progress')
     const count = await progressBars.count()
@@ -214,9 +199,8 @@ test.describe('UI Components', () => {
   })
 
   test('Chart containers are visible', async ({ page }) => {
-    await page.goto('#dashboard')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     const chartContainers = page.getByRole('region', { name: /chart|graph/i })
     const count = await chartContainers.count()
@@ -224,9 +208,8 @@ test.describe('UI Components', () => {
   })
 
   test('Empty states display', async ({ page }) => {
-    await page.goto('#bills')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await login(page)
+    await navigateToRoute(page, 'bills')
 
     const emptyStates = page.getByText(/no bills|add your first/i)
     const count = await emptyStates.count()
@@ -234,11 +217,10 @@ test.describe('UI Components', () => {
   })
 
   test('Responsive layout adjusts', async ({ page }) => {
+    await login(page)
     // Desktop
     await page.setViewportSize({ width: 1920, height: 1080 })
-    await page.goto('#dashboard')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
+    await navigateToRoute(page, 'dashboard')
 
     // Tablet
     await page.setViewportSize({ width: 768, height: 1024 })

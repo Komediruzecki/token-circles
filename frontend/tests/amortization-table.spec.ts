@@ -1,11 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { login } from './test-helpers'
+import { login, navigateToRoute } from './test-helpers'
 
 test.describe('Loan Amortization Table', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
-    await page.goto('#loans')
-    await page.waitForLoadState('networkidle')
+    await navigateToRoute(page, 'loans')
   })
 
   test('should display amortization schedule when clicking View Amortization', async ({ page }) => {
