@@ -90,7 +90,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
               labels: {
                 color: textColor,
                 font: { size: 12 },
-                padding: 15,
+                padding: isPieOrDoughnut ? 20 : 15,
                 usePointStyle: true,
                 boxWidth: 12,
                 boxHeight: 12,
