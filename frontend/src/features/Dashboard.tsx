@@ -548,7 +548,7 @@ export default function Dashboard() {
                           },
                         },
                       }}
-                      height={360}
+                      height={400}
                       showExport
                       filename="spending-by-category"
                     />

@@ -6,7 +6,6 @@
 .chart-container {
   position: relative;
   height: 100%;
-  overflow: hidden;
 }
 
 .chart-container canvas {
@@ -14,7 +13,7 @@
 }
 
 .chart-container.tall {
-  height: 320px;
+  height: 400px;
 }
 
 .chart-container.medium {
