@@ -2,7 +2,7 @@
  * Local API Handlers — IndexedDB-backed route handlers for serverless mode
  */
 import * as XLSX from 'xlsx'
-import { getDB, IndexedDBAdapter, seedDefaultCategories } from './idb'
+import { getDB, IndexedDBAdapter, seedDefaultCategories, seedDemoProfiles } from './idb'
 import { getStorageMode, setStorageMode } from './storageFactory'
 import type { StorageMode } from './storageFactory'
 
@@ -1550,6 +1550,34 @@ export async function importData(body: unknown): Promise<Response> {
 export async function clearAll(): Promise<Response> {
   await adapter.clearAllData()
   return ok({ message: 'All data cleared' })
+}
+
+export async function deleteAllTransactions(): Promise<Response> {
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
+  for (const t of txns) {
+    await db.delete('transactions', t.id)
+  }
+  return ok({ message: 'All transactions deleted' })
+}
+
+export async function deleteAllCategories(): Promise<Response> {
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+  for (const c of cats) {
+    await db.delete('categories', c.id)
+  }
+  await seedDefaultCategories(pid)
+  return ok({ message: 'Categories reset to defaults' })
+}
+
+export async function reseedDemoData(): Promise<Response> {
+  await adapter.clearAllData()
+  localStorage.removeItem('finance_had_profiles')
+  await seedDemoProfiles()
+  return ok({ message: 'Demo data reseeded' })
 }
 
 // ── Dashboard aggregation ────────────────────────────────────────────────────

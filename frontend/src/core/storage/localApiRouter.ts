@@ -170,6 +170,11 @@ const routes: RouteDef[] = [
     methods: ['DELETE'],
     handler: dispatch({ DELETE: () => h.profileResetData() }),
   },
+  {
+    pattern: /^\/profiles\/reseed-demo$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: () => h.reseedDemoData() }),
+  },
 
   // ── Settings ──
   {
@@ -251,10 +256,11 @@ const routes: RouteDef[] = [
   // ── Transactions ──
   {
     pattern: /^\/transactions$/,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'DELETE'],
     handler: dispatch({
       GET: (ctx) => h.transactionsList(ctx.query),
       POST: (ctx) => h.transactionsCreate(ctx.body),
+      DELETE: () => h.deleteAllTransactions(),
     }),
   },
   {
@@ -300,10 +306,11 @@ const routes: RouteDef[] = [
   // ── Categories ──
   {
     pattern: /^\/categories$/,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'DELETE'],
     handler: dispatch({
       GET: (ctx) => h.categoriesList(ctx.query),
       POST: (ctx) => h.categoriesCreate(ctx.body),
+      DELETE: () => h.deleteAllCategories(),
     }),
   },
   {

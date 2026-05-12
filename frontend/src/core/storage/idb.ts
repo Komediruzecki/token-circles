@@ -112,8 +112,12 @@ export class IndexedDBAdapter implements StorageAdapter {
       localStorage.setItem('currentProfileId', String(profiles[0].id))
       return profiles[0].id
     }
-    // No profiles exist — seed demo profiles then return the first one
-    await seedDemoProfiles()
+    // No profiles exist — only seed demo on first init, never after user deletes all
+    const hadProfiles = localStorage.getItem('finance_had_profiles')
+    if (!hadProfiles) {
+      localStorage.setItem('finance_had_profiles', '1')
+      await seedDemoProfiles()
+    }
     const newProfiles = await db.getAll('profiles')
     if (newProfiles.length > 0) {
       const stored = localStorage.getItem('currentProfileId')
@@ -123,7 +127,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
       return newProfiles[0].id
     }
-    return this.createProfile('Main Profile')
+    return this.createProfile('My Finances')
   }
 
   async createProfile(name: string): Promise<number> {
