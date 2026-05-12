@@ -19,51 +19,96 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 // ---- Schema Helpers ----
 
-function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
-  // Profiles
-  if (oldVersion < 1) {
-    db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
+function ensureStore(db: IDBPDatabase, name: string, keyPath: string, autoIncrement: boolean) {
+  if (!db.objectStoreNames.contains(name)) {
+    db.createObjectStore(name, { keyPath, autoIncrement })
+  }
+}
 
+function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
+  // Version 1: base schema
+  if (oldVersion < 1) {
+    ensureStore(db, 'profiles', 'id', true)
     const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
     txns.createIndex('by_profile', 'profile_id')
     txns.createIndex('by_date', 'date')
     txns.createIndex('by_category', 'category_id')
     txns.createIndex('by_type', 'type')
-
     const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
     cats.createIndex('by_profile', 'profile_id')
     cats.createIndex('by_type', 'type')
-
     const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
     accts.createIndex('by_profile', 'profile_id')
-
     const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
     budgets.createIndex('by_profile', 'profile_id')
-
     const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
     goals.createIndex('by_profile', 'profile_id')
-
     const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
     loans.createIndex('by_profile', 'profile_id')
-
     const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
     bh.createIndex('by_account', 'account_id')
-
     const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
     receipts.createIndex('by_profile', 'profile_id')
     receipts.createIndex('by_transaction', 'transaction_id')
-
-    db.createObjectStore('settings', { keyPath: 'key' })
+    ensureStore(db, 'settings', 'key', false)
   }
 
-  // Version 3: Add portfolio holdings store
+  // Version 3: portfolio holdings
   if (oldVersion < 3) {
     const pf = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
     pf.createIndex('by_profile', 'profile_id')
+  }
+
+  // Version 4: ensure ALL stores and indexes exist (migrates older v3 schemas that missed stores)
+  if (oldVersion < 4) {
+    ensureStore(db, 'profiles', 'id', true)
+    ensureStore(db, 'settings', 'key', false)
+
+    if (!db.objectStoreNames.contains('transactions')) {
+      const t = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
+      t.createIndex('by_profile', 'profile_id')
+      t.createIndex('by_date', 'date')
+      t.createIndex('by_category', 'category_id')
+      t.createIndex('by_type', 'type')
+    }
+    if (!db.objectStoreNames.contains('categories')) {
+      const c = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
+      c.createIndex('by_profile', 'profile_id')
+      c.createIndex('by_type', 'type')
+    }
+    if (!db.objectStoreNames.contains('accounts')) {
+      const a = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
+      a.createIndex('by_profile', 'profile_id')
+    }
+    if (!db.objectStoreNames.contains('budgets')) {
+      const b = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
+      b.createIndex('by_profile', 'profile_id')
+    }
+    if (!db.objectStoreNames.contains('goals')) {
+      const g = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
+      g.createIndex('by_profile', 'profile_id')
+    }
+    if (!db.objectStoreNames.contains('loans')) {
+      const l = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
+      l.createIndex('by_profile', 'profile_id')
+    }
+    if (!db.objectStoreNames.contains('balanceHistory')) {
+      const bh2 = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
+      bh2.createIndex('by_account', 'account_id')
+    }
+    if (!db.objectStoreNames.contains('receipts')) {
+      const r = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
+      r.createIndex('by_profile', 'profile_id')
+      r.createIndex('by_transaction', 'transaction_id')
+    }
+    if (!db.objectStoreNames.contains('portfolioHoldings')) {
+      const p = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
+      p.createIndex('by_profile', 'profile_id')
+    }
   }
 }
 
@@ -529,7 +574,13 @@ export class IndexedDBAdapter implements StorageAdapter {
       'settings',
     ]
     for (const store of stores) {
-      await db.clear(store)
+      try {
+        if (db.objectStoreNames.contains(store)) {
+          await db.clear(store)
+        }
+      } catch {
+        // Skip stores that don't exist (schema mismatch)
+      }
     }
   }
 }
