@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
+import { login, navigateToRoute } from './test-helpers'
 
 test.describe('Bills', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('#bills')
-    await page.waitForLoadState('domcontentloaded')
+    await login(page)
+    await navigateToRoute(page, 'bills')
   })
 
   test('should display bills header', async ({ page }) => {

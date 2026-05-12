@@ -481,6 +481,8 @@ export default function Goals() {
       {showAddModal() && (
         <div
           class={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false)
           }}

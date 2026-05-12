@@ -293,7 +293,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: isProduction, // Require HTTPS in production
+      secure: false, // Allow cookies over HTTP for dev/localhost
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days

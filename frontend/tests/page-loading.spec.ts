@@ -3,6 +3,7 @@
  * Tests each page loads without errors or console warnings
  */
 import { test, expect } from '@playwright/test'
+import { login, navigateToRoute } from './test-helpers'
 
 test.describe('Page Loading Tests', () => {
   const pages = [
@@ -20,10 +21,10 @@ test.describe('Page Loading Tests', () => {
     'import',
   ]
 
-  for (const page of pages) {
-    test(`/${page} page loads without errors`, async ({ page }) => {
-      await page.goto(`/#${page}`)
-      await page.waitForLoadState('networkidle')
+  for (const pageName of pages) {
+    test(`/${pageName} page loads without errors`, async ({ page }) => {
+      await login(page)
+      await navigateToRoute(page, pageName)
 
       // Wait a moment for any async operations to complete
       await page.waitForTimeout(1000)
@@ -60,7 +61,8 @@ test.describe('Page Loading Tests', () => {
 
 test.describe('Navigation Tests', () => {
   test('navigation links work correctly', async ({ page }) => {
-    await page.goto('/')
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     // Test main navigation
     const navItems = page.locator('[data-nav-item]')
@@ -73,7 +75,8 @@ test.describe('Navigation Tests', () => {
   })
 
   test('sidebar navigation works', async ({ page }) => {
-    await page.goto('/')
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     // Find all sidebar links
     const sidebarLinks = page.locator('nav a[href^="#"]')
@@ -88,7 +91,8 @@ test.describe('Navigation Tests', () => {
 
 test.describe('Modal Loading Tests', () => {
   test('modals open and close correctly', async ({ page }) => {
-    await page.goto('/')
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     // Find and click a button that opens a modal
     const modalOpeners = page.locator('button[onclick*="modal"], button[onclick*="Modal"]')
@@ -113,7 +117,8 @@ test.describe('Modal Loading Tests', () => {
 
 test.describe('Component Loading Tests', () => {
   test('charts load without errors', async ({ page }) => {
-    await page.goto('/#dashboard')
+    await login(page)
+    await navigateToRoute(page, 'dashboard')
 
     // Wait for charts to render
     await page.waitForTimeout(2000)
@@ -133,10 +138,10 @@ test.describe('Component Loading Tests', () => {
   })
 
   test('tables load without errors', async ({ page }) => {
-    await page.goto('/#transactions')
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     // Wait for table to render
-    await page.waitForLoadState('networkidle')
     await page.waitForTimeout(500)
 
     // Check for table-related errors
@@ -157,7 +162,8 @@ test.describe('Component Loading Tests', () => {
 
 test.describe('Form Loading Tests', () => {
   test('forms initialize correctly', async ({ page }) => {
-    await page.goto('/#transactions')
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     // Find all form inputs
     const formInputs = page.locator(
@@ -170,7 +176,8 @@ test.describe('Form Loading Tests', () => {
   })
 
   test('buttons are clickable', async ({ page }) => {
-    await page.goto('/#transactions')
+    await login(page)
+    await navigateToRoute(page, 'transactions')
 
     // Find buttons
     const buttons = page.locator('button')

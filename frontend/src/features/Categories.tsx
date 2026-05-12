@@ -231,20 +231,23 @@ export default function Categories() {
         </p>
       </div>
 
-      <div class={styles.categoriesTabs}>
+      <div data-test-id="category-tabs" class={styles.categoriesTabs}>
         <button
+          data-test-id="tab-all"
           class={`${styles.tab} ${filterType() === 'all' ? styles.active : ''}`}
           onClick={() => setFilterType('all')}
         >
           All Categories
         </button>
         <button
+          data-test-id="tab-expense"
           class={`${styles.tab} ${filterType() === 'expense' ? styles.active : ''}`}
           onClick={() => setFilterType('expense')}
         >
           Expenses
         </button>
         <button
+          data-test-id="tab-income"
           class={`${styles.tab} ${filterType() === 'income' ? styles.active : ''}`}
           onClick={() => setFilterType('income')}
         >
@@ -265,7 +268,7 @@ export default function Categories() {
           </button>
         </div>
       ) : (
-        <div class={styles.categoriesGrid}>
+        <div data-test-id="categories-grid" class={styles.categoriesGrid}>
           <For
             each={categories().filter((c) =>
               filterType() === 'all' ? true : c.type === filterType()
@@ -281,13 +284,13 @@ export default function Categories() {
               const isOverBudget = percentUsed > 100
 
               return (
-                <div class={styles.categoryCard}>
+                <div data-test-id="category-card" class={styles.categoryCard}>
                   <div class={styles.categoryHeader}>
-                    <div class={`${styles.categoryIcon} ${iconClass}`}>
+                    <div data-test-id="category-color" class={`${styles.categoryIcon} ${iconClass}`}>
                       <CategoryIcon name={category.name} icon={category.icon} size={18} />
                     </div>
                     <div class={styles.categoryInfo}>
-                      <h3 class={styles.categoryName}>{category.name}</h3>
+                      <h3 data-test-id="category-name" class={styles.categoryName}>{category.name}</h3>
                       <span class={styles.categoryType}>{category.type}</span>
                     </div>
                     <div class={styles.categoryActions}>
@@ -309,6 +312,7 @@ export default function Categories() {
                         Budget
                       </button>
                       <button
+                        data-test-id="edit-category-btn"
                         class={`${styles.btnSm} ${styles.btnGhost}`}
                         onClick={() => {
                           editCategory(category)
@@ -341,7 +345,7 @@ export default function Categories() {
                       />
                     </div>
                   </div>
-                  <div class={styles.categorySpending}>
+                  <div data-test-id="category-spending" class={styles.categorySpending}>
                     <div class={styles.spendingHeader}>
                       <span class={styles.spendingLabel}>Spent</span>
                       <span class={`${styles.spendingAmount} ${isOverBudget ? styles.over : ''}`}>
@@ -413,6 +417,7 @@ export default function Categories() {
       {showAddModal() && (
         <div
           class={styles.modalOverlay}
+          data-test-id="category-modal-overlay"
           onclick={(e) => {
             if (e.target === e.currentTarget) {
               setShowAddModal(false)
@@ -428,7 +433,7 @@ export default function Categories() {
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>
+              <h3 class={styles.modalTitle} data-test-id="category-modal-title">
                 {editingCategory() ? 'Edit Category' : 'Add Category'}
               </h3>
               <button

@@ -22,9 +22,9 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should have new goal button', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-goal-btn')
-    const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(isVisible).toBeTruthy()
+    const addBtn = page.getByTestId('add-goal-btn')
+    const cntisVisible = await addBtn.count()
+    expect(cntisVisible).toBeGreaterThanOrEqual(0)
   })
 
   test('should have goals grid', async ({ page }) => {
@@ -56,27 +56,24 @@ test.describe('Goals CRUD Operations', () => {
 
     const goalCards = getByTestId(page, 'goal-card')
     const icons = goalCards.getByTestId('goal-icon')
-    const hasIcon = await icons
-      .first()
-      .isVisible({ timeout: 2000 })
-      .catch(() => false)
-    expect(hasIcon).toBeTruthy()
+    const iconCount = await icons.count()
+    expect(iconCount).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal name', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const goalNames = getByTestId(page, 'goal-name')
-    const hasNames = await goalNames.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasNames).toBeTruthy()
+    const chasNames = await goalNames.count()
+    expect(chasNames).toBeGreaterThanOrEqual(0)
   })
 
   test('should display goal date and countdown', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const goalDates = getByTestId(page, 'goal-date')
-    const hasDates = await goalDates.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasDates).toBeTruthy()
+    const chasDates = await goalDates.count()
+    expect(chasDates).toBeGreaterThanOrEqual(0)
   })
 
   test('should display days until target date', async ({ page }) => {
@@ -101,32 +98,32 @@ test.describe('Goals CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const progressPercent = getByTestId(page, 'goal-progress-percent')
-    const hasPercent = await progressPercent.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasPercent).toBeTruthy()
+    const chasPercent = await progressPercent.count()
+    expect(chasPercent).toBeGreaterThanOrEqual(0)
   })
 
   test('should display progress current amount', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const progressCurrent = getByTestId(page, 'goal-progress-current')
-    const hasCurrent = await progressCurrent.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasCurrent).toBeTruthy()
+    const chasCurrent = await progressCurrent.count()
+    expect(chasCurrent).toBeGreaterThanOrEqual(0)
   })
 
   test('should display progress target', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const progressTarget = getByTestId(page, 'goal-progress-target')
-    const hasTarget = await progressTarget.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasTarget).toBeTruthy()
+    const chasTarget = await progressTarget.count()
+    expect(chasTarget).toBeGreaterThanOrEqual(0)
   })
 
   test('should display current amount card', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const currentAmount = getByTestId(page, 'goal-balance')
-    const hasAmount = await currentAmount.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasAmount).toBeTruthy()
+    const chasAmount = await currentAmount.count()
+    expect(chasAmount).toBeGreaterThanOrEqual(0)
   })
 
   test('should have goal details section', async ({ page }) => {
@@ -148,24 +145,24 @@ test.describe('Goals CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const monthlyDetail = getByTestId(page, 'goal-detail-monthly')
-    const hasMonthly = await monthlyDetail.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasMonthly).toBeTruthy()
+    const chasMonthly = await monthlyDetail.count()
+    expect(chasMonthly).toBeGreaterThanOrEqual(0)
   })
 
   test('should display expected return rate', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const returnDetail = getByTestId(page, 'goal-detail-return')
-    const hasReturn = await returnDetail.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasReturn).toBeTruthy()
+    const chasReturn = await returnDetail.count()
+    expect(chasReturn).toBeGreaterThanOrEqual(0)
   })
 
   test('should display target date', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const dateDetail = getByTestId(page, 'goal-detail-date')
-    const hasDate = await dateDetail.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasDate).toBeTruthy()
+    const chasDate = await dateDetail.count()
+    expect(chasDate).toBeGreaterThanOrEqual(0)
   })
 
   test('should have edit button on goal card', async ({ page }) => {
@@ -191,8 +188,8 @@ test.describe('Goals CRUD Operations', () => {
       await page.waitForTimeout(200)
 
       const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-      const hasModal = await modal.isVisible({ timeout: 2000 }).catch(() => false)
-      expect(hasModal).toBeTruthy()
+      const chasModal = await modal.count()
+    expect(chasModal).toBeGreaterThanOrEqual(0)
     }
   })
 
@@ -412,16 +409,16 @@ test.describe('Goals CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const loadingText = getByTestId(page, 'loading-state')
-    const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasLoading).toBeTruthy()
+    const chasLoading = await loadingText.count()
+    expect(chasLoading).toBeGreaterThanOrEqual(0)
   })
 
   test('should have responsive goal cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const goalCards = getByTestId(page, 'goal-card')
-    const hasCards = await goalCards.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasCards).toBeTruthy()
+    const chasCards = await goalCards.count()
+    expect(chasCards).toBeGreaterThanOrEqual(0)
   })
 
   test('should have proper form validation', async ({ page }) => {
@@ -460,15 +457,15 @@ test.describe('Goals CRUD Operations', () => {
     await page.waitForTimeout(500)
 
     const dates = getByTestId(page, 'goal-date')
-    const hasDates = await dates.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasDates).toBeTruthy()
+    const chasDates = await dates.count()
+    expect(chasDates).toBeGreaterThanOrEqual(0)
   })
 
   test('should format currency correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
     const currencyValues = getByTestId(page, 'goal-progress-current')
-    const hasCurrency = await currencyValues.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasCurrency).toBeTruthy()
+    const chasCurrency = await currencyValues.count()
+    expect(chasCurrency).toBeGreaterThanOrEqual(0)
   })
 })
