@@ -2,6 +2,12 @@
  * Local API Handlers — IndexedDB-backed route handlers for serverless mode
  */
 import * as XLSX from 'xlsx'
+import {
+  generateAnnualPdf,
+  generateMonthlyPdf,
+  generatePlSummaryPdf,
+  generateTaxSummaryPdf,
+} from './clientPdfReports'
 import { getDB, IndexedDBAdapter, seedDefaultCategories, seedDemoProfiles } from './idb'
 import { getStorageMode, setStorageMode } from './storageFactory'
 import type { StorageMode } from './storageFactory'
@@ -2732,17 +2738,39 @@ export async function reportHandler(ctx: {
   const path = ctx.path
   const query = ctx.query
 
-  // PDF generation requires puppeteer/pdfkit — not available client-side
+  // Client-side PDF generation with jsPDF + Chart.js
   if (path.includes('-pdf')) {
-    return json(
-      {
-        error: 'PDF report generation is not available in serverless mode.',
-        message:
-          'Please switch to self-hosted mode (Settings → Storage Mode) to generate PDF reports.',
-        serverlessMode: true,
-      },
-      501
-    )
+    try {
+      const yearParam = query.get('year')
+      const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear()
+      const month = query.get('month')
+      const theme = query.get('theme') || 'light'
+      const dark = theme === 'dark'
+
+      let blob: Blob
+
+      if (path.includes('monthly-pdf') && month) {
+        blob = await generateMonthlyPdf(`${year}-${String(parseInt(month)).padStart(2, '0')}`, dark)
+      } else if (path.includes('annual-pdf') || (path.includes('monthly-pdf') && !month)) {
+        blob = await generateAnnualPdf(year, dark)
+      } else if (path.includes('tax-summary-pdf')) {
+        blob = await generateTaxSummaryPdf(year, dark)
+      } else if (path.includes('pl-summary-pdf')) {
+        blob = await generatePlSummaryPdf(year, dark)
+      } else {
+        return json({ error: 'Unknown PDF report type' }, 400)
+      }
+
+      return new Response(blob, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${path.replace('/api/reports/', '')}.pdf"`,
+        },
+      })
+    } catch (err) {
+      return json({ error: `PDF generation failed: ${(err as Error).message}` }, 500)
+    }
   }
 
   const yearParam = query.get('year')
