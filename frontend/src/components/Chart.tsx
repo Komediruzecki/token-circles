@@ -71,7 +71,7 @@ export default function Chart(props: ChartProps) {
       style={{
         height: props.height ? `${props.height}px` : '300px',
         width: '100%',
-        overflow: 'hidden',
+        position: 'relative',
       }}
     >
       <canvas

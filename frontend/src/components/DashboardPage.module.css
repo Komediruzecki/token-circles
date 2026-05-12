@@ -272,13 +272,11 @@
 .chart-container {
   position: relative;
   height: 300px;
-  overflow: hidden;
 }
 
 .chart-container-medium {
   position: relative;
   height: 320px;
-  overflow: hidden;
 }
 
 .chart-container-tall {
