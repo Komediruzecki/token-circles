@@ -158,10 +158,11 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/profiles\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['GET', 'PUT', 'PATCH', 'DELETE'],
     handler: dispatch({
       GET: (ctx) => h.profilesGet(ctx.params),
       PUT: (ctx) => h.profilesUpdate(ctx.params, ctx.body),
+      PATCH: (ctx) => h.profilesUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.profilesDelete(ctx.params),
     }),
   },
