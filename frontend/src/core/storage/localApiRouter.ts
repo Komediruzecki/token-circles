@@ -1,3 +1,4 @@
+import { validateBody } from '../validation'
 import * as h from './localHandlers'
 import type { StorageMode } from './storageFactory'
 
@@ -880,6 +881,12 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
 
     if (!route.methods.includes(method)) {
       return methodNotAllowed(method, `/api${path}`)
+    }
+
+    // Validate request body against Zod schemas
+    if (body !== null && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      const validationError = validateBody(method, `/api${path}`, body)
+      if (validationError) return validationError
     }
 
     return route.handler({ method, path: `/api${path}`, params, query, body })
