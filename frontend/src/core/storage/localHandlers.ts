@@ -2718,6 +2718,7 @@ function calculateRetirementProjection(
   const shortfall = retirementSavings < 0 ? Math.abs(retirementSavings) : 0
   const yearsOfRunway = Math.round(retirementSavings / (annualWithdrawal / 12))
 
+  const projectedTotal = Math.round(balance)
   return {
     currentAge,
     retirementAge,
@@ -2734,6 +2735,17 @@ function calculateRetirementProjection(
     finalBalance: Math.max(0, Math.round(retirementSavings)),
     shortfall,
     yearsOfRunway,
+    // Frontend-compatible field names
+    current_age: currentAge,
+    retirement_age: retirementAge,
+    current_amount: Math.round(currentSavings),
+    annual_contribution: Math.round(monthlyContribution * 12),
+    expected_return: Math.round(annualReturn),
+    withdrawal_rate: Math.round(withdrawalRate),
+    years_to_retire: retirementAge - currentAge,
+    projected_total: projectedTotal,
+    projected_income: Math.round(projectedTotal > 0 ? projectedTotal * 0.04 : 0),
+    monthly_income_in_retirement: Math.round(projectedTotal > 0 ? projectedTotal * 0.04 / 12 : 0),
   }
 }
 
