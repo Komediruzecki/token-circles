@@ -35,8 +35,8 @@ import SankeyChart from '../components/SankeyChart'
 import { formatCurrency } from '../core/api'
 import { theme } from '../core/theme'
 import { apiGet, showToast } from '../utils/api'
-import type { AnalyticsApiResponse, AnalyticsSummary, CategoryTrendItem, SankeyData, Transaction } from '../types/models'
 import { downloadBlob } from '../utils/chartExport'
+import type { CategoryTrendItem, SankeyData, Transaction } from '../types/models'
 
 interface AnalyticsData {
   byCategory: Array<{ category_id: number; category_name: string; amount: number }>
