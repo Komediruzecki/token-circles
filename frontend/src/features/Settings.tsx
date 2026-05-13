@@ -372,7 +372,7 @@ export default function Settings() {
     setRenaming(true)
     try {
       const res = await apiFetch(`/api/profiles/${pid}`, {
-        method: 'PATCH',
+        method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
