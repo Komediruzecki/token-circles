@@ -6776,45 +6776,6 @@ app.get('/api/calculator/emergency-fund', apiRateLimiter, (req, res) => {
   }
 });
 
-// ========================
-// RETIREMENT ENDPOINTS
-// ========================
-app.get('/api/retirement-goals', apiRateLimiter, (req, res) => {
-  try {
-    const pid = getProfileId(req);
-    const settings = db
-      .prepare('SELECT * FROM settings WHERE key = ? AND profile_id = ?')
-      .get('retirement_goals', pid);
-
-    const goals = db
-      .prepare(
-        `
-      SELECT
-        id,
-        name,
-        target_amount,
-        current_amount,
-        deadline,
-        notes,
-        created_at
-      FROM savings_goals
-      WHERE profile_id = ?
-      ORDER BY deadline ASC
-    `
-      )
-      .all(pid);
-
-    res.json({
-      settings: settings ? JSON.parse(settings.value) : null,
-      goals: goals.map((g) => ({ ...g, profile_id: pid })),
-    });
-  } catch (err) {
-    console.error(err.message);
-    logError('error', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/retirement/projection', apiRateLimiter, (req, res) => {
   try {
     const pid = getProfileId(req);
