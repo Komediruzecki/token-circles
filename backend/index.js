@@ -4441,11 +4441,15 @@ app.get('/api/dashboard', apiRateLimiter, async (req, res) => {
     // Get summary (income, expenses, balance, recent transactions)
     const dateFrom = req.query.date_from;
     const dateTo = req.query.date_to;
+    const allTime = req.query.all === 'true';
     let startDate;
     let endDate;
     const year = parseInt(req.query.year) || new Date().getFullYear();
     const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
-    if (dateFrom && dateTo) {
+    if (allTime) {
+      startDate = '0000-01-01';
+      endDate = '9999-12-31';
+    } else if (dateFrom && dateTo) {
       startDate = dateFrom;
       endDate = dateTo;
     } else {

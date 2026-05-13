@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [loading, setLoading] = createSignal(true)
   const [pillPeriod, setPillPeriod] = createSignal('month')
+  const [allTime, setAllTime] = createSignal(false)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(
     (() => {
@@ -96,13 +97,16 @@ export default function Dashboard() {
     month()
     year() // track dependencies
     // When PeriodNavigator changes month/year, use standard month-based filtering
-    void loadDashboard()
+    // Skip if all-time is active (pill change triggers its own load)
+    if (!allTime()) {
+      void loadDashboard()
+    }
   })
 
   const loadDashboard = async (dateFrom?: string, dateTo?: string) => {
     setLoading(true)
     try {
-      const data = await api.getDashboard(month(), year(), dateFrom, dateTo)
+      const data = await api.getDashboard(month(), year(), dateFrom, dateTo, allTime())
       setMetrics(data)
     } catch {
       toast('Failed to load dashboard', 'error')
@@ -145,6 +149,7 @@ export default function Dashboard() {
 
   const handlePillChange = async (pillId: string) => {
     setPillPeriod(pillId)
+    setAllTime(pillId === 'all')
     const now = new Date()
     const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -239,12 +244,13 @@ export default function Dashboard() {
           <PeriodNavigator
             month={month}
             year={year}
-            onMonthChange={setMonth}
-            onYearChange={setYear}
+            onMonthChange={(m) => { setMonth(m); setAllTime(false) }}
+            onYearChange={(y) => { setYear(y); setAllTime(false) }}
             onPrev={() => {
               const m = month()
               const y = year()
               setPillPeriod('custom')
+              setAllTime(false)
               if (m === 1) {
                 setMonth(12)
                 setYear(y - 1)
@@ -256,6 +262,7 @@ export default function Dashboard() {
               const m = month()
               const y = year()
               setPillPeriod('custom')
+              setAllTime(false)
               if (m === 12) {
                 setMonth(1)
                 setYear(y + 1)

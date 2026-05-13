@@ -691,10 +691,13 @@ export class ApiClient {
     month?: number,
     year?: number,
     dateFrom?: string,
-    dateTo?: string
+    dateTo?: string,
+    allTime?: boolean
   ): Promise<Models.DashboardMetrics> {
     const qs = new URLSearchParams()
-    if (dateFrom && dateTo) {
+    if (allTime) {
+      qs.set('all', 'true')
+    } else if (dateFrom && dateTo) {
       qs.set('date_from', dateFrom)
       qs.set('date_to', dateTo)
     } else if (month && year) {
