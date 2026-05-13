@@ -59,13 +59,7 @@ function detectStorageMode(): StorageMode {
  * Get the current storage mode
  */
 export function getStorageMode(): StorageMode {
-  // If mode is explicitly set to self-hosted via env, skip detection
-  const envDefault = import.meta.env.VITE_DEFAULT_STORAGE as string | undefined
-  if (envDefault === 'sqlite' && currentMode === 'self-hosted') {
-    return 'self-hosted'
-  }
-
-  // Check localStorage for stored user preference (takes priority)
+  // User preference from localStorage always takes priority
   const stored = localStorage.getItem('finance_storage_mode')
   if (stored !== null && stored !== '') {
     const mode = stored as StorageMode
@@ -75,6 +69,7 @@ export function getStorageMode(): StorageMode {
   }
 
   // If env default is set, use it as fallback instead of pathname detection
+  const envDefault = import.meta.env.VITE_DEFAULT_STORAGE as string | undefined
   if (envDefault === 'dexie') return 'serverless'
   if (envDefault === 'sqlite') return 'self-hosted'
 

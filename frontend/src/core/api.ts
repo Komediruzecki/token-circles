@@ -972,27 +972,27 @@ export class ApiClient {
 
   // ============ RECURRING TRANSACTIONS ============
 
-  getRecurring(): Promise<any[]> {
-    return this.request('/recurring')
+  getRecurring(): Promise<Models.RecurringTransaction[]> {
+    return this.request<Models.RecurringTransaction[]>('/recurring')
   }
 
-  getRecurringById(id: number): Promise<any> {
-    return this.request(`/recurring/${id}`)
+  getRecurringById(id: number): Promise<Models.RecurringTransaction> {
+    return this.request<Models.RecurringTransaction>(`/recurring/${id}`)
   }
 
-  createRecurring(data: Record<string, unknown>): Promise<any> {
-    return this.request('/recurring', { method: 'POST', body: data })
+  createRecurring(data: Omit<Models.RecurringTransaction, 'id' | 'profile_id'>): Promise<Models.RecurringTransaction> {
+    return this.request<Models.RecurringTransaction>('/recurring', { method: 'POST', body: data })
   }
 
-  updateRecurring(id: number, data: Record<string, unknown>): Promise<any> {
-    return this.request(`/recurring/${id}`, { method: 'PUT', body: data })
+  updateRecurring(id: number, data: Partial<Models.RecurringTransaction>): Promise<Models.RecurringTransaction> {
+    return this.request<Models.RecurringTransaction>(`/recurring/${id}`, { method: 'PUT', body: data })
   }
 
-  deleteRecurring(id: number): Promise<any> {
+  deleteRecurring(id: number): Promise<void> {
     return this.request(`/recurring/${id}`, { method: 'DELETE' })
   }
 
-  populateRecurring(id: number): Promise<any> {
+  populateRecurring(id: number): Promise<{ ok: boolean }> {
     return this.request(`/recurring/${id}/populate`, { method: 'POST' })
   }
 }

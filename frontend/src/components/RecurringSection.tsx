@@ -6,21 +6,7 @@ import { createSignal, For, onMount } from 'solid-js'
 import { api } from '../core/api'
 import { showConfirm } from '../core/confirmStore'
 import styles from './RecurringSection.module.css'
-import type { Category } from '../types/models'
-
-interface RecurringItem {
-  id: number
-  description: string
-  amount: number
-  type: string
-  frequency: string
-  next_date: string | null
-  category_id: number | null
-  category_name: string | null
-  category_color: string | null
-  day_of_month: number | null
-  notes: string | null
-}
+import type { Category, RecurringTransaction } from '../types/models'
 
 interface RecurringSectionProps {
   categories: Category[]
@@ -28,7 +14,7 @@ interface RecurringSectionProps {
 }
 
 export default function RecurringSection(props: RecurringSectionProps) {
-  const [items, setItems] = createSignal<RecurringItem[]>([])
+  const [items, setItems] = createSignal<RecurringTransaction[]>([])
   const [isModalOpen, setIsModalOpen] = createSignal(false)
   const [editingId, setEditingId] = createSignal<number | null>(null)
   const [expanded, setExpanded] = createSignal(false)
@@ -62,7 +48,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setIsModalOpen(true)
   }
 
-  const openEditModal = async (item: RecurringItem) => {
+  const openEditModal = async (item: RecurringTransaction) => {
     setEditingId(item.id)
     setFormDescription(item.description)
     setFormAmount(item.amount.toString())
@@ -112,7 +98,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     }
   }
 
-  const handleDelete = async (item: RecurringItem) => {
+  const handleDelete = async (item: RecurringTransaction) => {
     if (!(await showConfirm(`Delete recurring "${item.description}"?`))) return
     try {
       await api.deleteRecurring(item.id)
@@ -122,7 +108,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     }
   }
 
-  const handlePopulate = async (item: RecurringItem) => {
+  const handlePopulate = async (item: RecurringTransaction) => {
     try {
       await api.populateRecurring(item.id)
       props.onRefreshTransactions()
