@@ -348,7 +348,7 @@ export default function Accounts() {
       {/* Add Account Modal */}
       {showAddModal() && (
         <div
-          class={styles.modalOverlay}
+          data-test-id="add-account-modal" class={`${styles.modalOverlay} ${styles.visible}`}
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false)
           }}

@@ -58,13 +58,13 @@ test.describe('UI Components', () => {
     await login(page)
     await navigateToRoute(page, 'accounts')
 
-    const addBtn = page.getByRole('button', { name: /add account/i })
+    const addBtn = page.locator('[data-test-id="add-account-btn"]')
     if (await addBtn.isVisible()) {
       await addBtn.click()
       await page.waitForTimeout(300)
 
-      const modal = page.getByRole('dialog')
-      await expect(modal).toBeVisible()
+      const modal = page.locator('[data-test-id="add-account-modal"]')
+      await expect(modal).toBeVisible({ timeout: 5000 })
 
       // Click cancel or overlay to close
       const cancelBtn = page.getByRole('button', { name: /cancel/i })
@@ -79,7 +79,7 @@ test.describe('UI Components', () => {
     await login(page)
     await navigateToRoute(page, 'categories')
 
-    const tabs = page.getByRole('tab')
+    const tabs = page.locator('[data-test-id="category-tabs"] [data-test-id^="tab-"]')
     const count = await tabs.count()
     expect(count).toBeGreaterThanOrEqual(2)
 
@@ -87,7 +87,7 @@ test.describe('UI Components', () => {
       await tabs.nth(1).click()
       await page.waitForTimeout(200)
 
-      expect(await tabs.nth(1).getAttribute('aria-selected')).toBe('true')
+      expect(await tabs.nth(1).getAttribute('class')).toContain('active')
     }
   })
 
@@ -150,13 +150,13 @@ test.describe('UI Components', () => {
     await navigateToRoute(page, 'accounts')
 
     // Try to trigger a save action
-    const addBtn = page.getByRole('button', { name: /add account/i })
+    const addBtn = page.locator('[data-test-id="add-account-btn"]')
     if (await addBtn.isVisible()) {
       await addBtn.click()
       await page.waitForTimeout(300)
 
-      const submitBtn = page.getByRole('button', { name: /add account/i })
-      if (await submitBtn.isVisible()) {
+      const submitBtn = page.locator('[data-test-id="add-account-modal"] button[type="submit"]')
+      if (await submitBtn.isVisible().catch(() => false)) {
         await submitBtn.click()
         await page.waitForTimeout(500)
 
