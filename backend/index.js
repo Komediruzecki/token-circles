@@ -3940,6 +3940,25 @@ app.delete('/api/savings-goals/:id', apiRateLimiter, (req, res) => {
   }
 });
 
+// Contribute an amount to a savings goal
+app.post('/api/savings-goals/:id/contribute', apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    const goalId = req.params.id;
+    const goal = db.prepare('SELECT * FROM savings_goals WHERE id=? AND profile_id=?').get(goalId, pid);
+    if (!goal) return res.status(404).json({ error: 'Goal not found' });
+    const { amount } = req.body;
+    const contribution = parseFloat(amount) || 0;
+    const newAmount = (goal.current_amount || 0) + contribution;
+    db.prepare('UPDATE savings_goals SET current_amount=? WHERE id=? AND profile_id=?').run(newAmount, goalId, pid);
+    res.json({ ok: true, current_amount: newAmount });
+  } catch (err) {
+    console.error(err.message);
+    logError('error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Recalculate goal progress from linked category transactions
 function recalcGoalProgress(goalId) {
   const goal = db.prepare('SELECT * FROM savings_goals WHERE id=?').get(goalId);

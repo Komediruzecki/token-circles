@@ -956,6 +956,9 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
       zero_based_remaining,
       income,
       period: month,
+      can_allocate: zero_based_remaining > 0,
+      unassigned_budget: zero_based_remaining,
+      already_budgeted: totalBudget,
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
@@ -1403,7 +1406,13 @@ export async function goalsContribute(
 
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
-  return json(loans)
+  const enriched = loans.map((l) => {
+    const prepayments = (l as Record<string, unknown>).prepayments as Array<{ amount: number }> | undefined
+    const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
+    const prepayment_count = prepayments?.length || 0
+    return { ...l, total_prepaid, prepayment_count }
+  })
+  return json(enriched)
 }
 
 export async function loansCreate(body: unknown): Promise<Response> {
@@ -1675,14 +1684,23 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       .filter((t) => t.type === 'expense')
       .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
 
-    // Recent transactions (top 10)
+    // Recent transactions (top 10) with category join
+    const cats = await adapter.listCategories()
+    const catMap = new Map(cats.map((c) => [c.id, c]))
     const recent = [...currentTxns]
       .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
       .slice(0, 10)
+      .map((t) => {
+        const cat = catMap.get(t.category_id!)
+        return {
+          ...t,
+          category_name: cat?.name || 'Uncategorized',
+          category_color: cat?.color || '#999',
+          category_icon: cat?.icon || 'question_mark',
+        }
+      })
 
     // Category breakdown (expenses)
-    const cats = await adapter.listCategories()
-    const catMap = new Map(cats.map((c) => [c.id, c]))
     const expenseByCat: Record<
       string,
       { category_name: string; category_color: string; total: number }
