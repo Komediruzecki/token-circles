@@ -196,7 +196,7 @@ export default function Budgets() {
           status:
             item.status ||
             (item.percent_used > 100 ? 'over' : item.percent_used >= 90 ? 'warning' : 'ok'),
-          is_fully_allocated: item.is_fully_allocated ?? ((item as Record<string, unknown>).is_budgeted && item.amount > 0),
+          is_fully_allocated: item.is_fully_allocated ?? ((item.is_budgeted as boolean) && item.amount > 0),
         })
       )
       setAllocations(allocationsList)

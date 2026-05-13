@@ -116,7 +116,7 @@ export default function Analytics() {
       return
     }
     try {
-      const res = await apiGet<AnalyticsApiResponse>(`/api/analytics/weeks?year=${year}&month=${month}`)
+      const res = await apiGet<Record<string, unknown>>(`/api/analytics/weeks?year=${year}&month=${month}`)
       setWeeks(res.weeks || [])
     } catch (_e) {
       console.error('Failed to load weeks')
@@ -129,7 +129,7 @@ export default function Analytics() {
     setHeatmapModal({ dateStr, amount, transactions: [], loading: true })
     try {
       const type = heatmapType()
-      const res = await apiGet<AnalyticsApiResponse>(
+      const res = await apiGet<Record<string, unknown>>(
         `/api/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`
       )
       const list = Array.isArray(res?.transactions)
@@ -151,9 +151,9 @@ export default function Analytics() {
     setLoading(true)
     try {
       const [categoryRes, transactionsRes, monthlyRes] = await Promise.all([
-        apiGet<AnalyticsApiResponse>(`/api/analytics/category-trends?type=${categoryType()}`),
-        apiGet<AnalyticsApiResponse>('/api/transactions/summary'),
-        apiGet<AnalyticsApiResponse>('/api/stats/monthly?months=24'),
+        apiGet<Record<string, unknown>>(`/api/analytics/category-trends?type=${categoryType()}`),
+        apiGet<Record<string, unknown>>('/api/transactions/summary'),
+        apiGet<Record<string, unknown>>('/api/stats/monthly?months=24'),
       ])
 
       // Transform category-trends response
@@ -197,7 +197,7 @@ export default function Analytics() {
   // Load heatmap data
   const loadHeatmapData = async () => {
     try {
-      const res = await apiGet<AnalyticsApiResponse>(
+      const res = await apiGet<Record<string, unknown>>(
         `/api/analytics/daily-heatmap?year=${heatmapYear()}&type=${heatmapType()}`
       )
       const dataMap = new Map<string, number>()
@@ -218,7 +218,7 @@ export default function Analytics() {
   // Load sankey data
   const loadSankeyData = async () => {
     try {
-      const res = await apiGet<AnalyticsApiResponse>(
+      const res = await apiGet<Record<string, unknown>>(
         `/api/analytics/sankey?year=${sankeyYear()}&month=${sankeyMonth()}`
       )
       setSankeyData({ nodes: res.nodes || [], links: res.links || [] })
@@ -240,7 +240,7 @@ export default function Analytics() {
       }
       const week = selectedWeek()
       if (week) params.set('week', week)
-      const res = await apiGet<AnalyticsApiResponse>(`/api/analytics/category-trends?${params.toString()}`)
+      const res = await apiGet<Record<string, unknown>>(`/api/analytics/category-trends?${params.toString()}`)
       setStackedData({
         labels: res.labels || [],
         datasets: res.datasets || [],
@@ -256,7 +256,7 @@ export default function Analytics() {
         const week = selectedWeek()
         if (week) cmpParams.set('week', week)
         try {
-          const cmpRes = await apiGet<AnalyticsApiResponse>(`/api/analytics/category-trends?${cmpParams.toString()}`)
+          const cmpRes = await apiGet<Record<string, unknown>>(`/api/analytics/category-trends?${cmpParams.toString()}`)
           setCompareData({
             labels: cmpRes.labels || [],
             datasets: cmpRes.datasets || [],

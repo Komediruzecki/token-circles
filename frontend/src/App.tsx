@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createEffect, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import { createEffect, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
@@ -14,6 +14,20 @@ import Spotlight from './components/Spotlight'
 import ToastContainer from './components/ToastContainer'
 import TourSelectionModal from './components/TourSelectionModal'
 import { api, toast } from './core/api.js'
+import {
+  setCurrentProfile as setCurrentProfileStore,
+  setIsAuthenticated as setIsAuthenticatedStore,
+  setIsLoginModalOpen as setIsLoginModalOpenStore,
+  setIsProfileModalOpen as setIsProfileModalOpenStore,
+  setIsQuickAddOpen as setIsQuickAddOpenStore,
+  setLoading,
+  setPage,
+  setProfiles as setProfilesStore,
+  setQuickAddCategories as setQuickAddCategoriesStore,
+  setShowDropdown as setShowDropdownStore,
+  setSidebarCollapsed as setSidebarCollapsedStore,
+  useAppState,
+} from './core/appStore'
 import { logger } from './core/logger.js'
 import {
   setShowTourSelection,
@@ -24,21 +38,33 @@ import {
 } from './core/spotlightStore'
 import { pages as allPages } from './router.tsx'
 import type { PageName } from './router.tsx'
-import type { Category } from './types/models'
+import type { Category, Profile } from './types/models'
 
 export function App() {
-  const [_currentPage, _setCurrentPage] = createSignal<PageName>('dashboard')
-  const [_isLoading, _setIsLoading] = createSignal(true)
-  const [activePage, setActivePage] = createSignal<PageName>('dashboard')
-  const [profiles, setProfiles] = createSignal<any[]>([])
-  const [currentProfile, setCurrentProfile] = createSignal<any>(null)
-  const [isAuthenticated, setIsAuthenticated] = createSignal(false)
-  const [showDropdown, setShowDropdown] = createSignal(false)
-  const [isLoginModalOpen, setIsLoginModalOpen] = createSignal(false)
-  const [isProfileModalOpen, setIsProfileModalOpen] = createSignal(false)
-  const [isQuickAddOpen, setIsQuickAddOpen] = createSignal(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true)
-  const [quickAddCategories, setQuickAddCategories] = createSignal<Category[]>([])
+  // Shared app store — replaces 12 inline signals
+  const state = useAppState()
+  const activePage = () => state.page
+  const setActivePage = (p: PageName) => { setPage(p); }
+  const _isLoading = () => state.loading
+  const _setIsLoading = (v: boolean) => { setLoading(v); }
+  const profiles = () => state.profiles as Profile[]
+  const setProfiles = (p: Profile[]) => { setProfilesStore(p); }
+  const currentProfile = () => state.currentProfile
+  const setCurrentProfile = (p: Profile | null) => { setCurrentProfileStore(p); }
+  const isAuthenticated = () => state.isAuthenticated
+  const setIsAuthenticated = (v: boolean) => { setIsAuthenticatedStore(v); }
+  const showDropdown = () => state.showDropdown
+  const setShowDropdown = (v: boolean) => { setShowDropdownStore(v); }
+  const isLoginModalOpen = () => state.isLoginModalOpen
+  const setIsLoginModalOpen = (v: boolean) => { setIsLoginModalOpenStore(v); }
+  const isProfileModalOpen = () => state.isProfileModalOpen
+  const setIsProfileModalOpen = (v: boolean) => { setIsProfileModalOpenStore(v); }
+  const isQuickAddOpen = () => state.isQuickAddOpen
+  const setIsQuickAddOpen = (v: boolean) => { setIsQuickAddOpenStore(v); }
+  const sidebarCollapsed = () => state.sidebarCollapsed
+  const setSidebarCollapsed = (v: boolean) => { setSidebarCollapsedStore(v); }
+  const quickAddCategories = () => state.quickAddCategories
+  const setQuickAddCategories = (c: Category[]) => { setQuickAddCategoriesStore(c); }
 
   const loadProfiles = async (autoSelect = false) => {
     try {
@@ -65,18 +91,18 @@ export function App() {
   const selectProfile = async (profileId: number) => {
     try {
       localStorage.setItem('currentProfileId', profileId.toString())
-      setCurrentProfile(profiles().find((p) => p.id === profileId))
+      setCurrentProfile(profiles().find((p) => p.id === profileId) ?? null)
       setShowDropdown(false)
       // Force page content to refresh by briefly showing loading
       _setIsLoading(true)
-      setTimeout(() => _setIsLoading(false), 50)
+      setTimeout(() => { _setIsLoading(false); }, 50)
     } catch {
       console.error('Failed to select profile')
     }
   }
 
   const toggleDropdown = () => {
-    setShowDropdown((prev) => !prev)
+    setShowDropdownStore(!state.showDropdown)
   }
 
   const handleLogin = () => {
@@ -372,10 +398,10 @@ export function App() {
                     'font-weight': 'bold',
                   }}
                 >
-                  {currentProfile() ? currentProfile().name.charAt(0).toUpperCase() : '?'}
+                  {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
                 </div>
                 <span class={profileStyles.profileName} style={{ 'font-weight': 600 }}>
-                  {currentProfile() ? currentProfile().name : 'Not Logged In'}
+                  {currentProfile()?.name || 'Not Logged In'}
                 </span>
               </div>
               <svg
@@ -430,7 +456,7 @@ export function App() {
 
               <div
                 class={profileStyles.profileDropdownItem}
-                onClick={() => setIsProfileModalOpen(true)}
+                onClick={() => { setIsProfileModalOpen(true); }}
               >
                 <svg
                   width="14"
@@ -516,7 +542,7 @@ export function App() {
                   'white-space': 'nowrap',
                 }}
               >
-                {currentProfile().name}
+                {currentProfile()?.name}
               </span>
               <button
                 class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
@@ -606,12 +632,12 @@ export function App() {
       </div>
 
       <Show when={!sidebarCollapsed()}>
-        <div class={layoutStyles['sidebar-overlay']} onClick={() => setSidebarCollapsed(true)} />
+        <div class={layoutStyles['sidebar-overlay']} onClick={() => { setSidebarCollapsed(true); }} />
       </Show>
 
       <button
         class={layoutStyles['mobile-toggle']}
-        onClick={() => setSidebarCollapsed((v) => !v)}
+        onClick={() => { setSidebarCollapsedStore(!state.sidebarCollapsed); }}
         aria-label="Toggle sidebar"
       >
         <svg
@@ -647,12 +673,12 @@ export function App() {
       </main>
 
       <Show when={isLoginModalOpen()}>
-        <LoginModal onClose={() => setIsLoginModalOpen(false)} onSuccess={handleLoginSuccess} />
+        <LoginModal onClose={() => { setIsLoginModalOpen(false); }} onSuccess={handleLoginSuccess} />
       </Show>
 
       <Show when={isProfileModalOpen()}>
         <ProfileModal
-          onClose={() => setIsProfileModalOpen(false)}
+          onClose={() => { setIsProfileModalOpen(false); }}
           onSuccess={() => {
             setIsProfileModalOpen(false)
             loadProfiles(true)
@@ -662,7 +688,7 @@ export function App() {
 
       <QuickAddModal
         isOpen={isQuickAddOpen}
-        onClose={() => setIsQuickAddOpen(false)}
+        onClose={() => { setIsQuickAddOpen(false); }}
         categories={() => quickAddCategories()}
         onSave={(_transaction) => {
           toast('Transaction added', 'success')
