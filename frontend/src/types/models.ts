@@ -178,6 +178,22 @@ export interface LoanPrepayment {
   note: string
 }
 
+// ============ RECURRING TRANSACTIONS ============
+export interface RecurringTransaction {
+  id: number
+  description: string
+  amount: number
+  type: TransactionType
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  next_date: string | null
+  category_id: CategoryId | null
+  category_name: string | null
+  category_color: string | null
+  day_of_month: number | null
+  notes: string | null
+  profile_id: ProfileId
+}
+
 // ============ BILLS ============
 export interface Bill {
   id: BillId
