@@ -1628,13 +1628,28 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
   try {
     const pid = await adapter.getCurrentProfileId()
     const now = new Date()
+    const allTime = query.get('all') === 'true'
+    const dateFrom = query.get('date_from')
+    const dateTo = query.get('date_to')
     const year = parseInt(query.get('year')!) || now.getFullYear()
     const month = parseInt(query.get('month')!) || now.getMonth() + 1
 
-    const startDate = monthStart(year, month)
+    let startDate: string
+    let endDate: string
+    if (allTime) {
+      startDate = '0000-01-01'
+      endDate = '9999-12-31'
+    } else if (dateFrom && dateTo) {
+      startDate = dateFrom
+      endDate = dateTo
+    } else {
+      startDate = monthStart(year, month)
+      const lastDay = new Date(year, month, 0).getDate()
+      endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    }
+
+    // Previous period (for MoM delta)
     const pm = prevMonth(year, month)
-    const lastDay = new Date(year, month, 0).getDate()
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     const prevStart = monthStart(pm.year, pm.month)
     const prevLastDay = new Date(pm.year, pm.month, 0).getDate()
     const prevEnd = `${pm.year}-${String(pm.month).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`
@@ -1642,7 +1657,7 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
     const allTxns = await adapter.listTransactions()
     const profileTxns = allTxns.filter((t) => t.profile_id === pid)
 
-    // Current month
+    // Current period
     const currentTxns = profileTxns.filter((t) => t.date >= startDate && t.date <= endDate)
     const currentIncome = currentTxns
       .filter((t) => t.type === 'income')
