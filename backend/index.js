@@ -146,8 +146,10 @@ function calculateRetirementProjection(
     monthly_income_in_retirement: Math.round(balance > 0 ? balance * 0.04 / 12 : 0),
   };
 }
-const XLSX = require('xlsx');
-const PDFDocument = require('pdfkit');
+const spreadsheetService = require('./services/spreadsheetService');
+const pdfService = require('./services/pdfService');
+const pdfRenderService = require('./services/pdfRenderService');
+const yahooFinanceService = require('./services/yahooFinanceService');
 
 const app = express();
 const PORT = process.env.PORT || 3847;
@@ -205,7 +207,7 @@ function parseDateString(dateStr) {
   if (!dateStr) return new Date().toISOString().split('T')[0];
   if (typeof dateStr === 'number') {
     // Excel date code
-    const d = XLSX.SSF.parse_date_code(dateStr);
+    const d = spreadsheetService.parseExcelDate(dateStr);
     if (d) return new Date(d.y, d.m - 1, d.d).toISOString().split('T')[0];
   }
   const s = String(dateStr).trim();
@@ -527,8 +529,7 @@ if (serveDist) {
     setHeaders: (res, filepath) => {
       const ext = path.extname(filepath).toLowerCase()
       // Use correct MIME types for static assets
-      const mimeLookup = require('mime-types')
-      const mimeType = mimeLookup.lookup(ext)
+      const mimeType = mime.lookup(ext)
       if (mimeType) {
         res.setHeader('Content-Type', mimeType)
       }
@@ -4699,15 +4700,13 @@ const importFiles = {}; // temp storage for reloading specific sheets
 app.post('/api/import/upload', apiRateLimiter, uploadImport.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const workbook = XLSX.readFile(req.file.path);
-    const sheetNames = workbook.SheetNames;
+    const { sheetNames, sheets, workbook } = spreadsheetService.readFile(req.file.path);
 
     const selectedSheet =
       req.body.sheetName && sheetNames.includes(req.body.sheetName)
         ? req.body.sheetName
         : sheetNames[0];
-    const sheet = workbook.Sheets[selectedSheet];
-    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    const data = spreadsheetService.sheetToJson(sheets[selectedSheet], { header: 1 });
 
     const fileId = Date.now().toString(36);
     importFiles[fileId] = {
@@ -4776,7 +4775,7 @@ app.post('/api/import/file-sheet', apiRateLimiter, (req, res) => {
     if (!sheetNames.includes(sheetName)) return res.status(400).json({ error: 'Sheet not found' });
 
     const sheet = entry.workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    const data = spreadsheetService.sheetToJson(sheet, { header: 1 });
     const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ''));
 
     // Server-side duplicate detection
@@ -4895,8 +4894,8 @@ app.post('/api/import/googlesheet', apiRateLimiter, (req, res) => {
           return r.arrayBuffer();
         })
         .then((buf) => {
-          const workbook = XLSX.read(buf, { type: 'array' });
-          resolve({ sheetNames: workbook.SheetNames, workbook });
+          const result = spreadsheetService.readBuffer(buf);
+          resolve({ sheetNames: result.sheetNames, workbook: result.workbook });
         })
         .catch((err) => resolve({ error: err.message }));
     });
@@ -4932,7 +4931,7 @@ app.post('/api/import/googlesheet', apiRateLimiter, (req, res) => {
           ? sheetName
           : xlsxResult.sheetNames[0];
         const sheet = xlsxResult.workbook.Sheets[targetSheet];
-        const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const data = spreadsheetService.sheetToJson(sheet, { header: 1 });
         const headers = (data[0] || []).map(String);
         const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ''));
         return res.json({
@@ -6967,23 +6966,8 @@ app.get('/api/portfolio/holdings', apiRateLimiter, async (req, res) => {
       .all(...pids);
 
     // Try to fetch current prices
-    let prices = {};
-    try {
-      const YahooFinance = require('yahoo-finance2').default;
-      const yahooFinance = new YahooFinance();
-      const tickers = [...new Set(holdings.map((h) => h.ticker))];
-      if (tickers.length > 0) {
-        const quotes = await yahooFinance.quote(tickers);
-        const quoteList = Array.isArray(quotes) ? quotes : [quotes];
-        for (const q of quoteList) {
-          if (q && q.symbol && q.regularMarketPrice) {
-            prices[q.symbol] = q.regularMarketPrice;
-          }
-        }
-      }
-    } catch (priceErr) {
-      console.warn('Failed to fetch live prices, using fallback:', priceErr.message);
-    }
+    const tickers = [...new Set(holdings.map((h) => h.ticker))];
+    const prices = await yahooFinanceService.fetchPrices(tickers);
 
     // Enrich holdings with current price and gain/loss
     const enriched = holdings.map((h) => {
@@ -7034,18 +7018,8 @@ app.get('/api/portfolio/summary', apiRateLimiter, async (req, res) => {
     // Try to fetch current prices
     let prices = {};
     try {
-      const YahooFinance = require('yahoo-finance2').default;
-      const yahooFinance = new YahooFinance();
       const tickers = [...new Set(holdings.map((h) => h.ticker))];
-      if (tickers.length > 0) {
-        const quotes = await yahooFinance.quote(tickers);
-        const quoteList = Array.isArray(quotes) ? quotes : [quotes];
-        for (const q of quoteList) {
-          if (q && q.symbol && q.regularMarketPrice) {
-            prices[q.symbol] = q.regularMarketPrice;
-          }
-        }
-      }
+      prices = await yahooFinanceService.fetchPrices(tickers);
     } catch (priceErr) {
       console.warn('Failed to fetch live prices:', priceErr.message);
     }
@@ -7190,13 +7164,10 @@ app.post('/api/portfolio/prices', apiRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'tickers array is required' });
     }
 
-    const YahooFinance = require('yahoo-finance2').default;
-    const yahooFinance = new YahooFinance();
-    const quotes = await yahooFinance.quote(tickers.map((t) => String(t).toUpperCase()));
-    const quoteList = Array.isArray(quotes) ? quotes : [quotes];
+    const quotes = await yahooFinanceService.fetchQuotes(tickers.map((t) => String(t).toUpperCase()));
 
     const prices = {};
-    for (const q of quoteList) {
+    for (const q of quotes) {
       if (q && q.symbol && q.regularMarketPrice) {
         prices[q.symbol] = {
           price: q.regularMarketPrice,
@@ -7928,44 +7899,12 @@ app.get('/api/reports/monthly-pdf', apiRateLimiter, async (req, res) => {
     // --- Use puppeteer to render and export as PDF directly ---
     let pdfBuffer = null;
 
-    try {
-      const puppeteer = require('puppeteer');
-
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      });
-
-      try {
-        const exportPage = await browser.newPage();
-        await exportPage.setViewport({ width: 800, height: 1000, deviceScaleFactor: 2 });
-
-        await exportPage.evaluateOnNewDocument((data) => {
-          window.__DATA__ = data;
-        }, exportData);
-
-        const baseUrl = `http://localhost:${PORT}`;
-        await exportPage.goto(`${baseUrl}/export-monthly.html`, {
-          waitUntil: 'networkidle0',
-          timeout: 30000,
-        });
-
-        // Wait for the page to signal that charts have finished rendering
-        await exportPage.waitForFunction(() => window.__RENDER_DONE__ === true, { timeout: 30000 });
-
-        pdfBuffer = Buffer.from(
-          await exportPage.pdf({
-            format: 'A4',
-            printBackground: true,
-            margin: { top: '15px', right: '15px', bottom: '15px', left: '15px' },
-          })
-        );
-      } finally {
-        await browser.close();
-      }
-    } catch (puppeteerErr) {
-      console.error('Puppeteer render failed:', puppeteerErr.message);
-    }
+    pdfBuffer = await pdfRenderService.renderToPdf(exportData, {
+      pagePath: '/export-monthly.html',
+      basePort: PORT,
+      viewport: { width: 800, height: 1000, deviceScaleFactor: 2 },
+      pdfMargin: { top: '15px', right: '15px', bottom: '15px', left: '15px' },
+    });
 
     // --- Return the PDF directly ---
     if (pdfBuffer && pdfBuffer.length > 1000) {
@@ -7984,7 +7923,7 @@ app.get('/api/reports/monthly-pdf', apiRateLimiter, async (req, res) => {
       `attachment; filename="report-${year}-${String(month).padStart(2, '0')}.pdf"`
     );
 
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = pdfService.createDocument({ margin: 50 });
     doc.pipe(res);
 
     const titleColor = '#1e293b';
@@ -8241,8 +8180,8 @@ app.get('/api/reports/tax-summary-pdf', apiRateLimiter, (req, res) => {
     const nonTotal = nonRows.reduce((s, r) => s + r.amount, 0);
     const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
 
-    const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    
+    const doc = pdfService.createDocument({ margin: 50 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="tax-summary-${year}.pdf"`);
     doc.pipe(res);
@@ -8522,8 +8461,8 @@ app.get('/api/reports/pl-summary-pdf', apiRateLimiter, (req, res) => {
     const netSavings = incomeTotal - expenseTotal;
     const savingsRate = incomeTotal > 0 ? ((incomeTotal - expenseTotal) / incomeTotal) * 100 : 0;
 
-    const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    
+    const doc = pdfService.createDocument({ margin: 50 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="pl-summary-${year}.pdf"`);
     doc.pipe(res);
@@ -8833,46 +8772,12 @@ app.get('/api/reports/annual-pdf', apiRateLimiter, async (req, res) => {
     // --- Use puppeteer to render and export as PDF directly ---
     let pdfBuffer = null;
 
-    try {
-      const puppeteer = require('puppeteer');
-
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      });
-
-      try {
-        const exportPage = await browser.newPage();
-        await exportPage.setViewport({ width: 900, height: 1200, deviceScaleFactor: 2 });
-
-        // Inject data into the page before it loads scripts
-        await exportPage.evaluateOnNewDocument((data) => {
-          window.__DATA__ = data;
-        }, exportData);
-
-        const baseUrl = `http://localhost:${PORT}`;
-        await exportPage.goto(`${baseUrl}/export.html`, {
-          waitUntil: 'networkidle0',
-          timeout: 30000,
-        });
-
-        // Wait for the page to signal that charts have finished rendering
-        await exportPage.waitForFunction(() => window.__RENDER_DONE__ === true, { timeout: 30000 });
-
-        // Generate PDF directly from the rendered page (puppeteer returns Uint8Array, convert to Buffer)
-        pdfBuffer = Buffer.from(
-          await exportPage.pdf({
-            format: 'A4',
-            printBackground: true,
-            margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-          })
-        );
-      } finally {
-        await browser.close();
-      }
-    } catch (puppeteerErr) {
-      console.error('Puppeteer render failed:', puppeteerErr.message);
-    }
+    pdfBuffer = await pdfRenderService.renderToPdf(exportData, {
+      pagePath: '/export.html',
+      basePort: PORT,
+      viewport: { width: 900, height: 1200, deviceScaleFactor: 2 },
+      pdfMargin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+    });
 
     // --- Return the PDF directly ---
     if (pdfBuffer && pdfBuffer.length > 1000) {
@@ -8882,7 +8787,7 @@ app.get('/api/reports/annual-pdf', apiRateLimiter, async (req, res) => {
     }
 
     // Fallback: if puppeteer failed, generate text-only PDF
-    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const doc = pdfService.createDocument({ margin: 40 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="annual-report-${year}.pdf"`);
     doc.pipe(res);
