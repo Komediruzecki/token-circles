@@ -19,9 +19,9 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
-function upgradeSchema(db: IDBPDatabase) {
+function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
   db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
 
   const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
@@ -57,6 +57,12 @@ function upgradeSchema(db: IDBPDatabase) {
   pf.createIndex('by_profile', 'profile_id')
 
   db.createObjectStore('settings', { keyPath: 'key' })
+
+  // v2: bills store
+  if (oldVersion < 2) {
+    const bills = db.createObjectStore('bills', { keyPath: 'id', autoIncrement: true })
+    bills.createIndex('by_profile', 'profile_id')
+  }
 }
 
 let dbPromise: ReturnType<typeof openDB> | null = null
@@ -776,6 +782,124 @@ export async function seedDemoProfiles(): Promise<void> {
         profile_id: profileId,
       })
     }
+
+    // ── Extra accounts for Mid and High tiers ──
+    if (!profile.name.includes('Low')) {
+      await db.add('accounts', {
+        name: 'Investment Account',
+        type: 'investment',
+        currency: 'EUR',
+        balance: profile.name.includes('High') ? 150000 : 25000,
+        starting_balance: profile.name.includes('High') ? 120000 : 20000,
+        starting_balance_date: '2020-01-01',
+        notes: '',
+        profile_id: profileId,
+      })
+    }
+    if (profile.name.includes('High')) {
+      await db.add('accounts', {
+        name: 'Retirement 401k',
+        type: 'retirement',
+        currency: 'EUR',
+        balance: 180000,
+        starting_balance: 100000,
+        starting_balance_date: '2015-01-01',
+        notes: 'Tax-advantaged retirement account',
+        profile_id: profileId,
+      })
+    }
+
+    // ── Additional loans ──
+    if (profile.name.includes('High')) {
+      await db.add('loans', {
+        name: 'Investment Property Loan',
+        principal: 200000,
+        interest_rate: 4.2,
+        start_date: '2023-06-01',
+        term_months: 240,
+        profile_id: profileId,
+      })
+    }
+    if (!profile.name.includes('Low')) {
+      await db.add('loans', {
+        name: profile.name.includes('High') ? 'Luxury Car Lease' : 'Auto Loan',
+        principal: profile.name.includes('High') ? 55000 : 18000,
+        interest_rate: profile.name.includes('High') ? 3.9 : 5.2,
+        start_date: profile.name.includes('High') ? '2024-01-15' : '2022-08-01',
+        term_months: profile.name.includes('High') ? 48 : 60,
+        profile_id: profileId,
+      })
+    }
+
+    // ── Bills ──
+    const bills = profile.name.includes('High')
+      ? [
+          { name: 'Mortgage Payment', amount: Math.round(profile.income * 0.28), dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Monthly mortgage', category: 'Housing' },
+          { name: 'Electricity Bill', amount: 180, dueDay: 15, recurring: 1, frequency: 'monthly', notes: 'Monthly electricity', category: 'Utilities' },
+          { name: 'Natural Gas', amount: 95, dueDay: 20, recurring: 1, frequency: 'monthly', notes: 'Monthly gas', category: 'Utilities' },
+          { name: 'Internet Service', amount: 80, dueDay: 5, recurring: 1, frequency: 'monthly', notes: 'Fiber internet', category: 'Subscriptions' },
+          { name: 'Health Insurance', amount: 420, dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Health coverage', category: 'Insurance' },
+          { name: 'Car Insurance', amount: 180, dueDay: 10, recurring: 1, frequency: 'monthly', notes: 'Auto coverage', category: 'Insurance' },
+        ]
+      : profile.name.includes('Mid')
+        ? [
+            { name: 'Rent Payment', amount: Math.round(profile.income * 0.30), dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Monthly rent', category: 'Housing' },
+            { name: 'Electricity Bill', amount: 130, dueDay: 15, recurring: 1, frequency: 'monthly', notes: 'Monthly electricity', category: 'Utilities' },
+            { name: 'Internet Service', amount: 60, dueDay: 5, recurring: 1, frequency: 'monthly', notes: 'Home internet', category: 'Subscriptions' },
+            { name: 'Car Insurance', amount: 120, dueDay: 10, recurring: 1, frequency: 'monthly', notes: 'Auto coverage', category: 'Insurance' },
+          ]
+        : [
+            { name: 'Rent Payment', amount: Math.round(profile.income * 0.35), dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Monthly rent', category: 'Housing' },
+            { name: 'Electricity Bill', amount: 90, dueDay: 15, recurring: 1, frequency: 'monthly', notes: 'Monthly electricity', category: 'Utilities' },
+            { name: 'Phone Plan', amount: 35, dueDay: 5, recurring: 1, frequency: 'monthly', notes: 'Mobile phone', category: 'Subscriptions' },
+          ]
+
+    for (const bill of bills) {
+      const dueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(bill.dueDay).padStart(2, '0')}`
+      await db.add('bills', {
+        name: bill.name,
+        amount: bill.amount,
+        due_date: dueDate,
+        recurring: bill.recurring,
+        frequency: bill.frequency,
+        notes: bill.notes,
+        is_active: 1,
+        profile_id: profileId,
+      })
+    }
+
+    // ── Budgets ──
+    const budgetCategories = [
+      { name: 'Housing', pct: 0.37 },
+      { name: 'Food', pct: 0.21 },
+      { name: 'Transportation', pct: 0.11 },
+      { name: 'Entertainment', pct: 0.07 },
+      { name: 'Shopping', pct: 0.06 },
+      { name: 'Subscriptions', pct: 0.05 },
+    ]
+    for (const bc of budgetCategories) {
+      const cat = catByName(bc.name)
+      if (!cat) continue
+      const budgetAmount = Math.round(profile.income * profile.spendFraction * bc.pct)
+      await db.add('budgets', {
+        category_id: cat.id,
+        amount: budgetAmount,
+        period: 'monthly',
+        start_date: `${now.getFullYear()}-01-01`,
+        end_date: null,
+        rollover_enabled: 1,
+        rollover_amount: 0,
+        profile_id: profileId,
+      })
+    }
+
+    // ── Emergency fund config ──
+    const monthlyExpenses = Math.round(profile.income * profile.spendFraction)
+    await db.add('settings', {
+      key: 'emergency_fund_config',
+      value: JSON.stringify({ monthly_expenses: monthlyExpenses }),
+      profile_id: profileId,
+    })
   }
 
   // Set current profile to the mid-income (second) profile
