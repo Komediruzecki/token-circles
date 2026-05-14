@@ -56,7 +56,33 @@ export async function authMe(): Promise<Response> {
 export async function profilesList(): Promise<Response> {
   const db = await getDB()
   const profiles = await db.getAll('profiles')
-  return json(profiles)
+
+  // Compute per-profile counts for the Settings Household Overview table
+  const result = await Promise.all(
+    profiles.map(async (p: { id: number; name: string }) => {
+      const pid = p.id
+      let txCount = 0
+      let acctCount = 0
+      let budgetCount = 0
+      try {
+        txCount = await db.countFromIndex('transactions', 'by_profile', pid)
+      } catch { /* store may not exist */ }
+      try {
+        acctCount = await db.countFromIndex('accounts', 'by_profile', pid)
+      } catch { /* store may not exist */ }
+      try {
+        budgetCount = await db.countFromIndex('budgets', 'by_profile', pid)
+      } catch { /* store may not exist */ }
+      return {
+        ...p,
+        transaction_count: txCount,
+        account_count: acctCount,
+        budget_count: budgetCount,
+      }
+    })
+  )
+
+  return json(result)
 }
 
 export async function profilesCreate(body: unknown): Promise<Response> {

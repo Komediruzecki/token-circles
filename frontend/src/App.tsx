@@ -91,6 +91,12 @@ export function App() {
   const selectProfile = async (profileId: number) => {
     try {
       localStorage.setItem('currentProfileId', profileId.toString())
+      // Also update selectedProfileIds to include this profile
+      const current = getSelectedProfileIds()
+      if (!current.includes(profileId)) {
+        const updated = [...current, profileId]
+        localStorage.setItem('selectedProfileIds', JSON.stringify(updated))
+      }
       setCurrentProfile(profiles().find((p) => p.id === profileId) ?? null)
       setShowDropdown(false)
       // Force page content to refresh by briefly showing loading
@@ -101,8 +107,46 @@ export function App() {
     }
   }
 
+  const getSelectedProfileIds = (): number[] => {
+    const stored = localStorage.getItem('selectedProfileIds')
+    if (stored) {
+      try {
+        const ids = JSON.parse(stored) as number[]
+        if (ids.length > 0) return ids
+      } catch { /* ignore */ }
+    }
+    const currentId = parseInt(localStorage.getItem('currentProfileId') || '1', 10)
+    return [currentId]
+  }
+
+  const [selectedProfileIds, setSelectedProfileIds] = createSignal<number[]>(getSelectedProfileIds())
+
+  const toggleProfileSelection = (profileId: number) => {
+    setSelectedProfileIds((prev) => {
+      const idx = prev.indexOf(profileId)
+      if (idx !== -1) {
+        // Deselect — but keep at least one
+        if (prev.length <= 1) return prev
+        return prev.filter((id) => id !== profileId)
+      }
+      return [...prev, profileId]
+    })
+  }
+
   const toggleDropdown = () => {
-    setShowDropdownStore(!state.showDropdown)
+    const wasOpen = state.showDropdown
+    if (wasOpen) {
+      // Closing dropdown — save and reload
+      const ids = selectedProfileIds()
+      localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
+      if (ids.length > 0) {
+        localStorage.setItem('currentProfileId', ids[0].toString())
+      }
+      setShowDropdown(false)
+      window.location.reload()
+    } else {
+      setShowDropdown(true)
+    }
   }
 
   const handleLogin = () => {
@@ -154,6 +198,25 @@ export function App() {
     } else {
       document.documentElement.setAttribute('data-theme', 'dark')
     }
+
+    // Click-outside handler for profile dropdown
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showDropdown()) {
+        const target = e.target as HTMLElement
+        if (!target.closest(`.${profileStyles.profileDropdown}`)) {
+          // Apply selection and reload
+          const ids = selectedProfileIds()
+          localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
+          if (ids.length > 0) {
+            localStorage.setItem('currentProfileId', ids[0].toString())
+          }
+          setShowDropdown(false)
+          window.location.reload()
+        }
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    onCleanup(() => { document.removeEventListener('click', handleClickOutside); })
 
     await api.checkLogin().then(async (loggedIn) => {
       setIsAuthenticated(loggedIn)
@@ -422,29 +485,41 @@ export function App() {
             <div
               class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
             >
-              <div class={profileStyles.profileDropdownHeader}>Switch Profile</div>
+              <div class={profileStyles.profileDropdownHeader}>
+                Profiles ({selectedProfileIds().length} of {profiles().length} selected)
+              </div>
               {profiles().length > 0 ? (
                 <For each={profiles()}>
                   {(profile) => (
                     <div
                       class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
-                      onClick={() => selectProfile(profile.id)}
                     >
-                      <div
+                      <input
+                        type="checkbox"
+                        checked={selectedProfileIds().includes(profile.id)}
+                        onClick={(e) => { e.stopPropagation(); }}
+                        onchange={() => { toggleProfileSelection(profile.id); }}
                         style={{
-                          width: '8px',
-                          height: '8px',
-                          'border-radius': '50%',
-                          background:
-                            currentProfile()?.id === profile.id ? 'var(--primary)' : 'transparent',
-                          border:
-                            currentProfile()?.id === profile.id
-                              ? 'none'
-                              : '1px solid var(--border)',
-                          'margin-right': '8px',
+                          width: '16px',
+                          height: '16px',
+                          'margin-right': '10px',
+                          cursor: 'pointer',
+                          'accent-color': 'var(--primary)',
+                          'flex-shrink': 0,
                         }}
-                      ></div>
-                      {profile.name}
+                      />
+                      <span
+                        style={{ flex: 1, cursor: 'pointer' }}
+                        onClick={() => selectProfile(profile.id)}
+                        title="Set as primary profile"
+                      >
+                        {profile.name}
+                      </span>
+                      {currentProfile()?.id === profile.id && (
+                        <span style={{ 'font-size': '10px', color: 'var(--primary)', opacity: 0.7 }}>
+                          primary
+                        </span>
+                      )}
                     </div>
                   )}
                 </For>
