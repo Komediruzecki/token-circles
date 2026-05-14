@@ -1541,6 +1541,186 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
   return notFound('Prepayment')
 }
 
+// ── Housing ──────────────────────────────────────────────────────────────────
+
+export async function housingList(): Promise<Response> {
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  try {
+    const all = await db.getAllFromIndex('housings', 'by_profile', pid)
+    const total = all.reduce((s, h) => s + Math.abs(parseFloat(String(h.monthly_amount || 0))), 0)
+    return json({ housings: all, total_monthly: Math.round(total) })
+  } catch {
+    return json({ housings: [], total_monthly: 0 })
+  }
+}
+
+export async function housingCreate(body: unknown): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  const b = body as Record<string, unknown>
+  const property_name = (b.property_name as string) || (b.name as string) || ''
+  const amount = parseFloat(String((b.monthly_amount as string | number) || 0))
+  if (!property_name || isNaN(amount) || amount <= 0) {
+    return json({ error: 'Property name and a valid monthly amount are required' }, 400)
+  }
+  const due_day = (b.due_day as number) || 1
+  const due_month = (b.due_month as number) || new Date().getMonth() + 1
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  const id = await db.add('housings', {
+    profile_id: pid,
+    name: property_name,
+    type: (b.type as string) || 'other',
+    monthly_amount: amount,
+    due_date: `${String(due_month).padStart(2, '0')}-${String(due_day).padStart(2, '0')}`,
+    due_day,
+    due_month,
+    autopay: b.autopay ? 1 : 0,
+    notes: (b.notes as string) || '',
+    created_at: new Date().toISOString(),
+    property_name,
+  })
+  return json({ id }, 201)
+}
+
+export async function housingGet(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  const h = await db.get('housings', idParam(params))
+  return h ? json(h) : notFound('Housing expense')
+}
+
+export async function housingUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+  const db = await getDB()
+  const h = await db.get('housings', idParam(params))
+  if (!h) return notFound('Housing expense')
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>
+    if (b.property_name !== undefined) h.name = b.property_name
+    if (b.type !== undefined) h.type = b.type
+    if (b.monthly_amount !== undefined) h.monthly_amount = parseFloat(String((b.monthly_amount as string | number) || 0))
+    if (b.due_day !== undefined) h.due_day = Number(b.due_day)
+    if (b.due_month !== undefined) h.due_month = Number(b.due_month)
+    if (b.autopay !== undefined) h.autopay = b.autopay ? 1 : 0
+    if (b.notes !== undefined) h.notes = b.notes
+    if (b.due_day !== undefined || b.due_month !== undefined) {
+      h.due_date = `${String(h.due_month || 1).padStart(2, '0')}-${String(h.due_day || 1).padStart(2, '0')}`
+    }
+    h.property_name = h.name
+  }
+  await db.put('housings', h)
+  return ok()
+}
+
+export async function housingDelete(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  await db.delete('housings', idParam(params))
+  return ok()
+}
+
+// ── Bills ────────────────────────────────────────────────────────────────────
+
+export async function billsList(): Promise<Response> {
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  try {
+    const all = await db.getAllFromIndex('bills', 'by_profile', pid)
+    return json(all)
+  } catch {
+    return json([])
+  }
+}
+
+export async function billsCreate(body: unknown): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  const b = body as Record<string, unknown>
+  const name = ((b.name as string) || '').trim()
+  const amount = parseFloat(String((b.amount as string | number) || 0))
+  if (!name || isNaN(amount) || amount <= 0) {
+    return json({ error: 'Name and a valid amount are required' }, 400)
+  }
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  const id = await db.add('bills', {
+    profile_id: pid,
+    name,
+    amount,
+    frequency: (b.frequency as string) || 'monthly',
+    due_date: (b.due_date as string) || '',
+    day_of_month: (b.day_of_month as number) || 1,
+    category_id: b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
+    recurring: b.recurring !== false ? 1 : 0,
+    is_active: 1,
+    notes: (b.notes as string) || '',
+    created_at: new Date().toISOString(),
+  })
+  return json({ id }, 201)
+}
+
+export async function billsGet(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  const b = await db.get('bills', idParam(params))
+  return b ? json(b) : notFound('Bill')
+}
+
+export async function billsUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+  const db = await getDB()
+  const bill = await db.get('bills', idParam(params))
+  if (!bill) return notFound('Bill')
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>
+    if (b.name !== undefined) bill.name = b.name
+    if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
+    if (b.frequency !== undefined) bill.frequency = b.frequency
+    if (b.due_date !== undefined) bill.due_date = b.due_date
+    if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
+    if (b.category_id !== undefined) bill.category_id = b.category_id !== null ? Number(b.category_id) : null
+    if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
+    if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0
+    if (b.notes !== undefined) bill.notes = b.notes
+  }
+  await db.put('bills', bill)
+  return ok()
+}
+
+export async function billsDelete(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  await db.delete('bills', idParam(params))
+  return ok()
+}
+
+export async function billsUpcoming(): Promise<Response> {
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  try {
+    const all = await db.getAllFromIndex('bills', 'by_profile', pid)
+    const active = all.filter((b: Record<string, unknown>) => b.is_active !== 0)
+    const today = new Date()
+    const dayOfMonth = today.getDate()
+    const upcoming = active
+      .filter((b: Record<string, unknown>) => {
+        const dom = Number(b.day_of_month || 1)
+        return dom >= dayOfMonth
+      })
+      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+        return (Number(a.day_of_month) || 1) - (Number(b.day_of_month) || 1)
+      })
+    return json(upcoming)
+  } catch {
+    return json([])
+  }
+}
+
+export async function billsPayOrMarkPaid(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  const bill = await db.get('bills', idParam(params))
+  if (!bill) return notFound('Bill')
+  const now = new Date().toISOString().substring(0, 10)
+  bill.last_paid_date = now
+  bill.last_paid = now
+  await db.put('bills', bill)
+  return ok()
+}
+
 // ── Export / Import / Clear ──────────────────────────────────────────────────
 
 export async function exportAll(): Promise<Response> {

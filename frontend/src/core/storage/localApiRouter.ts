@@ -49,16 +49,6 @@ function stub(_path: string): Handler {
   })
 }
 
-// Specific mock handlers for routes that need non-array responses
-function housingStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json({ housings: [] })),
-    POST: () => Promise.resolve(json({ id: 1, housings: [] }, 201)),
-    PUT: () => Promise.resolve(json({ ok: true })),
-    DELETE: () => Promise.resolve(json({ ok: true })),
-  })
-}
-
 function exchangeRatesStub(): Handler {
   return dispatch({
     GET: () => Promise.resolve(json({ rates: { EUR: 1, USD: 1.08, GBP: 0.85, JPY: 156.0 } })),
@@ -607,22 +597,29 @@ const routes: RouteDef[] = [
     }),
   },
 
-  // Bills (client-only: returns empty lists)
+  // Bills
   {
     pattern: /^\/bills$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/bills'),
+    handler: dispatch({
+      GET: () => h.billsList(),
+      POST: (ctx) => h.billsCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/bills\/(\d+)$/,
     methods: ['GET', 'PUT', 'DELETE'],
-    handler: stub('/api/bills'),
+    handler: dispatch({
+      GET: (ctx) => h.billsGet(ctx.params),
+      PUT: (ctx) => h.billsUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.billsDelete(ctx.params),
+    }),
   },
-  { pattern: /^\/bills\/upcoming$/, methods: ['GET'], handler: stub('/api/bills/upcoming') },
+  { pattern: /^\/bills\/upcoming$/, methods: ['GET'], handler: dispatch({ GET: () => h.billsUpcoming() }) },
   {
     pattern: /^\/bills\/(\d+)\/(pay|mark-paid)$/,
     methods: ['POST'],
-    handler: stub('/api/bills/:id/pay'),
+    handler: dispatch({ POST: (ctx) => h.billsPayOrMarkPaid(ctx.params) }),
   },
 
   // Tags (LS6 no store)
@@ -763,11 +760,29 @@ const routes: RouteDef[] = [
     }),
   },
   {
-    pattern: /^\/housing(\/(\d+))?$/,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    handler: housingStub(),
+    pattern: /^\/housing$/,
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: () => h.housingList(),
+      POST: (ctx) => h.housingCreate(ctx.body),
+    }),
   },
-  { pattern: /^\/housing\/calculate$/, methods: ['POST'], handler: housingStub() },
+  {
+    pattern: /^\/housing\/(\d+)$/,
+    methods: ['GET', 'PUT', 'DELETE'],
+    handler: dispatch({
+      GET: (ctx) => h.housingGet(ctx.params),
+      PUT: (ctx) => h.housingUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.housingDelete(ctx.params),
+    }),
+  },
+  {
+    pattern: /^\/housing\/calculate$/,
+    methods: ['POST'],
+    handler: dispatch({
+      POST: () => Promise.resolve(json({ affordable: true, max_price: 300000, monthly_payment: 1200 })),
+    }),
+  },
   {
     pattern: /^\/calculator\/compound-interest$/,
     methods: ['POST'],
