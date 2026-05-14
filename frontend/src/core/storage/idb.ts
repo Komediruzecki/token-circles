@@ -525,6 +525,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'profiles',
       'portfolioHoldings',
       'settings',
+      'bills',
     ]
     for (const store of stores) {
       try {
@@ -895,10 +896,9 @@ export async function seedDemoProfiles(): Promise<void> {
 
     // ── Emergency fund config ──
     const monthlyExpenses = Math.round(profile.income * profile.spendFraction)
-    await db.add('settings', {
-      key: 'emergency_fund_config',
-      value: JSON.stringify({ monthly_expenses: monthlyExpenses }),
-      profile_id: profileId,
+    await db.put('settings', {
+      key: `emergency_fund_config_${profileId}`,
+      value: JSON.stringify({ monthly_expenses: monthlyExpenses, profile_id: profileId }),
     })
   }
 
