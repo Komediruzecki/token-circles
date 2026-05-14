@@ -69,7 +69,7 @@ describe('localApiRouter - stub handlers', () => {
 
   it('stub POST returns { id: 1 } with 201', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/recurring', {
+    const res = await routeApiRequest('http://localhost/api/tags', {
       method: 'POST',
       body: JSON.stringify({ name: 'test' }),
     })
@@ -139,8 +139,8 @@ describe('localApiRouter - path with params', () => {
 describe('localApiRouter - body parsing', () => {
   it('parses JSON body string', async () => {
     const { routeApiRequest } = await loadModule()
-    // Use a POST route that processes body - recurring creation (stub)
-    const res = await routeApiRequest('http://localhost/api/recurring', {
+    // Use a POST route that processes body - tags creation (stub)
+    const res = await routeApiRequest('http://localhost/api/tags', {
       method: 'POST',
       body: JSON.stringify({ name: 'Netflix', amount: 14.99 }),
     })

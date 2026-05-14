@@ -634,26 +634,29 @@ const routes: RouteDef[] = [
     handler: stub('/api/tags/:id/transactions'),
   },
 
-  // Recurring (LS6 no store)
+  // Recurring
   {
     pattern: /^\/recurring$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/recurring'),
+    handler: dispatch({
+      GET: () => h.recurringList(),
+      POST: (ctx) => h.recurringCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/recurring\/(\d+)$/,
     methods: ['GET', 'PUT', 'DELETE'],
-    handler: stub('/api/recurring'),
+    handler: dispatch({
+      GET: () => h.recurringList(),
+      PUT: (ctx) => h.recurringUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.recurringDelete(ctx.params),
+    }),
   },
-  {
-    pattern: /^\/recurring\/upcoming$/,
-    methods: ['GET'],
-    handler: stub('/api/recurring/upcoming'),
-  },
+  { pattern: /^\/recurring\/upcoming$/, methods: ['GET'], handler: dispatch({ GET: () => h.recurringUpcoming() }) },
   {
     pattern: /^\/recurring\/(\d+)\/populate$/,
     methods: ['POST'],
-    handler: stub('/api/recurring/:id/populate'),
+    handler: dispatch({ POST: (ctx) => h.recurringPopulate(ctx.params) }),
   },
 
   // Receipts

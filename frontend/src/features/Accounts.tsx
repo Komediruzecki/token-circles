@@ -70,10 +70,11 @@ export default function Accounts() {
     try {
       const [accountsRes, txRes] = await Promise.all([
         apiGet<Account[]>('/api/accounts'),
-        apiGet<any>('/api/transactions/summary'),
+        apiGet<any>(`/api/transactions?limit=500`),
       ])
       setAccounts(accountsRes)
-      setTransactions(Array.isArray(txRes) ? txRes : [])
+      const txList = Array.isArray(txRes) ? txRes : txRes?.transactions || txRes?.rows || []
+      setTransactions(Array.isArray(txList) ? txList : [])
     } catch (err) {
       console.error('Failed to load accounts', err)
       showToast('Failed to load accounts', 'error')
@@ -182,10 +183,25 @@ export default function Accounts() {
     return accounts().reduce((sum, acc) => sum + acc.balance, 0)
   }
 
-  // Filter transactions by account (now just returns empty array if non-array)
-  const getAccountTransactions = (_accountId: number) => {
+  // Compute monthly income from loaded transactions
+  const monthlyIncome = () => {
+    const now = new Date()
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const txs = transactions()
-    return Array.isArray(txs) ? txs : []
+    if (!Array.isArray(txs)) return 0
+    return txs
+      .filter((t) => t.date?.startsWith(monthStr) && t.type === 'income')
+      .reduce((s, t) => s + (t.amount || 0), 0)
+  }
+
+  const monthlyExpenses = () => {
+    const now = new Date()
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const txs = transactions()
+    if (!Array.isArray(txs)) return 0
+    return txs
+      .filter((t) => t.date?.startsWith(monthStr) && t.type === 'expense')
+      .reduce((s, t) => s + (t.amount || 0), 0)
   }
 
   return (
@@ -230,9 +246,7 @@ export default function Accounts() {
             class={`${styles.summaryValue} ${styles.positive}`}
           >
             +
-            {formatAmount(
-              0 // TODO: Need to implement monthly income calculation when transactions have account_id
-            )}
+            {formatAmount(monthlyIncome())}
           </div>
         </div>
         <div data-test-id="summary-expenses" class={styles.summaryCard}>
@@ -242,9 +256,7 @@ export default function Accounts() {
             class={`${styles.summaryValue} ${styles.negative}`}
           >
             -
-            {formatAmount(
-              0 // TODO: Need to implement monthly expense calculation when transactions have account_id
-            )}
+            {formatAmount(monthlyExpenses())}
           </div>
         </div>
       </div>
