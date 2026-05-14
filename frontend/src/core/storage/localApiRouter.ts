@@ -597,7 +597,7 @@ const routes: RouteDef[] = [
     pattern: /^\/bills$/,
     methods: ['GET', 'POST'],
     handler: dispatch({
-      GET: () => h.billsList(),
+      GET: (ctx) => h.billsList(ctx.query),
       POST: (ctx) => h.billsCreate(ctx.body),
     }),
   },

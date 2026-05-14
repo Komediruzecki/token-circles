@@ -1571,10 +1571,14 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
 
 export async function housingList(): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pids = adapter.getCurrentProfileIds()
   try {
-    const all = await db.getAllFromIndex('housings', 'by_profile', pid)
-    const total = all.reduce((s, h) => s + Math.abs(parseFloat(String(h.monthly_amount || 0))), 0)
+    const all: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('housings', 'by_profile', pid)
+      all.push(...rows)
+    }
+    const total = all.reduce((s, h) => s + Math.abs(parseFloat(String((h.monthly_amount as number) || 0))), 0)
     return json({ housings: all, total_monthly: Math.round(total) })
   } catch {
     return json({ housings: [], total_monthly: 0 })
@@ -1645,12 +1649,52 @@ export async function housingDelete(params: Record<string, string>): Promise<Res
 
 // ── Bills ────────────────────────────────────────────────────────────────────
 
-export async function billsList(): Promise<Response> {
+// Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
+function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
+  if (!bill.last_paid_date && !bill.last_paid) return false
+  const lastPaid = new Date((bill.last_paid_date || bill.last_paid) as string)
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+
+  const frequency = (bill.frequency as string) || 'monthly'
+  if (frequency === 'monthly') {
+    return lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
+  } else if (frequency === 'weekly') {
+    const weekAgo = new Date(today)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    return lastPaid >= weekAgo
+  } else if (frequency === 'biweekly') {
+    const twoWeeksAgo = new Date(today)
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+    return lastPaid >= twoWeeksAgo
+  } else if (frequency === 'yearly') {
+    return lastPaid.getFullYear() === today.getFullYear()
+  }
+  return false
+}
+
+export async function billsList(query?: URLSearchParams): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pids = adapter.getCurrentProfileIds()
   try {
-    const all = await db.getAllFromIndex('bills', 'by_profile', pid)
-    return json(all)
+    const all: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('bills', 'by_profile', pid)
+      all.push(...rows)
+    }
+
+    const now = new Date()
+    const billsWithStatus = all.map((b) => ({
+      ...b,
+      paid: isBillPaidForCurrentPeriod(b, now),
+    }))
+
+    // Filter by paid status if requested
+    const paidParam = query?.get('paid')
+    if (paidParam === 'true') return json(billsWithStatus.filter((b) => b.paid))
+    if (paidParam === 'false') return json(billsWithStatus.filter((b) => !b.paid))
+
+    return json(billsWithStatus)
   } catch {
     return json([])
   }
@@ -1716,19 +1760,29 @@ export async function billsDelete(params: Record<string, string>): Promise<Respo
 
 export async function billsUpcoming(): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pids = adapter.getCurrentProfileIds()
   try {
-    const all = await db.getAllFromIndex('bills', 'by_profile', pid)
+    const all: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('bills', 'by_profile', pid)
+      all.push(...rows)
+    }
     const active = all.filter((b: Record<string, unknown>) => b.is_active !== 0)
     const today = new Date()
     const dayOfMonth = today.getDate()
     const upcoming = active
       .filter((b: Record<string, unknown>) => {
-        const dom = Number(b.day_of_month || 1)
+        // Derive day of month from due_date (format: YYYY-MM-DD) or fall back to day_of_month field
+        const dueDate = (b.due_date as string) || ''
+        const dom = dueDate ? parseInt(dueDate.split('-')[2], 10) : (Number(b.day_of_month) || 1)
         return dom >= dayOfMonth
       })
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-        return (Number(a.day_of_month) || 1) - (Number(b.day_of_month) || 1)
+        const aDate = (a.due_date as string) || ''
+        const bDate = (b.due_date as string) || ''
+        const aDom = aDate ? parseInt(aDate.split('-')[2], 10) : (Number(a.day_of_month) || 1)
+        const bDom = bDate ? parseInt(bDate.split('-')[2], 10) : (Number(b.day_of_month) || 1)
+        return aDom - bDom
       })
     return json(upcoming)
   } catch {
@@ -1751,10 +1805,14 @@ export async function billsPayOrMarkPaid(params: Record<string, string>): Promis
 
 export async function categoryMappingsList(): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pids = adapter.getCurrentProfileIds()
   try {
     if (db.objectStoreNames.contains('categoryMappings')) {
-      const all = await db.getAllFromIndex('categoryMappings', 'by_profile', pid)
+      const all: Record<string, unknown>[] = []
+      for (const pid of pids) {
+        const rows = await db.getAllFromIndex('categoryMappings', 'by_profile', pid)
+        all.push(...rows)
+      }
       return json(all)
     }
   } catch { /* store may not exist yet */ }
@@ -1789,9 +1847,13 @@ export async function categoryMappingsDelete(params: Record<string, string>): Pr
 
 export async function tagsList(): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pids = adapter.getCurrentProfileIds()
   try {
-    const all = await db.getAllFromIndex('tags', 'by_profile', pid)
+    const all: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('tags', 'by_profile', pid)
+      all.push(...rows)
+    }
     return json(all)
   } catch {
     return json([])
@@ -1831,9 +1893,13 @@ export async function tagsGetTransactions(params: Record<string, string>): Promi
 
 export async function recurringList(): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pids = adapter.getCurrentProfileIds()
   try {
-    const all = await db.getAllFromIndex('recurring', 'by_profile', pid)
+    const all: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
+      all.push(...rows)
+    }
     return json(all)
   } catch {
     return json([])

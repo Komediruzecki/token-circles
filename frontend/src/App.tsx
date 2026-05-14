@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createEffect, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import { createEffect, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
