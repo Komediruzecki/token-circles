@@ -5,8 +5,7 @@ let _yahooFinance = null
 
 function getClient() {
   if (!_yahooFinance) {
-    const YahooFinance = require('yahoo-finance2').default
-    _yahooFinance = new YahooFinance()
+    _yahooFinance = require('yahoo-finance2').default
   }
   return _yahooFinance
 }
@@ -22,13 +21,13 @@ async function fetchPrices(tickers) {
     const quoteList = Array.isArray(quotes) ? quotes : [quotes]
     const prices = {}
     for (const q of quoteList) {
-      if (q && q.symbol && q.regularMarketPrice) {
+      if (q && q.symbol && q.regularMarketPrice != null) {
         prices[q.symbol] = q.regularMarketPrice
       }
     }
     return prices
   } catch (err) {
-    console.warn('Failed to fetch live prices, using fallback:', err.message)
+    console.error('Failed to fetch live prices, using fallback:', err.message)
     return {}
   }
 }
@@ -43,7 +42,7 @@ async function fetchQuotes(tickers) {
     const quotes = await getClient().quote(tickers)
     return Array.isArray(quotes) ? quotes : [quotes]
   } catch (err) {
-    console.warn('Failed to fetch quotes:', err.message)
+    console.error('Failed to fetch quotes, using fallback:', err.message)
     return []
   }
 }

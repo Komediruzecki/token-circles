@@ -18,9 +18,12 @@ async function getBrowser() {
   if (_booting) return _booting
   const puppeteer = require('puppeteer')
   _booting = puppeteer.launch(launchOptions())
-  _browser = await _booting
-  _booting = null
-  return _browser
+  try {
+    _browser = await _booting
+    return _browser
+  } finally {
+    _booting = null
+  }
 }
 
 /**

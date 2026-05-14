@@ -68,15 +68,32 @@ function renderChartViaWorker(
   chartData: ChartData,
   width: number,
   height: number,
-  dark: boolean
+  dark: boolean,
+  timeoutMs = 15000
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const worker = getChartWorker()
     const id = ++_workerRequestId
+    let settled = false
+
+    const cleanup = () => {
+      clearTimeout(timer)
+      worker.removeEventListener('message', handler)
+    }
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        cleanup()
+        reject(new Error('Chart render timed out'))
+      }
+    }, timeoutMs)
 
     const handler = (e: MessageEvent) => {
       if (e.data.id !== id) return
-      worker.removeEventListener('message', handler)
+      if (settled) return
+      settled = true
+      cleanup()
 
       if (e.data.error) {
         reject(new Error(e.data.error))
@@ -323,12 +340,14 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
     const chartH = chartW * 0.6
     if (incomeChartUrl) {
       doc.addImage(incomeChartUrl, 'PNG', 15, posY, chartW, chartH)
+      URL.revokeObjectURL(incomeChartUrl)
       doc.setFontSize(10)
       doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
       doc.text('Income by Category', 15 + chartW / 2, posY + chartH + 12, { align: 'center' })
     }
     if (expenseChartUrl) {
       doc.addImage(expenseChartUrl, 'PNG', 15 + chartW + 15, posY, chartW, chartH)
+      URL.revokeObjectURL(expenseChartUrl)
       doc.setFontSize(10)
       doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
       doc.text('Expenses by Category', 15 + chartW + 15 + chartW / 2, posY + chartH + 12, {

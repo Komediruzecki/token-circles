@@ -40,10 +40,11 @@ class BaseRepository {
     return result.lastInsertRowid
   }
 
-  /** UPDATE rows matching where clause */
+  /** UPDATE rows matching where clause — where is required */
   update(table, data, where, ...params) {
+    if (!where) throw new Error('update requires a WHERE clause')
     const sets = Object.keys(data).map((k) => `${k} = ?`).join(', ')
-    const sql = `UPDATE ${table} SET ${sets}${where ? ` WHERE ${where}` : ''}`
+    const sql = `UPDATE ${table} SET ${sets} WHERE ${where}`
     return this.run(sql, ...Object.values(data), ...params)
   }
 
@@ -57,9 +58,10 @@ class BaseRepository {
     return map
   }
 
-  /** DELETE rows matching where clause */
+  /** DELETE rows matching where clause — where is required */
   delete(table, where, ...params) {
-    const sql = `DELETE FROM ${table}${where ? ` WHERE ${where}` : ''}`
+    if (!where) throw new Error('delete requires a WHERE clause')
+    const sql = `DELETE FROM ${table} WHERE ${where}`
     return this.run(sql, ...params)
   }
 }

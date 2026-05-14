@@ -6,6 +6,7 @@ class ProfilesRepository extends BaseRepository {
   }
 
   allByIds(ids) {
+    if (!ids || ids.length === 0) return []
     const placeholders = ids.map(() => '?').join(', ')
     return super.all(
       `SELECT * FROM profiles WHERE id IN (${placeholders}) ORDER BY id`,
@@ -51,10 +52,13 @@ class ProfilesRepository extends BaseRepository {
     const tables = ['transactions', 'budgets', 'categories', 'loans',
       'accounts', 'goals', 'account_balance_history', 'receipts',
       'portfolio_holdings', 'bills', 'settings']
-    for (const table of tables) {
-      this.run(`DELETE FROM ${table} WHERE profile_id = ?`, pid)
-    }
-    this.deleteById(pid)
+    const deleteAll = this.db.transaction(() => {
+      for (const table of tables) {
+        this.run(`DELETE FROM ${table} WHERE profile_id = ?`, pid)
+      }
+      this.deleteById(pid)
+    })
+    deleteAll()
   }
 }
 
