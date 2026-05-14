@@ -547,12 +547,17 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/categories\/mappings$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/categories/mappings'),
+    handler: dispatch({
+      GET: (ctx) => h.categoryMappingsList(ctx.query),
+      POST: (ctx) => h.categoryMappingsCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/categories\/mappings\/(\d+)$/,
     methods: ['DELETE'],
-    handler: stub('/api/categories/mappings'),
+    handler: dispatch({
+      DELETE: (ctx) => h.categoryMappingsDelete(ctx.params),
+    }),
   },
   {
     pattern: /^\/categories\/auto-map$/,
