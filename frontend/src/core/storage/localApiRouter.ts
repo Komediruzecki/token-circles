@@ -67,12 +67,6 @@ function reportsCustomStub(): Handler {
   })
 }
 
-function statsMonthlyStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json([])),
-  })
-}
-
 function logsStub(): Handler {
   return dispatch({
     GET: () => Promise.resolve(json([])),
@@ -246,6 +240,7 @@ const routes: RouteDef[] = [
   },
 
   // ── Transactions ──
+  { pattern: /^\/transactions\/summary$/, methods: ['GET'], handler: dispatch({ GET: () => h.transactionsSummary() }) },
   {
     pattern: /^\/transactions$/,
     methods: ['GET', 'POST', 'DELETE'],
@@ -809,7 +804,7 @@ const routes: RouteDef[] = [
   { pattern: /^\/reports\/custom$/, methods: ['POST'], handler: reportsCustomStub() },
 
   // Stats
-  { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: statsMonthlyStub() },
+  { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.statsMonthly(ctx.query) }) },
 
   // Logs (client-only: returns empty lists)
   {

@@ -268,6 +268,7 @@ export default function Bills() {
 
   onMount(() => {
     loadBills()
+    loadCategories()
   })
 
   return (

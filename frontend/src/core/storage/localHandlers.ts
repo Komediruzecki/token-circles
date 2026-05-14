@@ -232,10 +232,12 @@ export async function transactionsExport(query: URLSearchParams): Promise<Respon
 }
 
 export async function transactionsSummary(): Promise<Response> {
-  const txns = await adapter.listTransactions()
-  const income = txns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const expense = txns.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  return json({ income, expense, count: txns.length })
+  const pid = await adapter.getCurrentProfileId()
+  const allTxns = await adapter.listTransactions()
+  const txns = allTxns.filter((t) => t.profile_id === pid)
+  const totalIncome = txns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const totalExpenses = txns.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  return json({ totalIncome, totalExpenses, count: txns.length })
 }
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
@@ -2493,6 +2495,31 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     }
 
     return json({ nodes, links })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
+// ── Stats monthly ────────────────────────────────────────────────────────────
+
+export async function statsMonthly(query: URLSearchParams): Promise<Response> {
+  try {
+    const pid = await adapter.getCurrentProfileId()
+    const months = parseInt(query.get('months') || '24')
+    const allTxns = await adapter.listTransactions()
+    const profileTxns = allTxns.filter((t) => t.profile_id === pid)
+
+    const now = new Date()
+    const result: Array<{ month: string; income: number; expense: number }> = []
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const monthTxns = profileTxns.filter((t) => t.date.startsWith(monthStr))
+      const income = monthTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+      const expense = monthTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+      result.push({ month: monthStr, income, expense })
+    }
+    return json(result)
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }
