@@ -150,6 +150,7 @@ const spreadsheetService = require('./services/spreadsheetService');
 const pdfService = require('./services/pdfService');
 const pdfRenderService = require('./services/pdfRenderService');
 const yahooFinanceService = require('./services/yahooFinanceService');
+const { seedDemoData } = require('./seedDemoData');
 
 const app = express();
 const PORT = process.env.PORT || 3847;
@@ -9028,6 +9029,9 @@ app.get('*', (req, res) => {
   // For all other paths, serve index.html for SPA routes
   res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
+
+// Seed demo data on first run (no profiles exist)
+seedDemoData(db, 0)
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Finance Manager running on port ${PORT}`);

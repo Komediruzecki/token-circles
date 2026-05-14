@@ -72,6 +72,7 @@ export default function Analytics() {
     numDays: number
   }>({ labels: [], datasets: [], numDays: 0 })
   const [compareEnabled, setCompareEnabled] = createSignal(false)
+  const [compareYear, setCompareYear] = createSignal(new Date().getFullYear())
   const [compareMonth, setCompareMonth] = createSignal(new Date().getMonth() + 1)
   const [compareData, setCompareData] = createSignal<{
     labels: string[]
@@ -231,11 +232,12 @@ export default function Analytics() {
   // Load stacked trend data
   const loadStackedData = async () => {
     try {
+      const isYearView = stackedView() === 'year'
       const params = new URLSearchParams({
         year: String(stackedYear()),
         type: categoryType(),
       })
-      if (stackedView() === 'month') {
+      if (!isYearView) {
         params.set('month', String(stackedMonth()))
       }
       const week = selectedWeek()
@@ -249,12 +251,14 @@ export default function Analytics() {
 
       if (compareEnabled()) {
         const cmpParams = new URLSearchParams({
-          year: String(stackedYear()),
+          year: isYearView ? String(compareYear()) : String(stackedYear()),
           type: categoryType(),
         })
-        cmpParams.set('month', String(compareMonth()))
-        const week = selectedWeek()
-        if (week) cmpParams.set('week', week)
+        if (!isYearView) {
+          cmpParams.set('month', String(compareMonth()))
+        }
+        const cmpWeek = selectedWeek()
+        if (cmpWeek) cmpParams.set('week', cmpWeek)
         try {
           const cmpRes = await apiGet<Record<string, unknown>>(`/api/analytics/category-trends?${cmpParams.toString()}`)
           setCompareData({
@@ -395,7 +399,9 @@ export default function Analytics() {
                         year: 'numeric',
                       })}
                   {compareEnabled() &&
-                    ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
+                    (stackedView() === 'year'
+                      ? ` vs ${compareYear()}`
+                      : ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`)}
                   )
                 </h3>
                 <div class={styles.heatmapControls}>
@@ -474,17 +480,38 @@ export default function Analytics() {
                     </>
                   )}
                   <button
-                    class={`${styles.tab} ${compareEnabled() ? styles.active : ''}`}
+                    class={styles.compareBtn}
+                    classList={{ [styles.compareActive!]: compareEnabled() }}
                     onclick={() => {
                       setCompareEnabled(!compareEnabled())
                       loadStackedData()
                     }}
-                    title="Compare category spending with another month"
-                    style="white-space:nowrap;padding:8px 12px;font-size:13px;"
+                    title={
+                      stackedView() === 'year'
+                        ? 'Compare category spending with another year'
+                        : 'Compare category spending with another month'
+                    }
                   >
-                    Compare
+                    {compareEnabled() ? 'Hide Compare' : 'Compare'}
                   </button>
-                  {compareEnabled() && (
+                  {compareEnabled() && stackedView() === 'year' && (
+                    <select
+                      class={styles.heatmapTypeSelect}
+                      value={compareYear()}
+                      onchange={(e) => {
+                        setCompareYear(Number(e.currentTarget.value))
+                        loadStackedData()
+                      }}
+                      title="Select year to compare against"
+                    >
+                      {availableYears()
+                        .filter((y) => y !== stackedYear())
+                        .map((year) => (
+                          <option value={year}>{year}</option>
+                        ))}
+                    </select>
+                  )}
+                  {compareEnabled() && stackedView() === 'month' && (
                     <select
                       class={styles.heatmapTypeSelect}
                       value={compareMonth()}
@@ -506,10 +533,12 @@ export default function Analytics() {
               {compareEnabled() && compareData() && (
                 <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:0 4px;">
                   Dashed outlines show{' '}
-                  {new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', {
-                    month: 'long',
-                    year: 'numeric',
-                  })}{' '}
+                  {stackedView() === 'year'
+                    ? compareYear()
+                    : new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', {
+                        month: 'long',
+                        year: 'numeric',
+                      })}{' '}
                   data for comparison
                 </div>
               )}
