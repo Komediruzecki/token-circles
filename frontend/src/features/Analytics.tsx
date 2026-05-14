@@ -550,17 +550,28 @@ export default function Analytics() {
                     type="bar"
                     onReady={setStackedChart}
                     data={{
-                      labels: stackedData().labels,
+                      labels:
+                        compareEnabled() && stackedView() === 'year'
+                          ? stackedData().labels.map((l: string) => l.replace(/\s+\d{4}$/, ''))
+                          : stackedData().labels,
                       datasets: [
                         ...stackedData().datasets.map((ds) => ({
-                          label: ds.category,
+                          label:
+                            compareEnabled() && stackedView() === 'year'
+                              ? `${ds.category} (${stackedYear()})`
+                              : compareEnabled()
+                                ? `${ds.category} (${new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`
+                                : ds.category,
                           data: ds.data,
                           backgroundColor: ds.color || '#6366f1',
                           borderWidth: 0,
                         })),
                         ...(compareData()
                           ? compareData()!.datasets.map((ds) => ({
-                              label: `${ds.category} (Compare)`,
+                              label:
+                                stackedView() === 'year'
+                                  ? `${ds.category} (${compareYear()})`
+                                  : `${ds.category} (${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`,
                               data: ds.data,
                               backgroundColor: ds.color ? `${ds.color}66` : '#6366f166',
                               borderColor: ds.color || '#6366f1',
