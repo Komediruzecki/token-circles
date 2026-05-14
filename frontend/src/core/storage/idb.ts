@@ -19,7 +19,7 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
   db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
@@ -62,6 +62,12 @@ function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
   if (oldVersion < 2) {
     const bills = db.createObjectStore('bills', { keyPath: 'id', autoIncrement: true })
     bills.createIndex('by_profile', 'profile_id')
+  }
+
+  // v3: housings store
+  if (oldVersion < 3) {
+    const housings = db.createObjectStore('housings', { keyPath: 'id', autoIncrement: true })
+    housings.createIndex('by_profile', 'profile_id')
   }
 }
 
@@ -526,6 +532,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'portfolioHoldings',
       'settings',
       'bills',
+      'housings',
     ]
     for (const store of stores) {
       try {

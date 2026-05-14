@@ -36,14 +36,24 @@ import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 interface Housing {
   id: number
   type: 'rent' | 'mortgage' | 'hoa' | 'property_tax' | 'insurance' | 'other'
-  property_name: string
-  monthly_amount: number
+  property_name?: string
+  name?: string
+  monthly_amount: number | string
   due_day: number
   due_month: number
-  start_date: string
-  autopay: boolean
+  due_date?: string
+  start_date?: string
+  autopay: boolean | number
   notes?: string
   profile_id: number
+}
+
+function getPropertyName(h: Housing): string {
+  return h.property_name || h.name || 'Unknown'
+}
+
+function getMonthlyAmount(h: Housing): number {
+  return Math.abs(parseFloat(String(h.monthly_amount || 0)))
 }
 
 export default function HousingForm() {
@@ -121,7 +131,7 @@ export default function HousingForm() {
 
   // Calculate total monthly housing cost
   const totalMonthlyCost = () => {
-    return housings().reduce((sum, h) => sum + h.monthly_amount, 0)
+    return housings().reduce((sum, h) => sum + getMonthlyAmount(h), 0)
   }
 
   // Get type icon SVG
@@ -207,7 +217,7 @@ export default function HousingForm() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Autopay Enabled</div>
-          <div class={styles.summaryValue}>{housings().filter((h) => h.autopay).length}</div>
+          <div class={styles.summaryValue}>{housings().filter((h) => h.autopay === true || h.autopay === 1).length}</div>
         </div>
       </div>
 
@@ -229,11 +239,11 @@ export default function HousingForm() {
                 <div class={styles.housingHeader}>
                   <div class={styles.housingIcon}>{getTypeIcon(housing.type)}</div>
                   <div class={styles.housingInfo}>
-                    <h3 class={styles.housingName}>{housing.property_name}</h3>
+                    <h3 class={styles.housingName}>{getPropertyName(housing)}</h3>
                     <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
                   </div>
                   <div class={styles.housingActions}>
-                    {housing.autopay ? (
+                    {(housing.autopay === true || housing.autopay === 1) ? (
                       <Badge status="success">Autopay</Badge>
                     ) : (
                       <Badge status="default">Manual</Badge>
@@ -257,13 +267,15 @@ export default function HousingForm() {
                 </div>
                 <div class={styles.housingAmount}>
                   <div class={styles.amountLabel}>Monthly Cost</div>
-                  <div class={styles.amountValue}>{formatAmount(housing.monthly_amount)}</div>
+                  <div class={styles.amountValue}>{formatAmount(getMonthlyAmount(housing))}</div>
                 </div>
                 <div class={styles.housingDetails}>
                   <div class={styles.detailItem}>
                     <span class={styles.detailLabel}>Due</span>
                     <span class={styles.detailValue}>
-                      {housing.due_month} / {housing.due_day}
+                      {housing.due_date
+                        ? housing.due_date
+                        : `${housing.due_month} / ${housing.due_day}`}
                     </span>
                   </div>
                   {housing.notes && (
