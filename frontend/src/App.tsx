@@ -89,23 +89,17 @@ export function App() {
     }
   }
 
-  const selectProfile = async (profileId: number) => {
-    try {
-      localStorage.setItem('currentProfileId', profileId.toString())
-      // Also update selectedProfileIds to include this profile
-      const current = getSelectedProfileIds()
-      if (!current.includes(profileId)) {
-        const updated = [...current, profileId]
-        localStorage.setItem('selectedProfileIds', JSON.stringify(updated))
-      }
-      setCurrentProfile(profiles().find((p) => p.id === profileId) ?? null)
-      setShowDropdown(false)
-      // Force page content to refresh by briefly showing loading
-      _setIsLoading(true)
-      setTimeout(() => { _setIsLoading(false); }, 50)
-    } catch {
-      console.error('Failed to select profile')
+  const selectProfile = (profileId: number) => {
+    localStorage.setItem('currentProfileId', profileId.toString())
+    // Also update selectedProfileIds to include this profile
+    const current = getSelectedProfileIds()
+    if (!current.includes(profileId)) {
+      const updated = [...current, profileId]
+      localStorage.setItem('selectedProfileIds', JSON.stringify(updated))
     }
+    setCurrentProfile(profiles().find((p) => p.id === profileId) ?? null)
+    setShowDropdown(false)
+    bumpProfileVersion()
   }
 
   const getSelectedProfileIds = (): number[] => {
@@ -113,7 +107,12 @@ export function App() {
     if (stored) {
       try {
         const ids = JSON.parse(stored) as number[]
-        if (ids.length > 0) return ids
+        if (Array.isArray(ids) && ids.length > 0) {
+          // Dedup and filter to existing profiles only
+          const existingIds = new Set(profiles().map((p) => p.id))
+          const valid = [...new Set(ids)].filter((id) => existingIds.has(id))
+          if (valid.length > 0) return valid
+        }
       } catch { /* ignore */ }
     }
     const currentId = parseInt(localStorage.getItem('currentProfileId') || '1', 10)
@@ -124,13 +123,15 @@ export function App() {
 
   const toggleProfileSelection = (profileId: number) => {
     setSelectedProfileIds((prev) => {
-      const idx = prev.indexOf(profileId)
+      // Dedup in case of stale/corrupted localStorage
+      const unique = [...new Set(prev)]
+      const idx = unique.indexOf(profileId)
       if (idx !== -1) {
         // Deselect — but keep at least one
-        if (prev.length <= 1) return prev
-        return prev.filter((id) => id !== profileId)
+        if (unique.length <= 1) return unique
+        return unique.filter((id) => id !== profileId)
       }
-      return [...prev, profileId]
+      return [...unique, profileId]
     })
   }
 
@@ -447,7 +448,7 @@ export function App() {
                 width: '100%',
               }}
             >
-              <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'min-width': 0 }}>
                 <div
                   style={{
                     width: '24px',
@@ -460,12 +461,26 @@ export function App() {
                     'justify-content': 'center',
                     'font-size': '12px',
                     'font-weight': 'bold',
+                    'flex-shrink': 0,
                   }}
                 >
                   {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
                 </div>
-                <span class={profileStyles.profileName} style={{ 'font-weight': 600 }}>
-                  {currentProfile()?.name || 'Not Logged In'}
+                <span
+                  class={profileStyles.profileName}
+                  style={{
+                    'font-weight': 600,
+                    overflow: 'hidden',
+                    'text-overflow': 'ellipsis',
+                    'white-space': 'nowrap',
+                  }}
+                >
+                  {selectedProfileIds().length > 1
+                    ? profiles()
+                        .filter((p) => selectedProfileIds().includes(p.id))
+                        .map((p) => p.name)
+                        .join(' & ')
+                    : currentProfile()?.name || 'Not Logged In'}
                 </span>
               </div>
               <svg
@@ -511,7 +526,7 @@ export function App() {
                       />
                       <span
                         style={{ flex: 1, cursor: 'pointer' }}
-                        onClick={() => selectProfile(profile.id)}
+                        onClick={() => { selectProfile(profile.id); }}
                         title="Set as primary profile"
                       >
                         {profile.name}
