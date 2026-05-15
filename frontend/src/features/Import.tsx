@@ -561,6 +561,7 @@ export default function Import() {
       'portfolio',
       'pbz',
       'revolut',
+      'rev',
       'n26',
       'wise',
       'paypal',
@@ -568,21 +569,8 @@ export default function Import() {
       'monzo',
       'starling',
     ]
-    const matchKeyword = (kws: string[]) =>
-      kws.some((kw) => {
-        if (lower.includes(kw)) return true
-        if (kw.includes(lower)) return true
-        // Short names (≤6 chars) may share a root with a keyword (e.g. 'wrev' ↔ 'revolut')
-        if (lower.length <= 6 && lower.length >= 3) {
-          for (let i = 0; i <= lower.length - 3; i++) {
-            const sub = lower.slice(i, i + 3)
-            if (kw.includes(sub)) return true
-          }
-        }
-        return false
-      })
-    if (matchKeyword(incomeKeywords)) return 'income'
-    if (matchKeyword(accountKeywords)) return 'account'
+    if (incomeKeywords.some((kw) => lower.includes(kw))) return 'income'
+    if (accountKeywords.some((kw) => lower.includes(kw))) return 'account'
     return 'expense'
   }
 
