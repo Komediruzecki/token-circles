@@ -120,6 +120,47 @@ export default function Import() {
   const [sheetResult, setSheetResult] = createSignal<SheetResult | null>(null)
   const [sheetNames, setSheetNames] = createSignal<string[]>([])
 
+  // Paste CSV state
+  const [pastedText, setPastedText] = createSignal('')
+  const [pasteDelimiter, setPasteDelimiter] = createSignal<'auto' | 'comma' | 'tab'>('auto')
+
+  const parsePastedData = (text: string) => {
+    if (!text.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const delim = pasteDelimiter() === 'tab' ? '\t' : pasteDelimiter() === 'comma' ? ',' : ''
+      const rows: string[][] = []
+      const lines = text.trim().split('\n')
+      for (const line of lines) {
+        const cols: string[] = []
+        let cur = ''
+        let inQuotes = false
+        for (const ch of line) {
+          if (ch === '"') { inQuotes = !inQuotes }
+          else if ((delim && ch === delim) || (!delim && (ch === ',' || ch === '\t')) && !inQuotes) {
+            cols.push(cur.trim().replace(/^"|"$/g, ''))
+            cur = ''
+          } else cur += ch
+        }
+        cols.push(cur.trim().replace(/^"|"$/g, ''))
+        rows.push(cols)
+      }
+      if (rows.length < 2) { setError('Need at least a header row and one data row'); setLoading(false); return }
+      const headers = rows[0]
+      const dataRows = rows.slice(1).filter((r) => r.some((c) => c))
+      setUploadResult({
+        headers,
+        rows: dataRows,
+        fileName: 'pasted-data.csv',
+        fileId: `paste-${  Date.now()}`,
+        duplicateCount: 0,
+        duplicateIndices: [],
+      })
+      setActiveStep('upload')
+    } catch { setError('Failed to parse pasted data'); setLoading(false) }
+  }
+
   // Column mapping
   const [columnMapping, setColumnMapping] = createSignal<Record<string, number>>({})
   const [categoryTypes, setCategoryTypes] = createSignal<
@@ -930,6 +971,41 @@ export default function Import() {
           Download Sample Template
         </button>
       </div>
+
+      {/* Paste CSV/TSV Section */}
+      <hr class={styles.sectionDivider} />
+      <h3 class={styles.sectionHeader}>Paste CSV/TSV</h3>
+      <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
+        Paste tabular data directly from Excel, Google Sheets, or any spreadsheet application.
+        Works guaranteed in serverless mode — no CORS restrictions.
+      </p>
+      <div class={styles.formGroup} style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}>
+        <select
+          class={styles.formControl}
+          value={pasteDelimiter()}
+          onchange={(e) => setPasteDelimiter(e.currentTarget.value as 'auto' | 'comma' | 'tab')}
+          style={{ 'max-width': '140px' }}
+        >
+          <option value="auto">Auto-detect</option>
+          <option value="comma">Comma (,)</option>
+          <option value="tab">Tab</option>
+        </select>
+        <button
+          class={styles.btnPrimary}
+          onClick={() => { parsePastedData(pastedText()); }}
+          disabled={loading() || !pastedText().trim()}
+        >
+          Parse Pasted Data
+        </button>
+      </div>
+      <textarea
+        class={styles.formControl}
+        placeholder="Paste CSV or TSV data here (include header row)&#10;Example:&#10;date,description,amount&#10;2024-01-15,Grocery Store,-45.99&#10;2024-01-16,Salary,3200.00"
+        value={pastedText()}
+        oninput={(e) => setPastedText(e.currentTarget.value)}
+        rows={8}
+        style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
+      />
 
       {/* Google Sheets Section */}
       <hr class={styles.sectionDivider} />

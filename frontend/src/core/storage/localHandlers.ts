@@ -3704,15 +3704,118 @@ export async function importFileSheet(body: unknown): Promise<Response> {
   }
 }
 
-export async function importGoogleSheet(): Promise<Response> {
-  return json(
-    {
-      error: 'Google Sheets import is not available in serverless mode due to CORS restrictions.',
-      message: 'Please download your sheet as CSV or Excel and import the file instead.',
-      serverlessMode: true,
-    },
-    501
-  )
+export async function importGoogleSheet(body: unknown): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'URL is required' }, 400)
+  const { url, sheetName } = body as Record<string, string>
+  if (!url) return json({ error: 'URL is required' }, 400)
+
+  // Extract sheet ID and gid from URL
+  const idMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
+  if (!idMatch) return json({ error: 'Invalid Google Sheets URL or ID' }, 400)
+  const sheetId = idMatch[1]
+  const gidMatch = url.match(/[?&#]gid=([0-9]+)/)
+  const gid = gidMatch ? gidMatch[1] : null
+
+  // CSV parse helper (handles quoted fields, commas in values)
+  const parseCSV = (text: string): { headers: string[]; rows: string[][] } => {
+    const rows: string[][] = []
+    const lines = text.trim().split('\n')
+    for (const line of lines) {
+      const cols: string[] = []
+      let cur = ''
+      let inQuotes = false
+      for (const ch of line) {
+        if (ch === '"') { inQuotes = !inQuotes }
+        else if (ch === ',' && !inQuotes) { cols.push(cur.trim().replace(/^"|"$/g, '')); cur = '' }
+        else cur += ch
+      }
+      cols.push(cur.trim().replace(/^"|"$/g, ''))
+      rows.push(cols)
+    }
+    return { headers: rows[0] || [], rows: rows.slice(1).filter((r) => r.some((c) => c)) }
+  }
+
+  // Strategy 1: Published CSV (requires sheet to be published to web)
+  try {
+    const pubUrl = gid
+      ? `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv&gid=${gid}`
+      : `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv`
+    const pubRes = await fetch(pubUrl)
+    if (pubRes.ok) {
+      const text = await pubRes.text()
+      if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
+        const { headers, rows } = parseCSV(text)
+        return json({
+          headers,
+          rows,
+          sheetNames: [sheetName || 'Sheet1'],
+          selectedSheet: sheetName || 'Sheet1',
+        })
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Strategy 2: Google Visualization API (CORS-friendly, works for link-shared sheets)
+  try {
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}${sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : ''}`
+    const gvizRes = await fetch(gvizUrl)
+    if (gvizRes.ok) {
+      const gvizText = await gvizRes.text()
+      // Strip Google's response wrapper: "/*O_o*/ google.visualization.Query.setResponse({...});"
+      const jsonStr = gvizText
+        .replace(/^\)\]\}'/, '')
+        .replace(/^\/\*O_o\*\/\s*google\.visualization\.Query\.setResponse\(/, '')
+        .replace(/\);?\s*$/, '')
+      const parsed = JSON.parse(jsonStr)
+      if (parsed.table) {
+        const cols = parsed.table.cols.map((c: Record<string, unknown>) =>
+          (c.label as string) || (c.id as string) || ''
+        )
+        const dataRows = (parsed.table.rows || []).map((r: Record<string, unknown>) =>
+          (r.c as Array<{ v: unknown }>).map((cell) => {
+            const v = cell?.v
+            if (v === null || v === undefined) return ''
+            return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : JSON.stringify(v)
+          })
+        )
+        return json({
+          headers: cols,
+          rows: dataRows,
+          sheetNames: [sheetName || 'Sheet1'],
+          selectedSheet: sheetName || 'Sheet1',
+        })
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Strategy 3: Regular CSV export (rarely works from browser due to CORS, but try anyway)
+  try {
+    const csvUrl = gid
+      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
+      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
+    const csvRes = await fetch(csvUrl)
+    if (csvRes.ok) {
+      const text = await csvRes.text()
+      if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
+        const { headers, rows } = parseCSV(text)
+        return json({
+          headers,
+          rows,
+          sheetNames: [sheetName || 'Sheet1'],
+          selectedSheet: sheetName || 'Sheet1',
+        })
+      }
+    }
+  } catch { /* fall through */ }
+
+  return json({
+    error: 'Could not access the Google Sheet from the browser.',
+    message:
+      'To import this sheet, either: (1) Publish it to the web (File → Share → Publish to web), ' +
+      'or (2) Set sharing to "Anyone with the link can view", ' +
+      'or (3) Download as CSV and use the File Upload tab.',
+    serverlessMode: true,
+  }, 422)
 }
 
 export async function importExecute(body: unknown): Promise<Response> {

@@ -700,7 +700,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/import\/googlesheet$/,
     methods: ['POST'],
-    handler: dispatch({ POST: () => h.importGoogleSheet() }),
+    handler: dispatch({ POST: (ctx) => h.importGoogleSheet(ctx.body) }),
   },
   {
     pattern: /^\/import\/file-sheet$/,
