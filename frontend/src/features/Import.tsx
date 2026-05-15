@@ -862,7 +862,7 @@ export default function Import() {
               <option value="tab">Tab</option>
             </select>
             <button
-              class={styles.btnPrimary}
+              class={`${styles.btn} ${styles.btnPrimary}`}
               onClick={() => { parsePastedData(pastedText()) }}
               disabled={loading() || !pastedText().trim()}
             >
