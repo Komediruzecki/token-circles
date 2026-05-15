@@ -546,14 +546,20 @@ export default function Import() {
       'reimbursement',
     ]
     const accountKeywords = [
+      'current account',
+      'giro account',
+      'checking account',
+      'savings account',
+      'investment account',
+      'credit card account',
       'account',
       'checking',
       'savings',
       'giro',
+      'current',
       'wallet',
       'portfolio',
-      'investment account',
-      'credit card account',
+      'pbz',
       'revolut',
       'n26',
       'wise',
@@ -562,8 +568,21 @@ export default function Import() {
       'monzo',
       'starling',
     ]
-    if (incomeKeywords.some((kw) => lower.includes(kw))) return 'income'
-    if (accountKeywords.some((kw) => lower.includes(kw))) return 'account'
+    const matchKeyword = (kws: string[]) =>
+      kws.some((kw) => {
+        if (lower.includes(kw)) return true
+        if (kw.includes(lower)) return true
+        // Short names (≤6 chars) may share a root with a keyword (e.g. 'wrev' ↔ 'revolut')
+        if (lower.length <= 6 && lower.length >= 3) {
+          for (let i = 0; i <= lower.length - 3; i++) {
+            const sub = lower.slice(i, i + 3)
+            if (kw.includes(sub)) return true
+          }
+        }
+        return false
+      })
+    if (matchKeyword(incomeKeywords)) return 'income'
+    if (matchKeyword(accountKeywords)) return 'account'
     return 'expense'
   }
 
