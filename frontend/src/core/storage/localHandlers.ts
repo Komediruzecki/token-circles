@@ -3735,6 +3735,27 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return { headers: rows[0] || [], rows: rows.slice(1).filter((r) => r.some((c) => c)) }
   }
 
+  // Strategy 0: CORS proxy (works around browser CORS restrictions)
+  try {
+    const rawUrl = gid
+      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
+      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`
+    const proxyRes = await fetch(proxyUrl)
+    if (proxyRes.ok) {
+      const text = await proxyRes.text()
+      if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html') && text.trim()) {
+        const { headers, rows } = parseCSV(text)
+        return json({
+          headers,
+          rows,
+          sheetNames: [sheetName || 'Sheet1'],
+          selectedSheet: sheetName || 'Sheet1',
+        })
+      }
+    }
+  } catch { /* fall through */ }
+
   // Strategy 1: Published CSV (requires sheet to be published to web)
   try {
     const pubUrl = gid
@@ -3821,10 +3842,6 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
 export async function importExecute(body: unknown): Promise<Response> {
   try {
     const data = body as Record<string, unknown>
-    const sessionId = toStr(data.session_id)
-    const session = importSessions.get(sessionId)
-    if (!session) return json({ error: 'Session expired or not found' }, 404)
-
     const mapping = (data.mapping as Record<string, string>) || {}
     const dryRun = Boolean(data.dry_run)
     const categoryTypes = (data.categoryTypes as Record<string, string>) || {}
@@ -3832,7 +3849,16 @@ export async function importExecute(body: unknown): Promise<Response> {
     const accountBalances = (data.accountBalances as Record<string, string>) || {}
     const accountBalanceDates = (data.accountBalanceDates as Record<string, string>) || {}
 
-    const rows = await parseSheetData(session.workbook)
+    // Accept rows directly (from paste/Google Sheets) or via session_id (from file upload)
+    let rows: string[][]
+    if (Array.isArray(data.rows)) {
+      rows = data.rows as string[][]
+    } else {
+      const sessionId = toStr(data.session_id)
+      const session = importSessions.get(sessionId)
+      if (!session) return json({ error: 'Session expired or not found' }, 404)
+      rows = await parseSheetData(session.workbook)
+    }
     const { clean } = await detectDuplicates(rows)
 
     const profileId = getProfileIdFromStorage()
