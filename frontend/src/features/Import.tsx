@@ -524,7 +524,7 @@ export default function Import() {
         type: 'success',
         text:
           data.message ||
-          `Successfully imported ${data.imported || rowsToImport.length} transactions`,
+          `Imported ${data.imported ?? 0} transactions${data.skipped ? ` (${data.skipped} skipped)` : ''}`,
       })
 
       // Reset after delay

@@ -3302,6 +3302,16 @@ function calculateRetirementProjection(
 // ── Receipts ────────────────────────────────────────────────────────────────
 
 function getProfileIdFromStorage(): number {
+  // Check selectedProfileIds first (what the dashboard uses for queries),
+  // so imported transactions land in the profile the user is actually viewing.
+  const selected = localStorage.getItem('selectedProfileIds')
+  if (selected) {
+    try {
+      const ids = JSON.parse(selected) as number[]
+      if (Array.isArray(ids) && ids.length > 0) return ids[0]
+    } catch { /* ignore */ }
+  }
+  // Fall back to currentProfileId for backward compatibility
   const stored = localStorage.getItem('currentProfileId')
   return stored ? parseInt(stored, 10) : 1
 }
