@@ -2,6 +2,10 @@
  * Local API Handlers — IndexedDB-backed route handlers for serverless mode
  */
 import {
+  calculateSchedule,
+  getSummary,
+} from '../loanCalculator'
+import {
   generateAnnualPdf,
   generateMonthlyPdf,
   generatePlSummaryPdf,
@@ -1565,6 +1569,63 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
     return ok()
   }
   return notFound('Prepayment')
+}
+
+// Loan amortization calculate (ported from backend/models/loanCalculator.js)
+export async function loansCalculate(params: Record<string, string>): Promise<Response> {
+  try {
+    const db = await getDB()
+    const loan = await db.get('loans', idParam(params))
+    if (!loan) return notFound('Loan')
+
+    const ratePeriods = (loan.rate_periods || []) as Array<{
+      rate: number
+      start_month: number
+      end_month?: number | null
+    }>
+    const prepayments = (loan.prepayments || []) as Array<{
+      month: number
+      amount: number
+      note?: string
+    }>
+
+    // Prepend the loan's initial rate as the first rate period
+    const initialRatePeriod = {
+      rate: (loan.interest_rate as number) || 0,
+      start_month: 1,
+      end_month: null as number | null,
+    }
+    const allRatePeriods = [initialRatePeriod, ...ratePeriods]
+
+    const scheduleWithPrepayments = calculateSchedule(
+      loan.principal as number,
+      loan.start_date as string,
+      loan.term_months as number,
+      allRatePeriods,
+      prepayments
+    )
+
+    const scheduleNoPrepayments = calculateSchedule(
+      loan.principal as number,
+      loan.start_date as string,
+      loan.term_months as number,
+      allRatePeriods,
+      []
+    )
+
+    const summary = getSummary(scheduleWithPrepayments, scheduleNoPrepayments)
+
+    return json({
+      schedule: scheduleWithPrepayments,
+      summary,
+      comparison: {
+        withPrepayments: summary,
+        withoutPrepayments: getSummary(scheduleNoPrepayments, scheduleNoPrepayments),
+      },
+    })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
 }
 
 // ── Housing ──────────────────────────────────────────────────────────────────

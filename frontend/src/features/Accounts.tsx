@@ -52,6 +52,7 @@ interface Account {
 export default function Accounts() {
   const [accounts, setAccounts] = createSignal<Account[]>([])
   const [transactions, setTransactions] = createSignal<any[]>([])
+  const [profiles, setProfiles] = createSignal<Array<{ id: number; name: string }>>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [formData, setFormData] = createSignal({
@@ -64,15 +65,44 @@ export default function Accounts() {
     starting_date: '',
   })
 
-  // Load accounts and transactions
+  const profileNameMap = () => {
+    const map = new Map<number, string>()
+    for (const p of profiles()) map.set(p.id, p.name)
+    return map
+  }
+
+  const multiProfile = () => {
+    const ids = new Set(accounts().map((a) => a.profile_id))
+    return ids.size > 1
+  }
+
+  const accountsByProfile = () => {
+    if (!multiProfile()) return [{ profileId: 0, profileName: '', accounts: accounts() }]
+    const groups = new Map<number, Account[]>()
+    for (const a of accounts()) {
+      const list = groups.get(a.profile_id) || []
+      list.push(a)
+      groups.set(a.profile_id, list)
+    }
+    const names = profileNameMap()
+    return Array.from(groups.entries()).map(([pid, accts]) => ({
+      profileId: pid,
+      profileName: names.get(pid) || `Profile ${pid}`,
+      accounts: accts,
+    }))
+  }
+
+  // Load accounts, transactions, and profiles
   const loadData = async () => {
     setLoading(true)
     try {
-      const [accountsRes, txRes] = await Promise.all([
+      const [accountsRes, txRes, profilesRes] = await Promise.all([
         apiGet<Account[]>('/api/accounts'),
         apiGet<any>(`/api/transactions?limit=500`),
+        apiGet<Array<{ id: number; name: string }>>('/api/profiles').catch(() => []),
       ])
       setAccounts(accountsRes)
+      setProfiles(profilesRes)
       const txList = Array.isArray(txRes) ? txRes : txRes?.transactions || txRes?.rows || []
       setTransactions(Array.isArray(txList) ? txList : [])
     } catch (err) {
@@ -281,25 +311,35 @@ export default function Accounts() {
           </button>
         </div>
       ) : (
-        <div data-test-id="accounts-grid" class={styles.accountsGrid}>
-          <For each={accounts()}>
-            {(account) => (
-              <div data-test-id="account-card" class={styles.accountCard}>
-                <div class={styles.accountHeader}>
-                  <div data-test-id="account-icon" class={styles.accountIcon}>
-                    {getTypeIcon(account.type)}
-                  </div>
-                  <div class={styles.accountInfo}>
-                    <h3 data-test-id="account-name" class={styles.accountName}>
-                      {account.name}
-                    </h3>
-                    <p data-test-id="account-bank" class={styles.accountBank}>
-                      {account.bank_name || 'No bank listed'}
-                    </p>
-                  </div>
-                  <div class={styles.accountActions}>
-                    <Badge status={getAccountBadgeStatus(account.type)}>{account.type}</Badge>
-                    <ConfirmButton
+        <For each={accountsByProfile()}>
+          {(group) => (
+            <>
+              {multiProfile() && (
+                <h2 class={styles.profileGroupHeader}>
+                  <span class={styles.profileGroupDot}></span>
+                  {group.profileName}
+                  <span class={styles.profileGroupCount}>{group.accounts.length} accounts</span>
+                </h2>
+              )}
+              <div data-test-id="accounts-grid" class={styles.accountsGrid}>
+                <For each={group.accounts}>
+                  {(account) => (
+                    <div data-test-id="account-card" class={styles.accountCard}>
+                      <div class={styles.accountHeader}>
+                        <div data-test-id="account-icon" class={styles.accountIcon}>
+                          {getTypeIcon(account.type)}
+                        </div>
+                        <div class={styles.accountInfo}>
+                          <h3 data-test-id="account-name" class={styles.accountName}>
+                            {account.name}
+                          </h3>
+                          <p data-test-id="account-bank" class={styles.accountBank}>
+                            {account.bank_name || 'No bank listed'}
+                          </p>
+                        </div>
+                        <div class={styles.accountActions}>
+                          <Badge status={getAccountBadgeStatus(account.type)}>{account.type}</Badge>
+                          <ConfirmButton
                       class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                       onConfirm={() => deleteAccount(account.id)}
                       confirmLabel="Delete? This will remove all related transactions."
@@ -361,6 +401,9 @@ export default function Accounts() {
             )}
           </For>
         </div>
+            </>
+          )}
+        </For>
       )}
 
       {/* Add Account Modal */}

@@ -582,18 +582,12 @@ const routes: RouteDef[] = [
     handler: stub('/api/accounts/:id/reconciliation-summary'),
   },
 
-  // Loans: calculate (client-only: returns empty amortization)
+  // Loans: calculate (ported from backend loanCalculator)
   {
     pattern: /^\/loans\/(\d+)\/calculate$/,
     methods: ['POST'],
     handler: dispatch({
-      POST: () =>
-        Promise.resolve(
-          json({
-            schedule: [],
-            summary: { totalPaid: 0, totalInterest: 0, payoffDate: null, interestSaved: 0 },
-          })
-        ),
+      POST: (ctx) => h.loansCalculate(ctx.params),
     }),
   },
 
