@@ -15,6 +15,7 @@ import ToastContainer from './components/ToastContainer'
 import TourSelectionModal from './components/TourSelectionModal'
 import { api, toast } from './core/api.js'
 import {
+  bumpProfileVersion,
   setCurrentProfile as setCurrentProfileStore,
   setIsAuthenticated as setIsAuthenticatedStore,
   setIsLoginModalOpen as setIsLoginModalOpenStore,
@@ -136,14 +137,14 @@ export function App() {
   const toggleDropdown = () => {
     const wasOpen = state.showDropdown
     if (wasOpen) {
-      // Closing dropdown — save and reload
+      // Closing dropdown — save and trigger reactive data reload
       const ids = selectedProfileIds()
       localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
       if (ids.length > 0) {
         localStorage.setItem('currentProfileId', ids[0].toString())
       }
       setShowDropdown(false)
-      window.location.reload()
+      bumpProfileVersion()
     } else {
       setShowDropdown(true)
     }
@@ -204,14 +205,14 @@ export function App() {
       if (showDropdown()) {
         const target = e.target as HTMLElement
         if (!target.closest(`.${profileStyles.profileDropdown}`)) {
-          // Apply selection and reload
+          // Apply selection and trigger reactive data reload
           const ids = selectedProfileIds()
           localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
           if (ids.length > 0) {
             localStorage.setItem('currentProfileId', ids[0].toString())
           }
           setShowDropdown(false)
-          window.location.reload()
+          bumpProfileVersion()
         }
       }
     }

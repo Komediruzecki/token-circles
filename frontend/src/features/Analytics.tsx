@@ -33,6 +33,7 @@ import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
 import SankeyChart from '../components/SankeyChart'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { apiGet, showToast } from '../utils/api'
 import { downloadBlob } from '../utils/chartExport'
@@ -46,6 +47,7 @@ interface AnalyticsData {
 }
 
 export default function Analytics() {
+  const state = useAppState()
   const [data, setData] = createSignal<AnalyticsData | null>(null)
   const [loading, setLoading] = createSignal(true)
   const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
@@ -333,6 +335,15 @@ export default function Analytics() {
   }
 
   onMount(() => {
+    loadYears()
+    loadData()
+    loadStackedData()
+    loadHeatmapData()
+  })
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
     loadYears()
     loadData()
     loadStackedData()

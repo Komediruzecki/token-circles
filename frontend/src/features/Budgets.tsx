@@ -38,6 +38,7 @@ import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import { getLocalCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 import type { BudgetImprovement, BudgetSummaryResponse, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
@@ -104,6 +105,7 @@ interface Category {
 }
 
 export default function Budgets() {
+  const state = useAppState()
   const [month, setMonth] = createSignal(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
@@ -471,6 +473,14 @@ export default function Budgets() {
   onMount(() => {
     loadImprovements()
     loadCategories()
+  })
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
+    loadImprovements()
+    loadCategories()
+    loadData()
   })
 
   // Load data when month changes

@@ -30,11 +30,12 @@
  * Goals Component
  * Handles savings goals with progress tracking
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import styles from '../components/GoalsPage.module.css'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 
@@ -59,6 +60,7 @@ interface CategoryOption {
 }
 
 export default function Goals() {
+  const state = useAppState()
   const [goals, setGoals] = createSignal<Goal[]>([])
   const [categories, setCategories] = createSignal<CategoryOption[]>([])
   const [loading, setLoading] = createSignal(true)
@@ -203,6 +205,12 @@ export default function Goals() {
   }
 
   onMount(() => {
+    loadGoals()
+    loadCategories()
+  })
+
+  createEffect(() => {
+    void state.profileVersion
     loadGoals()
     loadCategories()
   })

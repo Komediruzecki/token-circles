@@ -33,6 +33,7 @@ import { LogViewer } from '../components/LogViewer'
 import styles from '../components/SettingsPage.module.css'
 import { toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
+import { bumpProfileVersion } from '../core/appStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
@@ -482,21 +483,21 @@ export default function Settings() {
     }
     setHouseholdIds(newIds)
     localStorage.setItem('selectedProfileIds', JSON.stringify(newIds))
-    window.location.reload()
+    bumpProfileVersion()
   }
 
   const selectAllHousehold = () => {
     const all = allProfiles()
     setHouseholdIds(all.map((p) => p.id))
     localStorage.setItem('selectedProfileIds', JSON.stringify(all.map((p) => p.id)))
-    window.location.reload()
+    bumpProfileVersion()
   }
 
   const clearHousehold = () => {
     const currentId = parseInt(localStorage.getItem('currentProfileId') || '1')
     setHouseholdIds([currentId])
     localStorage.setItem('selectedProfileIds', JSON.stringify([currentId]))
-    window.location.reload()
+    bumpProfileVersion()
   }
 
   return (

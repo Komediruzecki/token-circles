@@ -31,11 +31,12 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import styles from '../components/AccountsPage.module.css'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
 interface Account {
@@ -50,6 +51,7 @@ interface Account {
 }
 
 export default function Accounts() {
+  const state = useAppState()
   const [accounts, setAccounts] = createSignal<Account[]>([])
   const [transactions, setTransactions] = createSignal<any[]>([])
   const [profiles, setProfiles] = createSignal<Array<{ id: number; name: string }>>([])
@@ -205,6 +207,11 @@ export default function Accounts() {
   }
 
   onMount(() => {
+    loadData()
+  })
+
+  createEffect(() => {
+    void state.profileVersion
     loadData()
   })
 

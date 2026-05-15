@@ -18,6 +18,7 @@ export interface AppState {
   isQuickAddOpen: boolean
   sidebarCollapsed: boolean
   quickAddCategories: Category[]
+  profileVersion: number
 }
 
 const initialState: AppState = {
@@ -32,6 +33,7 @@ const initialState: AppState = {
   isQuickAddOpen: false,
   sidebarCollapsed: true,
   quickAddCategories: [],
+  profileVersion: 0,
 }
 
 const [state, setState] = createStore<AppState>(initialState)
@@ -150,4 +152,14 @@ export function getQuickAddCategories() {
 
 export function setQuickAddCategories(categories: Category[]) {
   setState('quickAddCategories', categories)
+}
+
+// ── Profile version (incremented on selection change, pages watch to reload data) ──
+
+export function getProfileVersion() {
+  return state.profileVersion
+}
+
+export function bumpProfileVersion() {
+  setState('profileVersion', (v) => v + 1)
 }

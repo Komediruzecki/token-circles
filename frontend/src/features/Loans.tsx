@@ -30,13 +30,14 @@
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
 import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 import type { Loan, LoanDetail, LoanPrepayment } from '../types/models'
@@ -57,6 +58,7 @@ interface Loan {
 }
 
 export default function Loans() {
+  const state = useAppState()
   const [loans, setLoans] = createSignal<Loan[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -318,6 +320,11 @@ export default function Loans() {
   }
 
   onMount(() => {
+    loadLoans()
+  })
+
+  createEffect(() => {
+    void state.profileVersion
     loadLoans()
   })
 

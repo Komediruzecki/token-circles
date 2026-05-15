@@ -41,11 +41,13 @@ import styles from '../components/TransactionsPage.module.css'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, getLocalCurrency, toast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { apiPut } from '../utils/api'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
+  const state = useAppState()
   const [transactions, setTransactions] = createSignal<Transaction[]>([])
   const [loading, setLoading] = createSignal(true)
   const [selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
@@ -91,6 +93,12 @@ export default function Transactions() {
   const [netBalance, setNetBalance] = createSignal(0)
   const [totalAmount, setTotalAmount] = createSignal(0)
   const [showReconciled, setShowReconciled] = createSignal(true)
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
+    refreshTransactions()
+  })
 
   // Calculate transaction totals
   createEffect(() => {

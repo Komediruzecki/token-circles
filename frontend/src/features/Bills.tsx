@@ -56,10 +56,11 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import styles from '../components/BillsPage.module.css'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
 interface Bill {
@@ -85,6 +86,7 @@ interface Category {
 }
 
 export default function Bills() {
+  const state = useAppState()
   const [bills, setBills] = createSignal<Bill[]>([])
   const [upcoming, setUpcoming] = createSignal<Bill[]>([])
   const [paid, setPaid] = createSignal<Bill[]>([])
@@ -267,6 +269,12 @@ export default function Bills() {
   }
 
   onMount(() => {
+    loadBills()
+    loadCategories()
+  })
+
+  createEffect(() => {
+    void state.profileVersion
     loadBills()
     loadCategories()
   })

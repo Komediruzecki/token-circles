@@ -41,9 +41,11 @@ import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { PeriodPills } from '../components/PeriodPills'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import type * as Models from '../types/models'
 
 export default function Dashboard() {
+  const state = useAppState()
   const [month, setMonth] = createSignal(5)
   const [year, setYear] = createSignal(2026)
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
@@ -90,6 +92,12 @@ export default function Dashboard() {
   }
 
   onMount(() => {
+    void loadMonthlyData()
+  })
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
     void loadMonthlyData()
   })
 
