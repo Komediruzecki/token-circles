@@ -547,15 +547,20 @@ export default function Import() {
     ]
     const accountKeywords = [
       'account',
-      'bank',
       'checking',
       'savings',
       'giro',
-      'deposit',
       'wallet',
       'portfolio',
       'investment account',
       'credit card account',
+      'revolut',
+      'n26',
+      'wise',
+      'paypal',
+      'bunq',
+      'monzo',
+      'starling',
     ]
     if (incomeKeywords.some((kw) => lower.includes(kw))) return 'income'
     if (accountKeywords.some((kw) => lower.includes(kw))) return 'account'
