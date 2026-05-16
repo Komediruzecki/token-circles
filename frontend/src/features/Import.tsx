@@ -37,6 +37,7 @@
 
 import { createSignal, For, onMount, Show } from 'solid-js'
 import { apiFetch } from '../core/apiFetch'
+import { classifyCategory } from '../core/categoryClassifier'
 import styles from './Import.module.css'
 
 // Column field names for mapping
@@ -526,56 +527,6 @@ export default function Import() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // Auto-detect income categories based on keywords in the category name
-  const classifyCategory = (name: string): 'income' | 'expense' | 'account' => {
-    const lower = name.toLowerCase()
-    const incomeKeywords = [
-      'salary',
-      'income',
-      'wages',
-      'wage',
-      'payroll',
-      'revenue',
-      'dividend',
-      'refund',
-      'bonus',
-      'paycheck',
-      'pay cheque',
-      'interest',
-      'credit',
-      'received',
-      'royalt',
-      'reimbursement',
-    ]
-    const accountKeywords = [
-      'current account',
-      'giro account',
-      'checking account',
-      'savings account',
-      'investment account',
-      'credit card account',
-      'account',
-      'checking',
-      'savings',
-      'giro',
-      'current',
-      'wallet',
-      'portfolio',
-      'pbz',
-      'revolut',
-      'rev',
-      'n26',
-      'wise',
-      'paypal',
-      'bunq',
-      'monzo',
-      'starling',
-    ]
-    if (incomeKeywords.some((kw) => lower.includes(kw))) return 'income'
-    if (accountKeywords.some((kw) => lower.includes(kw))) return 'account'
-    return 'expense'
   }
 
   onMount(() => {
