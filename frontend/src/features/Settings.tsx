@@ -976,6 +976,9 @@ export default function Settings() {
                 <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
                   See what&apos;s new in each version of Finance Manager.
                 </p>
+                <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
+                  v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
+                </p>
               </div>
             </div>
           </div>

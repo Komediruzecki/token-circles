@@ -1,3 +1,4 @@
+import { execSync } from 'child_process'
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import bundleAnalyzer from 'vite-bundle-analyzer'
@@ -12,6 +13,9 @@ const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+    __GIT_SHA__: JSON.stringify(
+      (() => { try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'unknown' } })(),
+    ),
   },
   base: './',
   build: {

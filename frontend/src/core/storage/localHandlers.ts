@@ -2792,99 +2792,113 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return { headers: rows[0] || [], rows: rows.slice(1).filter((r) => r.some((c) => c)) }
   }
 
-  // Timeout wrapper for fetch — avoids hanging on slow/unreachable URLs
-  const fetchWithTimeout = async (url: string, ms: number) => {
+  const GOOGLE_SHEETS_TIMEOUT = 10000
+
+  // Fetch helper that rejects on non-ok or non-data response
+  const tryFetch = async (url: string): Promise<Response> => {
     const controller = new AbortController()
-    const timer = setTimeout(() => { controller.abort() }, ms)
+    const timer = setTimeout(() => { controller.abort() }, GOOGLE_SHEETS_TIMEOUT)
     try {
       const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res
     } finally {
       clearTimeout(timer)
     }
   }
 
-  // Strategy 1: Published CSV (requires sheet to be published to web)
-  try {
-    const pubUrl = gid
-      ? `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv&gid=${gid}`
-      : `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv`
-    const pubRes = await fetchWithTimeout(pubUrl, 10000)
-    if (pubRes.ok) {
-      const text = await pubRes.text()
-      if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
-        const { headers, rows } = parseCSV(text)
-        return json({
-          headers,
-          rows,
-          sheetNames: [sheetName || 'Sheet1'],
-          selectedSheet: sheetName || 'Sheet1',
-        })
-      }
+  // Try a single strategy — returns the parsed result or throws
+  const tryStrategy = async (
+    url: string,
+    parser: (text: string) => ReturnType<typeof json> | null
+  ): Promise<ReturnType<typeof json>> => {
+    const res = await tryFetch(url)
+    const text = await res.text()
+    // Reject HTML responses (Google login walls, CORS errors disguised as HTML)
+    const trimmed = text.trim()
+    if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
+      throw new Error('HTML response — likely CORS or auth wall')
     }
-  } catch { /* fall through */ }
+    const parsed = parser(trimmed)
+    if (parsed) return parsed
+    throw new Error('Parse returned empty')
+  }
 
-  // Strategy 2: Google Visualization API (CORS-friendly, works for link-shared sheets)
+  // Strategy 1: Published CSV
+  const pubUrl = gid
+    ? `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv&gid=${gid}`
+    : `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv`
+  const strategy1 = tryStrategy(pubUrl, (text) => {
+    const { headers, rows } = parseCSV(text)
+    return json({ headers, rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+  })
+
+  // Strategy 2: Google Visualization API
+  const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}${sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : ''}`
+  const strategy2 = tryStrategy(gvizUrl, (text) => {
+    const jsonStr = text
+      .replace(/^\)\]\}'/, '')
+      .replace(/^\/\*O_o\*\/\s*google\.visualization\.Query\.setResponse\(/, '')
+      .replace(/\);?\s*$/, '')
+    const parsed = JSON.parse(jsonStr)
+    if (!parsed.table) return null
+    const cols = parsed.table.cols.map((c: Record<string, unknown>) =>
+      (c.label as string) || (c.id as string) || ''
+    )
+    const dataRows = (parsed.table.rows || []).map((r: Record<string, unknown>) =>
+      (r.c as Array<{ v: unknown }>).map((cell) => {
+        const v = cell?.v
+        if (v === null || v === undefined) return ''
+        return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : JSON.stringify(v)
+      })
+    )
+    return json({ headers: cols, rows: dataRows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+  })
+
+  // Strategy 3: CSV export (rarely works from browser, but try)
+  const csvUrl = gid
+    ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
+    : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
+  const strategy3 = tryStrategy(csvUrl, (text) => {
+    const { headers, rows } = parseCSV(text)
+    return json({ headers, rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+  })
+
+  // Race all strategies against each other and a hard deadline
+  const deadline = new Promise<never>((_, reject) => {
+    setTimeout(() => { reject(new Error('TIMEOUT')) }, GOOGLE_SHEETS_TIMEOUT + 500)
+  })
+
+  const strategies: Promise<ReturnType<typeof json>>[] = [strategy1, strategy2, strategy3]
+  const errors: string[] = []
+
+  // Try strategies sequentially with fast failure — first success wins,
+  // but each gets at most GOOGLE_SHEETS_TIMEOUT total across all attempts
   try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}${sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : ''}`
-    const gvizRes = await fetchWithTimeout(gvizUrl, 10000)
-    if (gvizRes.ok) {
-      const gvizText = await gvizRes.text()
-      // Strip Google's response wrapper: "/*O_o*/ google.visualization.Query.setResponse({...});"
-      const jsonStr = gvizText
-        .replace(/^\)\]\}'/, '')
-        .replace(/^\/\*O_o\*\/\s*google\.visualization\.Query\.setResponse\(/, '')
-        .replace(/\);?\s*$/, '')
-      const parsed = JSON.parse(jsonStr)
-      if (parsed.table) {
-        const cols = parsed.table.cols.map((c: Record<string, unknown>) =>
-          (c.label as string) || (c.id as string) || ''
-        )
-        const dataRows = (parsed.table.rows || []).map((r: Record<string, unknown>) =>
-          (r.c as Array<{ v: unknown }>).map((cell) => {
-            const v = cell?.v
-            if (v === null || v === undefined) return ''
-            return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : JSON.stringify(v)
-          })
-        )
-        return json({
-          headers: cols,
-          rows: dataRows,
-          sheetNames: [sheetName || 'Sheet1'],
-          selectedSheet: sheetName || 'Sheet1',
-        })
-      }
-    }
-  } catch { /* fall through */ }
-
-  // Strategy 3: Regular CSV export (rarely works from browser due to CORS, but try anyway)
-  try {
-    const csvUrl = gid
-      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
-      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
-    const csvRes = await fetchWithTimeout(csvUrl, 10000)
-    if (csvRes.ok) {
-      const text = await csvRes.text()
-      if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
-        const { headers, rows } = parseCSV(text)
-        return json({
-          headers,
-          rows,
-          sheetNames: [sheetName || 'Sheet1'],
-          selectedSheet: sheetName || 'Sheet1',
-        })
-      }
-    }
-  } catch { /* fall through */ }
-
-  return json({
-    error: 'Could not access the Google Sheet from the browser.',
-    message:
-      'To import this sheet, either: (1) Publish it to the web (File → Share → Publish to web), ' +
-      'or (2) Set sharing to "Anyone with the link can view", ' +
-      'or (3) Download as CSV and use the File Upload tab.',
-    serverlessMode: true,
-  }, 422)
+    const result = await Promise.race([
+      (async () => {
+        for (const s of strategies) {
+          try {
+            return await s
+          } catch (e) {
+            errors.push((e as Error).message)
+          }
+        }
+        throw new Error(errors.join('; ') || 'All strategies failed')
+      })(),
+      deadline,
+    ])
+    return result as ReturnType<typeof json>
+  } catch {
+    return json({
+      error: 'Could not access the Google Sheet from the browser.',
+      message:
+        'To import this sheet, either: (1) Publish it to the web (File → Share → Publish to web), ' +
+        'or (2) Set sharing to "Anyone with the link can view", ' +
+        'or (3) Download as CSV and use the File Upload tab.',
+      serverlessMode: true,
+    }, 422)
+  }
 }
 
 export async function importExecute(body: unknown): Promise<Response> {
