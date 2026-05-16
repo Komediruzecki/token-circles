@@ -37,7 +37,7 @@ import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
-import { getLocalCurrency } from '../core/api'
+import { api, getLocalCurrency } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
@@ -154,7 +154,20 @@ export default function Budgets() {
     'December',
   ]
   const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
+  const [availableYears, setAvailableYears] = createSignal<number[]>([
+    currentYear - 1,
+    currentYear,
+    currentYear + 1,
+  ])
+
+  const loadYearRange = async () => {
+    try {
+      const { minYear, maxYear } = await api.getTransactionYears()
+      const years: number[] = []
+      for (let y = maxYear; y >= minYear; y--) years.push(y)
+      setAvailableYears(years)
+    } catch { /* keep defaults */ }
+  }
 
   const currentMonthNum = () => parseInt(month().split('-')[1])
   const currentYearNum = () => parseInt(month().split('-')[0])
@@ -473,6 +486,7 @@ export default function Budgets() {
   onMount(() => {
     loadImprovements()
     loadCategories()
+    loadYearRange()
   })
 
   // Reload when profile selection changes
@@ -481,6 +495,7 @@ export default function Budgets() {
     loadImprovements()
     loadCategories()
     loadData()
+    loadYearRange()
   })
 
   // Load data when month changes
@@ -557,7 +572,7 @@ export default function Budgets() {
               </button>
               {showYearPicker() && (
                 <div class={styles.dropdown}>
-                  {years.map((y) => (
+                  {availableYears().map((y) => (
                     <button
                       class={styles.dropdownItem}
                       classList={{ [styles.selected]: y === currentYearNum() }}

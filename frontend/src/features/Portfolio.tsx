@@ -3,13 +3,15 @@
  * Tracks stock/ETF holdings with real-time prices and gain/loss
  */
 
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import styles from '../components/PortfolioPage.module.css'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
 
 export default function Portfolio() {
+  const state = useAppState()
   const [holdings, setHoldings] = createSignal<PortfolioHolding[]>([])
   const [summary, setSummary] = createSignal<PortfolioSummary | null>(null)
   const [loading, setLoading] = createSignal(true)
@@ -43,6 +45,7 @@ export default function Portfolio() {
   onMount(() => {
     loadData()
   })
+  createEffect(() => { void state.profileVersion; void loadData() })
 
   const openAddModal = () => {
     setEditingHolding(null)

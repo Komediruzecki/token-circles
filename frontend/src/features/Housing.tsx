@@ -26,11 +26,12 @@
  * Housing Component
  * Manages housing-related expenses and property information
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import styles from '../components/HousingPage.module.css'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
 
 interface Housing {
@@ -57,6 +58,7 @@ function getMonthlyAmount(h: Housing): number {
 }
 
 export default function HousingForm() {
+  const state = useAppState()
   const [housings, setHousings] = createSignal<Housing[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -183,6 +185,7 @@ export default function HousingForm() {
   onMount(() => {
     loadHousings()
   })
+  createEffect(() => { void state.profileVersion; void loadHousings() })
 
   return (
     <div class={`page page-housing page-enter ${styles.housingPage}`}>

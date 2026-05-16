@@ -2,9 +2,10 @@
  * Counterparties Page
  * Aggregates beneficiary/payor data to show "who owes who"
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import styles from '../components/CounterpartiesPage.module.css'
 import { formatCurrency } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { apiGet } from '../utils/api'
 
 interface Counterparty {
@@ -18,12 +19,13 @@ interface Counterparty {
 type SortField = 'name' | 'incoming' | 'outgoing' | 'net' | 'transaction_count'
 
 export default function Counterparties() {
+  const state = useAppState()
   const [counterparties, setCounterparties] = createSignal<Counterparty[]>([])
   const [loading, setLoading] = createSignal(true)
   const [sortField, setSortField] = createSignal<SortField>('net')
   const [sortAsc, setSortAsc] = createSignal(false)
 
-  onMount(async () => {
+  const loadData = async () => {
     try {
       const data = await apiGet<Counterparty[]>('/api/counterparties')
       if (Array.isArray(data)) {
@@ -34,7 +36,10 @@ export default function Counterparties() {
     } finally {
       setLoading(false)
     }
-  })
+  }
+
+  onMount(() => { void loadData() })
+  createEffect(() => { void state.profileVersion; void loadData() })
 
   const handleSort = (field: SortField) => {
     if (sortField() === field) {
