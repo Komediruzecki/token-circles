@@ -57,28 +57,27 @@ describe('localApiRouter - route matching', () => {
   })
 })
 
-describe('localApiRouter - stub handlers', () => {
-  it('stub GET returns empty array', async () => {
+describe('localApiRouter - category mappings', () => {
+  it('GET returns array', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/categories/mappings')
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(Array.isArray(data)).toBe(true)
-    expect(data.length).toBe(0)
   })
 
-  it('stub POST returns { id: 1 } with 201', async () => {
+  it('POST creates and returns mapping', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
-      body: JSON.stringify({ name: 'test' }),
+      body: JSON.stringify({ name: 'test', mapping: 'test-mapping' }),
     })
     expect(res.status).toBe(201)
     const data = await res.json()
-    expect(data.id).toBe(1)
+    expect(data.id).toBeDefined()
   })
 
-  it('stub DELETE returns { ok: true }', async () => {
+  it('DELETE returns ok', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/categories/mappings/1', { method: 'DELETE' })
     expect(res.status).toBe(200)
@@ -107,21 +106,23 @@ describe('localApiRouter - exchange rates stub', () => {
   })
 })
 
-describe('localApiRouter - loan calculate mock', () => {
-  it('returns empty amortization schedule', async () => {
+describe('localApiRouter - loan calculate', () => {
+  it('returns schedule for valid loan data', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/loans/1/calculate', { method: 'POST' })
+    const res = await routeApiRequest('http://localhost/api/loans/1/calculate', {
+      method: 'POST',
+      body: JSON.stringify({ principal: 10000, rate: 5, termMonths: 12 }),
+    })
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.schedule).toEqual([])
-    expect(data.summary.totalPaid).toBe(0)
+    expect(data.schedule).toBeDefined()
+    expect(data.summary).toBeDefined()
   })
 })
 
 describe('localApiRouter - path with params', () => {
   it('matches paths with numeric IDs', async () => {
     const { routeApiRequest } = await loadModule()
-    // Categories/mappings/:id with DELETE returns stub { ok: true }
     const res = await routeApiRequest('http://localhost/api/categories/mappings/42', { method: 'DELETE' })
     expect(res.status).toBe(200)
     const data = await res.json()
