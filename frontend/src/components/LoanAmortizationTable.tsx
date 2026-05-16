@@ -4,10 +4,9 @@
  */
 import { createEffect, createSignal, For, on, onMount } from 'solid-js'
 import Chart from '../components/Chart'
-import { api as _api, formatCurrency } from '../core/api'
+import { api as _api, apiPost, formatCurrency, showToast } from '../core/api'
 import { theme } from '../core/theme'
 import styles from '../features/LoansPage.module.css'
-import { apiPost, showToast } from '../utils/api'
 
 interface AmortizationRow {
   month: number

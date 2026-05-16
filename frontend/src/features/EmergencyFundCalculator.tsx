@@ -21,9 +21,8 @@
 import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ExportChartButton from '../components/ExportChartButton'
-import { formatCurrency } from '../core/api'
+import { apiGet, formatCurrency, showToast } from '../core/api'
 import { theme } from '../core/theme'
-import { apiGet, showToast } from '../utils/api'
 import sharedStyles from './CalculatorShared.module.css'
 import styles from './EmergencyFundCalculator.module.css'
 

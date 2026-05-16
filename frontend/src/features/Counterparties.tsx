@@ -4,8 +4,8 @@
  */
 import { createEffect, createSignal, For, onMount } from 'solid-js'
 import { formatCurrency } from '../core/api'
+import { apiGet } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { apiGet } from '../utils/api'
 import styles from './CounterpartiesPage.module.css'
 
 interface Counterparty {

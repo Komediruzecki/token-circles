@@ -34,8 +34,8 @@ import { createEffect, createSignal, For, onMount } from 'solid-js'
 import CategoryIcon from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 import styles from './CategoriesPage.module.css'
 
 interface Category {

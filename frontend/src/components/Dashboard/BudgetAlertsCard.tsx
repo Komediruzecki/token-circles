@@ -3,8 +3,7 @@
  * Shows budget alerts for the current period — fetches from API
  */
 import { createSignal, For, onMount } from 'solid-js'
-import { formatCurrency } from '../../core/api'
-import { apiGet } from '../../utils/api'
+import { apiGet, formatCurrency } from '../../core/api'
 import styles from './BudgetAlertsCard.module.css'
 
 interface BudgetAlert {

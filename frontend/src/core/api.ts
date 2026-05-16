@@ -1046,3 +1046,85 @@ export const toast = (
 ): void => {
   addToast(message, type)
 }
+
+// Re-export for backward compatibility — prefer toast() for new code
+export const showToast = toast
+
+// ── HTTP verb helpers ─────────────────────────────────────────────────────────
+
+function getProfileIdForHeaders(): string {
+  const id = localStorage.getItem('currentProfileId')
+  return (id !== null ? parseInt(id, 10) : 1).toString()
+}
+
+function getHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'X-Profile-Id': getProfileIdForHeaders(),
+  }
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type')
+  if (contentType !== null && contentType.includes('application/json')) {
+    const data = (await response.json()) as T
+    if (!response.ok) {
+      const errorData = data as { error?: string } | undefined
+      throw new Error(errorData?.error || `Request failed with status ${response.status}`)
+    }
+    return data
+  }
+  throw new Error('Invalid response format')
+}
+
+export async function apiGet<T = unknown>(url: string): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'GET',
+    headers: getHeaders(),
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}
+
+export async function apiPost<T = unknown>(
+  url: string,
+  body: unknown,
+  options?: RequestInit
+): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+    ...options,
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}
+
+export async function apiPut<T = unknown>(
+  url: string,
+  body: unknown,
+  options?: RequestInit
+): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+    ...options,
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}
+
+export async function apiDelete<T = unknown>(url: string): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'DELETE',
+    headers: { 'X-Profile-Id': getProfileIdForHeaders() },
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}

@@ -4,9 +4,8 @@
  */
 
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
-import { formatCurrency } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
 import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
 
