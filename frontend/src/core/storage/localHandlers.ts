@@ -3301,19 +3301,21 @@ function calculateRetirementProjection(
 
 // ── Receipts ────────────────────────────────────────────────────────────────
 
-function getProfileIdFromStorage(): number {
-  // Check selectedProfileIds first (what the dashboard uses for queries),
-  // so imported transactions land in the profile the user is actually viewing.
+function getProfileIdsFromStorage(): number[] {
   const selected = localStorage.getItem('selectedProfileIds')
   if (selected) {
     try {
       const ids = JSON.parse(selected) as number[]
-      if (Array.isArray(ids) && ids.length > 0) return ids[0]
+      if (Array.isArray(ids) && ids.length > 0) return ids
     } catch { /* ignore */ }
   }
-  // Fall back to currentProfileId for backward compatibility
   const stored = localStorage.getItem('currentProfileId')
-  return stored ? parseInt(stored, 10) : 1
+  return stored ? [parseInt(stored, 10)] : [1]
+}
+
+function getProfileIdFromStorage(): number {
+  const ids = getProfileIdsFromStorage()
+  return ids[0]
 }
 
 // ── Reports ─────────────────────────────────────────────────────────────────
@@ -4043,31 +4045,38 @@ export async function importBulk(body: unknown): Promise<Response> {
 export async function getCounterparties(): Promise<Response> {
   try {
     const db = await getDB()
-    const txs = await db.getAll('transactions')
+    const pids = getProfileIdsFromStorage()
+    const txs: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      txs.push(...(await db.getAllFromIndex('transactions', 'by_profile', pid)))
+    }
 
     const map = new Map<string, { incoming: number; outgoing: number; count: number }>()
 
     for (const tx of txs) {
-      if (tx.type === 'expense' && tx.beneficiary) {
-        const name = String(tx.beneficiary).trim()
-        if (!name) continue
-        const existing = map.get(name)
-        if (existing) {
-          existing.outgoing += tx.amount
-          existing.count++
-        } else {
-          map.set(name, { incoming: 0, outgoing: tx.amount, count: 1 })
+      const txAmount = typeof tx.amount === 'number' ? tx.amount : parseFloat(toStr(tx.amount)) || 0
+      if (tx.type === 'expense') {
+        const beneficiary = toStr(tx.beneficiary).trim() || toStr(tx.description).trim()
+        if (beneficiary) {
+          const existing = map.get(beneficiary)
+          if (existing) {
+            existing.outgoing += txAmount
+            existing.count++
+          } else {
+            map.set(beneficiary, { incoming: 0, outgoing: txAmount, count: 1 })
+          }
         }
       }
-      if (tx.type === 'income' && tx.payor) {
-        const name = String(tx.payor).trim()
-        if (!name) continue
-        const existing = map.get(name)
-        if (existing) {
-          existing.incoming += tx.amount
-          existing.count++
-        } else {
-          map.set(name, { incoming: tx.amount, outgoing: 0, count: 1 })
+      if (tx.type === 'income') {
+        const payor = toStr(tx.payor).trim() || toStr(tx.description).trim()
+        if (payor) {
+          const existing = map.get(payor)
+          if (existing) {
+            existing.incoming += txAmount
+            existing.count++
+          } else {
+            map.set(payor, { incoming: txAmount, outgoing: 0, count: 1 })
+          }
         }
       }
     }
@@ -4093,7 +4102,11 @@ export async function getCounterparties(): Promise<Response> {
 export async function portfolioHoldingsList(): Promise<Response> {
   try {
     const db = await getDB()
-    const holdings = await db.getAll('portfolioHoldings')
+    const pids = getProfileIdsFromStorage()
+    const holdings: Record<string, unknown>[] = []
+    for (const pid of pids) {
+      holdings.push(...(await db.getAllFromIndex('portfolioHoldings', 'by_profile', pid)))
+    }
     const result = holdings.map((h: any) => ({
       ...h,
       currentPrice: h.purchase_price,
