@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [loading, setLoading] = createSignal(true)
   const [pillPeriod, setPillPeriod] = createSignal('month')
   const [allTime, setAllTime] = createSignal(false)
+  const [dataMinYear, setDataMinYear] = createSignal<number | undefined>(undefined)
+  const [dataMaxYear, setDataMaxYear] = createSignal<number | undefined>(undefined)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(
     (() => {
@@ -93,12 +95,14 @@ export default function Dashboard() {
 
   onMount(() => {
     void loadMonthlyData()
+    void loadYearRange()
   })
 
   // Reload when profile selection changes
   createEffect(() => {
     void state.profileVersion
     void loadMonthlyData()
+    void loadYearRange()
   })
 
   createEffect(() => {
@@ -121,6 +125,14 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadYearRange = async () => {
+    try {
+      const { minYear, maxYear } = await api.getTransactionYears()
+      setDataMinYear(minYear)
+      setDataMaxYear(maxYear)
+    } catch { /* keep defaults */ }
   }
 
   const loadMonthlyData = async (dateFrom?: string, dateTo?: string) => {
@@ -252,6 +264,8 @@ export default function Dashboard() {
           <PeriodNavigator
             month={month}
             year={year}
+            minYear={dataMinYear()}
+            maxYear={dataMaxYear()}
             onMonthChange={(m) => { setMonth(m); setAllTime(false) }}
             onYearChange={(y) => { setYear(y); setAllTime(false) }}
             onPrev={() => {

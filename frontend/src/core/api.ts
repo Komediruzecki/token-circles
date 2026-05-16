@@ -685,6 +685,19 @@ export class ApiClient {
   // ============ ANALYTICS & DASHBOARD ============
 
   /**
+   * Get min/max transaction years for the selected profiles.
+   * Uses the analytics distinct-years endpoint.
+   */
+  async getTransactionYears(): Promise<{ minYear: number; maxYear: number }> {
+    const res = await this.request<{ years: number[] }>('/analytics/distinct-years')
+    const years = res.years || []
+    return {
+      minYear: years.length > 0 ? Math.min(...years) : new Date().getFullYear(),
+      maxYear: years.length > 0 ? Math.max(...years) : new Date().getFullYear(),
+    }
+  }
+
+  /**
    * Get dashboard metrics
    */
   async getDashboard(

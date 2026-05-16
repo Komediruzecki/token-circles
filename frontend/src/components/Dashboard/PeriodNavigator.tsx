@@ -12,6 +12,8 @@ export interface PeriodNavigatorProps {
   onYearChange: (newYear: number) => void
   onPrev: () => void
   onNext: () => void
+  minYear?: number
+  maxYear?: number
 }
 
 const MONTHS = [
@@ -33,7 +35,9 @@ export function PeriodNavigator(props: PeriodNavigatorProps) {
   const [showMonthPicker, setShowMonthPicker] = createSignal(false)
   const [showYearPicker, setShowYearPicker] = createSignal(false)
   const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
+  const startYear = props.minYear ?? currentYear - 10
+  const endYear = props.maxYear ?? currentYear + 10
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
 
   return (
     <div class={styles.periodNavigator}>

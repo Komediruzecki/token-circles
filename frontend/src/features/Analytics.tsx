@@ -32,7 +32,7 @@ import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
 import SankeyChart from '../components/SankeyChart'
-import { formatCurrency } from '../core/api'
+import { api, formatCurrency } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { apiGet, showToast } from '../utils/api'
@@ -100,11 +100,10 @@ export default function Analytics() {
   // Load available years from data
   const loadYears = async () => {
     try {
-      const res = await apiGet<{ years: number[] }>('/api/analytics/distinct-years')
-      const years = res.years || []
-      const currentYear = new Date().getFullYear()
-      if (!years.includes(currentYear)) years.unshift(currentYear)
-      setAvailableYears(years.sort((a: number, b: number) => b - a))
+      const { minYear, maxYear } = await api.getTransactionYears()
+      const years: number[] = []
+      for (let y = maxYear; y >= minYear; y--) years.push(y)
+      setAvailableYears(years)
     } catch (_e) {
       // keep default
     }
