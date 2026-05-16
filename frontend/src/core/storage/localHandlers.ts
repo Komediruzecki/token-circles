@@ -3747,33 +3747,24 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return { headers: rows[0] || [], rows: rows.slice(1).filter((r) => r.some((c) => c)) }
   }
 
-  // Strategy 0: CORS proxy (works around browser CORS restrictions)
-  try {
-    const rawUrl = gid
-      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
-      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`
-    const proxyRes = await fetch(proxyUrl)
-    if (proxyRes.ok) {
-      const text = await proxyRes.text()
-      if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html') && text.trim()) {
-        const { headers, rows } = parseCSV(text)
-        return json({
-          headers,
-          rows,
-          sheetNames: [sheetName || 'Sheet1'],
-          selectedSheet: sheetName || 'Sheet1',
-        })
-      }
+  // Timeout wrapper for fetch — avoids hanging on slow/unreachable URLs
+  const fetchWithTimeout = async (url: string, ms: number) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => { controller.abort() }, ms)
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      return res
+    } finally {
+      clearTimeout(timer)
     }
-  } catch { /* fall through */ }
+  }
 
   // Strategy 1: Published CSV (requires sheet to be published to web)
   try {
     const pubUrl = gid
       ? `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv&gid=${gid}`
       : `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv`
-    const pubRes = await fetch(pubUrl)
+    const pubRes = await fetchWithTimeout(pubUrl, 10000)
     if (pubRes.ok) {
       const text = await pubRes.text()
       if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
@@ -3791,7 +3782,7 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   // Strategy 2: Google Visualization API (CORS-friendly, works for link-shared sheets)
   try {
     const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}${sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : ''}`
-    const gvizRes = await fetch(gvizUrl)
+    const gvizRes = await fetchWithTimeout(gvizUrl, 10000)
     if (gvizRes.ok) {
       const gvizText = await gvizRes.text()
       // Strip Google's response wrapper: "/*O_o*/ google.visualization.Query.setResponse({...});"
@@ -3826,7 +3817,7 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     const csvUrl = gid
       ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
       : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
-    const csvRes = await fetch(csvUrl)
+    const csvRes = await fetchWithTimeout(csvUrl, 10000)
     if (csvRes.ok) {
       const text = await csvRes.text()
       if (!text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
