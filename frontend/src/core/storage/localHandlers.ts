@@ -2834,9 +2834,19 @@ function toStr(v: unknown): string {
 }
 
 /** Normalize a date value to yyyy-mm-dd format.
- *  Handles: dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, yyyy/mm/dd, mm/dd/yyyy, Excel serial numbers */
+ *  Handles: Google Viz Date(Y,M,D), dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, yyyy/mm/dd, Excel serial numbers */
 function normalizeDate(v: unknown): string {
   if (v === null || v === undefined) return ''
+  // Google Visualization API date: Date(2026,3,9) — month is 0-indexed
+  const gvizMatch = toStr(v).match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/)
+  if (gvizMatch) {
+    const y = parseInt(gvizMatch[1])
+    const m = parseInt(gvizMatch[2]) + 1 // 0-indexed → 1-indexed
+    const d = parseInt(gvizMatch[3])
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+  }
   // Excel serial date (days since 1900-01-01, with the 1900 leap year bug)
   if (typeof v === 'number' && v > 1 && v < 200000) {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000))
@@ -2856,11 +2866,9 @@ function normalizeDate(v: unknown): string {
   const dmy = s.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
   if (dmy) {
     const d = parseInt(dmy[1]), m = parseInt(dmy[2]), y = parseInt(dmy[3])
-    // Heuristic: if first part > 12, it's probably dd/mm not mm/dd
     if (d > 12 && m <= 12) {
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }
-    // If both <= 12, assume dd/mm/yyyy (European format, most common for this app)
     if (d <= 31 && m <= 12) {
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }

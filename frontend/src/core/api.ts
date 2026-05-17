@@ -1030,7 +1030,22 @@ export const formatCurrency = (amount: number, currency: Models.Currency = 'EUR'
 }
 
 export const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr)
+  let date = new Date(dateStr)
+  // Handle Google Viz Date(Y,M,D) format where month is 0-indexed
+  if (isNaN(date.getTime())) {
+    const m = dateStr.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/)
+    if (m) {
+      date = new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]))
+    }
+  }
+  // Handle dd/mm/yyyy
+  if (isNaN(date.getTime())) {
+    const m = dateStr.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
+    if (m) {
+      date = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]))
+    }
+  }
+  if (isNaN(date.getTime())) return dateStr
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
