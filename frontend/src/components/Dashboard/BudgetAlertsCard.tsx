@@ -7,12 +7,13 @@ import { apiGet, formatCurrency } from '../../core/api'
 import styles from './BudgetAlertsCard.module.css'
 
 interface BudgetAlert {
-  category_name: string
-  category_color: string
-  budgeted: number
+  categoryName: string
+  categoryColor: string
+  categoryIcon?: string
+  budgetAmount: number
   spent: number
   remaining: number
-  percent: number
+  percentage: number
   status: 'over' | 'warning' | 'ok'
 }
 
@@ -22,9 +23,9 @@ export default function BudgetAlertsCard() {
 
   onMount(async () => {
     try {
-      const data = (await apiGet<any[]>('/api/budgets/alerts?threshold=80')) as any
-      if (Array.isArray(data)) {
-        setAlerts(data)
+      const data = (await apiGet<{ alerts: BudgetAlert[] }>('/api/budgets/alerts?threshold=80')) as any
+      if (data?.alerts && Array.isArray(data.alerts)) {
+        setAlerts(data.alerts)
       }
     } catch {
       // keep defaults
@@ -66,12 +67,12 @@ export default function BudgetAlertsCard() {
             <div class={`${styles.alertItem} ${statusClass(alert.status)}`}>
               <span
                 class={styles.alertDot}
-                style={{ 'background-color': `#${alert.category_color || 'ef4444'}` }}
+                style={{ 'background-color': `#${alert.categoryColor || 'ef4444'}` }}
               />
               <div class={styles.alertContent}>
-                <div class={styles.alertTitle}>{alert.category_name}</div>
+                <div class={styles.alertTitle}>{alert.categoryName}</div>
                 <div class={styles.alertDescription}>
-                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgeted)} ({alert.percent}
+                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgetAmount)} ({alert.percentage}
                   %)
                 </div>
               </div>

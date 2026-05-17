@@ -1576,10 +1576,13 @@ export async function dashboardNetWorth(): Promise<Response> {
 export async function analyticsDistinctYears(): Promise<Response> {
   try {
     const allTxns = await adapter.listTransactions()
-    const years = [...new Set(allTxns.map((t) => parseInt(t.date.substring(0, 4))))].sort(
-      (a, b) => b - a
-    )
     const currentYear = new Date().getFullYear()
+    const yearsSet = new Set<number>()
+    for (const t of allTxns) {
+      const y = parseInt(t.date.substring(0, 4))
+      if (!isNaN(y) && y >= 1900 && y <= 2100) yearsSet.add(y)
+    }
+    const years = [...yearsSet].sort((a, b) => b - a)
     if (years.length === 0) years.push(currentYear)
     if (!years.includes(currentYear)) years.unshift(currentYear)
     return json({ years })
@@ -2830,6 +2833,47 @@ function toStr(v: unknown): string {
   return String(v)
 }
 
+/** Normalize a date value to yyyy-mm-dd format.
+ *  Handles: dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, yyyy/mm/dd, mm/dd/yyyy, Excel serial numbers */
+function normalizeDate(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  // Excel serial date (days since 1900-01-01, with the 1900 leap year bug)
+  if (typeof v === 'number' && v > 1 && v < 200000) {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000))
+    if (isNaN(d.getTime())) return ''
+    return d.toISOString().slice(0, 10)
+  }
+  const s = toStr(v).trim()
+  if (!s) return ''
+  // Already yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  // yyyy/mm/dd
+  const slashYmd = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+  if (slashYmd) {
+    return `${slashYmd[1]}-${slashYmd[2].padStart(2, '0')}-${slashYmd[3].padStart(2, '0')}`
+  }
+  // dd/mm/yyyy or dd-mm-yyyy
+  const dmy = s.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
+  if (dmy) {
+    const d = parseInt(dmy[1]), m = parseInt(dmy[2]), y = parseInt(dmy[3])
+    // Heuristic: if first part > 12, it's probably dd/mm not mm/dd
+    if (d > 12 && m <= 12) {
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+    // If both <= 12, assume dd/mm/yyyy (European format, most common for this app)
+    if (d <= 31 && m <= 12) {
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+    return ''
+  }
+  // Try native Date parse as fallback
+  const dt = new Date(s)
+  if (!isNaN(dt.getTime())) {
+    return dt.toISOString().slice(0, 10)
+  }
+  return ''
+}
+
 interface ImportSession {
   workbook: WorkBook
   uploadedAt: number
@@ -2849,7 +2893,7 @@ async function parseSheetData(workbook: WorkBook) {
     for (const [key, value] of Object.entries(row)) {
       const lk = key.toLowerCase().trim()
       if (lk === 'date' || lk === 'datum') {
-        cleaned.date = value
+        cleaned.date = normalizeDate(value) || value
       } else if (lk === 'description' || lk === 'desc') {
         cleaned.description = value
       } else if (lk === 'amount' || lk === 'bedrag') {
@@ -2885,7 +2929,7 @@ async function detectDuplicates(
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
-    const date = toStr(row.date)
+    const date = normalizeDate(row.date) || toStr(row.date)
     const desc = toStr(row.description).toLowerCase().trim()
     const amount = parseFloat(toStr(row.amount) || '0')
 
@@ -3013,6 +3057,24 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     throw new Error('Parse returned empty')
   }
 
+  /** Strip trailing columns that are both empty-headed and empty-bodied */
+  const cleanColumns = (headers: string[], rows: string[][]): { headers: string[]; rows: string[][] } => {
+    // Find last column with a meaningful header or data
+    let lastUsed = -1
+    for (let c = 0; c < headers.length; c++) {
+      const hasHeader = headers[c] && !/^[A-Z]{1,2}$/.test(headers[c])
+      const hasData = rows.some((r) => r[c] && r[c].trim())
+      if (hasHeader || hasData) lastUsed = c
+    }
+    if (lastUsed >= 0 && lastUsed < headers.length - 1) {
+      return {
+        headers: headers.slice(0, lastUsed + 1),
+        rows: rows.map((r) => r.slice(0, lastUsed + 1)),
+      }
+    }
+    return { headers, rows }
+  }
+
   // Strategy 0: CORS proxy (required for browser — Google doesn't set CORS headers)
   const rawUrl = gid
     ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
@@ -3020,7 +3082,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`
   const strategy0 = tryStrategy(proxyUrl, (text) => {
     const { headers, rows } = parseCSV(text)
-    return json({ headers, rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    const cleaned = cleanColumns(headers, rows)
+    return json({ headers: cleaned.headers, rows: cleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
   })
 
   // Strategy 1: Published CSV
@@ -3029,7 +3092,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     : `https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv`
   const strategy1 = tryStrategy(pubUrl, (text) => {
     const { headers, rows } = parseCSV(text)
-    return json({ headers, rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    const cleaned = cleanColumns(headers, rows)
+    return json({ headers: cleaned.headers, rows: cleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
   })
 
   // Strategy 2: Google Visualization API
@@ -3041,9 +3105,14 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
       .replace(/\);?\s*$/, '')
     const parsed = JSON.parse(jsonStr)
     if (!parsed.table) return null
-    const cols = parsed.table.cols.map((c: Record<string, unknown>) =>
-      (c.label as string) || (c.id as string) || ''
-    )
+    const rawCols = parsed.table.cols.map((c: Record<string, unknown>) => {
+      const label = (c.label as string) || ''
+      const id = (c.id as string) || ''
+      // Google Viz uses Excel-style column letters (A, B, ..., L, M, ...) as id
+      // If label is empty and id is a single/double uppercase letter, treat as empty header
+      if (!label && /^[A-Z]{1,2}$/.test(id)) return ''
+      return label || id
+    })
     const dataRows = (parsed.table.rows || []).map((r: Record<string, unknown>) =>
       (r.c as Array<{ v: unknown }>).map((cell) => {
         const v = cell?.v
@@ -3051,7 +3120,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
         return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : JSON.stringify(v)
       })
     )
-    return json({ headers: cols, rows: dataRows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    const gvizCleaned = cleanColumns(rawCols, dataRows)
+    return json({ headers: gvizCleaned.headers, rows: gvizCleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
   })
 
   // Strategy 3: CSV export (rarely works from browser, but try)
@@ -3060,7 +3130,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
   const strategy3 = tryStrategy(csvUrl, (text) => {
     const { headers, rows } = parseCSV(text)
-    return json({ headers, rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    const cleaned = cleanColumns(headers, rows)
+    return json({ headers: cleaned.headers, rows: cleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
   })
 
   // Race all strategies against each other and a hard deadline
@@ -3167,7 +3238,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     for (let i = 0; i < clean.length; i++) {
       const row = clean[i]
       const description = toStr(row.description)
-      const date = toStr(row.date)
+      const date = normalizeDate(row.date) || toStr(row.date)
       const amount = parseFloat(toStr(row.amount) || '0')
       // Determine transaction type: use type column > categoryTypes > amount sign
       let type = 'expense'
