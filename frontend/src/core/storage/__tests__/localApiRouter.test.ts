@@ -86,23 +86,27 @@ describe('localApiRouter - category mappings', () => {
   })
 })
 
-describe('localApiRouter - exchange rates stub', () => {
-  it('returns mock exchange rates', async () => {
+describe('localApiRouter - exchange rates', () => {
+  it('returns exchange rates with expected structure', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/exchange-rates')
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.rates.USD).toBe(1.08)
-    expect(data.rates.GBP).toBe(0.85)
-    expect(data.rates.JPY).toBe(156.0)
+    expect(data.base).toBe('EUR')
+    expect(data.rates).toBeTypeOf('object')
+    expect(data.rates.EUR).toBe(1)
+    expect(typeof data.cached).toBe('boolean')
   })
 
-  it('returns single rate for pair', async () => {
+  it('returns single rate for currency pair', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/exchange-rates/EUR/USD')
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.rate).toBe(1.08)
+    expect(data.base).toBe('EUR')
+    expect(data.target).toBe('USD')
+    expect(typeof data.rate).toBe('number')
+    expect(data.rate).toBeGreaterThan(0)
   })
 })
 

@@ -774,6 +774,45 @@ export async function housingDelete(params: Record<string, string>): Promise<Res
   return ok()
 }
 
+export async function housingCalculate(body: unknown): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  const b = body as Record<string, unknown>
+  const grossIncome = parseFloat(String((b.gross_income as string | number) || 0))
+  const livingExpenses = parseFloat(String((b.living_expenses as string | number) || 0))
+  const transportCost = parseFloat(String((b.transport_cost as string | number) || 0))
+  const utilitiesCost = parseFloat(String((b.utilities_cost as string | number) || 0))
+  const savingsTarget = parseFloat(String((b.savings_target as string | number) || 0))
+
+  // Standard 30% rule: housing should not exceed 30% of gross income
+  const affordableRent = Math.round(grossIncome * 0.30 * 100) / 100
+  const totalNonHousingExpenses = livingExpenses + transportCost + utilitiesCost + savingsTarget
+  const maxAvailable = Math.max(0, grossIncome - totalNonHousingExpenses)
+  const recommendedRent = Math.round(Math.min(affordableRent, maxAvailable) * 100) / 100
+  const housingRatio = grossIncome > 0 ? Math.round((recommendedRent / grossIncome) * 10000) / 100 : 0
+
+  const total = grossIncome
+  const breakdown = [
+    { name: 'Housing (recommended)', amount: recommendedRent, percentage: total > 0 ? Math.round((recommendedRent / total) * 10000) / 100 : 0 },
+    { name: 'Living Expenses', amount: livingExpenses, percentage: total > 0 ? Math.round((livingExpenses / total) * 10000) / 100 : 0 },
+    { name: 'Transport', amount: transportCost, percentage: total > 0 ? Math.round((transportCost / total) * 10000) / 100 : 0 },
+    { name: 'Utilities', amount: utilitiesCost, percentage: total > 0 ? Math.round((utilitiesCost / total) * 10000) / 100 : 0 },
+    { name: 'Savings', amount: savingsTarget, percentage: total > 0 ? Math.round((savingsTarget / total) * 10000) / 100 : 0 },
+    { name: 'Remaining', amount: Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent), percentage: total > 0 ? Math.round((Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent) / total) * 10000) / 100 : 0 },
+  ]
+
+  return json({
+    grossIncome,
+    livingExpenses,
+    transportCost,
+    utilitiesCost,
+    savingsTarget,
+    housingRatio,
+    affordableRent,
+    recommendedRent,
+    monthlySpendingBreakdown: breakdown,
+  })
+}
+
 // ── Bills ────────────────────────────────────────────────────────────────────
 
 // Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
@@ -1016,6 +1055,41 @@ export async function tagsGetTransactions(params: Record<string, string>): Promi
   return json(filtered)
 }
 
+export async function tagsUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+  const db = await getDB()
+  const tag = await db.get('tags', idParam(params))
+  if (!tag) return notFound('Tag')
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>
+    if (b.name !== undefined) tag.name = (b.name as string).trim()
+    if (b.color !== undefined) tag.color = b.color as string
+  }
+  await db.put('tags', tag)
+  return json(tag)
+}
+
+export async function tagsDelete(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  const tag = await db.get('tags', idParam(params))
+  if (!tag) return notFound('Tag')
+  // Remove tag from all transactions that reference it
+  const pids = adapter.getCurrentProfileIds()
+  for (const pid of pids) {
+    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
+    for (const t of txns) {
+      const tagIds = (t.tag_ids as number[]) || []
+      const idx = tagIds.indexOf(idParam(params))
+      if (idx !== -1) {
+        tagIds.splice(idx, 1)
+        t.tag_ids = tagIds
+        await db.put('transactions', t)
+      }
+    }
+  }
+  await db.delete('tags', idParam(params))
+  return ok()
+}
+
 // ── Recurring ───────────────────────────────────────────────────────────────
 
 export async function recurringList(): Promise<Response> {
@@ -1031,6 +1105,13 @@ export async function recurringList(): Promise<Response> {
   } catch {
     return json([])
   }
+}
+
+export async function recurringGet(params: Record<string, string>): Promise<Response> {
+  const db = await getDB()
+  const item = await db.get('recurring', idParam(params))
+  if (!item) return notFound('Recurring transaction')
+  return json(item)
 }
 
 export async function recurringCreate(body: unknown): Promise<Response> {
@@ -2503,6 +2584,117 @@ export async function reportHandler(ctx: {
     return json({ error: 'Unknown report type' }, 400)
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
+  }
+}
+
+export async function reportsCustom(body: unknown): Promise<Response> {
+  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  const b = body as Record<string, unknown>
+  const name = (typeof b.name === 'string' ? b.name.trim() : '') || 'Custom Report'
+  const reportType = (b.type as string) || 'custom'
+  const dateFrom = b.date_from as string | undefined
+  const dateTo = b.date_to as string | undefined
+  const categoryId = b.category_id as number | undefined
+
+  const db = await getDB()
+  const pids = adapter.getCurrentProfileIds()
+  const txns: Record<string, unknown>[] = []
+  for (const pid of pids) {
+    txns.push(...(await db.getAllFromIndex('transactions', 'by_profile', pid)))
+  }
+
+  let filtered = txns
+  if (dateFrom) filtered = filtered.filter((t) => (t.date as string) >= dateFrom)
+  if (dateTo) filtered = filtered.filter((t) => (t.date as string) <= dateTo)
+  if (categoryId) filtered = filtered.filter((t) => t.category_id === categoryId)
+
+  const totalIncome = filtered.filter((t) => t.type === 'income').reduce((s, t) => s + (t.amount as number), 0)
+  const totalExpenses = filtered.filter((t) => t.type === 'expense').reduce((s, t) => s + (t.amount as number), 0)
+  const netTotal = totalIncome - totalExpenses
+
+  const byCategory: Record<string, { count: number; total: number }> = {}
+  for (const t of filtered) {
+    const catName = (t.category_name as string) || 'Uncategorized'
+    if (!byCategory[catName]) byCategory[catName] = { count: 0, total: 0 }
+    byCategory[catName].count++
+    byCategory[catName].total += t.amount as number
+  }
+
+  return json({
+    reportId: Date.now(),
+    name,
+    type: reportType,
+    createdAt: new Date().toISOString(),
+    summary: {
+      totalIncome,
+      totalExpenses,
+      netTotal,
+      transactionCount: filtered.length,
+    },
+    byCategory,
+  })
+}
+
+// ── Exchange Rates ──────────────────────────────────────────────────────────
+
+const EXCHANGE_RATES_CACHE_KEY = 'exchange_rates_cache'
+const EXCHANGE_RATES_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
+async function fetchExchangeRates(base: string): Promise<{ rates: Record<string, number>; cached: boolean }> {
+  const db = await getDB()
+  try {
+    const cached = await db.get('settings', EXCHANGE_RATES_CACHE_KEY)
+    if (cached) {
+      const data = JSON.parse(cached.value as string)
+      if (data.base === base && Date.now() - data.ts < EXCHANGE_RATES_CACHE_TTL) {
+        return { rates: data.rates, cached: true }
+      }
+    }
+  } catch { /* not cached */ }
+
+  const url = `https://open.er-api.com/v6/latest/${encodeURIComponent(base)}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = await res.json()
+  if (!data || !data.rates) throw new Error('Invalid response from exchange rate API')
+
+  await db.put('settings', {
+    key: EXCHANGE_RATES_CACHE_KEY,
+    value: JSON.stringify({ ts: Date.now(), base, rates: data.rates }),
+  })
+
+  return { rates: data.rates as Record<string, number>, cached: false }
+}
+
+export async function exchangeRates(query: URLSearchParams): Promise<Response> {
+  try {
+    const base = query.get('base') || 'EUR'
+    const symbols = query.get('symbols')
+    const { rates, cached } = await fetchExchangeRates(base)
+    let result = rates
+    if (symbols) {
+      const symbolList = symbols.split(',').map((s) => s.trim().toUpperCase())
+      result = {}
+      for (const sym of symbolList) {
+        if (rates[sym] !== undefined) result[sym] = rates[sym]
+      }
+    }
+    return json({ base, rates: result, cached })
+  } catch (err) {
+    return json({ error: (err as Error).message || 'Failed to fetch exchange rates' }, 502)
+  }
+}
+
+export async function exchangeRateSingle(params: Record<string, string>): Promise<Response> {
+  try {
+    const base = params.p1?.toUpperCase() || 'EUR'
+    const target = params.p2?.toUpperCase() || 'USD'
+    const { rates } = await fetchExchangeRates(base)
+    const rate = rates[target]
+    if (rate === undefined) return json({ error: `Rate not found for ${target}` }, 404)
+    return json({ base, target, rate })
+  } catch (err) {
+    return json({ error: (err as Error).message || 'Failed to fetch exchange rate' }, 502)
   }
 }
 

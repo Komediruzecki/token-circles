@@ -37,24 +37,6 @@ function notFound(path: string): Response {
   return json({ error: `Not found: ${path}` }, 404)
 }
 
-function exchangeRatesStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json({ rates: { EUR: 1, USD: 1.08, GBP: 0.85, JPY: 156.0 } })),
-  })
-}
-
-function singleExchangeRateStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json({ rate: 1.08 })),
-  })
-}
-
-function reportsCustomStub(): Handler {
-  return dispatch({
-    POST: () => Promise.resolve(json({ report_url: '', generated: false })),
-  })
-}
-
 // ── Dispatcher helper ────────────────────────────────────────────────────────
 
 /** Create a handler that dispatches based on HTTP method to named handlers */
@@ -264,11 +246,6 @@ const routes: RouteDef[] = [
     pattern: /^\/transactions\/export$/,
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.transactionsExport(ctx.query) }),
-  },
-  {
-    pattern: /^\/transactions\/summary$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: () => h.transactionsSummary() }),
   },
 
   // ── Categories ──
@@ -618,6 +595,14 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.tagsGetTransactions(ctx.params) }),
   },
+  {
+    pattern: /^\/tags\/(\d+)$/,
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.tagsUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.tagsDelete(ctx.params),
+    }),
+  },
 
   // Recurring
   {
@@ -632,7 +617,7 @@ const routes: RouteDef[] = [
     pattern: /^\/recurring\/(\d+)$/,
     methods: ['GET', 'PUT', 'DELETE'],
     handler: dispatch({
-      GET: () => h.recurringList(),
+      GET: (ctx) => h.recurringGet(ctx.params),
       PUT: (ctx) => h.recurringUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.recurringDelete(ctx.params),
     }),
@@ -711,12 +696,16 @@ const routes: RouteDef[] = [
     handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }),
   },
 
-  // Exchange rates (client-only: returns mock rates)
-  { pattern: /^\/exchange-rates$/, methods: ['GET'], handler: exchangeRatesStub() },
+  // Exchange rates (cached from open.er-api.com)
+  {
+    pattern: /^\/exchange-rates$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.exchangeRates(ctx.query) }),
+  },
   {
     pattern: /^\/exchange-rates\/([A-Z]{3})\/([A-Z]{3})$/,
     methods: ['GET'],
-    handler: singleExchangeRateStub(),
+    handler: dispatch({ GET: (ctx) => h.exchangeRateSingle(ctx.params) }),
   },
 
   // Calculators (LS10)
@@ -767,7 +756,7 @@ const routes: RouteDef[] = [
     pattern: /^\/housing\/calculate$/,
     methods: ['POST'],
     handler: dispatch({
-      POST: () => Promise.resolve(json({ affordable: true, max_price: 300000, monthly_payment: 1200 })),
+      POST: (ctx) => h.housingCalculate(ctx.body),
     }),
   },
   {
@@ -793,7 +782,11 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.reportHandler(ctx) }),
   },
-  { pattern: /^\/reports\/custom$/, methods: ['POST'], handler: reportsCustomStub() },
+  {
+    pattern: /^\/reports\/custom$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.reportsCustom(ctx.body) }),
+  },
 
   // Stats
   { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.statsMonthly(ctx.query) }) },
