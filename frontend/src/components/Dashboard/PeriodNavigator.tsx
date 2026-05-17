@@ -14,6 +14,8 @@ export interface PeriodNavigatorProps {
   onNext: () => void
   minYear?: number
   maxYear?: number
+  /** If provided, show only these exact years instead of a continuous range */
+  years?: number[]
 }
 
 const MONTHS = [
@@ -37,7 +39,7 @@ export function PeriodNavigator(props: PeriodNavigatorProps) {
   const currentYear = new Date().getFullYear()
   const startYear = props.minYear ?? currentYear - 10
   const endYear = props.maxYear ?? currentYear + 10
-  const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
+  const years = props.years ?? Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
 
   return (
     <div class={styles.periodNavigator}>

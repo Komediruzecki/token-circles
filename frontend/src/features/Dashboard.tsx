@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [allTime, setAllTime] = createSignal(false)
   const [dataMinYear, setDataMinYear] = createSignal<number | undefined>(undefined)
   const [dataMaxYear, setDataMaxYear] = createSignal<number | undefined>(undefined)
+  const [dataYears, setDataYears] = createSignal<number[] | undefined>(undefined)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(
     (() => {
@@ -129,9 +130,10 @@ export default function Dashboard() {
 
   const loadYearRange = async () => {
     try {
-      const { minYear, maxYear } = await api.getTransactionYears()
+      const { minYear, maxYear, years } = await api.getTransactionYears()
       setDataMinYear(minYear)
       setDataMaxYear(maxYear)
+      setDataYears(years.length > 0 ? years : undefined)
     } catch { /* keep defaults */ }
   }
 
@@ -266,6 +268,7 @@ export default function Dashboard() {
             year={year}
             minYear={dataMinYear()}
             maxYear={dataMaxYear()}
+            years={dataYears()}
             onMonthChange={(m) => { setMonth(m); setAllTime(false) }}
             onYearChange={(y) => { setYear(y); setAllTime(false) }}
             onPrev={() => {

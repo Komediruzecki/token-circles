@@ -162,10 +162,8 @@ export default function Budgets() {
 
   const loadYearRange = async () => {
     try {
-      const { minYear, maxYear } = await api.getTransactionYears()
-      const years: number[] = []
-      for (let y = maxYear; y >= minYear; y--) years.push(y)
-      setAvailableYears(years)
+      const { years } = await api.getTransactionYears()
+      if (years.length > 0) setAvailableYears([...years].sort((a, b) => b - a))
     } catch { /* keep defaults */ }
   }
 

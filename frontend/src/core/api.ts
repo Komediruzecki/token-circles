@@ -688,12 +688,13 @@ export class ApiClient {
    * Get min/max transaction years for the selected profiles.
    * Uses the analytics distinct-years endpoint.
    */
-  async getTransactionYears(): Promise<{ minYear: number; maxYear: number }> {
+  async getTransactionYears(): Promise<{ minYear: number; maxYear: number; years: number[] }> {
     const res = await this.request<{ years: number[] }>('/analytics/distinct-years')
     const years = res.years || []
     return {
       minYear: years.length > 0 ? Math.min(...years) : new Date().getFullYear(),
       maxYear: years.length > 0 ? Math.max(...years) : new Date().getFullYear(),
+      years,
     }
   }
 
