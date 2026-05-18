@@ -1312,8 +1312,8 @@ export async function deleteAllCategories(): Promise<Response> {
 }
 
 export async function reseedDemoData(): Promise<Response> {
-  await adapter.clearAllData()
-  localStorage.removeItem('finance_had_profiles')
+  // Only seeds demo profiles if none exist — does NOT clear existing data.
+  // Use clearAll() for full data deletion.
   await seedDemoProfiles()
   return ok({ message: 'Demo data reseeded' })
 }
