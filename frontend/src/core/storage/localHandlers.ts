@@ -3373,7 +3373,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         type,
         description,
         date,
-        amount: type === 'income' ? Math.abs(amount) : -Math.abs(amount),
+        amount: Math.abs(amount),
         category_id: categoryId,
         notes: toStr(row.notes),
         beneficiary: toStr(row.beneficiary),
@@ -3383,7 +3383,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
 
       if (!dryRun) {
-        const id = await db.add('transactions', transaction)
+        const id = await adapter.createTransaction(transaction as any)
         imported.push(id as number)
       } else {
         imported.push(-1)
@@ -3412,7 +3412,6 @@ export async function importBulk(body: unknown): Promise<Response> {
     }
 
     const profileId = getProfileIdFromStorage()
-    const db = await getDB()
     const imported: number[] = []
 
     for (const item of items) {
@@ -3421,7 +3420,7 @@ export async function importBulk(body: unknown): Promise<Response> {
         type: toStr(item.type) || 'expense',
         description: toStr(item.description),
         date: toStr(item.date) || new Date().toISOString().slice(0, 10),
-        amount: Number(item.amount) || 0,
+        amount: Math.abs(Number(item.amount) || 0),
         category_id: item.category_id ? Number(item.category_id) : null,
         notes: toStr(item.notes),
         beneficiary: toStr(item.beneficiary),
@@ -3429,7 +3428,7 @@ export async function importBulk(body: unknown): Promise<Response> {
         account_id: item.account_id ? Number(item.account_id) : null,
         created_at: new Date().toISOString(),
       }
-      const id = await db.add('transactions', transaction)
+      const id = await adapter.createTransaction(transaction as any)
       imported.push(id as number)
     }
 
