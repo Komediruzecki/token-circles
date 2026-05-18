@@ -26,7 +26,7 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createSignal, For, onMount, untrack } from 'solid-js'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
@@ -391,8 +391,9 @@ export default function Analytics() {
   createEffect(() => {
     const year = stackedYear()
     const type = categoryType()
-    // Only refresh if data already exists — otherwise onMount handles it
-    if (data()) refreshData(year, type)
+    // Only refresh if data already exists — otherwise onMount handles it.
+    // Use untrack to avoid re-triggering this effect when setData writes back.
+    if (untrack(data)) refreshData(year, type)
   })
 
   // Silent refresh: update summary stats without showing loading spinner
@@ -428,7 +429,7 @@ export default function Analytics() {
       setData({
         byCategory,
         byMonth,
-        recentTransactions: data()?.recentTransactions || [],
+        recentTransactions: [],
         savingsRate:
           transactionsRes?.totalIncome > 0
             ? ((transactionsRes.totalIncome - transactionsRes.totalExpenses) /
