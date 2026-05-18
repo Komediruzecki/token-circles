@@ -3287,13 +3287,17 @@ export async function importExecute(body: unknown): Promise<Response> {
     }
     const { clean } = await detectDuplicates(rows)
 
-    // Auto-detect "IB" / "Interactive Brokers" categories as account type
+    // Auto-detect "IB" / "Interactive Brokers" categories as account type.
+    // Use case-insensitive check to avoid duplicates like "IB" + "ib".
     const ibPattern = /^(ib|interactive\s*brokers)$/i
     for (const row of clean) {
       const rawCat = toStr(row.category).trim()
       if (ibPattern.test(rawCat)) {
         const key = rawCat.toLowerCase()
-        if (!categoryTypes[key]) {
+        const exists = Object.keys(categoryTypes).some(
+          (k) => k.toLowerCase() === key
+        )
+        if (!exists) {
           categoryTypes[key] = 'account'
           accountTypes[key] = accountTypes[key] || 'ib'
         }
@@ -3311,15 +3315,21 @@ export async function importExecute(body: unknown): Promise<Response> {
     if (!dryRun) {
       // Check for existing accounts by name to avoid duplicates on re-import
       const existingAccounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
+      // Track created account names (lowercase) to prevent duplicates from
+      // case-variant keys like "IB" + "ib" both mapping to 'account'.
+      const createdAccountNames = new Set<string>()
       for (const [catName, catType] of Object.entries(categoryTypes)) {
         if (catType !== 'account') continue
         const catLower = catName.toLowerCase()
+        // Skip if already processed in this batch (case-insensitive duplicate)
+        if (createdAccountNames.has(catLower)) continue
         // Reuse existing account if already present
         const existing = existingAccounts.find(
           (a: Record<string, unknown>) => (a.name as string || '').toLowerCase() === catLower
         )
         if (existing) {
           accountIdMap.set(catName, existing.id as number)
+          createdAccountNames.add(catLower)
           continue
         }
         const accType = (accountTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib'
@@ -3336,11 +3346,13 @@ export async function importExecute(body: unknown): Promise<Response> {
         }
         const id = await db.add('accounts', account)
         accountIdMap.set(catName, id as number)
+        createdAccountNames.add(catLower)
       }
 
       // Also build account map from means_of_payment column values.
-      // When means_of_payment references an account (e.g. "Erste Current"),
-      // we link the transaction to that account so balances are updated.
+      // Only link to EXISTING accounts — do NOT auto-create new ones.
+      // Means of payment values may contain category names (e.g. "Salary Eur")
+      // that should not become accounts.
       const existingAccounts2 = await db.getAllFromIndex('accounts', 'by_profile', profileId)
       for (const row of clean) {
         const mop = toStr(row.means_of_payment).trim()
@@ -3352,19 +3364,8 @@ export async function importExecute(body: unknown): Promise<Response> {
         )
         if (existing) {
           mopAccountMap.set(mopLower, existing.id as number)
-          continue
         }
-        const account = {
-          name: mop,
-          type: 'giro',
-          balance: 0,
-          starting_balance: 0,
-          balance_date: new Date().toISOString().split('T')[0],
-          profile_id: profileId,
-          created_at: new Date().toISOString(),
-        }
-        const id = await db.add('accounts', account)
-        mopAccountMap.set(mopLower, id as number)
+        // Only link to accounts the user explicitly created — never auto-create.
       }
     }
 
