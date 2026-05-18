@@ -3275,6 +3275,16 @@ export async function importExecute(body: unknown): Promise<Response> {
     }
     const { clean } = await detectDuplicates(rows)
 
+    // Auto-detect "IB" / "Interactive Brokers" categories as account type
+    const ibPattern = /^(ib|interactive\s*brokers)$/i
+    for (const row of clean) {
+      const catName = toStr(row.category).trim()
+      if (ibPattern.test(catName) && !categoryTypes[catName]) {
+        categoryTypes[catName] = 'account'
+        accountTypes[catName] = accountTypes[catName] || 'ib'
+      }
+    }
+
     const profileId = getProfileIdFromStorage()
     const db = await getDB()
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
