@@ -3364,7 +3364,13 @@ export async function importExecute(body: unknown): Promise<Response> {
         let cat = categories.find((c) => c.name.toLowerCase().trim() === catName)
         // Auto-create category if not found
         if (!cat) {
-          const defaultColor = '#6366f1'
+          const palette = [
+            '#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6',
+            '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6', '#A855F7',
+            '#EC4899', '#F43F5E', '#D946EF', '#84CC16', '#10B981',
+            '#0EA5E9', '#2563EB', '#7C3AED', '#C026D3', '#E11D48',
+          ]
+          const defaultColor = palette[categories.length % palette.length]
           const id = await db.add('categories', {
             name: catName.charAt(0).toUpperCase() + catName.slice(1),
             type,
