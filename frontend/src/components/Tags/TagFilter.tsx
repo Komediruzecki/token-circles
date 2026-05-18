@@ -2,7 +2,7 @@
  * Tag Filter Component
  * Dropdown filter for filtering transactions by tags
  */
-import { createEffect, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
 import tagFilterStyles from './TagFilter.module.css'
 
 export interface TagFilterProps {
@@ -15,27 +15,23 @@ export interface TagFilterProps {
 export function TagFilter(props: TagFilterProps) {
   const [isOpen, setIsOpen] = createSignal(false)
   const [filterText, setFilterText] = createSignal('')
-  const tags = props.availableTags()
-  const tagsResult = props.selectedTags()
 
-  const selectedTags: Set<string> = (tagsResult as any)[0]
+  // Reactive: recompute when parent signals change (prevents frozen-at-mount values)
+  const tags = createMemo(() => props.availableTags())
+  const selectedTags = createMemo(() => props.selectedTags())
 
   const filteredTags = () => {
-    if (!filterText()) return tags
-    return tags.filter((tag) => tag.toLowerCase().includes(filterText().toLowerCase()))
+    if (!filterText()) return tags()
+    return tags().filter((tag) => tag.toLowerCase().includes(filterText().toLowerCase()))
   }
 
-  const selectedCount = () => {
-    return selectedTags.size
-  }
+  const selectedCount = () => selectedTags().size
 
   const allSelected = () => {
-    return selectedTags.size === tags.length && tags.length > 0
+    return selectedTags().size === tags().length && tags().length > 0
   }
 
-  const anySelected = () => {
-    return selectedTags.size > 0
-  }
+  const anySelected = () => selectedTags().size > 0
 
   createEffect(() => {
     if (!isOpen()) {
@@ -79,7 +75,7 @@ export function TagFilter(props: TagFilterProps) {
                   if (allSelected()) {
                     props.onClear()
                   } else {
-                    tags.forEach((tag) => {
+                    tags().forEach((tag) => {
                       props.onToggle(tag)
                     })
                   }
@@ -92,13 +88,13 @@ export function TagFilter(props: TagFilterProps) {
 
             <For each={filteredTags()}>
               {(tag) => {
-                const isSelected = () => selectedTags?.has(tag) ?? false
+                const isSelected = () => selectedTags()?.has(tag) ?? false
                 return (
                   <div class={tagFilterStyles.tagItem}>
                     <button
                       class={`${tagFilterStyles.tagCheckbox} ${isSelected() ? tagFilterStyles.selected : ''}`}
                       onClick={() => {
-                        if (selectedTags) props.onToggle(tag)
+                        if (selectedTags()) props.onToggle(tag)
                       }}
                       type="button"
                     >

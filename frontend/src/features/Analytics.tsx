@@ -26,7 +26,7 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createEffect, createSignal, For, onMount, untrack } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount, untrack } from 'solid-js'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
@@ -319,14 +319,14 @@ export default function Analytics() {
   }
 
   // Get total income
-  const totalIncome = () => {
+  const totalIncome = createMemo(() => {
     return data()?.byMonth.reduce((sum, m) => sum + m.income, 0) || 0
-  }
+  })
 
   // Get total expense
-  const totalExpense = () => {
+  const totalExpense = createMemo(() => {
     return data()?.byMonth.reduce((sum, m) => sum + m.expense, 0) || 0
-  }
+  })
 
   // Format currency
   const formatAmount = (amount: number): string => {

@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -257,10 +257,16 @@ export default function Transactions() {
     setSelectedCategories(filters.selectedCategories || [])
     setSelectedTags(filters.selectedTags || [])
     setCurrentPage(1)
-    if (filters.selectedPreset) {
-      applyDatePreset(filters.selectedPreset)
-    } else if (filters.dateRange) {
+    if (filters.dateRange) {
       setDateRange(filters.dateRange)
+    }
+    if (filters.selectedPreset) {
+      setSelectedPreset(filters.selectedPreset)
+      if (filters.selectedPreset !== 'custom' && filters.selectedPreset !== 'all') {
+        applyDatePreset(filters.selectedPreset)
+      } else if (filters.selectedPreset === 'all') {
+        setDateRange({ from: '', to: '' })
+      }
     }
   }
 
@@ -270,7 +276,7 @@ export default function Transactions() {
   }
 
   // Calculate filtered results
-  const filteredTransactions = () => {
+  const filteredTransactions = createMemo(() => {
     const allTransactions = transactions()
     const filtered = allTransactions.filter((tx) => {
       // Filter by type
@@ -364,24 +370,24 @@ export default function Transactions() {
     })
 
     return filtered
-  }
+  })
 
   // Get uncategorized transactions
-  const uncategorizedTransactions = () => {
+  const uncategorizedTransactions = createMemo(() => {
     const allTransactions = transactions()
     return allTransactions.filter((tx) => tx.category_id === undefined || tx.category_id === null)
-  }
+  })
 
   // Calculate paginated results
-  const paginatedTransactions = () => {
+  const paginatedTransactions = createMemo(() => {
     const filtered = filteredTransactions()
     const start = (currentPage() - 1) * itemsPerPage()
     return filtered.slice(start, start + itemsPerPage())
-  }
+  })
 
-  const totalPages = () => Math.ceil(filteredTransactions().length / itemsPerPage())
+  const totalPages = createMemo(() => Math.ceil(filteredTransactions().length / itemsPerPage()))
 
-  const reconciledCount = () => transactions().filter((t) => t.reconciled).length
+  const reconciledCount = createMemo(() => transactions().filter((t) => t.reconciled).length)
 
   // Auto-categorize handler
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
@@ -430,10 +436,7 @@ export default function Transactions() {
       case 'year':
         setDateRange({ from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })
         break
-      case 'custom':
-        break
     }
-    setSelectedPreset(preset)
     setCurrentPage(1)
   }
 

@@ -109,7 +109,8 @@ export default function Portfolio() {
   const refreshPrices = async () => {
     setPriceLoading(true)
     try {
-      const tickers = holdings().map((h) => h.ticker)
+      const currentHoldings = holdings()
+      const tickers = currentHoldings.map((h) => h.ticker)
       if (tickers.length > 0) {
         await apiPost('/api/portfolio/prices', { tickers })
       }

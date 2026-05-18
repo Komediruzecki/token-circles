@@ -26,7 +26,7 @@
  * Housing Component
  * Manages housing-related expenses and property information
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
@@ -132,9 +132,9 @@ export default function HousingForm() {
   }
 
   // Calculate total monthly housing cost
-  const totalMonthlyCost = () => {
+  const totalMonthlyCost = createMemo(() => {
     return housings().reduce((sum, h) => sum + getMonthlyAmount(h), 0)
-  }
+  })
 
   // Get type icon SVG
   const getTypeIcon = (type: string) => {

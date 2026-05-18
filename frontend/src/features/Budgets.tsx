@@ -153,11 +153,11 @@ export default function Budgets() {
     'November',
     'December',
   ]
-  const currentYear = new Date().getFullYear()
+  const currentYear = () => new Date().getFullYear()
   const [availableYears, setAvailableYears] = createSignal<number[]>([
-    currentYear - 1,
-    currentYear,
-    currentYear + 1,
+    currentYear() - 1,
+    currentYear(),
+    currentYear() + 1,
   ])
 
   const loadYearRange = async () => {

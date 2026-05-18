@@ -2,7 +2,7 @@
  * Counterparties Page
  * Aggregates beneficiary/payor data to show "who owes who"
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import { formatCurrency } from '../core/api'
 import { apiGet } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -50,7 +50,7 @@ export default function Counterparties() {
     }
   }
 
-  const sorted = () => {
+  const sorted = createMemo(() => {
     const list = [...counterparties()]
     list.sort((a, b) => {
       const aVal = a[sortField()]
@@ -62,34 +62,34 @@ export default function Counterparties() {
       return sortAsc() ? cmp : -cmp
     })
     return list
-  }
+  })
 
   const sortIndicator = (field: SortField) => {
     if (sortField() !== field) return ''
     return sortAsc() ? ' ↑' : ' ↓'
   }
 
-  const totalOwed = () => {
+  const totalOwed = createMemo(() => {
     let sum = 0
     for (const c of counterparties()) {
       if (c.net < 0) sum += Math.abs(c.net)
     }
     return sum
-  }
+  })
 
-  const totalOwing = () => {
+  const totalOwing = createMemo(() => {
     let sum = 0
     for (const c of counterparties()) {
       if (c.net > 0) sum += c.net
     }
     return sum
-  }
+  })
 
-  const netPosition = () => {
+  const netPosition = createMemo(() => {
     let sum = 0
     for (const c of counterparties()) sum += c.net
     return sum
-  }
+  })
 
   return (
     <div class={`${styles.page} page page-counterparties page-enter`}>

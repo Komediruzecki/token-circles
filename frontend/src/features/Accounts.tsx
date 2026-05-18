@@ -31,7 +31,7 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
@@ -67,18 +67,18 @@ export default function Accounts() {
     starting_date: '',
   })
 
-  const profileNameMap = () => {
+  const profileNameMap = createMemo(() => {
     const map = new Map<number, string>()
     for (const p of profiles()) map.set(p.id, p.name)
     return map
-  }
+  })
 
-  const multiProfile = () => {
+  const multiProfile = createMemo(() => {
     const ids = new Set(accounts().map((a) => a.profile_id))
     return ids.size > 1
-  }
+  })
 
-  const accountsByProfile = () => {
+  const accountsByProfile = createMemo(() => {
     if (!multiProfile()) return [{ profileId: 0, profileName: '', accounts: accounts() }]
     const groups = new Map<number, Account[]>()
     for (const a of accounts()) {
@@ -92,7 +92,7 @@ export default function Accounts() {
       profileName: names.get(pid) || `Profile ${pid}`,
       accounts: accts,
     }))
-  }
+  })
 
   // Load accounts, transactions, and profiles
   const loadData = async () => {
@@ -216,9 +216,9 @@ export default function Accounts() {
   })
 
   // Calculate total balance
-  const totalBalance = () => {
+  const totalBalance = createMemo(() => {
     return accounts().reduce((sum, acc) => sum + acc.balance, 0)
-  }
+  })
 
   // Filter transactions by account
   const getAccountTransactions = (accountId: number) => {
@@ -227,7 +227,7 @@ export default function Accounts() {
   }
 
   // Compute monthly income from loaded transactions
-  const monthlyIncome = () => {
+  const monthlyIncome = createMemo(() => {
     const now = new Date()
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const txs = transactions()
@@ -235,9 +235,9 @@ export default function Accounts() {
     return txs
       .filter((t) => t.date?.startsWith(monthStr) && t.type === 'income')
       .reduce((s, t) => s + (t.amount || 0), 0)
-  }
+  })
 
-  const monthlyExpenses = () => {
+  const monthlyExpenses = createMemo(() => {
     const now = new Date()
     const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const txs = transactions()
@@ -245,7 +245,7 @@ export default function Accounts() {
     return txs
       .filter((t) => t.date?.startsWith(monthStr) && t.type === 'expense')
       .reduce((s, t) => s + (t.amount || 0), 0)
-  }
+  })
 
   return (
     <div class={`${styles.accountsPage} page page-accounts page-enter`}>

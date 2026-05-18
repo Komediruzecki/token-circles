@@ -3308,6 +3308,17 @@ export async function importExecute(body: unknown): Promise<Response> {
     const db = await getDB()
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
 
+    // Normalize keys to lowercase so lookups are case-insensitive
+    const normalizeKeys = (obj: Record<string, string>) => {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(obj)) out[k.toLowerCase()] = v
+      return out
+    }
+    const catTypes = normalizeKeys(categoryTypes)
+    const acctTypes = normalizeKeys(accountTypes)
+    const acctBalances = normalizeKeys(accountBalances)
+    const acctBalanceDates = normalizeKeys(accountBalanceDates)
+
     // Create accounts for categories marked as 'account' type
     const accountIdMap = new Map<string, number>()
     // Also track accounts from means_of_payment column values
@@ -3318,7 +3329,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       // Track created account names (lowercase) to prevent duplicates from
       // case-variant keys like "IB" + "ib" both mapping to 'account'.
       const createdAccountNames = new Set<string>()
-      for (const [catName, catType] of Object.entries(categoryTypes)) {
+      for (const [catName, catType] of Object.entries(catTypes)) {
         if (catType !== 'account') continue
         const catLower = catName.toLowerCase()
         // Skip if already processed in this batch (case-insensitive duplicate)
@@ -3328,13 +3339,13 @@ export async function importExecute(body: unknown): Promise<Response> {
           (a: Record<string, unknown>) => (a.name as string || '').toLowerCase() === catLower
         )
         if (existing) {
-          accountIdMap.set(catName, existing.id as number)
+          accountIdMap.set(catLower, existing.id as number)
           createdAccountNames.add(catLower)
           continue
         }
-        const accType = (accountTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib'
-        const balance = parseFloat(accountBalances[catName]) || 0
-        const balanceDate = accountBalanceDates[catName] || new Date().toISOString().split('T')[0]
+        const accType = (acctTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib'
+        const balance = parseFloat(acctBalances[catName]) || 0
+        const balanceDate = acctBalanceDates[catName] || new Date().toISOString().split('T')[0]
         const account = {
           name: catName,
           type: accType,
@@ -3345,7 +3356,7 @@ export async function importExecute(body: unknown): Promise<Response> {
           created_at: new Date().toISOString(),
         }
         const id = await db.add('accounts', account)
-        accountIdMap.set(catName, id as number)
+        accountIdMap.set(catLower, id as number)
         createdAccountNames.add(catLower)
       }
 
@@ -3385,7 +3396,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       let type = 'expense'
       const rawType = toStr(row.type).trim().toLowerCase()
       const catName = toStr(row.category).toLowerCase().trim()
-      const catType = categoryTypes[catName]
+      const catType = catTypes[catName]
 
       if (catType === 'account') {
         type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
@@ -3411,8 +3422,9 @@ export async function importExecute(body: unknown): Promise<Response> {
       const rawCat = toStr(row.category)
       const mopValue = toStr(row.means_of_payment).trim().toLowerCase()
       if (rawCat) {
-        const catName = rawCat.toLowerCase().trim()
-        let cat = categories.find((c) => c.name.toLowerCase().trim() === catName)
+        // Use lowered version only for matching; store original case in DB
+        const catLower = rawCat.toLowerCase().trim()
+        let cat = categories.find((c) => c.name.toLowerCase().trim() === catLower)
         // Auto-create category if not found
         if (!cat) {
           const palette = [
@@ -3422,15 +3434,18 @@ export async function importExecute(body: unknown): Promise<Response> {
             '#0EA5E9', '#2563EB', '#7C3AED', '#C026D3', '#E11D48',
           ]
           const defaultColor = palette[categories.length % palette.length]
+          // Preserve original casing: capitalize first letter only
+          const displayName = rawCat.trim()
+          const storedName = displayName.charAt(0).toUpperCase() + displayName.slice(1)
           const id = await db.add('categories', {
-            name: catName.charAt(0).toUpperCase() + catName.slice(1),
+            name: storedName,
             type,
             color: defaultColor,
             icon: 'tag',
             tax_deductible: false,
             profile_id: profileId,
           })
-          cat = { id: id as number, name: catName, type, color: defaultColor, icon: 'tag' } as any
+          cat = { id: id as number, name: storedName, type, color: defaultColor, icon: 'tag' } as any
           categories.push(cat)
         }
         if (cat) categoryId = cat.id
@@ -3438,11 +3453,11 @@ export async function importExecute(body: unknown): Promise<Response> {
         // the account is the DESTINATION (money arriving from external source,
         // e.g. selling stock → proceeds arrive at brokerage account).
         // For income/expense, the account is the primary account.
-        if (accountIdMap.has(catName)) {
+        if (accountIdMap.has(catLower)) {
           if (type === 'transfer') {
-            transferAccountId = accountIdMap.get(catName)!
+            transferAccountId = accountIdMap.get(catLower)!
           } else {
-            accountId = accountIdMap.get(catName)!
+            accountId = accountIdMap.get(catLower)!
           }
         }
       }
@@ -3890,7 +3905,7 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
           }
         }
         if (Object.keys(patch).length > 0) {
-          await db.put('transactions', { ...tx, ...patch })
+          await adapter.updateTransaction(id, patch)
           updated++
         }
       }

@@ -30,7 +30,7 @@
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
@@ -331,8 +331,8 @@ export default function Loans() {
   const chartColors = () => theme.getChartColors()
 
   // Calculate totals
-  const totalPrincipal = () => loans().reduce((sum, l) => sum + l.principal, 0)
-  const totalRemaining = () => loans().reduce((sum, l) => sum + calculateRemaining(l), 0)
+  const totalPrincipal = createMemo(() => loans().reduce((sum, l) => sum + l.principal, 0))
+  const totalRemaining = createMemo(() => loans().reduce((sum, l) => sum + calculateRemaining(l), 0))
 
   return (
     <div class={`page page-loans page-enter ${styles.loansPage}`}>

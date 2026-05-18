@@ -104,7 +104,7 @@ export default function FilterBar(props: FilterBarProps) {
       selectedCategories: [],
       selectedTags: [],
       dateRange: { from: '', to: '' },
-      selectedPreset: 'month',
+      selectedPreset: 'all',
     })
   }
 
@@ -118,9 +118,9 @@ export default function FilterBar(props: FilterBarProps) {
     return `${selectedTags().length} Selected`
   }
 
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth()
+  const now = createMemo(() => new Date())
+  const currentYear = createMemo(() => now().getFullYear())
+  const currentMonth = createMemo(() => now().getMonth())
 
   const derivedMonth = createMemo(() => {
     const dr = props.dateRange
@@ -128,7 +128,7 @@ export default function FilterBar(props: FilterBarProps) {
       const d = new Date(dr.from)
       if (!isNaN(d.getTime())) return d.getMonth()
     }
-    return currentMonth
+    return currentMonth()
   })
 
   const derivedYear = createMemo(() => {
@@ -137,12 +137,12 @@ export default function FilterBar(props: FilterBarProps) {
       const d = new Date(dr.from)
       if (!isNaN(d.getTime())) return d.getFullYear()
     }
-    return currentYear
+    return currentYear()
   })
 
   const years = createMemo(() => {
     const range: number[] = []
-    for (let y = currentYear - 5; y <= currentYear + 5; y++) range.push(y)
+    for (let y = currentYear() - 5; y <= currentYear() + 5; y++) range.push(y)
     return range
   })
 
@@ -294,14 +294,14 @@ export default function FilterBar(props: FilterBarProps) {
 
         {/* Date presets */}
         <div class={styles.dateFilters}>
-          {['month', 'lastMonth', 'year'].map((p) => (
+          {['all', 'month', 'lastMonth', 'year'].map((p) => (
             <button
               class={`${styles.presetBtn} ${props.selectedPreset === p ? styles.presetBtnActive : ''}`}
               onClick={() => {
                 handlePresetClick(p)
               }}
             >
-              {p === 'month' ? 'This Month' : p === 'lastMonth' ? 'Last Month' : 'This Year'}
+              {p === 'all' ? 'All Time' : p === 'month' ? 'This Month' : p === 'lastMonth' ? 'Last Month' : 'This Year'}
             </button>
           ))}
         </div>
