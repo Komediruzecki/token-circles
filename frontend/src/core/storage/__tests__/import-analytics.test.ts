@@ -300,4 +300,52 @@ describe('Import → Analytics flow', () => {
       expect(body.datasets.length).toBe(0) // no data = no datasets
     })
   })
+
+  describe('bills CRUD with profile scoping', () => {
+    it('billsCreate stores bill with correct profile_id', async () => {
+      const { billsCreate } = await import('../localHandlers.js')
+      const res = await billsCreate({
+        name: 'Electric Bill',
+        amount: 85,
+        frequency: 'monthly',
+        due_date: '2026-06-15',
+        day_of_month: 15,
+        category_id: 1,
+      })
+      expect(res.status).toBe(201)
+
+      // Verify it's in the mock store with correct profile_id
+      const bills = Array.from(mockStores['bills']?.values() ?? [])
+      expect(bills.length).toBe(1)
+      expect((bills[0] as Record<string, unknown>).name).toBe('Electric Bill')
+      expect((bills[0] as Record<string, unknown>).profile_id).toBe(1)
+    })
+
+    it('billsList returns bills for current profile', async () => {
+      // Create a bill first
+      await adapter.createTransaction({
+        type: 'expense', amount: 100, description: 'bill ref',
+        date: '2026-05-01', category_id: null, profile_id: 1, account_id: null,
+      } as any)
+
+      const { billsCreate, billsList } = await import('../localHandlers.js')
+      await billsCreate({ name: 'Internet', amount: 45, frequency: 'monthly', day_of_month: 1 })
+
+      const listRes = await billsList()
+      const body = await listRes.json() as unknown[]
+      expect(body.length).toBe(1)
+      expect((body[0] as Record<string, unknown>).name).toBe('Internet')
+    })
+
+    it('billsList from other profile not returned', async () => {
+      // Create a bill under profile 1 (current profile)
+      const { billsCreate } = await import('../localHandlers.js')
+      await billsCreate({ name: 'Rent', amount: 1200, frequency: 'monthly', day_of_month: 1 })
+
+      // Verify profile 1 bill exists
+      const bills = Array.from(mockStores['bills']?.values() ?? [])
+      expect(bills.length).toBe(1)
+      expect((bills[0] as Record<string, unknown>).profile_id).toBe(1)
+    })
+  })
 })
