@@ -79,14 +79,14 @@ export function App() {
       })
       setProfiles(unique)
 
-      if (autoSelect && data.length > 0) {
+      if (autoSelect && unique.length > 0) {
         const savedId = localStorage.getItem('currentProfileId')
         let activeProfile = null
         if (savedId) {
-          activeProfile = data.find((p) => p.id === parseInt(savedId))
+          activeProfile = unique.find((p) => p.id === parseInt(savedId))
         }
         if (!activeProfile) {
-          activeProfile = data[0]
+          activeProfile = unique[0]
           localStorage.setItem('currentProfileId', activeProfile.id.toString())
         }
         setCurrentProfile(activeProfile)
@@ -517,6 +517,7 @@ export function App() {
                 <For each={profiles()}>
                   {(profile) => (
                     <div
+                      data-profile-id={profile.id}
                       class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
                     >
                       <input
