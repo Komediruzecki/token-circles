@@ -911,29 +911,34 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
 }
 
 export async function billsCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  const b = body as Record<string, unknown>
-  const name = ((b.name as string) || '').trim()
-  const amount = parseFloat(String((b.amount as string | number) || 0))
-  if (!name || isNaN(amount) || amount <= 0) {
-    return json({ error: 'Name and a valid amount are required' }, 400)
+  try {
+    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+    const b = body as Record<string, unknown>
+    const name = ((b.name as string) || '').trim()
+    const amount = parseFloat(String((b.amount as string | number) || 0))
+    if (!name || isNaN(amount) || amount <= 0) {
+      return json({ error: 'Name and a valid amount are required' }, 400)
+    }
+    const db = await getDB()
+    const pid = await adapter.getCurrentProfileId()
+    const record = {
+      profile_id: pid,
+      name,
+      amount,
+      frequency: (b.frequency as string) || 'monthly',
+      due_date: (b.due_date as string) || '',
+      day_of_month: (b.day_of_month as number) || 1,
+      category_id: b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
+      recurring: b.recurring !== false ? 1 : 0,
+      is_active: 1,
+      notes: (b.notes as string) || '',
+      created_at: new Date().toISOString(),
+    }
+    const id = await db.add('bills', record)
+    return json({ id }, 201)
+  } catch (err) {
+    return json({ error: `Failed to create bill: ${(err as Error).message}` }, 500)
   }
-  const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
-  const id = await db.add('bills', {
-    profile_id: pid,
-    name,
-    amount,
-    frequency: (b.frequency as string) || 'monthly',
-    due_date: (b.due_date as string) || '',
-    day_of_month: (b.day_of_month as number) || 1,
-    category_id: b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
-    recurring: b.recurring !== false ? 1 : 0,
-    is_active: 1,
-    notes: (b.notes as string) || '',
-    created_at: new Date().toISOString(),
-  })
-  return json({ id }, 201)
 }
 
 export async function billsGet(params: Record<string, string>): Promise<Response> {
