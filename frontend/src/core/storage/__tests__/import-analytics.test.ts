@@ -60,7 +60,6 @@ vi.mock('../handlers/helpers', async () => {
 })
 
 async function seedCategory(name: string, type: 'income' | 'expense', color: string) {
-  const db = await getDB()
   const cat = { name, type, color, profile_id: 1 }
   const id = mockNextId++
   const record = { ...cat, id }
@@ -70,7 +69,6 @@ async function seedCategory(name: string, type: 'income' | 'expense', color: str
 }
 
 async function seedAccount(name: string, balance: number) {
-  const db = await getDB()
   const acct = { name, type: 'checking', balance, profile_id: 1 }
   const id = mockNextId++
   const record = { ...acct, id }
