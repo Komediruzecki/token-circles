@@ -127,7 +127,7 @@ interface BalanceAdjustment {
 /** Compute how a transaction affects account balances.
  *  Returns an array of {accountId, delta} pairs.
  *  Positive delta = add to balance, negative = subtract. */
-function computeBalanceDeltas(tx: {
+export function computeBalanceDeltas(tx: {
   account_id?: number | null
   transfer_account_id?: number | null
   type: string

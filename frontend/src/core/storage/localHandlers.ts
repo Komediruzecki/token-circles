@@ -3307,8 +3307,19 @@ export async function importExecute(body: unknown): Promise<Response> {
     // Create accounts for categories marked as 'account' type
     const accountIdMap = new Map<string, number>()
     if (!dryRun) {
+      // Check for existing accounts by name to avoid duplicates on re-import
+      const existingAccounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
       for (const [catName, catType] of Object.entries(categoryTypes)) {
         if (catType !== 'account') continue
+        const catLower = catName.toLowerCase()
+        // Reuse existing account if already present
+        const existing = existingAccounts.find(
+          (a: Record<string, unknown>) => (a.name as string || '').toLowerCase() === catLower
+        )
+        if (existing) {
+          accountIdMap.set(catName, existing.id as number)
+          continue
+        }
         const accType = (accountTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib'
         const balance = parseFloat(accountBalances[catName]) || 0
         const balanceDate = accountBalanceDates[catName] || new Date().toISOString().split('T')[0]
@@ -3316,6 +3327,7 @@ export async function importExecute(body: unknown): Promise<Response> {
           name: catName,
           type: accType,
           balance,
+          starting_balance: balance,
           balance_date: balanceDate,
           profile_id: profileId,
           created_at: new Date().toISOString(),
@@ -3333,19 +3345,24 @@ export async function importExecute(body: unknown): Promise<Response> {
       const description = toStr(row.description)
       const date = normalizeDate(row.date) || toStr(row.date)
       const amount = parseFloat(toStr(row.amount) || '0')
-      // Determine transaction type: use type column > categoryTypes > amount sign
+      // Determine transaction type.
+      // For account-type categories (IB, Revolut, etc.), the type is always from the
+      // account's perspective: positive amount = money INTO account (income),
+      // negative = money OUT (expense). Bank statement types are ignored for accounts
+      // because the bank's perspective (e.g. "Expense" for a deposit) is inverted.
       let type = 'expense'
       const rawType = toStr(row.type).trim().toLowerCase()
-      if (['income', 'expense', 'transfer'].includes(rawType)) {
+      const catName = toStr(row.category).toLowerCase().trim()
+      const catType = categoryTypes[catName]
+
+      if (catType === 'account') {
+        type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
+      } else if (['income', 'expense', 'transfer'].includes(rawType)) {
         type = rawType
+      } else if (catType && (catType === 'income' || catType === 'expense')) {
+        type = catType
       } else {
-        const catName = toStr(row.category).toLowerCase().trim()
-        const catType = categoryTypes[catName]
-        if (catType && (catType === 'income' || catType === 'expense')) {
-          type = catType
-        } else {
-          type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
-        }
+        type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
       }
 
       if (!description || !date || isNaN(amount)) {
@@ -3399,7 +3416,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         notes: toStr(row.notes),
         beneficiary: toStr(row.beneficiary),
         payor: toStr(row.payor),
-        account_id: accountId || data.account_id ? Number(accountId || data.account_id) : null,
+        account_id: accountId !== null ? accountId : (data.account_id ? Number(data.account_id) : null),
         created_at: new Date().toISOString(),
       }
 
