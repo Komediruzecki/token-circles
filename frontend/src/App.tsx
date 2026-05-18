@@ -2,7 +2,7 @@
  * Main App Component - Root component for the application
  */
 
-import { createEffect, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import { createEffect, createMemo, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
@@ -129,6 +129,17 @@ export function App() {
   }
 
   const [selectedProfileIds, setSelectedProfileIds] = createSignal<number[]>(getSelectedProfileIds())
+
+  // Defensive dedup of profiles array before rendering.
+  // The store may accumulate duplicates due to proxy/reconciliation edge cases.
+  const uniqueProfiles = createMemo(() => {
+    const seen = new Set<number>()
+    return profiles().filter((p) => {
+      if (seen.has(p.id)) return false
+      seen.add(p.id)
+      return true
+    })
+  })
 
   const toggleProfileSelection = (profileId: number) => {
     setSelectedProfileIds((prev) => {
@@ -511,10 +522,10 @@ export function App() {
               class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
             >
               <div class={profileStyles.profileDropdownHeader}>
-                {profiles().length === 0 ? 'No profiles' : `Profiles (${selectedProfileIds().length} of ${profiles().length} selected)`}
+                {uniqueProfiles().length === 0 ? 'No profiles' : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
               </div>
-              {profiles().length > 0 ? (
-                <For each={profiles()}>
+              {uniqueProfiles().length > 0 ? (
+                <For each={uniqueProfiles()}>
                   {(profile) => (
                     <div
                       data-profile-id={profile.id}
