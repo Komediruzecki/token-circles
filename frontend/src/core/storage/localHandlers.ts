@@ -3290,10 +3290,13 @@ export async function importExecute(body: unknown): Promise<Response> {
     // Auto-detect "IB" / "Interactive Brokers" categories as account type
     const ibPattern = /^(ib|interactive\s*brokers)$/i
     for (const row of clean) {
-      const catName = toStr(row.category).trim()
-      if (ibPattern.test(catName) && !categoryTypes[catName]) {
-        categoryTypes[catName] = 'account'
-        accountTypes[catName] = accountTypes[catName] || 'ib'
+      const rawCat = toStr(row.category).trim()
+      if (ibPattern.test(rawCat)) {
+        const key = rawCat.toLowerCase()
+        if (!categoryTypes[key]) {
+          categoryTypes[key] = 'account'
+          accountTypes[key] = accountTypes[key] || 'ib'
+        }
       }
     }
 
