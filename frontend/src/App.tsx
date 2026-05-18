@@ -103,7 +103,11 @@ export function App() {
     // Set only this profile as selected (clears multi-select)
     localStorage.setItem('selectedProfileIds', JSON.stringify([profileId]))
     setSelectedProfileIds([profileId])
-    setCurrentProfile(profiles().find((p) => p.id === profileId) ?? null)
+    // Shallow-copy from profiles() to avoid store-proxy cross-reference
+    // (setting a proxy from one store path as value at another path can
+    //  cause spurious reactivity that briefly corrupts the profiles list)
+    const found = profiles().find((p) => p.id === profileId)
+    setCurrentProfile(found ? { ...found } : null)
     setShowDropdown(false)
     bumpProfileVersion()
   }
@@ -185,9 +189,9 @@ export function App() {
         (p) => p.id === (savedProfileId ? parseInt(savedProfileId) : null) || p.id === 1
       )
       if (selectedProfile) {
-        setCurrentProfile(selectedProfile)
+        setCurrentProfile({ ...selectedProfile })
       } else {
-        setCurrentProfile(profiles()[0])
+        setCurrentProfile({ ...profiles()[0] })
       }
     }
     setShowDropdown(false)
@@ -248,7 +252,7 @@ export function App() {
         await loadProfiles(false)
         // Default to first profile if not strictly logged in but profiles exist
         if (profiles().length > 0) {
-          setCurrentProfile(profiles()[0])
+          setCurrentProfile({ ...profiles()[0] })
         }
       }
     })
