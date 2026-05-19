@@ -405,7 +405,19 @@ export async function categoriesList(query: URLSearchParams): Promise<Response> 
 export async function categoriesCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid category data' }, 400)
   const cat = body as Record<string, unknown>
-  cat.profile_id = await adapter.getCurrentProfileId()
+  const name = (cat.name as string || '').trim()
+  if (!name) return json({ error: 'Category name is required' }, 400)
+
+  const pid = await adapter.getCurrentProfileId()
+  cat.profile_id = pid
+
+  // Check for duplicate name within the same profile
+  const db = await getDB()
+  const existing = await db.getAllFromIndex('categories', 'by_profile', pid)
+  if (existing.some((c) => (c.name as string).toLowerCase().trim() === name.toLowerCase())) {
+    return json({ error: 'Category name already exists for this profile' }, 400)
+  }
+
   const id = await adapter.createCategory(
     cat as unknown as Parameters<typeof adapter.createCategory>[0]
   )
