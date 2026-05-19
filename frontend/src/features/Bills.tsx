@@ -89,7 +89,6 @@ export default function Bills() {
   const state = useAppState()
   const [bills, setBills] = createSignal<Bill[]>([])
   const [upcoming, setUpcoming] = createSignal<Bill[]>([])
-  const [paid, setPaid] = createSignal<Bill[]>([])
   const [categories, setCategories] = createSignal<Category[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -112,10 +111,9 @@ export default function Bills() {
   const loadBills = async () => {
     setLoading(true)
     try {
-      const [allRes, upcomingRes, paidRes] = await Promise.all([
+      const [allRes, upcomingRes] = await Promise.all([
         apiGet<Bill[]>('/api/bills'),
         apiGet<Bill[]>('/api/bills/upcoming'),
-        apiGet<Bill[]>('/api/bills?paid=true'),
       ])
       setBills(allRes)
       // Handle upcoming bills which have next_due_date instead of due_date
@@ -125,7 +123,6 @@ export default function Bills() {
           due_date: b.due_date || (b as any).next_due_date || '2026-05-01',
         }))
       )
-      setPaid(paidRes)
     } catch (err) {
       console.error('Failed to load bills:', err)
       showToast('Failed to load bills', 'error')
@@ -388,93 +385,6 @@ export default function Bills() {
           </div>
         )}
 
-        {/* Unpaid Bills Section — all unpaid bills not already shown in Upcoming */}
-        {bills().filter((b) => !b.paid).length > 0 && (
-          <div data-test-id="bills-unpaid-section" class={styles.billsSection}>
-            <h2 class={styles.sectionTitle}>
-              <svg
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>{' '}
-              Unpaid Bills
-              <span class={styles.sectionSubtitle}>
-                {bills().filter((b) => !b.paid).length} unpaid
-              </span>
-            </h2>
-            <div class={styles.billsList}>
-              <For each={bills().filter((b) => !b.paid)}>
-                {(bill) => (
-                  <div
-                    data-test-id="bill-card"
-                    class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
-                  >
-                    <div class={styles.billMain}>
-                      <div data-test-id="bill-icon" class={styles.billIcon}>
-                        {bill.autopay ? (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
-                      </div>
-                      <div class={styles.billInfo}>
-                        <h3 data-test-id="bill-name" class={styles.billName}>
-                          {bill.name}
-                        </h3>
-                        <p data-test-id="bill-details" class={styles.billDetails}>
-                          {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
-                          {bill.frequency === 'monthly'
-                            ? 'Monthly'
-                            : bill.frequency === 'weekly'
-                              ? 'Weekly'
-                              : 'Biweekly'}
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      data-test-id="bill-amount-container"
-                      class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
-                    >
-                      <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                      <button
-                        data-test-id="bill-mark-paid-btn"
-                        class={`${styles.btnPrimary} ${styles.btnSm}`}
-                        onClick={() => markPaid(bill.id)}
-                        disabled={markingPaid().has(bill.id)}
-                      >
-                        {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        )}
-
         {/* Paid Bills Section */}
         <div data-test-id="bills-paid-section" class={styles.billsSection}>
           <h2 class={styles.sectionTitle}>
@@ -601,74 +511,6 @@ export default function Bills() {
         </div>
       </div>
 
-      {/* Paid Section */}
-      {paid().length > 0 && (
-        <div data-test-id="bills-paid-section" class={styles.billsSection}>
-          <h2 class={styles.sectionTitle}>
-            <svg
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>{' '}
-            Paid Bills
-            <span class={styles.sectionSubtitle}>{paid().length} bills</span>
-          </h2>
-          <div data-test-id="bills-list" class={styles.billsList}>
-            <For each={paid()}>
-              {(bill) => (
-                <div data-test-id="bill-card" class={`${styles.billCard} ${styles.paid}`}>
-                  <div class={styles.billMain}>
-                    <div data-test-id="bill-icon" class={styles.billIcon}>
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div class={styles.billInfo}>
-                      <h3 data-test-id="bill-name" class={styles.billName}>
-                        {bill.name}
-                      </h3>
-                      <p data-test-id="bill-details" class={styles.billDetails}>
-                        Paid {formatDate(bill.due_date)}
-                      </p>
-                    </div>
-                  </div>
-                  <div class={styles.billAmount}>
-                    <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                    <ConfirmButton
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onConfirm={() => deleteBill(bill.id)}
-                      label={
-                        <svg
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
-        </div>
-      )}
-
       {/* Add Bill Modal */}
       {showAddModal() && (
         <div
@@ -700,6 +542,7 @@ export default function Bills() {
                   placeholder="e.g., Rent, Electricity, Internet"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>

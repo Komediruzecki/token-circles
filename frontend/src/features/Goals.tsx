@@ -66,6 +66,8 @@ export default function Goals() {
   const [loading, setLoading] = createSignal(true)
   const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
+  const [showCategoryModal, setShowCategoryModal] = createSignal(false)
+  const [categoryForm, setCategoryForm] = createSignal({ name: '', type: 'expense', color: '#6366f1' })
   const [editingGoal, setEditingGoal] = createSignal<Goal | null>(null)
   const [formData, setFormData] = createSignal({
     name: '',
@@ -162,6 +164,43 @@ export default function Goals() {
     } catch (err) {
       console.error('Failed to delete goal:', err)
       showToast('Failed to delete goal', 'error')
+    }
+  }
+
+  // Add category from within goal modal
+  const addCategory = async (e: Event) => {
+    e.preventDefault()
+    try {
+      await apiPost('/api/categories', {
+        name: categoryForm().name,
+        type: categoryForm().type,
+        color: categoryForm().color.replace('#', ''),
+      })
+      setShowCategoryModal(false)
+      setCategoryForm({ name: '', type: 'expense', color: '#6366f1' })
+      loadCategories()
+    } catch (err) {
+      console.error('Failed to create category:', err)
+      showToast('Failed to create category', 'error')
+    }
+  }
+
+  // Contribute to manually tracked goal
+  const contribute = async (goalId: number) => {
+    const amount = window.prompt('Contribution amount:')
+    if (!amount) return
+    const parsed = parseFloat(amount)
+    if (isNaN(parsed) || parsed <= 0) {
+      showToast('Please enter a valid positive amount', 'error')
+      return
+    }
+    try {
+      await apiPost(`/api/savings-goals/${goalId}/contribute`, { amount: parsed })
+      showToast('Contribution added', 'success')
+      loadGoals()
+    } catch (err) {
+      console.error('Failed to contribute:', err)
+      showToast('Failed to add contribution', 'error')
     }
   }
 
@@ -295,6 +334,25 @@ export default function Goals() {
                           <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
+                      {!goal.category_id && (
+                        <button
+                          data-test-id="goal-contribute-btn"
+                          class={styles.btnSm}
+                          title="Add contribution"
+                          onclick={() => contribute(goal.id)}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                        </button>
+                      )}
                       <ConfirmButton
                         class={styles.btnSm}
                         onConfirm={() => deleteGoal(goal.id)}
@@ -531,6 +589,7 @@ export default function Goals() {
                   placeholder="e.g., Emergency Fund, Vacation"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>
@@ -585,6 +644,14 @@ export default function Goals() {
                     )}
                   </For>
                 </select>
+                <button
+                  type="button"
+                  class={styles.btnLink}
+                  style={{ 'margin-top': '8px' }}
+                  onClick={() => setShowCategoryModal(true)}
+                >
+                  + Add Category
+                </button>
                 <p
                   style={{
                     'font-size': '11px',
@@ -615,6 +682,87 @@ export default function Goals() {
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
                   {editingGoal() ? 'Update' : 'Create'} Goal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Category Modal (from goal creation) */}
+      {showCategoryModal() && (
+        <div
+          class={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowCategoryModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>Add Category</h3>
+              <button
+                class={styles.modalClose}
+                onclick={() => setShowCategoryModal(false)}
+              >
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form class={styles.modalBody} onsubmit={addCategory}>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Category Name</label>
+                <input
+                  type="text"
+                  class={styles.formControl}
+                  placeholder="e.g., Vacation Fund"
+                  value={categoryForm().name}
+                  oninput={(e) => setCategoryForm({ ...categoryForm(), name: e.target.value })}
+                  required
+                />
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Type</label>
+                <select
+                  class={styles.formControl}
+                  value={categoryForm().type}
+                  oninput={(e) =>
+                    setCategoryForm({
+                      ...categoryForm(),
+                      type: e.target.value as 'expense' | 'income',
+                    })
+                  }
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Color</label>
+                <input
+                  type="color"
+                  class={styles.colorInput}
+                  value={categoryForm().color}
+                  oninput={(e) => setCategoryForm({ ...categoryForm(), color: e.target.value })}
+                />
+              </div>
+              <div class={styles.modalFooter}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onclick={() => setShowCategoryModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" class={styles.btnPrimary}>
+                  Add Category
                 </button>
               </div>
             </form>

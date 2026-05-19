@@ -724,6 +724,7 @@ export default function Loans() {
                   placeholder="e.g., Auto Loan, Student Loan"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>
