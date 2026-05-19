@@ -30,7 +30,7 @@
  * Goals Component
  * Handles savings goals with progress tracking
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
@@ -186,10 +186,21 @@ export default function Goals() {
   }
 
   // Contribute to manually tracked goal
-  const contribute = async (goalId: number) => {
-    const amount = window.prompt('Contribution amount:')
-    if (!amount) return
-    const parsed = parseFloat(amount)
+  const [contributingGoalId, setContributingGoalId] = createSignal<number | null>(null)
+  const [contributeAmount, setContributeAmount] = createSignal('')
+
+  const startContribute = (goalId: number) => {
+    setContributingGoalId(goalId)
+    setContributeAmount('')
+  }
+
+  const cancelContribute = () => {
+    setContributingGoalId(null)
+    setContributeAmount('')
+  }
+
+  const submitContribute = async (goalId: number) => {
+    const parsed = parseFloat(contributeAmount())
     if (isNaN(parsed) || parsed <= 0) {
       showToast('Please enter a valid positive amount', 'error')
       return
@@ -197,6 +208,8 @@ export default function Goals() {
     try {
       await apiPost(`/api/savings-goals/${goalId}/contribute`, { amount: parsed })
       showToast('Contribution added', 'success')
+      setContributingGoalId(null)
+      setContributeAmount('')
       loadGoals()
     } catch (err) {
       console.error('Failed to contribute:', err)
@@ -252,6 +265,22 @@ export default function Goals() {
     void state.profileVersion
     loadGoals()
     loadCategories()
+  })
+
+  // Memoized chart data
+  const projectionGoals = createMemo(() => goals().filter((g) => g.monthly_contribution > 0))
+  const projectionMaxMonths = createMemo(() =>
+    Math.max(
+      ...projectionGoals().map((g) => Math.ceil((g.target_amount - g.current_amount) / (g.monthly_contribution || 1))),
+      1
+    )
+  )
+  const projectionLabels = createMemo(() => {
+    const now = new Date()
+    return Array.from({ length: projectionMaxMonths() + 1 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    })
   })
 
   return (
@@ -334,12 +363,12 @@ export default function Goals() {
                           <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                      {!goal.category_id && (
+                      {!goal.category_id && contributingGoalId() !== goal.id && (
                         <button
                           data-test-id="goal-contribute-btn"
                           class={styles.btnSm}
                           title="Add contribution"
-                          onclick={() => contribute(goal.id)}
+                          onclick={() => { startContribute(goal.id) }}
                         >
                           <svg
                             width="16"
@@ -370,6 +399,36 @@ export default function Goals() {
                       />
                     </div>
                   </div>
+                  {contributingGoalId() === goal.id && (
+                    <div class={styles.contributeForm}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        class={styles.formControl}
+                        placeholder="Amount..."
+                        value={contributeAmount()}
+                        oninput={(e) => setContributeAmount(e.target.value)}
+                        onkeydown={(e) => {
+                          if (e.key === 'Enter') submitContribute(goal.id)
+                          if (e.key === 'Escape') cancelContribute()
+                        }}
+                        autofocus
+                      />
+                      <button
+                        class={`${styles.btnPrimary} ${styles.btnSm}`}
+                        onclick={() => submitContribute(goal.id)}
+                      >
+                        Add
+                      </button>
+                      <button
+                        class={`${styles.btnSecondary} ${styles.btnSm}`}
+                        onclick={cancelContribute}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                   <div class={styles.goalProgress}>
                     <div data-test-id="goal-progress-bar" class={styles.progressBar}>
                       <div class={styles.progressFill} style={{ width: `${progress}%` }} />
@@ -450,7 +509,7 @@ export default function Goals() {
       )}
 
       {/* Goal Projection Timeline */}
-      {goals().length > 0 && goals().some((g) => g.monthly_contribution > 0) && (
+      {projectionGoals().length > 0 && (
         <div class={styles.goalsChartSection}>
           <h3>Goal Projections</h3>
           <div class={styles.chartWrapper}>
@@ -458,25 +517,8 @@ export default function Goals() {
               id="goals-projection-chart"
               type="line"
               data={{
-                labels: (() => {
-                  const now = new Date()
-                  const maxMonths = Math.max(
-                    ...goals()
-                      .filter((g) => g.monthly_contribution > 0)
-                      .map((g) => {
-                        const remaining = g.target_amount - g.current_amount
-                        const monthly = g.monthly_contribution || 1
-                        return Math.ceil(remaining / monthly)
-                      }),
-                    1
-                  )
-                  return Array.from({ length: maxMonths + 1 }, (_, i) => {
-                    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-                    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                  })
-                })(),
-                datasets: goals()
-                  .filter((g) => g.monthly_contribution > 0)
+                labels: projectionLabels(),
+                datasets: projectionGoals()
                   .map((g, idx) => {
                     const colors = [
                       '#6366f1',
@@ -764,6 +806,7 @@ export default function Goals() {
                   placeholder="e.g., Vacation Fund"
                   value={categoryForm().name}
                   oninput={(e) => setCategoryForm({ ...categoryForm(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>

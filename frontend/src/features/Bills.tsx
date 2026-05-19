@@ -56,7 +56,7 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
@@ -129,6 +129,10 @@ export default function Bills() {
       console.error('Failed to load categories', err)
     }
   }
+
+  // Memoized filtered lists
+  const unpaidBills = createMemo(() => unpaidBills())
+  const paidBills = createMemo(() => paidBills())
 
   // Add category
   const addCategory = async (e: Event) => {
@@ -285,9 +289,26 @@ export default function Bills() {
         </p>
       </div>
 
+      {loading() ? (
+        <div data-test-id="loading-state" class={styles.emptyState}>
+          Loading bills...
+        </div>
+      ) : bills().length === 0 ? (
+        <div data-test-id="bills-empty" class={styles.emptyState}>
+          <p>No bills yet</p>
+          <p>Add your first bill to start tracking your payments.</p>
+          <button
+            data-test-id="bills-add-btn-empty"
+            class={styles.btnPrimary}
+            onClick={() => setShowAddModal(true)}
+          >
+            Add Bill
+          </button>
+        </div>
+      ) : (
       <div class={styles.billsGrid}>
         {/* Unpaid Bills Section */}
-        {bills().filter((b) => !b.paid).length > 0 && (
+        {unpaidBills().length > 0 && (
           <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
             <h2 class={styles.sectionTitle}>
               <svg
@@ -302,11 +323,11 @@ export default function Bills() {
               </svg>{' '}
               Unpaid Bills
               <span class={styles.sectionSubtitle}>
-                {bills().filter((b) => !b.paid).length} bills
+                {unpaidBills().length} bills
               </span>
             </h2>
             <div data-test-id="bills-list" class={styles.billsList}>
-              <For each={bills().filter((b) => !b.paid)}>
+              <For each={unpaidBills()}>
                 {(bill) => (
                   <div
                     data-test-id="bill-card"
@@ -374,6 +395,7 @@ export default function Bills() {
         )}
 
         {/* Paid Bills Section */}
+        {paidBills().length > 0 && (
         <div data-test-id="bills-paid-section" class={styles.billsSection}>
           <h2 class={styles.sectionTitle}>
             <span>
@@ -389,27 +411,10 @@ export default function Bills() {
               </svg>
             </span>{' '}
             Paid Bills
-            <span class={styles.sectionSubtitle}>{bills().filter((b) => b.paid).length} paid</span>
+            <span class={styles.sectionSubtitle}>{paidBills().length} paid</span>
           </h2>
-          {loading() ? (
-            <div data-test-id="loading-state" class={styles.emptyState}>
-              Loading bills...
-            </div>
-          ) : bills().length === 0 ? (
-            <div data-test-id="bills-empty" class={styles.emptyState}>
-              <p>No bills yet</p>
-              <p>Add your first bill to start tracking your payments.</p>
-              <button
-                data-test-id="bills-add-btn-empty"
-                class={styles.btnPrimary}
-                onClick={() => setShowAddModal(true)}
-              >
-                Add Bill
-              </button>
-            </div>
-          ) : (
             <div class={styles.billsList}>
-              <For each={bills().filter((b) => b.paid)}>
+              <For each={paidBills()}>
                 {(bill) => (
                   <div
                     class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
@@ -495,9 +500,10 @@ export default function Bills() {
                 )}
               </For>
             </div>
-          )}
         </div>
+      )}
       </div>
+    )}
 
       {/* Add Bill Modal */}
       {showAddModal() && (
@@ -667,6 +673,7 @@ export default function Bills() {
                   placeholder="e.g., Utilities, Entertainment"
                   value={categoryForm().name}
                   oninput={(e) => setCategoryForm({ ...categoryForm(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>
