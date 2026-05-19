@@ -174,7 +174,7 @@ export default function Goals() {
       await apiPost('/api/categories', {
         name: categoryForm().name,
         type: categoryForm().type,
-        color: categoryForm().color.replace('#', ''),
+        color: categoryForm().color,
       })
       setShowCategoryModal(false)
       setCategoryForm({ name: '', type: 'expense', color: '#6366f1' })
