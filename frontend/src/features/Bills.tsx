@@ -88,7 +88,6 @@ interface Category {
 export default function Bills() {
   const state = useAppState()
   const [bills, setBills] = createSignal<Bill[]>([])
-  const [upcoming, setUpcoming] = createSignal<Bill[]>([])
   const [categories, setCategories] = createSignal<Category[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -111,18 +110,8 @@ export default function Bills() {
   const loadBills = async () => {
     setLoading(true)
     try {
-      const [allRes, upcomingRes] = await Promise.all([
-        apiGet<Bill[]>('/api/bills'),
-        apiGet<Bill[]>('/api/bills/upcoming'),
-      ])
+      const allRes = await apiGet<Bill[]>('/api/bills')
       setBills(allRes)
-      // Handle upcoming bills which have next_due_date instead of due_date
-      setUpcoming(
-        upcomingRes.map((b) => ({
-          ...b,
-          due_date: b.due_date || (b as any).next_due_date || '2026-05-01',
-        }))
-      )
     } catch (err) {
       console.error('Failed to load bills:', err)
       showToast('Failed to load bills', 'error')
@@ -197,7 +186,6 @@ export default function Bills() {
   // Mark bill as paid
   const markPaid = async (id: number) => {
     // Optimistic update: mark as paid locally immediately
-    setUpcoming(upcoming().map((b) => (b.id === id ? { ...b, paid: true } : b)))
     setBills(bills().map((b) => (b.id === id ? { ...b, paid: true } : b)))
     setMarkingPaid(new Set([...markingPaid(), id]))
 
@@ -298,8 +286,8 @@ export default function Bills() {
       </div>
 
       <div class={styles.billsGrid}>
-        {/* Upcoming Section — bills starting from today forward */}
-        {upcoming().filter((b) => !b.paid).length > 0 && (
+        {/* Unpaid Bills Section */}
+        {bills().filter((b) => !b.paid).length > 0 && (
           <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
             <h2 class={styles.sectionTitle}>
               <svg
@@ -312,13 +300,13 @@ export default function Bills() {
               >
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
               </svg>{' '}
-              Upcoming Bills
+              Unpaid Bills
               <span class={styles.sectionSubtitle}>
-                {upcoming().filter((b) => !b.paid).length} bills
+                {bills().filter((b) => !b.paid).length} bills
               </span>
             </h2>
             <div data-test-id="bills-list" class={styles.billsList}>
-              <For each={upcoming().filter((b) => !b.paid)}>
+              <For each={bills().filter((b) => !b.paid)}>
                 {(bill) => (
                   <div
                     data-test-id="bill-card"
