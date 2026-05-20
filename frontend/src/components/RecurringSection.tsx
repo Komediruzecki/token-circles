@@ -87,9 +87,9 @@ export default function RecurringSection(props: RecurringSectionProps) {
     try {
       const id = editingId()
       if (id) {
-        await api.updateRecurring(id, data)
+        await api.updateRecurring(id, data as any)
       } else {
-        await api.createRecurring(data)
+        await api.createRecurring(data as any)
       }
       setIsModalOpen(false)
       await loadItems()

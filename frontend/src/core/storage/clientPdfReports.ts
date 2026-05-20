@@ -55,10 +55,9 @@ let _workerRequestId = 0
 
 function getChartWorker(): Worker {
   if (!_chartWorker) {
-    _chartWorker = new Worker(
-      new URL('../../workers/chartWorker.ts', import.meta.url),
-      { type: 'module' }
-    )
+    _chartWorker = new Worker(new URL('../../workers/chartWorker.ts', import.meta.url), {
+      type: 'module',
+    })
   }
   return _chartWorker
 }
@@ -242,7 +241,8 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   const [y, m] = month.split('-').map(Number)
 
   const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: Transaction) => t.date >= `${month}-01` && t.date < `${y}-${String(m + 1).padStart(2, '0')}-01`
+    (t: Transaction) =>
+      t.date >= `${month}-01` && t.date < `${y}-${String(m + 1).padStart(2, '0')}-01`
   )
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
@@ -253,7 +253,8 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   let totalExpense = 0
 
   for (const t of txns as Transaction[]) {
-    const cat = t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
     const amt = Math.abs(t.amount)
@@ -430,7 +431,8 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
   }
 
   for (const t of txns as Transaction[]) {
-    const cat = t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
     const amt = Math.abs(t.amount)
@@ -639,7 +641,8 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
   const db = await getDB()
   const pid = getProfileId()
   const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: Transaction) => t.type === 'expense' && t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
+    (t: Transaction) =>
+      t.type === 'expense' && t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
   )
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
@@ -648,7 +651,8 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
   const nonMap: Record<string, { count: number; total: number }> = {}
 
   for (const t of txns as Transaction[]) {
-    const cat = t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const amt = Math.abs(t.amount)
     if (cat?.tax_deductible) {
@@ -771,7 +775,8 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
   let totalExpense = 0
 
   for (const t of txns as Transaction[]) {
-    const cat = t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const amt = Math.abs(t.amount)
     if (t.type === 'income') {

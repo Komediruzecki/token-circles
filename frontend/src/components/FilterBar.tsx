@@ -28,8 +28,8 @@ interface FilterOption {
 }
 
 interface FilterState {
-  categories: FilterOption[]
-  tags: FilterOption[]
+  categories?: FilterOption[]
+  tags?: FilterOption[]
   selectedCategories: number[] | undefined
   selectedTags: number[] | undefined
   dateRange: { from: string; to: string }
@@ -79,9 +79,19 @@ export default function FilterBar(props: FilterBarProps) {
   const toggleTag = (tagId: number) => {
     const idx = selectedTags().indexOf(tagId)
     if (idx >= 0) {
-      props.onChange({ ...props, selectedTags: selectedTags().filter((id) => id !== tagId) })
+      props.onChange({
+        selectedCategories: props.selectedCategories,
+        selectedTags: selectedTags().filter((id) => id !== tagId),
+        dateRange: props.dateRange,
+        selectedPreset: props.selectedPreset,
+      })
     } else {
-      props.onChange({ ...props, selectedTags: [...selectedTags(), tagId] })
+      props.onChange({
+        selectedCategories: props.selectedCategories,
+        selectedTags: [...selectedTags(), tagId],
+        dateRange: props.dateRange,
+        selectedPreset: props.selectedPreset,
+      })
     }
   }
 
@@ -308,7 +318,13 @@ export default function FilterBar(props: FilterBarProps) {
                 handlePresetClick(p)
               }}
             >
-              {p === 'all' ? 'All Time' : p === 'month' ? 'This Month' : p === 'lastMonth' ? 'Last Month' : 'This Year'}
+              {p === 'all'
+                ? 'All Time'
+                : p === 'month'
+                  ? 'This Month'
+                  : p === 'lastMonth'
+                    ? 'Last Month'
+                    : 'This Year'}
             </button>
           ))}
         </div>

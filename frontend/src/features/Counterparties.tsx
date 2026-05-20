@@ -38,8 +38,13 @@ export default function Counterparties() {
     }
   }
 
-  onMount(() => { void loadData() })
-  createEffect(() => { void state.profileVersion; void loadData() })
+  onMount(() => {
+    void loadData()
+  })
+  createEffect(() => {
+    void state.profileVersion
+    void loadData()
+  })
 
   const handleSort = (field: SortField) => {
     if (sortField() === field) {

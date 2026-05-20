@@ -117,7 +117,6 @@ export default function Transactions() {
   })
 
   // _loadTransactionReceipt - placeholder for receipt loading
-  // @ts-expect-error unused but used by event delegation
   const _loadTransactionReceipt = async (_receipt: Receipt | null) => {
     // Placeholder - functionality can be extended
   }

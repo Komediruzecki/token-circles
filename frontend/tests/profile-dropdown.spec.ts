@@ -20,7 +20,10 @@ test('profile dropdown - no duplicates after reseed and create', async ({ page }
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
   // Navigate to settings to clear all data first
-  await page.goto('http://localhost:3800/#settings', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto('http://localhost:3800/#settings', {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000,
+  })
   await page.waitForTimeout(1000)
 
   // Click "Delete All Data" in Danger Zone
@@ -78,7 +81,7 @@ test('profile dropdown - no duplicates after reseed and create', async ({ page }
   for (const name of profileNames) {
     nameCounts.set(name, (nameCounts.get(name) || 0) + 1)
   }
-  for (const [name, c] of nameCounts) {
+  for (const [_name, c] of nameCounts) {
     expect(c).toBe(1)
   }
 })
@@ -285,8 +288,8 @@ test('profile dropdown - console errors check', async ({ page }) => {
   console.log('Console errors:', errors)
 
   // Check for key errors
-  const keyErrors = errors.filter((e) =>
-    e.includes('key') || e.includes('duplicate') || e.includes('unique')
+  const keyErrors = errors.filter(
+    (e) => e.includes('key') || e.includes('duplicate') || e.includes('unique')
   )
   expect(keyErrors).toHaveLength(0)
 })

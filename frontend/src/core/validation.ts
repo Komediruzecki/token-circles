@@ -55,7 +55,11 @@ export const budgetCreateSchema = z.object({
   amount: z.number().nonnegative(),
   period: z.enum(['monthly', 'weekly', 'yearly']),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  end_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
 })
 
 export const budgetUpdateSchema = budgetCreateSchema.partial()
@@ -87,14 +91,13 @@ export function validateBody(method: string, path: string, body: unknown): Respo
   const result = schema.safeParse(body)
   if (result.success) return null
 
-  // Return 400 with field-level errors
-  const errors = (result as z.SafeParseError<unknown>).error.issues.map((issue) => ({
+  const errors = (result as any).error.issues.map((issue: any) => ({
     field: issue.path.join('.') || '(root)',
     message: issue.message,
   }))
 
-  return new Response(
-    JSON.stringify({ error: 'Validation failed', details: errors }),
-    { status: 400, headers: { 'Content-Type': 'application/json' } }
-  )
+  return new Response(JSON.stringify({ error: 'Validation failed', details: errors }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }

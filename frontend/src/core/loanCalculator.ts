@@ -40,11 +40,7 @@ interface Summary {
   originalTotalPayments: number
 }
 
-export function calcMonthlyPayment(
-  principal: number,
-  annualRate: number,
-  months: number
-): number {
+export function calcMonthlyPayment(principal: number, annualRate: number, months: number): number {
   if (annualRate === 0) return principal / months
   const r = annualRate / 100 / 12
   return (principal * (r * Math.pow(1 + r, months))) / (Math.pow(1 + r, months) - 1)
@@ -142,11 +138,17 @@ export function payoffDate(schedule: ScheduleRow[]): string | null {
   return schedule[schedule.length - 1].date
 }
 
-export function interestSaved(originalSchedule: ScheduleRow[], prepaySchedule: ScheduleRow[]): number {
+export function interestSaved(
+  originalSchedule: ScheduleRow[],
+  prepaySchedule: ScheduleRow[]
+): number {
   return totalInterest(originalSchedule) - totalInterest(prepaySchedule)
 }
 
-export function monthsSaved(originalSchedule: ScheduleRow[], prepaySchedule: ScheduleRow[]): number {
+export function monthsSaved(
+  originalSchedule: ScheduleRow[],
+  prepaySchedule: ScheduleRow[]
+): number {
   const saved = interestSaved(originalSchedule, prepaySchedule)
   const monthlyPayment = originalSchedule.length > 0 ? originalSchedule[0].payment : 1
   const equivMonths = Math.round(saved / monthlyPayment)
@@ -167,9 +169,7 @@ export function getSummary(schedule: ScheduleRow[], originalSchedule: ScheduleRo
     payoffDate: payoffDate(schedule),
     totalPayments: schedule.length,
     avgMonthlyPayment:
-      schedule.length > 0
-        ? schedule.reduce((s, r) => s + r.payment, 0) / schedule.length
-        : 0,
+      schedule.length > 0 ? schedule.reduce((s, r) => s + r.payment, 0) / schedule.length : 0,
     maxBalance: schedule.length > 0 ? schedule[0].balance : 0,
     originalTotalInterest: originalInterest,
     originalTotalPayments: originalMonths,

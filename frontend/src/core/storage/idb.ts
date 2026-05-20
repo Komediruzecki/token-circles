@@ -144,7 +144,11 @@ export function computeBalanceDeltas(tx: {
       adj.push({ accountId: tx.account_id, delta: tx.type === 'income' ? tx.amount : -tx.amount })
     }
   }
-  if (!tx.account_id && tx.transfer_account_id && (tx.type === 'income' || tx.type === 'transfer')) {
+  if (
+    !tx.account_id &&
+    tx.transfer_account_id &&
+    (tx.type === 'income' || tx.type === 'transfer')
+  ) {
     adj.push({ accountId: tx.transfer_account_id, delta: tx.amount })
   }
   return adj
@@ -166,7 +170,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       try {
         const ids = JSON.parse(stored) as number[]
         if (Array.isArray(ids) && ids.length > 0) return ids
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     return [this.getProfileId()]
   }
@@ -1022,24 +1028,128 @@ export async function seedDemoProfiles(): Promise<void> {
     // ── Bills ──
     const bills = profile.name.includes('High')
       ? [
-          { name: 'Mortgage Payment', amount: Math.round(profile.income * 0.28), dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Monthly mortgage', category: 'Housing' },
-          { name: 'Electricity Bill', amount: 180, dueDay: 15, recurring: 1, frequency: 'monthly', notes: 'Monthly electricity', category: 'Utilities' },
-          { name: 'Natural Gas', amount: 95, dueDay: 20, recurring: 1, frequency: 'monthly', notes: 'Monthly gas', category: 'Utilities' },
-          { name: 'Internet Service', amount: 80, dueDay: 5, recurring: 1, frequency: 'monthly', notes: 'Fiber internet', category: 'Subscriptions' },
-          { name: 'Health Insurance', amount: 420, dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Health coverage', category: 'Insurance' },
-          { name: 'Car Insurance', amount: 180, dueDay: 10, recurring: 1, frequency: 'monthly', notes: 'Auto coverage', category: 'Insurance' },
+          {
+            name: 'Mortgage Payment',
+            amount: Math.round(profile.income * 0.28),
+            dueDay: 1,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Monthly mortgage',
+            category: 'Housing',
+          },
+          {
+            name: 'Electricity Bill',
+            amount: 180,
+            dueDay: 15,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Monthly electricity',
+            category: 'Utilities',
+          },
+          {
+            name: 'Natural Gas',
+            amount: 95,
+            dueDay: 20,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Monthly gas',
+            category: 'Utilities',
+          },
+          {
+            name: 'Internet Service',
+            amount: 80,
+            dueDay: 5,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Fiber internet',
+            category: 'Subscriptions',
+          },
+          {
+            name: 'Health Insurance',
+            amount: 420,
+            dueDay: 1,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Health coverage',
+            category: 'Insurance',
+          },
+          {
+            name: 'Car Insurance',
+            amount: 180,
+            dueDay: 10,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Auto coverage',
+            category: 'Insurance',
+          },
         ]
       : profile.name.includes('Mid')
         ? [
-            { name: 'Rent Payment', amount: Math.round(profile.income * 0.30), dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Monthly rent', category: 'Housing' },
-            { name: 'Electricity Bill', amount: 130, dueDay: 15, recurring: 1, frequency: 'monthly', notes: 'Monthly electricity', category: 'Utilities' },
-            { name: 'Internet Service', amount: 60, dueDay: 5, recurring: 1, frequency: 'monthly', notes: 'Home internet', category: 'Subscriptions' },
-            { name: 'Car Insurance', amount: 120, dueDay: 10, recurring: 1, frequency: 'monthly', notes: 'Auto coverage', category: 'Insurance' },
+            {
+              name: 'Rent Payment',
+              amount: Math.round(profile.income * 0.3),
+              dueDay: 1,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly rent',
+              category: 'Housing',
+            },
+            {
+              name: 'Electricity Bill',
+              amount: 130,
+              dueDay: 15,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly electricity',
+              category: 'Utilities',
+            },
+            {
+              name: 'Internet Service',
+              amount: 60,
+              dueDay: 5,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Home internet',
+              category: 'Subscriptions',
+            },
+            {
+              name: 'Car Insurance',
+              amount: 120,
+              dueDay: 10,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Auto coverage',
+              category: 'Insurance',
+            },
           ]
         : [
-            { name: 'Rent Payment', amount: Math.round(profile.income * 0.35), dueDay: 1, recurring: 1, frequency: 'monthly', notes: 'Monthly rent', category: 'Housing' },
-            { name: 'Electricity Bill', amount: 90, dueDay: 15, recurring: 1, frequency: 'monthly', notes: 'Monthly electricity', category: 'Utilities' },
-            { name: 'Phone Plan', amount: 35, dueDay: 5, recurring: 1, frequency: 'monthly', notes: 'Mobile phone', category: 'Subscriptions' },
+            {
+              name: 'Rent Payment',
+              amount: Math.round(profile.income * 0.35),
+              dueDay: 1,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly rent',
+              category: 'Housing',
+            },
+            {
+              name: 'Electricity Bill',
+              amount: 90,
+              dueDay: 15,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly electricity',
+              category: 'Utilities',
+            },
+            {
+              name: 'Phone Plan',
+              amount: 35,
+              dueDay: 5,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Mobile phone',
+              category: 'Subscriptions',
+            },
           ]
 
     for (const bill of bills) {

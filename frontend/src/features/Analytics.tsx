@@ -123,7 +123,7 @@ export default function Analytics() {
       return
     }
     try {
-      const res = await apiGet<Record<string, unknown>>(`/api/analytics/weeks?year=${year}&month=${month}`)
+      const res = await apiGet<any>(`/api/analytics/weeks?year=${year}&month=${month}`)
       setWeeks(res.weeks || [])
     } catch (_e) {
       console.error('Failed to load weeks')
@@ -136,7 +136,7 @@ export default function Analytics() {
     setHeatmapModal({ dateStr, amount, transactions: [], loading: true })
     try {
       const type = heatmapType()
-      const res = await apiGet<Record<string, unknown>>(
+      const res = await apiGet<any>(
         `/api/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`
       )
       const list = Array.isArray(res?.transactions)
@@ -159,21 +159,23 @@ export default function Analytics() {
     const year = stackedYear()
     try {
       const [categoryRes, transactionsRes, monthlyRes] = await Promise.all([
-        apiGet<Record<string, unknown>>(`/api/analytics/category-trends?type=${categoryType()}&year=${year}`),
-        apiGet<Record<string, unknown>>('/api/transactions/summary'),
-        apiGet<Record<string, unknown>>('/api/stats/monthly?months=24'),
+        apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}&year=${year}`),
+        apiGet<any>('/api/transactions/summary'),
+        apiGet<any>('/api/stats/monthly?months=24'),
       ])
 
       // Transform category-trends response into doughnut data
-      const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d: Record<string, unknown>, i: number) => {
-        const dataArr = (d.data as number[]) || []
-        const total = dataArr.reduce((a: number, b: number) => a + b, 0)
-        return {
-          category_id: i,
-          category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
-          amount: total,
-        }
-      })
+      const byCategory = (categoryRes.datasets || [])
+        .slice(0, 10)
+        .map((d: Record<string, unknown>, i: number) => {
+          const dataArr = (d.data as number[]) || []
+          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+          return {
+            category_id: i,
+            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+            amount: total,
+          }
+        })
 
       // Monthly data from /api/stats/monthly, filtered to selected year
       const yearPrefix = String(year)
@@ -215,7 +217,7 @@ export default function Analytics() {
     const month = monthlyMonth()
     try {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
-      const monthlyRes = await apiGet<Record<string, unknown>>('/api/stats/monthly?months=24')
+      const monthlyRes = await apiGet<any>('/api/stats/monthly?months=24')
       const months = Array.isArray(monthlyRes) ? monthlyRes : []
       const found = months.find((m: Record<string, unknown>) => m.month === mKey)
       if (found) {
@@ -237,7 +239,7 @@ export default function Analytics() {
   // Load heatmap data
   const loadHeatmapData = async () => {
     try {
-      const res = await apiGet<Record<string, unknown>>(
+      const res = await apiGet<any>(
         `/api/analytics/daily-heatmap?year=${heatmapYear()}&type=${heatmapType()}`
       )
       const dataMap = new Map<string, number>()
@@ -258,7 +260,7 @@ export default function Analytics() {
   // Load sankey data
   const loadSankeyData = async () => {
     try {
-      const res = await apiGet<Record<string, unknown>>(
+      const res = await apiGet<any>(
         `/api/analytics/sankey?year=${sankeyYear()}&month=${sankeyMonth()}`
       )
       setSankeyData({ nodes: res.nodes || [], links: res.links || [] })
@@ -281,7 +283,7 @@ export default function Analytics() {
       }
       const week = selectedWeek()
       if (week) params.set('week', week)
-      const res = await apiGet<Record<string, unknown>>(`/api/analytics/category-trends?${params.toString()}`)
+      const res = await apiGet<any>(`/api/analytics/category-trends?${params.toString()}`)
       setStackedData({
         labels: res.labels || [],
         datasets: res.datasets || [],
@@ -299,7 +301,7 @@ export default function Analytics() {
         const cmpWeek = selectedWeek()
         if (cmpWeek) cmpParams.set('week', cmpWeek)
         try {
-          const cmpRes = await apiGet<Record<string, unknown>>(`/api/analytics/category-trends?${cmpParams.toString()}`)
+          const cmpRes = await apiGet<any>(`/api/analytics/category-trends?${cmpParams.toString()}`)
           setCompareData({
             labels: cmpRes.labels || [],
             datasets: cmpRes.datasets || [],
@@ -399,21 +401,23 @@ export default function Analytics() {
   // Silent refresh: update summary stats without showing loading spinner
   const refreshData = async (year: number, type: string) => {
     try {
-      const [categoryRes, transactionsRes, monthlyRes] = await Promise.all([
-        apiGet<Record<string, unknown>>(`/api/analytics/category-trends?type=${type}&year=${year}`),
-        apiGet<Record<string, unknown>>('/api/transactions/summary'),
-        apiGet<Record<string, unknown>>('/api/stats/monthly?months=24'),
-      ])
+      const [categoryRes, transactionsRes, monthlyRes] = (await Promise.all([
+        apiGet<any>(`/api/analytics/category-trends?type=${type}&year=${year}`),
+        apiGet<any>('/api/transactions/summary'),
+        apiGet<any>('/api/stats/monthly?months=24'),
+      ])) as [any, any, any]
 
-      const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d: Record<string, unknown>, i: number) => {
-        const dataArr = (d.data as number[]) || []
-        const total = dataArr.reduce((a: number, b: number) => a + b, 0)
-        return {
-          category_id: i,
-          category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
-          amount: total,
-        }
-      })
+      const byCategory = (categoryRes.datasets || [])
+        .slice(0, 10)
+        .map((d: Record<string, unknown>, i: number) => {
+          const dataArr = (d.data as number[]) || []
+          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+          return {
+            category_id: i,
+            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+            amount: total,
+          }
+        })
 
       const yearPrefix = String(year)
       const byMonth = Array.isArray(monthlyRes)
@@ -496,7 +500,12 @@ export default function Analytics() {
           <div class={styles.analyticsStats} style="margin-bottom:24px">
             <div class={styles.statCard} style="border-left:3px solid var(--primary)">
               <div class={styles.statLabel}>
-                Monthly Savings ({new Date(monthlyYear(), monthlyMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})
+                Monthly Savings (
+                {new Date(monthlyYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+                )
               </div>
               <div class={styles.heatmapControls} style="justify-content:flex-start;margin-top:8px">
                 <select
@@ -537,7 +546,9 @@ export default function Analytics() {
                 </div>
                 <div class={styles.statCard}>
                   <div class={styles.statLabel}>Monthly Net</div>
-                  <div class={`${styles.statValue} ${monthlyStats()!.income - monthlyStats()!.expense >= 0 ? styles.positive : styles.negative}`}>
+                  <div
+                    class={`${styles.statValue} ${monthlyStats()!.income - monthlyStats()!.expense >= 0 ? styles.positive : styles.negative}`}
+                  >
                     {formatAmount(monthlyStats()!.income - monthlyStats()!.expense)}
                   </div>
                 </div>
@@ -841,7 +852,8 @@ export default function Analytics() {
             <div class={styles.analyticsChart}>
               <div class={styles.heatmapHeader}>
                 <h3 class={styles.chartTitle}>
-                  {categoryType() === 'expense' ? 'Spending' : 'Income'} by Category ({stackedYear()})
+                  {categoryType() === 'expense' ? 'Spending' : 'Income'} by Category (
+                  {stackedYear()})
                 </h3>
                 <div class={styles.heatmapControls}>
                   <ExportChartButton
@@ -1091,7 +1103,7 @@ export default function Analytics() {
                           {(tx: Transaction) => (
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
                               <span style="color:var(--text);">
-                                {tx.description || tx.category || '-'}
+                                {tx.description || tx.category_name || '-'}
                               </span>
                               <span
                                 style={`font-weight:600;color:${tx.type === 'income' ? 'var(--income)' : 'var(--expense)'};`}

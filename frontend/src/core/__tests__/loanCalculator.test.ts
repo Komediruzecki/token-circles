@@ -30,9 +30,7 @@ describe('calcMonthlyPayment', () => {
 
 describe('calculateSchedule', () => {
   it('produces correct schedule for simple loan', () => {
-    const schedule = calculateSchedule(10000, '2024-01-01', 12, [
-      { rate: 6, start_month: 1 },
-    ])
+    const schedule = calculateSchedule(10000, '2024-01-01', 12, [{ rate: 6, start_month: 1 }])
     expect(schedule.length).toBe(12)
     expect(schedule[0].balance).toBeLessThan(10000)
     expect(schedule[0].interest).toBeCloseTo(50, 0) // 10000 * 6% / 12
@@ -40,18 +38,20 @@ describe('calculateSchedule', () => {
   })
 
   it('handles 0% interest correctly', () => {
-    const schedule = calculateSchedule(12000, '2024-01-01', 12, [
-      { rate: 0, start_month: 1 },
-    ])
+    const schedule = calculateSchedule(12000, '2024-01-01', 12, [{ rate: 0, start_month: 1 }])
     expect(schedule.length).toBe(12)
     expect(schedule[0].principal).toBeCloseTo(1000, 2)
     expect(schedule[11].balance).toBeCloseTo(0, 2)
   })
 
   it('applies prepayments to reduce principal', () => {
-    const withPrepay = calculateSchedule(10000, '2024-01-01', 12, [
-      { rate: 6, start_month: 1 },
-    ], [{ month: 3, amount: 2000 }])
+    const withPrepay = calculateSchedule(
+      10000,
+      '2024-01-01',
+      12,
+      [{ rate: 6, start_month: 1 }],
+      [{ month: 3, amount: 2000 }]
+    )
     const noPrepay = calculateScheduleNoPrepayments(10000, '2024-01-01', 12, [
       { rate: 6, start_month: 1 },
     ])
@@ -72,12 +72,14 @@ describe('calculateSchedule', () => {
 })
 
 describe('utility functions', () => {
-  const schedule = calculateSchedule(10000, '2024-01-01', 12, [
-    { rate: 6, start_month: 1 },
-  ])
-  const prepaySchedule = calculateSchedule(10000, '2024-01-01', 12, [
-    { rate: 6, start_month: 1 },
-  ], [{ month: 2, amount: 3000 }])
+  const schedule = calculateSchedule(10000, '2024-01-01', 12, [{ rate: 6, start_month: 1 }])
+  const prepaySchedule = calculateSchedule(
+    10000,
+    '2024-01-01',
+    12,
+    [{ rate: 6, start_month: 1 }],
+    [{ month: 2, amount: 3000 }]
+  )
 
   it('totalInterest sums all interest', () => {
     const interest = totalInterest(schedule)
@@ -111,9 +113,7 @@ describe('utility functions', () => {
 
 describe('getSummary', () => {
   it('returns full summary object', () => {
-    const schedule = calculateSchedule(10000, '2024-01-01', 12, [
-      { rate: 6, start_month: 1 },
-    ])
+    const schedule = calculateSchedule(10000, '2024-01-01', 12, [{ rate: 6, start_month: 1 }])
     const summary = getSummary(schedule, schedule)
 
     expect(summary.totalPaid).toBeGreaterThan(0)
@@ -126,12 +126,14 @@ describe('getSummary', () => {
   })
 
   it('shows interest saved when comparing schedules', () => {
-    const original = calculateSchedule(10000, '2024-01-01', 12, [
-      { rate: 6, start_month: 1 },
-    ])
-    const prepay = calculateSchedule(10000, '2024-01-01', 12, [
-      { rate: 6, start_month: 1 },
-    ], [{ month: 3, amount: 5000 }])
+    const original = calculateSchedule(10000, '2024-01-01', 12, [{ rate: 6, start_month: 1 }])
+    const prepay = calculateSchedule(
+      10000,
+      '2024-01-01',
+      12,
+      [{ rate: 6, start_month: 1 }],
+      [{ month: 3, amount: 5000 }]
+    )
     const summary = getSummary(prepay, original)
 
     expect(summary.interestSaved).toBeGreaterThan(0)

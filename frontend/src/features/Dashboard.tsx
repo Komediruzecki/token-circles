@@ -134,7 +134,9 @@ export default function Dashboard() {
       setDataMinYear(minYear)
       setDataMaxYear(maxYear)
       setDataYears(years.length > 0 ? years : undefined)
-    } catch { /* keep defaults */ }
+    } catch {
+      /* keep defaults */
+    }
   }
 
   const loadMonthlyData = async (dateFrom?: string, dateTo?: string) => {
@@ -160,9 +162,7 @@ export default function Dashboard() {
       })
       const netWorth = timeline.map((t) => t.balance)
       const income = timeline.map((t) => (t.netChange > 0 ? t.netChange : 0))
-      const expenses = timeline.map((t) =>
-        t.netChange < 0 ? Math.abs(t.netChange) : 0
-      )
+      const expenses = timeline.map((t) => (t.netChange < 0 ? Math.abs(t.netChange) : 0))
       setMonthlyData({ labels, income, expenses, netWorth })
     } catch {
       // Don't show error for monthly data - it's optional
@@ -269,8 +269,14 @@ export default function Dashboard() {
             minYear={dataMinYear()}
             maxYear={dataMaxYear()}
             years={dataYears()}
-            onMonthChange={(m) => { setMonth(m); setAllTime(false) }}
-            onYearChange={(y) => { setYear(y); setAllTime(false) }}
+            onMonthChange={(m) => {
+              setMonth(m)
+              setAllTime(false)
+            }}
+            onYearChange={(y) => {
+              setYear(y)
+              setAllTime(false)
+            }}
             onPrev={() => {
               const m = month()
               const y = year()

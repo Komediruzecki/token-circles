@@ -196,7 +196,10 @@ export default function Categories() {
   onMount(() => {
     loadCategories()
   })
-  createEffect(() => { void state.profileVersion; void loadCategories() })
+  createEffect(() => {
+    void state.profileVersion
+    void loadCategories()
+  })
 
   const categoryIconColors: Record<string, string> = {
     '#ef4444': 'bg-red-100 text-red-600',

@@ -67,7 +67,11 @@ export default function Goals() {
   const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
-  const [categoryForm, setCategoryForm] = createSignal({ name: '', type: 'expense', color: '#6366f1' })
+  const [categoryForm, setCategoryForm] = createSignal({
+    name: '',
+    type: 'expense',
+    color: '#6366f1',
+  })
   const [editingGoal, setEditingGoal] = createSignal<Goal | null>(null)
   const [formData, setFormData] = createSignal({
     name: '',
@@ -271,7 +275,9 @@ export default function Goals() {
   const projectionGoals = createMemo(() => goals().filter((g) => g.monthly_contribution > 0))
   const projectionMaxMonths = createMemo(() =>
     Math.max(
-      ...projectionGoals().map((g) => Math.ceil((g.target_amount - g.current_amount) / (g.monthly_contribution || 1))),
+      ...projectionGoals().map((g) =>
+        Math.ceil((g.target_amount - g.current_amount) / (g.monthly_contribution || 1))
+      ),
       1
     )
   )
@@ -368,7 +374,9 @@ export default function Goals() {
                           data-test-id="goal-contribute-btn"
                           class={styles.btnSm}
                           title="Add contribution"
-                          onclick={() => { startContribute(goal.id) }}
+                          onclick={() => {
+                            startContribute(goal.id)
+                          }}
                         >
                           <svg
                             width="16"
@@ -518,49 +526,41 @@ export default function Goals() {
               type="line"
               data={{
                 labels: projectionLabels(),
-                datasets: projectionGoals()
-                  .map((g, idx) => {
-                    const colors = [
-                      '#6366f1',
-                      '#10b981',
-                      '#f59e0b',
-                      '#ef4444',
-                      '#8b5cf6',
-                      '#06b6d4',
-                    ]
-                    const color = colors[idx % colors.length]
-                    const monthly = g.monthly_contribution || 0
-                    const remaining = g.target_amount - g.current_amount
-                    const monthsNeeded = Math.ceil(remaining / monthly)
-                    const data: (number | null)[] = [g.current_amount]
-                    for (let m = 1; m <= monthsNeeded; m++) {
-                      data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
-                    }
-                    // Compute achievement date label
-                    const now = new Date()
-                    const achieveDate = new Date(now.getFullYear(), now.getMonth() + monthsNeeded, 1)
-                    const achieveLabel = achieveDate.toLocaleDateString('en-US', {
-                      month: 'short',
-                      year: 'numeric',
-                    })
-                    return {
-                      label: `${g.name} — target ${achieveLabel}`,
-                      data,
-                      borderColor: color,
-                      backgroundColor: `${color}20`,
-                      fill: true,
-                      tension: 0.3,
-                      borderWidth: 2,
-                      pointRadius: data.map((_, i) => (i === monthsNeeded ? 4 : 0)),
-                      pointBackgroundColor: data.map((_, i) =>
-                        i === monthsNeeded ? color : 'transparent'
-                      ),
-                      pointBorderColor: data.map((_, i) =>
-                        i === monthsNeeded ? '#fff' : 'transparent'
-                      ),
-                      pointBorderWidth: 2,
-                    }
-                  }),
+                datasets: projectionGoals().map((g, idx) => {
+                  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+                  const color = colors[idx % colors.length]
+                  const monthly = g.monthly_contribution || 0
+                  const remaining = g.target_amount - g.current_amount
+                  const monthsNeeded = Math.ceil(remaining / monthly)
+                  const data: (number | null)[] = [g.current_amount]
+                  for (let m = 1; m <= monthsNeeded; m++) {
+                    data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
+                  }
+                  // Compute achievement date label
+                  const now = new Date()
+                  const achieveDate = new Date(now.getFullYear(), now.getMonth() + monthsNeeded, 1)
+                  const achieveLabel = achieveDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    year: 'numeric',
+                  })
+                  return {
+                    label: `${g.name} — target ${achieveLabel}`,
+                    data,
+                    borderColor: color,
+                    backgroundColor: `${color}20`,
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: data.map((_, i) => (i === monthsNeeded ? 4 : 0)),
+                    pointBackgroundColor: data.map((_, i) =>
+                      i === monthsNeeded ? color : 'transparent'
+                    ),
+                    pointBorderColor: data.map((_, i) =>
+                      i === monthsNeeded ? '#fff' : 'transparent'
+                    ),
+                    pointBorderWidth: 2,
+                  }
+                }),
               }}
               options={{
                 responsive: true,
@@ -788,10 +788,7 @@ export default function Goals() {
           >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Category</h3>
-              <button
-                class={styles.modalClose}
-                onclick={() => setShowCategoryModal(false)}
-              >
+              <button class={styles.modalClose} onclick={() => setShowCategoryModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>

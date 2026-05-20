@@ -379,10 +379,12 @@ test.describe('Transactions CRUD Operations', () => {
       .click()
       .catch(() => {})
 
-    const modalVisible = await page.waitForSelector('[data-test-id="tx-modal"]', {
-      state: 'visible',
-      timeout: 3000,
-    }).catch(() => null)
+    const modalVisible = await page
+      .waitForSelector('[data-test-id="tx-modal"]', {
+        state: 'visible',
+        timeout: 3000,
+      })
+      .catch(() => null)
 
     if (modalVisible) {
       // Try to submit form without filling required fields

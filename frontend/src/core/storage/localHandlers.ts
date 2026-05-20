@@ -1,10 +1,7 @@
 /**
  * Local API Handlers — IndexedDB-backed route handlers for serverless mode
  */
-import {
-  calculateSchedule,
-  getSummary,
-} from '../loanCalculator'
+import { calculateSchedule, getSummary } from '../loanCalculator'
 import {
   generateAnnualPdf,
   generateMonthlyPdf,
@@ -85,13 +82,19 @@ export async function profilesList(): Promise<Response> {
       let budgetCount = 0
       try {
         txCount = await db.countFromIndex('transactions', 'by_profile', pid)
-      } catch { /* store may not exist */ }
+      } catch {
+        /* store may not exist */
+      }
       try {
         acctCount = await db.countFromIndex('accounts', 'by_profile', pid)
-      } catch { /* store may not exist */ }
+      } catch {
+        /* store may not exist */
+      }
       try {
         budgetCount = await db.countFromIndex('budgets', 'by_profile', pid)
-      } catch { /* store may not exist */ }
+      } catch {
+        /* store may not exist */
+      }
       return {
         ...p,
         transaction_count: txCount,
@@ -106,7 +109,7 @@ export async function profilesList(): Promise<Response> {
 
 export async function profilesCreate(body: unknown): Promise<Response> {
   if (body && typeof body === 'object' && 'name' in body) {
-    const name = ((body as Record<string, unknown>).name as string || '').trim()
+    const name = (((body as Record<string, unknown>).name as string) || '').trim()
     if (!name) return json({ error: 'Profile name is required' }, 400)
     const db = await getDB()
     const existing = await db.getAll('profiles')
@@ -144,10 +147,25 @@ export async function profilesDelete(params: Record<string, string>): Promise<Re
   const profile = await db.get('profiles', profileId)
   if (!profile) return notFound('Profile')
   const pids = adapter.getCurrentProfileIds()
-  if (!pids.includes(profileId)) return json({ error: 'Cannot delete a profile you do not own' }, 403)
+  if (!pids.includes(profileId))
+    return json({ error: 'Cannot delete a profile you do not own' }, 403)
 
   // Cascade delete all data belonging to this profile
-  const stores = ['transactions', 'categories', 'accounts', 'budgets', 'goals', 'loans', 'balanceHistory', 'bills', 'housings', 'recurring', 'tags', 'portfolioHoldings', 'receipts']
+  const stores = [
+    'transactions',
+    'categories',
+    'accounts',
+    'budgets',
+    'goals',
+    'loans',
+    'balanceHistory',
+    'bills',
+    'housings',
+    'recurring',
+    'tags',
+    'portfolioHoldings',
+    'receipts',
+  ]
   for (const store of stores) {
     if (!db.objectStoreNames.contains(store)) continue
     const all = await db.getAll(store)
@@ -174,7 +192,9 @@ export async function profilesDelete(params: Record<string, string>): Promise<Re
       } else {
         localStorage.removeItem('selectedProfileIds')
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return ok()
@@ -183,7 +203,15 @@ export async function profilesDelete(params: Record<string, string>): Promise<Re
 export async function profileResetData(): Promise<Response> {
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
-  const stores = ['transactions', 'categories', 'accounts', 'budgets', 'goals', 'loans', 'balanceHistory']
+  const stores = [
+    'transactions',
+    'categories',
+    'accounts',
+    'budgets',
+    'goals',
+    'loans',
+    'balanceHistory',
+  ]
   for (const store of stores) {
     if (!db.objectStoreNames.contains(store)) continue
     const all = await db.getAll(store)
@@ -405,7 +433,7 @@ export async function categoriesList(query: URLSearchParams): Promise<Response> 
 export async function categoriesCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid category data' }, 400)
   const cat = body as Record<string, unknown>
-  const name = (cat.name as string || '').trim()
+  const name = ((cat.name as string) || '').trim()
   if (!name) return json({ error: 'Category name is required' }, 400)
 
   const pid = await adapter.getCurrentProfileId()
@@ -505,7 +533,6 @@ export async function accountsHistoryDelete(params: Record<string, string>): Pro
   return ok()
 }
 
-
 // ── Goals ────────────────────────────────────────────────────────────────────
 
 export async function goalsList(): Promise<Response> {
@@ -561,7 +588,7 @@ export async function goalsContribute(
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
   const enriched = loans.map((l) => {
-    const prepayments = (l as Record<string, unknown>).prepayments as Array<{ amount: number }> | undefined
+    const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined
     const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
     const prepayment_count = prepayments?.length || 0
     return { ...l, total_prepaid, prepayment_count }
@@ -766,7 +793,10 @@ export async function housingList(): Promise<Response> {
       }
       all.push(...rows)
     }
-    const total = all.reduce((s, h) => s + Math.abs(parseFloat(String((h.monthly_amount as number) || 0))), 0)
+    const total = all.reduce(
+      (s, h) => s + Math.abs(parseFloat(String((h.monthly_amount as number) || 0))),
+      0
+    )
     return json({ housings: all, total_monthly: Math.round(total) })
   } catch {
     return json({ housings: [], total_monthly: 0 })
@@ -808,7 +838,10 @@ export async function housingGet(params: Record<string, string>): Promise<Respon
   return h ? json(h) : notFound('Housing expense')
 }
 
-export async function housingUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+export async function housingUpdate(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
   const db = await getDB()
   const h = await db.get('housings', idParam(params))
   if (!h) return notFound('Housing expense')
@@ -816,7 +849,8 @@ export async function housingUpdate(params: Record<string, string>, body: unknow
     const b = body as Record<string, unknown>
     if (b.property_name !== undefined) h.name = b.property_name
     if (b.type !== undefined) h.type = b.type
-    if (b.monthly_amount !== undefined) h.monthly_amount = parseFloat(String((b.monthly_amount as string | number) || 0))
+    if (b.monthly_amount !== undefined)
+      h.monthly_amount = parseFloat(String((b.monthly_amount as string | number) || 0))
     if (b.due_day !== undefined) h.due_day = Number(b.due_day)
     if (b.due_month !== undefined) h.due_month = Number(b.due_month)
     if (b.autopay !== undefined) h.autopay = b.autopay ? 1 : 0
@@ -846,20 +880,50 @@ export async function housingCalculate(body: unknown): Promise<Response> {
   const savingsTarget = parseFloat(String((b.savings_target as string | number) || 0))
 
   // Standard 30% rule: housing should not exceed 30% of gross income
-  const affordableRent = Math.round(grossIncome * 0.30 * 100) / 100
+  const affordableRent = Math.round(grossIncome * 0.3 * 100) / 100
   const totalNonHousingExpenses = livingExpenses + transportCost + utilitiesCost + savingsTarget
   const maxAvailable = Math.max(0, grossIncome - totalNonHousingExpenses)
   const recommendedRent = Math.round(Math.min(affordableRent, maxAvailable) * 100) / 100
-  const housingRatio = grossIncome > 0 ? Math.round((recommendedRent / grossIncome) * 10000) / 100 : 0
+  const housingRatio =
+    grossIncome > 0 ? Math.round((recommendedRent / grossIncome) * 10000) / 100 : 0
 
   const total = grossIncome
   const breakdown = [
-    { name: 'Housing (recommended)', amount: recommendedRent, percentage: total > 0 ? Math.round((recommendedRent / total) * 10000) / 100 : 0 },
-    { name: 'Living Expenses', amount: livingExpenses, percentage: total > 0 ? Math.round((livingExpenses / total) * 10000) / 100 : 0 },
-    { name: 'Transport', amount: transportCost, percentage: total > 0 ? Math.round((transportCost / total) * 10000) / 100 : 0 },
-    { name: 'Utilities', amount: utilitiesCost, percentage: total > 0 ? Math.round((utilitiesCost / total) * 10000) / 100 : 0 },
-    { name: 'Savings', amount: savingsTarget, percentage: total > 0 ? Math.round((savingsTarget / total) * 10000) / 100 : 0 },
-    { name: 'Remaining', amount: Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent), percentage: total > 0 ? Math.round((Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent) / total) * 10000) / 100 : 0 },
+    {
+      name: 'Housing (recommended)',
+      amount: recommendedRent,
+      percentage: total > 0 ? Math.round((recommendedRent / total) * 10000) / 100 : 0,
+    },
+    {
+      name: 'Living Expenses',
+      amount: livingExpenses,
+      percentage: total > 0 ? Math.round((livingExpenses / total) * 10000) / 100 : 0,
+    },
+    {
+      name: 'Transport',
+      amount: transportCost,
+      percentage: total > 0 ? Math.round((transportCost / total) * 10000) / 100 : 0,
+    },
+    {
+      name: 'Utilities',
+      amount: utilitiesCost,
+      percentage: total > 0 ? Math.round((utilitiesCost / total) * 10000) / 100 : 0,
+    },
+    {
+      name: 'Savings',
+      amount: savingsTarget,
+      percentage: total > 0 ? Math.round((savingsTarget / total) * 10000) / 100 : 0,
+    },
+    {
+      name: 'Remaining',
+      amount: Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent),
+      percentage:
+        total > 0
+          ? Math.round(
+              (Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent) / total) * 10000
+            ) / 100
+          : 0,
+    },
   ]
 
   return json({
@@ -886,7 +950,9 @@ function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): b
 
   const frequency = (bill.frequency as string) || 'monthly'
   if (frequency === 'monthly') {
-    return lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
+    return (
+      lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
+    )
   } else if (frequency === 'weekly') {
     const weekAgo = new Date(today)
     weekAgo.setDate(weekAgo.getDate() - 7)
@@ -946,7 +1012,8 @@ export async function billsCreate(body: unknown): Promise<Response> {
       frequency: (b.frequency as string) || 'monthly',
       due_date: (b.due_date as string) || '',
       day_of_month: (b.day_of_month as number) || 1,
-      category_id: b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
+      category_id:
+        b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
       recurring: b.recurring !== false ? 1 : 0,
       autopay: b.autopay ? 1 : 0,
       is_active: 1,
@@ -966,7 +1033,10 @@ export async function billsGet(params: Record<string, string>): Promise<Response
   return b ? json(b) : notFound('Bill')
 }
 
-export async function billsUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+export async function billsUpdate(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
   const db = await getDB()
   const bill = await db.get('bills', idParam(params))
   if (!bill) return notFound('Bill')
@@ -977,7 +1047,8 @@ export async function billsUpdate(params: Record<string, string>, body: unknown)
     if (b.frequency !== undefined) bill.frequency = b.frequency
     if (b.due_date !== undefined) bill.due_date = b.due_date
     if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
-    if (b.category_id !== undefined) bill.category_id = b.category_id !== null ? Number(b.category_id) : null
+    if (b.category_id !== undefined)
+      bill.category_id = b.category_id !== null ? Number(b.category_id) : null
     if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
     if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0
     if (b.notes !== undefined) bill.notes = b.notes
@@ -1008,14 +1079,14 @@ export async function billsUpcoming(): Promise<Response> {
       .filter((b: Record<string, unknown>) => {
         // Derive day of month from due_date (format: YYYY-MM-DD) or fall back to day_of_month field
         const dueDate = (b.due_date as string) || ''
-        const dom = dueDate ? parseInt(dueDate.split('-')[2], 10) : (Number(b.day_of_month) || 1)
+        const dom = dueDate ? parseInt(dueDate.split('-')[2], 10) : Number(b.day_of_month) || 1
         return dom >= dayOfMonth
       })
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
         const aDate = (a.due_date as string) || ''
         const bDate = (b.due_date as string) || ''
-        const aDom = aDate ? parseInt(aDate.split('-')[2], 10) : (Number(a.day_of_month) || 1)
-        const bDom = bDate ? parseInt(bDate.split('-')[2], 10) : (Number(b.day_of_month) || 1)
+        const aDom = aDate ? parseInt(aDate.split('-')[2], 10) : Number(a.day_of_month) || 1
+        const bDom = bDate ? parseInt(bDate.split('-')[2], 10) : Number(b.day_of_month) || 1
         return aDom - bDom
       })
     return json(upcoming)
@@ -1049,7 +1120,9 @@ export async function categoryMappingsList(): Promise<Response> {
       }
       return json(all)
     }
-  } catch { /* store may not exist yet */ }
+  } catch {
+    /* store may not exist yet */
+  }
   return json([])
 }
 
@@ -1203,7 +1276,10 @@ export async function recurringCreate(body: unknown): Promise<Response> {
   return json({ id, profile_id: pid }, 201)
 }
 
-export async function recurringUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
+export async function recurringUpdate(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
   const db = await getDB()
   const item = await db.get('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
@@ -1341,7 +1417,6 @@ export async function reseedDemoData(): Promise<Response> {
   await seedDemoProfiles()
   return ok({ message: 'Demo data reseeded' })
 }
-
 
 export async function dashboardMain(query: URLSearchParams): Promise<Response> {
   try {
@@ -1604,9 +1679,7 @@ export async function dashboardNetWorth(): Promise<Response> {
 
     // Monthly net flow from all transactions
     const allTxns = await adapter.listTransactions()
-    const profileTxns = allTxns.filter(
-      (t) => t.type === 'income' || t.type === 'expense'
-    )
+    const profileTxns = allTxns.filter((t) => t.type === 'income' || t.type === 'expense')
     const monthlyMap: Record<string, { month: string; net: number }> = {}
     for (const t of profileTxns) {
       const mo = t.date.substring(0, 7)
@@ -1696,9 +1769,7 @@ export async function analyticsDailyHeatmap(query: URLSearchParams): Promise<Res
     const type = query.get('type') === 'income' ? 'income' : 'expense'
 
     const allTxns = await adapter.listTransactions()
-    const rows = allTxns.filter(
-      (t) => t.date.startsWith(String(year)) && t.type === type
-    )
+    const rows = allTxns.filter((t) => t.date.startsWith(String(year)) && t.type === type)
 
     const dates: Record<string, number> = {}
     for (const t of rows) {
@@ -1745,9 +1816,7 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
 
     const allTxns = await adapter.listTransactions()
     const cats = await adapter.listCategories(type as 'income' | 'expense')
-    const txns = allTxns.filter(
-      (t) => t.type === type && t.date >= startStr && t.date <= endStr
-    )
+    const txns = allTxns.filter((t) => t.type === type && t.date >= startStr && t.date <= endStr)
 
     // Generate labels based on view level
     const labels: string[] = []
@@ -2034,8 +2103,12 @@ export async function statsMonthly(query: URLSearchParams): Promise<Response> {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const monthTxns = profileTxns.filter((t) => t.date.startsWith(monthStr))
-      const income = monthTxns.filter((t) => t.type === 'income').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-      const expense = monthTxns.filter((t) => t.type === 'expense').reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+      const income = monthTxns
+        .filter((t) => t.type === 'income')
+        .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+      const expense = monthTxns
+        .filter((t) => t.type === 'expense')
+        .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
       result.push({ month: monthStr, income, expense })
     }
     return json(result)
@@ -2489,7 +2562,7 @@ function calculateRetirementProjection(
     years_to_retire: retirementAge - currentAge,
     projected_total: projectedTotal,
     projected_income: Math.round(projectedTotal > 0 ? projectedTotal * 0.04 : 0),
-    monthly_income_in_retirement: Math.round(projectedTotal > 0 ? projectedTotal * 0.04 / 12 : 0),
+    monthly_income_in_retirement: Math.round(projectedTotal > 0 ? (projectedTotal * 0.04) / 12 : 0),
   }
 }
 
@@ -2501,7 +2574,9 @@ function getProfileIdsFromStorage(): number[] {
     try {
       const ids = JSON.parse(selected) as number[]
       if (Array.isArray(ids) && ids.length > 0) return ids
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   const stored = localStorage.getItem('currentProfileId')
   return stored ? [parseInt(stored, 10)] : [1]
@@ -2564,8 +2639,8 @@ export async function reportHandler(ctx: {
     if (path === '/api/reports/tax-summary') {
       const db = await getDB()
       const pids = getProfileIdsFromStorage()
-      const cats: Record<string, unknown>[] = []
-      const txns: Record<string, unknown>[] = []
+      const cats: any[] = []
+      const txns: any[] = []
       for (const pid of pids) {
         cats.push(...(await db.getAllFromIndex('categories', 'by_profile', pid)))
         txns.push(...(await db.getAllFromIndex('transactions', 'by_profile', pid)))
@@ -2612,8 +2687,8 @@ export async function reportHandler(ctx: {
     if (path === '/api/reports/pl-summary') {
       const db = await getDB()
       const pids = getProfileIdsFromStorage()
-      const cats: Record<string, unknown>[] = []
-      const txns: Record<string, unknown>[] = []
+      const cats: any[] = []
+      const txns: any[] = []
       for (const pid of pids) {
         cats.push(...(await db.getAllFromIndex('categories', 'by_profile', pid)))
         txns.push(...(await db.getAllFromIndex('transactions', 'by_profile', pid)))
@@ -2687,8 +2762,12 @@ export async function reportsCustom(body: unknown): Promise<Response> {
   if (dateTo) filtered = filtered.filter((t) => (t.date as string) <= dateTo)
   if (categoryId) filtered = filtered.filter((t) => t.category_id === categoryId)
 
-  const totalIncome = filtered.filter((t) => t.type === 'income').reduce((s, t) => s + (t.amount as number), 0)
-  const totalExpenses = filtered.filter((t) => t.type === 'expense').reduce((s, t) => s + (t.amount as number), 0)
+  const totalIncome = filtered
+    .filter((t) => t.type === 'income')
+    .reduce((s, t) => s + (t.amount as number), 0)
+  const totalExpenses = filtered
+    .filter((t) => t.type === 'expense')
+    .reduce((s, t) => s + (t.amount as number), 0)
   const netTotal = totalIncome - totalExpenses
 
   const byCategory: Record<string, { count: number; total: number }> = {}
@@ -2719,7 +2798,9 @@ export async function reportsCustom(body: unknown): Promise<Response> {
 const EXCHANGE_RATES_CACHE_KEY = '__cache__exchange_rates'
 const EXCHANGE_RATES_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
-async function fetchExchangeRates(base: string): Promise<{ rates: Record<string, number>; cached: boolean }> {
+async function fetchExchangeRates(
+  base: string
+): Promise<{ rates: Record<string, number>; cached: boolean }> {
   const db = await getDB()
   try {
     const cached = await db.get('settings', EXCHANGE_RATES_CACHE_KEY)
@@ -2729,7 +2810,9 @@ async function fetchExchangeRates(base: string): Promise<{ rates: Record<string,
         return { rates: data.rates, cached: true }
       }
     }
-  } catch { /* not cached */ }
+  } catch {
+    /* not cached */
+  }
 
   const url = `https://open.er-api.com/v6/latest/${encodeURIComponent(base)}`
   const res = await fetch(url)
@@ -2876,7 +2959,7 @@ export async function receiptsGetFileByName(params: Record<string, string>): Pro
   const db = await getDB()
   const filename = params.p1
   const pids = adapter.getCurrentProfileIds()
-  const all: Record<string, unknown>[] = []
+  const all: any[] = []
   for (const pid of pids) {
     const rows = await db.getAllFromIndex('receipts', 'by_profile', pid)
     all.push(...rows)
@@ -2948,7 +3031,9 @@ function normalizeDate(v: unknown): string {
   // dd/mm/yyyy or dd-mm-yyyy
   const dmy = s.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
   if (dmy) {
-    const d = parseInt(dmy[1]), m = parseInt(dmy[2]), y = parseInt(dmy[3])
+    const d = parseInt(dmy[1]),
+      m = parseInt(dmy[2]),
+      y = parseInt(dmy[3])
     if (d > 12 && m <= 12) {
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }
@@ -3107,9 +3192,12 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
       let cur = ''
       let inQuotes = false
       for (const ch of line) {
-        if (ch === '"') { inQuotes = !inQuotes }
-        else if (ch === ',' && !inQuotes) { cols.push(cur.trim().replace(/^"|"$/g, '')); cur = '' }
-        else cur += ch
+        if (ch === '"') {
+          inQuotes = !inQuotes
+        } else if (ch === ',' && !inQuotes) {
+          cols.push(cur.trim().replace(/^"|"$/g, ''))
+          cur = ''
+        } else cur += ch
       }
       cols.push(cur.trim().replace(/^"|"$/g, ''))
       rows.push(cols)
@@ -3122,7 +3210,9 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   // Fetch helper that rejects on non-ok or non-data response
   const tryFetch = async (url: string): Promise<Response> => {
     const controller = new AbortController()
-    const timer = setTimeout(() => { controller.abort() }, GOOGLE_SHEETS_TIMEOUT)
+    const timer = setTimeout(() => {
+      controller.abort()
+    }, GOOGLE_SHEETS_TIMEOUT)
     try {
       const res = await fetch(url, { signal: controller.signal })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -3150,7 +3240,10 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   }
 
   /** Strip trailing columns that are both empty-headed and empty-bodied */
-  const cleanColumns = (headers: string[], rows: string[][]): { headers: string[]; rows: string[][] } => {
+  const cleanColumns = (
+    headers: string[],
+    rows: string[][]
+  ): { headers: string[]; rows: string[][] } => {
     // Find last column with a meaningful header or data
     let lastUsed = -1
     for (let c = 0; c < headers.length; c++) {
@@ -3175,7 +3268,12 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   const strategy0 = tryStrategy(proxyUrl, (text) => {
     const { headers, rows } = parseCSV(text)
     const cleaned = cleanColumns(headers, rows)
-    return json({ headers: cleaned.headers, rows: cleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    return json({
+      headers: cleaned.headers,
+      rows: cleaned.rows,
+      sheetNames: [sheetName || 'Sheet1'],
+      selectedSheet: sheetName || 'Sheet1',
+    })
   })
 
   // Strategy 1: Published CSV
@@ -3185,7 +3283,12 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   const strategy1 = tryStrategy(pubUrl, (text) => {
     const { headers, rows } = parseCSV(text)
     const cleaned = cleanColumns(headers, rows)
-    return json({ headers: cleaned.headers, rows: cleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    return json({
+      headers: cleaned.headers,
+      rows: cleaned.rows,
+      sheetNames: [sheetName || 'Sheet1'],
+      selectedSheet: sheetName || 'Sheet1',
+    })
   })
 
   // Strategy 2: Google Visualization API
@@ -3209,11 +3312,22 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
       (r.c as Array<{ v: unknown }>).map((cell) => {
         const v = cell?.v
         if (v === null || v === undefined) return ''
-        return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : JSON.stringify(v)
+        return typeof v === 'string'
+          ? v
+          : typeof v === 'number'
+            ? String(v)
+            : typeof v === 'boolean'
+              ? String(v)
+              : JSON.stringify(v)
       })
     )
     const gvizCleaned = cleanColumns(rawCols, dataRows)
-    return json({ headers: gvizCleaned.headers, rows: gvizCleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    return json({
+      headers: gvizCleaned.headers,
+      rows: gvizCleaned.rows,
+      sheetNames: [sheetName || 'Sheet1'],
+      selectedSheet: sheetName || 'Sheet1',
+    })
   })
 
   // Strategy 3: CSV export (rarely works from browser, but try)
@@ -3223,15 +3337,27 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   const strategy3 = tryStrategy(csvUrl, (text) => {
     const { headers, rows } = parseCSV(text)
     const cleaned = cleanColumns(headers, rows)
-    return json({ headers: cleaned.headers, rows: cleaned.rows, sheetNames: [sheetName || 'Sheet1'], selectedSheet: sheetName || 'Sheet1' })
+    return json({
+      headers: cleaned.headers,
+      rows: cleaned.rows,
+      sheetNames: [sheetName || 'Sheet1'],
+      selectedSheet: sheetName || 'Sheet1',
+    })
   })
 
   // Race all strategies against each other and a hard deadline
   const deadline = new Promise<never>((_, reject) => {
-    setTimeout(() => { reject(new Error('TIMEOUT')) }, GOOGLE_SHEETS_TIMEOUT + 500)
+    setTimeout(() => {
+      reject(new Error('TIMEOUT'))
+    }, GOOGLE_SHEETS_TIMEOUT + 500)
   })
 
-  const strategies: Promise<ReturnType<typeof json>>[] = [strategy0, strategy1, strategy2, strategy3]
+  const strategies: Promise<ReturnType<typeof json>>[] = [
+    strategy0,
+    strategy1,
+    strategy2,
+    strategy3,
+  ]
   const errors: string[] = []
 
   // Try strategies sequentially with fast failure — first success wins,
@@ -3252,14 +3378,17 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     ])
     return result as ReturnType<typeof json>
   } catch {
-    return json({
-      error: 'Could not access the Google Sheet from the browser.',
-      message:
-        'To import this sheet, either: (1) Publish it to the web (File → Share → Publish to web), ' +
-        'or (2) Set sharing to "Anyone with the link can view", ' +
-        'or (3) Download as CSV and use the File Upload tab.',
-      serverlessMode: true,
-    }, 422)
+    return json(
+      {
+        error: 'Could not access the Google Sheet from the browser.',
+        message:
+          'To import this sheet, either: (1) Publish it to the web (File → Share → Publish to web), ' +
+          'or (2) Set sharing to "Anyone with the link can view", ' +
+          'or (3) Download as CSV and use the File Upload tab.',
+        serverlessMode: true,
+      },
+      422
+    )
   }
 }
 
@@ -3306,9 +3435,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       const rawCat = toStr(row.category).trim()
       if (ibPattern.test(rawCat)) {
         const key = rawCat.toLowerCase()
-        const exists = Object.keys(categoryTypes).some(
-          (k) => k.toLowerCase() === key
-        )
+        const exists = Object.keys(categoryTypes).some((k) => k.toLowerCase() === key)
         if (!exists) {
           categoryTypes[key] = 'account'
           accountTypes[key] = accountTypes[key] || 'ib'
@@ -3348,7 +3475,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         if (createdAccountNames.has(catLower)) continue
         // Reuse existing account if already present
         const existing = existingAccounts.find(
-          (a: Record<string, unknown>) => (a.name as string || '').toLowerCase() === catLower
+          (a: Record<string, unknown>) => ((a.name as string) || '').toLowerCase() === catLower
         )
         if (existing) {
           accountIdMap.set(catLower, existing.id as number)
@@ -3383,7 +3510,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         const mopLower = mop.toLowerCase()
         if (mopAccountMap.has(mopLower) || accountIdMap.has(mopLower)) continue
         const existing = existingAccounts2.find(
-          (a: Record<string, unknown>) => (a.name as string || '').toLowerCase() === mopLower
+          (a: Record<string, unknown>) => ((a.name as string) || '').toLowerCase() === mopLower
         )
         if (existing) {
           mopAccountMap.set(mopLower, existing.id as number)
@@ -3440,10 +3567,26 @@ export async function importExecute(body: unknown): Promise<Response> {
         // Auto-create category if not found
         if (!cat) {
           const palette = [
-            '#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6',
-            '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6', '#A855F7',
-            '#EC4899', '#F43F5E', '#D946EF', '#84CC16', '#10B981',
-            '#0EA5E9', '#2563EB', '#7C3AED', '#C026D3', '#E11D48',
+            '#EF4444',
+            '#F97316',
+            '#EAB308',
+            '#22C55E',
+            '#14B8A6',
+            '#06B6D4',
+            '#3B82F6',
+            '#6366F1',
+            '#8B5CF6',
+            '#A855F7',
+            '#EC4899',
+            '#F43F5E',
+            '#D946EF',
+            '#84CC16',
+            '#10B981',
+            '#0EA5E9',
+            '#2563EB',
+            '#7C3AED',
+            '#C026D3',
+            '#E11D48',
           ]
           const defaultColor = palette[categories.length % palette.length]
           // Preserve original casing: capitalize first letter only
@@ -3457,7 +3600,13 @@ export async function importExecute(body: unknown): Promise<Response> {
             tax_deductible: false,
             profile_id: profileId,
           })
-          cat = { id: id as number, name: storedName, type, color: defaultColor, icon: 'tag' } as any
+          cat = {
+            id: id as number,
+            name: storedName,
+            type,
+            color: defaultColor,
+            icon: 'tag',
+          } as any
           categories.push(cat)
         }
         if (cat) categoryId = cat.id
@@ -3499,7 +3648,8 @@ export async function importExecute(body: unknown): Promise<Response> {
         notes: toStr(row.notes),
         beneficiary: toStr(row.beneficiary),
         payor: toStr(row.payor),
-        account_id: accountId !== null ? accountId : (data.account_id ? Number(data.account_id) : null),
+        account_id:
+          accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null,
         transfer_account_id: transferAccountId || undefined,
         created_at: new Date().toISOString(),
       }
@@ -3548,7 +3698,9 @@ export async function importBulk(body: unknown): Promise<Response> {
         beneficiary: toStr(item.beneficiary),
         payor: toStr(item.payor),
         account_id: item.account_id ? Number(item.account_id) : null,
-        transfer_account_id: item.transfer_account_id ? Number(item.transfer_account_id) : undefined,
+        transfer_account_id: item.transfer_account_id
+          ? Number(item.transfer_account_id)
+          : undefined,
         created_at: new Date().toISOString(),
       }
       const id = await adapter.createTransaction(transaction as any)
@@ -3833,7 +3985,11 @@ export async function transactionTagsSet(
     const data = body as Record<string, unknown>
     const tagIds = data.tagIds as number[] | undefined
     if (!Array.isArray(tagIds)) return json({ error: 'tagIds must be an array' }, 400)
-    const updated = { ...tx, tag_ids: tagIds, tags: [] as { id: number; name: string; color: string }[] }
+    const updated = {
+      ...tx,
+      tag_ids: tagIds,
+      tags: [] as { id: number; name: string; color: string }[],
+    }
     if (tagIds.length > 0) {
       const allTags = await db.getAllFromIndex('tags', 'by_profile', pid)
       updated.tags = (allTags as Record<string, unknown>[])
@@ -3897,7 +4053,15 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
       if (!updateData || typeof updateData !== 'object') {
         return json({ error: 'No update data provided' }, 400)
       }
-      const allowedFields = ['category_id', 'type', 'description', 'beneficiary', 'payor', 'notes', 'reconciled']
+      const allowedFields = [
+        'category_id',
+        'type',
+        'description',
+        'beneficiary',
+        'payor',
+        'notes',
+        'reconciled',
+      ]
       let updated = 0
       for (const id of ids) {
         const tx = await db.get('transactions', id)
@@ -3952,7 +4116,10 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
       const rawMappings = await db.getAll('category_mappings')
       for (const m of rawMappings as Record<string, unknown>[]) {
         if (m.profile_id === pid) {
-          mappingPatterns.push({ pattern: (m.pattern as string).toLowerCase(), categoryId: m.category_id as number })
+          mappingPatterns.push({
+            pattern: (m.pattern as string).toLowerCase(),
+            categoryId: m.category_id as number,
+          })
         }
       }
     } catch {
@@ -3969,15 +4136,14 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
       }
     } else {
       const all = await db.getAllFromIndex('transactions', 'by_profile', pid)
-      txns = (all as Record<string, unknown>[]).filter(
-        (t) => !t.category_id || t.category_id === 0
-      )
+      txns = (all as Record<string, unknown>[]).filter((t) => !t.category_id || t.category_id === 0)
     }
 
     let mapped = 0
     for (const tx of txns) {
       const toStr = (v: unknown) => (typeof v === 'string' ? v : '')
-      const searchText = `${toStr(tx.description)} ${toStr(tx.beneficiary)} ${toStr(tx.payor)}`.toLowerCase()
+      const searchText =
+        `${toStr(tx.description)} ${toStr(tx.beneficiary)} ${toStr(tx.payor)}`.toLowerCase()
       const normalized = searchText.replace(/[^a-z0-9]/g, '')
 
       // Check learned mappings first
@@ -3991,21 +4157,94 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
 
       // Check keyword-based classification
       if (bestCategoryId === null) {
-        const incomeKeywords = ['salary', 'wage', 'income', 'revenue', 'refund', 'dividend', 'interest', 'bonus', 'freelance', 'deposit', 'paycheck']
-        const expenseKeywords = ['groceries', 'restaurant', 'rent', 'utility', 'insurance', 'health', 'transport', 'shopping', 'entertainment', 'subscription', 'phone', 'internet', 'electric', 'water', 'gas', 'gym', 'travel', 'education', 'medical', 'dental', 'pharmacy', 'clothing', 'charity', 'gift', 'tax', 'fee', 'bank fee', 'maintenance', 'repair', 'fuel', 'parking', 'toll', 'hotel', 'flight', 'coffee', 'food', 'drink']
-        const accountKeywords = ['revolut', 'rev', 'n26', 'wise', 'paypal', 'pbz', 'current', 'giro', 'savings', 'wallet', 'transfer', 'wire']
+        const incomeKeywords = [
+          'salary',
+          'wage',
+          'income',
+          'revenue',
+          'refund',
+          'dividend',
+          'interest',
+          'bonus',
+          'freelance',
+          'deposit',
+          'paycheck',
+        ]
+        const expenseKeywords = [
+          'groceries',
+          'restaurant',
+          'rent',
+          'utility',
+          'insurance',
+          'health',
+          'transport',
+          'shopping',
+          'entertainment',
+          'subscription',
+          'phone',
+          'internet',
+          'electric',
+          'water',
+          'gas',
+          'gym',
+          'travel',
+          'education',
+          'medical',
+          'dental',
+          'pharmacy',
+          'clothing',
+          'charity',
+          'gift',
+          'tax',
+          'fee',
+          'bank fee',
+          'maintenance',
+          'repair',
+          'fuel',
+          'parking',
+          'toll',
+          'hotel',
+          'flight',
+          'coffee',
+          'food',
+          'drink',
+        ]
+        const accountKeywords = [
+          'revolut',
+          'rev',
+          'n26',
+          'wise',
+          'paypal',
+          'pbz',
+          'current',
+          'giro',
+          'savings',
+          'wallet',
+          'transfer',
+          'wire',
+        ]
 
         for (const kw of incomeKeywords) {
-          if (normalized.includes(kw)) { bestCategoryId = (catMap.get('income') || catMap.get('salary'))?.id as number; break }
+          if (normalized.includes(kw)) {
+            bestCategoryId = (catMap.get('income') || catMap.get('salary'))?.id as number
+            break
+          }
         }
         if (bestCategoryId === null) {
           for (const kw of accountKeywords) {
-            if (normalized.includes(kw)) { bestCategoryId = (catMap.get('transfer') || catMap.get('account transfer'))?.id as number; break }
+            if (normalized.includes(kw)) {
+              bestCategoryId = (catMap.get('transfer') || catMap.get('account transfer'))
+                ?.id as number
+              break
+            }
           }
         }
         if (bestCategoryId === null) {
           for (const kw of expenseKeywords) {
-            if (normalized.includes(kw)) { bestCategoryId = (catMap.get('other'))?.id as number; break }
+            if (normalized.includes(kw)) {
+              bestCategoryId = catMap.get('other')?.id as number
+              break
+            }
           }
         }
       }
@@ -4037,10 +4276,15 @@ export async function categoriesApplyMappings(body: unknown): Promise<Response> 
         const allMappings = await db.getAll('category_mappings')
         for (const m of allMappings as Record<string, unknown>[]) {
           if (m.profile_id === pid && mappingIds.includes(m.id as number)) {
-            patterns.push({ pattern: (m.pattern as string).toLowerCase(), categoryId: m.category_id as number })
+            patterns.push({
+              pattern: (m.pattern as string).toLowerCase(),
+              categoryId: m.category_id as number,
+            })
           }
         }
-      } catch { /* store may not exist */ }
+      } catch {
+        /* store may not exist */
+      }
     }
 
     // Get transactions to apply to
@@ -4053,7 +4297,8 @@ export async function categoriesApplyMappings(body: unknown): Promise<Response> 
     let applied = 0
     for (const tx of targets) {
       const toStr = (v: unknown) => (typeof v === 'string' ? v : '')
-      const searchText = `${toStr(tx.description)} ${toStr(tx.beneficiary)} ${toStr(tx.payor)}`.toLowerCase()
+      const searchText =
+        `${toStr(tx.description)} ${toStr(tx.beneficiary)} ${toStr(tx.payor)}`.toLowerCase()
       const normalized = searchText.replace(/[^a-z0-9]/g, '')
       for (const mp of patterns) {
         if (normalized.includes(mp.pattern.replace(/[^a-z0-9]/g, ''))) {
@@ -4084,8 +4329,10 @@ export async function accountsTimeline(): Promise<Response> {
       try {
         const acct = await db.get('accounts', accountId)
         if (!acct || !pids.includes(acct.profile_id)) continue
-      } catch { continue }
-      const date = (entry.recorded_at as string || entry.date as string || '').slice(0, 10)
+      } catch {
+        continue
+      }
+      const date = ((entry.recorded_at as string) || (entry.date as string) || '').slice(0, 10)
       const balance = entry.balance as number
       timeline.set(date, (timeline.get(date) || 0) + balance)
     }
@@ -4109,9 +4356,7 @@ export async function accountsReconciliationSummary(
     if (!account || account.profile_id !== pid) return notFound('Account')
 
     const allTxns = await db.getAllFromIndex('transactions', 'by_profile', pid)
-    const txns = (allTxns as Record<string, unknown>[]).filter(
-      (t) => t.account_id === accountId
-    )
+    const txns = (allTxns as Record<string, unknown>[]).filter((t) => t.account_id === accountId)
 
     const unreconciled = txns.filter((t) => !t.reconciled)
     const reconciled = txns.filter((t) => !!t.reconciled)
@@ -4120,7 +4365,7 @@ export async function accountsReconciliationSummary(
       account_id: accountId,
       account_name: account.name,
       unreconciled_count: unreconciled.length,
-      unreconciled_total: unreconciled.reduce((s, t) => s + (t.amount as number || 0), 0),
+      unreconciled_total: unreconciled.reduce((s, t) => s + ((t.amount as number) || 0), 0),
       reconciled_count: reconciled.length,
       total_transactions: txns.length,
     })
@@ -4128,4 +4373,3 @@ export async function accountsReconciliationSummary(
     return json({ error: (err as Error).message }, 500)
   }
 }
-

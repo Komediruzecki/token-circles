@@ -2,7 +2,18 @@
  * Budget handlers — IndexedDB-backed implementations for all /api/budgets routes.
  */
 import { getDB } from '../idb'
-import { adapter, endOfNextMonth, getAmount, idParam, json, monthStart, nextMonth, notFound, ok, prevMonth } from './helpers'
+import {
+  adapter,
+  endOfNextMonth,
+  getAmount,
+  idParam,
+  json,
+  monthStart,
+  nextMonth,
+  notFound,
+  ok,
+  prevMonth,
+} from './helpers'
 
 export async function budgetsList(): Promise<Response> {
   const budgets = await adapter.listBudgets()

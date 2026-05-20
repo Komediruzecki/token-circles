@@ -203,7 +203,11 @@ const routes: RouteDef[] = [
   },
 
   // ── Transactions ──
-  { pattern: /^\/transactions\/summary$/, methods: ['GET'], handler: dispatch({ GET: () => h.transactionsSummary() }) },
+  {
+    pattern: /^\/transactions\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.transactionsSummary() }),
+  },
   {
     pattern: /^\/transactions$/,
     methods: ['GET', 'POST', 'DELETE'],
@@ -513,7 +517,7 @@ const routes: RouteDef[] = [
     pattern: /^\/categories\/mappings$/,
     methods: ['GET', 'POST'],
     handler: dispatch({
-      GET: (ctx) => h.categoryMappingsList(ctx.query),
+      GET: () => h.categoryMappingsList(),
       POST: (ctx) => h.categoryMappingsCreate(ctx.body),
     }),
   },
@@ -574,7 +578,11 @@ const routes: RouteDef[] = [
       DELETE: (ctx) => h.billsDelete(ctx.params),
     }),
   },
-  { pattern: /^\/bills\/upcoming$/, methods: ['GET'], handler: dispatch({ GET: () => h.billsUpcoming() }) },
+  {
+    pattern: /^\/bills\/upcoming$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.billsUpcoming() }),
+  },
   {
     pattern: /^\/bills\/(\d+)\/(pay|mark-paid)$/,
     methods: ['POST'],
@@ -622,7 +630,11 @@ const routes: RouteDef[] = [
       DELETE: (ctx) => h.recurringDelete(ctx.params),
     }),
   },
-  { pattern: /^\/recurring\/upcoming$/, methods: ['GET'], handler: dispatch({ GET: () => h.recurringUpcoming() }) },
+  {
+    pattern: /^\/recurring\/upcoming$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.recurringUpcoming() }),
+  },
   {
     pattern: /^\/recurring\/(\d+)\/populate$/,
     methods: ['POST'],
@@ -789,7 +801,11 @@ const routes: RouteDef[] = [
   },
 
   // Stats
-  { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: dispatch({ GET: (ctx) => h.statsMonthly(ctx.query) }) },
+  {
+    pattern: /^\/stats\/monthly$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.statsMonthly(ctx.query) }),
+  },
 
   // Logs
   {

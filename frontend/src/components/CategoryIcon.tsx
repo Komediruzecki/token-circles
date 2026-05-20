@@ -322,9 +322,29 @@ const iconPatterns: [RegExp, IconDef][] = [
 // Short keywords that must appear as standalone words (with word boundaries)
 // to avoid false positives like "car" inside "card", "cat" inside "categorized", etc.
 const boundaryWords = new Set([
-  'car', 'cat', 'dog', 'pet', 'gas', 'fun', 'eat', 'eye', 'run',
-  'fit', 'gym', 'kid', 'vet', 'spa', 'tax', 'irs', 'fee', 'desk',
-  'cell', 'rent', 'nail', 'skin', 'hair',
+  'car',
+  'cat',
+  'dog',
+  'pet',
+  'gas',
+  'fun',
+  'eat',
+  'eye',
+  'run',
+  'fit',
+  'gym',
+  'kid',
+  'vet',
+  'spa',
+  'tax',
+  'irs',
+  'fee',
+  'desk',
+  'cell',
+  'rent',
+  'nail',
+  'skin',
+  'hair',
 ])
 
 function findIcon(categoryName: string): IconDef | null {

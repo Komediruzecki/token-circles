@@ -44,7 +44,10 @@ export default function Portfolio() {
   onMount(() => {
     loadData()
   })
-  createEffect(() => { void state.profileVersion; void loadData() })
+  createEffect(() => {
+    void state.profileVersion
+    void loadData()
+  })
 
   const openAddModal = () => {
     setEditingHolding(null)

@@ -35,6 +35,8 @@ describe('storageFactory - storage mode detection', () => {
 
   it('resetAdapter does not throw', async () => {
     const { resetAdapter } = await import('../storageFactory.js')
-    expect(() => { resetAdapter() }).not.toThrow()
+    expect(() => {
+      resetAdapter()
+    }).not.toThrow()
   })
 })

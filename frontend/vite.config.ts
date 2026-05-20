@@ -14,7 +14,13 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
     __GIT_SHA__: JSON.stringify(
-      (() => { try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'unknown' } })(),
+      (() => {
+        try {
+          return execSync('git rev-parse --short HEAD').toString().trim()
+        } catch {
+          return 'unknown'
+        }
+      })()
     ),
   },
   base: './',
@@ -36,9 +42,7 @@ export default defineConfig({
   plugins: [
     solidPlugin(),
     ANALYZE_BUNDLE ? bundleAnalyzer() : undefined,
-    ...(process.env.NODE_ENV !== 'production'
-      ? [devtools({ targetOrigin: 'auto' })]
-      : []),
+    ...(process.env.NODE_ENV !== 'production' ? [devtools({ targetOrigin: 'auto' })] : []),
     {
       name: 'copy-export-html',
       writeBundle() {

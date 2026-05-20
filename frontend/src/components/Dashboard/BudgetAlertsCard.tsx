@@ -23,7 +23,9 @@ export default function BudgetAlertsCard() {
 
   onMount(async () => {
     try {
-      const data = (await apiGet<{ alerts: BudgetAlert[] }>('/api/budgets/alerts?threshold=80')) as any
+      const data = (await apiGet<{ alerts: BudgetAlert[] }>(
+        '/api/budgets/alerts?threshold=80'
+      )) as any
       if (data?.alerts && Array.isArray(data.alerts)) {
         setAlerts(data.alerts)
       }
@@ -72,7 +74,8 @@ export default function BudgetAlertsCard() {
               <div class={styles.alertContent}>
                 <div class={styles.alertTitle}>{alert.categoryName}</div>
                 <div class={styles.alertDescription}>
-                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgetAmount)} ({alert.percentage}
+                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgetAmount)} (
+                  {alert.percentage}
                   %)
                 </div>
               </div>

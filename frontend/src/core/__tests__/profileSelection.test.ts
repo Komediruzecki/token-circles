@@ -22,7 +22,7 @@ function deduplicateById(profiles: Array<{ id: number; name: string }>) {
 function getSelectedProfileIds(
   profiles: Array<{ id: number; name: string }>,
   localStorageIds: string | null,
-  localStorageCurrent: string | null,
+  localStorageCurrent: string | null
 ): number[] {
   const stored = localStorageIds
   if (stored) {
@@ -150,7 +150,7 @@ describe('getSelectedProfileIds', () => {
         { id: 10, name: 'Second' },
       ],
       null,
-      '1',
+      '1'
     )
     expect(result).toEqual([5])
   })

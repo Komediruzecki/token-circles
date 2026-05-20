@@ -41,7 +41,7 @@ import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import styles from './BudgetsPage.module.css'
-import type { BudgetImprovement, BudgetSummaryResponse, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
+import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 
@@ -164,7 +164,9 @@ export default function Budgets() {
     try {
       const { years } = await api.getTransactionYears()
       if (years.length > 0) setAvailableYears([...years].sort((a, b) => b - a))
-    } catch { /* keep defaults */ }
+    } catch {
+      /* keep defaults */
+    }
   }
 
   const currentMonthNum = () => parseInt(month().split('-')[1])
@@ -197,7 +199,7 @@ export default function Budgets() {
     try {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
         apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${month()}`),
-        apiGet<ZeroBasedResponse>(`/api/budgets/zero-based/summary?month=${month()}`),
+        apiGet<any>(`/api/budgets/zero-based/summary?month=${month()}`),
         apiGet<ForecastData>(`/api/budgets/forecast?month=${month()}`).catch(() => null),
       ])
 
@@ -209,14 +211,15 @@ export default function Budgets() {
           status:
             item.status ||
             (item.percent_used > 100 ? 'over' : item.percent_used >= 90 ? 'warning' : 'ok'),
-          is_fully_allocated: item.is_fully_allocated ?? ((item.is_budgeted as boolean) && item.amount > 0),
+          is_fully_allocated:
+            item.is_fully_allocated ?? (((item as any).is_budgeted as boolean) && item.amount > 0),
         })
       )
-      setAllocations(allocationsList)
+      setAllocations(allocationsList as any)
       setSummary({
         ...summaryRes,
         categories: summaryRes?.allocations || summaryRes?.categories || [],
-      })
+      } as any)
       const unallocated = summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0
       setBudgetMessage(
         unallocated > 0
@@ -363,9 +366,9 @@ export default function Budgets() {
     try {
       const [allRes, budgetRes] = await Promise.all([
         apiGet<Category[]>('/api/categories'),
-        apiGet<BudgetSummaryResponse[]>(
+        apiGet<any[]>(
           `/api/budgets/summary?year=${currentYearNum()}&month=${currentMonthNum()}`
-        ).catch((): BudgetSummaryResponse[] => []),
+        ).catch((): any[] => []),
       ])
       setCategories(allRes)
       const summary: Record<

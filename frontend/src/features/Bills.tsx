@@ -131,8 +131,8 @@ export default function Bills() {
   }
 
   // Memoized filtered lists
-  const unpaidBills = createMemo(() => unpaidBills())
-  const paidBills = createMemo(() => paidBills())
+  const unpaidBills = createMemo(() => bills().filter((b: any) => !b.paid))
+  const paidBills = createMemo(() => bills().filter((b: any) => b.paid))
 
   // Add category
   const addCategory = async (e: Event) => {
@@ -306,204 +306,202 @@ export default function Bills() {
           </button>
         </div>
       ) : (
-      <div class={styles.billsGrid}>
-        {/* Unpaid Bills Section */}
-        {unpaidBills().length > 0 && (
-          <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
-            <h2 class={styles.sectionTitle}>
-              <svg
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-              </svg>{' '}
-              Unpaid Bills
-              <span class={styles.sectionSubtitle}>
-                {unpaidBills().length} bills
-              </span>
-            </h2>
-            <div data-test-id="bills-list" class={styles.billsList}>
-              <For each={unpaidBills()}>
-                {(bill) => (
-                  <div
-                    data-test-id="bill-card"
-                    class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
-                  >
-                    <div class={styles.billMain}>
-                      <div data-test-id="bill-icon" class={styles.billIcon}>
-                        {bill.autopay ? (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
-                      </div>
-                      <div class={styles.billInfo}>
-                        <h3 data-test-id="bill-name" class={styles.billName}>
-                          {bill.name}
-                        </h3>
-                        <p data-test-id="bill-details" class={styles.billDetails}>
-                          {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
-                          {bill.frequency === 'monthly'
-                            ? 'Monthly'
-                            : bill.frequency === 'weekly'
-                              ? 'Weekly'
-                              : 'Biweekly'}
-                        </p>
-                      </div>
-                    </div>
+        <div class={styles.billsGrid}>
+          {/* Unpaid Bills Section */}
+          {unpaidBills().length > 0 && (
+            <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
+              <h2 class={styles.sectionTitle}>
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+                </svg>{' '}
+                Unpaid Bills
+                <span class={styles.sectionSubtitle}>{unpaidBills().length} bills</span>
+              </h2>
+              <div data-test-id="bills-list" class={styles.billsList}>
+                <For each={unpaidBills()}>
+                  {(bill) => (
                     <div
-                      data-test-id="bill-amount-container"
-                      class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                      data-test-id="bill-card"
+                      class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
                     >
-                      <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                      <button
-                        data-test-id="bill-mark-paid-btn"
-                        class={`${styles.btnPrimary} ${styles.btnSm}`}
-                        onClick={() => markPaid(bill.id)}
-                        disabled={markingPaid().has(bill.id)}
+                      <div class={styles.billMain}>
+                        <div data-test-id="bill-icon" class={styles.billIcon}>
+                          {bill.autopay ? (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          ) : (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div class={styles.billInfo}>
+                          <h3 data-test-id="bill-name" class={styles.billName}>
+                            {bill.name}
+                          </h3>
+                          <p data-test-id="bill-details" class={styles.billDetails}>
+                            {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
+                            {bill.frequency === 'monthly'
+                              ? 'Monthly'
+                              : bill.frequency === 'weekly'
+                                ? 'Weekly'
+                                : 'Biweekly'}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        data-test-id="bill-amount-container"
+                        class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
                       >
-                        {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
-                      </button>
+                        <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                        <button
+                          data-test-id="bill-mark-paid-btn"
+                          class={`${styles.btnPrimary} ${styles.btnSm}`}
+                          onClick={() => markPaid(bill.id)}
+                          disabled={markingPaid().has(bill.id)}
+                        >
+                          {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </For>
+                  )}
+                </For>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Paid Bills Section */}
-        {paidBills().length > 0 && (
-        <div data-test-id="bills-paid-section" class={styles.billsSection}>
-          <h2 class={styles.sectionTitle}>
-            <span>
-              <svg
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            </span>{' '}
-            Paid Bills
-            <span class={styles.sectionSubtitle}>{paidBills().length} paid</span>
-          </h2>
-            <div class={styles.billsList}>
-              <For each={paidBills()}>
-                {(bill) => (
-                  <div
-                    class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
+          {/* Paid Bills Section */}
+          {paidBills().length > 0 && (
+            <div data-test-id="bills-paid-section" class={styles.billsSection}>
+              <h2 class={styles.sectionTitle}>
+                <span>
+                  <svg
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
                   >
-                    <div class={styles.billMain}>
-                      <div data-test-id="bill-icon" class={styles.billIcon}>
-                        {bill.autopay ? (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </span>{' '}
+                Paid Bills
+                <span class={styles.sectionSubtitle}>{paidBills().length} paid</span>
+              </h2>
+              <div class={styles.billsList}>
+                <For each={paidBills()}>
+                  {(bill) => (
+                    <div
+                      class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
+                    >
+                      <div class={styles.billMain}>
+                        <div data-test-id="bill-icon" class={styles.billIcon}>
+                          {bill.autopay ? (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          ) : (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div class={styles.billInfo}>
+                          <h3 data-test-id="bill-name" class={styles.billName}>
+                            {bill.name}
+                            {bill.paid && <span class={styles.paidBadge}>Paid</span>}
+                          </h3>
+                          <p data-test-id="bill-details" class={styles.billDetails}>
+                            {formatDate(bill.due_date)} •{' '}
+                            {bill.frequency === 'monthly'
+                              ? 'Monthly'
+                              : bill.frequency === 'weekly'
+                                ? 'Weekly'
+                                : 'Biweekly'}
+                            {bill.category && ` • ${bill.category}`}
+                          </p>
+                        </div>
                       </div>
-                      <div class={styles.billInfo}>
-                        <h3 data-test-id="bill-name" class={styles.billName}>
-                          {bill.name}
-                          {bill.paid && <span class={styles.paidBadge}>Paid</span>}
-                        </h3>
-                        <p data-test-id="bill-details" class={styles.billDetails}>
-                          {formatDate(bill.due_date)} •{' '}
-                          {bill.frequency === 'monthly'
-                            ? 'Monthly'
-                            : bill.frequency === 'weekly'
-                              ? 'Weekly'
-                              : 'Biweekly'}
-                          {bill.category && ` • ${bill.category}`}
-                        </p>
+                      <div class={styles.billAmount}>
+                        <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                        <div class={styles.billActions}>
+                          {!bill.paid ? (
+                            <button
+                              data-test-id="bill-mark-paid-btn"
+                              class={`${styles.btnPrimary} ${styles.btnSm}`}
+                              onClick={() => markPaid(bill.id)}
+                              disabled={markingPaid().has(bill.id)}
+                            >
+                              {markingPaid().has(bill.id)
+                                ? 'Paying...'
+                                : isOverdue(bill.due_date)
+                                  ? 'Mark as Paid (Overdue)'
+                                  : 'Mark Paid'}
+                            </button>
+                          ) : (
+                            <ConfirmButton
+                              class={`${styles.btnSm} ${styles.btnGhost}`}
+                              onConfirm={() => deleteBill(bill.id)}
+                              label={
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              }
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div class={styles.billAmount}>
-                      <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                      <div class={styles.billActions}>
-                        {!bill.paid ? (
-                          <button
-                            data-test-id="bill-mark-paid-btn"
-                            class={`${styles.btnPrimary} ${styles.btnSm}`}
-                            onClick={() => markPaid(bill.id)}
-                            disabled={markingPaid().has(bill.id)}
-                          >
-                            {markingPaid().has(bill.id)
-                              ? 'Paying...'
-                              : isOverdue(bill.due_date)
-                                ? 'Mark as Paid (Overdue)'
-                                : 'Mark Paid'}
-                          </button>
-                        ) : (
-                          <ConfirmButton
-                            class={`${styles.btnSm} ${styles.btnGhost}`}
-                            onConfirm={() => deleteBill(bill.id)}
-                            label={
-                              <svg
-                                width="16"
-                                height="16"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            }
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </For>
+                  )}
+                </For>
+              </div>
             </div>
+          )}
         </div>
       )}
-      </div>
-    )}
 
       {/* Add Bill Modal */}
       {showAddModal() && (
