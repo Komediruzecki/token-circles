@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { getDB } from '../idb.js'
 import { 
-  analyticsDistinctYears,
-  analyticsWeeks,
-  analyticsDailyHeatmap,
   analyticsCategoryTrends,
+  analyticsDailyHeatmap,
+  analyticsDistinctYears,
   analyticsSankey,
+  analyticsWeeks,
+  categoriesCreate,
   reportsCustom,
   transactionsCreate,
-  categoriesCreate,
 } from '../localHandlers.js'
-import { getDB } from '../idb.js'
 
 describe('localHandlers - analytics and reports', () => {
   let catId: number

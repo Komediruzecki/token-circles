@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { getDB } from '../idb.js'
 import { 
   billsCreate, 
-  billsList, 
-  billsGet, 
-  billsUpdate,
   billsDelete,
+  billsGet, 
+  billsList, 
+  billsPayOrMarkPaid,
   billsUpcoming,
-  billsPayOrMarkPaid
-} from '../localHandlers.js'
-import { getDB } from '../idb.js'
+  billsUpdate} from '../localHandlers.js'
 
 describe('localHandlers - bills', () => {
   beforeEach(async () => {

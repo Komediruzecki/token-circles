@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { getDB } from '../idb.js'
 import { 
   categoriesCreate, 
-  categoriesList, 
+  categoriesDelete,
   categoriesGet, 
-  categoriesUpdate,
-  categoriesDelete
-} from '../localHandlers.js'
-import { getDB } from '../idb.js'
+  categoriesList, 
+  categoriesUpdate} from '../localHandlers.js'
 
 describe('localHandlers - categories', () => {
   beforeEach(async () => {

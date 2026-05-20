@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  dashboardMain,
-  dashboardSummary,
-  dashboardCharts,
-  dashboardNetWorth,
-  transactionsCreate,
-  categoriesCreate,
-  accountsCreate,
-} from '../localHandlers.js'
 import { getDB } from '../idb.js'
+import {
+  accountsCreate,
+  categoriesCreate,
+  dashboardCharts,
+  dashboardMain,
+  dashboardNetWorth,
+  dashboardSummary,
+  transactionsCreate,
+} from '../localHandlers.js'
 
 describe('localHandlers - dashboard', () => {
   beforeEach(async () => {

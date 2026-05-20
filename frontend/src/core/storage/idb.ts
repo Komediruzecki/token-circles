@@ -20,44 +20,47 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 6
+const DB_VERSION = 7
 
 function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
-  db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
+  // v1: base stores
+  if (oldVersion < 1) {
+    db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
 
-  const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
-  txns.createIndex('by_profile', 'profile_id')
-  txns.createIndex('by_date', 'date')
-  txns.createIndex('by_category', 'category_id')
-  txns.createIndex('by_type', 'type')
+    const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
+    txns.createIndex('by_profile', 'profile_id')
+    txns.createIndex('by_date', 'date')
+    txns.createIndex('by_category', 'category_id')
+    txns.createIndex('by_type', 'type')
 
-  const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
-  cats.createIndex('by_profile', 'profile_id')
-  cats.createIndex('by_type', 'type')
+    const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
+    cats.createIndex('by_profile', 'profile_id')
+    cats.createIndex('by_type', 'type')
 
-  const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
-  accts.createIndex('by_profile', 'profile_id')
+    const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
+    accts.createIndex('by_profile', 'profile_id')
 
-  const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
-  budgets.createIndex('by_profile', 'profile_id')
+    const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
+    budgets.createIndex('by_profile', 'profile_id')
 
-  const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
-  goals.createIndex('by_profile', 'profile_id')
+    const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
+    goals.createIndex('by_profile', 'profile_id')
 
-  const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
-  loans.createIndex('by_profile', 'profile_id')
+    const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
+    loans.createIndex('by_profile', 'profile_id')
 
-  const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
-  bh.createIndex('by_account', 'account_id')
+    const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
+    bh.createIndex('by_account', 'account_id')
 
-  const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
-  receipts.createIndex('by_profile', 'profile_id')
-  receipts.createIndex('by_transaction', 'transaction_id')
+    const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
+    receipts.createIndex('by_profile', 'profile_id')
+    receipts.createIndex('by_transaction', 'transaction_id')
 
-  const pf = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
-  pf.createIndex('by_profile', 'profile_id')
+    const pf = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
+    pf.createIndex('by_profile', 'profile_id')
 
-  db.createObjectStore('settings', { keyPath: 'key' })
+    db.createObjectStore('settings', { keyPath: 'key' })
+  }
 
   // v2: bills store
   if (oldVersion < 2) {
@@ -88,6 +91,12 @@ function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
     const logs = db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true })
     logs.createIndex('by_level', 'level')
     logs.createIndex('by_timestamp', 'timestamp')
+  }
+
+  // v7: categoryMappings store
+  if (oldVersion < 7) {
+    const cm = db.createObjectStore('categoryMappings', { keyPath: 'id', autoIncrement: true })
+    cm.createIndex('by_profile', 'profile_id')
   }
 }
 

@@ -290,7 +290,7 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
 export async function transactionsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid transaction data' }, 400)
   const tx = body as Record<string, unknown>
-  tx.profile_id = adapter.getCurrentProfileId ? await adapter.getCurrentProfileId() : 1
+  tx.profile_id = await adapter.getCurrentProfileId()
   const id = await adapter.createTransaction(
     tx as unknown as Parameters<typeof adapter.createTransaction>[0]
   )
@@ -1370,7 +1370,7 @@ export async function exportByType(
     const csv = ['date,type,description,amount,currency,category_id,notes']
     for (const t of data.transactions) {
       csv.push(
-        [t.date, t.type, `"${t.description}"`, t.amount, t.currency, `"${t.notes || ''}"`].join(',')
+        [t.date, t.type, `"${t.description}"`, t.amount, t.currency, t.category_id ?? '', `"${t.notes || ''}"`].join(',')
       )
     }
     return new Response(csv.join('\n'), {
@@ -3825,7 +3825,7 @@ export async function portfolioHoldingsCreate(body: unknown): Promise<Response> 
       purchase_date: dateVal,
       notes: typeof notesVal === 'string' ? notesVal : '',
       created_at: new Date().toISOString(),
-      profile_id: parseInt(localStorage.getItem('currentProfileId') || '1', 10),
+      profile_id: await adapter.getCurrentProfileId(),
     }
     const id = await db.add('portfolioHoldings', holding)
     return json({ ...holding, id }, 201)
@@ -4113,7 +4113,7 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
     // Get category mappings for learned patterns
     const mappingPatterns: { pattern: string; categoryId: number }[] = []
     try {
-      const rawMappings = await db.getAll('category_mappings')
+      const rawMappings = await db.getAll('categoryMappings')
       for (const m of rawMappings as Record<string, unknown>[]) {
         if (m.profile_id === pid) {
           mappingPatterns.push({
@@ -4123,7 +4123,7 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
         }
       }
     } catch {
-      // category_mappings store may not exist yet
+      // categoryMappings store may not exist yet
     }
 
     // Get uncategorized transactions
@@ -4273,7 +4273,7 @@ export async function categoriesApplyMappings(body: unknown): Promise<Response> 
     const patterns: { pattern: string; categoryId: number }[] = []
     if (mappingIds && mappingIds.length > 0) {
       try {
-        const allMappings = await db.getAll('category_mappings')
+        const allMappings = await db.getAll('categoryMappings')
         for (const m of allMappings as Record<string, unknown>[]) {
           if (m.profile_id === pid && mappingIds.includes(m.id as number)) {
             patterns.push({

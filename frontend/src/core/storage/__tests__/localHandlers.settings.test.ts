@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { getDB } from '../idb.js'
 import {
+  recurringCreate,
+  recurringDelete,
+  recurringGet,
+  recurringList,
+  recurringUpcoming,
+  recurringUpdate,
   settingsGet,
   settingsUpdate,
-  recurringList,
-  recurringCreate,
-  recurringGet,
-  recurringUpdate,
-  recurringDelete,
-  recurringUpcoming,
 } from '../localHandlers.js'
-import { getDB } from '../idb.js'
 
 describe('localHandlers - settings', () => {
   beforeEach(async () => {
