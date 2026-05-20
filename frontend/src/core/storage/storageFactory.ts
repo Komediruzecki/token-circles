@@ -37,7 +37,7 @@ function detectStorageMode(): StorageMode {
 
     // Check if API base URL is root (self-hosted) or domain (serverless)
     const apiBase = window.location.pathname.replace(/\/$/, '')
-    return apiBase === '/' ? 'serverless' : 'self-hosted'
+    return apiBase === '' || apiBase === '/' ? 'serverless' : 'self-hosted'
   } catch {
     return 'self-hosted'
   }

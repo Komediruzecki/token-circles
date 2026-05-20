@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { getDB } from '../idb.js'
 import {
-  authLogin,
   authCheck,
+  authLogin,
   authLogout,
   authMe,
-  profilesList,
-  profilesCreate,
-  profilesGet,
-  profilesUpdate,
-  profilesDelete,
-  portfolioHoldingsList,
   portfolioHoldingsCreate,
-  portfolioHoldingsUpdate,
   portfolioHoldingsDelete,
+  portfolioHoldingsList,
+  portfolioHoldingsUpdate,
   portfolioSummary,
+  profilesCreate,
+  profilesDelete,
+  profilesGet,
+  profilesList,
+  profilesUpdate,
 } from '../localHandlers.js'
-import { getDB } from '../idb.js'
 
 describe('localHandlers - auth stubs', () => {
   it('login returns user object', async () => {
