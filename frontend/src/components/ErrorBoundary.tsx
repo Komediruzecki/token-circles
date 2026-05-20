@@ -1,10 +1,6 @@
 import { ErrorBoundary as SolidErrorBoundary } from 'solid-js'
 import type { Component, JSX } from 'solid-js'
 
-declare global {
-  const __APP_VERSION__: string
-}
-
 interface Props {
   children: JSX.Element
 }

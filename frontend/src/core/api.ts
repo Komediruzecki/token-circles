@@ -997,12 +997,20 @@ export class ApiClient {
     return this.request<Models.RecurringTransaction>(`/recurring/${id}`)
   }
 
-  createRecurring(data: Omit<Models.RecurringTransaction, 'id' | 'profile_id'>): Promise<Models.RecurringTransaction> {
+  createRecurring(
+    data: Omit<Models.RecurringTransaction, 'id' | 'profile_id'>
+  ): Promise<Models.RecurringTransaction> {
     return this.request<Models.RecurringTransaction>('/recurring', { method: 'POST', body: data })
   }
 
-  updateRecurring(id: number, data: Partial<Models.RecurringTransaction>): Promise<Models.RecurringTransaction> {
-    return this.request<Models.RecurringTransaction>(`/recurring/${id}`, { method: 'PUT', body: data })
+  updateRecurring(
+    id: number,
+    data: Partial<Models.RecurringTransaction>
+  ): Promise<Models.RecurringTransaction> {
+    return this.request<Models.RecurringTransaction>(`/recurring/${id}`, {
+      method: 'PUT',
+      body: data,
+    })
   }
 
   deleteRecurring(id: number): Promise<void> {

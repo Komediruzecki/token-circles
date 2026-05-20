@@ -125,10 +125,42 @@ describe('Import → Analytics flow', () => {
 
     it('both income and expense stay positive after bulk insert (simulates import)', async () => {
       const txnData = [
-        { type: 'expense', amount: 25.50, description: 'Coffee', date: '2026-05-03', category_id: 1, profile_id: 1, account_id: 1 },
-        { type: 'expense', amount: 120, description: 'Electric bill', date: '2026-05-10', category_id: 1, profile_id: 1, account_id: 1 },
-        { type: 'income', amount: 3000, description: 'Freelance', date: '2026-05-15', category_id: 2, profile_id: 1, account_id: 1 },
-        { type: 'expense', amount: 80, description: 'Gas', date: '2026-05-20', category_id: 1, profile_id: 1, account_id: 1 },
+        {
+          type: 'expense',
+          amount: 25.5,
+          description: 'Coffee',
+          date: '2026-05-03',
+          category_id: 1,
+          profile_id: 1,
+          account_id: 1,
+        },
+        {
+          type: 'expense',
+          amount: 120,
+          description: 'Electric bill',
+          date: '2026-05-10',
+          category_id: 1,
+          profile_id: 1,
+          account_id: 1,
+        },
+        {
+          type: 'income',
+          amount: 3000,
+          description: 'Freelance',
+          date: '2026-05-15',
+          category_id: 2,
+          profile_id: 1,
+          account_id: 1,
+        },
+        {
+          type: 'expense',
+          amount: 80,
+          description: 'Gas',
+          date: '2026-05-20',
+          category_id: 1,
+          profile_id: 1,
+          account_id: 1,
+        },
       ]
 
       for (const t of txnData) await adapter.createTransaction(t as any)
@@ -181,9 +213,33 @@ describe('Import → Analytics flow', () => {
       await seedAccount('Checking', 5000)
 
       const expenses = [
-        { type: 'expense' as const, amount: 150, description: 'Food', date: '2026-05-01', category_id: 1, profile_id: 1, account_id: 1 },
-        { type: 'expense' as const, amount: 800, description: 'Rent', date: '2026-05-02', category_id: 1, profile_id: 1, account_id: 1 },
-        { type: 'expense' as const, amount: 60, description: 'Internet', date: '2026-05-03', category_id: 1, profile_id: 1, account_id: 1 },
+        {
+          type: 'expense' as const,
+          amount: 150,
+          description: 'Food',
+          date: '2026-05-01',
+          category_id: 1,
+          profile_id: 1,
+          account_id: 1,
+        },
+        {
+          type: 'expense' as const,
+          amount: 800,
+          description: 'Rent',
+          date: '2026-05-02',
+          category_id: 1,
+          profile_id: 1,
+          account_id: 1,
+        },
+        {
+          type: 'expense' as const,
+          amount: 60,
+          description: 'Internet',
+          date: '2026-05-03',
+          category_id: 1,
+          profile_id: 1,
+          account_id: 1,
+        },
       ]
       for (const t of expenses) await adapter.createTransaction(t as any)
 
@@ -199,17 +255,27 @@ describe('Import → Analytics flow', () => {
       await seedCategory('Salary', 'income', '#00FF00')
 
       await adapter.createTransaction({
-        type: 'expense', amount: 100, description: 'Dinner',
-        date: '2025-03-15', category_id: 1, profile_id: 1, account_id: null,
+        type: 'expense',
+        amount: 100,
+        description: 'Dinner',
+        date: '2025-03-15',
+        category_id: 1,
+        profile_id: 1,
+        account_id: null,
       } as any)
       await adapter.createTransaction({
-        type: 'income', amount: 5000, description: 'Bonus',
-        date: '2026-01-10', category_id: 2, profile_id: 1, account_id: null,
+        type: 'income',
+        amount: 5000,
+        description: 'Bonus',
+        date: '2026-01-10',
+        category_id: 2,
+        profile_id: 1,
+        account_id: null,
       } as any)
 
       const { analyticsDistinctYears } = await import('../localHandlers.js')
       const res = await analyticsDistinctYears()
-      const body = await res.json() as { years: number[] }
+      const body = (await res.json()) as { years: number[] }
       expect(body.years).toContain(2025)
       expect(body.years).toContain(2026)
     })
@@ -218,22 +284,41 @@ describe('Import → Analytics flow', () => {
       await seedCategory('Food', 'expense', '#FF0000')
 
       await adapter.createTransaction({
-        type: 'expense', amount: 30, description: 'Lunch',
-        date: '2026-05-01', category_id: 1, profile_id: 1, account_id: null,
+        type: 'expense',
+        amount: 30,
+        description: 'Lunch',
+        date: '2026-05-01',
+        category_id: 1,
+        profile_id: 1,
+        account_id: null,
       } as any)
       await adapter.createTransaction({
-        type: 'expense', amount: 70, description: 'Dinner',
-        date: '2026-05-01', category_id: 1, profile_id: 1, account_id: null,
+        type: 'expense',
+        amount: 70,
+        description: 'Dinner',
+        date: '2026-05-01',
+        category_id: 1,
+        profile_id: 1,
+        account_id: null,
       } as any)
       await adapter.createTransaction({
-        type: 'expense', amount: 200, description: 'Shopping',
-        date: '2026-05-15', category_id: 1, profile_id: 1, account_id: null,
+        type: 'expense',
+        amount: 200,
+        description: 'Shopping',
+        date: '2026-05-15',
+        category_id: 1,
+        profile_id: 1,
+        account_id: null,
       } as any)
 
       const { analyticsDailyHeatmap } = await import('../localHandlers.js')
       const params = new URLSearchParams({ year: '2026', type: 'expense' })
       const res = await analyticsDailyHeatmap(params)
-      const body = await res.json() as { dates: Record<string, number>; year: number; type: string }
+      const body = (await res.json()) as {
+        dates: Record<string, number>
+        year: number
+        type: string
+      }
 
       expect(body.dates['2026-05-01']).toBe(100) // 30 + 70
       expect(body.dates['2026-05-15']).toBe(200)
@@ -250,14 +335,22 @@ describe('Import → Analytics flow', () => {
       // Add expense transactions for each month
       for (let m = 1; m <= 12; m++) {
         await adapter.createTransaction({
-          type: 'expense', amount: 100, description: `Food month ${m}`,
+          type: 'expense',
+          amount: 100,
+          description: `Food month ${m}`,
           date: `2026-${String(m).padStart(2, '0')}-15`,
-          category_id: 1, profile_id: 1, account_id: null,
+          category_id: 1,
+          profile_id: 1,
+          account_id: null,
         } as any)
         await adapter.createTransaction({
-          type: 'income', amount: 5000, description: `Salary month ${m}`,
+          type: 'income',
+          amount: 5000,
+          description: `Salary month ${m}`,
           date: `2026-${String(m).padStart(2, '0')}-01`,
-          category_id: 2, profile_id: 1, account_id: null,
+          category_id: 2,
+          profile_id: 1,
+          account_id: null,
         } as any)
       }
 
@@ -267,7 +360,7 @@ describe('Import → Analytics flow', () => {
       const expenseRes = await analyticsCategoryTrends(
         new URLSearchParams({ year: '2026', type: 'expense' })
       )
-      const expenseBody = await expenseRes.json() as {
+      const expenseBody = (await expenseRes.json()) as {
         labels: string[]
         datasets: Array<{ category: string; color: string; data: number[] }>
         numDays: number
@@ -293,7 +386,7 @@ describe('Import → Analytics flow', () => {
       const res = await analyticsCategoryTrends(
         new URLSearchParams({ year: '2024', type: 'expense' })
       )
-      const body = await res.json() as { labels: unknown[]; datasets: unknown[] }
+      const body = (await res.json()) as { labels: unknown[]; datasets: unknown[] }
 
       expect(Array.isArray(body.labels)).toBe(true)
       expect(Array.isArray(body.datasets)).toBe(true)
@@ -324,15 +417,20 @@ describe('Import → Analytics flow', () => {
     it('billsList returns bills for current profile', async () => {
       // Create a bill first
       await adapter.createTransaction({
-        type: 'expense', amount: 100, description: 'bill ref',
-        date: '2026-05-01', category_id: null, profile_id: 1, account_id: null,
+        type: 'expense',
+        amount: 100,
+        description: 'bill ref',
+        date: '2026-05-01',
+        category_id: null,
+        profile_id: 1,
+        account_id: null,
       } as any)
 
       const { billsCreate, billsList } = await import('../localHandlers.js')
       await billsCreate({ name: 'Internet', amount: 45, frequency: 'monthly', day_of_month: 1 })
 
       const listRes = await billsList()
-      const body = await listRes.json() as unknown[]
+      const body = (await listRes.json()) as unknown[]
       expect(body.length).toBe(1)
       expect((body[0] as Record<string, unknown>).name).toBe('Internet')
     })

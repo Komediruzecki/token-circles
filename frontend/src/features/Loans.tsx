@@ -40,7 +40,7 @@ import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import styles from './LoansPage.module.css'
-import type { Loan, LoanDetail, LoanPrepayment } from '../types/models'
+import type { LoanDetail, LoanPrepayment } from '../types/models'
 
 interface Loan {
   id: number
@@ -332,7 +332,9 @@ export default function Loans() {
 
   // Calculate totals
   const totalPrincipal = createMemo(() => loans().reduce((sum, l) => sum + l.principal, 0))
-  const totalRemaining = createMemo(() => loans().reduce((sum, l) => sum + calculateRemaining(l), 0))
+  const totalRemaining = createMemo(() =>
+    loans().reduce((sum, l) => sum + calculateRemaining(l), 0)
+  )
 
   return (
     <div class={`page page-loans page-enter ${styles.loansPage}`}>

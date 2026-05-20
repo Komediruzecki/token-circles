@@ -79,7 +79,9 @@ describe('localApiRouter - category mappings', () => {
 
   it('DELETE returns ok', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/categories/mappings/1', { method: 'DELETE' })
+    const res = await routeApiRequest('http://localhost/api/categories/mappings/1', {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.ok).toBe(true)
@@ -127,7 +129,9 @@ describe('localApiRouter - loan calculate', () => {
 describe('localApiRouter - path with params', () => {
   it('matches paths with numeric IDs', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/categories/mappings/42', { method: 'DELETE' })
+    const res = await routeApiRequest('http://localhost/api/categories/mappings/42', {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.ok).toBe(true)

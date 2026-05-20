@@ -185,7 +185,10 @@ export default function HousingForm() {
   onMount(() => {
     loadHousings()
   })
-  createEffect(() => { void state.profileVersion; void loadHousings() })
+  createEffect(() => {
+    void state.profileVersion
+    void loadHousings()
+  })
 
   return (
     <div class={`page page-housing page-enter ${styles.housingPage}`}>
@@ -220,7 +223,9 @@ export default function HousingForm() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Autopay Enabled</div>
-          <div class={styles.summaryValue}>{housings().filter((h) => h.autopay === true || h.autopay === 1).length}</div>
+          <div class={styles.summaryValue}>
+            {housings().filter((h) => h.autopay === true || h.autopay === 1).length}
+          </div>
         </div>
       </div>
 
@@ -246,7 +251,7 @@ export default function HousingForm() {
                     <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
                   </div>
                   <div class={styles.housingActions}>
-                    {(housing.autopay === true || housing.autopay === 1) ? (
+                    {housing.autopay === true || housing.autopay === 1 ? (
                       <Badge status="success">Autopay</Badge>
                     ) : (
                       <Badge status="default">Manual</Badge>

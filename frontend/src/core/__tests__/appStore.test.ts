@@ -12,8 +12,8 @@ import {
 
 describe('appStore - profiles', () => {
   const sample = [
-    { id: 1, name: 'Demo', starting_balance: 0 },
-    { id: 2, name: 'Personal', starting_balance: 100 },
+    { id: 1, name: 'Demo', created_at: '2023-01-01T00:00:00Z' },
+    { id: 2, name: 'Personal', created_at: '2023-01-02T00:00:00Z' },
   ]
 
   it('starts with empty profiles', () => {
@@ -31,8 +31,8 @@ describe('appStore - profiles', () => {
   it('replaces same-id items with updated data', () => {
     setProfiles(sample)
     setProfiles([
-      { id: 1, name: 'Renamed Demo', starting_balance: 0 },
-      { id: 2, name: 'Renamed Personal', starting_balance: 100 },
+      { id: 1, name: 'Renamed Demo', created_at: '2023-01-01T00:00:00Z' },
+      { id: 2, name: 'Renamed Personal', created_at: '2023-01-02T00:00:00Z' },
     ])
     const second = getProfiles()
     expect(second.length).toBe(2)
@@ -45,7 +45,7 @@ describe('appStore - profiles', () => {
   it('replaces with fewer items (shrinks array)', () => {
     setProfiles(sample)
     expect(getProfiles().length).toBe(2)
-    setProfiles([{ id: 1, name: 'Demo', starting_balance: 0 }])
+    setProfiles([{ id: 1, name: 'Demo', created_at: '2023-01-01T00:00:00Z' }])
     expect(getProfiles().length).toBe(1)
     expect(getProfiles()[0].id).toBe(1)
   })
@@ -54,9 +54,9 @@ describe('appStore - profiles', () => {
     setProfiles(sample)
     expect(getProfiles().length).toBe(2)
     setProfiles([
-      { id: 1, name: 'Demo', starting_balance: 0 },
-      { id: 2, name: 'Personal', starting_balance: 100 },
-      { id: 3, name: 'Work', starting_balance: 500 },
+      { id: 1, name: 'Demo', created_at: '2023-01-01T00:00:00Z' },
+      { id: 2, name: 'Personal', created_at: '2023-01-02T00:00:00Z' },
+      { id: 3, name: 'Work', created_at: '2023-01-03T00:00:00Z' },
     ])
     expect(getProfiles().length).toBe(3)
     expect(getProfiles()[2].id).toBe(3)
@@ -80,13 +80,13 @@ describe('appStore - currentProfile', () => {
   })
 
   it('setCurrentProfile stores and retrieves a profile', () => {
-    const profile = { id: 1, name: 'Test', starting_balance: 50 }
+    const profile = { id: 1, name: 'Test', created_at: '2023-01-01T00:00:00Z' }
     setCurrentProfile(profile)
     expect(getCurrentProfile()).toEqual(profile)
   })
 
   it('setCurrentProfile(null) clears it', () => {
-    setCurrentProfile({ id: 1, name: 'Test', starting_balance: 50 })
+    setCurrentProfile({ id: 1, name: 'Test', created_at: '2023-01-01T00:00:00Z' })
     setCurrentProfile(null)
     expect(getCurrentProfile()).toBeNull()
   })

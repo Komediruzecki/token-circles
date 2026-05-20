@@ -47,7 +47,9 @@ test.describe('Page Animations', () => {
   test('transactions page shows table', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'transactions')
-    await expect(page.locator('table, [data-test-id="transactions-header"]').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('table, [data-test-id="transactions-header"]').first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 
   test('accounts grid renders', async ({ page }) => {

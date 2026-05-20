@@ -2,7 +2,17 @@
  * Main App Component - Root component for the application
  */
 
-import { createEffect, createMemo, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
@@ -45,27 +55,49 @@ export function App() {
   // Shared app store — replaces 12 inline signals
   const state = useAppState()
   const activePage = () => state.page
-  const setActivePage = (p: PageName) => { setPage(p); }
+  const setActivePage = (p: PageName) => {
+    setPage(p)
+  }
   const _isLoading = () => state.loading
-  const _setIsLoading = (v: boolean) => { setLoading(v); }
+  const _setIsLoading = (v: boolean) => {
+    setLoading(v)
+  }
   const profiles = () => state.profiles as Profile[]
-  const setProfiles = (p: Profile[]) => { setProfilesStore(p); }
+  const setProfiles = (p: Profile[]) => {
+    setProfilesStore(p)
+  }
   const currentProfile = () => state.currentProfile
-  const setCurrentProfile = (p: Profile | null) => { setCurrentProfileStore(p); }
+  const setCurrentProfile = (p: Profile | null) => {
+    setCurrentProfileStore(p)
+  }
   const isAuthenticated = () => state.isAuthenticated
-  const setIsAuthenticated = (v: boolean) => { setIsAuthenticatedStore(v); }
+  const setIsAuthenticated = (v: boolean) => {
+    setIsAuthenticatedStore(v)
+  }
   const showDropdown = () => state.showDropdown
-  const setShowDropdown = (v: boolean) => { setShowDropdownStore(v); }
+  const setShowDropdown = (v: boolean) => {
+    setShowDropdownStore(v)
+  }
   const isLoginModalOpen = () => state.isLoginModalOpen
-  const setIsLoginModalOpen = (v: boolean) => { setIsLoginModalOpenStore(v); }
+  const setIsLoginModalOpen = (v: boolean) => {
+    setIsLoginModalOpenStore(v)
+  }
   const isProfileModalOpen = () => state.isProfileModalOpen
-  const setIsProfileModalOpen = (v: boolean) => { setIsProfileModalOpenStore(v); }
+  const setIsProfileModalOpen = (v: boolean) => {
+    setIsProfileModalOpenStore(v)
+  }
   const isQuickAddOpen = () => state.isQuickAddOpen
-  const setIsQuickAddOpen = (v: boolean) => { setIsQuickAddOpenStore(v); }
+  const setIsQuickAddOpen = (v: boolean) => {
+    setIsQuickAddOpenStore(v)
+  }
   const sidebarCollapsed = () => state.sidebarCollapsed
-  const setSidebarCollapsed = (v: boolean) => { setSidebarCollapsedStore(v); }
+  const setSidebarCollapsed = (v: boolean) => {
+    setSidebarCollapsedStore(v)
+  }
   const quickAddCategories = () => state.quickAddCategories
-  const setQuickAddCategories = (c: Category[]) => { setQuickAddCategoriesStore(c); }
+  const setQuickAddCategories = (c: Category[]) => {
+    setQuickAddCategoriesStore(c)
+  }
 
   const loadProfiles = async (autoSelect = false) => {
     try {
@@ -123,7 +155,9 @@ export function App() {
           const valid = [...new Set(ids)].filter((id) => existingIds.has(id))
           if (valid.length > 0) return valid
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     // If no profiles exist at all, return empty — don't invent a nonexistent ID
     if (profiles().length === 0) return []
@@ -132,7 +166,8 @@ export function App() {
     return exists ? [currentId] : [profiles()[0].id]
   }
 
-  const [selectedProfileIds, setSelectedProfileIds] = createSignal<number[]>(getSelectedProfileIds())
+  const [selectedProfileIds, setSelectedProfileIds] =
+    createSignal<number[]>(getSelectedProfileIds())
 
   // Defensive dedup of profiles array before rendering.
   // The store may accumulate duplicates due to proxy/reconciliation edge cases.
@@ -242,7 +277,9 @@ export function App() {
       }
     }
     document.addEventListener('click', handleClickOutside)
-    onCleanup(() => { document.removeEventListener('click', handleClickOutside); })
+    onCleanup(() => {
+      document.removeEventListener('click', handleClickOutside)
+    })
 
     await api.checkLogin().then(async (loggedIn) => {
       setIsAuthenticated(loggedIn)
@@ -526,7 +563,9 @@ export function App() {
               class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
             >
               <div class={profileStyles.profileDropdownHeader}>
-                {uniqueProfiles().length === 0 ? 'No profiles' : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
+                {uniqueProfiles().length === 0
+                  ? 'No profiles'
+                  : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
               </div>
               {uniqueProfiles().length > 0 ? (
                 <For each={uniqueProfiles()}>
@@ -538,8 +577,12 @@ export function App() {
                       <input
                         type="checkbox"
                         checked={selectedProfileIds().includes(profile.id)}
-                        onClick={(e) => { e.stopPropagation(); }}
-                        onchange={() => { toggleProfileSelection(profile.id); }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                        }}
+                        onchange={() => {
+                          toggleProfileSelection(profile.id)
+                        }}
                         style={{
                           width: '16px',
                           height: '16px',
@@ -551,13 +594,17 @@ export function App() {
                       />
                       <span
                         style={{ flex: 1, cursor: 'pointer' }}
-                        onClick={() => { selectProfile(profile.id); }}
+                        onClick={() => {
+                          selectProfile(profile.id)
+                        }}
                         title="Set as primary profile"
                       >
                         {profile.name}
                       </span>
                       {currentProfile()?.id === profile.id && (
-                        <span style={{ 'font-size': '10px', color: 'var(--primary)', opacity: 0.7 }}>
+                        <span
+                          style={{ 'font-size': '10px', color: 'var(--primary)', opacity: 0.7 }}
+                        >
                           primary
                         </span>
                       )}
@@ -572,7 +619,9 @@ export function App() {
 
               <div
                 class={profileStyles.profileDropdownItem}
-                onClick={() => { setIsProfileModalOpen(true); }}
+                onClick={() => {
+                  setIsProfileModalOpen(true)
+                }}
               >
                 <svg
                   width="14"
@@ -748,12 +797,19 @@ export function App() {
       </div>
 
       <Show when={!sidebarCollapsed()}>
-        <div class={layoutStyles['sidebar-overlay']} onClick={() => { setSidebarCollapsed(true); }} />
+        <div
+          class={layoutStyles['sidebar-overlay']}
+          onClick={() => {
+            setSidebarCollapsed(true)
+          }}
+        />
       </Show>
 
       <button
         class={layoutStyles['mobile-toggle']}
-        onClick={() => { setSidebarCollapsedStore(!state.sidebarCollapsed); }}
+        onClick={() => {
+          setSidebarCollapsedStore(!state.sidebarCollapsed)
+        }}
         aria-label="Toggle sidebar"
       >
         <svg
@@ -777,7 +833,13 @@ export function App() {
                   <div class={layoutStyles.pageError}>
                     <h3>Page Error</h3>
                     <p>{err.toString()}</p>
-                    <button onClick={() => { window.location.reload(); }}>Reload</button>
+                    <button
+                      onClick={() => {
+                        window.location.reload()
+                      }}
+                    >
+                      Reload
+                    </button>
                   </div>
                 )}
               >
@@ -789,12 +851,19 @@ export function App() {
       </main>
 
       <Show when={isLoginModalOpen()}>
-        <LoginModal onClose={() => { setIsLoginModalOpen(false); }} onSuccess={handleLoginSuccess} />
+        <LoginModal
+          onClose={() => {
+            setIsLoginModalOpen(false)
+          }}
+          onSuccess={handleLoginSuccess}
+        />
       </Show>
 
       <Show when={isProfileModalOpen()}>
         <ProfileModal
-          onClose={() => { setIsProfileModalOpen(false); }}
+          onClose={() => {
+            setIsProfileModalOpen(false)
+          }}
           onSuccess={() => {
             setIsProfileModalOpen(false)
             loadProfiles(true)
@@ -804,7 +873,9 @@ export function App() {
 
       <QuickAddModal
         isOpen={isQuickAddOpen}
-        onClose={() => { setIsQuickAddOpen(false); }}
+        onClose={() => {
+          setIsQuickAddOpen(false)
+        }}
         categories={() => quickAddCategories()}
         onSave={(_transaction) => {
           toast('Transaction added', 'success')

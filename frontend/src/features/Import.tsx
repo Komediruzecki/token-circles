@@ -145,8 +145,12 @@ export default function Import() {
         let cur = ''
         let inQuotes = false
         for (const ch of line) {
-          if (ch === '"') { inQuotes = !inQuotes }
-          else if ((delim && ch === delim) || (!delim && (ch === ',' || ch === '\t')) && !inQuotes) {
+          if (ch === '"') {
+            inQuotes = !inQuotes
+          } else if (
+            (delim && ch === delim) ||
+            (!delim && (ch === ',' || ch === '\t') && !inQuotes)
+          ) {
             cols.push(cur.trim().replace(/^"|"$/g, ''))
             cur = ''
           } else cur += ch
@@ -154,7 +158,11 @@ export default function Import() {
         cols.push(cur.trim().replace(/^"|"$/g, ''))
         rows.push(cols)
       }
-      if (rows.length < 2) { setError('Need at least a header row and one data row'); setLoading(false); return }
+      if (rows.length < 2) {
+        setError('Need at least a header row and one data row')
+        setLoading(false)
+        return
+      }
       const headers = rows[0]
       const dataRows = rows.slice(1).filter((r) => r.some((c) => c))
       setUploadResult({
@@ -169,7 +177,10 @@ export default function Import() {
         duplicateIndices: [],
       })
       setActiveStep('upload')
-    } catch { setError('Failed to parse pasted data'); setLoading(false) }
+    } catch {
+      setError('Failed to parse pasted data')
+      setLoading(false)
+    }
   }
 
   // Column mapping
@@ -676,7 +687,9 @@ export default function Import() {
                   {(name) => (
                     <button
                       class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => { handleSheetTabClick(name) }}
+                      onClick={() => {
+                        handleSheetTabClick(name)
+                      }}
                     >
                       {name}
                     </button>
@@ -687,7 +700,11 @@ export default function Import() {
           )}
 
           {sheetResult() && (
-            <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={goToMapping} style={{ 'margin-top': '16px' }}>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={goToMapping}
+              style={{ 'margin-top': '16px' }}
+            >
               Continue to Mapping
             </button>
           )}
@@ -771,28 +788,314 @@ export default function Import() {
                   'Amount Local',
                 ]
                 const rows: string[][] = [
-                  ['2024-01-01', 'Salary January', '3200.00', 'Salary', 'EUR', 'Employer Inc.', 'Employer Inc.', 'Bank Transfer', '1.0', 'Monthly salary', 'income', '3200.00'],
-                  ['2024-01-02', 'Rent Payment', '-950.00', 'Rent', 'EUR', 'Landlord Ltd.', 'John Doe', 'Bank Transfer', '1.0', 'January rent', 'expense', '-950.00'],
-                  ['2024-01-03', 'Grocery Store', '-78.35', 'Groceries', 'EUR', 'Supermarket', 'John Doe', 'Debit Card', '1.0', 'Weekly groceries', 'expense', '-78.35'],
-                  ['2024-01-04', 'Electric Bill', '-112.50', 'Utilities', 'EUR', 'Power Co.', 'John Doe', 'Direct Debit', '1.0', 'January electricity', 'expense', '-112.50'],
-                  ['2024-01-05', 'Gas Station', '-55.00', 'Transport', 'EUR', 'Fuel Station', 'John Doe', 'Credit Card', '1.0', 'Fuel for car', 'expense', '-55.00'],
-                  ['2024-01-06', 'Internet Bill', '-39.99', 'Utilities', 'EUR', 'ISP Provider', 'John Doe', 'Direct Debit', '1.0', 'Monthly internet', 'expense', '-39.99'],
-                  ['2024-01-07', 'Restaurant Dinner', '-62.40', 'Dining', 'EUR', 'Bella Italia', 'John Doe', 'Credit Card', '1.0', 'Dinner with friends', 'expense', '-62.40'],
-                  ['2024-01-08', 'Gym Membership', '-45.00', 'Health', 'EUR', 'FitLife Gym', 'John Doe', 'Direct Debit', '1.0', 'Monthly gym fee', 'expense', '-45.00'],
-                  ['2024-01-10', 'Freelance Work', '450.00', 'Freelance', 'EUR', 'Client XYZ', 'Client XYZ', 'Bank Transfer', '1.0', 'Website project', 'income', '450.00'],
-                  ['2024-01-12', 'Phone Bill', '-29.99', 'Utilities', 'EUR', 'Telecom Co.', 'John Doe', 'Direct Debit', '1.0', 'Monthly phone plan', 'expense', '-29.99'],
-                  ['2024-01-14', 'Pharmacy', '-23.50', 'Health', 'EUR', 'City Pharmacy', 'John Doe', 'Debit Card', '1.0', 'Vitamins and supplies', 'expense', '-23.50'],
-                  ['2024-01-15', 'Cinema Tickets', '-28.00', 'Entertainment', 'EUR', 'CineMax', 'John Doe', 'Credit Card', '1.0', 'Movie night', 'expense', '-28.00'],
-                  ['2024-01-17', 'Transfer to Savings', '-500.00', 'Savings', 'EUR', 'My Savings Account', 'John Doe', 'Bank Transfer', '1.0', 'Monthly savings', 'expense', '-500.00'],
-                  ['2024-01-18', 'Grocery Store', '-85.20', 'Groceries', 'EUR', 'Supermarket', 'John Doe', 'Debit Card', '1.0', 'Weekly groceries', 'expense', '-85.20'],
-                  ['2024-01-20', 'Clothing Purchase', '-120.00', 'Shopping', 'EUR', 'Fashion Store', 'John Doe', 'Credit Card', '1.0', 'Winter jacket', 'expense', '-120.00'],
-                  ['2024-01-22', 'Car Insurance', '-185.00', 'Insurance', 'EUR', 'AutoInsure Ltd.', 'John Doe', 'Bank Transfer', '1.0', 'Quarterly payment', 'expense', '-185.00'],
-                  ['2024-01-24', 'Grocery Store', '-72.10', 'Groceries', 'EUR', 'Supermarket', 'John Doe', 'Debit Card', '1.0', 'Weekly groceries', 'expense', '-72.10'],
-                  ['2024-01-25', 'Online Course', '-49.99', 'Education', 'EUR', 'EduPlatform', 'John Doe', 'Credit Card', '1.0', 'Programming course', 'expense', '-49.99'],
-                  ['2024-01-27', 'Haircut', '-30.00', 'Personal Care', 'EUR', 'Barber Shop', 'John Doe', 'Debit Card', '1.0', 'Monthly haircut', 'expense', '-30.00'],
-                  ['2024-01-29', 'Restaurant Lunch', '-18.50', 'Dining', 'EUR', 'Cafe Central', 'John Doe', 'Debit Card', '1.0', 'Lunch break', 'expense', '-18.50'],
-                  ['2024-01-31', 'Grocery Store', '-68.75', 'Groceries', 'EUR', 'Supermarket', 'John Doe', 'Debit Card', '1.0', 'Weekly groceries', 'expense', '-68.75'],
-                  ['2024-02-01', 'Salary February', '3200.00', 'Salary', 'EUR', 'Employer Inc.', 'Employer Inc.', 'Bank Transfer', '1.0', 'Monthly salary', 'income', '3200.00'],
+                  [
+                    '2024-01-01',
+                    'Salary January',
+                    '3200.00',
+                    'Salary',
+                    'EUR',
+                    'Employer Inc.',
+                    'Employer Inc.',
+                    'Bank Transfer',
+                    '1.0',
+                    'Monthly salary',
+                    'income',
+                    '3200.00',
+                  ],
+                  [
+                    '2024-01-02',
+                    'Rent Payment',
+                    '-950.00',
+                    'Rent',
+                    'EUR',
+                    'Landlord Ltd.',
+                    'John Doe',
+                    'Bank Transfer',
+                    '1.0',
+                    'January rent',
+                    'expense',
+                    '-950.00',
+                  ],
+                  [
+                    '2024-01-03',
+                    'Grocery Store',
+                    '-78.35',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-78.35',
+                  ],
+                  [
+                    '2024-01-04',
+                    'Electric Bill',
+                    '-112.50',
+                    'Utilities',
+                    'EUR',
+                    'Power Co.',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'January electricity',
+                    'expense',
+                    '-112.50',
+                  ],
+                  [
+                    '2024-01-05',
+                    'Gas Station',
+                    '-55.00',
+                    'Transport',
+                    'EUR',
+                    'Fuel Station',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Fuel for car',
+                    'expense',
+                    '-55.00',
+                  ],
+                  [
+                    '2024-01-06',
+                    'Internet Bill',
+                    '-39.99',
+                    'Utilities',
+                    'EUR',
+                    'ISP Provider',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'Monthly internet',
+                    'expense',
+                    '-39.99',
+                  ],
+                  [
+                    '2024-01-07',
+                    'Restaurant Dinner',
+                    '-62.40',
+                    'Dining',
+                    'EUR',
+                    'Bella Italia',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Dinner with friends',
+                    'expense',
+                    '-62.40',
+                  ],
+                  [
+                    '2024-01-08',
+                    'Gym Membership',
+                    '-45.00',
+                    'Health',
+                    'EUR',
+                    'FitLife Gym',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'Monthly gym fee',
+                    'expense',
+                    '-45.00',
+                  ],
+                  [
+                    '2024-01-10',
+                    'Freelance Work',
+                    '450.00',
+                    'Freelance',
+                    'EUR',
+                    'Client XYZ',
+                    'Client XYZ',
+                    'Bank Transfer',
+                    '1.0',
+                    'Website project',
+                    'income',
+                    '450.00',
+                  ],
+                  [
+                    '2024-01-12',
+                    'Phone Bill',
+                    '-29.99',
+                    'Utilities',
+                    'EUR',
+                    'Telecom Co.',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'Monthly phone plan',
+                    'expense',
+                    '-29.99',
+                  ],
+                  [
+                    '2024-01-14',
+                    'Pharmacy',
+                    '-23.50',
+                    'Health',
+                    'EUR',
+                    'City Pharmacy',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Vitamins and supplies',
+                    'expense',
+                    '-23.50',
+                  ],
+                  [
+                    '2024-01-15',
+                    'Cinema Tickets',
+                    '-28.00',
+                    'Entertainment',
+                    'EUR',
+                    'CineMax',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Movie night',
+                    'expense',
+                    '-28.00',
+                  ],
+                  [
+                    '2024-01-17',
+                    'Transfer to Savings',
+                    '-500.00',
+                    'Savings',
+                    'EUR',
+                    'My Savings Account',
+                    'John Doe',
+                    'Bank Transfer',
+                    '1.0',
+                    'Monthly savings',
+                    'expense',
+                    '-500.00',
+                  ],
+                  [
+                    '2024-01-18',
+                    'Grocery Store',
+                    '-85.20',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-85.20',
+                  ],
+                  [
+                    '2024-01-20',
+                    'Clothing Purchase',
+                    '-120.00',
+                    'Shopping',
+                    'EUR',
+                    'Fashion Store',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Winter jacket',
+                    'expense',
+                    '-120.00',
+                  ],
+                  [
+                    '2024-01-22',
+                    'Car Insurance',
+                    '-185.00',
+                    'Insurance',
+                    'EUR',
+                    'AutoInsure Ltd.',
+                    'John Doe',
+                    'Bank Transfer',
+                    '1.0',
+                    'Quarterly payment',
+                    'expense',
+                    '-185.00',
+                  ],
+                  [
+                    '2024-01-24',
+                    'Grocery Store',
+                    '-72.10',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-72.10',
+                  ],
+                  [
+                    '2024-01-25',
+                    'Online Course',
+                    '-49.99',
+                    'Education',
+                    'EUR',
+                    'EduPlatform',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Programming course',
+                    'expense',
+                    '-49.99',
+                  ],
+                  [
+                    '2024-01-27',
+                    'Haircut',
+                    '-30.00',
+                    'Personal Care',
+                    'EUR',
+                    'Barber Shop',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Monthly haircut',
+                    'expense',
+                    '-30.00',
+                  ],
+                  [
+                    '2024-01-29',
+                    'Restaurant Lunch',
+                    '-18.50',
+                    'Dining',
+                    'EUR',
+                    'Cafe Central',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Lunch break',
+                    'expense',
+                    '-18.50',
+                  ],
+                  [
+                    '2024-01-31',
+                    'Grocery Store',
+                    '-68.75',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-68.75',
+                  ],
+                  [
+                    '2024-02-01',
+                    'Salary February',
+                    '3200.00',
+                    'Salary',
+                    'EUR',
+                    'Employer Inc.',
+                    'Employer Inc.',
+                    'Bank Transfer',
+                    '1.0',
+                    'Monthly salary',
+                    'income',
+                    '3200.00',
+                  ],
                 ]
                 const csv = [header, ...rows].map((r) => r.join(',')).join('\n')
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -817,7 +1120,9 @@ export default function Import() {
             Paste tabular data directly from Excel, Google Sheets, or any spreadsheet application.
             Works guaranteed in serverless mode — no CORS restrictions.
           </p>
-          <div style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}>
+          <div
+            style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}
+          >
             <select
               class={styles.formControl}
               value={pasteDelimiter()}
@@ -830,7 +1135,9 @@ export default function Import() {
             </select>
             <button
               class={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={() => { parsePastedData(pastedText()) }}
+              onClick={() => {
+                parsePastedData(pastedText())
+              }}
               disabled={loading() || !pastedText().trim()}
             >
               Parse Pasted Data
@@ -845,7 +1152,11 @@ export default function Import() {
             style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
           />
           {uploadResult() && activeImportTab() === 'paste-csv' && (
-            <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={goToMapping} style={{ 'margin-top': '12px' }}>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={goToMapping}
+              style={{ 'margin-top': '12px' }}
+            >
               Continue to Mapping
             </button>
           )}
@@ -891,14 +1202,34 @@ export default function Import() {
 
         {/* Category type review */}
         <div class={styles.categoryReview}>
-          <div style={{ display: 'flex', 'align-items': 'center', gap: '16px', 'margin-bottom': '16px', 'flex-wrap': 'wrap' }}>
-            <h3 class={styles.categoryReviewTitle} style={{ margin: 0 }}>Category Types</h3>
-            <label style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'font-size': '13px', color: 'var(--text-secondary)' }}>
+          <div
+            style={{
+              display: 'flex',
+              'align-items': 'center',
+              gap: '16px',
+              'margin-bottom': '16px',
+              'flex-wrap': 'wrap',
+            }}
+          >
+            <h3 class={styles.categoryReviewTitle} style={{ margin: 0 }}>
+              Category Types
+            </h3>
+            <label
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '6px',
+                'font-size': '13px',
+                color: 'var(--text-secondary)',
+              }}
+            >
               Tracking start date:
               <input
                 type="date"
                 value={universalStartDate()}
-                onchange={(e) => { applyUniversalStartDate(e.currentTarget.value) }}
+                onchange={(e) => {
+                  applyUniversalStartDate(e.currentTarget.value)
+                }}
                 style={{
                   padding: '4px 8px',
                   border: '1px solid var(--border)',

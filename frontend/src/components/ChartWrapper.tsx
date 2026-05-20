@@ -176,7 +176,9 @@ export default function ChartWrapper(props: ChartWrapperProps) {
           class={ChartContainer.chartContainer}
           classList={{ [heightClass]: !!heightClass }}
           style={{
-            ...(heightStyle ? { height: `${heightStyle.replace('height: ', '').replace('px', '')  }px` } : {}),
+            ...(heightStyle
+              ? { height: `${heightStyle.replace('height: ', '').replace('px', '')}px` }
+              : {}),
             display: 'flex',
             'align-items': 'center',
             'justify-content': 'center',

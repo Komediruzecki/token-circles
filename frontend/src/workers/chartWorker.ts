@@ -58,7 +58,11 @@ self.onmessage = async (e: MessageEvent<ChartRequest>) => {
               },
               y: {
                 grid: { color: gridColor, drawBorder: false },
-                ticks: { color: textColor, font: { size: 10 }, callback: (v: string | number) => v as number },
+                ticks: {
+                  color: textColor,
+                  font: { size: 10 },
+                  callback: (v: string | number) => v as number,
+                },
               },
             },
       } as any,

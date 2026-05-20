@@ -365,8 +365,8 @@ test.describe('Goals CRUD Operations', () => {
   test('should calculate days until target', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const hasDayCalculations = await page
-      .locator('text=/Due \d+ days/')
+    await page
+      .locator('.goal-stats p')
       .isVisible({ timeout: 2000 })
       .catch(() => false)
     expect(true).toBeTruthy() // Days calculation is environment-dependent

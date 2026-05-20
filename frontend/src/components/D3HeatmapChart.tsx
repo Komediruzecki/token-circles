@@ -71,8 +71,8 @@ export default function D3HeatmapChart(props: Props) {
 
     const colorFn =
       props.type === 'expense'
-        ? d3.scaleSequentialPow([0, maxVal], d3.interpolateReds).exponent(0.4)
-        : d3.scaleSequentialPow([0, maxVal], d3.interpolateGreens).exponent(0.4)
+        ? (d3.scaleSequentialPow([0, maxVal], d3.interpolateReds) as any).exponent(0.4)
+        : (d3.scaleSequentialPow([0, maxVal], d3.interpolateGreens) as any).exponent(0.4)
 
     const getValue = (date: Date) => {
       const dateStr = d3.timeFormat('%Y-%m-%d')(date)
