@@ -76,6 +76,13 @@ export default function Transactions() {
     []
   )
   const [categories, setCategories] = createSignal<Category[]>([])
+  // Filter categories by the selected transaction type
+  const filteredCategories = createMemo(() => {
+    const t = type()
+    const cats = categories()
+    if (t === 'transfer') return []
+    return cats.filter((c) => c.type === t)
+  })
   const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
@@ -455,12 +462,20 @@ export default function Transactions() {
   })
 
   const openTransactionModal = () => {
+    setType('expense')
     setFormId(null)
     setFormDescription('')
     setFormAmount('')
+    setFormCurrency(getLocalCurrency())
+    setFormExchangeRate('1')
+    setFormCategory(null)
+    setFormBeneficiary('')
+    setFormPayor('')
+    setFormNotes('')
     setFormMeans('')
     setFormAccountId(null)
     setFormAmountLocal('')
+    setFormDate(new Date().toISOString().slice(0, 10))
     setTransactionModalOpen(true)
   }
 
@@ -663,7 +678,7 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-expense"
                     class={`${styles.expense} ${type() === 'expense' ? styles.active : ''}`}
-                    onClick={() => setType('expense')}
+                    onClick={() => { setType('expense'); setFormCategory(null) }}
                   >
                     Expense
                   </button>
@@ -671,7 +686,7 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-income"
                     class={`${styles.income} ${type() === 'income' ? styles.active : ''}`}
-                    onClick={() => setType('income')}
+                    onClick={() => { setType('income'); setFormCategory(null) }}
                   >
                     Income
                   </button>
@@ -679,7 +694,7 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-transfer"
                     class={`${styles.transfer} ${type() === 'transfer' ? styles.active : ''}`}
-                    onClick={() => setType('transfer')}
+                    onClick={() => { setType('transfer'); setFormCategory(null) }}
                   >
                     Transfer
                   </button>
@@ -751,8 +766,8 @@ export default function Transactions() {
                       setFormCategory(value !== '' ? parseInt(value) : null)
                     }}
                   >
-                    <option value=""></option>
-                    <For each={categories()}>
+                    <option value="">Uncategorized</option>
+                    <For each={filteredCategories()}>
                       {(cat) => <option value={cat.id}>{cat.name}</option>}
                     </For>
                   </select>
