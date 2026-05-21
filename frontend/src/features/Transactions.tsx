@@ -877,13 +877,14 @@ export default function Transactions() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Receipt</label>
                 <div class={styles.receiptUploadContainer}>
-                  <label class={styles.receiptPlaceholder} for="tx-receipt" style="cursor: pointer">
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <label class={styles.receiptPlaceholder} for="tx-receipt">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                     <span class={styles.receiptText}>Click to upload receipt</span>
                   </label>
                   <input
+                    id="tx-receipt"
                     type="file"
                     class={styles.receiptInput}
                     accept="image/*,.pdf"
