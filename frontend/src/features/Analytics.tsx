@@ -104,11 +104,27 @@ export default function Analytics() {
     savingsRate: number
   } | null>(null)
 
-  // Load available years from data
+  // Load available years from data and validate selected years
   const loadYears = async () => {
     try {
       const { years } = await api.getTransactionYears()
-      if (years.length > 0) setAvailableYears([...years].sort((a, b) => b - a))
+      if (years.length > 0) {
+        const sorted = [...years].sort((a, b) => b - a)
+        setAvailableYears(sorted)
+        // Validate selected years exist in available range; fall back to latest if not
+        if (!sorted.includes(stackedYear())) {
+          setStackedYear(sorted[0])
+        }
+        if (!sorted.includes(heatmapYear())) {
+          setHeatmapYear(sorted[0])
+        }
+        if (!sorted.includes(sankeyYear())) {
+          setSankeyYear(sorted[0])
+        }
+        if (!sorted.includes(monthlyYear())) {
+          setMonthlyYear(sorted[0])
+        }
+      }
     } catch (_e) {
       // keep default
     }
