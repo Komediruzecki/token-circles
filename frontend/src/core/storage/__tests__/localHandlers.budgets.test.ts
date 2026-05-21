@@ -38,7 +38,7 @@ describe('localHandlers - budgets', () => {
     expect(created.amount).toBe(500)
 
     // List
-    const listRes = await budgetsList(new URLSearchParams())
+    const listRes = await budgetsList()
     expect(listRes.status).toBe(200)
     const list = await listRes.json()
     expect(list).toHaveLength(1)
@@ -86,7 +86,7 @@ describe('localHandlers - budgets', () => {
     const deleteRes = await budgetsDelete({ p1: created.id.toString() })
     expect(deleteRes.status).toBe(200)
 
-    const listRes = await budgetsList(new URLSearchParams())
+    const listRes = await budgetsList()
     const list = await listRes.json()
     expect(list).toHaveLength(0)
   })

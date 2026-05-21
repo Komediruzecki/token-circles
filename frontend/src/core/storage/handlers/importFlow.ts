@@ -3,6 +3,7 @@
  */
 import { getDB } from "../idb"
 import { adapter, json } from "./helpers"
+import type { WorkBook } from 'xlsx'
 
 
 function toStr(v: unknown): string {
@@ -114,7 +115,7 @@ async function detectDuplicates(
   rows: Record<string, unknown>[]
 ): Promise<{ duplicates: number[]; clean: Record<string, unknown>[] }> {
   const db = await getDB()
-  const profileId = getProfileIdFromStorage()
+  const profileId = await adapter.getCurrentProfileId()
   const existing = await db.getAllFromIndex('transactions', 'by_profile', profileId)
   const duplicates: number[] = []
 
@@ -457,7 +458,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
     }
 
-    const profileId = getProfileIdFromStorage()
+    const profileId = await adapter.getCurrentProfileId()
     const db = await getDB()
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
 
@@ -697,7 +698,7 @@ export async function importBulk(body: unknown): Promise<Response> {
       return json({ error: 'No items array provided' }, 400)
     }
 
-    const profileId = getProfileIdFromStorage()
+    const profileId = await adapter.getCurrentProfileId()
     const imported: number[] = []
 
     for (const item of items) {

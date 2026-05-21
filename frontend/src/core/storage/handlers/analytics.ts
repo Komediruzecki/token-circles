@@ -1,6 +1,7 @@
 /**
  * Analytics handlers — IndexedDB-backed implementations
  */
+import { seedDefaultCategories } from "../idb"
 import { adapter, getAmount, json } from "./helpers"
 
 

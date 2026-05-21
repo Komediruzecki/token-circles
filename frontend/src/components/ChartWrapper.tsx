@@ -180,7 +180,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
           classList={{ [heightClass()]: !!heightClass() }}
           style={{
             ...(heightStyle()
-              ? { height: `${heightStyle().replace('height: ', '').replace('px', '')}px` }
+              ? { height: `${(heightStyle() as string).replace('height: ', '').replace('px', '')}px` }
               : {}),
             display: 'flex',
             'align-items': 'center',
