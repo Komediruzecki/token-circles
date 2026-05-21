@@ -678,7 +678,10 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-expense"
                     class={`${styles.expense} ${type() === 'expense' ? styles.active : ''}`}
-                    onClick={() => { setType('expense'); setFormCategory(null) }}
+                    onClick={() => {
+                      setType('expense')
+                      setFormCategory(null)
+                    }}
                   >
                     Expense
                   </button>
@@ -686,7 +689,10 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-income"
                     class={`${styles.income} ${type() === 'income' ? styles.active : ''}`}
-                    onClick={() => { setType('income'); setFormCategory(null) }}
+                    onClick={() => {
+                      setType('income')
+                      setFormCategory(null)
+                    }}
                   >
                     Income
                   </button>
@@ -694,7 +700,10 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-transfer"
                     class={`${styles.transfer} ${type() === 'transfer' ? styles.active : ''}`}
-                    onClick={() => { setType('transfer'); setFormCategory(null) }}
+                    onClick={() => {
+                      setType('transfer')
+                      setFormCategory(null)
+                    }}
                   >
                     Transfer
                   </button>
@@ -893,7 +902,14 @@ export default function Transactions() {
                 <label class={styles.formLabel}>Receipt</label>
                 <div class={styles.receiptUploadContainer}>
                   <label class={styles.receiptPlaceholder} for="tx-receipt">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <svg
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                     <span class={styles.receiptText}>Click to upload receipt</span>
@@ -939,9 +955,9 @@ export default function Transactions() {
                               d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                             />
                           </svg>
-                          <div style="font-size: 14px">{selectedFile()!.name}</div>
+                          <div style="font-size: 14px">{selectedFile()?.name || 'Unknown'}</div>
                           <div style="font-size: 12px; color: var(--text-secondary)">
-                            {(selectedFile()!.size / 1024).toFixed(1)} KB
+                            {selectedFile() ? (selectedFile()!.size / 1024).toFixed(1) : 0} KB
                           </div>
                         </div>
                       )}
@@ -991,9 +1007,30 @@ export default function Transactions() {
               class={styles.btnPrimary}
               data-test-id="tx-save-btn"
               onclick={async () => {
+                // Validation
+                const desc = formDescription().trim()
+                const amtStr = formAmount().trim()
+                const amt = parseFloat(amtStr)
+                if (!desc) {
+                  toast('Please enter a description', 'warning')
+                  return
+                }
+                if (!amtStr || isNaN(amt) || amt === 0) {
+                  toast('Please enter a valid amount', 'warning')
+                  return
+                }
+                if (!formDate()) {
+                  toast('Please enter a date', 'warning')
+                  return
+                }
+                if (type() !== 'transfer' && formCategory() === null) {
+                  toast('Please select a category', 'warning')
+                  return
+                }
+
                 const txData: Record<string, unknown> = {
-                  description: formDescription(),
-                  amount: parseFloat(formAmount() || '0'),
+                  description: desc,
+                  amount: amt,
                   date: formDate() || new Date().toISOString().slice(0, 10),
                   type: type(),
                   category_id: formCategory() ?? null,
