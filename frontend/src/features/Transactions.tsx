@@ -1181,6 +1181,16 @@ export default function Transactions() {
         <div class={styles.loading}>Loading transactions...</div>
       ) : (
         <>
+          {/* Top Pagination */}
+          {totalPages() > 1 && (
+            <Pagination
+              currentPage={currentPage()}
+              totalPages={totalPages()}
+              itemsPerPage={itemsPerPage()}
+              totalItems={filteredTransactions().length}
+              onPageChange={handlePageChange}
+            />
+          )}
           <TransactionTable
             transactions={paginatedTransactions()}
             selectedTransactions={selectedTransactions()}
