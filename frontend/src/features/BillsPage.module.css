@@ -242,6 +242,9 @@
   align-items: center;
   gap: 8px;
 }
+.bills-page .toggle-switch input {
+  display: none;
+}
 .bills-page .toggle-slider {
   width: 44px;
   height: 24px;
