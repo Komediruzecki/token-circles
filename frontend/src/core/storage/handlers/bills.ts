@@ -1,9 +1,8 @@
 /**
  * Bills handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 // Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
 function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
@@ -42,7 +41,7 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
     }
 
     const now = new Date()
-    const billsWithStatus = all.map((b) => ({
+    const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
       ...b,
       paid: isBillPaidForCurrentPeriod(b, now),
     }))
@@ -50,12 +49,12 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
     // Filter by paid status if requested
     let result = billsWithStatus
     const paidParam = query?.get('paid')
-    if (paidParam === 'true') result = result.filter((b) => b.paid)
-    if (paidParam === 'false') result = result.filter((b) => !b.paid)
+    if (paidParam === 'true') result = result.filter((b) => b.paid as boolean)
+    if (paidParam === 'false') result = result.filter((b) => !(b.paid as boolean))
 
     // Filter by type if requested
     const typeParam = query?.get('type')
-    if (typeParam) result = result.filter((b) => (b.type || 'bill') === typeParam)
+    if (typeParam) result = result.filter((b) => ((b.type as string) || 'bill') === typeParam)
 
     return json(result)
   } catch {
@@ -176,4 +175,3 @@ export async function billsPayOrMarkPaid(params: Record<string, string>): Promis
   await db.put('bills', bill)
   return ok()
 }
-
