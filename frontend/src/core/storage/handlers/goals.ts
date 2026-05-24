@@ -1,9 +1,8 @@
 /**
  * Goals handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function goalsList(): Promise<Response> {
   const goals = await adapter.listGoals()
@@ -52,4 +51,3 @@ export async function goalsContribute(
   await db.put('goals', goal)
   return json({ ok: true, current_amount: goal.current_amount })
 }
-

@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
-  tagsCreate, 
+import {
+  tagsCreate,
   tagsDelete,
   tagsGetTransactions,
-  tagsList, 
+  tagsList,
   tagsUpdate,
-  transactionsCreate
+  transactionsCreate,
 } from '../localHandlers.js'
 
 describe('localHandlers - tags', () => {
@@ -19,7 +19,6 @@ describe('localHandlers - tags', () => {
     await db.clear('tags')
     await db.clear('transactions')
 
-    
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
@@ -68,7 +67,7 @@ describe('localHandlers - tags', () => {
       amount: 100,
       description: 'Flight',
       tags: ['Trip'],
-      tag_ids: [tag.id]
+      tag_ids: [tag.id],
     })
 
     const getRes = await tagsGetTransactions({ p1: tag.id.toString() })

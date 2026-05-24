@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
+import {
   housingCalculate,
-  housingCreate, 
+  housingCreate,
   housingDelete,
-  housingGet, 
-  housingList, 
-  housingUpdate} from '../localHandlers.js'
+  housingGet,
+  housingList,
+  housingUpdate,
+} from '../localHandlers.js'
 
 describe('localHandlers - housing', () => {
   beforeEach(async () => {
@@ -16,7 +17,7 @@ describe('localHandlers - housing', () => {
     // Reset data
     await db.clear('profiles')
     await db.clear('housings')
-    
+
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
@@ -26,7 +27,7 @@ describe('localHandlers - housing', () => {
       property_name: 'Primary Residence',
       monthly_amount: 1500,
       due_day: 1,
-      type: 'rent'
+      type: 'rent',
     })
     expect(createRes.status).toBe(201)
     const created = await createRes.json()
@@ -52,16 +53,19 @@ describe('localHandlers - housing', () => {
       property_name: 'Investment Property',
       monthly_amount: 1200,
       due_day: 1,
-      type: 'rent'
+      type: 'rent',
     })
     const created = await createRes.json()
 
-    const updateRes = await housingUpdate({ p1: created.id.toString() }, {
-      property_name: 'Investment Property Updated',
-      monthly_amount: 1300,
-    })
+    const updateRes = await housingUpdate(
+      { p1: created.id.toString() },
+      {
+        property_name: 'Investment Property Updated',
+        monthly_amount: 1300,
+      }
+    )
     expect(updateRes.status).toBe(200)
-    
+
     const getRes = await housingGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.monthly_amount).toBe(1300)
@@ -72,7 +76,7 @@ describe('localHandlers - housing', () => {
       property_name: 'To Delete',
       monthly_amount: 1000,
       due_day: 1,
-      type: 'rent'
+      type: 'rent',
     })
     const created = await createRes.json()
 
@@ -90,7 +94,7 @@ describe('localHandlers - housing', () => {
       living_expenses: 1000,
       transport_cost: 200,
       utilities_cost: 150,
-      savings_target: 500
+      savings_target: 500,
     })
     expect(calcRes.status).toBe(200)
     const calc = await calcRes.json()

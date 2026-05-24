@@ -215,7 +215,9 @@
   border: 2px dashed var(--border);
   border-radius: var(--radius);
   text-align: center;
-  transition: border-color 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
 }
 .transactions-page .receipt-upload-container:hover {
   border-color: var(--primary);

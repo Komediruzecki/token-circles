@@ -61,9 +61,7 @@ export function endOfNextMonth(startDate: string): string {
 // ── Shared data helpers ───────────────────────────────────────────────────────
 
 /** Fetch all records from a store across current profile IDs */
-export async function getAllForProfiles(
-  storeName: string,
-): Promise<Record<string, unknown>[]> {
+export async function getAllForProfiles(storeName: string): Promise<Record<string, unknown>[]> {
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
   const all: Record<string, unknown>[] = []
@@ -94,5 +92,5 @@ export function getMimeType(filename: string): string {
     webp: 'image/webp',
     svg: 'image/svg+xml',
   }
-  return (ext && mimeMap[ext]) ? mimeMap[ext] : 'application/octet-stream'
+  return ext && mimeMap[ext] ? mimeMap[ext] : 'application/octet-stream'
 }

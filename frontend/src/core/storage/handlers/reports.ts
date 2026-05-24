@@ -7,9 +7,8 @@ import {
   generatePlSummaryPdf,
   generateTaxSummaryPdf,
 } from '../clientPdfReports'
-import { getDB } from "../idb"
-import { adapter, json } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, json } from './helpers'
 
 export async function reportHandler(ctx: {
   path: string
@@ -214,4 +213,3 @@ export async function reportsCustom(body: unknown): Promise<Response> {
     byCategory,
   })
 }
-

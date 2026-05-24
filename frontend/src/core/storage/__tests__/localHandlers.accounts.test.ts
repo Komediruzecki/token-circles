@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
-  accountsCreate, 
+import {
+  accountsCreate,
   accountsDelete,
-  accountsGet, 
+  accountsGet,
   accountsHistory,
   accountsHistoryRecord,
-  accountsList, 
+  accountsList,
   accountsTimeline,
-  accountsUpdate} from '../localHandlers.js'
+  accountsUpdate,
+} from '../localHandlers.js'
 
 describe('localHandlers - accounts', () => {
   beforeEach(async () => {
@@ -19,7 +20,7 @@ describe('localHandlers - accounts', () => {
     await db.clear('profiles')
     await db.clear('accounts')
     await db.clear('balanceHistory')
-    
+
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
@@ -58,13 +59,16 @@ describe('localHandlers - accounts', () => {
     })
     const created = await createRes.json()
 
-    const updateRes = await accountsUpdate({ p1: created.id.toString() }, {
-      ...created,
-      name: 'Super Savings',
-      balance: 600,
-    })
+    const updateRes = await accountsUpdate(
+      { p1: created.id.toString() },
+      {
+        ...created,
+        name: 'Super Savings',
+        balance: 600,
+      }
+    )
     expect(updateRes.status).toBe(200)
-    
+
     const getRes = await accountsGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.name).toBe('Super Savings')
@@ -96,10 +100,13 @@ describe('localHandlers - accounts', () => {
     const created = await createRes.json()
 
     // Record history
-    const recordRes = await accountsHistoryRecord({ p1: created.id.toString() }, {
-      balance: 150,
-      date: '2026-05-20'
-    })
+    const recordRes = await accountsHistoryRecord(
+      { p1: created.id.toString() },
+      {
+        balance: 150,
+        date: '2026-05-20',
+      }
+    )
     expect(recordRes.status).toBe(201)
 
     // Get history
@@ -118,10 +125,13 @@ describe('localHandlers - accounts', () => {
     })
     const created = await createRes.json()
 
-    await accountsHistoryRecord({ p1: created.id.toString() }, {
-      balance: 200,
-      date: '2026-05-20'
-    })
+    await accountsHistoryRecord(
+      { p1: created.id.toString() },
+      {
+        balance: 200,
+        date: '2026-05-20',
+      }
+    )
 
     const timelineRes = await accountsTimeline()
     expect(timelineRes.status).toBe(200)

@@ -1,9 +1,8 @@
 /**
  * Counterparties handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, json } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, json } from './helpers'
 
 function toStr(v: unknown): string {
   if (v === null || v === undefined) return ''

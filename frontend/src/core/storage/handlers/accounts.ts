@@ -1,9 +1,8 @@
 /**
  * Accounts handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function accountsList(): Promise<Response> {
   const accts = await adapter.listAccounts()
@@ -118,4 +117,3 @@ export async function accountsReconciliationSummary(
     return json({ error: (err as Error).message }, 500)
   }
 }
-

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
+import {
   analyticsCategoryTrends,
   analyticsDailyHeatmap,
   analyticsDistinctYears,
@@ -21,7 +21,7 @@ describe('localHandlers - analytics and reports', () => {
     await db.clear('profiles')
     await db.clear('transactions')
     await db.clear('categories')
-    
+
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
 
     const catRes = await categoriesCreate({ name: 'Food', type: 'expense', color: '#ff0000' })
@@ -34,21 +34,21 @@ describe('localHandlers - analytics and reports', () => {
       type: 'expense',
       date: '2025-05-10',
       description: 'Groceries 1',
-      category_id: catId
+      category_id: catId,
     })
     await transactionsCreate({
       amount: 50,
       type: 'expense',
       date: '2026-05-20',
       description: 'Groceries 2',
-      category_id: catId
+      category_id: catId,
     })
     await transactionsCreate({
       amount: 2000,
       type: 'income',
       date: '2026-05-01',
       description: 'Salary',
-      category_id: null
+      category_id: null,
     })
   })
 
@@ -80,9 +80,9 @@ describe('localHandlers - analytics and reports', () => {
   })
 
   it('gets category trends', async () => {
-    const params = new URLSearchParams({ 
-      date_from: '2026-01-01', 
-      date_to: '2026-12-31' 
+    const params = new URLSearchParams({
+      date_from: '2026-01-01',
+      date_to: '2026-12-31',
     })
     const res = await analyticsCategoryTrends(params)
     expect(res.status).toBe(200)
@@ -93,9 +93,9 @@ describe('localHandlers - analytics and reports', () => {
   })
 
   it('gets sankey data', async () => {
-    const params = new URLSearchParams({ 
-      date_from: '2026-01-01', 
-      date_to: '2026-12-31' 
+    const params = new URLSearchParams({
+      date_from: '2026-01-01',
+      date_to: '2026-12-31',
     })
     const res = await analyticsSankey(params)
     expect(res.status).toBe(200)
@@ -109,7 +109,7 @@ describe('localHandlers - analytics and reports', () => {
       date_from: '2026-01-01',
       date_to: '2026-12-31',
       metrics: ['income', 'expenses', 'net'],
-      groupBy: 'category'
+      groupBy: 'category',
     })
     expect(res.status).toBe(200)
     const report = await res.json()

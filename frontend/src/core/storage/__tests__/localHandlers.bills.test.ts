@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
-  billsCreate, 
+import {
+  billsCreate,
   billsDelete,
-  billsGet, 
-  billsList, 
+  billsGet,
+  billsList,
   billsPayOrMarkPaid,
   billsUpcoming,
-  billsUpdate} from '../localHandlers.js'
+  billsUpdate,
+} from '../localHandlers.js'
 
 describe('localHandlers - bills', () => {
   beforeEach(async () => {
@@ -17,7 +18,7 @@ describe('localHandlers - bills', () => {
     // Reset data
     await db.clear('profiles')
     await db.clear('bills')
-    
+
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
@@ -28,12 +29,11 @@ describe('localHandlers - bills', () => {
       amount: 50,
       due_date: '2026-05-15',
       frequency: 'monthly',
-      auto_pay: false
+      auto_pay: false,
     })
     expect(createRes.status).toBe(201)
     const created = await createRes.json()
     expect(created.id).toBeDefined()
-
 
     // List
     const listRes = await billsList()
@@ -56,16 +56,19 @@ describe('localHandlers - bills', () => {
       amount: 100,
       due_date: '2026-05-20',
       frequency: 'monthly',
-      auto_pay: false
+      auto_pay: false,
     })
     const created = await createRes.json()
 
-    const updateRes = await billsUpdate({ p1: created.id.toString() }, {
-      ...created,
-      amount: 120,
-    })
+    const updateRes = await billsUpdate(
+      { p1: created.id.toString() },
+      {
+        ...created,
+        amount: 120,
+      }
+    )
     expect(updateRes.status).toBe(200)
-    
+
     const getRes = await billsGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.amount).toBe(120)
@@ -77,7 +80,7 @@ describe('localHandlers - bills', () => {
       amount: 10,
       due_date: '2026-05-01',
       frequency: 'monthly',
-      auto_pay: false
+      auto_pay: false,
     })
     const created = await createRes.json()
 
@@ -95,7 +98,7 @@ describe('localHandlers - bills', () => {
       amount: 40,
       due_date: '2026-05-10',
       frequency: 'monthly',
-      auto_pay: false
+      auto_pay: false,
     })
     const created = await createRes.json()
 
@@ -120,7 +123,7 @@ describe('localHandlers - bills', () => {
       amount: 60,
       due_date: nextMonth,
       frequency: 'monthly',
-      auto_pay: false
+      auto_pay: false,
     })
 
     const upcomingRes = await billsUpcoming()

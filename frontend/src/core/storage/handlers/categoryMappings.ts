@@ -1,9 +1,8 @@
 /**
  * CategoryMappings handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, ok } from './helpers'
 
 export async function categoryMappingsList(): Promise<Response> {
   const db = await getDB()
@@ -46,4 +45,3 @@ export async function categoryMappingsDelete(params: Record<string, string>): Pr
   }
   return ok()
 }
-

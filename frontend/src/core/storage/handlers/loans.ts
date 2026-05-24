@@ -2,9 +2,8 @@
  * Loans handlers — IndexedDB-backed implementations
  */
 import { calculateSchedule, getSummary } from '../../loanCalculator'
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
@@ -199,4 +198,3 @@ export async function loansCalculate(params: Record<string, string>): Promise<Re
     return json({ error: (err as Error).message }, 500)
   }
 }
-

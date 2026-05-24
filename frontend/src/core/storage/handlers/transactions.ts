@@ -1,9 +1,8 @@
 /**
  * Transactions handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function transactionsList(query: URLSearchParams): Promise<Response> {
   const filters: Record<string, unknown> = {}
@@ -245,4 +244,3 @@ export async function reconcileBatch(body: unknown): Promise<Response> {
   }
   return json({ message: `${updated} transactions reconciled`, updated })
 }
-

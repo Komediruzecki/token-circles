@@ -6,7 +6,8 @@ import {
   budgetsGet,
   budgetsList,
   budgetsSummary,
-  budgetsUpdate} from '../localHandlers.js'
+  budgetsUpdate,
+} from '../localHandlers.js'
 
 describe('localHandlers - budgets', () => {
   beforeEach(async () => {
@@ -18,10 +19,16 @@ describe('localHandlers - budgets', () => {
     await db.clear('budgets')
     await db.clear('categories')
     await db.clear('transactions')
-    
+
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
-    await db.add('categories', { id: 1, profile_id: 1, name: 'Food', type: 'expense', color: '#ff0000' })
+    await db.add('categories', {
+      id: 1,
+      profile_id: 1,
+      name: 'Food',
+      type: 'expense',
+      color: '#ff0000',
+    })
   })
 
   it('creates, lists, and gets a budget', async () => {
@@ -62,12 +69,15 @@ describe('localHandlers - budgets', () => {
     })
     const created = await createRes.json()
 
-    const updateRes = await budgetsUpdate({ p1: created.id.toString() }, {
-      ...created,
-      amount: 300,
-    })
+    const updateRes = await budgetsUpdate(
+      { p1: created.id.toString() },
+      {
+        ...created,
+        amount: 300,
+      }
+    )
     expect(updateRes.status).toBe(200)
-    
+
     const getRes = await budgetsGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.amount).toBe(300)
@@ -107,13 +117,13 @@ describe('localHandlers - budgets', () => {
       amount: 300,
       type: 'expense',
       date: '2026-05-15',
-      description: 'Groceries'
+      description: 'Groceries',
     })
 
     const summaryRes = await budgetsSummary(new URLSearchParams({ month: '5', year: '2026' }))
     expect(summaryRes.status).toBe(200)
     const summary = await summaryRes.json()
-    
+
     expect(Array.isArray(summary)).toBe(true)
     expect(summary).toHaveLength(1)
     expect(summary[0].amount).toBe(1000)

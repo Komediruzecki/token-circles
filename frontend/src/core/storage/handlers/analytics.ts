@@ -1,9 +1,8 @@
 /**
  * Analytics handlers — IndexedDB-backed implementations
  */
-import { seedDefaultCategories } from "../idb"
-import { adapter, getAmount, json } from "./helpers"
-
+import { seedDefaultCategories } from '../idb'
+import { adapter, getAmount, json } from './helpers'
 
 export async function analyticsDistinctYears(): Promise<Response> {
   try {
@@ -416,4 +415,3 @@ export async function seedCategories(): Promise<Response> {
   const cats = await adapter.listCategories()
   return json({ ok: true, categories: cats.length })
 }
-

@@ -1,9 +1,8 @@
 /**
  * Recurring handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function recurringList(): Promise<Response> {
   const db = await getDB()
@@ -122,4 +121,3 @@ export async function recurringPopulate(params: Record<string, string>): Promise
 
   return json({ ok: true })
 }
-
