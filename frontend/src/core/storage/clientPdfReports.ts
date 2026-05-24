@@ -184,8 +184,9 @@ function addSectionTable(
   color?: [number, number, number]
 ) {
   const pageW = doc.internal.pageSize.getWidth()
-  const x = 15
-  const boxW = pageW - 30
+  const totalW = colWidths.reduce((s, w) => s + w, 0)
+  const x = (pageW - totalW) / 2
+  const boxW = totalW
   const rowH = 10
   const headerH = 10
 
@@ -647,7 +648,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     doc,
     'Monthly Breakdown',
     ['Month', 'Income', 'Expenses', 'Net', 'Running Balance'],
-    [95, 117, 117, 117, 119],
+    [70, 118, 118, 118, 120],
     monthly.map((m, i) => {
       const n = m.income - m.expense
       const running = monthly.slice(0, i + 1).reduce((s, x) => s + x.income - x.expense, 0)
