@@ -116,10 +116,13 @@ function addTitle(doc: jsPDF, title: string, subtitle: string, dark: boolean) {
   const sc = dark ? '#94a3b8' : '#64748b'
   doc.setTextColor(tc)
   doc.setFontSize(20)
-  doc.text(title, doc.internal.pageSize.getWidth() / 2, 25, { align: 'center' })
+  doc.text(title, doc.internal.pageSize.getWidth() / 2, 30, { align: 'center' })
   doc.setFontSize(11)
   doc.setTextColor(sc)
-  doc.text(subtitle, doc.internal.pageSize.getWidth() / 2, 33, { align: 'center' })
+  doc.text(subtitle, doc.internal.pageSize.getWidth() / 2, 42, { align: 'center' })
+  // Draw a separator line below the title
+  doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
+  doc.line(15, 48, doc.internal.pageSize.getWidth() - 15, 48)
 }
 
 function addSummaryBox(
@@ -156,7 +159,7 @@ function addSummaryBox(
     doc.text(item.value, cx + colW / 2, y + 26, { align: 'center' })
   })
 
-  return y + boxH + 12
+  return y + boxH + 16
 }
 
 function addSectionTable(
@@ -466,8 +469,11 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
   // Display sizes are calculated first, then charts are rendered at 2x.
   const chartScale = 2
 
-  const doughnutDisplayW = 170
-  const doughnutDisplayH = 120
+  // 2-column layout: doughnut + bar side by side, line full-width below
+  const colChartW = (pageW - 45) / 2
+  const colChartH = 170
+  const doughnutDisplayW = colChartW
+  const doughnutDisplayH = colChartH
   const doughnutUrl =
     topCategories.length > 0
       ? await renderChartViaWorker(
@@ -488,8 +494,8 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
         )
       : ''
 
-  const barDisplayW = Math.min(pageW - 30, 450)
-  const barDisplayH = barDisplayW * 0.45
+  const barDisplayW = colChartW
+  const barDisplayH = colChartH
   const barUrl =
     monthly.length > 0
       ? await renderChartViaWorker(
@@ -520,7 +526,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
       : ''
 
   const lineDisplayW = pageW - 30
-  const lineDisplayH = 130
+  const lineDisplayH = 120
   const lineUrl =
     cashFlow.length > 0
       ? await renderChartViaWorker(
@@ -562,40 +568,36 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
         value: `${net >= 0 ? '€' : '-€'}${fmt(Math.abs(net))}`,
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
+      {
+        label: 'Savings Rate',
+        value: `${savingsRate.toFixed(1)}%`,
+        color: savingsRate >= 0 ? [5, 150, 105] : [220, 38, 38],
+      },
     ],
-    42,
+    52,
     dark
   )
 
-  // Savings rate
-  doc.setFontSize(10)
-  doc.setTextColor(dark ? 148 : 100, dark ? 163 : 116, dark ? 184 : 139)
-  doc.text(`Savings Rate: ${savingsRate.toFixed(1)}%`, pageW / 2, posY, { align: 'center' })
-  posY += 8
-
-  // Category doughnut
-  if (doughnutUrl) {
-    doc.addImage(doughnutUrl, 'PNG', 15, posY, doughnutDisplayW, doughnutDisplayH)
-    doc.setFontSize(10)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-    doc.text('Spending by Category', 15 + doughnutDisplayW / 2, posY + doughnutDisplayH + 12, { align: 'center' })
-    posY += doughnutDisplayH + 24
-  }
-
-  // Monthly bar chart
-  if (barUrl) {
-    if (posY + barDisplayH + 22 > doc.internal.pageSize.getHeight() - 25) {
-      doc.addPage()
-      posY = 25
+  // Charts: 2-column grid (doughnut + bar side by side), then line full-width
+  if (doughnutUrl || barUrl) {
+    const chartLabelY = posY + colChartH + 12
+    if (doughnutUrl) {
+      doc.addImage(doughnutUrl, 'PNG', 15, posY, doughnutDisplayW, doughnutDisplayH)
+      doc.setFontSize(10)
+      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
+      doc.text('Spending by Category', 15 + doughnutDisplayW / 2, chartLabelY, { align: 'center' })
     }
-    doc.addImage(barUrl, 'PNG', (pageW - barDisplayW) / 2, posY, barDisplayW, barDisplayH)
-    doc.setFontSize(10)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-    doc.text('Monthly Income vs Expenses', pageW / 2, posY + barDisplayH + 12, { align: 'center' })
-    posY += barDisplayH + 22
+    if (barUrl) {
+      const barX = 15 + colChartW + 15
+      doc.addImage(barUrl, 'PNG', barX, posY, barDisplayW, barDisplayH)
+      doc.setFontSize(10)
+      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
+      doc.text('Monthly Income vs Expenses', barX + barDisplayW / 2, chartLabelY, { align: 'center' })
+    }
+    posY += colChartH + 28
   }
 
-  // Cash flow line chart
+  // Cash flow line chart (full-width)
   if (lineUrl && cashFlow.length > 0) {
     if (posY + lineDisplayH + 22 > doc.internal.pageSize.getHeight() - 25) {
       doc.addPage()
@@ -608,8 +610,20 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     posY += lineDisplayH + 22
   }
 
-  // Monthly breakdown table — columns fill full box width (565px)
+  // Footer on first page
+  const fc = dark ? '#64748b' : '#94a3b8'
+  doc.setFontSize(8)
+  doc.setTextColor(fc)
+  doc.text(
+    `Generated by Finance Manager — ${new Date().toLocaleDateString()}`,
+    pageW / 2,
+    doc.internal.pageSize.getHeight() - 15,
+    { align: 'center' }
+  )
+
+  // Monthly breakdown table on page 2
   doc.addPage()
+  posY = 25
   addSectionTable(
     doc,
     'Monthly Breakdown',
@@ -626,11 +640,11 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
         running >= 0 ? `€${fmt(running)}` : `-€${fmt(Math.abs(running))}`,
       ]
     }),
-    22,
+    posY,
     dark
   )
 
-  const fc = dark ? '#64748b' : '#94a3b8'
+  // Footer on page 2
   doc.setFontSize(8)
   doc.setTextColor(fc)
   doc.text(
