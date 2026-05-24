@@ -20,5 +20,5 @@ const localStorageMock = (function () {
 
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
-  writable: true
+  writable: true,
 })

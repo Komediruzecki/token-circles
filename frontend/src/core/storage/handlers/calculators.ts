@@ -1,9 +1,8 @@
 /**
  * Calculators handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, getAmount, idParam, json, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, getAmount, idParam, json, ok } from './helpers'
 
 export async function compoundInterest(body: unknown): Promise<Response> {
   try {
@@ -442,4 +441,3 @@ function calculateRetirementProjection(
     monthly_income_in_retirement: Math.round(projectedTotal > 0 ? (projectedTotal * 0.04) / 12 : 0),
   }
 }
-

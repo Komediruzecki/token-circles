@@ -115,7 +115,7 @@ describe('localHandlers - portfolio', () => {
     const createRes = await portfolioHoldingsCreate({
       ticker: 'AAPL',
       shares: 10,
-      purchase_price: 150.50,
+      purchase_price: 150.5,
       purchase_date: '2026-01-15',
       notes: 'Long term hold',
     })
@@ -141,10 +141,7 @@ describe('localHandlers - portfolio', () => {
     })
     const created = await createRes.json()
 
-    const updateRes = await portfolioHoldingsUpdate(
-      { p1: created.id.toString() },
-      { shares: 10 }
-    )
+    const updateRes = await portfolioHoldingsUpdate({ p1: created.id.toString() }, { shares: 10 })
     expect(updateRes.status).toBe(200)
     const updated = await updateRes.json()
     expect(updated.shares).toBe(10)

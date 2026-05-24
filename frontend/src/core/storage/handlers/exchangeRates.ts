@@ -1,9 +1,8 @@
 /**
  * Exchange Rates handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { json } from "./helpers"
-
+import { getDB } from '../idb'
+import { json } from './helpers'
 
 const EXCHANGE_RATES_CACHE_KEY = '__cache__exchange_rates'
 const EXCHANGE_RATES_CACHE_TTL = 60 * 60 * 1000 // 1 hour
@@ -69,5 +68,3 @@ export async function exchangeRateSingle(params: Record<string, string>): Promis
     return json({ error: (err as Error).message || 'Failed to fetch exchange rate' }, 502)
   }
 }
-
-

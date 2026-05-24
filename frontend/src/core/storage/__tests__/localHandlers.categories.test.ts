@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
-  categoriesCreate, 
+import {
+  categoriesCreate,
   categoriesDelete,
-  categoriesGet, 
-  categoriesList, 
-  categoriesUpdate} from '../localHandlers.js'
+  categoriesGet,
+  categoriesList,
+  categoriesUpdate,
+} from '../localHandlers.js'
 
 describe('localHandlers - categories', () => {
   beforeEach(async () => {
@@ -15,7 +16,7 @@ describe('localHandlers - categories', () => {
     // Reset data
     await db.clear('profiles')
     await db.clear('categories')
-    
+
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
@@ -54,13 +55,16 @@ describe('localHandlers - categories', () => {
     })
     const created = await createRes.json()
 
-    const updateRes = await categoriesUpdate({ p1: created.id.toString() }, {
-      ...created,
-      name: 'Job',
-      color: '#eeeeee',
-    })
+    const updateRes = await categoriesUpdate(
+      { p1: created.id.toString() },
+      {
+        ...created,
+        name: 'Job',
+        color: '#eeeeee',
+      }
+    )
     expect(updateRes.status).toBe(200)
-    
+
     const getRes = await categoriesGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.name).toBe('Job')

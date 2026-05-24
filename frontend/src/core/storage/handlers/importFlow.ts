@@ -1,10 +1,9 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, json } from "./helpers"
+import { getDB } from '../idb'
+import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
-
 
 function toStr(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -727,4 +726,3 @@ export async function importBulk(body: unknown): Promise<Response> {
     return json({ error: (err as Error).message }, 500)
   }
 }
-

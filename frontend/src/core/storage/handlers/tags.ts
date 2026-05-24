@@ -1,9 +1,8 @@
 /**
  * Tags handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function tagsList(): Promise<Response> {
   const db = await getDB()
@@ -149,4 +148,3 @@ export async function transactionsByTag(params: Record<string, string>): Promise
     return json({ error: (err as Error).message }, 500)
   }
 }
-

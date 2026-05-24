@@ -1,9 +1,8 @@
 /**
  * Receipts handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function receiptsUpload(body: unknown): Promise<Response> {
   try {

@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { 
+import {
   loansCalculate,
-  loansCreate, 
+  loansCreate,
   loansDelete,
-  loansGet, 
-  loansList, 
-  loansUpdate} from '../localHandlers.js'
+  loansGet,
+  loansList,
+  loansUpdate,
+} from '../localHandlers.js'
 
 describe('localHandlers - loans', () => {
   beforeEach(async () => {
@@ -16,7 +17,7 @@ describe('localHandlers - loans', () => {
     // Reset data
     await db.clear('profiles')
     await db.clear('loans')
-    
+
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
@@ -58,12 +59,15 @@ describe('localHandlers - loans', () => {
     })
     const created = await createRes.json()
 
-    const updateRes = await loansUpdate({ p1: created.id.toString() }, {
-      ...created,
-      interest_rate: 4.5,
-    })
+    const updateRes = await loansUpdate(
+      { p1: created.id.toString() },
+      {
+        ...created,
+        interest_rate: 4.5,
+      }
+    )
     expect(updateRes.status).toBe(200)
-    
+
     const getRes = await loansGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.interest_rate).toBe(4.5)
@@ -99,7 +103,7 @@ describe('localHandlers - loans', () => {
     const calcRes = await loansCalculate({ p1: created.id.toString() })
     expect(calcRes.status).toBe(200)
     const schedule = await calcRes.json()
-    
+
     // Assuming the calculate returns { summary: {...}, schedule: [...] }
     expect(schedule.summary).toBeDefined()
     expect(schedule.schedule).toBeDefined()

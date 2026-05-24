@@ -1,9 +1,8 @@
 /**
  * ExportImport handlers — IndexedDB-backed implementations
  */
-import { getDB, seedDefaultCategories, seedDemoProfiles } from "../idb"
-import { adapter, getAmount, json, monthEnd, monthStart, nextMonth, ok, prevMonth } from "./helpers"
-
+import { getDB, seedDefaultCategories, seedDemoProfiles } from '../idb'
+import { adapter, getAmount, json, monthEnd, monthStart, nextMonth, ok, prevMonth } from './helpers'
 
 export async function exportAll(): Promise<Response> {
   const data = await adapter.exportData()
@@ -22,7 +21,15 @@ export async function exportByType(
     const csv = ['date,type,description,amount,currency,category_id,notes']
     for (const t of data.transactions) {
       csv.push(
-        [t.date, t.type, `"${t.description}"`, t.amount, t.currency, t.category_id ?? '', `"${t.notes || ''}"`].join(',')
+        [
+          t.date,
+          t.type,
+          `"${t.description}"`,
+          t.amount,
+          t.currency,
+          t.category_id ?? '',
+          `"${t.notes || ''}"`,
+        ].join(',')
       )
     }
     return new Response(csv.join('\n'), {
@@ -361,4 +368,3 @@ export async function dashboardNetWorth(): Promise<Response> {
     return json({ error: (err as Error).message }, 500)
   }
 }
-

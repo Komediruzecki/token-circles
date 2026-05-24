@@ -1,9 +1,8 @@
 /**
  * Categories handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function categoriesList(query: URLSearchParams): Promise<Response> {
   const type = query.get('type') as 'income' | 'expense' | undefined
@@ -111,20 +110,70 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
 
       if (bestCategoryId === null) {
         const incomeKeywords = [
-          'salary', 'wage', 'income', 'revenue', 'refund', 'dividend',
-          'interest', 'bonus', 'freelance', 'deposit', 'paycheck',
+          'salary',
+          'wage',
+          'income',
+          'revenue',
+          'refund',
+          'dividend',
+          'interest',
+          'bonus',
+          'freelance',
+          'deposit',
+          'paycheck',
         ]
         const accountKeywords = [
-          'revolut', 'rev', 'n26', 'wise', 'paypal', 'pbz',
-          'current', 'giro', 'savings', 'wallet', 'transfer', 'wire',
+          'revolut',
+          'rev',
+          'n26',
+          'wise',
+          'paypal',
+          'pbz',
+          'current',
+          'giro',
+          'savings',
+          'wallet',
+          'transfer',
+          'wire',
         ]
         const expenseKeywords = [
-          'groceries', 'restaurant', 'rent', 'utility', 'insurance', 'health',
-          'transport', 'shopping', 'entertainment', 'subscription', 'phone',
-          'internet', 'electric', 'water', 'gas', 'gym', 'travel', 'education',
-          'medical', 'dental', 'pharmacy', 'clothing', 'charity', 'gift',
-          'tax', 'fee', 'bank fee', 'maintenance', 'repair', 'fuel',
-          'parking', 'toll', 'hotel', 'flight', 'coffee', 'food', 'drink',
+          'groceries',
+          'restaurant',
+          'rent',
+          'utility',
+          'insurance',
+          'health',
+          'transport',
+          'shopping',
+          'entertainment',
+          'subscription',
+          'phone',
+          'internet',
+          'electric',
+          'water',
+          'gas',
+          'gym',
+          'travel',
+          'education',
+          'medical',
+          'dental',
+          'pharmacy',
+          'clothing',
+          'charity',
+          'gift',
+          'tax',
+          'fee',
+          'bank fee',
+          'maintenance',
+          'repair',
+          'fuel',
+          'parking',
+          'toll',
+          'hotel',
+          'flight',
+          'coffee',
+          'food',
+          'drink',
         ]
 
         for (const kw of incomeKeywords) {
@@ -136,7 +185,8 @@ export async function categoriesAutoMap(body: unknown): Promise<Response> {
         if (bestCategoryId === null) {
           for (const kw of accountKeywords) {
             if (normalized.includes(kw)) {
-              bestCategoryId = (catMap.get('transfer') || catMap.get('account transfer'))?.id as number
+              bestCategoryId = (catMap.get('transfer') || catMap.get('account transfer'))
+                ?.id as number
               break
             }
           }
@@ -214,4 +264,3 @@ export async function categoriesApplyMappings(body: unknown): Promise<Response> 
     return json({ error: (err as Error).message }, 500)
   }
 }
-

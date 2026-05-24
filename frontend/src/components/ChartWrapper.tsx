@@ -165,12 +165,10 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         ? ChartContainer.chartMedium
         : props.variant === 'short'
           ? ChartContainer.chartShort
-          : '',
+          : ''
   )
 
-  const heightStyle = createMemo(() =>
-    props.height ? `height: ${props.height}px` : undefined,
-  )
+  const heightStyle = createMemo(() => (props.height ? `height: ${props.height}px` : undefined))
 
   return (
     <ErrorBoundary
@@ -180,7 +178,9 @@ export default function ChartWrapper(props: ChartWrapperProps) {
           classList={{ [heightClass()]: !!heightClass() }}
           style={{
             ...(heightStyle()
-              ? { height: `${(heightStyle() as string).replace('height: ', '').replace('px', '')}px` }
+              ? {
+                  height: `${(heightStyle() as string).replace('height: ', '').replace('px', '')}px`,
+                }
               : {}),
             display: 'flex',
             'align-items': 'center',

@@ -1,10 +1,9 @@
 /**
  * Settings handlers — IndexedDB-backed implementations
  */
-import { getStorageMode, setStorageMode } from "../storageFactory"
-import { adapter, json, ok } from "./helpers"
-import type { StorageMode } from "../storageFactory"
-
+import { getStorageMode, setStorageMode } from '../storageFactory'
+import { adapter, json, ok } from './helpers'
+import type { StorageMode } from '../storageFactory'
 
 export async function settingsGet(): Promise<Response> {
   const settings = await adapter.getSettings()
@@ -31,4 +30,3 @@ export async function storageModeSet(body: unknown): Promise<Response> {
   }
   return json({ error: 'Mode required' }, 400)
 }
-

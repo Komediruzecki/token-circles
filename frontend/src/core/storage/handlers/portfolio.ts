@@ -1,9 +1,8 @@
 /**
  * Portfolio handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound } from './helpers'
 
 export async function portfolioHoldingsList(): Promise<Response> {
   try {

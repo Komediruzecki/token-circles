@@ -1,9 +1,8 @@
 /**
  * Housing handlers — IndexedDB-backed implementations
  */
-import { getDB } from "../idb"
-import { adapter, idParam, json, notFound, ok } from "./helpers"
-
+import { getDB } from '../idb'
+import { adapter, idParam, json, notFound, ok } from './helpers'
 
 export async function housingList(): Promise<Response> {
   const db = await getDB()
@@ -162,4 +161,3 @@ export async function housingCalculate(body: unknown): Promise<Response> {
     monthlySpendingBreakdown: breakdown,
   })
 }
-
