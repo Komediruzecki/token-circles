@@ -579,3 +579,79 @@
     font-size: 18px;
   }
 }
+
+/* Subscription Tracker Card */
+.subscriptionSection {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.subTotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+.subscriptionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.subItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.subItem:hover {
+  background: var(--bg-secondary, #f8fafc);
+}
+.subItemInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.subDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.subItemName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.subItemMeta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.subItemAmount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}

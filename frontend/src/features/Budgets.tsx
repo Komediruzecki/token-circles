@@ -32,14 +32,16 @@
  */
 import { createEffect, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
-import styles from '../components/BudgetsPage.module.css'
 import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
-import { getLocalCurrency } from '../core/api'
+import { api, getLocalCurrency } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
+import styles from './BudgetsPage.module.css'
+import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 
@@ -103,6 +105,7 @@ interface Category {
 }
 
 export default function Budgets() {
+  const state = useAppState()
   const [month, setMonth] = createSignal(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
@@ -114,7 +117,7 @@ export default function Budgets() {
   const [budgetMessage, setBudgetMessage] = createSignal<string>('')
   const [forecastData, setForecastData] = createSignal<ForecastData | null>(null)
 
-  const [improvements, setImprovements] = createSignal<any[]>([])
+  const [improvements, setImprovements] = createSignal<BudgetImprovement[]>([])
   const [showMonthPicker, setShowMonthPicker] = createSignal(false)
   const [showYearPicker, setShowYearPicker] = createSignal(false)
 
@@ -150,8 +153,21 @@ export default function Budgets() {
     'November',
     'December',
   ]
-  const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
+  const currentYear = () => new Date().getFullYear()
+  const [availableYears, setAvailableYears] = createSignal<number[]>([
+    currentYear() - 1,
+    currentYear(),
+    currentYear() + 1,
+  ])
+
+  const loadYearRange = async () => {
+    try {
+      const { years } = await api.getTransactionYears()
+      if (years.length > 0) setAvailableYears([...years].sort((a, b) => b - a))
+    } catch {
+      /* keep defaults */
+    }
+  }
 
   const currentMonthNum = () => parseInt(month().split('-')[1])
   const currentYearNum = () => parseInt(month().split('-')[0])
@@ -182,27 +198,28 @@ export default function Budgets() {
 
     try {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
-        apiGet<any>(`/api/budgets/zero-based?month=${month()}`),
+        apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${month()}`),
         apiGet<any>(`/api/budgets/zero-based/summary?month=${month()}`),
         apiGet<ForecastData>(`/api/budgets/forecast?month=${month()}`).catch(() => null),
       ])
 
       const allocationsList = (allocationsRes?.allocations || allocationsRes?.categories || []).map(
-        (item: any) => ({
+        (item: ZeroBasedAllocation) => ({
           ...item,
           amount: item.amount || item.allocated || 0,
           allocated: item.amount || item.allocated || 0,
           status:
             item.status ||
             (item.percent_used > 100 ? 'over' : item.percent_used >= 90 ? 'warning' : 'ok'),
-          is_fully_allocated: item.is_fully_allocated ?? (item.is_budgeted && item.amount > 0),
+          is_fully_allocated:
+            item.is_fully_allocated ?? (((item as any).is_budgeted as boolean) && item.amount > 0),
         })
       )
-      setAllocations(allocationsList)
+      setAllocations(allocationsList as any)
       setSummary({
         ...summaryRes,
         categories: summaryRes?.allocations || summaryRes?.categories || [],
-      })
+      } as any)
       const unallocated = summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0
       setBudgetMessage(
         unallocated > 0
@@ -224,7 +241,7 @@ export default function Budgets() {
   // Load historical improvements data for trend chart
   const loadImprovements = async () => {
     try {
-      const data = await apiGet<any[]>(`/api/budgets/improvements?months=6`)
+      const data = await apiGet<BudgetImprovement[]>(`/api/budgets/improvements?months=6`)
       setImprovements(data || [])
     } catch {
       // History loading is best-effort
@@ -351,7 +368,7 @@ export default function Budgets() {
         apiGet<Category[]>('/api/categories'),
         apiGet<any[]>(
           `/api/budgets/summary?year=${currentYearNum()}&month=${currentMonthNum()}`
-        ).catch(() => [] as any[]),
+        ).catch((): any[] => []),
       ])
       setCategories(allRes)
       const summary: Record<
@@ -470,6 +487,16 @@ export default function Budgets() {
   onMount(() => {
     loadImprovements()
     loadCategories()
+    loadYearRange()
+  })
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
+    loadImprovements()
+    loadCategories()
+    loadData()
+    loadYearRange()
   })
 
   // Load data when month changes
@@ -546,7 +573,7 @@ export default function Budgets() {
               </button>
               {showYearPicker() && (
                 <div class={styles.dropdown}>
-                  {years.map((y) => (
+                  {availableYears().map((y) => (
                     <button
                       class={styles.dropdownItem}
                       classList={{ [styles.selected]: y === currentYearNum() }}
@@ -728,11 +755,11 @@ export default function Budgets() {
             <Chart
               type="line"
               data={{
-                labels: [...improvements()].reverse().map((item: any) => item.month),
+                labels: [...improvements()].reverse().map((item) => item.month),
                 datasets: [
                   {
                     label: 'Adherence %',
-                    data: [...improvements()].reverse().map((item: any) => item.adherence_pct),
+                    data: [...improvements()].reverse().map((item) => item.adherence_pct),
                     borderColor: 'rgba(59, 130, 246, 1)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     fill: true,

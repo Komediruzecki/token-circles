@@ -57,72 +57,81 @@ describe('localApiRouter - route matching', () => {
   })
 })
 
-describe('localApiRouter - stub handlers', () => {
-  it('stub GET returns empty array', async () => {
+describe('localApiRouter - category mappings', () => {
+  it('GET returns array', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/tags')
+    const res = await routeApiRequest('http://localhost/api/categories/mappings')
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(Array.isArray(data)).toBe(true)
-    expect(data.length).toBe(0)
   })
 
-  it('stub POST returns { id: 1 } with 201', async () => {
+  it('POST creates and returns mapping', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/recurring', {
+    const res = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
-      body: JSON.stringify({ name: 'test' }),
+      body: JSON.stringify({ name: 'test', mapping: 'test-mapping' }),
     })
     expect(res.status).toBe(201)
     const data = await res.json()
-    expect(data.id).toBe(1)
+    expect(data.id).toBeDefined()
   })
 
-  it('stub DELETE returns { ok: true }', async () => {
+  it('DELETE returns ok', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/tags/1', { method: 'DELETE' })
+    const res = await routeApiRequest('http://localhost/api/categories/mappings/1', {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.ok).toBe(true)
   })
 })
 
-describe('localApiRouter - exchange rates stub', () => {
-  it('returns mock exchange rates', async () => {
+describe('localApiRouter - exchange rates', () => {
+  it('returns exchange rates with expected structure', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/exchange-rates')
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.rates.USD).toBe(1.08)
-    expect(data.rates.GBP).toBe(0.85)
-    expect(data.rates.JPY).toBe(156.0)
+    expect(data.base).toBe('EUR')
+    expect(data.rates).toBeTypeOf('object')
+    expect(data.rates.EUR).toBe(1)
+    expect(typeof data.cached).toBe('boolean')
   })
 
-  it('returns single rate for pair', async () => {
+  it('returns single rate for currency pair', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/exchange-rates/EUR/USD')
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.rate).toBe(1.08)
+    expect(data.base).toBe('EUR')
+    expect(data.target).toBe('USD')
+    expect(typeof data.rate).toBe('number')
+    expect(data.rate).toBeGreaterThan(0)
   })
 })
 
-describe('localApiRouter - loan calculate mock', () => {
-  it('returns empty amortization schedule', async () => {
+describe('localApiRouter - loan calculate', () => {
+  it('returns schedule for valid loan data', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/loans/1/calculate', { method: 'POST' })
+    const res = await routeApiRequest('http://localhost/api/loans/1/calculate', {
+      method: 'POST',
+      body: JSON.stringify({ principal: 10000, rate: 5, termMonths: 12 }),
+    })
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.schedule).toEqual([])
-    expect(data.summary.totalPaid).toBe(0)
+    expect(data.schedule).toBeDefined()
+    expect(data.summary).toBeDefined()
   })
 })
 
 describe('localApiRouter - path with params', () => {
   it('matches paths with numeric IDs', async () => {
     const { routeApiRequest } = await loadModule()
-    // Tags/:id with DELETE returns stub { ok: true }
-    const res = await routeApiRequest('http://localhost/api/tags/42', { method: 'DELETE' })
+    const res = await routeApiRequest('http://localhost/api/categories/mappings/42', {
+      method: 'DELETE',
+    })
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.ok).toBe(true)
@@ -139,8 +148,8 @@ describe('localApiRouter - path with params', () => {
 describe('localApiRouter - body parsing', () => {
   it('parses JSON body string', async () => {
     const { routeApiRequest } = await loadModule()
-    // Use a POST route that processes body - recurring creation (stub)
-    const res = await routeApiRequest('http://localhost/api/recurring', {
+    // Use a POST route that processes body - categories mappings (stub)
+    const res = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
       body: JSON.stringify({ name: 'Netflix', amount: 14.99 }),
     })

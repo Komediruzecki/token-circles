@@ -242,6 +242,9 @@
   align-items: center;
   gap: 8px;
 }
+.bills-page .toggle-switch input {
+  display: none;
+}
 .bills-page .toggle-slider {
   width: 44px;
   height: 24px;
@@ -405,5 +408,118 @@
 
   .bills-page .section-title {
     font-size: 16px;
+  }
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background: var(--bg-secondary, #f1f5f9);
+  padding: 4px;
+  border-radius: var(--radius);
+  width: fit-content;
+}
+.tabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.tabBtn:hover {
+  color: var(--text);
+}
+.tabActive {
+  background: var(--card-bg);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.tabBadge {
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Subscription summary */
+.subscriptionSummary {
+  margin-bottom: 24px;
+}
+.subSummaryRow {
+  display: flex;
+  gap: 12px;
+}
+.subSummaryCard {
+  flex: 1;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.subSummaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.subSummaryValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Subscription view wrapper */
+.subscriptionView {
+  /* container for the entire subscription tab content */
+}
+
+/* Category groups */
+.categoryGroup {
+  margin-bottom: 28px;
+}
+.categoryGroupTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.categoryGroupCount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-secondary, #f1f5f9);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+/* Gallery grid — responsive auto-fill */
+.subscriptionGallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .subscriptionGallery {
+    grid-template-columns: 1fr;
   }
 }

@@ -86,6 +86,7 @@ export interface LoanData {
   profile_id: number
   name: string
   principal: number
+  interest_rate: number
   start_date: string
   term_months: number
   rate_periods: LoanRatePeriodData[]

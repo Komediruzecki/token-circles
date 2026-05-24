@@ -37,13 +37,15 @@ import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
 import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
 import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
 import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
-import styles from '../components/DashboardPage.module.css'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { PeriodPills } from '../components/PeriodPills'
 import { api, formatCurrency, formatDate, toast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './DashboardPage.module.css'
 import type * as Models from '../types/models'
 
 export default function Dashboard() {
+  const state = useAppState()
   const [month, setMonth] = createSignal(5)
   const [year, setYear] = createSignal(2026)
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
@@ -51,6 +53,9 @@ export default function Dashboard() {
   const [loading, setLoading] = createSignal(true)
   const [pillPeriod, setPillPeriod] = createSignal('month')
   const [allTime, setAllTime] = createSignal(false)
+  const [dataMinYear, setDataMinYear] = createSignal<number | undefined>(undefined)
+  const [dataMaxYear, setDataMaxYear] = createSignal<number | undefined>(undefined)
+  const [dataYears, setDataYears] = createSignal<number[] | undefined>(undefined)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(
     (() => {
@@ -91,6 +96,14 @@ export default function Dashboard() {
 
   onMount(() => {
     void loadMonthlyData()
+    void loadYearRange()
+  })
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
+    void loadMonthlyData()
+    void loadYearRange()
   })
 
   createEffect(() => {
@@ -112,6 +125,17 @@ export default function Dashboard() {
       toast('Failed to load dashboard', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadYearRange = async () => {
+    try {
+      const { minYear, maxYear, years } = await api.getTransactionYears()
+      setDataMinYear(minYear)
+      setDataMaxYear(maxYear)
+      setDataYears(years.length > 0 ? years : undefined)
+    } catch {
+      /* keep defaults */
     }
   }
 
@@ -138,9 +162,7 @@ export default function Dashboard() {
       })
       const netWorth = timeline.map((t) => t.balance)
       const income = timeline.map((t) => (t.netChange > 0 ? t.netChange : 0))
-      const expenses = timeline.map((t) =>
-        t.netChange < 0 ? Math.abs(t.netChange) : 0
-      )
+      const expenses = timeline.map((t) => (t.netChange < 0 ? Math.abs(t.netChange) : 0))
       setMonthlyData({ labels, income, expenses, netWorth })
     } catch {
       // Don't show error for monthly data - it's optional
@@ -244,8 +266,17 @@ export default function Dashboard() {
           <PeriodNavigator
             month={month}
             year={year}
-            onMonthChange={(m) => { setMonth(m); setAllTime(false) }}
-            onYearChange={(y) => { setYear(y); setAllTime(false) }}
+            minYear={dataMinYear()}
+            maxYear={dataMaxYear()}
+            years={dataYears()}
+            onMonthChange={(m) => {
+              setMonth(m)
+              setAllTime(false)
+            }}
+            onYearChange={(y) => {
+              setYear(y)
+              setAllTime(false)
+            }}
             onPrev={() => {
               const m = month()
               const y = year()

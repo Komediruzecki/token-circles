@@ -26,27 +26,39 @@
  * Housing Component
  * Manages housing-related expenses and property information
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
-import styles from '../components/HousingPage.module.css'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './HousingPage.module.css'
 
 interface Housing {
   id: number
   type: 'rent' | 'mortgage' | 'hoa' | 'property_tax' | 'insurance' | 'other'
-  property_name: string
-  monthly_amount: number
+  property_name?: string
+  name?: string
+  monthly_amount: number | string
   due_day: number
   due_month: number
-  start_date: string
-  autopay: boolean
+  due_date?: string
+  start_date?: string
+  autopay: boolean | number
   notes?: string
   profile_id: number
 }
 
+function getPropertyName(h: Housing): string {
+  return h.property_name || h.name || 'Unknown'
+}
+
+function getMonthlyAmount(h: Housing): number {
+  return Math.abs(parseFloat(String(h.monthly_amount || 0)))
+}
+
 export default function HousingForm() {
+  const state = useAppState()
   const [housings, setHousings] = createSignal<Housing[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -59,6 +71,31 @@ export default function HousingForm() {
     autopay: false,
     notes: '',
   })
+
+  // Subscriptions tracker
+  interface SubBill {
+    id: number
+    name: string
+    amount: number
+    due_date: string
+    frequency: string
+    is_active: number
+    category_name?: string
+    category_color?: string
+    notes?: string
+  }
+  const [subscriptions, setSubscriptions] = createSignal<SubBill[]>([])
+  const activeSubs = createMemo(() => subscriptions().filter((s) => s.is_active !== 0))
+  const totalSubsCost = createMemo(() => activeSubs().reduce((sum, s) => sum + s.amount, 0))
+
+  const loadSubscriptions = async () => {
+    try {
+      const data = await apiGet<SubBill[]>('/api/bills?type=subscription')
+      setSubscriptions(Array.isArray(data) ? data : [])
+    } catch {
+      // subscriptions remain as-is
+    }
+  }
 
   // Load housing expenses
   const loadHousings = async () => {
@@ -120,9 +157,9 @@ export default function HousingForm() {
   }
 
   // Calculate total monthly housing cost
-  const totalMonthlyCost = () => {
-    return housings().reduce((sum, h) => sum + h.monthly_amount, 0)
-  }
+  const totalMonthlyCost = createMemo(() => {
+    return housings().reduce((sum, h) => sum + getMonthlyAmount(h), 0)
+  })
 
   // Get type icon SVG
   const getTypeIcon = (type: string) => {
@@ -172,6 +209,12 @@ export default function HousingForm() {
 
   onMount(() => {
     loadHousings()
+    loadSubscriptions()
+  })
+  createEffect(() => {
+    void state.profileVersion
+    void loadHousings()
+    void loadSubscriptions()
   })
 
   return (
@@ -207,9 +250,60 @@ export default function HousingForm() {
         </div>
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Autopay Enabled</div>
-          <div class={styles.summaryValue}>{housings().filter((h) => h.autopay).length}</div>
+          <div class={styles.summaryValue}>
+            {housings().filter((h) => h.autopay === true || h.autopay === 1).length}
+          </div>
         </div>
       </div>
+
+      {/* Subscription Tracker */}
+      {activeSubs().length > 0 && (
+        <div class={styles.subscriptionSection}>
+          <div class={styles.sectionHeader}>
+            <h3 class={styles.sectionTitle}>
+              <svg
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              Subscription Tracker
+            </h3>
+            <span class={styles.subTotal}>{formatCurrency(totalSubsCost())}/mo</span>
+          </div>
+          <div class={styles.subscriptionList}>
+            <For each={activeSubs()}>
+              {(sub) => (
+                <div class={styles.subItem}>
+                  <div class={styles.subItemInfo}>
+                    <span
+                      class={styles.subDot}
+                      style={{ background: sub.category_color || 'var(--primary)' }}
+                    />
+                    <div>
+                      <div class={styles.subItemName}>{sub.name}</div>
+                      <div class={styles.subItemMeta}>
+                        {sub.frequency === 'monthly'
+                          ? 'Monthly'
+                          : sub.frequency === 'weekly'
+                            ? 'Weekly'
+                            : 'Biweekly'}
+                        {sub.due_date &&
+                          ` · Due ${new Date(sub.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div class={styles.subItemAmount}>{formatCurrency(sub.amount)}</div>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+      )}
 
       {loading() ? (
         <div class={styles.emptyState}>Loading housing expenses...</div>
@@ -229,11 +323,11 @@ export default function HousingForm() {
                 <div class={styles.housingHeader}>
                   <div class={styles.housingIcon}>{getTypeIcon(housing.type)}</div>
                   <div class={styles.housingInfo}>
-                    <h3 class={styles.housingName}>{housing.property_name}</h3>
+                    <h3 class={styles.housingName}>{getPropertyName(housing)}</h3>
                     <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
                   </div>
                   <div class={styles.housingActions}>
-                    {housing.autopay ? (
+                    {housing.autopay === true || housing.autopay === 1 ? (
                       <Badge status="success">Autopay</Badge>
                     ) : (
                       <Badge status="default">Manual</Badge>
@@ -257,13 +351,15 @@ export default function HousingForm() {
                 </div>
                 <div class={styles.housingAmount}>
                   <div class={styles.amountLabel}>Monthly Cost</div>
-                  <div class={styles.amountValue}>{formatAmount(housing.monthly_amount)}</div>
+                  <div class={styles.amountValue}>{formatAmount(getMonthlyAmount(housing))}</div>
                 </div>
                 <div class={styles.housingDetails}>
                   <div class={styles.detailItem}>
                     <span class={styles.detailLabel}>Due</span>
                     <span class={styles.detailValue}>
-                      {housing.due_month} / {housing.due_day}
+                      {housing.due_date
+                        ? housing.due_date
+                        : `${housing.due_month} / ${housing.due_day}`}
                     </span>
                   </div>
                   {housing.notes && (

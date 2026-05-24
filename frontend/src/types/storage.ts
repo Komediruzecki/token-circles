@@ -95,6 +95,7 @@ export interface Transaction {
   means: string
   notes: string
   tags: string[]
+  tag_ids?: number[]
   reconciled?: number
   reconciled_at?: string
 }
@@ -241,3 +242,13 @@ export interface ExportPortfolioHolding {
 }
 
 export type ExportSettings = Settings
+
+export interface LogEntry {
+  id: number
+  timestamp: string
+  level: string
+  source: string
+  error: string
+  stack?: string | null
+  request?: Record<string, unknown> | null
+}

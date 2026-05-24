@@ -37,6 +37,7 @@
 
 import { createSignal, For, onMount, Show } from 'solid-js'
 import { apiFetch } from '../core/apiFetch'
+import { classifyCategory } from '../core/categoryClassifier'
 import styles from './Import.module.css'
 
 // Column field names for mapping
@@ -105,7 +106,14 @@ interface SheetResult {
 type Step = 'upload' | 'mapping' | 'preview' | 'importing' | 'done'
 
 export default function Import() {
-  // Tab state
+  // Import method tab
+  type ImportTab = 'google-sheets' | 'file-upload' | 'paste-csv'
+  const [activeImportTab, setActiveImportTab] = createSignal<ImportTab>('google-sheets')
+
+  const profileHeaders = () => {
+    const pid = localStorage.getItem('currentProfileId') || '1'
+    return { 'X-Profile-Id': pid }
+  }
 
   // Step state
   const [activeStep, setActiveStep] = createSignal<Step>('upload')
@@ -120,6 +128,61 @@ export default function Import() {
   const [sheetResult, setSheetResult] = createSignal<SheetResult | null>(null)
   const [sheetNames, setSheetNames] = createSignal<string[]>([])
 
+  // Paste CSV state
+  const [pastedText, setPastedText] = createSignal('')
+  const [pasteDelimiter, setPasteDelimiter] = createSignal<'auto' | 'comma' | 'tab'>('auto')
+
+  const parsePastedData = (text: string) => {
+    if (!text.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const delim = pasteDelimiter() === 'tab' ? '\t' : pasteDelimiter() === 'comma' ? ',' : ''
+      const rows: string[][] = []
+      const lines = text.trim().split('\n')
+      for (const line of lines) {
+        const cols: string[] = []
+        let cur = ''
+        let inQuotes = false
+        for (const ch of line) {
+          if (ch === '"') {
+            inQuotes = !inQuotes
+          } else if (
+            (delim && ch === delim) ||
+            (!delim && (ch === ',' || ch === '\t') && !inQuotes)
+          ) {
+            cols.push(cur.trim().replace(/^"|"$/g, ''))
+            cur = ''
+          } else cur += ch
+        }
+        cols.push(cur.trim().replace(/^"|"$/g, ''))
+        rows.push(cols)
+      }
+      if (rows.length < 2) {
+        setError('Need at least a header row and one data row')
+        setLoading(false)
+        return
+      }
+      const headers = rows[0]
+      const dataRows = rows.slice(1).filter((r) => r.some((c) => c))
+      setUploadResult({
+        headers,
+        rows: dataRows,
+        filename: 'pasted-data.csv',
+        fileId: `paste-${Date.now()}`,
+        sheetName: 'Pasted',
+        sheetNames: ['Pasted'],
+        totalRows: dataRows.length,
+        duplicateCount: 0,
+        duplicateIndices: [],
+      })
+      setActiveStep('upload')
+    } catch {
+      setError('Failed to parse pasted data')
+      setLoading(false)
+    }
+  }
+
   // Column mapping
   const [columnMapping, setColumnMapping] = createSignal<Record<string, number>>({})
   const [categoryTypes, setCategoryTypes] = createSignal<
@@ -128,6 +191,20 @@ export default function Import() {
   const [accountTypes, setAccountTypes] = createSignal<Record<string, string>>({})
   const [accountBalances, setAccountBalances] = createSignal<Record<string, string>>({})
   const [accountBalanceDates, setAccountBalanceDates] = createSignal<Record<string, string>>({})
+  const [universalStartDate, setUniversalStartDate] = createSignal('')
+
+  const applyUniversalStartDate = (date: string) => {
+    setUniversalStartDate(date)
+    if (!date) return
+    const types = categoryTypes()
+    const dates = { ...accountBalanceDates() }
+    for (const cat of detectCategories()) {
+      if (types[cat] === 'account') {
+        dates[cat] = date
+      }
+    }
+    setAccountBalanceDates(dates)
+  }
 
   // Preview state
   const [_rows, setRows] = createSignal<string[][]>([])
@@ -241,17 +318,12 @@ export default function Import() {
     setResultMessage(null)
 
     try {
-      const getProfileHeaders = () => {
-        const pid = localStorage.getItem('currentProfileId') || '1'
-        return { 'X-Profile-Id': pid }
-      }
-
       const formData = new FormData()
       formData.append('file', file)
 
       const response = await apiFetch('/api/import/upload', {
         method: 'POST',
-        headers: getProfileHeaders(),
+        headers: profileHeaders(),
         body: formData,
       })
 
@@ -302,14 +374,9 @@ export default function Import() {
     setError(null)
 
     try {
-      const getProfileHeaders = () => {
-        const pid = localStorage.getItem('currentProfileId') || '1'
-        return { 'X-Profile-Id': pid }
-      }
-
       const response = await apiFetch('/api/import/googlesheet', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
+        headers: { 'Content-Type': 'application/json', ...profileHeaders() },
         body: JSON.stringify({ url, sheetName: selectedSheet() }),
       })
 
@@ -419,17 +486,12 @@ export default function Import() {
         rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
       }
 
-      const getProfileHeaders = () => {
-        const pid = localStorage.getItem('currentProfileId') || '1'
-        return { 'X-Profile-Id': pid }
-      }
-
       // Server-side duplicate detection for new-only mode
       const dupCount = hasDuplicateCount() ?? 0
       if (mode === 'new' && dupCount > 0) {
         const previewResponse = await apiFetch('/api/import/file-sheet', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
+          headers: { 'Content-Type': 'application/json', ...profileHeaders() },
           body: JSON.stringify({
             fileId: fileId(),
             sheetName: selectedSheet(),
@@ -445,7 +507,7 @@ export default function Import() {
 
       const response = await apiFetch('/api/import/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getProfileHeaders() },
+        headers: { 'Content-Type': 'application/json', ...profileHeaders() },
         body: JSON.stringify({
           rows: rowsToImport,
           mapping,
@@ -464,7 +526,7 @@ export default function Import() {
         type: 'success',
         text:
           data.message ||
-          `Successfully imported ${data.imported || rowsToImport.length} transactions`,
+          `Imported ${data.imported ?? 0} transactions${data.skipped ? ` (${data.skipped} skipped)` : ''}`,
       })
 
       // Reset after delay
@@ -478,44 +540,6 @@ export default function Import() {
     }
   }
 
-  // Auto-detect income categories based on keywords in the category name
-  const classifyCategory = (name: string): 'income' | 'expense' | 'account' => {
-    const lower = name.toLowerCase()
-    const incomeKeywords = [
-      'salary',
-      'income',
-      'wages',
-      'wage',
-      'payroll',
-      'revenue',
-      'dividend',
-      'refund',
-      'bonus',
-      'paycheck',
-      'pay cheque',
-      'interest',
-      'credit',
-      'received',
-      'royalt',
-      'reimbursement',
-    ]
-    const accountKeywords = [
-      'account',
-      'bank',
-      'checking',
-      'savings',
-      'giro',
-      'deposit',
-      'wallet',
-      'portfolio',
-      'investment account',
-      'credit card account',
-    ]
-    if (incomeKeywords.some((kw) => lower.includes(kw))) return 'income'
-    if (accountKeywords.some((kw) => lower.includes(kw))) return 'account'
-    return 'expense'
-  }
-
   onMount(() => {
     // Initialize default category types with discovered categories
     const categories = detectCategories()
@@ -526,535 +550,617 @@ export default function Import() {
     setCategoryTypes(types)
   })
 
-  // File upload step
-  const fileUploadStep = () => (
+  // Data entry step (with tabs for Google Sheets, File Upload, Paste CSV)
+  const dataEntryStep = () => (
     <div class={styles.uploadArea}>
-      {/* File Upload Section */}
-      <h3 class={styles.sectionHeader}>File Upload</h3>
-      <div
-        class={`${styles.dropzone} ${loading() ? styles.disabled : ''}`}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        id="import-dropzone"
-      >
-        <input
-          type="file"
-          id="import-file-input"
-          accept=".csv,.xlsx,.xls"
-          class={styles.fileInput}
-          disabled={loading()}
-          onChange={handleFileSelect}
-        />
-        <label for="import-file-input" class={styles.uploadLabel}>
-          <svg
-            class={styles.dropzoneIcon}
-            width="48"
-            height="48"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      {/* Import method tabs */}
+      <div class={styles.tabBar}>
+        <button
+          class={`${styles.tab} ${activeImportTab() === 'google-sheets' ? styles.active : ''}`}
+          onClick={() => setActiveImportTab('google-sheets')}
+        >
+          Google Sheets
+        </button>
+        <button
+          class={`${styles.tab} ${activeImportTab() === 'file-upload' ? styles.active : ''}`}
+          onClick={() => setActiveImportTab('file-upload')}
+        >
+          File Upload
+        </button>
+        <button
+          class={`${styles.tab} ${activeImportTab() === 'paste-csv' ? styles.active : ''}`}
+          onClick={() => setActiveImportTab('paste-csv')}
+        >
+          Paste CSV
+        </button>
+      </div>
+
+      {/* Google Sheets Tab */}
+      {activeImportTab() === 'google-sheets' && (
+        <>
+          <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
+            <h3 class={styles.settingsCardTitle}>Expected Columns</h3>
+            <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
+              <table class={styles.previewTable}>
+                <thead>
+                  <tr>
+                    <th>Column</th>
+                    <th>Required</th>
+                    <th>Sample Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Date</td>
+                    <td>Yes</td>
+                    <td>2024-01-15</td>
+                  </tr>
+                  <tr>
+                    <td>Description</td>
+                    <td>Yes</td>
+                    <td>Grocery Store Purchase</td>
+                  </tr>
+                  <tr>
+                    <td>Amount</td>
+                    <td>Yes</td>
+                    <td>-45.99</td>
+                  </tr>
+                  <tr>
+                    <td>Category</td>
+                    <td>No</td>
+                    <td>Groceries</td>
+                  </tr>
+                  <tr>
+                    <td>Currency</td>
+                    <td>No</td>
+                    <td>EUR</td>
+                  </tr>
+                  <tr>
+                    <td>Beneficiary</td>
+                    <td>No</td>
+                    <td>Supermarket Inc.</td>
+                  </tr>
+                  <tr>
+                    <td>Payor</td>
+                    <td>No</td>
+                    <td>John Doe</td>
+                  </tr>
+                  <tr>
+                    <td>Means of Payment</td>
+                    <td>No</td>
+                    <td>Credit Card</td>
+                  </tr>
+                  <tr>
+                    <td>Exchange Rate</td>
+                    <td>No</td>
+                    <td>1.0</td>
+                  </tr>
+                  <tr>
+                    <td>Notes</td>
+                    <td>No</td>
+                    <td>Weekly shopping</td>
+                  </tr>
+                  <tr>
+                    <td>Type</td>
+                    <td>No</td>
+                    <td>expense</td>
+                  </tr>
+                  <tr>
+                    <td>Amount Local</td>
+                    <td>No</td>
+                    <td>-45.99</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class={styles.sheetsInfo} style={{ 'margin-top': '12px', 'margin-bottom': 0 }}>
+              Column names are auto-detected. Use the downloadable template below for guaranteed
+              matching.
+            </p>
+          </div>
+
+          <div class={styles.sheetsUrlRow}>
+            <input
+              type="text"
+              class={styles.sheetsUrlInput}
+              placeholder="Paste Google Sheets URL"
+              value={sheetUrl()}
+              onInput={(e) => setSheetUrl(e.target.value)}
+            />
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={fetchGoogleSheet}
+              disabled={loading()}
+            >
+              Fetch
+            </button>
+          </div>
+          <p class={styles.sheetsInfo}>
+            Google Sheets URL format: https://docs.google.com/spreadsheets/d/...
+          </p>
+
+          {sheetNames().length > 0 && !sheetResult() && (
+            <div class={styles.sheetsUrlRow}>
+              <label class={styles.sheetsInfo}>Available sheets:</label>
+              <div class={styles.sheetTabs}>
+                <For each={sheetNames()}>
+                  {(name) => (
+                    <button
+                      class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
+                      onClick={() => {
+                        handleSheetTabClick(name)
+                      }}
+                    >
+                      {name}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
+
+          {sheetResult() && (
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={goToMapping}
+              style={{ 'margin-top': '16px' }}
+            >
+              Continue to Mapping
+            </button>
+          )}
+        </>
+      )}
+
+      {/* File Upload Tab */}
+      {activeImportTab() === 'file-upload' && (
+        <>
+          <div
+            class={`${styles.dropzone} ${loading() ? styles.disabled : ''}`}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            id="import-dropzone"
           >
-            <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          <p class={styles.dropzoneTitle}>Click or drag and drop your file here</p>
-          <p class={styles.dropzoneHint}>Supported formats: CSV, XLSX, XLS</p>
-        </label>
-      </div>
-
-      {/* Sheet selector if multiple sheets */}
-      {uploadResult() && uploadResult()!.sheetNames.length > 1 && (
-        <div class={styles.sheetsUrlRow}>
-          <label class={styles.sheetsInfo}>Available sheets:</label>
-          <div class={styles.sheetTabs}>
-            <For each={uploadResult()!.sheetNames}>
-              {(name) => (
-                <button
-                  class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
-                  onClick={() => setSelectedSheet(name)}
-                >
-                  {name}
-                </button>
-              )}
-            </For>
+            <input
+              type="file"
+              id="import-file-input"
+              accept=".csv,.xlsx,.xls"
+              class={styles.fileInput}
+              disabled={loading()}
+              onChange={handleFileSelect}
+            />
+            <label for="import-file-input" class={styles.uploadLabel}>
+              <svg
+                class={styles.dropzoneIcon}
+                width="48"
+                height="48"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p class={styles.dropzoneTitle}>Click or drag and drop your file here</p>
+              <p class={styles.dropzoneHint}>Supported formats: CSV, XLSX, XLS</p>
+            </label>
           </div>
-        </div>
+
+          {uploadResult() && uploadResult()!.sheetNames.length > 1 && (
+            <div class={styles.sheetsUrlRow}>
+              <label class={styles.sheetsInfo}>Available sheets:</label>
+              <div class={styles.sheetTabs}>
+                <For each={uploadResult()!.sheetNames}>
+                  {(name) => (
+                    <button
+                      class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
+                      onClick={() => setSelectedSheet(name)}
+                    >
+                      {name}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
+
+          {uploadResult() && (
+            <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={goToMapping}>
+              Continue to Mapping
+            </button>
+          )}
+
+          <div class={styles.templateSection}>
+            <p class={styles.dropzoneHint}>Need a template?</p>
+            <button
+              class={`${styles.btn} ${styles.btnOutline}`}
+              onClick={() => {
+                const header = [
+                  'Date',
+                  'Description',
+                  'Amount',
+                  'Category',
+                  'Currency',
+                  'Beneficiary',
+                  'Payor',
+                  'Means of Payment',
+                  'Exchange Rate',
+                  'Notes',
+                  'Type',
+                  'Amount Local',
+                ]
+                const rows: string[][] = [
+                  [
+                    '2024-01-01',
+                    'Salary January',
+                    '3200.00',
+                    'Salary',
+                    'EUR',
+                    'Employer Inc.',
+                    'Employer Inc.',
+                    'Bank Transfer',
+                    '1.0',
+                    'Monthly salary',
+                    'income',
+                    '3200.00',
+                  ],
+                  [
+                    '2024-01-02',
+                    'Rent Payment',
+                    '-950.00',
+                    'Rent',
+                    'EUR',
+                    'Landlord Ltd.',
+                    'John Doe',
+                    'Bank Transfer',
+                    '1.0',
+                    'January rent',
+                    'expense',
+                    '-950.00',
+                  ],
+                  [
+                    '2024-01-03',
+                    'Grocery Store',
+                    '-78.35',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-78.35',
+                  ],
+                  [
+                    '2024-01-04',
+                    'Electric Bill',
+                    '-112.50',
+                    'Utilities',
+                    'EUR',
+                    'Power Co.',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'January electricity',
+                    'expense',
+                    '-112.50',
+                  ],
+                  [
+                    '2024-01-05',
+                    'Gas Station',
+                    '-55.00',
+                    'Transport',
+                    'EUR',
+                    'Fuel Station',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Fuel for car',
+                    'expense',
+                    '-55.00',
+                  ],
+                  [
+                    '2024-01-06',
+                    'Internet Bill',
+                    '-39.99',
+                    'Utilities',
+                    'EUR',
+                    'ISP Provider',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'Monthly internet',
+                    'expense',
+                    '-39.99',
+                  ],
+                  [
+                    '2024-01-07',
+                    'Restaurant Dinner',
+                    '-62.40',
+                    'Dining',
+                    'EUR',
+                    'Bella Italia',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Dinner with friends',
+                    'expense',
+                    '-62.40',
+                  ],
+                  [
+                    '2024-01-08',
+                    'Gym Membership',
+                    '-45.00',
+                    'Health',
+                    'EUR',
+                    'FitLife Gym',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'Monthly gym fee',
+                    'expense',
+                    '-45.00',
+                  ],
+                  [
+                    '2024-01-10',
+                    'Freelance Work',
+                    '450.00',
+                    'Freelance',
+                    'EUR',
+                    'Client XYZ',
+                    'Client XYZ',
+                    'Bank Transfer',
+                    '1.0',
+                    'Website project',
+                    'income',
+                    '450.00',
+                  ],
+                  [
+                    '2024-01-12',
+                    'Phone Bill',
+                    '-29.99',
+                    'Utilities',
+                    'EUR',
+                    'Telecom Co.',
+                    'John Doe',
+                    'Direct Debit',
+                    '1.0',
+                    'Monthly phone plan',
+                    'expense',
+                    '-29.99',
+                  ],
+                  [
+                    '2024-01-14',
+                    'Pharmacy',
+                    '-23.50',
+                    'Health',
+                    'EUR',
+                    'City Pharmacy',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Vitamins and supplies',
+                    'expense',
+                    '-23.50',
+                  ],
+                  [
+                    '2024-01-15',
+                    'Cinema Tickets',
+                    '-28.00',
+                    'Entertainment',
+                    'EUR',
+                    'CineMax',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Movie night',
+                    'expense',
+                    '-28.00',
+                  ],
+                  [
+                    '2024-01-17',
+                    'Transfer to Savings',
+                    '-500.00',
+                    'Savings',
+                    'EUR',
+                    'My Savings Account',
+                    'John Doe',
+                    'Bank Transfer',
+                    '1.0',
+                    'Monthly savings',
+                    'expense',
+                    '-500.00',
+                  ],
+                  [
+                    '2024-01-18',
+                    'Grocery Store',
+                    '-85.20',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-85.20',
+                  ],
+                  [
+                    '2024-01-20',
+                    'Clothing Purchase',
+                    '-120.00',
+                    'Shopping',
+                    'EUR',
+                    'Fashion Store',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Winter jacket',
+                    'expense',
+                    '-120.00',
+                  ],
+                  [
+                    '2024-01-22',
+                    'Car Insurance',
+                    '-185.00',
+                    'Insurance',
+                    'EUR',
+                    'AutoInsure Ltd.',
+                    'John Doe',
+                    'Bank Transfer',
+                    '1.0',
+                    'Quarterly payment',
+                    'expense',
+                    '-185.00',
+                  ],
+                  [
+                    '2024-01-24',
+                    'Grocery Store',
+                    '-72.10',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-72.10',
+                  ],
+                  [
+                    '2024-01-25',
+                    'Online Course',
+                    '-49.99',
+                    'Education',
+                    'EUR',
+                    'EduPlatform',
+                    'John Doe',
+                    'Credit Card',
+                    '1.0',
+                    'Programming course',
+                    'expense',
+                    '-49.99',
+                  ],
+                  [
+                    '2024-01-27',
+                    'Haircut',
+                    '-30.00',
+                    'Personal Care',
+                    'EUR',
+                    'Barber Shop',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Monthly haircut',
+                    'expense',
+                    '-30.00',
+                  ],
+                  [
+                    '2024-01-29',
+                    'Restaurant Lunch',
+                    '-18.50',
+                    'Dining',
+                    'EUR',
+                    'Cafe Central',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Lunch break',
+                    'expense',
+                    '-18.50',
+                  ],
+                  [
+                    '2024-01-31',
+                    'Grocery Store',
+                    '-68.75',
+                    'Groceries',
+                    'EUR',
+                    'Supermarket',
+                    'John Doe',
+                    'Debit Card',
+                    '1.0',
+                    'Weekly groceries',
+                    'expense',
+                    '-68.75',
+                  ],
+                  [
+                    '2024-02-01',
+                    'Salary February',
+                    '3200.00',
+                    'Salary',
+                    'EUR',
+                    'Employer Inc.',
+                    'Employer Inc.',
+                    'Bank Transfer',
+                    '1.0',
+                    'Monthly salary',
+                    'income',
+                    '3200.00',
+                  ],
+                ]
+                const csv = [header, ...rows].map((r) => r.join(',')).join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'finance_import_template.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              Download Sample Template
+            </button>
+          </div>
+        </>
       )}
 
-      {/* Upload data button */}
-      {uploadResult() && (
-        <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={goToMapping}>
-          Continue to Mapping
-        </button>
-      )}
-
-      {/* Template download */}
-      <div class={styles.templateSection}>
-        <p class={styles.dropzoneHint}>Need a template?</p>
-        <button
-          class={`${styles.btn} ${styles.btnOutline}`}
-          onClick={() => {
-            const header = [
-              'Date',
-              'Description',
-              'Amount',
-              'Category',
-              'Currency',
-              'Beneficiary',
-              'Payor',
-              'Means of Payment',
-              'Exchange Rate',
-              'Notes',
-              'Type',
-              'Amount Local',
-            ]
-            const rows: string[][] = [
-              [
-                '2024-01-01',
-                'Salary January',
-                '3200.00',
-                'Salary',
-                'EUR',
-                'Employer Inc.',
-                'Employer Inc.',
-                'Bank Transfer',
-                '1.0',
-                'Monthly salary',
-                'income',
-                '3200.00',
-              ],
-              [
-                '2024-01-02',
-                'Rent Payment',
-                '-950.00',
-                'Rent',
-                'EUR',
-                'Landlord Ltd.',
-                'John Doe',
-                'Bank Transfer',
-                '1.0',
-                'January rent',
-                'expense',
-                '-950.00',
-              ],
-              [
-                '2024-01-03',
-                'Grocery Store',
-                '-78.35',
-                'Groceries',
-                'EUR',
-                'Supermarket',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Weekly groceries',
-                'expense',
-                '-78.35',
-              ],
-              [
-                '2024-01-04',
-                'Electric Bill',
-                '-112.50',
-                'Utilities',
-                'EUR',
-                'Power Co.',
-                'John Doe',
-                'Direct Debit',
-                '1.0',
-                'January electricity',
-                'expense',
-                '-112.50',
-              ],
-              [
-                '2024-01-05',
-                'Gas Station',
-                '-55.00',
-                'Transport',
-                'EUR',
-                'Fuel Station',
-                'John Doe',
-                'Credit Card',
-                '1.0',
-                'Fuel for car',
-                'expense',
-                '-55.00',
-              ],
-              [
-                '2024-01-06',
-                'Internet Bill',
-                '-39.99',
-                'Utilities',
-                'EUR',
-                'ISP Provider',
-                'John Doe',
-                'Direct Debit',
-                '1.0',
-                'Monthly internet',
-                'expense',
-                '-39.99',
-              ],
-              [
-                '2024-01-07',
-                'Restaurant Dinner',
-                '-62.40',
-                'Dining',
-                'EUR',
-                'Bella Italia',
-                'John Doe',
-                'Credit Card',
-                '1.0',
-                'Dinner with friends',
-                'expense',
-                '-62.40',
-              ],
-              [
-                '2024-01-08',
-                'Gym Membership',
-                '-45.00',
-                'Health',
-                'EUR',
-                'FitLife Gym',
-                'John Doe',
-                'Direct Debit',
-                '1.0',
-                'Monthly gym fee',
-                'expense',
-                '-45.00',
-              ],
-              [
-                '2024-01-10',
-                'Freelance Work',
-                '450.00',
-                'Freelance',
-                'EUR',
-                'Client XYZ',
-                'Client XYZ',
-                'Bank Transfer',
-                '1.0',
-                'Website project',
-                'income',
-                '450.00',
-              ],
-              [
-                '2024-01-12',
-                'Phone Bill',
-                '-29.99',
-                'Utilities',
-                'EUR',
-                'Telecom Co.',
-                'John Doe',
-                'Direct Debit',
-                '1.0',
-                'Monthly phone plan',
-                'expense',
-                '-29.99',
-              ],
-              [
-                '2024-01-14',
-                'Pharmacy',
-                '-23.50',
-                'Health',
-                'EUR',
-                'City Pharmacy',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Vitamins and supplies',
-                'expense',
-                '-23.50',
-              ],
-              [
-                '2024-01-15',
-                'Cinema Tickets',
-                '-28.00',
-                'Entertainment',
-                'EUR',
-                'CineMax',
-                'John Doe',
-                'Credit Card',
-                '1.0',
-                'Movie night',
-                'expense',
-                '-28.00',
-              ],
-              [
-                '2024-01-17',
-                'Transfer to Savings',
-                '-500.00',
-                'Savings',
-                'EUR',
-                'My Savings Account',
-                'John Doe',
-                'Bank Transfer',
-                '1.0',
-                'Monthly savings',
-                'expense',
-                '-500.00',
-              ],
-              [
-                '2024-01-18',
-                'Grocery Store',
-                '-85.20',
-                'Groceries',
-                'EUR',
-                'Supermarket',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Weekly groceries',
-                'expense',
-                '-85.20',
-              ],
-              [
-                '2024-01-20',
-                'Clothing Purchase',
-                '-120.00',
-                'Shopping',
-                'EUR',
-                'Fashion Store',
-                'John Doe',
-                'Credit Card',
-                '1.0',
-                'Winter jacket',
-                'expense',
-                '-120.00',
-              ],
-              [
-                '2024-01-22',
-                'Car Insurance',
-                '-185.00',
-                'Insurance',
-                'EUR',
-                'AutoInsure Ltd.',
-                'John Doe',
-                'Bank Transfer',
-                '1.0',
-                'Quarterly payment',
-                'expense',
-                '-185.00',
-              ],
-              [
-                '2024-01-24',
-                'Grocery Store',
-                '-72.10',
-                'Groceries',
-                'EUR',
-                'Supermarket',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Weekly groceries',
-                'expense',
-                '-72.10',
-              ],
-              [
-                '2024-01-25',
-                'Online Course',
-                '-49.99',
-                'Education',
-                'EUR',
-                'EduPlatform',
-                'John Doe',
-                'Credit Card',
-                '1.0',
-                'Programming course',
-                'expense',
-                '-49.99',
-              ],
-              [
-                '2024-01-27',
-                'Haircut',
-                '-30.00',
-                'Personal Care',
-                'EUR',
-                'Barber Shop',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Monthly haircut',
-                'expense',
-                '-30.00',
-              ],
-              [
-                '2024-01-29',
-                'Restaurant Lunch',
-                '-18.50',
-                'Dining',
-                'EUR',
-                'Cafe Central',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Lunch break',
-                'expense',
-                '-18.50',
-              ],
-              [
-                '2024-01-31',
-                'Grocery Store',
-                '-68.75',
-                'Groceries',
-                'EUR',
-                'Supermarket',
-                'John Doe',
-                'Debit Card',
-                '1.0',
-                'Weekly groceries',
-                'expense',
-                '-68.75',
-              ],
-              [
-                '2024-02-01',
-                'Salary February',
-                '3200.00',
-                'Salary',
-                'EUR',
-                'Employer Inc.',
-                'Employer Inc.',
-                'Bank Transfer',
-                '1.0',
-                'Monthly salary',
-                'income',
-                '3200.00',
-              ],
-            ]
-            const csv = [header, ...rows].map((r) => r.join(',')).join('\n')
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = 'finance_import_template.csv'
-            a.click()
-            URL.revokeObjectURL(url)
-          }}
-        >
-          Download Sample Template
-        </button>
-      </div>
-
-      {/* Google Sheets Section */}
-      <hr class={styles.sectionDivider} />
-      <h3 class={styles.sectionHeader}>Google Sheets</h3>
-      {/* Column guidelines */}
-      <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
-        <h3 class={styles.settingsCardTitle}>Expected Columns</h3>
-        <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
-          <table class={styles.previewTable}>
-            <thead>
-              <tr>
-                <th>Column</th>
-                <th>Required</th>
-                <th>Sample Data</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Date</td>
-                <td>Yes</td>
-                <td>2024-01-15</td>
-              </tr>
-              <tr>
-                <td>Description</td>
-                <td>Yes</td>
-                <td>Grocery Store Purchase</td>
-              </tr>
-              <tr>
-                <td>Amount</td>
-                <td>Yes</td>
-                <td>-45.99</td>
-              </tr>
-              <tr>
-                <td>Category</td>
-                <td>No</td>
-                <td>Groceries</td>
-              </tr>
-              <tr>
-                <td>Currency</td>
-                <td>No</td>
-                <td>EUR</td>
-              </tr>
-              <tr>
-                <td>Beneficiary</td>
-                <td>No</td>
-                <td>Supermarket Inc.</td>
-              </tr>
-              <tr>
-                <td>Payor</td>
-                <td>No</td>
-                <td>John Doe</td>
-              </tr>
-              <tr>
-                <td>Means of Payment</td>
-                <td>No</td>
-                <td>Credit Card</td>
-              </tr>
-              <tr>
-                <td>Exchange Rate</td>
-                <td>No</td>
-                <td>1.0</td>
-              </tr>
-              <tr>
-                <td>Notes</td>
-                <td>No</td>
-                <td>Weekly shopping</td>
-              </tr>
-              <tr>
-                <td>Type</td>
-                <td>No</td>
-                <td>expense</td>
-              </tr>
-              <tr>
-                <td>Amount Local</td>
-                <td>No</td>
-                <td>-45.99</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class={styles.sheetsInfo} style={{ 'margin-top': '12px', 'margin-bottom': 0 }}>
-          Column names are auto-detected. Use the downloadable template below for guaranteed
-          matching.
-        </p>
-      </div>
-
-      <div class={styles.sheetsUrlRow}>
-        <input
-          type="text"
-          class={styles.sheetsUrlInput}
-          placeholder="Paste Google Sheets URL"
-          value={sheetUrl()}
-          onInput={(e) => setSheetUrl(e.target.value)}
-        />
-        <button
-          class={`${styles.btn} ${styles.btnPrimary}`}
-          onClick={fetchGoogleSheet}
-          disabled={loading()}
-        >
-          Fetch
-        </button>
-      </div>
-      <p class={styles.sheetsInfo}>
-        Google Sheets URL format: https://docs.google.com/spreadsheets/d/...
-      </p>
-
-      {/* Sheet tabs from first fetch */}
-      {sheetNames().length > 0 && !sheetResult() && (
-        <div class={styles.sheetsUrlRow}>
-          <label class={styles.sheetsInfo}>Available sheets:</label>
-          <div class={styles.sheetTabs}>
-            <For each={sheetNames()}>
-              {(name) => (
-                <button
-                  class={`${styles.sheetTab} ${selectedSheet() === name ? styles.active : ''}`}
-                  onClick={() => {
-                    handleSheetTabClick(name)
-                  }}
-                >
-                  {name}
-                </button>
-              )}
-            </For>
+      {/* Paste CSV Tab */}
+      {activeImportTab() === 'paste-csv' && (
+        <>
+          <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
+            Paste tabular data directly from Excel, Google Sheets, or any spreadsheet application.
+            Works guaranteed in serverless mode — no CORS restrictions.
+          </p>
+          <div
+            style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}
+          >
+            <select
+              class={styles.formControl}
+              value={pasteDelimiter()}
+              onchange={(e) => setPasteDelimiter(e.currentTarget.value as 'auto' | 'comma' | 'tab')}
+              style={{ 'max-width': '140px' }}
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="comma">Comma (,)</option>
+              <option value="tab">Tab</option>
+            </select>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={() => {
+                parsePastedData(pastedText())
+              }}
+              disabled={loading() || !pastedText().trim()}
+            >
+              Parse Pasted Data
+            </button>
           </div>
-        </div>
+          <textarea
+            class={styles.formControl}
+            placeholder="Paste CSV or TSV data here (include header row)&#10;Example:&#10;date,description,amount&#10;2024-01-15,Grocery Store,-45.99&#10;2024-01-16,Salary,3200.00"
+            value={pastedText()}
+            oninput={(e) => setPastedText(e.currentTarget.value)}
+            rows={8}
+            style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
+          />
+          {uploadResult() && activeImportTab() === 'paste-csv' && (
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={goToMapping}
+              style={{ 'margin-top': '12px' }}
+            >
+              Continue to Mapping
+            </button>
+          )}
+        </>
       )}
     </div>
   )
@@ -1096,7 +1202,45 @@ export default function Import() {
 
         {/* Category type review */}
         <div class={styles.categoryReview}>
-          <h3 class={styles.categoryReviewTitle}>Category Types</h3>
+          <div
+            style={{
+              display: 'flex',
+              'align-items': 'center',
+              gap: '16px',
+              'margin-bottom': '16px',
+              'flex-wrap': 'wrap',
+            }}
+          >
+            <h3 class={styles.categoryReviewTitle} style={{ margin: 0 }}>
+              Category Types
+            </h3>
+            <label
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '6px',
+                'font-size': '13px',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              Tracking start date:
+              <input
+                type="date"
+                value={universalStartDate()}
+                onchange={(e) => {
+                  applyUniversalStartDate(e.currentTarget.value)
+                }}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid var(--border)',
+                  'border-radius': '4px',
+                  'font-size': '13px',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                }}
+              />
+            </label>
+          </div>
           <div style="max-height: 400px; overflow-y: auto;">
             <table class={styles.categoryTable}>
               <thead>
@@ -1383,7 +1527,7 @@ export default function Import() {
       </Show>
 
       {/* Form content */}
-      <Show when={activeStep() === 'upload'}>{fileUploadStep()}</Show>
+      <Show when={activeStep() === 'upload'}>{dataEntryStep()}</Show>
       <Show when={activeStep() === 'mapping'}>{mappingStep()}</Show>
       <Show when={activeStep() === 'preview'}>{previewStep()}</Show>
 

@@ -1,7 +1,7 @@
 /**
  * TourSelectionModal — Lets users choose which spotlight tour to take
  */
-import { For } from 'solid-js'
+import { createMemo, For } from 'solid-js'
 import {
   getCompletedCount,
   getTotalTourCount,
@@ -15,8 +15,8 @@ import {
 import styles from './TourSelectionModal.module.css'
 
 export default function TourSelectionModal() {
-  const completedCount = getCompletedCount()
-  const totalCount = getTotalTourCount()
+  const completedCount = createMemo(() => getCompletedCount())
+  const totalCount = createMemo(() => getTotalTourCount())
 
   return (
     <div class={styles.overlay} onClick={() => setShowTourSelection(false)}>
@@ -30,7 +30,7 @@ export default function TourSelectionModal() {
           <div>
             <h2>Take a Tour</h2>
             <p>
-              {completedCount}/{totalCount} tours completed
+              {completedCount()}/{totalCount()} tours completed
             </p>
           </div>
           <button
@@ -65,7 +65,7 @@ export default function TourSelectionModal() {
             >
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
-            Take Full Tour (All {totalCount} pages)
+            Take Full Tour (All {totalCount()} pages)
           </button>
 
           {/* Individual Tours */}

@@ -91,8 +91,6 @@ test.describe('Goals', () => {
 
     const editBtns = getByTestId(page, 'goal-edit-btn')
     const goalCards = getByTestId(page, 'goal-card')
-    const deleteBtns = getByTestId(page, 'goal-delete-btn')
-
     const editCount = await editBtns.count()
     const goalCount = await goalCards.count()
     expect(editCount).toBeGreaterThanOrEqual(0)

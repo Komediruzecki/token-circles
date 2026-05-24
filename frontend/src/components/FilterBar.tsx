@@ -28,8 +28,8 @@ interface FilterOption {
 }
 
 interface FilterState {
-  categories: FilterOption[]
-  tags: FilterOption[]
+  categories?: FilterOption[]
+  tags?: FilterOption[]
   selectedCategories: number[] | undefined
   selectedTags: number[] | undefined
   dateRange: { from: string; to: string }
@@ -79,9 +79,19 @@ export default function FilterBar(props: FilterBarProps) {
   const toggleTag = (tagId: number) => {
     const idx = selectedTags().indexOf(tagId)
     if (idx >= 0) {
-      props.onChange({ ...props, selectedTags: selectedTags().filter((id) => id !== tagId) })
+      props.onChange({
+        selectedCategories: props.selectedCategories,
+        selectedTags: selectedTags().filter((id) => id !== tagId),
+        dateRange: props.dateRange,
+        selectedPreset: props.selectedPreset,
+      })
     } else {
-      props.onChange({ ...props, selectedTags: [...selectedTags(), tagId] })
+      props.onChange({
+        selectedCategories: props.selectedCategories,
+        selectedTags: [...selectedTags(), tagId],
+        dateRange: props.dateRange,
+        selectedPreset: props.selectedPreset,
+      })
     }
   }
 
@@ -100,11 +110,10 @@ export default function FilterBar(props: FilterBarProps) {
     if (props.onSearchChange) props.onSearchChange('')
     if (props.onFilterTypeChange) props.onFilterTypeChange('all')
     props.onChange({
-      ...props,
       selectedCategories: [],
       selectedTags: [],
       dateRange: { from: '', to: '' },
-      selectedPreset: 'month',
+      selectedPreset: 'all',
     })
   }
 
@@ -118,9 +127,9 @@ export default function FilterBar(props: FilterBarProps) {
     return `${selectedTags().length} Selected`
   }
 
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth()
+  const now = createMemo(() => new Date())
+  const currentYear = createMemo(() => now().getFullYear())
+  const currentMonth = createMemo(() => now().getMonth())
 
   const derivedMonth = createMemo(() => {
     const dr = props.dateRange
@@ -128,7 +137,7 @@ export default function FilterBar(props: FilterBarProps) {
       const d = new Date(dr.from)
       if (!isNaN(d.getTime())) return d.getMonth()
     }
-    return currentMonth
+    return currentMonth()
   })
 
   const derivedYear = createMemo(() => {
@@ -137,12 +146,12 @@ export default function FilterBar(props: FilterBarProps) {
       const d = new Date(dr.from)
       if (!isNaN(d.getTime())) return d.getFullYear()
     }
-    return currentYear
+    return currentYear()
   })
 
   const years = createMemo(() => {
     const range: number[] = []
-    for (let y = currentYear - 5; y <= currentYear + 5; y++) range.push(y)
+    for (let y = currentYear() - 5; y <= currentYear() + 5; y++) range.push(y)
     return range
   })
 
@@ -151,21 +160,29 @@ export default function FilterBar(props: FilterBarProps) {
     const lastDay = new Date(year, month + 1, 0)
     const fmt = (d: Date) => d.toISOString().slice(0, 10)
     props.onChange({
-      ...props,
+      selectedCategories: props.selectedCategories,
+      selectedTags: props.selectedTags,
       dateRange: { from: fmt(firstDay), to: fmt(lastDay) },
       selectedPreset: 'custom',
     })
   }
 
   const handlePresetClick = (preset: string) => {
-    props.onChange({ ...props, selectedPreset: preset })
+    props.onChange({
+      selectedCategories: props.selectedCategories,
+      selectedTags: props.selectedTags,
+      dateRange: props.dateRange,
+      selectedPreset: preset,
+    })
   }
 
   const handleDateChange = (field: 'from' | 'to') => (e: Event) => {
     const target = e.target as HTMLInputElement
     props.onChange({
-      ...props,
+      selectedCategories: props.selectedCategories,
+      selectedTags: props.selectedTags,
       dateRange: { ...props.dateRange, [field]: target.value },
+      selectedPreset: 'custom',
     })
   }
 
@@ -294,14 +311,20 @@ export default function FilterBar(props: FilterBarProps) {
 
         {/* Date presets */}
         <div class={styles.dateFilters}>
-          {['month', 'lastMonth', 'year'].map((p) => (
+          {['all', 'month', 'lastMonth', 'year'].map((p) => (
             <button
               class={`${styles.presetBtn} ${props.selectedPreset === p ? styles.presetBtnActive : ''}`}
               onClick={() => {
                 handlePresetClick(p)
               }}
             >
-              {p === 'month' ? 'This Month' : p === 'lastMonth' ? 'Last Month' : 'This Year'}
+              {p === 'all'
+                ? 'All Time'
+                : p === 'month'
+                  ? 'This Month'
+                  : p === 'lastMonth'
+                    ? 'Last Month'
+                    : 'This Year'}
             </button>
           ))}
         </div>

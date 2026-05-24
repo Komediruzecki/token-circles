@@ -26,16 +26,17 @@
  * Settings Component
  * Application configuration and preferences with storage switching
  */
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
-import styles from '../components/SettingsPage.module.css'
 import { toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
+import { bumpProfileVersion } from '../core/appStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
+import styles from './SettingsPage.module.css'
 import type { ChartExportSettings } from '../utils/chartExportSettings'
 
 function Reports() {
@@ -432,9 +433,9 @@ export default function Settings() {
     const checkHash = () => setShowLogs(window.location.hash.includes('#logs'))
     checkHash()
     window.addEventListener('hashchange', checkHash)
-    return () => {
+    onCleanup(() => {
       window.removeEventListener('hashchange', checkHash)
-    }
+    })
   })
 
   // Household View state
@@ -482,21 +483,21 @@ export default function Settings() {
     }
     setHouseholdIds(newIds)
     localStorage.setItem('selectedProfileIds', JSON.stringify(newIds))
-    window.location.reload()
+    bumpProfileVersion()
   }
 
   const selectAllHousehold = () => {
     const all = allProfiles()
     setHouseholdIds(all.map((p) => p.id))
     localStorage.setItem('selectedProfileIds', JSON.stringify(all.map((p) => p.id)))
-    window.location.reload()
+    bumpProfileVersion()
   }
 
   const clearHousehold = () => {
     const currentId = parseInt(localStorage.getItem('currentProfileId') || '1')
     setHouseholdIds([currentId])
     localStorage.setItem('selectedProfileIds', JSON.stringify([currentId]))
-    window.location.reload()
+    bumpProfileVersion()
   }
 
   return (
@@ -974,6 +975,9 @@ export default function Settings() {
                 </button>
                 <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
                   See what&apos;s new in each version of Finance Manager.
+                </p>
+                <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
+                  v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
                 </p>
               </div>
             </div>

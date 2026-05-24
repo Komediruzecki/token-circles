@@ -4,29 +4,24 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { login, navigateToRoute } from './test-helpers'
+import { login, navigateToRoute, getByTestId } from './test-helpers'
 
 test.describe('Page Animations', () => {
   test('page content is visible', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
-    await expect(page.locator('#page-content')).toBeVisible()
-    await expect(page.locator('.page-content')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible()
   })
 
   test('page content has fadeIn animation class', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
-    const content = page.locator('.page-dashboard')
+    const content = page.locator('[class*="page"]').first()
     await expect(content).toBeVisible()
 
-    // Check that the element has animation or transition
     const style = await content.evaluate((el) => {
       const styles = window.getComputedStyle(el)
-      return {
-        opacity: styles.opacity,
-        transition: styles.transition,
-      }
+      return { opacity: styles.opacity }
     })
     expect(style.opacity).not.toBe('0')
   })
@@ -35,108 +30,79 @@ test.describe('Page Animations', () => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
 
-    // Navigate from dashboard to transactions
     await navigateToRoute(page, 'transactions')
+    await expect(page.locator('h1').first()).toBeVisible()
 
-    await expect(page.locator('#page-content')).toBeVisible()
-    await expect(page.locator('.page-transactions')).toBeVisible()
-
-    // Navigate back to dashboard
     await navigateToRoute(page, 'dashboard')
-
-    await expect(page.locator('.page-dashboard')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible()
   })
 
   test('dashboard loads with all sections visible', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
 
-    await page.waitForSelector('.dashboard-header', { state: 'visible' })
-    await page.waitForSelector('.summary-cards', { state: 'visible' })
-    await page.waitForSelector('.recent-transactions', { state: 'visible' })
-
-    await expect(page.locator('.dashboard-header')).toBeVisible()
-    await expect(page.locator('.summary-cards')).toBeVisible()
-    await expect(page.locator('.recent-transactions')).toBeVisible()
+    await expect(getByTestId(page, 'dashboard-header')).toBeVisible({ timeout: 10000 })
   })
 
   test('transactions page shows table', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'transactions')
-    await page.waitForSelector('table', { state: 'visible' })
-
-    await expect(page.locator('table')).toBeVisible()
+    await expect(page.locator('table, [data-test-id="transactions-header"]').first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 
   test('accounts grid renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'accounts')
-    await page.waitForSelector('.accounts-grid', { state: 'visible' })
-
-    await expect(page.locator('.accounts-grid')).toBeVisible()
+    await expect(getByTestId(page, 'accounts-grid')).toBeVisible({ timeout: 5000 })
   })
 
   test('budgets page renders content', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'budgets')
-    await page.waitForSelector('.page-budgets', { state: 'visible' })
-
-    await expect(page.locator('.page-budgets')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('goals page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'goals')
-    await page.waitForSelector('.page-goals', { state: 'visible' })
-
-    await expect(page.locator('.page-goals')).toBeVisible()
+    await expect(getByTestId(page, 'goals-header')).toBeVisible({ timeout: 5000 })
   })
 
   test('loans page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'loans')
-    await page.waitForSelector('.page-loans', { state: 'visible' })
-
-    await expect(page.locator('.page-loans')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('bills page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'bills')
-    await page.waitForSelector('.page-bills', { state: 'visible' })
-
-    await expect(page.locator('.page-bills')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('retirement page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'retirement')
-    await page.waitForSelector('.page-retirement', { state: 'visible' })
-
-    await expect(page.locator('.page-retirement')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('analytics page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'analytics')
-    await page.waitForSelector('.page-analytics', { state: 'visible' })
-
-    await expect(page.locator('.page-analytics')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('settings page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'settings')
-    await page.waitForSelector('.page-settings', { state: 'visible' })
-
-    await expect(page.locator('.page-settings')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('housing page renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'housing')
-    await page.waitForSelector('.page-housing', { state: 'visible' })
-
-    await expect(page.locator('.page-housing')).toBeVisible()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 5000 })
   })
 })

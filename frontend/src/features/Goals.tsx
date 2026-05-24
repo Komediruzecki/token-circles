@@ -30,13 +30,14 @@
  * Goals Component
  * Handles savings goals with progress tracking
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
-import styles from '../components/GoalsPage.module.css'
 import { formatCurrency } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
+import styles from './GoalsPage.module.css'
 
 interface Goal {
   id: number
@@ -59,11 +60,18 @@ interface CategoryOption {
 }
 
 export default function Goals() {
+  const state = useAppState()
   const [goals, setGoals] = createSignal<Goal[]>([])
   const [categories, setCategories] = createSignal<CategoryOption[]>([])
   const [loading, setLoading] = createSignal(true)
   const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
+  const [showCategoryModal, setShowCategoryModal] = createSignal(false)
+  const [categoryForm, setCategoryForm] = createSignal({
+    name: '',
+    type: 'expense',
+    color: '#6366f1',
+  })
   const [editingGoal, setEditingGoal] = createSignal<Goal | null>(null)
   const [formData, setFormData] = createSignal({
     name: '',
@@ -163,6 +171,56 @@ export default function Goals() {
     }
   }
 
+  // Add category from within goal modal
+  const addCategory = async (e: Event) => {
+    e.preventDefault()
+    try {
+      await apiPost('/api/categories', {
+        name: categoryForm().name,
+        type: categoryForm().type,
+        color: categoryForm().color,
+      })
+      setShowCategoryModal(false)
+      setCategoryForm({ name: '', type: 'expense', color: '#6366f1' })
+      loadCategories()
+    } catch (err) {
+      console.error('Failed to create category:', err)
+      showToast('Failed to create category', 'error')
+    }
+  }
+
+  // Contribute to manually tracked goal
+  const [contributingGoalId, setContributingGoalId] = createSignal<number | null>(null)
+  const [contributeAmount, setContributeAmount] = createSignal('')
+
+  const startContribute = (goalId: number) => {
+    setContributingGoalId(goalId)
+    setContributeAmount('')
+  }
+
+  const cancelContribute = () => {
+    setContributingGoalId(null)
+    setContributeAmount('')
+  }
+
+  const submitContribute = async (goalId: number) => {
+    const parsed = parseFloat(contributeAmount())
+    if (isNaN(parsed) || parsed <= 0) {
+      showToast('Please enter a valid positive amount', 'error')
+      return
+    }
+    try {
+      await apiPost(`/api/savings-goals/${goalId}/contribute`, { amount: parsed })
+      showToast('Contribution added', 'success')
+      setContributingGoalId(null)
+      setContributeAmount('')
+      loadGoals()
+    } catch (err) {
+      console.error('Failed to contribute:', err)
+      showToast('Failed to add contribution', 'error')
+    }
+  }
+
   // Open edit modal
   const editGoal = (goal: Goal) => {
     setEditingGoal(goal)
@@ -205,6 +263,30 @@ export default function Goals() {
   onMount(() => {
     loadGoals()
     loadCategories()
+  })
+
+  createEffect(() => {
+    void state.profileVersion
+    loadGoals()
+    loadCategories()
+  })
+
+  // Memoized chart data
+  const projectionGoals = createMemo(() => goals().filter((g) => g.monthly_contribution > 0))
+  const projectionMaxMonths = createMemo(() =>
+    Math.max(
+      ...projectionGoals().map((g) =>
+        Math.ceil((g.target_amount - g.current_amount) / (g.monthly_contribution || 1))
+      ),
+      1
+    )
+  )
+  const projectionLabels = createMemo(() => {
+    const now = new Date()
+    return Array.from({ length: projectionMaxMonths() + 1 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    })
   })
 
   return (
@@ -287,6 +369,27 @@ export default function Goals() {
                           <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
+                      {!goal.category_id && contributingGoalId() !== goal.id && (
+                        <button
+                          data-test-id="goal-contribute-btn"
+                          class={styles.btnSm}
+                          title="Add contribution"
+                          onclick={() => {
+                            startContribute(goal.id)
+                          }}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                        </button>
+                      )}
                       <ConfirmButton
                         class={styles.btnSm}
                         onConfirm={() => deleteGoal(goal.id)}
@@ -304,6 +407,36 @@ export default function Goals() {
                       />
                     </div>
                   </div>
+                  {contributingGoalId() === goal.id && (
+                    <div class={styles.contributeForm}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        class={styles.formControl}
+                        placeholder="Amount..."
+                        value={contributeAmount()}
+                        oninput={(e) => setContributeAmount(e.target.value)}
+                        onkeydown={(e) => {
+                          if (e.key === 'Enter') submitContribute(goal.id)
+                          if (e.key === 'Escape') cancelContribute()
+                        }}
+                        autofocus
+                      />
+                      <button
+                        class={`${styles.btnPrimary} ${styles.btnSm}`}
+                        onclick={() => submitContribute(goal.id)}
+                      >
+                        Add
+                      </button>
+                      <button
+                        class={`${styles.btnSecondary} ${styles.btnSm}`}
+                        onclick={cancelContribute}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                   <div class={styles.goalProgress}>
                     <div data-test-id="goal-progress-bar" class={styles.progressBar}>
                       <div class={styles.progressFill} style={{ width: `${progress}%` }} />
@@ -384,7 +517,7 @@ export default function Goals() {
       )}
 
       {/* Goal Projection Timeline */}
-      {goals().length > 0 && goals().some((g) => g.monthly_contribution > 0) && (
+      {projectionGoals().length > 0 && (
         <div class={styles.goalsChartSection}>
           <h3>Goal Projections</h3>
           <div class={styles.chartWrapper}>
@@ -392,53 +525,50 @@ export default function Goals() {
               id="goals-projection-chart"
               type="line"
               data={{
-                labels: (() => {
-                  const maxMonths = Math.max(
-                    ...goals()
-                      .filter((g) => g.monthly_contribution > 0)
-                      .map((g) => {
-                        const remaining = g.target_amount - g.current_amount
-                        const monthly = g.monthly_contribution || 1
-                        return Math.ceil(remaining / monthly)
-                      }),
-                    1
-                  )
-                  return Array.from({ length: maxMonths + 1 }, (_, i) => `Month ${i}`)
-                })(),
-                datasets: goals()
-                  .filter((g) => g.monthly_contribution > 0)
-                  .map((g, idx) => {
-                    const colors = [
-                      '#6366f1',
-                      '#10b981',
-                      '#f59e0b',
-                      '#ef4444',
-                      '#8b5cf6',
-                      '#06b6d4',
-                    ]
-                    const color = colors[idx % colors.length]
-                    const monthly = g.monthly_contribution || 0
-                    const remaining = g.target_amount - g.current_amount
-                    const monthsNeeded = Math.ceil(remaining / monthly)
-                    const data: (number | null)[] = [g.current_amount]
-                    for (let m = 1; m <= monthsNeeded; m++) {
-                      data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
-                    }
-                    return {
-                      label: g.name,
-                      data,
-                      borderColor: color,
-                      backgroundColor: `${color}20`,
-                      fill: true,
-                      tension: 0.3,
-                      borderWidth: 2,
-                      pointRadius: 0,
-                    }
-                  }),
+                labels: projectionLabels(),
+                datasets: projectionGoals().map((g, idx) => {
+                  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+                  const color = colors[idx % colors.length]
+                  const monthly = g.monthly_contribution || 0
+                  const remaining = g.target_amount - g.current_amount
+                  const monthsNeeded = Math.ceil(remaining / monthly)
+                  const data: (number | null)[] = [g.current_amount]
+                  for (let m = 1; m <= monthsNeeded; m++) {
+                    data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
+                  }
+                  // Compute achievement date label
+                  const now = new Date()
+                  const achieveDate = new Date(now.getFullYear(), now.getMonth() + monthsNeeded, 1)
+                  const achieveLabel = achieveDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    year: 'numeric',
+                  })
+                  return {
+                    label: `${g.name} — target ${achieveLabel}`,
+                    data,
+                    borderColor: color,
+                    backgroundColor: `${color}20`,
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: data.map((_, i) => (i === monthsNeeded ? 4 : 0)),
+                    pointBackgroundColor: data.map((_, i) =>
+                      i === monthsNeeded ? color : 'transparent'
+                    ),
+                    pointBorderColor: data.map((_, i) =>
+                      i === monthsNeeded ? '#fff' : 'transparent'
+                    ),
+                    pointBorderWidth: 2,
+                  }
+                }),
               }}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                  intersect: false,
+                  mode: 'index',
+                },
                 scales: {
                   y: {
                     ticks: {
@@ -458,7 +588,7 @@ export default function Goals() {
                     grid: { color: chartColors().border },
                     title: {
                       display: true,
-                      text: 'Months from now',
+                      text: 'Projected timeline',
                       color: chartColors().text,
                     },
                   },
@@ -467,6 +597,23 @@ export default function Goals() {
                   legend: {
                     position: 'top',
                     labels: { color: chartColors().text, usePointStyle: true },
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (ctx: any) => {
+                        const dataset = ctx.dataset
+                        const val = dataset.data[ctx.dataIndex]
+                        const isLast = ctx.dataIndex === dataset.data.length - 1
+                        const isPlateau =
+                          !isLast &&
+                          val === dataset.data[ctx.dataIndex + 1] &&
+                          val === dataset.data[Math.min(ctx.dataIndex + 2, dataset.data.length - 1)]
+                        let label = `${dataset.label?.split(' — ')[0] || dataset.label}: ${formatCurrency(val)}`
+                        if (isLast) label += ' (goal reached)'
+                        else if (isPlateau) label += ' (goal reached)'
+                        return label
+                      },
+                    },
                   },
                 },
               }}
@@ -523,6 +670,7 @@ export default function Goals() {
                   placeholder="e.g., Emergency Fund, Vacation"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>
@@ -577,6 +725,14 @@ export default function Goals() {
                     )}
                   </For>
                 </select>
+                <button
+                  type="button"
+                  class={styles.btnLink}
+                  style={{ 'margin-top': '8px' }}
+                  onClick={() => setShowCategoryModal(true)}
+                >
+                  + Add Category
+                </button>
                 <p
                   style={{
                     'font-size': '11px',
@@ -607,6 +763,85 @@ export default function Goals() {
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
                   {editingGoal() ? 'Update' : 'Create'} Goal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Category Modal (from goal creation) */}
+      {showCategoryModal() && (
+        <div
+          class={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onclick={(e) => {
+            if (e.target === e.currentTarget) setShowCategoryModal(false)
+          }}
+        >
+          <div
+            class={styles.modal}
+            onclick={(e) => {
+              e.stopPropagation()
+            }}
+          >
+            <div class={styles.modalHeader}>
+              <h3 class={styles.modalTitle}>Add Category</h3>
+              <button class={styles.modalClose} onclick={() => setShowCategoryModal(false)}>
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form class={styles.modalBody} onsubmit={addCategory}>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Category Name</label>
+                <input
+                  type="text"
+                  class={styles.formControl}
+                  placeholder="e.g., Vacation Fund"
+                  value={categoryForm().name}
+                  oninput={(e) => setCategoryForm({ ...categoryForm(), name: e.target.value })}
+                  autofocus
+                  required
+                />
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Type</label>
+                <select
+                  class={styles.formControl}
+                  value={categoryForm().type}
+                  oninput={(e) =>
+                    setCategoryForm({
+                      ...categoryForm(),
+                      type: e.target.value as 'expense' | 'income',
+                    })
+                  }
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Color</label>
+                <input
+                  type="color"
+                  class={styles.colorInput}
+                  value={categoryForm().color}
+                  oninput={(e) => setCategoryForm({ ...categoryForm(), color: e.target.value })}
+                />
+              </div>
+              <div class={styles.modalFooter}>
+                <button
+                  type="button"
+                  class={styles.btnSecondary}
+                  onclick={() => setShowCategoryModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" class={styles.btnPrimary}>
+                  Add Category
                 </button>
               </div>
             </form>

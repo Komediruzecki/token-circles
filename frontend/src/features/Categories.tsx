@@ -30,12 +30,13 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createSignal, For, onMount } from 'solid-js'
-import styles from '../components/CategoriesPage.module.css'
+import { createEffect, createSignal, For, onMount } from 'solid-js'
 import CategoryIcon from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './CategoriesPage.module.css'
 
 interface Category {
   id: number
@@ -48,6 +49,7 @@ interface Category {
 }
 
 export default function Categories() {
+  const state = useAppState()
   const [categories, setCategories] = createSignal<Category[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -193,6 +195,10 @@ export default function Categories() {
   // OnMount
   onMount(() => {
     loadCategories()
+  })
+  createEffect(() => {
+    void state.profileVersion
+    void loadCategories()
   })
 
   const categoryIconColors: Record<string, string> = {

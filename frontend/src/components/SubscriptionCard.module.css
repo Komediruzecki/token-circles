@@ -1,0 +1,201 @@
+/* SubscriptionCard — Beautiful branded card */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Top accent stripe (brand color) */
+.accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* Header row: icon + info + amount */
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+/* Brand icon box — matches category-icon from Categories */
+.iconBox {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+}
+
+.amount {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.amountValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.frequency {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: block;
+}
+
+/* Meta row: due date + category pill */
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.due {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dueNormal {
+  color: var(--text-secondary);
+}
+
+.dueSoon {
+  color: #f59e0b;
+}
+
+.dueOverdue {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* Category pill */
+.categoryPill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* Status badges */
+.statusRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.paidBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.pausedBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-secondary, #f1f5f9);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+/* Actions — hidden by default, fade in on card hover */
+.actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.card:hover .actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.actionBtn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.actionPrimary {
+  background: var(--primary);
+  color: #fff;
+}
+.actionPrimary:hover {
+  background: var(--primary-hover, #2563eb);
+}
+.actionPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actionGhost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.actionGhost:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Paused state */
+.paused {
+  opacity: 0.65;
+}
+.paused:hover {
+  opacity: 0.85;
+}

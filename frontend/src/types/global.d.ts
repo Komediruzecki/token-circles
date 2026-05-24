@@ -5,6 +5,9 @@
 /// <reference types="vite/client" />
 
 declare global {
+  const __APP_VERSION__: string
+  const __GIT_SHA__: string
+
   interface Window {
     transactionsSetType?: (type: string) => void
     transactionsLoad?: () => Promise<void>

@@ -1,10 +1,9 @@
+import { execSync } from 'child_process'
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
-// @ts-expect-error -- Bundle analyzer may not be installed
 import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
 import solidPlugin from 'vite-plugin-solid'
-import solidSvg from 'vite-plugin-solid-svg'
 import { devtoolsPlugin as devtools } from 'solid-devtools/vite'
 import fs from 'fs'
 
@@ -14,6 +13,15 @@ const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+    __GIT_SHA__: JSON.stringify(
+      (() => {
+        try {
+          return execSync('git rev-parse --short HEAD').toString().trim()
+        } catch {
+          return 'unknown'
+        }
+      })()
+    ),
   },
   base: './',
   build: {
@@ -34,10 +42,7 @@ export default defineConfig({
   plugins: [
     solidPlugin(),
     ANALYZE_BUNDLE ? bundleAnalyzer() : undefined,
-    solidSvg({ defaultAsComponent: true }),
-    devtools({
-      targetOrigin: 'auto',
-    }),
+    ...(process.env.NODE_ENV !== 'production' ? [devtools({ targetOrigin: 'auto' })] : []),
     {
       name: 'copy-export-html',
       writeBundle() {

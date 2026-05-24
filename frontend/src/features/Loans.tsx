@@ -30,15 +30,17 @@
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
-import styles from '../components/LoansPage.module.css'
 import { api as _api, formatCurrency } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
+import styles from './LoansPage.module.css'
+import type { LoanDetail, LoanPrepayment } from '../types/models'
 
 interface Loan {
   id: number
@@ -56,6 +58,7 @@ interface Loan {
 }
 
 export default function Loans() {
+  const state = useAppState()
   const [loans, setLoans] = createSignal<Loan[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -128,8 +131,8 @@ export default function Loans() {
   // Prepayment management
   const loadPrepayments = async (loanId: number) => {
     try {
-      const full = await apiGet<any>(`/api/loans/${loanId}`)
-      setPrepayments(full.prepayments || [])
+      const full = await apiGet<LoanDetail>(`/api/loans/${loanId}`)
+      setPrepayments((full as LoanDetail).prepayments || [])
     } catch {
       setPrepayments([])
     }
@@ -154,11 +157,11 @@ export default function Loans() {
       loadPrepayments(loanId)
       setAmortizationRecalculateKey((k) => k + 1)
       if (amortizationLoan()?.id === loanId) {
-        const fresh = await apiGet<any>(`/api/loans/${loanId}`)
+        const fresh = await apiGet<LoanDetail>(`/api/loans/${loanId}`)
         setAmortizationLoan({ ...amortizationLoan()!, prepayments: fresh.prepayments || [] })
       }
-    } catch (e: any) {
-      showToast(e.message || 'Failed to add prepayment', 'error')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Failed to add prepayment', 'error')
     }
   }
 
@@ -169,11 +172,11 @@ export default function Loans() {
       loadPrepayments(loanId)
       setAmortizationRecalculateKey((k) => k + 1)
       if (amortizationLoan()?.id === loanId) {
-        const fresh = await apiGet<any>(`/api/loans/${loanId}`)
+        const fresh = await apiGet<LoanDetail>(`/api/loans/${loanId}`)
         setAmortizationLoan({ ...amortizationLoan()!, prepayments: fresh.prepayments || [] })
       }
-    } catch (e: any) {
-      showToast(e.message || 'Failed to delete prepayment', 'error')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Failed to delete prepayment', 'error')
     }
   }
 
@@ -243,8 +246,8 @@ export default function Loans() {
     setEditingLoan(loan)
     let ratePeriods: RatePeriod[] = []
     try {
-      const full = await apiGet<any>(`/api/loans/${loan.id}`)
-      ratePeriods = (full.rate_periods || []).map((rp: any) => ({
+      const full = await apiGet<LoanDetail>(`/api/loans/${loan.id}`)
+      ratePeriods = ((full as LoanDetail).rate_periods || []).map((rp) => ({
         rate: String(rp.rate),
         start_month: rp.start_month,
         end_month: rp.end_month || null,
@@ -320,11 +323,18 @@ export default function Loans() {
     loadLoans()
   })
 
+  createEffect(() => {
+    void state.profileVersion
+    loadLoans()
+  })
+
   const chartColors = () => theme.getChartColors()
 
   // Calculate totals
-  const totalPrincipal = () => loans().reduce((sum, l) => sum + l.principal, 0)
-  const totalRemaining = () => loans().reduce((sum, l) => sum + calculateRemaining(l), 0)
+  const totalPrincipal = createMemo(() => loans().reduce((sum, l) => sum + l.principal, 0))
+  const totalRemaining = createMemo(() =>
+    loans().reduce((sum, l) => sum + calculateRemaining(l), 0)
+  )
 
   return (
     <div class={`page page-loans page-enter ${styles.loansPage}`}>
@@ -716,6 +726,7 @@ export default function Loans() {
                   placeholder="e.g., Auto Loan, Student Loan"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>
@@ -997,7 +1008,7 @@ export default function Loans() {
                       <label class={styles.formLabel}>Existing Prepayments</label>
                       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
                         <For each={prepayments()}>
-                          {(p: any) => (
+                          {(p: LoanPrepayment) => (
                             <div
                               style={{
                                 display: 'flex',

@@ -30,22 +30,24 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
 import Pagination from '../components/Pagination'
 import ReconciliationModal from '../components/ReconciliationModal'
 import RecurringSection from '../components/RecurringSection'
-import styles from '../components/TransactionsPage.module.css'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, getLocalCurrency, toast } from '../core/api'
+import { apiPut } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
-import { apiPut } from '../utils/api'
+import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
+  const state = useAppState()
   const [transactions, setTransactions] = createSignal<Transaction[]>([])
   const [loading, setLoading] = createSignal(true)
   const [selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
@@ -74,6 +76,13 @@ export default function Transactions() {
     []
   )
   const [categories, setCategories] = createSignal<Category[]>([])
+  // Filter categories by the selected transaction type
+  const filteredCategories = createMemo(() => {
+    const t = type()
+    const cats = categories()
+    if (t === 'transfer') return []
+    return cats.filter((c) => c.type === t)
+  })
   const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
@@ -92,6 +101,12 @@ export default function Transactions() {
   const [totalAmount, setTotalAmount] = createSignal(0)
   const [showReconciled, setShowReconciled] = createSignal(true)
 
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
+    refreshTransactions()
+  })
+
   // Calculate transaction totals
   createEffect(() => {
     const txs = transactions()
@@ -109,7 +124,6 @@ export default function Transactions() {
   })
 
   // _loadTransactionReceipt - placeholder for receipt loading
-  // @ts-expect-error unused but used by event delegation
   const _loadTransactionReceipt = async (_receipt: Receipt | null) => {
     // Placeholder - functionality can be extended
   }
@@ -249,10 +263,16 @@ export default function Transactions() {
     setSelectedCategories(filters.selectedCategories || [])
     setSelectedTags(filters.selectedTags || [])
     setCurrentPage(1)
-    if (filters.selectedPreset) {
-      applyDatePreset(filters.selectedPreset)
-    } else if (filters.dateRange) {
+    if (filters.dateRange) {
       setDateRange(filters.dateRange)
+    }
+    if (filters.selectedPreset) {
+      setSelectedPreset(filters.selectedPreset)
+      if (filters.selectedPreset !== 'custom' && filters.selectedPreset !== 'all') {
+        applyDatePreset(filters.selectedPreset)
+      } else if (filters.selectedPreset === 'all') {
+        setDateRange({ from: '', to: '' })
+      }
     }
   }
 
@@ -262,7 +282,7 @@ export default function Transactions() {
   }
 
   // Calculate filtered results
-  const filteredTransactions = () => {
+  const filteredTransactions = createMemo(() => {
     const allTransactions = transactions()
     const filtered = allTransactions.filter((tx) => {
       // Filter by type
@@ -356,24 +376,24 @@ export default function Transactions() {
     })
 
     return filtered
-  }
+  })
 
   // Get uncategorized transactions
-  const uncategorizedTransactions = () => {
+  const uncategorizedTransactions = createMemo(() => {
     const allTransactions = transactions()
     return allTransactions.filter((tx) => tx.category_id === undefined || tx.category_id === null)
-  }
+  })
 
   // Calculate paginated results
-  const paginatedTransactions = () => {
+  const paginatedTransactions = createMemo(() => {
     const filtered = filteredTransactions()
     const start = (currentPage() - 1) * itemsPerPage()
     return filtered.slice(start, start + itemsPerPage())
-  }
+  })
 
-  const totalPages = () => Math.ceil(filteredTransactions().length / itemsPerPage())
+  const totalPages = createMemo(() => Math.ceil(filteredTransactions().length / itemsPerPage()))
 
-  const reconciledCount = () => transactions().filter((t) => t.reconciled).length
+  const reconciledCount = createMemo(() => transactions().filter((t) => t.reconciled).length)
 
   // Auto-categorize handler
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
@@ -422,10 +442,7 @@ export default function Transactions() {
       case 'year':
         setDateRange({ from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })
         break
-      case 'custom':
-        break
     }
-    setSelectedPreset(preset)
     setCurrentPage(1)
   }
 
@@ -445,12 +462,20 @@ export default function Transactions() {
   })
 
   const openTransactionModal = () => {
+    setType('expense')
     setFormId(null)
     setFormDescription('')
     setFormAmount('')
+    setFormCurrency(getLocalCurrency())
+    setFormExchangeRate('1')
+    setFormCategory(null)
+    setFormBeneficiary('')
+    setFormPayor('')
+    setFormNotes('')
     setFormMeans('')
     setFormAccountId(null)
     setFormAmountLocal('')
+    setFormDate(new Date().toISOString().slice(0, 10))
     setTransactionModalOpen(true)
   }
 
@@ -653,7 +678,10 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-expense"
                     class={`${styles.expense} ${type() === 'expense' ? styles.active : ''}`}
-                    onClick={() => setType('expense')}
+                    onClick={() => {
+                      setType('expense')
+                      setFormCategory(null)
+                    }}
                   >
                     Expense
                   </button>
@@ -661,7 +689,10 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-income"
                     class={`${styles.income} ${type() === 'income' ? styles.active : ''}`}
-                    onClick={() => setType('income')}
+                    onClick={() => {
+                      setType('income')
+                      setFormCategory(null)
+                    }}
                   >
                     Income
                   </button>
@@ -669,7 +700,10 @@ export default function Transactions() {
                     type="button"
                     data-test-id="tx-type-transfer"
                     class={`${styles.transfer} ${type() === 'transfer' ? styles.active : ''}`}
-                    onClick={() => setType('transfer')}
+                    onClick={() => {
+                      setType('transfer')
+                      setFormCategory(null)
+                    }}
                   >
                     Transfer
                   </button>
@@ -741,8 +775,8 @@ export default function Transactions() {
                       setFormCategory(value !== '' ? parseInt(value) : null)
                     }}
                   >
-                    <option value=""></option>
-                    <For each={categories()}>
+                    <option value="">Uncategorized</option>
+                    <For each={filteredCategories()}>
                       {(cat) => <option value={cat.id}>{cat.name}</option>}
                     </For>
                   </select>
@@ -867,13 +901,21 @@ export default function Transactions() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Receipt</label>
                 <div class={styles.receiptUploadContainer}>
-                  <label class={styles.receiptPlaceholder} for="tx-receipt" style="cursor: pointer">
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <label class={styles.receiptPlaceholder} for="tx-receipt">
+                    <svg
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>
                     <span class={styles.receiptText}>Click to upload receipt</span>
                   </label>
                   <input
+                    id="tx-receipt"
                     type="file"
                     class={styles.receiptInput}
                     accept="image/*,.pdf"
@@ -913,9 +955,9 @@ export default function Transactions() {
                               d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                             />
                           </svg>
-                          <div style="font-size: 14px">{selectedFile()!.name}</div>
+                          <div style="font-size: 14px">{selectedFile()?.name || 'Unknown'}</div>
                           <div style="font-size: 12px; color: var(--text-secondary)">
-                            {(selectedFile()!.size / 1024).toFixed(1)} KB
+                            {selectedFile() ? (selectedFile()!.size / 1024).toFixed(1) : 0} KB
                           </div>
                         </div>
                       )}
@@ -965,9 +1007,30 @@ export default function Transactions() {
               class={styles.btnPrimary}
               data-test-id="tx-save-btn"
               onclick={async () => {
+                // Validation
+                const desc = formDescription().trim()
+                const amtStr = formAmount().trim()
+                const amt = parseFloat(amtStr)
+                if (!desc) {
+                  toast('Please enter a description', 'warning')
+                  return
+                }
+                if (!amtStr || isNaN(amt) || amt === 0) {
+                  toast('Please enter a valid amount', 'warning')
+                  return
+                }
+                if (!formDate()) {
+                  toast('Please enter a date', 'warning')
+                  return
+                }
+                if (type() !== 'transfer' && formCategory() === null) {
+                  toast('Please select a category', 'warning')
+                  return
+                }
+
                 const txData: Record<string, unknown> = {
-                  description: formDescription(),
-                  amount: parseFloat(formAmount() || '0'),
+                  description: desc,
+                  amount: amt,
                   date: formDate() || new Date().toISOString().slice(0, 10),
                   type: type(),
                   category_id: formCategory() ?? null,
@@ -1118,6 +1181,16 @@ export default function Transactions() {
         <div class={styles.loading}>Loading transactions...</div>
       ) : (
         <>
+          {/* Top Pagination */}
+          {totalPages() > 1 && (
+            <Pagination
+              currentPage={currentPage()}
+              totalPages={totalPages()}
+              itemsPerPage={itemsPerPage()}
+              totalItems={filteredTransactions().length}
+              onPageChange={handlePageChange}
+            />
+          )}
           <TransactionTable
             transactions={paginatedTransactions()}
             selectedTransactions={selectedTransactions()}

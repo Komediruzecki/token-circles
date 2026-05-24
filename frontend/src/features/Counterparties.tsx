@@ -2,10 +2,11 @@
  * Counterparties Page
  * Aggregates beneficiary/payor data to show "who owes who"
  */
-import { createSignal, For, onMount } from 'solid-js'
-import styles from '../components/CounterpartiesPage.module.css'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import { formatCurrency } from '../core/api'
-import { apiGet } from '../utils/api'
+import { apiGet } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './CounterpartiesPage.module.css'
 
 interface Counterparty {
   name: string
@@ -18,12 +19,13 @@ interface Counterparty {
 type SortField = 'name' | 'incoming' | 'outgoing' | 'net' | 'transaction_count'
 
 export default function Counterparties() {
+  const state = useAppState()
   const [counterparties, setCounterparties] = createSignal<Counterparty[]>([])
   const [loading, setLoading] = createSignal(true)
   const [sortField, setSortField] = createSignal<SortField>('net')
   const [sortAsc, setSortAsc] = createSignal(false)
 
-  onMount(async () => {
+  const loadData = async () => {
     try {
       const data = await apiGet<Counterparty[]>('/api/counterparties')
       if (Array.isArray(data)) {
@@ -34,6 +36,14 @@ export default function Counterparties() {
     } finally {
       setLoading(false)
     }
+  }
+
+  onMount(() => {
+    void loadData()
+  })
+  createEffect(() => {
+    void state.profileVersion
+    void loadData()
   })
 
   const handleSort = (field: SortField) => {
@@ -45,7 +55,7 @@ export default function Counterparties() {
     }
   }
 
-  const sorted = () => {
+  const sorted = createMemo(() => {
     const list = [...counterparties()]
     list.sort((a, b) => {
       const aVal = a[sortField()]
@@ -57,34 +67,34 @@ export default function Counterparties() {
       return sortAsc() ? cmp : -cmp
     })
     return list
-  }
+  })
 
   const sortIndicator = (field: SortField) => {
     if (sortField() !== field) return ''
     return sortAsc() ? ' ↑' : ' ↓'
   }
 
-  const totalOwed = () => {
+  const totalOwed = createMemo(() => {
     let sum = 0
     for (const c of counterparties()) {
       if (c.net < 0) sum += Math.abs(c.net)
     }
     return sum
-  }
+  })
 
-  const totalOwing = () => {
+  const totalOwing = createMemo(() => {
     let sum = 0
     for (const c of counterparties()) {
       if (c.net > 0) sum += c.net
     }
     return sum
-  }
+  })
 
-  const netPosition = () => {
+  const netPosition = createMemo(() => {
     let sum = 0
     for (const c of counterparties()) sum += c.net
     return sum
-  }
+  })
 
   return (
     <div class={`${styles.page} page page-counterparties page-enter`}>

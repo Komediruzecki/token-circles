@@ -2,7 +2,17 @@
  * Main App Component - Root component for the application
  */
 
-import { createEffect, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, Suspense } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
@@ -14,6 +24,21 @@ import Spotlight from './components/Spotlight'
 import ToastContainer from './components/ToastContainer'
 import TourSelectionModal from './components/TourSelectionModal'
 import { api, toast } from './core/api.js'
+import {
+  bumpProfileVersion,
+  setCurrentProfile as setCurrentProfileStore,
+  setIsAuthenticated as setIsAuthenticatedStore,
+  setIsLoginModalOpen as setIsLoginModalOpenStore,
+  setIsProfileModalOpen as setIsProfileModalOpenStore,
+  setIsQuickAddOpen as setIsQuickAddOpenStore,
+  setLoading,
+  setPage,
+  setProfiles as setProfilesStore,
+  setQuickAddCategories as setQuickAddCategoriesStore,
+  setShowDropdown as setShowDropdownStore,
+  setSidebarCollapsed as setSidebarCollapsedStore,
+  useAppState,
+} from './core/appStore'
 import { logger } from './core/logger.js'
 import {
   setShowTourSelection,
@@ -24,35 +49,76 @@ import {
 } from './core/spotlightStore'
 import { pages as allPages } from './router.tsx'
 import type { PageName } from './router.tsx'
-import type { Category } from './types/models'
+import type { Category, Profile } from './types/models'
 
 export function App() {
-  const [_currentPage, _setCurrentPage] = createSignal<PageName>('dashboard')
-  const [_isLoading, _setIsLoading] = createSignal(true)
-  const [activePage, setActivePage] = createSignal<PageName>('dashboard')
-  const [profiles, setProfiles] = createSignal<any[]>([])
-  const [currentProfile, setCurrentProfile] = createSignal<any>(null)
-  const [isAuthenticated, setIsAuthenticated] = createSignal(false)
-  const [showDropdown, setShowDropdown] = createSignal(false)
-  const [isLoginModalOpen, setIsLoginModalOpen] = createSignal(false)
-  const [isProfileModalOpen, setIsProfileModalOpen] = createSignal(false)
-  const [isQuickAddOpen, setIsQuickAddOpen] = createSignal(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = createSignal(true)
-  const [quickAddCategories, setQuickAddCategories] = createSignal<Category[]>([])
+  // Shared app store — replaces 12 inline signals
+  const state = useAppState()
+  const activePage = () => state.page
+  const setActivePage = (p: PageName) => {
+    setPage(p)
+  }
+  const _isLoading = () => state.loading
+  const _setIsLoading = (v: boolean) => {
+    setLoading(v)
+  }
+  const profiles = () => state.profiles as Profile[]
+  const setProfiles = (p: Profile[]) => {
+    setProfilesStore(p)
+  }
+  const currentProfile = () => state.currentProfile
+  const setCurrentProfile = (p: Profile | null) => {
+    setCurrentProfileStore(p)
+  }
+  const isAuthenticated = () => state.isAuthenticated
+  const setIsAuthenticated = (v: boolean) => {
+    setIsAuthenticatedStore(v)
+  }
+  const showDropdown = () => state.showDropdown
+  const setShowDropdown = (v: boolean) => {
+    setShowDropdownStore(v)
+  }
+  const isLoginModalOpen = () => state.isLoginModalOpen
+  const setIsLoginModalOpen = (v: boolean) => {
+    setIsLoginModalOpenStore(v)
+  }
+  const isProfileModalOpen = () => state.isProfileModalOpen
+  const setIsProfileModalOpen = (v: boolean) => {
+    setIsProfileModalOpenStore(v)
+  }
+  const isQuickAddOpen = () => state.isQuickAddOpen
+  const setIsQuickAddOpen = (v: boolean) => {
+    setIsQuickAddOpenStore(v)
+  }
+  const sidebarCollapsed = () => state.sidebarCollapsed
+  const setSidebarCollapsed = (v: boolean) => {
+    setSidebarCollapsedStore(v)
+  }
+  const quickAddCategories = () => state.quickAddCategories
+  const setQuickAddCategories = (c: Category[]) => {
+    setQuickAddCategoriesStore(c)
+  }
 
   const loadProfiles = async (autoSelect = false) => {
     try {
       const data = await api.getProfiles()
-      setProfiles(data)
+      // Deduplicate profiles by ID (can happen after clear + reseed with stale state)
+      const seen = new Set<number>()
+      const unique = data.filter((p) => {
+        if (seen.has(p.id)) return false
+        seen.add(p.id)
+        return true
+      })
+      setProfiles(unique)
 
-      if (autoSelect && data.length > 0) {
+      if (autoSelect && unique.length > 0) {
         const savedId = localStorage.getItem('currentProfileId')
         let activeProfile = null
         if (savedId) {
-          activeProfile = data.find((p) => p.id === parseInt(savedId))
+          activeProfile = unique.find((p) => p.id === parseInt(savedId))
         }
         if (!activeProfile) {
-          activeProfile = data[0]
+          activeProfile = unique[0]
           localStorage.setItem('currentProfileId', activeProfile.id.toString())
         }
         setCurrentProfile(activeProfile)
@@ -60,23 +126,96 @@ export function App() {
     } catch {
       setProfiles([])
     }
+    // Refresh selected IDs after profile list changes (e.g., after data reset)
+    setSelectedProfileIds(getSelectedProfileIds())
   }
 
-  const selectProfile = async (profileId: number) => {
-    try {
-      localStorage.setItem('currentProfileId', profileId.toString())
-      setCurrentProfile(profiles().find((p) => p.id === profileId))
-      setShowDropdown(false)
-      // Force page content to refresh by briefly showing loading
-      _setIsLoading(true)
-      setTimeout(() => _setIsLoading(false), 50)
-    } catch {
-      console.error('Failed to select profile')
+  const selectProfile = (profileId: number) => {
+    localStorage.setItem('currentProfileId', profileId.toString())
+    // Set only this profile as selected (clears multi-select)
+    localStorage.setItem('selectedProfileIds', JSON.stringify([profileId]))
+    setSelectedProfileIds([profileId])
+    // Shallow-copy from profiles() to avoid store-proxy cross-reference
+    // (setting a proxy from one store path as value at another path can
+    //  cause spurious reactivity that briefly corrupts the profiles list)
+    const found = profiles().find((p) => p.id === profileId)
+    setCurrentProfile(found ? { ...found } : null)
+    setShowDropdown(false)
+    bumpProfileVersion()
+    // Reload to ensure all pages refresh data for the new profile
+    setTimeout(() => {
+      window.location.reload()
+    }, 50)
+  }
+
+  const getSelectedProfileIds = (): number[] => {
+    const stored = localStorage.getItem('selectedProfileIds')
+    if (stored) {
+      try {
+        const ids = JSON.parse(stored) as number[]
+        if (Array.isArray(ids) && ids.length > 0) {
+          // Dedup and filter to existing profiles only
+          const existingIds = new Set(profiles().map((p) => p.id))
+          const valid = [...new Set(ids)].filter((id) => existingIds.has(id))
+          if (valid.length > 0) return valid
+        }
+      } catch {
+        /* ignore */
+      }
     }
+    // If no profiles exist at all, return empty — don't invent a nonexistent ID
+    if (profiles().length === 0) return []
+    const currentId = parseInt(localStorage.getItem('currentProfileId') || '1', 10)
+    const exists = profiles().some((p) => p.id === currentId)
+    return exists ? [currentId] : [profiles()[0].id]
+  }
+
+  const [selectedProfileIds, setSelectedProfileIds] =
+    createSignal<number[]>(getSelectedProfileIds())
+
+  // Defensive dedup of profiles array before rendering.
+  // The store may accumulate duplicates due to proxy/reconciliation edge cases.
+  const uniqueProfiles = createMemo(() => {
+    const seen = new Set<number>()
+    return profiles().filter((p) => {
+      if (seen.has(p.id)) return false
+      seen.add(p.id)
+      return true
+    })
+  })
+
+  const toggleProfileSelection = (profileId: number) => {
+    setSelectedProfileIds((prev) => {
+      // Dedup in case of stale/corrupted localStorage
+      const unique = [...new Set(prev)]
+      const idx = unique.indexOf(profileId)
+      if (idx !== -1) {
+        // Deselect — but keep at least one
+        if (unique.length <= 1) return unique
+        return unique.filter((id) => id !== profileId)
+      }
+      return [...unique, profileId]
+    })
   }
 
   const toggleDropdown = () => {
-    setShowDropdown((prev) => !prev)
+    const wasOpen = state.showDropdown
+    if (wasOpen) {
+      // Closing dropdown — save and trigger reactive data reload
+      const ids = selectedProfileIds()
+      localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
+      if (ids.length > 0) {
+        localStorage.setItem('currentProfileId', ids[0].toString())
+      }
+      setShowDropdown(false)
+      bumpProfileVersion()
+      // Reload to ensure all pages refresh with new profile selection
+      setTimeout(() => {
+        window.location.reload()
+      }, 50)
+    } else {
+      setShowDropdown(true)
+    }
   }
 
   const handleLogin = () => {
@@ -93,9 +232,9 @@ export function App() {
         (p) => p.id === (savedProfileId ? parseInt(savedProfileId) : null) || p.id === 1
       )
       if (selectedProfile) {
-        setCurrentProfile(selectedProfile)
+        setCurrentProfile({ ...selectedProfile })
       } else {
-        setCurrentProfile(profiles()[0])
+        setCurrentProfile({ ...profiles()[0] })
       }
     }
     setShowDropdown(false)
@@ -129,6 +268,31 @@ export function App() {
       document.documentElement.setAttribute('data-theme', 'dark')
     }
 
+    // Click-outside handler for profile dropdown
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showDropdown()) {
+        const target = e.target as HTMLElement
+        if (!target.closest(`.${profileStyles.profileDropdown}`)) {
+          // Apply selection and trigger reactive data reload
+          const ids = selectedProfileIds()
+          localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
+          if (ids.length > 0) {
+            localStorage.setItem('currentProfileId', ids[0].toString())
+          }
+          setShowDropdown(false)
+          bumpProfileVersion()
+          // Reload to ensure all pages refresh with new profile selection
+          setTimeout(() => {
+            window.location.reload()
+          }, 50)
+        }
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    onCleanup(() => {
+      document.removeEventListener('click', handleClickOutside)
+    })
+
     await api.checkLogin().then(async (loggedIn) => {
       setIsAuthenticated(loggedIn)
       if (loggedIn) {
@@ -137,7 +301,7 @@ export function App() {
         await loadProfiles(false)
         // Default to first profile if not strictly logged in but profiles exist
         if (profiles().length > 0) {
-          setCurrentProfile(profiles()[0])
+          setCurrentProfile({ ...profiles()[0] })
         }
       }
     })
@@ -357,7 +521,7 @@ export function App() {
                 width: '100%',
               }}
             >
-              <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'min-width': 0 }}>
                 <div
                   style={{
                     width: '24px',
@@ -370,12 +534,26 @@ export function App() {
                     'justify-content': 'center',
                     'font-size': '12px',
                     'font-weight': 'bold',
+                    'flex-shrink': 0,
                   }}
                 >
-                  {currentProfile() ? currentProfile().name.charAt(0).toUpperCase() : '?'}
+                  {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
                 </div>
-                <span class={profileStyles.profileName} style={{ 'font-weight': 600 }}>
-                  {currentProfile() ? currentProfile().name : 'Not Logged In'}
+                <span
+                  class={profileStyles.profileName}
+                  style={{
+                    'font-weight': 600,
+                    overflow: 'hidden',
+                    'text-overflow': 'ellipsis',
+                    'white-space': 'nowrap',
+                  }}
+                >
+                  {selectedProfileIds().length > 1
+                    ? profiles()
+                        .filter((p) => selectedProfileIds().includes(p.id))
+                        .map((p) => p.name)
+                        .join(' & ')
+                    : currentProfile()?.name || 'Not Logged In'}
                 </span>
               </div>
               <svg
@@ -396,29 +574,52 @@ export function App() {
             <div
               class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
             >
-              <div class={profileStyles.profileDropdownHeader}>Switch Profile</div>
-              {profiles().length > 0 ? (
-                <For each={profiles()}>
+              <div class={profileStyles.profileDropdownHeader}>
+                {uniqueProfiles().length === 0
+                  ? 'No profiles'
+                  : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
+              </div>
+              {uniqueProfiles().length > 0 ? (
+                <For each={uniqueProfiles()}>
                   {(profile) => (
                     <div
+                      data-profile-id={profile.id}
                       class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
-                      onClick={() => selectProfile(profile.id)}
                     >
-                      <div
-                        style={{
-                          width: '8px',
-                          height: '8px',
-                          'border-radius': '50%',
-                          background:
-                            currentProfile()?.id === profile.id ? 'var(--primary)' : 'transparent',
-                          border:
-                            currentProfile()?.id === profile.id
-                              ? 'none'
-                              : '1px solid var(--border)',
-                          'margin-right': '8px',
+                      <input
+                        type="checkbox"
+                        checked={selectedProfileIds().includes(profile.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
                         }}
-                      ></div>
-                      {profile.name}
+                        onchange={() => {
+                          toggleProfileSelection(profile.id)
+                        }}
+                        style={{
+                          width: '16px',
+                          height: '16px',
+                          'margin-right': '10px',
+                          cursor: 'pointer',
+                          'accent-color': 'var(--primary)',
+                          'flex-shrink': 0,
+                        }}
+                      />
+                      <span
+                        style={{ flex: 1, cursor: 'pointer' }}
+                        onClick={() => {
+                          selectProfile(profile.id)
+                        }}
+                        title="Set as primary profile"
+                      >
+                        {profile.name}
+                      </span>
+                      {currentProfile()?.id === profile.id && (
+                        <span
+                          style={{ 'font-size': '10px', color: 'var(--primary)', opacity: 0.7 }}
+                        >
+                          primary
+                        </span>
+                      )}
                     </div>
                   )}
                 </For>
@@ -430,7 +631,9 @@ export function App() {
 
               <div
                 class={profileStyles.profileDropdownItem}
-                onClick={() => setIsProfileModalOpen(true)}
+                onClick={() => {
+                  setIsProfileModalOpen(true)
+                }}
               >
                 <svg
                   width="14"
@@ -516,7 +719,7 @@ export function App() {
                   'white-space': 'nowrap',
                 }}
               >
-                {currentProfile().name}
+                {currentProfile()?.name}
               </span>
               <button
                 class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
@@ -606,12 +809,19 @@ export function App() {
       </div>
 
       <Show when={!sidebarCollapsed()}>
-        <div class={layoutStyles['sidebar-overlay']} onClick={() => setSidebarCollapsed(true)} />
+        <div
+          class={layoutStyles['sidebar-overlay']}
+          onClick={() => {
+            setSidebarCollapsed(true)
+          }}
+        />
       </Show>
 
       <button
         class={layoutStyles['mobile-toggle']}
-        onClick={() => setSidebarCollapsed((v) => !v)}
+        onClick={() => {
+          setSidebarCollapsedStore(!state.sidebarCollapsed)
+        }}
         aria-label="Toggle sidebar"
       >
         <svg
@@ -635,7 +845,13 @@ export function App() {
                   <div class={layoutStyles.pageError}>
                     <h3>Page Error</h3>
                     <p>{err.toString()}</p>
-                    <button onClick={() => { window.location.reload(); }}>Reload</button>
+                    <button
+                      onClick={() => {
+                        window.location.reload()
+                      }}
+                    >
+                      Reload
+                    </button>
                   </div>
                 )}
               >
@@ -647,12 +863,19 @@ export function App() {
       </main>
 
       <Show when={isLoginModalOpen()}>
-        <LoginModal onClose={() => setIsLoginModalOpen(false)} onSuccess={handleLoginSuccess} />
+        <LoginModal
+          onClose={() => {
+            setIsLoginModalOpen(false)
+          }}
+          onSuccess={handleLoginSuccess}
+        />
       </Show>
 
       <Show when={isProfileModalOpen()}>
         <ProfileModal
-          onClose={() => setIsProfileModalOpen(false)}
+          onClose={() => {
+            setIsProfileModalOpen(false)
+          }}
           onSuccess={() => {
             setIsProfileModalOpen(false)
             loadProfiles(true)
@@ -662,7 +885,9 @@ export function App() {
 
       <QuickAddModal
         isOpen={isQuickAddOpen}
-        onClose={() => setIsQuickAddOpen(false)}
+        onClose={() => {
+          setIsQuickAddOpen(false)
+        }}
         categories={() => quickAddCategories()}
         onSave={(_transaction) => {
           toast('Transaction added', 'success')

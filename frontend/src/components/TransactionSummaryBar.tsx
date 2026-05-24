@@ -2,6 +2,7 @@
  * Transaction Summary Bar Component
  * Shows summary of transaction statistics
  */
+import { createMemo } from 'solid-js'
 import { getLocalCurrency } from '../core/api'
 import styles from './TransactionSummaryBar.module.css'
 
@@ -24,36 +25,36 @@ interface TransactionSummaryBarProps {
 }
 
 export default function TransactionSummaryBar(props: TransactionSummaryBarProps) {
-  const currency = props.currency || getLocalCurrency()
-  const isPositive = props.netBalance >= 0
+  const currency = createMemo(() => props.currency || getLocalCurrency())
+  const isPositive = createMemo(() => props.netBalance >= 0)
 
   return (
     <div class={styles.summaryBar}>
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Total Amount</span>
         <span class={`${styles.summaryValue} ${styles.total}`}>
-          {formatAmount(props.totalAmount, currency)}
+          {formatAmount(props.totalAmount, currency())}
         </span>
       </div>
       <div class={styles.summaryDivider} />
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Income</span>
         <span class={`${styles.summaryValue} ${styles.positive}`}>
-          {formatAmount(props.totalIncome, currency)}
+          {formatAmount(props.totalIncome, currency())}
         </span>
       </div>
       <div class={styles.summaryDivider} />
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Expenses</span>
         <span class={`${styles.summaryValue} ${styles.negative}`}>
-          {formatAmount(props.totalExpenses, currency)}
+          {formatAmount(props.totalExpenses, currency())}
         </span>
       </div>
       <div class={styles.summaryDivider} />
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Net</span>
-        <span class={`${styles.summaryValue} ${isPositive ? styles.positive : styles.negative}`}>
-          {formatAmount(props.netBalance, currency)}
+        <span class={`${styles.summaryValue} ${isPositive() ? styles.positive : styles.negative}`}>
+          {formatAmount(props.netBalance, currency())}
         </span>
       </div>
       <div class={styles.summaryDivider} />

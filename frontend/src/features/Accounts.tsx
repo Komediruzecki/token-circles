@@ -31,12 +31,13 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createSignal, For, onMount } from 'solid-js'
-import styles from '../components/AccountsPage.module.css'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './AccountsPage.module.css'
 
 interface Account {
   id: number
@@ -50,8 +51,10 @@ interface Account {
 }
 
 export default function Accounts() {
+  const state = useAppState()
   const [accounts, setAccounts] = createSignal<Account[]>([])
   const [transactions, setTransactions] = createSignal<any[]>([])
+  const [profiles, setProfiles] = createSignal<Array<{ id: number; name: string }>>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [formData, setFormData] = createSignal({
@@ -64,16 +67,46 @@ export default function Accounts() {
     starting_date: '',
   })
 
-  // Load accounts and transactions
+  const profileNameMap = createMemo(() => {
+    const map = new Map<number, string>()
+    for (const p of profiles()) map.set(p.id, p.name)
+    return map
+  })
+
+  const multiProfile = createMemo(() => {
+    const ids = new Set(accounts().map((a) => a.profile_id))
+    return ids.size > 1
+  })
+
+  const accountsByProfile = createMemo(() => {
+    if (!multiProfile()) return [{ profileId: 0, profileName: '', accounts: accounts() }]
+    const groups = new Map<number, Account[]>()
+    for (const a of accounts()) {
+      const list = groups.get(a.profile_id) || []
+      list.push(a)
+      groups.set(a.profile_id, list)
+    }
+    const names = profileNameMap()
+    return Array.from(groups.entries()).map(([pid, accts]) => ({
+      profileId: pid,
+      profileName: names.get(pid) || `Profile ${pid}`,
+      accounts: accts,
+    }))
+  })
+
+  // Load accounts, transactions, and profiles
   const loadData = async () => {
     setLoading(true)
     try {
-      const [accountsRes, txRes] = await Promise.all([
+      const [accountsRes, txRes, profilesRes] = await Promise.all([
         apiGet<Account[]>('/api/accounts'),
-        apiGet<any>('/api/transactions/summary'),
+        apiGet<any>(`/api/transactions?limit=500`),
+        apiGet<Array<{ id: number; name: string }>>('/api/profiles').catch(() => []),
       ])
       setAccounts(accountsRes)
-      setTransactions(Array.isArray(txRes) ? txRes : [])
+      setProfiles(profilesRes)
+      const txList = Array.isArray(txRes) ? txRes : txRes?.transactions || txRes?.rows || []
+      setTransactions(Array.isArray(txList) ? txList : [])
     } catch (err) {
       console.error('Failed to load accounts', err)
       showToast('Failed to load accounts', 'error')
@@ -177,16 +210,42 @@ export default function Accounts() {
     loadData()
   })
 
+  createEffect(() => {
+    void state.profileVersion
+    loadData()
+  })
+
   // Calculate total balance
-  const totalBalance = () => {
+  const totalBalance = createMemo(() => {
     return accounts().reduce((sum, acc) => sum + acc.balance, 0)
+  })
+
+  // Filter transactions by account
+  const getAccountTransactions = (accountId: number) => {
+    const txs = transactions()
+    return Array.isArray(txs) ? txs.filter((t) => t.account_id === accountId) : []
   }
 
-  // Filter transactions by account (now just returns empty array if non-array)
-  const getAccountTransactions = (_accountId: number) => {
+  // Compute monthly income from loaded transactions
+  const monthlyIncome = createMemo(() => {
+    const now = new Date()
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const txs = transactions()
-    return Array.isArray(txs) ? txs : []
-  }
+    if (!Array.isArray(txs)) return 0
+    return txs
+      .filter((t) => t.date?.startsWith(monthStr) && t.type === 'income')
+      .reduce((s, t) => s + (t.amount || 0), 0)
+  })
+
+  const monthlyExpenses = createMemo(() => {
+    const now = new Date()
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const txs = transactions()
+    if (!Array.isArray(txs)) return 0
+    return txs
+      .filter((t) => t.date?.startsWith(monthStr) && t.type === 'expense')
+      .reduce((s, t) => s + (t.amount || 0), 0)
+  })
 
   return (
     <div class={`${styles.accountsPage} page page-accounts page-enter`}>
@@ -229,10 +288,7 @@ export default function Accounts() {
             data-test-id="summary-income-value"
             class={`${styles.summaryValue} ${styles.positive}`}
           >
-            +
-            {formatAmount(
-              0 // TODO: Need to implement monthly income calculation when transactions have account_id
-            )}
+            +{formatAmount(monthlyIncome())}
           </div>
         </div>
         <div data-test-id="summary-expenses" class={styles.summaryCard}>
@@ -241,10 +297,7 @@ export default function Accounts() {
             data-test-id="summary-expenses-value"
             class={`${styles.summaryValue} ${styles.negative}`}
           >
-            -
-            {formatAmount(
-              0 // TODO: Need to implement monthly expense calculation when transactions have account_id
-            )}
+            -{formatAmount(monthlyExpenses())}
           </div>
         </div>
       </div>
@@ -263,92 +316,106 @@ export default function Accounts() {
           </button>
         </div>
       ) : (
-        <div data-test-id="accounts-grid" class={styles.accountsGrid}>
-          <For each={accounts()}>
-            {(account) => (
-              <div data-test-id="account-card" class={styles.accountCard}>
-                <div class={styles.accountHeader}>
-                  <div data-test-id="account-icon" class={styles.accountIcon}>
-                    {getTypeIcon(account.type)}
-                  </div>
-                  <div class={styles.accountInfo}>
-                    <h3 data-test-id="account-name" class={styles.accountName}>
-                      {account.name}
-                    </h3>
-                    <p data-test-id="account-bank" class={styles.accountBank}>
-                      {account.bank_name || 'No bank listed'}
-                    </p>
-                  </div>
-                  <div class={styles.accountActions}>
-                    <Badge status={getAccountBadgeStatus(account.type)}>{account.type}</Badge>
-                    <ConfirmButton
-                      class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                      onConfirm={() => deleteAccount(account.id)}
-                      confirmLabel="Delete? This will remove all related transactions."
-                      label={
-                        <svg
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      }
-                    />
-                  </div>
-                </div>
-                <div data-test-id="current-balance-card" class={styles.accountBalance}>
-                  <div class={styles.balanceLabel}>Current Balance</div>
-                  <div data-test-id="account-balance" class={styles.balanceAmount}>
-                    {formatAmount(account.balance)}
-                  </div>
-                </div>
-                <div data-test-id="activity-section" class={styles.accountActivity}>
-                  <div class={styles.activityHeader}>
-                    <span class={styles.activityLabel}>Recent Activity</span>
-                    <a
-                      href={`#transactions?category=${encodeURIComponent(account.name)}`}
-                      class={styles.btnLink}
-                    >
-                      View All →
-                    </a>
-                  </div>
-                  <div data-test-id="activity-list" class={styles.activityList}>
-                    <For each={getAccountTransactions(account.id).slice(0, 3)}>
-                      {(tx: any) => (
-                        <div data-test-id="activity-item" class={styles.activityItem}>
-                          <div data-test-id="activity-desc" class={styles.activityContent}>
-                            <div data-test-id="activity-desc" class={styles.activityDesc}>
-                              {tx.description}
-                            </div>
-                            <div data-test-id="activity-date" class={styles.activityDate}>
-                              {new Date(tx.date).toLocaleDateString()}
-                            </div>
-                          </div>
-                          <div
-                            data-test-id="activity-amount"
-                            class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
-                          >
-                            {tx.type === 'expense' ? '-' : '+'}
-                            {formatAmount(tx.amount)}
-                          </div>
+        <For each={accountsByProfile()}>
+          {(group) => (
+            <>
+              {multiProfile() && (
+                <h2 class={styles.profileGroupHeader}>
+                  <span class={styles.profileGroupDot}></span>
+                  {group.profileName}
+                  <span class={styles.profileGroupCount}>{group.accounts.length} accounts</span>
+                </h2>
+              )}
+              <div data-test-id="accounts-grid" class={styles.accountsGrid}>
+                <For each={group.accounts}>
+                  {(account) => (
+                    <div data-test-id="account-card" class={styles.accountCard}>
+                      <div class={styles.accountHeader}>
+                        <div data-test-id="account-icon" class={styles.accountIcon}>
+                          {getTypeIcon(account.type)}
                         </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
+                        <div class={styles.accountInfo}>
+                          <h3 data-test-id="account-name" class={styles.accountName}>
+                            {account.name}
+                          </h3>
+                          <p data-test-id="account-bank" class={styles.accountBank}>
+                            {account.bank_name || 'No bank listed'}
+                          </p>
+                        </div>
+                        <div class={styles.accountActions}>
+                          <Badge status={getAccountBadgeStatus(account.type)}>{account.type}</Badge>
+                          <ConfirmButton
+                            class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                            onConfirm={() => deleteAccount(account.id)}
+                            confirmLabel="Delete? This will remove all related transactions."
+                            label={
+                              <svg
+                                width="16"
+                                height="16"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div data-test-id="current-balance-card" class={styles.accountBalance}>
+                        <div class={styles.balanceLabel}>Current Balance</div>
+                        <div data-test-id="account-balance" class={styles.balanceAmount}>
+                          {formatAmount(account.balance)}
+                        </div>
+                      </div>
+                      <div data-test-id="activity-section" class={styles.accountActivity}>
+                        <div class={styles.activityHeader}>
+                          <span class={styles.activityLabel}>Recent Activity</span>
+                          <a
+                            href={`#transactions?category=${encodeURIComponent(account.name)}`}
+                            class={styles.btnLink}
+                          >
+                            View All →
+                          </a>
+                        </div>
+                        <div data-test-id="activity-list" class={styles.activityList}>
+                          <For each={getAccountTransactions(account.id).slice(0, 3)}>
+                            {(tx: any) => (
+                              <div data-test-id="activity-item" class={styles.activityItem}>
+                                <div data-test-id="activity-desc" class={styles.activityContent}>
+                                  <div data-test-id="activity-desc" class={styles.activityDesc}>
+                                    {tx.description}
+                                  </div>
+                                  <div data-test-id="activity-date" class={styles.activityDate}>
+                                    {new Date(tx.date).toLocaleDateString()}
+                                  </div>
+                                </div>
+                                <div
+                                  data-test-id="activity-amount"
+                                  class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                                >
+                                  {tx.type === 'expense' ? '-' : '+'}
+                                  {formatAmount(tx.amount)}
+                                </div>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
-            )}
-          </For>
-        </div>
+            </>
+          )}
+        </For>
       )}
 
       {/* Add Account Modal */}
       {showAddModal() && (
         <div
-          class={styles.modalOverlay}
+          data-test-id="add-account-modal"
+          class={`${styles.modalOverlay} ${styles.visible}`}
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false)
           }}

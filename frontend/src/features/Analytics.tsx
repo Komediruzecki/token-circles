@@ -26,25 +26,28 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
-import styles from '../components/AnalyticsPage.module.css'
+import { createEffect, createMemo, createSignal, For, onMount, untrack } from 'solid-js'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
 import SankeyChart from '../components/SankeyChart'
-import { formatCurrency } from '../core/api'
+import { api, formatCurrency } from '../core/api'
+import { apiGet, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
-import { apiGet, showToast } from '../utils/api'
 import { downloadBlob } from '../utils/chartExport'
+import styles from './AnalyticsPage.module.css'
+import type { SankeyData, Transaction } from '../types/models'
 
 interface AnalyticsData {
   byCategory: Array<{ category_id: number; category_name: string; amount: number }>
   byMonth: Array<{ month: string; income: number; expense: number }>
-  recentTransactions: Array<any>
+  recentTransactions: Transaction[]
   savingsRate: number
 }
 
 export default function Analytics() {
+  const state = useAppState()
   const [data, setData] = createSignal<AnalyticsData | null>(null)
   const [loading, setLoading] = createSignal(true)
   const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
@@ -57,7 +60,7 @@ export default function Analytics() {
   const [sankeyMonth, setSankeyMonth] = createSignal(
     new Date().getMonth() === 0 ? 12 : new Date().getMonth()
   )
-  const [sankeyData, setSankeyData] = createSignal<{ nodes: any[]; links: any[] }>({
+  const [sankeyData, setSankeyData] = createSignal<SankeyData>({
     nodes: [],
     links: [],
   })
@@ -71,6 +74,7 @@ export default function Analytics() {
     numDays: number
   }>({ labels: [], datasets: [], numDays: 0 })
   const [compareEnabled, setCompareEnabled] = createSignal(false)
+  const [compareYear, setCompareYear] = createSignal(new Date().getFullYear())
   const [compareMonth, setCompareMonth] = createSignal(new Date().getMonth() + 1)
   const [compareData, setCompareData] = createSignal<{
     labels: string[]
@@ -81,7 +85,7 @@ export default function Analytics() {
   const [heatmapModal, setHeatmapModal] = createSignal<{
     dateStr: string
     amount: number
-    transactions: any[]
+    transactions: Transaction[]
     loading: boolean
   } | null>(null)
   const [categoryChart, setCategoryChart] = createSignal<any>(undefined)
@@ -92,15 +96,35 @@ export default function Analytics() {
     undefined
   )
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
+  const [monthlyMonth, setMonthlyMonth] = createSignal(new Date().getMonth() + 1)
+  const [monthlyYear, setMonthlyYear] = createSignal(new Date().getFullYear())
+  const [monthlyStats, setMonthlyStats] = createSignal<{
+    income: number
+    expense: number
+    savingsRate: number
+  } | null>(null)
 
-  // Load available years from data
+  // Load available years from data and validate selected years
   const loadYears = async () => {
     try {
-      const res = await apiGet<{ years: number[] }>('/api/analytics/distinct-years')
-      const years = res.years || []
-      const currentYear = new Date().getFullYear()
-      if (!years.includes(currentYear)) years.unshift(currentYear)
-      setAvailableYears(years.sort((a: number, b: number) => b - a))
+      const { years } = await api.getTransactionYears()
+      if (years.length > 0) {
+        const sorted = [...years].sort((a, b) => b - a)
+        setAvailableYears(sorted)
+        // Validate selected years exist in available range; fall back to latest if not
+        if (!sorted.includes(stackedYear())) {
+          setStackedYear(sorted[0])
+        }
+        if (!sorted.includes(heatmapYear())) {
+          setHeatmapYear(sorted[0])
+        }
+        if (!sorted.includes(sankeyYear())) {
+          setSankeyYear(sorted[0])
+        }
+        if (!sorted.includes(monthlyYear())) {
+          setMonthlyYear(sorted[0])
+        }
+      }
     } catch (_e) {
       // keep default
     }
@@ -145,34 +169,44 @@ export default function Analytics() {
 
   const closeHeatmapModal = () => setHeatmapModal(null)
 
-  // Load analytics data
+  // Load analytics data (summary stats + doughnut + income/expense line)
   const loadData = async () => {
     setLoading(true)
+    const year = stackedYear()
     try {
       const [categoryRes, transactionsRes, monthlyRes] = await Promise.all([
-        apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}`),
+        apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}&year=${year}`),
         apiGet<any>('/api/transactions/summary'),
         apiGet<any>('/api/stats/monthly?months=24'),
       ])
 
-      // Transform category-trends response
-      const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d: any, i: number) => ({
-        category_id: i,
-        category_name: d.category,
-        amount: Array.isArray(d.data) ? d.data.reduce((sum: number, v: number) => sum + v, 0) : 0,
-      }))
+      // Transform category-trends response into doughnut data
+      const byCategory = (categoryRes.datasets || [])
+        .slice(0, 10)
+        .map((d: Record<string, unknown>, i: number) => {
+          const dataArr = (d.data as number[]) || []
+          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+          return {
+            category_id: i,
+            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+            amount: total,
+          }
+        })
 
-      // Monthly data from /api/stats/monthly
+      // Monthly data from /api/stats/monthly, filtered to selected year
+      const yearPrefix = String(year)
       const byMonth = Array.isArray(monthlyRes)
-        ? monthlyRes.map((m: any) => ({
-            month: m.month,
-            income: m.income || 0,
-            expense: m.expense || 0,
-          }))
+        ? monthlyRes
+            .filter((m: Record<string, unknown>) => (m.month as string).startsWith(yearPrefix))
+            .map((m: Record<string, unknown>) => ({
+              month: m.month as string,
+              income: (m.income as number) || 0,
+              expense: (m.expense as number) || 0,
+            }))
         : []
 
       // Recent transactions from summary
-      const recentTransactions: any[] = []
+      const recentTransactions: Transaction[] = []
 
       setData({
         byCategory,
@@ -190,6 +224,31 @@ export default function Analytics() {
       showToast('Failed to load analytics data', 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Load monthly stats for the monthly savings card
+  const loadMonthlyStats = async () => {
+    const year = monthlyYear()
+    const month = monthlyMonth()
+    try {
+      const mKey = `${year}-${String(month).padStart(2, '0')}`
+      const monthlyRes = await apiGet<any>('/api/stats/monthly?months=24')
+      const months = Array.isArray(monthlyRes) ? monthlyRes : []
+      const found = months.find((m: Record<string, unknown>) => m.month === mKey)
+      if (found) {
+        const income = (found.income as number) || 0
+        const expense = (found.expense as number) || 0
+        setMonthlyStats({
+          income,
+          expense,
+          savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0,
+        })
+      } else {
+        setMonthlyStats({ income: 0, expense: 0, savingsRate: 0 })
+      }
+    } catch {
+      setMonthlyStats(null)
     }
   }
 
@@ -230,11 +289,12 @@ export default function Analytics() {
   // Load stacked trend data
   const loadStackedData = async () => {
     try {
+      const isYearView = stackedView() === 'year'
       const params = new URLSearchParams({
         year: String(stackedYear()),
         type: categoryType(),
       })
-      if (stackedView() === 'month') {
+      if (!isYearView) {
         params.set('month', String(stackedMonth()))
       }
       const week = selectedWeek()
@@ -248,12 +308,14 @@ export default function Analytics() {
 
       if (compareEnabled()) {
         const cmpParams = new URLSearchParams({
-          year: String(stackedYear()),
+          year: isYearView ? String(compareYear()) : String(stackedYear()),
           type: categoryType(),
         })
-        cmpParams.set('month', String(compareMonth()))
-        const week = selectedWeek()
-        if (week) cmpParams.set('week', week)
+        if (!isYearView) {
+          cmpParams.set('month', String(compareMonth()))
+        }
+        const cmpWeek = selectedWeek()
+        if (cmpWeek) cmpParams.set('week', cmpWeek)
         try {
           const cmpRes = await apiGet<any>(`/api/analytics/category-trends?${cmpParams.toString()}`)
           setCompareData({
@@ -275,14 +337,14 @@ export default function Analytics() {
   }
 
   // Get total income
-  const totalIncome = () => {
+  const totalIncome = createMemo(() => {
     return data()?.byMonth.reduce((sum, m) => sum + m.income, 0) || 0
-  }
+  })
 
   // Get total expense
-  const totalExpense = () => {
+  const totalExpense = createMemo(() => {
     return data()?.byMonth.reduce((sum, m) => sum + m.expense, 0) || 0
-  }
+  })
 
   // Format currency
   const formatAmount = (amount: number): string => {
@@ -324,12 +386,81 @@ export default function Analytics() {
     loadData()
     loadStackedData()
     loadHeatmapData()
+    loadMonthlyStats()
   })
 
-  // Reload data when relevant signals change
+  // Reload monthly stats when month or year selector changes
   createEffect(() => {
-    loadData()
+    monthlyMonth()
+    monthlyYear()
+    loadMonthlyStats()
   })
+
+  // Reload when profile selection changes
+  createEffect(() => {
+    void state.profileVersion
+    loadYears()
+    loadData()
+    loadStackedData()
+    loadHeatmapData()
+  })
+
+  // Reload summary stats silently when year or type changes (no loading flash)
+  createEffect(() => {
+    const year = stackedYear()
+    const type = categoryType()
+    // Only refresh if data already exists — otherwise onMount handles it.
+    // Use untrack to avoid re-triggering this effect when setData writes back.
+    if (untrack(data)) refreshData(year, type)
+  })
+
+  // Silent refresh: update summary stats without showing loading spinner
+  const refreshData = async (year: number, type: string) => {
+    try {
+      const [categoryRes, transactionsRes, monthlyRes] = (await Promise.all([
+        apiGet<any>(`/api/analytics/category-trends?type=${type}&year=${year}`),
+        apiGet<any>('/api/transactions/summary'),
+        apiGet<any>('/api/stats/monthly?months=24'),
+      ])) as [any, any, any]
+
+      const byCategory = (categoryRes.datasets || [])
+        .slice(0, 10)
+        .map((d: Record<string, unknown>, i: number) => {
+          const dataArr = (d.data as number[]) || []
+          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+          return {
+            category_id: i,
+            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+            amount: total,
+          }
+        })
+
+      const yearPrefix = String(year)
+      const byMonth = Array.isArray(monthlyRes)
+        ? monthlyRes
+            .filter((m: Record<string, unknown>) => (m.month as string).startsWith(yearPrefix))
+            .map((m: Record<string, unknown>) => ({
+              month: m.month as string,
+              income: (m.income as number) || 0,
+              expense: (m.expense as number) || 0,
+            }))
+        : []
+
+      setData({
+        byCategory,
+        byMonth,
+        recentTransactions: [],
+        savingsRate:
+          transactionsRes?.totalIncome > 0
+            ? ((transactionsRes.totalIncome - transactionsRes.totalExpenses) /
+                transactionsRes.totalIncome) *
+              100
+            : 0,
+      })
+    } catch (err) {
+      console.error('Failed to refresh analytics', err)
+    }
+  }
 
   return (
     <div class={`page page-analytics page-enter ${styles.analyticsPage}`}>
@@ -338,7 +469,7 @@ export default function Analytics() {
         <p class={styles.pageSubtitle}>Visualize your financial data and track trends</p>
       </div>
 
-      {loading() ? (
+      {loading() && !data() ? (
         <div class={styles.emptyState}>Loading analytics...</div>
       ) : !data() ? (
         <div class={styles.emptyState}>
@@ -363,14 +494,14 @@ export default function Analytics() {
               <div class={`${styles.statValue} ${styles.positive}`}>
                 {formatAmount(totalIncome())}
               </div>
-              <div class={styles.statDesc}>Last 6 months</div>
+              <div class={styles.statDesc}>{stackedYear()}</div>
             </div>
             <div class={styles.statCard}>
               <div class={styles.statLabel}>Total Expense</div>
               <div class={`${styles.statValue} ${styles.negative}`}>
                 {formatAmount(totalExpense())}
               </div>
-              <div class={styles.statDesc}>Last 6 months</div>
+              <div class={styles.statDesc}>{stackedYear()}</div>
             </div>
             <div class={styles.statCard}>
               <div class={styles.statLabel}>Net Savings</div>
@@ -379,6 +510,75 @@ export default function Analytics() {
               </div>
               <div class={styles.statDesc}>Income - Expenses</div>
             </div>
+          </div>
+
+          {/* Monthly Savings Card */}
+          <div class={styles.analyticsStats} style="margin-bottom:24px">
+            <div class={styles.statCard} style="border-left:3px solid var(--primary)">
+              <div class={styles.statLabel}>
+                Monthly Savings (
+                {new Date(monthlyYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+                )
+              </div>
+              <div class={styles.heatmapControls} style="justify-content:flex-start;margin-top:8px">
+                <select
+                  class={styles.heatmapYearSelect}
+                  value={monthlyYear()}
+                  onchange={(e) => setMonthlyYear(Number(e.currentTarget.value))}
+                >
+                  {availableYears().map((year) => (
+                    <option value={year}>{year}</option>
+                  ))}
+                </select>
+                <select
+                  class={styles.heatmapTypeSelect}
+                  value={monthlyMonth()}
+                  onchange={(e) => setMonthlyMonth(Number(e.currentTarget.value))}
+                >
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option value={i + 1}>
+                      {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {monthlyStats() && (
+              <>
+                <div class={styles.statCard}>
+                  <div class={styles.statLabel}>Monthly Income</div>
+                  <div class={`${styles.statValue} ${styles.positive}`}>
+                    {formatAmount(monthlyStats()!.income)}
+                  </div>
+                </div>
+                <div class={styles.statCard}>
+                  <div class={styles.statLabel}>Monthly Expense</div>
+                  <div class={`${styles.statValue} ${styles.negative}`}>
+                    {formatAmount(monthlyStats()!.expense)}
+                  </div>
+                </div>
+                <div class={styles.statCard}>
+                  <div class={styles.statLabel}>Monthly Net</div>
+                  <div
+                    class={`${styles.statValue} ${monthlyStats()!.income - monthlyStats()!.expense >= 0 ? styles.positive : styles.negative}`}
+                  >
+                    {formatAmount(monthlyStats()!.income - monthlyStats()!.expense)}
+                  </div>
+                </div>
+                <div class={styles.statCard}>
+                  <div class={styles.statLabel}>Monthly Savings Rate</div>
+                  <div
+                    class={`${styles.statValue} ${monthlyStats()!.savingsRate >= 20 ? styles.positive : monthlyStats()!.savingsRate >= 10 ? styles.warning : styles.negative}`}
+                  >
+                    {formatPercent(monthlyStats()!.savingsRate)}
+                  </div>
+                  <div class={styles.statDesc}>Target: 20%+</div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Stacked Trends - Full Width */}
@@ -394,7 +594,9 @@ export default function Analytics() {
                         year: 'numeric',
                       })}
                   {compareEnabled() &&
-                    ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
+                    (stackedView() === 'year'
+                      ? ` vs ${compareYear()}`
+                      : ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`)}
                   )
                 </h3>
                 <div class={styles.heatmapControls}>
@@ -473,17 +675,38 @@ export default function Analytics() {
                     </>
                   )}
                   <button
-                    class={`${styles.tab} ${compareEnabled() ? styles.active : ''}`}
+                    class={styles.compareBtn}
+                    classList={{ [styles.compareActive!]: compareEnabled() }}
                     onclick={() => {
                       setCompareEnabled(!compareEnabled())
                       loadStackedData()
                     }}
-                    title="Compare category spending with another month"
-                    style="white-space:nowrap;padding:8px 12px;font-size:13px;"
+                    title={
+                      stackedView() === 'year'
+                        ? 'Compare category spending with another year'
+                        : 'Compare category spending with another month'
+                    }
                   >
-                    Compare
+                    {compareEnabled() ? 'Hide Compare' : 'Compare'}
                   </button>
-                  {compareEnabled() && (
+                  {compareEnabled() && stackedView() === 'year' && (
+                    <select
+                      class={styles.heatmapTypeSelect}
+                      value={compareYear()}
+                      onchange={(e) => {
+                        setCompareYear(Number(e.currentTarget.value))
+                        loadStackedData()
+                      }}
+                      title="Select year to compare against"
+                    >
+                      {availableYears()
+                        .filter((y) => y !== stackedYear())
+                        .map((year) => (
+                          <option value={year}>{year}</option>
+                        ))}
+                    </select>
+                  )}
+                  {compareEnabled() && stackedView() === 'month' && (
                     <select
                       class={styles.heatmapTypeSelect}
                       value={compareMonth()}
@@ -505,10 +728,12 @@ export default function Analytics() {
               {compareEnabled() && compareData() && (
                 <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:0 4px;">
                   Dashed outlines show{' '}
-                  {new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', {
-                    month: 'long',
-                    year: 'numeric',
-                  })}{' '}
+                  {stackedView() === 'year'
+                    ? compareYear()
+                    : new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', {
+                        month: 'long',
+                        year: 'numeric',
+                      })}{' '}
                   data for comparison
                 </div>
               )}
@@ -520,17 +745,28 @@ export default function Analytics() {
                     type="bar"
                     onReady={setStackedChart}
                     data={{
-                      labels: stackedData().labels,
+                      labels:
+                        compareEnabled() && stackedView() === 'year'
+                          ? stackedData().labels.map((l: string) => l.replace(/\s+\d{4}$/, ''))
+                          : stackedData().labels,
                       datasets: [
                         ...stackedData().datasets.map((ds) => ({
-                          label: ds.category,
+                          label:
+                            compareEnabled() && stackedView() === 'year'
+                              ? `${ds.category} (${stackedYear()})`
+                              : compareEnabled()
+                                ? `${ds.category} (${new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`
+                                : ds.category,
                           data: ds.data,
                           backgroundColor: ds.color || '#6366f1',
                           borderWidth: 0,
                         })),
                         ...(compareData()
                           ? compareData()!.datasets.map((ds) => ({
-                              label: `${ds.category} (Compare)`,
+                              label:
+                                stackedView() === 'year'
+                                  ? `${ds.category} (${compareYear()})`
+                                  : `${ds.category} (${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`,
                               data: ds.data,
                               backgroundColor: ds.color ? `${ds.color}66` : '#6366f166',
                               borderColor: ds.color || '#6366f1',
@@ -632,7 +868,8 @@ export default function Analytics() {
             <div class={styles.analyticsChart}>
               <div class={styles.heatmapHeader}>
                 <h3 class={styles.chartTitle}>
-                  {categoryType() === 'expense' ? 'Spending' : 'Income'} by Category
+                  {categoryType() === 'expense' ? 'Spending' : 'Income'} by Category (
+                  {stackedYear()})
                 </h3>
                 <div class={styles.heatmapControls}>
                   <ExportChartButton
@@ -645,7 +882,7 @@ export default function Analytics() {
                     value={categoryType()}
                     onchange={(e) => {
                       setCategoryType(e.currentTarget.value as 'expense' | 'income')
-                      loadData()
+                      loadStackedData()
                     }}
                   >
                     <option value="expense">Expenses</option>
@@ -705,7 +942,7 @@ export default function Analytics() {
 
             <div class={styles.analyticsChart}>
               <div class={styles.heatmapHeader}>
-                <h3 class={styles.chartTitle}>Monthly Income vs Expense</h3>
+                <h3 class={styles.chartTitle}>Monthly Income vs Expense ({stackedYear()})</h3>
                 <div class={styles.heatmapControls}>
                   <ExportChartButton
                     chart={monthlyChart()}
@@ -879,10 +1116,10 @@ export default function Analytics() {
                     ) : (
                       <div style="max-height:200px;overflow-y:auto;">
                         <For each={heatmapModal()!.transactions.slice(0, 10)}>
-                          {(tx: any) => (
+                          {(tx: Transaction) => (
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
                               <span style="color:var(--text);">
-                                {tx.description || tx.category || '-'}
+                                {tx.description || tx.category_name || '-'}
                               </span>
                               <span
                                 style={`font-weight:600;color:${tx.type === 'income' ? 'var(--income)' : 'var(--expense)'};`}
@@ -1156,7 +1393,7 @@ export default function Analytics() {
             <h3 class={styles.sectionTitle}>Recent Transactions</h3>
             <div class={styles.transactionList}>
               <For each={data()!.recentTransactions}>
-                {(tx: any) => (
+                {(tx: Transaction) => (
                   <div class={styles.transactionItem}>
                     <div
                       class={styles.transactionIcon}

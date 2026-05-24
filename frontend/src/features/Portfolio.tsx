@@ -3,13 +3,14 @@
  * Tracks stock/ETF holdings with real-time prices and gain/loss
  */
 
-import { createSignal, For, onMount, Show } from 'solid-js'
-import styles from '../components/PortfolioPage.module.css'
-import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
+import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
 
 export default function Portfolio() {
+  const state = useAppState()
   const [holdings, setHoldings] = createSignal<PortfolioHolding[]>([])
   const [summary, setSummary] = createSignal<PortfolioSummary | null>(null)
   const [loading, setLoading] = createSignal(true)
@@ -42,6 +43,10 @@ export default function Portfolio() {
 
   onMount(() => {
     loadData()
+  })
+  createEffect(() => {
+    void state.profileVersion
+    void loadData()
   })
 
   const openAddModal = () => {
@@ -107,7 +112,8 @@ export default function Portfolio() {
   const refreshPrices = async () => {
     setPriceLoading(true)
     try {
-      const tickers = holdings().map((h) => h.ticker)
+      const currentHoldings = holdings()
+      const tickers = currentHoldings.map((h) => h.ticker)
       if (tickers.length > 0) {
         await apiPost('/api/portfolio/prices', { tickers })
       }

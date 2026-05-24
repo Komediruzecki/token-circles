@@ -56,11 +56,15 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createSignal, For, onMount } from 'solid-js'
-import styles from '../components/BillsPage.module.css'
+import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
+import SubscriptionCard from '../components/SubscriptionCard'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, showToast } from '../utils/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import styles from './BillsPage.module.css'
+import { matchBrand } from './subscriptionBrands'
+import type { SubscriptionCardBill } from '../components/SubscriptionCard'
 
 interface Bill {
   id: number
@@ -68,12 +72,17 @@ interface Bill {
   amount: number
   due_date: string
   category?: string
+  category_id?: number | null
+  category_name?: string
+  category_color?: string
   account_id?: number
   frequency: 'monthly' | 'weekly' | 'biweekly'
   paid: boolean
   autopay: boolean
   profile_id: number
   created_at: string
+  type?: 'bill' | 'subscription'
+  is_active?: number
 }
 
 interface Category {
@@ -85,13 +94,13 @@ interface Category {
 }
 
 export default function Bills() {
+  const state = useAppState()
   const [bills, setBills] = createSignal<Bill[]>([])
-  const [upcoming, setUpcoming] = createSignal<Bill[]>([])
-  const [paid, setPaid] = createSignal<Bill[]>([])
   const [categories, setCategories] = createSignal<Category[]>([])
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
+  const [editingId, setEditingId] = createSignal<number | null>(null)
   const [formData, setFormData] = createSignal({
     name: '',
     amount: '',
@@ -99,6 +108,7 @@ export default function Bills() {
     category: '',
     frequency: 'monthly' as Bill['frequency'],
     autopay: false,
+    type: 'bill' as 'bill' | 'subscription',
   })
   const [categoryForm, setCategoryForm] = createSignal({
     name: '',
@@ -110,20 +120,8 @@ export default function Bills() {
   const loadBills = async () => {
     setLoading(true)
     try {
-      const [allRes, upcomingRes, paidRes] = await Promise.all([
-        apiGet<Bill[]>('/api/bills'),
-        apiGet<Bill[]>('/api/bills/upcoming'),
-        apiGet<Bill[]>('/api/bills?paid=true'),
-      ])
+      const allRes = await apiGet<Bill[]>('/api/bills')
       setBills(allRes)
-      // Handle upcoming bills which have next_due_date instead of due_date
-      setUpcoming(
-        upcomingRes.map((b) => ({
-          ...b,
-          due_date: b.due_date || (b as any).next_due_date || '2026-05-01',
-        }))
-      )
-      setPaid(paidRes)
     } catch (err) {
       console.error('Failed to load bills:', err)
       showToast('Failed to load bills', 'error')
@@ -141,6 +139,54 @@ export default function Bills() {
       console.error('Failed to load categories', err)
     }
   }
+
+  // Tab state: 'all' | 'subscriptions'
+  const [billTab, setBillTab] = createSignal<'all' | 'subscriptions'>('all')
+
+  // Memoized filtered lists
+  const subscriptions = createMemo(() =>
+    bills().filter((b) => (b.type || 'bill') === 'subscription')
+  )
+  const activeSubscriptions = createMemo(() =>
+    subscriptions().filter((b) => b.is_active !== 0)
+  )
+  const totalMonthlySubs = createMemo(() =>
+    activeSubscriptions().reduce((sum, b) => sum + b.amount, 0)
+  )
+
+  // Group active subscriptions by category
+  const subscriptionGroups = createMemo(() => {
+    const groups = new Map<string, Bill[]>()
+    for (const sub of activeSubscriptions()) {
+      const brand = matchBrand(sub.name, sub.category_color)
+      const cat = brand.defaultCategory
+      if (!groups.has(cat)) groups.set(cat, [])
+      groups.get(cat)!.push(sub)
+    }
+    return [...groups.entries()]
+  })
+
+  const pausedSubscriptions = createMemo(() =>
+    subscriptions().filter((b) => b.is_active === 0)
+  )
+
+  // Pause a subscription
+  const pauseSubscription = async (id: number) => {
+    const sub = bills().find((b) => b.id === id)
+    if (!sub) return
+    try {
+      await apiPut(`/api/bills/${id}`, { ...sub, is_active: 0, type: sub.type })
+      await loadBills()
+    } catch {
+      showToast('Failed to pause subscription', 'error')
+    }
+  }
+  const unpaidBills = createMemo(() =>
+    bills().filter((b) => !b.paid && (b.type || 'bill') !== 'subscription')
+  )
+  const paidBills = createMemo(() =>
+    bills().filter((b) => b.paid && (b.type || 'bill') !== 'subscription')
+  )
 
   // Add category
   const addCategory = async (e: Event) => {
@@ -172,12 +218,20 @@ export default function Bills() {
       category: formData().category || undefined,
       frequency: formData().frequency,
       autopay: formData().autopay,
+      type: formData().type,
     }
 
     try {
-      await apiPost('/api/bills', data)
-      showToast('Bill saved successfully', 'success')
+      const id = editingId()
+      if (id) {
+        await apiPut(`/api/bills/${id}`, data)
+        showToast('Bill updated', 'success')
+      } else {
+        await apiPost('/api/bills', data)
+        showToast('Bill saved', 'success')
+      }
       setShowAddModal(false)
+      setEditingId(null)
       setFormData({
         name: '',
         amount: '',
@@ -185,6 +239,7 @@ export default function Bills() {
         category: '',
         frequency: 'monthly',
         autopay: false,
+        type: 'bill',
       })
       loadBills()
     } catch (err) {
@@ -193,12 +248,28 @@ export default function Bills() {
     }
   }
 
+  // Open edit modal pre-filled with bill data
+  const openEditModal = (idOrBill: number | Bill) => {
+    const bill = typeof idOrBill === 'number' ? bills().find((b) => b.id === idOrBill) : idOrBill
+    if (!bill) return
+    setEditingId(bill.id)
+    setFormData({
+      name: bill.name,
+      amount: bill.amount.toString(),
+      due_date: bill.due_date,
+      category: bill.category || '',
+      frequency: bill.frequency,
+      autopay: bill.autopay,
+      type: bill.type || 'bill',
+    })
+    setShowAddModal(true)
+  }
+
   const [markingPaid, setMarkingPaid] = createSignal<Set<number>>(new Set())
 
   // Mark bill as paid
   const markPaid = async (id: number) => {
     // Optimistic update: mark as paid locally immediately
-    setUpcoming(upcoming().map((b) => (b.id === id ? { ...b, paid: true } : b)))
     setBills(bills().map((b) => (b.id === id ? { ...b, paid: true } : b)))
     setMarkingPaid(new Set([...markingPaid(), id]))
 
@@ -268,6 +339,13 @@ export default function Bills() {
 
   onMount(() => {
     loadBills()
+    loadCategories()
+  })
+
+  createEffect(() => {
+    void state.profileVersion
+    loadBills()
+    loadCategories()
   })
 
   return (
@@ -278,12 +356,23 @@ export default function Bills() {
           <button
             data-test-id="add-bill-btn"
             class={styles.btnPrimary}
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setEditingId(null)
+              setFormData({
+                ...formData(),
+                name: '',
+                amount: '',
+                due_date: '',
+                category: '',
+                type: billTab() === 'subscriptions' ? 'subscription' : 'bill',
+              })
+              setShowAddModal(true)
+            }}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            Add Bill
+            {billTab() === 'subscriptions' ? 'Add Subscription' : 'Add Bill'}
           </button>
         </div>
         <p data-test-id="bills-subtitle" class={styles.pageSubtitle}>
@@ -291,285 +380,381 @@ export default function Bills() {
         </p>
       </div>
 
-      <div class={styles.billsGrid}>
-        {/* Upcoming Section */}
-        {upcoming().filter((b) => !b.paid).length > 0 && (
-          <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
-            <h2 class={styles.sectionTitle}>
-              <svg
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-              </svg>{' '}
-              Upcoming Bills
-              <span class={styles.sectionSubtitle}>
-                {upcoming().filter((b) => !b.paid).length} bills
-              </span>
-            </h2>
-            <div data-test-id="bills-list" class={styles.billsList}>
-              <For each={upcoming().filter((b) => !b.paid)}>
-                {(bill) => (
-                  <div
-                    data-test-id="bill-card"
-                    class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
-                  >
-                    <div class={styles.billMain}>
-                      <div data-test-id="bill-icon" class={styles.billIcon}>
-                        {bill.autopay ? (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
-                      </div>
-                      <div class={styles.billInfo}>
-                        <h3 data-test-id="bill-name" class={styles.billName}>
-                          {bill.name}
-                        </h3>
-                        <p data-test-id="bill-details" class={styles.billDetails}>
-                          {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
-                          {bill.frequency === 'monthly'
-                            ? 'Monthly'
-                            : bill.frequency === 'weekly'
-                              ? 'Weekly'
-                              : 'Biweekly'}
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      data-test-id="bill-amount-container"
-                      class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
-                    >
-                      <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                      <button
-                        data-test-id="bill-mark-paid-btn"
-                        class={`${styles.btnPrimary} ${styles.btnSm}`}
-                        onClick={() => markPaid(bill.id)}
-                        disabled={markingPaid().has(bill.id)}
-                      >
-                        {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        )}
-
-        {/* All Bills Section */}
-        <div data-test-id="bills-all-section" class={styles.billsSection}>
-          <h2 class={styles.sectionTitle}>
-            <span>
-              <svg
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            </span>{' '}
-            All Bills
-            <span class={styles.sectionSubtitle}>{bills().length} total</span>
-          </h2>
-          {loading() ? (
-            <div data-test-id="loading-state" class={styles.emptyState}>
-              Loading bills...
-            </div>
-          ) : bills().length === 0 ? (
-            <div data-test-id="bills-empty" class={styles.emptyState}>
-              <p>No bills yet</p>
-              <p>Add your first bill to start tracking your payments.</p>
-              <button
-                data-test-id="bills-add-btn-empty"
-                class={styles.btnPrimary}
-                onClick={() => setShowAddModal(true)}
-              >
-                Add Bill
-              </button>
-            </div>
-          ) : (
-            <div class={styles.billsList}>
-              <For each={bills()}>
-                {(bill) => (
-                  <div
-                    class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
-                  >
-                    <div class={styles.billMain}>
-                      <div data-test-id="bill-icon" class={styles.billIcon}>
-                        {bill.autopay ? (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="18"
-                            height="18"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
-                      </div>
-                      <div class={styles.billInfo}>
-                        <h3 data-test-id="bill-name" class={styles.billName}>
-                          {bill.name}
-                          {bill.paid && <span class={styles.paidBadge}>Paid</span>}
-                        </h3>
-                        <p data-test-id="bill-details" class={styles.billDetails}>
-                          {formatDate(bill.due_date)} •{' '}
-                          {bill.frequency === 'monthly'
-                            ? 'Monthly'
-                            : bill.frequency === 'weekly'
-                              ? 'Weekly'
-                              : 'Biweekly'}
-                          {bill.category && ` • ${bill.category}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div class={styles.billAmount}>
-                      <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                      <div class={styles.billActions}>
-                        {!bill.paid ? (
-                          <button
-                            data-test-id="bill-mark-paid-btn"
-                            class={`${styles.btnPrimary} ${styles.btnSm}`}
-                            onClick={() => markPaid(bill.id)}
-                            disabled={markingPaid().has(bill.id)}
-                          >
-                            {markingPaid().has(bill.id)
-                              ? 'Paying...'
-                              : isOverdue(bill.due_date)
-                                ? 'Mark as Paid (Overdue)'
-                                : 'Mark Paid'}
-                          </button>
-                        ) : (
-                          <ConfirmButton
-                            class={`${styles.btnSm} ${styles.btnGhost}`}
-                            onConfirm={() => deleteBill(bill.id)}
-                            label={
-                              <svg
-                                width="16"
-                                height="16"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            }
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
+      {/* Tab navigation */}
+      <div class={styles.tabs}>
+        <button
+          class={`${styles.tabBtn} ${billTab() === 'all' ? styles.tabActive : ''}`}
+          onClick={() => setBillTab('all')}
+        >
+          <svg
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Regular Bills
+        </button>
+        <button
+          class={`${styles.tabBtn} ${billTab() === 'subscriptions' ? styles.tabActive : ''}`}
+          onClick={() => setBillTab('subscriptions')}
+        >
+          <svg
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          Subscriptions
+          {activeSubscriptions().length > 0 && (
+            <span class={styles.tabBadge}>{activeSubscriptions().length}</span>
           )}
-        </div>
+        </button>
       </div>
 
-      {/* Paid Section */}
-      {paid().length > 0 && (
-        <div data-test-id="bills-paid-section" class={styles.billsSection}>
-          <h2 class={styles.sectionTitle}>
-            <svg
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>{' '}
-            Paid Bills
-            <span class={styles.sectionSubtitle}>{paid().length} bills</span>
-          </h2>
-          <div data-test-id="bills-list" class={styles.billsList}>
-            <For each={paid()}>
-              {(bill) => (
-                <div data-test-id="bill-card" class={`${styles.billCard} ${styles.paid}`}>
-                  <div class={styles.billMain}>
-                    <div data-test-id="bill-icon" class={styles.billIcon}>
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div class={styles.billInfo}>
-                      <h3 data-test-id="bill-name" class={styles.billName}>
-                        {bill.name}
-                      </h3>
-                      <p data-test-id="bill-details" class={styles.billDetails}>
-                        Paid {formatDate(bill.due_date)}
-                      </p>
-                    </div>
-                  </div>
-                  <div class={styles.billAmount}>
-                    <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                    <ConfirmButton
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onConfirm={() => deleteBill(bill.id)}
-                      label={
-                        <svg
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      }
-                    />
+      {loading() ? (
+        <div data-test-id="loading-state" class={styles.emptyState}>
+          Loading bills...
+        </div>
+      ) : billTab() === 'subscriptions' ? (
+        <div class={styles.subscriptionView}>
+          {/* Subscription Summary Card */}
+          <div class={styles.subscriptionSummary}>
+            <div class={styles.subSummaryRow}>
+              <div class={styles.subSummaryCard}>
+                <span class={styles.subSummaryLabel}>Active Subs</span>
+                <span class={styles.subSummaryValue}>{activeSubscriptions().length}</span>
+              </div>
+              <div class={styles.subSummaryCard}>
+                <span class={styles.subSummaryLabel}>Monthly Total</span>
+                <span class={styles.subSummaryValue}>{formatCurrency(totalMonthlySubs())}</span>
+              </div>
+              <div class={styles.subSummaryCard}>
+                <span class={styles.subSummaryLabel}>Categories</span>
+                <span class={styles.subSummaryValue}>{subscriptionGroups().length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Groups — Gallery Grid */}
+          {activeSubscriptions().length > 0 && (
+            <For each={subscriptionGroups()}>
+              {([category, subs]) => (
+                <div class={styles.categoryGroup}>
+                  <h3 class={styles.categoryGroupTitle}>
+                    {category}
+                    <span class={styles.categoryGroupCount}>{subs.length}</span>
+                  </h3>
+                  <div class={styles.subscriptionGallery}>
+                    <For each={subs}>
+                      {(sub) => (
+                        <SubscriptionCard
+                          subscription={sub as SubscriptionCardBill}
+                          onMarkPaid={markPaid}
+                          onPause={pauseSubscription}
+                          onDelete={deleteBill}
+                          onEdit={openEditModal}
+                          markingPaid={markingPaid}
+                        />
+                      )}
+                    </For>
                   </div>
                 </div>
               )}
             </For>
-          </div>
+          )}
+
+          {/* Paused Subscriptions */}
+          {pausedSubscriptions().length > 0 && (
+            <div class={styles.categoryGroup}>
+              <h3 class={styles.categoryGroupTitle}>
+                Paused
+                <span class={styles.categoryGroupCount}>{pausedSubscriptions().length}</span>
+              </h3>
+              <div class={styles.subscriptionGallery}>
+                <For each={pausedSubscriptions()}>
+                  {(sub) => (
+                    <SubscriptionCard
+                      subscription={sub as SubscriptionCardBill}
+                      onMarkPaid={markPaid}
+                      onPause={async (id) => {
+                        const s = bills().find((b) => b.id === id)
+                        if (!s) return
+                        await apiPut(`/api/bills/${id}`, {
+                          ...s,
+                          is_active: 1,
+                          type: s.type,
+                        })
+                        await loadBills()
+                      }}
+                      onDelete={deleteBill}
+                      onEdit={openEditModal}
+                      markingPaid={markingPaid}
+                    />
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
+
+          {subscriptions().length === 0 && (
+            <div class={styles.emptyState}>
+              <p>No subscriptions yet</p>
+              <p>Add streaming services, software subscriptions, and other recurring services.</p>
+              <button
+                class={styles.btnPrimary}
+                onClick={() => {
+                  setEditingId(null)
+                  setFormData({
+                    name: '',
+                    amount: '',
+                    due_date: '',
+                    category: '',
+                    frequency: 'monthly',
+                    autopay: false,
+                    type: 'subscription',
+                  })
+                  setShowAddModal(true)
+                }}
+              >
+                Add Subscription
+              </button>
+            </div>
+          )}
+        </div>
+      ) : bills().length === 0 ? (
+        <div data-test-id="bills-empty" class={styles.emptyState}>
+          <p>No bills yet</p>
+          <p>Add your first bill to start tracking your payments.</p>
+          <button
+            data-test-id="bills-add-btn-empty"
+            class={styles.btnPrimary}
+            onClick={() => {
+              setEditingId(null)
+              setFormData({ name: '', amount: '', due_date: '', category: '', frequency: 'monthly', autopay: false, type: 'bill' })
+              setShowAddModal(true)
+            }}
+          >
+            Add Bill
+          </button>
+        </div>
+      ) : (
+        <div class={styles.billsGrid}>
+          {/* Unpaid Bills Section */}
+          {unpaidBills().length > 0 && (
+            <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
+              <h2 class={styles.sectionTitle}>
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+                </svg>{' '}
+                Unpaid Bills
+                <span class={styles.sectionSubtitle}>{unpaidBills().length} bills</span>
+              </h2>
+              <div data-test-id="bills-list" class={styles.billsList}>
+                <For each={unpaidBills()}>
+                  {(bill) => (
+                    <div
+                      data-test-id="bill-card"
+                      class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                    >
+                      <div class={styles.billMain}>
+                        <div data-test-id="bill-icon" class={styles.billIcon}>
+                          {bill.autopay ? (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          ) : (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div class={styles.billInfo}>
+                          <h3 data-test-id="bill-name" class={styles.billName}>
+                            {bill.name}
+                          </h3>
+                          <p data-test-id="bill-details" class={styles.billDetails}>
+                            {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
+                            {bill.frequency === 'monthly'
+                              ? 'Monthly'
+                              : bill.frequency === 'weekly'
+                                ? 'Weekly'
+                                : 'Biweekly'}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        data-test-id="bill-amount-container"
+                        class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                      >
+                        <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                        <div class={styles.billActions}>
+                          <button
+                            class={`${styles.btnPrimary} ${styles.btnSm}`}
+                            onClick={() => markPaid(bill.id)}
+                            disabled={markingPaid().has(bill.id)}
+                          >
+                            {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
+                          </button>
+                          <button
+                            class={`${styles.btnGhost} ${styles.btnSm}`}
+                            onClick={() => { openEditModal(bill); }}
+                            title="Edit bill"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
+
+          {/* Paid Bills Section */}
+          {paidBills().length > 0 && (
+            <div data-test-id="bills-paid-section" class={styles.billsSection}>
+              <h2 class={styles.sectionTitle}>
+                <span>
+                  <svg
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </span>{' '}
+                Paid Bills
+                <span class={styles.sectionSubtitle}>{paidBills().length} paid</span>
+              </h2>
+              <div class={styles.billsList}>
+                <For each={paidBills()}>
+                  {(bill) => (
+                    <div
+                      class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
+                    >
+                      <div class={styles.billMain}>
+                        <div data-test-id="bill-icon" class={styles.billIcon}>
+                          {bill.autopay ? (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          ) : (
+                            <svg
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div class={styles.billInfo}>
+                          <h3 data-test-id="bill-name" class={styles.billName}>
+                            {bill.name}
+                            {bill.paid && <span class={styles.paidBadge}>Paid</span>}
+                          </h3>
+                          <p data-test-id="bill-details" class={styles.billDetails}>
+                            {formatDate(bill.due_date)} •{' '}
+                            {bill.frequency === 'monthly'
+                              ? 'Monthly'
+                              : bill.frequency === 'weekly'
+                                ? 'Weekly'
+                                : 'Biweekly'}
+                            {bill.category && ` • ${bill.category}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div class={styles.billAmount}>
+                        <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                        <div class={styles.billActions}>
+                          <button
+                            class={`${styles.btnGhost} ${styles.btnSm}`}
+                            onClick={() => { openEditModal(bill); }}
+                            title="Edit bill"
+                          >
+                            Edit
+                          </button>
+                          {!bill.paid ? (
+                            <button
+                              data-test-id="bill-mark-paid-btn"
+                              class={`${styles.btnPrimary} ${styles.btnSm}`}
+                              onClick={() => markPaid(bill.id)}
+                              disabled={markingPaid().has(bill.id)}
+                            >
+                              {markingPaid().has(bill.id)
+                                ? 'Paying...'
+                                : isOverdue(bill.due_date)
+                                  ? 'Mark as Paid (Overdue)'
+                                  : 'Mark Paid'}
+                            </button>
+                          ) : (
+                            <ConfirmButton
+                              class={`${styles.btnSm} ${styles.btnGhost}`}
+                              onConfirm={() => deleteBill(bill.id)}
+                              label={
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              }
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -578,7 +763,7 @@ export default function Bills() {
         <div
           class={styles.modalOverlay}
           onclick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false)
+            if (e.target === e.currentTarget) { setShowAddModal(false); setEditingId(null) }
           }}
         >
           <div
@@ -588,8 +773,8 @@ export default function Bills() {
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>Add Bill</h3>
-              <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
+              <h3 class={styles.modalTitle}>{editingId() ? 'Edit' : 'Add'} {formData().type === 'subscription' ? 'Subscription' : 'Bill'}</h3>
+              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingId(null) }}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -604,6 +789,7 @@ export default function Bills() {
                   placeholder="e.g., Rent, Electricity, Internet"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>
@@ -665,6 +851,19 @@ export default function Bills() {
                 </select>
               </div>
               <div class={styles.formGroup}>
+                <label class={styles.formLabel}>Type</label>
+                <select
+                  class={styles.formControl}
+                  value={formData().type}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), type: e.target.value as 'bill' | 'subscription' })
+                  }
+                >
+                  <option value="bill">Regular Bill</option>
+                  <option value="subscription">Subscription</option>
+                </select>
+              </div>
+              <div class={styles.formGroup}>
                 <label class={styles.formLabel}>
                   <span>
                     <svg
@@ -701,7 +900,7 @@ export default function Bills() {
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
-                  Add Bill
+                  {editingId() ? 'Update' : 'Add'} {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
                 </button>
               </div>
             </form>
@@ -740,6 +939,7 @@ export default function Bills() {
                   placeholder="e.g., Utilities, Entertainment"
                   value={categoryForm().name}
                   oninput={(e) => setCategoryForm({ ...categoryForm(), name: e.target.value })}
+                  autofocus
                   required
                 />
               </div>

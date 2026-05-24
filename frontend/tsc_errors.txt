@@ -1,0 +1,124 @@
+src/components/D3HeatmapChart.tsx(74,66): error TS2339: Property 'exponent' does not exist on type 'ScaleSequential<string, never>'.
+src/components/D3HeatmapChart.tsx(75,68): error TS2339: Property 'exponent' does not exist on type 'ScaleSequential<string, never>'.
+src/components/ErrorBoundary.tsx(5,9): error TS2451: Cannot redeclare block-scoped variable '__APP_VERSION__'.
+src/components/FilterBar.tsx(102,20): error TS2345: Argument of type '{ selectedCategories: never[]; selectedTags: never[]; dateRange: { from: string; to: string; }; selectedPreset: string; }' is not assignable to parameter of type 'FilterState'.
+  Type '{ selectedCategories: never[]; selectedTags: never[]; dateRange: { from: string; to: string; }; selectedPreset: string; }' is missing the following properties from type 'FilterState': categories, tags
+src/components/FilterBar.tsx(152,20): error TS2345: Argument of type '{ selectedCategories: number[] | undefined; selectedTags: number[] | undefined; dateRange: { from: string; to: string; }; selectedPreset: string; }' is not assignable to parameter of type 'FilterState'.
+  Type '{ selectedCategories: number[] | undefined; selectedTags: number[] | undefined; dateRange: { from: string; to: string; }; selectedPreset: string; }' is missing the following properties from type 'FilterState': categories, tags
+src/components/FilterBar.tsx(161,20): error TS2345: Argument of type '{ selectedCategories: number[] | undefined; selectedTags: number[] | undefined; dateRange: { from: string; to: string; }; selectedPreset: string; }' is not assignable to parameter of type 'FilterState'.
+  Type '{ selectedCategories: number[] | undefined; selectedTags: number[] | undefined; dateRange: { from: string; to: string; }; selectedPreset: string; }' is missing the following properties from type 'FilterState': categories, tags
+src/components/FilterBar.tsx(171,20): error TS2345: Argument of type '{ selectedCategories: number[] | undefined; selectedTags: number[] | undefined; dateRange: { from: string; to: string; }; selectedPreset: string; }' is not assignable to parameter of type 'FilterState'.
+  Type '{ selectedCategories: number[] | undefined; selectedTags: number[] | undefined; dateRange: { from: string; to: string; }; selectedPreset: string; }' is missing the following properties from type 'FilterState': categories, tags
+src/components/RecurringSection.tsx(92,35): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'Omit<RecurringTransaction, "id" | "profile_id">'.
+  Type 'Record<string, unknown>' is missing the following properties from type 'Omit<RecurringTransaction, "id" | "profile_id">': category_id, type, description, amount, and 6 more.
+src/core/__tests__/appStore.test.ts(24,17): error TS2345: Argument of type '{ id: number; name: string; starting_balance: number; }[]' is not assignable to parameter of type 'Profile[]'.
+  Property 'created_at' is missing in type '{ id: number; name: string; starting_balance: number; }' but required in type 'Profile'.
+src/core/__tests__/appStore.test.ts(32,17): error TS2345: Argument of type '{ id: number; name: string; starting_balance: number; }[]' is not assignable to parameter of type 'Profile[]'.
+  Property 'created_at' is missing in type '{ id: number; name: string; starting_balance: number; }' but required in type 'Profile'.
+src/core/__tests__/appStore.test.ts(34,38): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/__tests__/appStore.test.ts(35,42): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/__tests__/appStore.test.ts(46,17): error TS2345: Argument of type '{ id: number; name: string; starting_balance: number; }[]' is not assignable to parameter of type 'Profile[]'.
+  Property 'created_at' is missing in type '{ id: number; name: string; starting_balance: number; }' but required in type 'Profile'.
+src/core/__tests__/appStore.test.ts(48,41): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/__tests__/appStore.test.ts(54,17): error TS2345: Argument of type '{ id: number; name: string; starting_balance: number; }[]' is not assignable to parameter of type 'Profile[]'.
+  Property 'created_at' is missing in type '{ id: number; name: string; starting_balance: number; }' but required in type 'Profile'.
+src/core/__tests__/appStore.test.ts(57,30): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/__tests__/appStore.test.ts(58,34): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/__tests__/appStore.test.ts(59,30): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/__tests__/appStore.test.ts(66,17): error TS2345: Argument of type '{ id: number; name: string; starting_balance: number; }[]' is not assignable to parameter of type 'Profile[]'.
+  Property 'created_at' is missing in type '{ id: number; name: string; starting_balance: number; }' but required in type 'Profile'.
+src/core/__tests__/appStore.test.ts(84,23): error TS2345: Argument of type '{ id: number; name: string; starting_balance: number; }' is not assignable to parameter of type 'Profile'.
+  Property 'created_at' is missing in type '{ id: number; name: string; starting_balance: number; }' but required in type 'Profile'.
+src/core/__tests__/appStore.test.ts(89,46): error TS2353: Object literal may only specify known properties, and 'starting_balance' does not exist in type 'Profile'.
+src/core/storage/localApiRouter.ts(516,44): error TS2554: Expected 0 arguments, but got 1.
+src/core/storage/localHandlers.ts(564,26): error TS2352: Conversion of type 'Loan' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'Loan'.
+src/core/storage/localHandlers.ts(2577,40): error TS18046: 't.date' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2577,62): error TS18046: 't.date' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2586,32): error TS2322: Type 'unknown' is not assignable to type 'string'.
+src/core/storage/localHandlers.ts(2586,57): error TS2322: Type 'unknown' is not assignable to type 'number'.
+src/core/storage/localHandlers.ts(2588,32): error TS2322: Type '{}' is not assignable to type 'string'.
+src/core/storage/localHandlers.ts(2588,71): error TS2322: Type 'unknown' is not assignable to type 'number'.
+src/core/storage/localHandlers.ts(2605,50): error TS18046: 'r.amount' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2624,39): error TS18046: 't.date' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2624,61): error TS18046: 't.date' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2633,20): error TS2538: Type 'unknown' cannot be used as an index type.
+src/core/storage/localHandlers.ts(2633,42): error TS2538: Type 'unknown' cannot be used as an index type.
+src/core/storage/localHandlers.ts(2634,15): error TS2538: Type 'unknown' cannot be used as an index type.
+src/core/storage/localHandlers.ts(2635,15): error TS2538: Type 'unknown' cannot be used as an index type.
+src/core/storage/localHandlers.ts(2647,55): error TS18046: 'r.amount' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2648,58): error TS18046: 'r.amount' is of type 'unknown'.
+src/core/storage/localHandlers.ts(2887,38): error TS2339: Property 'split' does not exist on type '{}'.
+src/core/storage/localHandlers.ts(2901,23): error TS2345: Argument of type '{}' is not assignable to parameter of type 'BodyInit | null | undefined'.
+src/core/validation.ts(91,31): error TS2724: '"/home/maff/foss/finance-manager/frontend/node_modules/zod/v4/classic/external"' has no exported member named 'SafeParseError'. Did you mean 'ZodSafeParseError'?
+src/core/validation.ts(91,74): error TS7006: Parameter 'issue' implicitly has an 'any' type.
+src/features/Analytics.tsx(127,16): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '{}' is not assignable to parameter of type '{ week: number; label: string; }[] | ((prev: { week: number; label: string; }[]) => { week: number; label: string; }[])'.
+src/features/Analytics.tsx(168,55): error TS2339: Property 'slice' does not exist on type '{}'.
+src/features/Analytics.tsx(198,11): error TS18046: 'transactionsRes.totalIncome' is of type 'unknown'.
+src/features/Analytics.tsx(199,17): error TS18046: 'transactionsRes.totalIncome' is of type 'unknown'.
+src/features/Analytics.tsx(199,47): error TS18046: 'transactionsRes.totalExpenses' is of type 'unknown'.
+src/features/Analytics.tsx(200,17): error TS18046: 'transactionsRes.totalIncome' is of type 'unknown'.
+src/features/Analytics.tsx(264,23): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type '{ name: string; category: string; color?: string | undefined; }[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ source: string | number; target: string | number; value: number; }[]': length, pop, push, concat, and 35 more.
+src/features/Analytics.tsx(264,47): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type '{ name: string; category: string; color?: string | undefined; }[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ source: string | number; target: string | number; value: number; }[]': length, pop, push, concat, and 35 more.
+src/features/Analytics.tsx(286,9): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type 'string[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ category: string; color: string; data: number[]; }[]': length, pop, push, concat, and 35 more.
+        Type '{}' is not assignable to type 'number'.
+src/features/Analytics.tsx(287,9): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type 'string[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ category: string; color: string; data: number[]; }[]': length, pop, push, concat, and 35 more.
+        Type '{}' is not assignable to type 'number'.
+src/features/Analytics.tsx(288,9): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type 'string[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ category: string; color: string; data: number[]; }[]': length, pop, push, concat, and 35 more.
+        Type '{}' is not assignable to type 'number'.
+src/features/Analytics.tsx(304,13): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type 'string[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ category: string; color: string; data: number[]; }[]': length, pop, push, concat, and 35 more.
+src/features/Analytics.tsx(305,13): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type '{}' is missing the following properties from type 'string[]': length, pop, push, concat, and 35 more.
+      Type '{}' is missing the following properties from type '{ category: string; color: string; data: number[]; }[]': length, pop, push, concat, and 35 more.
+src/features/Analytics.tsx(408,55): error TS2339: Property 'slice' does not exist on type '{}'.
+src/features/Analytics.tsx(434,11): error TS18046: 'transactionsRes.totalIncome' is of type 'unknown'.
+src/features/Analytics.tsx(435,17): error TS18046: 'transactionsRes.totalIncome' is of type 'unknown'.
+src/features/Analytics.tsx(435,47): error TS18046: 'transactionsRes.totalExpenses' is of type 'unknown'.
+src/features/Analytics.tsx(436,17): error TS18046: 'transactionsRes.totalIncome' is of type 'unknown'.
+src/features/Analytics.tsx(1094,55): error TS2339: Property 'category' does not exist on type 'Transaction'.
+src/features/Bills.tsx(134,9): error TS7022: 'unpaidBills' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/features/Bills.tsx(134,34): error TS7024: Function implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.
+src/features/Bills.tsx(135,9): error TS7022: 'paidBills' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/features/Bills.tsx(135,32): error TS7024: Function implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.
+src/features/Budgets.tsx(212,65): error TS2339: Property 'is_budgeted' does not exist on type 'ZeroBasedAllocation'.
+src/features/Budgets.tsx(215,22): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Argument of type '{ amount: number; allocated: number; status: "ok" | "warning" | "over"; is_fully_allocated: boolean; category_id: number; category_name: string; category_color: string; spent: number; remaining: number; percent_used: number; }[]' is not assignable to parameter of type 'CategoryAllocation[] | ((prev: CategoryAllocation[]) => CategoryAllocation[])'.
+      Type '{ amount: number; allocated: number; status: "ok" | "warning" | "over"; is_fully_allocated: boolean; category_id: number; category_name: string; category_color: string; spent: number; remaining: number; percent_used: number; }[]' is not assignable to type 'CategoryAllocation[]'.
+        Type '{ amount: number; allocated: number; status: "ok" | "warning" | "over"; is_fully_allocated: boolean; category_id: number; category_name: string; category_color: string; spent: number; remaining: number; percent_used: number; }' is missing the following properties from type 'CategoryAllocation': budget_id, category_icon, remaining_budget, can_allocate, and 2 more.
+src/features/Budgets.tsx(218,9): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Type 'ZeroBasedAllocation[]' is not assignable to type 'CategoryAllocation[]'.
+      Type 'ZeroBasedAllocation' is missing the following properties from type 'CategoryAllocation': budget_id, category_icon, remaining_budget, can_allocate, and 2 more.
+src/features/Budgets.tsx(220,39): error TS2339: Property 'zero_based_remaining' does not exist on type 'ZeroBasedResponse'.
+src/features/Budgets.tsx(220,75): error TS2339: Property 'zeroBasedRemaining' does not exist on type 'ZeroBasedResponse'.
+src/features/Budgets.tsx(377,21): error TS2339: Property 'category_id' does not exist on type 'BudgetSummaryResponse'.
+src/features/Budgets.tsx(378,22): error TS2339: Property 'spent' does not exist on type 'BudgetSummaryResponse'.
+src/features/Budgets.tsx(379,23): error TS2339: Property 'amount' does not exist on type 'BudgetSummaryResponse'.
+src/features/Budgets.tsx(380,26): error TS2339: Property 'remaining' does not exist on type 'BudgetSummaryResponse'.
+src/features/Budgets.tsx(381,29): error TS2339: Property 'percentage' does not exist on type 'BudgetSummaryResponse'.
+src/features/Loans.tsx(43,15): error TS2440: Import declaration conflicts with local declaration of 'Loan'.
+tests/goals-crud.spec.ts(368,11): error TS6133: 'hasDayCalculations' is declared but its value is never read.
+tests/goals.spec.ts(94,11): error TS6133: 'deleteBtns' is declared but its value is never read.
+tests/profile-dropdown.spec.ts(81,15): error TS6133: 'name' is declared but its value is never read.

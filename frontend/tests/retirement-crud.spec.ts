@@ -535,11 +535,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await navigateToRoute(page, 'retirement')
     await page.waitForTimeout(500)
 
-    await expect(
-      page.locator('.page.page-retirement, [data-test-id="page-retirement"]')
-    ).toBeVisible()
-    await expect(page.getByTestId('retirement-page-header')).toBeVisible()
-    await expect(page.getByTestId('retirement-subtitle')).toBeVisible()
+    await expect(page.getByTestId('retirement-page-header')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('retirement-subtitle')).toBeVisible({ timeout: 5000 })
   })
 
   test('should format currency correctly', async ({ page }) => {

@@ -2,7 +2,7 @@
  * Period Navigator Component
  * Navigation for month/year selection in dashboard
  */
-import { createSignal, For, Show } from 'solid-js'
+import { createMemo, createSignal, For, Show } from 'solid-js'
 import styles from './PeriodNavigator.module.css'
 
 export interface PeriodNavigatorProps {
@@ -12,6 +12,10 @@ export interface PeriodNavigatorProps {
   onYearChange: (newYear: number) => void
   onPrev: () => void
   onNext: () => void
+  minYear?: number
+  maxYear?: number
+  /** If provided, show only these exact years instead of a continuous range */
+  years?: number[]
 }
 
 const MONTHS = [
@@ -32,8 +36,17 @@ const MONTHS = [
 export function PeriodNavigator(props: PeriodNavigatorProps) {
   const [showMonthPicker, setShowMonthPicker] = createSignal(false)
   const [showYearPicker, setShowYearPicker] = createSignal(false)
-  const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
+  const currentYear = createMemo(() => new Date().getFullYear())
+
+  // Reactive: recomputes when parent signals (minYear, maxYear, years) change.
+  // Plain const would be computed once on mount and never update — that's why
+  // the year range appeared "hardcoded" even after profile switches.
+  const years = createMemo(() => {
+    if (props.years && props.years.length > 0) return props.years
+    const startYear = props.minYear ?? currentYear() - 10
+    const endYear = props.maxYear ?? currentYear() + 10
+    return Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
+  })
 
   return (
     <div class={styles.periodNavigator}>
@@ -107,7 +120,7 @@ export function PeriodNavigator(props: PeriodNavigatorProps) {
           </button>
           <Show when={showYearPicker()}>
             <div class={styles.dropdown}>
-              <For each={years}>
+              <For each={years()}>
                 {(y) => (
                   <button
                     class={styles.dropdownItem}

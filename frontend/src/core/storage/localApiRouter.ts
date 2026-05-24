@@ -1,3 +1,4 @@
+import { validateBody } from '../validation'
 import * as h from './localHandlers'
 import type { StorageMode } from './storageFactory'
 
@@ -34,59 +35,6 @@ function methodNotAllowed(method: string, path: string): Response {
 
 function notFound(path: string): Response {
   return json({ error: `Not found: ${path}` }, 404)
-}
-
-// Stub for routes that will be wired in later phases (LS7-LS14)
-// Returns empty/mock data instead of 501 so pages don't error in serverless mode
-function stub(_path: string): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json([])),
-    POST: () => Promise.resolve(json({ id: 1 }, 201)),
-    PUT: () => Promise.resolve(json({ ok: true })),
-    DELETE: () => Promise.resolve(json({ ok: true })),
-    PATCH: () => Promise.resolve(json({ ok: true })),
-  })
-}
-
-// Specific mock handlers for routes that need non-array responses
-function housingStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json({ housings: [] })),
-    POST: () => Promise.resolve(json({ id: 1, housings: [] }, 201)),
-    PUT: () => Promise.resolve(json({ ok: true })),
-    DELETE: () => Promise.resolve(json({ ok: true })),
-  })
-}
-
-function exchangeRatesStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json({ rates: { EUR: 1, USD: 1.08, GBP: 0.85, JPY: 156.0 } })),
-  })
-}
-
-function singleExchangeRateStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json({ rate: 1.08 })),
-  })
-}
-
-function reportsCustomStub(): Handler {
-  return dispatch({
-    POST: () => Promise.resolve(json({ report_url: '', generated: false })),
-  })
-}
-
-function statsMonthlyStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json([])),
-  })
-}
-
-function logsStub(): Handler {
-  return dispatch({
-    GET: () => Promise.resolve(json([])),
-    POST: () => Promise.resolve(json({ ok: true })),
-  })
 }
 
 // ── Dispatcher helper ────────────────────────────────────────────────────────
@@ -256,6 +204,11 @@ const routes: RouteDef[] = [
 
   // ── Transactions ──
   {
+    pattern: /^\/transactions\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.transactionsSummary() }),
+  },
+  {
     pattern: /^\/transactions$/,
     methods: ['GET', 'POST', 'DELETE'],
     handler: dispatch({
@@ -297,11 +250,6 @@ const routes: RouteDef[] = [
     pattern: /^\/transactions\/export$/,
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.transactionsExport(ctx.query) }),
-  },
-  {
-    pattern: /^\/transactions\/summary$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: () => h.transactionsSummary() }),
   },
 
   // ── Categories ──
@@ -543,124 +491,154 @@ const routes: RouteDef[] = [
     handler: dispatch({ POST: () => h.seedCategories() }),
   },
 
-  // ── Stubs for not-yet-implemented routes (LS11-LS14) ──
   // Transactions (extra): tags, by-tag, bulk
   {
     pattern: /^\/transactions\/(\d+)\/tags$/,
     methods: ['GET', 'POST', 'PUT'],
-    handler: stub('/api/transactions/:id/tags'),
+    handler: dispatch({
+      GET: (ctx) => h.transactionTagsGet(ctx.params),
+      POST: (ctx) => h.transactionTagsSet(ctx.params, ctx.body),
+      PUT: (ctx) => h.transactionTagsSet(ctx.params, ctx.body),
+    }),
   },
   {
     pattern: /^\/transactions\/by-tag\/(\d+)$/,
     methods: ['GET'],
-    handler: stub('/api/transactions/by-tag'),
+    handler: dispatch({ GET: (ctx) => h.transactionsByTag(ctx.params) }),
   },
-  { pattern: /^\/transactions\/bulk$/, methods: ['PUT'], handler: stub('/api/transactions/bulk') },
+  {
+    pattern: /^\/transactions\/bulk$/,
+    methods: ['PUT'],
+    handler: dispatch({ PUT: (ctx) => h.transactionsBulk(ctx.body) }),
+  },
 
   // Categories: mappings, auto-map
   {
     pattern: /^\/categories\/mappings$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/categories/mappings'),
+    handler: dispatch({
+      GET: () => h.categoryMappingsList(),
+      POST: (ctx) => h.categoryMappingsCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/categories\/mappings\/(\d+)$/,
     methods: ['DELETE'],
-    handler: stub('/api/categories/mappings'),
+    handler: dispatch({
+      DELETE: (ctx) => h.categoryMappingsDelete(ctx.params),
+    }),
   },
   {
     pattern: /^\/categories\/auto-map$/,
     methods: ['POST'],
-    handler: stub('/api/categories/auto-map'),
+    handler: dispatch({ POST: (ctx) => h.categoriesAutoMap(ctx.body) }),
   },
   {
     pattern: /^\/categories\/apply-mappings$/,
     methods: ['POST'],
-    handler: stub('/api/categories/apply-mappings'),
+    handler: dispatch({ POST: (ctx) => h.categoriesApplyMappings(ctx.body) }),
   },
 
   // Accounts: timeline, reconciliation-summary
   {
     pattern: /^\/accounts\/history\/timeline$/,
     methods: ['GET'],
-    handler: stub('/api/accounts/history/timeline'),
+    handler: dispatch({ GET: () => h.accountsTimeline() }),
   },
   {
     pattern: /^\/accounts\/(\d+)\/reconciliation-summary$/,
     methods: ['GET'],
-    handler: stub('/api/accounts/:id/reconciliation-summary'),
+    handler: dispatch({ GET: (ctx) => h.accountsReconciliationSummary(ctx.params) }),
   },
 
-  // Loans: calculate (client-only: returns empty amortization)
+  // Loans: calculate (ported from backend loanCalculator)
   {
     pattern: /^\/loans\/(\d+)\/calculate$/,
     methods: ['POST'],
     handler: dispatch({
-      POST: () =>
-        Promise.resolve(
-          json({
-            schedule: [],
-            summary: { totalPaid: 0, totalInterest: 0, payoffDate: null, interestSaved: 0 },
-          })
-        ),
+      POST: (ctx) => h.loansCalculate(ctx.params),
     }),
   },
 
-  // Bills (client-only: returns empty lists)
+  // Bills
   {
     pattern: /^\/bills$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/bills'),
+    handler: dispatch({
+      GET: (ctx) => h.billsList(ctx.query),
+      POST: (ctx) => h.billsCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/bills\/(\d+)$/,
     methods: ['GET', 'PUT', 'DELETE'],
-    handler: stub('/api/bills'),
+    handler: dispatch({
+      GET: (ctx) => h.billsGet(ctx.params),
+      PUT: (ctx) => h.billsUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.billsDelete(ctx.params),
+    }),
   },
-  { pattern: /^\/bills\/upcoming$/, methods: ['GET'], handler: stub('/api/bills/upcoming') },
+  {
+    pattern: /^\/bills\/upcoming$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: () => h.billsUpcoming() }),
+  },
   {
     pattern: /^\/bills\/(\d+)\/(pay|mark-paid)$/,
     methods: ['POST'],
-    handler: stub('/api/bills/:id/pay'),
+    handler: dispatch({ POST: (ctx) => h.billsPayOrMarkPaid(ctx.params) }),
   },
 
-  // Tags (LS6 no store)
+  // Tags
   {
     pattern: /^\/tags$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/tags'),
-  },
-  {
-    pattern: /^\/tags\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
-    handler: stub('/api/tags'),
+    handler: dispatch({
+      GET: () => h.tagsList(),
+      POST: (ctx) => h.tagsCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/tags\/(\d+)\/transactions$/,
     methods: ['GET'],
-    handler: stub('/api/tags/:id/transactions'),
+    handler: dispatch({ GET: (ctx) => h.tagsGetTransactions(ctx.params) }),
+  },
+  {
+    pattern: /^\/tags\/(\d+)$/,
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.tagsUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.tagsDelete(ctx.params),
+    }),
   },
 
-  // Recurring (LS6 no store)
+  // Recurring
   {
     pattern: /^\/recurring$/,
     methods: ['GET', 'POST'],
-    handler: stub('/api/recurring'),
+    handler: dispatch({
+      GET: () => h.recurringList(),
+      POST: (ctx) => h.recurringCreate(ctx.body),
+    }),
   },
   {
     pattern: /^\/recurring\/(\d+)$/,
     methods: ['GET', 'PUT', 'DELETE'],
-    handler: stub('/api/recurring'),
+    handler: dispatch({
+      GET: (ctx) => h.recurringGet(ctx.params),
+      PUT: (ctx) => h.recurringUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.recurringDelete(ctx.params),
+    }),
   },
   {
     pattern: /^\/recurring\/upcoming$/,
     methods: ['GET'],
-    handler: stub('/api/recurring/upcoming'),
+    handler: dispatch({ GET: () => h.recurringUpcoming() }),
   },
   {
     pattern: /^\/recurring\/(\d+)\/populate$/,
     methods: ['POST'],
-    handler: stub('/api/recurring/:id/populate'),
+    handler: dispatch({ POST: (ctx) => h.recurringPopulate(ctx.params) }),
   },
 
   // Receipts
@@ -707,7 +685,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/import\/googlesheet$/,
     methods: ['POST'],
-    handler: dispatch({ POST: () => h.importGoogleSheet() }),
+    handler: dispatch({ POST: (ctx) => h.importGoogleSheet(ctx.body) }),
   },
   {
     pattern: /^\/import\/file-sheet$/,
@@ -730,16 +708,24 @@ const routes: RouteDef[] = [
     handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }),
   },
 
-  // Exchange rates (client-only: returns mock rates)
-  { pattern: /^\/exchange-rates$/, methods: ['GET'], handler: exchangeRatesStub() },
+  // Exchange rates (cached from open.er-api.com)
+  {
+    pattern: /^\/exchange-rates$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.exchangeRates(ctx.query) }),
+  },
   {
     pattern: /^\/exchange-rates\/([A-Z]{3})\/([A-Z]{3})$/,
     methods: ['GET'],
-    handler: singleExchangeRateStub(),
+    handler: dispatch({ GET: (ctx) => h.exchangeRateSingle(ctx.params) }),
   },
 
   // Calculators (LS10)
-  { pattern: /^\/retirement$/, methods: ['POST'], handler: stub('/api/retirement') },
+  {
+    pattern: /^\/retirement$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.retirementCalculate(ctx.body) }),
+  },
   {
     pattern: /^\/retirement\/projection$/,
     methods: ['GET'],
@@ -762,11 +748,29 @@ const routes: RouteDef[] = [
     }),
   },
   {
-    pattern: /^\/housing(\/(\d+))?$/,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    handler: housingStub(),
+    pattern: /^\/housing$/,
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: () => h.housingList(),
+      POST: (ctx) => h.housingCreate(ctx.body),
+    }),
   },
-  { pattern: /^\/housing\/calculate$/, methods: ['POST'], handler: housingStub() },
+  {
+    pattern: /^\/housing\/(\d+)$/,
+    methods: ['GET', 'PUT', 'DELETE'],
+    handler: dispatch({
+      GET: (ctx) => h.housingGet(ctx.params),
+      PUT: (ctx) => h.housingUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.housingDelete(ctx.params),
+    }),
+  },
+  {
+    pattern: /^\/housing\/calculate$/,
+    methods: ['POST'],
+    handler: dispatch({
+      POST: (ctx) => h.housingCalculate(ctx.body),
+    }),
+  },
   {
     pattern: /^\/calculator\/compound-interest$/,
     methods: ['POST'],
@@ -790,18 +794,33 @@ const routes: RouteDef[] = [
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.reportHandler(ctx) }),
   },
-  { pattern: /^\/reports\/custom$/, methods: ['POST'], handler: reportsCustomStub() },
+  {
+    pattern: /^\/reports\/custom$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.reportsCustom(ctx.body) }),
+  },
 
   // Stats
-  { pattern: /^\/stats\/monthly$/, methods: ['GET'], handler: statsMonthlyStub() },
+  {
+    pattern: /^\/stats\/monthly$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.statsMonthly(ctx.query) }),
+  },
 
-  // Logs (client-only: returns empty lists)
+  // Logs
   {
     pattern: /^\/logs$/,
     methods: ['GET', 'POST'],
-    handler: logsStub(),
+    handler: dispatch({
+      GET: (ctx) => h.logsList(ctx.query),
+      POST: (ctx) => h.logsCreate(ctx.body),
+    }),
   },
-  { pattern: /^\/logs\/clear$/, methods: ['POST'], handler: logsStub() },
+  {
+    pattern: /^\/logs\/clear$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: () => h.logsClear() }),
+  },
 
   // ── Counterparties ──
   {
@@ -880,6 +899,20 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
 
     if (!route.methods.includes(method)) {
       return methodNotAllowed(method, `/api${path}`)
+    }
+
+    // Validate request body against Zod schemas
+    if (body !== null && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      const validationError = validateBody(method, `/api${path}`, body)
+      if (validationError) {
+        // Debug: log what triggered the validation failure to find the culprit
+        console.error(
+          '[routeApiRequest] Validation failed',
+          { method, path: `/api${path}`, body },
+          'Stack:', new Error().stack
+        )
+        return validationError
+      }
     }
 
     return route.handler({ method, path: `/api${path}`, params, query, body })

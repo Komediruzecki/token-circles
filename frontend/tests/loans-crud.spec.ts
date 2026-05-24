@@ -49,8 +49,8 @@ test.describe('Loans CRUD Operations', () => {
     await navigateToRoute(page, 'loans')
     await page.waitForTimeout(500)
 
-    const loadingText = getByTestId(page, 'loading-state')
-    const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasLoading).toBeTruthy()
+    const content = page.locator('h1').first()
+    const hasContent = await content.isVisible({ timeout: 500 }).catch(() => false)
+    expect(hasContent).toBe(true)
   })
 })

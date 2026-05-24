@@ -34,10 +34,10 @@ import { createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
-import styles from '../components/RetirementPage.module.css'
 import { formatCurrency } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { theme } from '../core/theme'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../utils/api'
+import styles from './RetirementPage.module.css'
 
 interface RetirementGoal {
   id: number

@@ -1,10 +1,11 @@
 /**
  * Client-side PDF Report Generation
- * Uses jsPDF + Chart.js offscreen canvas to generate reports matching backend layout.
+ * Uses jsPDF + Chart.js offscreen canvas (via Web Worker) to generate reports.
  */
 import { getDB } from './idb'
-import type * as ChartJS from 'chart.js/auto'
+import type { ChartData } from 'chart.js'
 import type { jsPDF } from 'jspdf'
+import type { Category, Transaction } from '../../types/models'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -47,59 +48,65 @@ const MONTHS_SHORT = [
   'Dec',
 ]
 
-// ── Chart rendering (offscreen) ─────────────────────────────────────────────
+// ── Chart rendering via Web Worker ───────────────────────────────────────────
 
-async function renderChartToDataUrl(
-  type: 'doughnut' | 'bar' | 'line',
-  data: ChartJS.ChartData,
+let _chartWorker: Worker | null = null
+let _workerRequestId = 0
+
+function getChartWorker(): Worker {
+  if (!_chartWorker) {
+    _chartWorker = new Worker(new URL('../../workers/chartWorker.ts', import.meta.url), {
+      type: 'module',
+    })
+  }
+  return _chartWorker
+}
+
+function renderChartViaWorker(
+  chartType: 'doughnut' | 'bar' | 'line',
+  chartData: ChartData,
   width: number,
   height: number,
-  dark: boolean
+  dark: boolean,
+  timeoutMs = 15000
 ): Promise<string> {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return ''
+  return new Promise((resolve, reject) => {
+    const worker = getChartWorker()
+    const id = ++_workerRequestId
+    let settled = false
 
-  const { default: Chart } = await import('chart.js/auto')
+    const cleanup = () => {
+      clearTimeout(timer)
+      worker.removeEventListener('message', handler)
+    }
 
-  const textColor = dark ? '#E5E7EB' : '#374151'
-  const gridColor = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
-  const isPie = type === 'doughnut'
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        cleanup()
+        reject(new Error('Chart render timed out'))
+      }
+    }, timeoutMs)
 
-  const chart = new Chart(ctx, {
-    type,
-    data,
-    options: {
-      responsive: false,
-      maintainAspectRatio: false,
-      animation: false,
-      layout: isPie ? { padding: { left: 0, right: 0, top: 0, bottom: 0 } } : undefined,
-      plugins: {
-        legend: {
-          display: false,
-        },
-        tooltip: { enabled: false },
-      },
-      scales: isPie
-        ? {}
-        : {
-            x: {
-              grid: { color: gridColor, drawBorder: false },
-              ticks: { color: textColor, font: { size: 10 } },
-            },
-            y: {
-              grid: { color: gridColor, drawBorder: false },
-              ticks: { color: textColor, font: { size: 10 }, callback: (v) => v as number },
-            },
-          },
-    } as any,
+    const handler = (e: MessageEvent) => {
+      if (e.data.id !== id) return
+      if (settled) return
+      settled = true
+      cleanup()
+
+      if (e.data.error) {
+        reject(new Error(e.data.error))
+      } else if (e.data.blob) {
+        const url = URL.createObjectURL(e.data.blob)
+        resolve(url)
+      } else {
+        resolve('')
+      }
+    }
+
+    worker.addEventListener('message', handler)
+    worker.postMessage({ id, chartType, chartData, width, height, dark })
   })
-
-  const dataUrl = canvas.toDataURL('image/png')
-  chart.destroy()
-  return dataUrl
 }
 
 // ── jsPDF helpers ────────────────────────────────────────────────────────────
@@ -234,18 +241,20 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   const [y, m] = month.split('-').map(Number)
 
   const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: any) => t.date >= `${month}-01` && t.date < `${y}-${String(m + 1).padStart(2, '0')}-01`
+    (t: Transaction) =>
+      t.date >= `${month}-01` && t.date < `${y}-${String(m + 1).padStart(2, '0')}-01`
   )
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
-  const catMap = new Map(cats.map((c: any) => [c.id, c]))
+  const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   const incomeByCat: Record<string, { name: string; color: string; total: number }> = {}
   const expenseByCat: Record<string, { name: string; color: string; total: number }> = {}
   let totalIncome = 0
   let totalExpense = 0
 
-  for (const t of txns as any[]) {
-    const cat = catMap.get(t.category_id)
+  for (const t of txns as Transaction[]) {
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
     const amt = Math.abs(t.amount)
@@ -267,7 +276,7 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   // Render charts offscreen
   const incomeChartUrl =
     incomeSorted.length > 0
-      ? await renderChartToDataUrl(
+      ? await renderChartViaWorker(
           'doughnut',
           {
             labels: incomeSorted.map((c) => c.name),
@@ -287,7 +296,7 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
 
   const expenseChartUrl =
     expenseSorted.length > 0
-      ? await renderChartToDataUrl(
+      ? await renderChartViaWorker(
           'doughnut',
           {
             labels: expenseSorted.map((c) => c.name),
@@ -332,12 +341,14 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
     const chartH = chartW * 0.6
     if (incomeChartUrl) {
       doc.addImage(incomeChartUrl, 'PNG', 15, posY, chartW, chartH)
+      URL.revokeObjectURL(incomeChartUrl)
       doc.setFontSize(10)
       doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
       doc.text('Income by Category', 15 + chartW / 2, posY + chartH + 12, { align: 'center' })
     }
     if (expenseChartUrl) {
       doc.addImage(expenseChartUrl, 'PNG', 15 + chartW + 15, posY, chartW, chartH)
+      URL.revokeObjectURL(expenseChartUrl)
       doc.setFontSize(10)
       doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
       doc.text('Expenses by Category', 15 + chartW + 15 + chartW / 2, posY + chartH + 12, {
@@ -404,10 +415,10 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
   const pid = getProfileId()
 
   const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: any) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
+    (t: Transaction) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
   )
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
-  const catMap = new Map(cats.map((c: any) => [c.id, c]))
+  const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   // Category breakdown
   const byCategory: Record<string, { name: string; color: string; total: number }> = {}
@@ -419,8 +430,9 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     monthly.push({ month: MONTHS_SHORT[m - 1], income: 0, expense: 0 })
   }
 
-  for (const t of txns as any[]) {
-    const cat = catMap.get(t.category_id)
+  for (const t of txns as Transaction[]) {
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
     const amt = Math.abs(t.amount)
@@ -447,7 +459,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
   // Render charts
   const doughnutUrl =
     topCategories.length > 0
-      ? await renderChartToDataUrl(
+      ? await renderChartViaWorker(
           'doughnut',
           {
             labels: topCategories.map((c) => c.name),
@@ -467,7 +479,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
 
   const barUrl =
     monthly.length > 0
-      ? await renderChartToDataUrl(
+      ? await renderChartViaWorker(
           'bar',
           {
             labels: monthly.map((m) => m.month),
@@ -496,7 +508,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
 
   const lineUrl =
     cashFlow.length > 0
-      ? await renderChartToDataUrl(
+      ? await renderChartViaWorker(
           'line',
           {
             labels: monthly.map((m) => m.month),
@@ -629,16 +641,18 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
   const db = await getDB()
   const pid = getProfileId()
   const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: any) => t.type === 'expense' && t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
+    (t: Transaction) =>
+      t.type === 'expense' && t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
   )
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
-  const catMap = new Map(cats.map((c: any) => [c.id, c]))
+  const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   const taxMap: Record<string, { count: number; total: number }> = {}
   const nonMap: Record<string, { count: number; total: number }> = {}
 
-  for (const t of txns as any[]) {
-    const cat = catMap.get(t.category_id)
+  for (const t of txns as Transaction[]) {
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const amt = Math.abs(t.amount)
     if (cat?.tax_deductible) {
@@ -677,12 +691,12 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
       {
         label: 'Non-Deductible',
         value: `€${fmt(nonTotal)}`,
-        color: dark ? ([148, 163, 184] as any) : ([100, 116, 139] as any),
+        color: (dark ? [148, 163, 184] : [100, 116, 139]) as [number, number, number],
       },
       {
         label: 'Total Expenses',
         value: `€${fmt(totalExp)}`,
-        color: dark ? ([226, 232, 240] as any) : ([30, 41, 59] as any),
+        color: (dark ? [226, 232, 240] : [30, 41, 59]) as [number, number, number],
       },
     ],
     42,
@@ -750,18 +764,19 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
   const db = await getDB()
   const pid = getProfileId()
   const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: any) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
+    (t: Transaction) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
   )
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
-  const catMap = new Map(cats.map((c: any) => [c.id, c]))
+  const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   const incomeMap: Record<string, { count: number; total: number }> = {}
   const expenseMap: Record<string, { count: number; total: number }> = {}
   let totalIncome = 0
   let totalExpense = 0
 
-  for (const t of txns as any[]) {
-    const cat = catMap.get(t.category_id)
+  for (const t of txns as Transaction[]) {
+    const cat =
+      t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const amt = Math.abs(t.amount)
     if (t.type === 'income') {

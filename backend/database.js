@@ -271,6 +271,7 @@ function migrate() {
       last_paid TEXT,
       last_paid_date TEXT,
       notes TEXT DEFAULT '',
+      type TEXT NOT NULL DEFAULT 'bill',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
@@ -489,6 +490,13 @@ function migrate() {
   if (!columnExists('bills', 'last_paid_date')) {
     try {
       db.exec('ALTER TABLE bills ADD COLUMN last_paid_date TEXT');
+    } catch (e) {}
+  }
+
+  // Migration: Add type column to bills table
+  if (!columnExists('bills', 'type')) {
+    try {
+      db.exec("ALTER TABLE bills ADD COLUMN type TEXT NOT NULL DEFAULT 'bill'");
     } catch (e) {}
   }
 
@@ -1472,7 +1480,7 @@ function seedSavingsGoals(profileId, config) {
 
 function seedBills(profileId, config) {
   const insertBill = db.prepare(
-    'INSERT INTO bills (name, amount, profile_id, due_date, next_due_date, recurring, category_id, last_paid_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO bills (name, amount, profile_id, due_date, next_due_date, recurring, category_id, last_paid_date, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   const bills = [
@@ -1481,12 +1489,16 @@ function seedBills(profileId, config) {
       amount: config.rent?.min || 1000,
       frequency: 'monthly',
       day_of_month: 1,
+      type: 'bill',
     },
-    { name: 'Electricity Bill', amount: 150, frequency: 'monthly', day_of_month: 15 },
-    { name: 'Natural Gas Bill', amount: 80, frequency: 'monthly', day_of_month: 20 },
-    { name: 'Internet Service', amount: 70, frequency: 'monthly', day_of_month: 5 },
-    { name: 'Car Insurance', amount: 120, frequency: 'monthly', day_of_month: 10 },
-    { name: 'Health Insurance', amount: 200, frequency: 'monthly', day_of_month: 1 },
+    { name: 'Electricity Bill', amount: 150, frequency: 'monthly', day_of_month: 15, type: 'bill' },
+    { name: 'Natural Gas Bill', amount: 80, frequency: 'monthly', day_of_month: 20, type: 'bill' },
+    { name: 'Internet Service', amount: 70, frequency: 'monthly', day_of_month: 5, type: 'subscription' },
+    { name: 'Car Insurance', amount: 120, frequency: 'monthly', day_of_month: 10, type: 'bill' },
+    { name: 'Health Insurance', amount: 200, frequency: 'monthly', day_of_month: 1, type: 'bill' },
+    { name: 'Netflix', amount: 15.99, frequency: 'monthly', day_of_month: 10, type: 'subscription' },
+    { name: 'Spotify', amount: 11.99, frequency: 'monthly', day_of_month: 15, type: 'subscription' },
+    { name: 'Cloud Storage', amount: 9.99, frequency: 'monthly', day_of_month: 20, type: 'subscription' },
   ];
 
   const currentYear = new Date().getFullYear();
@@ -1519,7 +1531,8 @@ function seedBills(profileId, config) {
       nextDueDate,
       1, // recurring
       null, // category_id
-      null // last_paid_date
+      null, // last_paid_date
+      bill.type || 'bill'
     );
   }
 }

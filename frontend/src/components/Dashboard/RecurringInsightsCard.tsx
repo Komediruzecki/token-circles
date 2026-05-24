@@ -2,7 +2,7 @@
  * Recurring Insights Card Component
  * Shows insights about recurring transactions
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createMemo, createSignal, For, onMount } from 'solid-js'
 import { api } from '../../core/api'
 import styles from './RecurringInsightsCard.module.css'
 
@@ -32,11 +32,12 @@ export default function RecurringInsightsCard() {
     }
   })
 
-  const upcoming = () =>
+  const upcoming = createMemo(() =>
     items()
       .filter((i) => i.next_date)
       .sort((a, b) => a.next_date!.localeCompare(b.next_date!))
       .slice(0, 5)
+  )
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
@@ -44,13 +45,13 @@ export default function RecurringInsightsCard() {
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-  const freqCounts = () => {
+  const freqCounts = createMemo(() => {
     const counts: Record<string, number> = {}
     for (const i of items()) {
       counts[i.frequency] = (counts[i.frequency] || 0) + 1
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])
-  }
+  })
 
   return (
     <div class={styles.card}>

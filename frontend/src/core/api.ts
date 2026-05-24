@@ -116,6 +116,14 @@ export class ApiClient {
         // Auth check 401s are expected when not logged in — don't log as errors
         const isAuthEndpoint = endpoint === '/auth/check' || endpoint === '/auth/me'
         if (!isAuthEndpoint || response.status !== 401) {
+          // Debug: trace POST /transactions failures
+          if (endpoint === '/transactions' && method === 'POST') {
+            console.error(
+              '[apiClient] POST /transactions failed',
+              { status: response.status, errorMsg, body: options.body },
+              'Stack:', new Error().stack
+            )
+          }
           logger.error(
             'API Error',
             { status: response.status, endpoint, message: errorMsg },
@@ -685,6 +693,20 @@ export class ApiClient {
   // ============ ANALYTICS & DASHBOARD ============
 
   /**
+   * Get min/max transaction years for the selected profiles.
+   * Uses the analytics distinct-years endpoint.
+   */
+  async getTransactionYears(): Promise<{ minYear: number; maxYear: number; years: number[] }> {
+    const res = await this.request<{ years: number[] }>('/analytics/distinct-years')
+    const years = res.years || []
+    return {
+      minYear: years.length > 0 ? Math.min(...years) : new Date().getFullYear(),
+      maxYear: years.length > 0 ? Math.max(...years) : new Date().getFullYear(),
+      years,
+    }
+  }
+
+  /**
    * Get dashboard metrics
    */
   async getDashboard(
@@ -983,12 +1005,20 @@ export class ApiClient {
     return this.request<Models.RecurringTransaction>(`/recurring/${id}`)
   }
 
-  createRecurring(data: Omit<Models.RecurringTransaction, 'id' | 'profile_id'>): Promise<Models.RecurringTransaction> {
+  createRecurring(
+    data: Omit<Models.RecurringTransaction, 'id' | 'profile_id'>
+  ): Promise<Models.RecurringTransaction> {
     return this.request<Models.RecurringTransaction>('/recurring', { method: 'POST', body: data })
   }
 
-  updateRecurring(id: number, data: Partial<Models.RecurringTransaction>): Promise<Models.RecurringTransaction> {
-    return this.request<Models.RecurringTransaction>(`/recurring/${id}`, { method: 'PUT', body: data })
+  updateRecurring(
+    id: number,
+    data: Partial<Models.RecurringTransaction>
+  ): Promise<Models.RecurringTransaction> {
+    return this.request<Models.RecurringTransaction>(`/recurring/${id}`, {
+      method: 'PUT',
+      body: data,
+    })
   }
 
   deleteRecurring(id: number): Promise<void> {
@@ -1017,32 +1047,27 @@ export const formatCurrency = (amount: number, currency: Models.Currency = 'EUR'
 }
 
 export const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr)
+  let date = new Date(dateStr)
+  // Handle Google Viz Date(Y,M,D) format where month is 0-indexed
+  if (isNaN(date.getTime())) {
+    const m = dateStr.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/)
+    if (m) {
+      date = new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]))
+    }
+  }
+  // Handle dd/mm/yyyy
+  if (isNaN(date.getTime())) {
+    const m = dateStr.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
+    if (m) {
+      date = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]))
+    }
+  }
+  if (isNaN(date.getTime())) return dateStr
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   })
-}
-
-export const formatMonth = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-}
-
-export const escapeHtml = (str: string): string => {
-  const div = document.createElement('div')
-  div.textContent = str
-  return div.innerHTML
-}
-
-export const hexToRgba = (hex: string, alpha = 1): string => {
-  if (!hex || !hex.startsWith('#')) return `rgba(255,255,255,${alpha})`
-  const h = hex.replace('#', '')
-  const r = parseInt(h.substring(0, 2), 16)
-  const g = parseInt(h.substring(2, 4), 16)
-  const b = parseInt(h.substring(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 import { addToast } from './toastStore'
@@ -1052,4 +1077,86 @@ export const toast = (
   type: 'info' | 'success' | 'error' | 'warning' = 'info'
 ): void => {
   addToast(message, type)
+}
+
+// Re-export for backward compatibility — prefer toast() for new code
+export const showToast = toast
+
+// ── HTTP verb helpers ─────────────────────────────────────────────────────────
+
+function getProfileIdForHeaders(): string {
+  const id = localStorage.getItem('currentProfileId')
+  return (id !== null ? parseInt(id, 10) : 1).toString()
+}
+
+function getHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'X-Profile-Id': getProfileIdForHeaders(),
+  }
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type')
+  if (contentType !== null && contentType.includes('application/json')) {
+    const data = (await response.json()) as T
+    if (!response.ok) {
+      const errorData = data as { error?: string } | undefined
+      throw new Error(errorData?.error || `Request failed with status ${response.status}`)
+    }
+    return data
+  }
+  throw new Error('Invalid response format')
+}
+
+export async function apiGet<T = unknown>(url: string): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'GET',
+    headers: getHeaders(),
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}
+
+export async function apiPost<T = unknown>(
+  url: string,
+  body: unknown,
+  options?: RequestInit
+): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+    ...options,
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}
+
+export async function apiPut<T = unknown>(
+  url: string,
+  body: unknown,
+  options?: RequestInit
+): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+    ...options,
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
+}
+
+export async function apiDelete<T = unknown>(url: string): Promise<T> {
+  const response = await apiFetch(url, {
+    credentials: 'include',
+    method: 'DELETE',
+    headers: { 'X-Profile-Id': getProfileIdForHeaders() },
+  })
+  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+  return parseJsonResponse<T>(response)
 }

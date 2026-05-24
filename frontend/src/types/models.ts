@@ -138,6 +138,40 @@ export interface CategoryAllocation {
   is_fully_allocated: boolean
 }
 
+export interface BudgetImprovement {
+  month: string
+  adherence_pct: number
+  total_budget: number
+  total_spent: number
+}
+
+export interface ZeroBasedAllocation {
+  category_id: CategoryId
+  category_name: string
+  category_color: string
+  amount: number
+  allocated: number
+  spent: number
+  remaining: number
+  percent_used: number
+  status: 'ok' | 'warning' | 'over'
+  is_fully_allocated: boolean
+}
+
+export interface BudgetSummaryResponse {
+  total_budget: number
+  total_spent: number
+  total_remaining: number
+  adherence_pct: number
+  allocations: ZeroBasedAllocation[]
+}
+
+export interface ZeroBasedResponse {
+  allocations: ZeroBasedAllocation[]
+  categories: ZeroBasedAllocation[]
+  summary: BudgetSummaryResponse
+}
+
 // ============ SAVINGS GOALS ============
 export interface SavingsGoal {
   id: GoalId
@@ -176,6 +210,15 @@ export interface LoanPrepayment {
   month: number
   amount: number
   note: string
+}
+
+export interface LoanDetail extends Loan {
+  prepayments: LoanPrepayment[]
+  rate_periods: LoanRatePeriod[]
+  monthly_payment: number
+  remaining_balance: number
+  total_paid: number
+  total_interest: number
 }
 
 // ============ RECURRING TRANSACTIONS ============
@@ -240,13 +283,6 @@ export interface ImportError {
 }
 
 // ============ RESPONSE TYPES ============
-export interface ApiResponse<T = unknown> {
-  error?: string
-  message?: string
-  ok?: boolean
-  data?: T
-}
-
 export interface PaginatedResponse<T> {
   items: T[]
   total: number
@@ -412,6 +448,45 @@ export interface StockPrice {
   dayHigh?: number
   dayLow?: number
   name?: string
+}
+
+// ============ ANALYTICS RESPONSES ============
+export interface CategoryTrendItem {
+  category_name: string
+  category_color: string
+  total: number
+  count: number
+  month?: string
+}
+
+export interface WeeklyTrendItem {
+  week_start: string
+  income: number
+  expense: number
+  count: number
+}
+
+export interface TransactionSummaryItem {
+  type: string
+  total: number
+  count: number
+}
+
+export interface SankeyData {
+  nodes: Array<{ name: string; category: string; color?: string }>
+  links: Array<{ source: string | number; target: string | number; value: number }>
+}
+
+export interface AnalyticsApiResponse {
+  weeks?: WeeklyTrendItem[]
+  trends?: CategoryTrendItem[]
+  categories?: CategoryTrendItem[]
+  summary?: TransactionSummaryItem[]
+  monthly?: Array<Record<string, unknown>>
+  items?: Transaction[]
+  transactions?: Transaction[]
+  sankey?: SankeyData
+  [key: string]: unknown
 }
 
 // ============ COMPONENT TYPES ============

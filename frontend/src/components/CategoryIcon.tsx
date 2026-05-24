@@ -163,9 +163,9 @@ const iconPatterns: [RegExp, IconDef][] = [
       path: 'M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zm4-4v4m4-4v4m4-4v4',
     },
   ],
-  // Housing / Rent / Mortgage
+  // Housing / Rent / Mortgage / Apartment
   [
-    /hous|rent|mortgage|home|lease|property|real\s*estate/i,
+    /hous|rent|mortgage|home|lease|property|real\s*estate|apartment/i,
     {
       path: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2zM9 22V12h6v10',
     },
@@ -303,6 +303,13 @@ const iconPatterns: [RegExp, IconDef][] = [
       path: 'M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
     },
   ],
+  // Bank / Banking / Fees
+  [
+    /bank|fee|finance|financial|reimburs/i,
+    {
+      path: 'M3 3h18v18H3V3zm4 18v-6h10v6M8 9h8m-4-2v4',
+    },
+  ],
   // Miscellaneous / Other / General / Uncategorized
   [
     /misc|other|general|uncategor|unknown|various|catch.?all/i,
@@ -312,21 +319,84 @@ const iconPatterns: [RegExp, IconDef][] = [
   ],
 ]
 
+// Short keywords that must appear as standalone words (with word boundaries)
+// to avoid false positives like "car" inside "card", "cat" inside "categorized", etc.
+const boundaryWords = new Set([
+  'car',
+  'cat',
+  'dog',
+  'pet',
+  'gas',
+  'fun',
+  'eat',
+  'eye',
+  'run',
+  'fit',
+  'gym',
+  'kid',
+  'vet',
+  'spa',
+  'tax',
+  'irs',
+  'fee',
+  'desk',
+  'cell',
+  'rent',
+  'nail',
+  'skin',
+  'hair',
+])
+
 function findIcon(categoryName: string): IconDef | null {
   const lower = categoryName.toLowerCase()
-  for (const [pattern, def] of iconPatterns) {
-    if (pattern.test(lower)) return def
+  patternLoop: for (const [pattern, def] of iconPatterns) {
+    if (!pattern.test(lower)) continue
+
+    // Accept the match if any non-boundary word appears (long words >4 chars,
+    // or short words not in the boundary set, are unlikely false positives)
+    const src = pattern.source
+    const words = src.split('|').map((w) => w.replace(/\\[s*?.]|[()]/g, '').replace(/\\b/g, ''))
+    const safeOk = words.some((w) => (w.length > 4 || !boundaryWords.has(w)) && lower.includes(w))
+    if (safeOk) return def
+
+    // For short keywords only, verify at least one matches with word boundaries
+    const shortWords = words.filter((w) => w.length <= 4 && boundaryWords.has(w))
+    if (shortWords.length > 0) {
+      const boundaryOk = shortWords.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))
+      if (boundaryOk) return def
+      continue patternLoop
+    }
+
+    // No short boundary words → accept the substring match
+    return def
   }
   return null
 }
 
-export function getCategorySvg(name: string, size = 18, icon?: string | null) {
-  let iconDef = icon ? iconNameMap[icon] : null
+// Stored icon values that are auto-assigned defaults (not user-chosen).
+// When a category has one of these, pattern matching takes priority.
+const defaultIconValues = new Set(['tag', 'folder', ''])
+const isDefaultIcon = (icon?: string | null) =>
+  icon === null || icon === undefined || defaultIconValues.has(icon)
 
-  if (!iconDef) {
-    const found = findIcon(name)
-    iconDef = found ?? fallbackIcon
+export function getCategorySvg(name: string, size = 18, icon?: string | null) {
+  let iconDef: IconDef | null = null
+
+  // If the stored icon was explicitly chosen by the user (not a default), use it
+  if (!isDefaultIcon(icon)) {
+    iconDef = iconNameMap[icon!]
   }
+
+  // Otherwise, try pattern matching on the category name
+  if (!iconDef) {
+    iconDef = findIcon(name)
+  }
+
+  // Finally, fall back to the generic fallback
+  if (!iconDef) {
+    iconDef = fallbackIcon
+  }
+
   return (
     <svg
       width={size}

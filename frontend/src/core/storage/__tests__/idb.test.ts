@@ -52,7 +52,7 @@ vi.mock('idb', () => ({
   openDB: vi.fn().mockResolvedValue(getMockDB()),
 }))
 
-import { getDB,IndexedDBAdapter } from '../idb.js'
+import { getDB, IndexedDBAdapter } from '../idb.js'
 
 describe('IndexedDBAdapter', () => {
   beforeEach(async () => {
@@ -159,12 +159,20 @@ describe('IndexedDBAdapter', () => {
   it('deleteAllTransactions clears all transactions', async () => {
     const adapter = new IndexedDBAdapter()
     await adapter.createTransaction({
-      type: 'expense', amount: 10, description: 'T1',
-      date: '2026-05-12', category_id: 1, profile_id: 1,
+      type: 'expense',
+      amount: 10,
+      description: 'T1',
+      date: '2026-05-12',
+      category_id: 1,
+      profile_id: 1,
     } as any)
     await adapter.createTransaction({
-      type: 'expense', amount: 20, description: 'T2',
-      date: '2026-05-12', category_id: 1, profile_id: 1,
+      type: 'expense',
+      amount: 20,
+      description: 'T2',
+      date: '2026-05-12',
+      category_id: 1,
+      profile_id: 1,
     } as any)
 
     await adapter.deleteAllTransactions()
@@ -174,7 +182,12 @@ describe('IndexedDBAdapter', () => {
 
   it('deleteAllCategories clears all categories', async () => {
     const adapter = new IndexedDBAdapter()
-    await adapter.createCategory({ name: 'Food', type: 'expense', color: '#F00', profile_id: 1 } as any)
+    await adapter.createCategory({
+      name: 'Food',
+      type: 'expense',
+      color: '#F00',
+      profile_id: 1,
+    } as any)
     await adapter.deleteAllCategories()
     const cats = await adapter.listCategories()
     expect(cats.length).toBe(0)

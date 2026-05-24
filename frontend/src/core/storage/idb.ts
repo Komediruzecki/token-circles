@@ -12,6 +12,7 @@ import type {
   ExportData,
   Goal,
   Loan,
+  LogEntry,
   Settings,
   StorageAdapter,
   Transaction,
@@ -19,44 +20,87 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 1
+const DB_VERSION = 8
 
-function upgradeSchema(db: IDBPDatabase) {
-  db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
+function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
+  // v1: base stores
+  if (oldVersion < 1) {
+    db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
 
-  const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
-  txns.createIndex('by_profile', 'profile_id')
-  txns.createIndex('by_date', 'date')
-  txns.createIndex('by_category', 'category_id')
-  txns.createIndex('by_type', 'type')
+    const txns = db.createObjectStore('transactions', { keyPath: 'id', autoIncrement: true })
+    txns.createIndex('by_profile', 'profile_id')
+    txns.createIndex('by_date', 'date')
+    txns.createIndex('by_category', 'category_id')
+    txns.createIndex('by_type', 'type')
 
-  const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
-  cats.createIndex('by_profile', 'profile_id')
-  cats.createIndex('by_type', 'type')
+    const cats = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true })
+    cats.createIndex('by_profile', 'profile_id')
+    cats.createIndex('by_type', 'type')
 
-  const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
-  accts.createIndex('by_profile', 'profile_id')
+    const accts = db.createObjectStore('accounts', { keyPath: 'id', autoIncrement: true })
+    accts.createIndex('by_profile', 'profile_id')
 
-  const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
-  budgets.createIndex('by_profile', 'profile_id')
+    const budgets = db.createObjectStore('budgets', { keyPath: 'id', autoIncrement: true })
+    budgets.createIndex('by_profile', 'profile_id')
 
-  const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
-  goals.createIndex('by_profile', 'profile_id')
+    const goals = db.createObjectStore('goals', { keyPath: 'id', autoIncrement: true })
+    goals.createIndex('by_profile', 'profile_id')
 
-  const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
-  loans.createIndex('by_profile', 'profile_id')
+    const loans = db.createObjectStore('loans', { keyPath: 'id', autoIncrement: true })
+    loans.createIndex('by_profile', 'profile_id')
 
-  const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
-  bh.createIndex('by_account', 'account_id')
+    const bh = db.createObjectStore('balanceHistory', { keyPath: 'id', autoIncrement: true })
+    bh.createIndex('by_account', 'account_id')
 
-  const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
-  receipts.createIndex('by_profile', 'profile_id')
-  receipts.createIndex('by_transaction', 'transaction_id')
+    const receipts = db.createObjectStore('receipts', { keyPath: 'id', autoIncrement: true })
+    receipts.createIndex('by_profile', 'profile_id')
+    receipts.createIndex('by_transaction', 'transaction_id')
 
-  const pf = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
-  pf.createIndex('by_profile', 'profile_id')
+    const pf = db.createObjectStore('portfolioHoldings', { keyPath: 'id', autoIncrement: true })
+    pf.createIndex('by_profile', 'profile_id')
 
-  db.createObjectStore('settings', { keyPath: 'key' })
+    db.createObjectStore('settings', { keyPath: 'key' })
+  }
+
+  // v2: bills store
+  if (oldVersion < 2) {
+    const bills = db.createObjectStore('bills', { keyPath: 'id', autoIncrement: true })
+    bills.createIndex('by_profile', 'profile_id')
+  }
+
+  // v3: housings store
+  if (oldVersion < 3) {
+    const housings = db.createObjectStore('housings', { keyPath: 'id', autoIncrement: true })
+    housings.createIndex('by_profile', 'profile_id')
+  }
+
+  // v4: recurring store
+  if (oldVersion < 4) {
+    const recurring = db.createObjectStore('recurring', { keyPath: 'id', autoIncrement: true })
+    recurring.createIndex('by_profile', 'profile_id')
+  }
+
+  // v5: tags store
+  if (oldVersion < 5) {
+    const tags = db.createObjectStore('tags', { keyPath: 'id', autoIncrement: true })
+    tags.createIndex('by_profile', 'profile_id')
+  }
+
+  // v6: logs store
+  if (oldVersion < 6) {
+    const logs = db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true })
+    logs.createIndex('by_level', 'level')
+    logs.createIndex('by_timestamp', 'timestamp')
+  }
+
+  // v7: categoryMappings store
+  if (oldVersion < 7) {
+    const cm = db.createObjectStore('categoryMappings', { keyPath: 'id', autoIncrement: true })
+    cm.createIndex('by_profile', 'profile_id')
+  }
+
+  // v8: no schema change — bills get `type` field via seed data and handler defaults.
+  // IndexedDB is schemaless so existing records default to type='bill' in application code.
 }
 
 let dbPromise: ReturnType<typeof openDB> | null = null
@@ -87,10 +131,62 @@ const DEFAULT_CATEGORIES = [
   { type: 'expense', name: 'Subscriptions', color: '#F43F5E', tax_deductible: false },
 ]
 
+interface BalanceAdjustment {
+  accountId: number
+  delta: number
+}
+
+/** Compute how a transaction affects account balances.
+ *  Returns an array of {accountId, delta} pairs.
+ *  Positive delta = add to balance, negative = subtract. */
+export function computeBalanceDeltas(tx: {
+  account_id?: number | null
+  transfer_account_id?: number | null
+  type: string
+  amount: number
+}): BalanceAdjustment[] {
+  const adj: BalanceAdjustment[] = []
+  if (tx.account_id) {
+    if (tx.type === 'transfer' && tx.transfer_account_id) {
+      adj.push({ accountId: tx.account_id, delta: -tx.amount })
+      adj.push({ accountId: tx.transfer_account_id, delta: tx.amount })
+    } else if (tx.type === 'transfer') {
+      adj.push({ accountId: tx.account_id, delta: -tx.amount })
+    } else if (tx.type === 'income' || tx.type === 'expense') {
+      adj.push({ accountId: tx.account_id, delta: tx.type === 'income' ? tx.amount : -tx.amount })
+    }
+  }
+  if (
+    !tx.account_id &&
+    tx.transfer_account_id &&
+    (tx.type === 'income' || tx.type === 'transfer')
+  ) {
+    adj.push({ accountId: tx.transfer_account_id, delta: tx.amount })
+  }
+  return adj
+}
+
 export class IndexedDBAdapter implements StorageAdapter {
   private getProfileId(): number {
     const stored = localStorage.getItem('currentProfileId')
     return stored ? parseInt(stored, 10) : 1
+  }
+
+  /**
+   * Get all selected profile IDs (for household/multi-profile view).
+   * Falls back to the single current profile ID if nothing stored.
+   */
+  getCurrentProfileIds(): number[] {
+    const stored = localStorage.getItem('selectedProfileIds')
+    if (stored) {
+      try {
+        const ids = JSON.parse(stored) as number[]
+        if (Array.isArray(ids) && ids.length > 0) return ids
+      } catch {
+        /* ignore */
+      }
+    }
+    return [this.getProfileId()]
   }
 
   // ---- Profiles ----
@@ -109,17 +205,12 @@ export class IndexedDBAdapter implements StorageAdapter {
     if (!hadProfiles) {
       localStorage.setItem('finance_had_profiles', '1')
       await seedDemoProfiles()
+      const seeded = await db.getAll('profiles')
+      if (seeded.length > 0) return seeded[0].id
     }
-    const newProfiles = await db.getAll('profiles')
-    if (newProfiles.length > 0) {
-      const stored = localStorage.getItem('currentProfileId')
-      if (stored) {
-        const parsed = parseInt(stored, 10)
-        if (newProfiles.find((p) => p.id === parsed)) return parsed
-      }
-      return newProfiles[0].id
-    }
-    return this.createProfile('My Finances')
+    // If user deleted all profiles, don't force-create one — return 0 so UI can handle it
+    localStorage.removeItem('currentProfileId')
+    return 0
   }
 
   async createProfile(name: string): Promise<number> {
@@ -147,8 +238,12 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async listTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
     const db = await getDB()
-    const profileId = await this.getCurrentProfileId()
-    let txns = await db.getAllFromIndex('transactions', 'by_profile', profileId)
+    const pids = this.getCurrentProfileIds()
+    let txns: Transaction[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('transactions', 'by_profile', pid)
+      txns.push(...rows)
+    }
 
     if (filters) {
       if (filters.type) txns = txns.filter((t) => t.type === filters.type)
@@ -174,34 +269,73 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const data = { ...tx }
     if (!data.profile_id) data.profile_id = await this.getCurrentProfileId()
-    return (await db.add('transactions', data)) as number
+    const id = (await db.add('transactions', data)) as number
+    for (const adj of computeBalanceDeltas(data)) {
+      await this._adjustAccountBalance(adj.accountId, adj.delta)
+    }
+    return id
   }
 
   async updateTransaction(id: number, tx: Partial<Transaction>): Promise<void> {
     const db = await getDB()
     const existing = await db.get('transactions', id)
-    if (existing) {
-      Object.assign(existing, tx)
-      await db.put('transactions', existing)
+    if (!existing) return
+    for (const adj of computeBalanceDeltas(existing)) {
+      await this._adjustAccountBalance(adj.accountId, -adj.delta)
+    }
+    Object.assign(existing, tx)
+    await db.put('transactions', existing)
+    for (const adj of computeBalanceDeltas(existing)) {
+      await this._adjustAccountBalance(adj.accountId, adj.delta)
     }
   }
 
   async deleteTransaction(id: number): Promise<void> {
     const db = await getDB()
+    const old = await db.get('transactions', id)
+    if (old) {
+      for (const adj of computeBalanceDeltas(old)) {
+        await this._adjustAccountBalance(adj.accountId, -adj.delta)
+      }
+    }
     await db.delete('transactions', id)
   }
 
   async deleteAllTransactions(): Promise<void> {
     const db = await getDB()
-    await db.clear('transactions')
+    const pids = this.getCurrentProfileIds()
+    for (const pid of pids) {
+      const accts = await db.getAllFromIndex('accounts', 'by_profile', pid)
+      for (const a of accts) {
+        a.balance = a.starting_balance ?? 0
+        await db.put('accounts', a)
+      }
+      const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
+      for (const t of txns) {
+        await db.delete('transactions', t.id)
+      }
+    }
+  }
+
+  private async _adjustAccountBalance(accountId: number, delta: number): Promise<void> {
+    const db = await getDB()
+    const acct = await db.get('accounts', accountId)
+    if (acct) {
+      acct.balance = (acct.balance ?? 0) + delta
+      await db.put('accounts', acct)
+    }
   }
 
   // ---- Categories ----
 
   async listCategories(type?: 'income' | 'expense'): Promise<Category[]> {
     const db = await getDB()
-    const profileId = await this.getCurrentProfileId()
-    let cats = await db.getAllFromIndex('categories', 'by_profile', profileId)
+    const pids = this.getCurrentProfileIds()
+    let cats: Category[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('categories', 'by_profile', pid)
+      cats.push(...rows)
+    }
     if (type) cats = cats.filter((c) => c.type === type)
     return cats
   }
@@ -229,15 +363,26 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async deleteAllCategories(): Promise<void> {
     const db = await getDB()
-    await db.clear('categories')
+    const pids = this.getCurrentProfileIds()
+    for (const pid of pids) {
+      const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+      for (const c of cats) {
+        await db.delete('categories', c.id)
+      }
+    }
   }
 
   // ---- Accounts ----
 
   async listAccounts(): Promise<Account[]> {
     const db = await getDB()
-    const profileId = await this.getCurrentProfileId()
-    return db.getAllFromIndex('accounts', 'by_profile', profileId)
+    const pids = this.getCurrentProfileIds()
+    const result: Account[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('accounts', 'by_profile', pid)
+      result.push(...rows)
+    }
+    return result
   }
 
   async createAccount(account: Account): Promise<number> {
@@ -265,8 +410,13 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async listBudgets(): Promise<Budget[]> {
     const db = await getDB()
-    const profileId = await this.getCurrentProfileId()
-    return db.getAllFromIndex('budgets', 'by_profile', profileId)
+    const pids = this.getCurrentProfileIds()
+    const result: Budget[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('budgets', 'by_profile', pid)
+      result.push(...rows)
+    }
+    return result
   }
 
   async createBudget(budget: Budget): Promise<number> {
@@ -294,8 +444,13 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async listGoals(): Promise<Goal[]> {
     const db = await getDB()
-    const profileId = await this.getCurrentProfileId()
-    return db.getAllFromIndex('goals', 'by_profile', profileId)
+    const pids = this.getCurrentProfileIds()
+    const result: Goal[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('goals', 'by_profile', pid)
+      result.push(...rows)
+    }
+    return result
   }
 
   async createGoal(goal: Goal): Promise<number> {
@@ -323,8 +478,13 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async listLoans(): Promise<Loan[]> {
     const db = await getDB()
-    const profileId = await this.getCurrentProfileId()
-    return db.getAllFromIndex('loans', 'by_profile', profileId)
+    const pids = this.getCurrentProfileIds()
+    const result: Loan[] = []
+    for (const pid of pids) {
+      const rows = await db.getAllFromIndex('loans', 'by_profile', pid)
+      result.push(...rows)
+    }
+    return result
   }
 
   async createLoan(loan: Loan): Promise<number> {
@@ -377,6 +537,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       primary_currency: 'EUR',
     }
     for (const s of all) {
+      if (typeof s.key === 'string' && s.key.startsWith('__cache__')) continue
       result[s.key] = s.value
     }
     return result as unknown as Settings
@@ -519,6 +680,11 @@ export class IndexedDBAdapter implements StorageAdapter {
       'profiles',
       'portfolioHoldings',
       'settings',
+      'bills',
+      'housings',
+      'recurring',
+      'tags',
+      'logs',
     ]
     for (const store of stores) {
       try {
@@ -529,6 +695,50 @@ export class IndexedDBAdapter implements StorageAdapter {
         // Skip stores that don't exist (schema mismatch)
       }
     }
+    // Clear profile-related localStorage so the app doesn't reference stale IDs
+    localStorage.removeItem('currentProfileId')
+    localStorage.removeItem('selectedProfileIds')
+    // Also clear init flag so demo profiles re-seed on next init
+    localStorage.removeItem('finance_had_profiles')
+  }
+
+  // ---- Logs ----
+
+  async addLog(entry: {
+    timestamp: string
+    level: string
+    source: string
+    error: string
+    stack?: string | null
+    request?: Record<string, unknown> | null
+  }): Promise<number> {
+    const db = await getDB()
+    const id = (await db.add('logs', entry)) as number
+    const all = await db.getAll('logs')
+    if (all.length > 500) {
+      const sorted = all.sort((a, b) => (a.id as number) - (b.id as number))
+      for (const e of sorted.slice(0, all.length - 500)) {
+        await db.delete('logs', e.id)
+      }
+    }
+    return id
+  }
+
+  async getLogs(query: { level?: string; limit?: number; offset?: number }): Promise<LogEntry[]> {
+    const db = await getDB()
+    let logs = await db.getAll('logs')
+    if (query.level) {
+      logs = logs.filter((l) => l.level === query.level)
+    }
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    const offset = query.offset ?? 0
+    const limit = query.limit ?? 50
+    return logs.slice(offset, offset + limit)
+  }
+
+  async clearLogs(): Promise<void> {
+    const db = await getDB()
+    await db.clear('logs')
   }
 }
 
@@ -571,7 +781,9 @@ const MONTHLY_EXPENSES = [
 export async function seedDemoProfiles(): Promise<void> {
   const db = await getDB()
   const existingProfiles = await db.getAll('profiles')
-  if (existingProfiles.length > 0) return
+  // Check if any demo profile name already exists (not just count)
+  const existingNames = new Set(existingProfiles.map((p: { name: string }) => p.name))
+  if (DEMO_PROFILES.some((dp) => existingNames.has(dp.name))) return
 
   // Inline seed helper so we don't need to import
   async function seedCats(profileId: number) {
@@ -776,6 +988,281 @@ export async function seedDemoProfiles(): Promise<void> {
         profile_id: profileId,
       })
     }
+
+    // ── Extra accounts for Mid and High tiers ──
+    if (!profile.name.includes('Low')) {
+      await db.add('accounts', {
+        name: 'Investment Account',
+        type: 'investment',
+        currency: 'EUR',
+        balance: profile.name.includes('High') ? 150000 : 25000,
+        starting_balance: profile.name.includes('High') ? 120000 : 20000,
+        starting_balance_date: '2020-01-01',
+        notes: '',
+        profile_id: profileId,
+      })
+    }
+    if (profile.name.includes('High')) {
+      await db.add('accounts', {
+        name: 'Retirement 401k',
+        type: 'retirement',
+        currency: 'EUR',
+        balance: 180000,
+        starting_balance: 100000,
+        starting_balance_date: '2015-01-01',
+        notes: 'Tax-advantaged retirement account',
+        profile_id: profileId,
+      })
+    }
+
+    // ── Additional loans ──
+    if (profile.name.includes('High')) {
+      await db.add('loans', {
+        name: 'Investment Property Loan',
+        principal: 200000,
+        interest_rate: 4.2,
+        start_date: '2023-06-01',
+        term_months: 240,
+        profile_id: profileId,
+      })
+    }
+    if (!profile.name.includes('Low')) {
+      await db.add('loans', {
+        name: profile.name.includes('High') ? 'Luxury Car Lease' : 'Auto Loan',
+        principal: profile.name.includes('High') ? 55000 : 18000,
+        interest_rate: profile.name.includes('High') ? 3.9 : 5.2,
+        start_date: profile.name.includes('High') ? '2024-01-15' : '2022-08-01',
+        term_months: profile.name.includes('High') ? 48 : 60,
+        profile_id: profileId,
+      })
+    }
+
+    // ── Bills ──
+    const bills = profile.name.includes('High')
+      ? [
+          {
+            name: 'Mortgage Payment',
+            amount: Math.round(profile.income * 0.28),
+            dueDay: 1,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Monthly mortgage',
+            category: 'Housing',
+          },
+          {
+            name: 'Electricity Bill',
+            amount: 180,
+            dueDay: 15,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Monthly electricity',
+            category: 'Utilities',
+          },
+          {
+            name: 'Natural Gas',
+            amount: 95,
+            dueDay: 20,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Monthly gas',
+            category: 'Utilities',
+          },
+          {
+            name: 'Internet Service',
+            amount: 80,
+            dueDay: 5,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Fiber internet',
+            category: 'Subscriptions',
+            type: 'subscription',
+          },
+          {
+            name: 'Health Insurance',
+            amount: 420,
+            dueDay: 1,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Health coverage',
+            category: 'Insurance',
+          },
+          {
+            name: 'Car Insurance',
+            amount: 180,
+            dueDay: 10,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Auto coverage',
+            category: 'Insurance',
+          },
+          {
+            name: 'Netflix',
+            amount: 15.99,
+            dueDay: 12,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Premium plan',
+            category: 'Subscriptions',
+            type: 'subscription',
+          },
+          {
+            name: 'Spotify',
+            amount: 11.99,
+            dueDay: 18,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: 'Family plan',
+            category: 'Subscriptions',
+            type: 'subscription',
+          },
+          {
+            name: 'Cloud Storage',
+            amount: 9.99,
+            dueDay: 25,
+            recurring: 1,
+            frequency: 'monthly',
+            notes: '2TB plan',
+            category: 'Subscriptions',
+            type: 'subscription',
+          },
+        ]
+      : profile.name.includes('Mid')
+        ? [
+            {
+              name: 'Rent Payment',
+              amount: Math.round(profile.income * 0.3),
+              dueDay: 1,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly rent',
+              category: 'Housing',
+            },
+            {
+              name: 'Electricity Bill',
+              amount: 130,
+              dueDay: 15,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly electricity',
+              category: 'Utilities',
+            },
+            {
+              name: 'Internet Service',
+              amount: 60,
+              dueDay: 5,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Home internet',
+              category: 'Subscriptions',
+              type: 'subscription',
+            },
+            {
+              name: 'Car Insurance',
+              amount: 120,
+              dueDay: 10,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Auto coverage',
+              category: 'Insurance',
+            },
+            {
+              name: 'Netflix',
+              amount: 15.99,
+              dueDay: 14,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Standard plan',
+              category: 'Subscriptions',
+              type: 'subscription',
+            },
+            {
+              name: 'Spotify',
+              amount: 11.99,
+              dueDay: 20,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Individual plan',
+              category: 'Subscriptions',
+              type: 'subscription',
+            },
+          ]
+        : [
+            {
+              name: 'Rent Payment',
+              amount: Math.round(profile.income * 0.35),
+              dueDay: 1,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly rent',
+              category: 'Housing',
+            },
+            {
+              name: 'Electricity Bill',
+              amount: 90,
+              dueDay: 15,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Monthly electricity',
+              category: 'Utilities',
+            },
+            {
+              name: 'Phone Plan',
+              amount: 35,
+              dueDay: 5,
+              recurring: 1,
+              frequency: 'monthly',
+              notes: 'Mobile phone',
+              category: 'Subscriptions',
+              type: 'subscription',
+            },
+          ]
+
+    for (const bill of bills) {
+      const dueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(bill.dueDay).padStart(2, '0')}`
+      await db.add('bills', {
+        name: bill.name,
+        amount: bill.amount,
+        due_date: dueDate,
+        recurring: bill.recurring,
+        frequency: bill.frequency,
+        notes: bill.notes,
+        is_active: 1,
+        profile_id: profileId,
+        type: (bill as any).type || 'bill',
+      })
+    }
+
+    // ── Budgets ──
+    const budgetCategories = [
+      { name: 'Housing', pct: 0.37 },
+      { name: 'Food', pct: 0.21 },
+      { name: 'Transportation', pct: 0.11 },
+      { name: 'Entertainment', pct: 0.07 },
+      { name: 'Shopping', pct: 0.06 },
+      { name: 'Subscriptions', pct: 0.05 },
+    ]
+    for (const bc of budgetCategories) {
+      const cat = catByName(bc.name)
+      if (!cat) continue
+      const budgetAmount = Math.round(profile.income * profile.spendFraction * bc.pct)
+      await db.add('budgets', {
+        category_id: cat.id,
+        amount: budgetAmount,
+        period: 'monthly',
+        start_date: `${now.getFullYear()}-01-01`,
+        end_date: null,
+        rollover_enabled: 1,
+        rollover_amount: 0,
+        profile_id: profileId,
+      })
+    }
+
+    // ── Emergency fund config ──
+    const monthlyExpenses = Math.round(profile.income * profile.spendFraction)
+    await db.put('settings', {
+      key: `emergency_fund_config_${profileId}`,
+      value: JSON.stringify({ monthly_expenses: monthlyExpenses, profile_id: profileId }),
+    })
   }
 
   // Set current profile to the mid-income (second) profile

@@ -2,7 +2,7 @@
  * Auto Categorize Modal Component
  * Suggests categories based on description patterns and allows user to accept/reject
  */
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import { api } from '../core/api'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
@@ -86,7 +86,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
     })
   })
 
-  const uncategorized = props.uncategorizedTransactions()
+  const uncategorized = createMemo(() => props.uncategorizedTransactions())
 
   return (
     <div
@@ -119,7 +119,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
         <div class={autoCategorizeModalStyles.content}>
           <div class={autoCategorizeModalStyles.stats}>
             <span class={autoCategorizeModalStyles.statItem}>
-              {uncategorized.length} uncategorized
+              {uncategorized().length} uncategorized
             </span>
             <span class={autoCategorizeModalStyles.statItem}>
               {Object.keys(pendingUpdates()).length} selected
@@ -128,7 +128,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
 
           {loading() ? (
             <div class={autoCategorizeModalStyles.loading}>Loading category suggestions...</div>
-          ) : uncategorized.length === 0 ? (
+          ) : uncategorized().length === 0 ? (
             <div class={autoCategorizeModalStyles.empty}>
               <svg
                 width="48"
@@ -144,7 +144,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
             </div>
           ) : (
             <div class={autoCategorizeModalStyles.transactionList}>
-              {uncategorized.map((tx) => {
+              {uncategorized().map((tx) => {
                 const matching = findMatchingCategory(tx.description)
                 const isSelected = tx.id in pendingUpdates()
 

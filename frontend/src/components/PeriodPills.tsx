@@ -2,6 +2,7 @@
  * Period Pills Component
  * Quick-select period buttons for dashboard
  */
+import { createMemo } from 'solid-js'
 import periodPillsStyles from './PeriodPills.module.css'
 
 export interface PeriodPill {
@@ -29,11 +30,11 @@ const DEFAULT_PERIODS: PeriodPill[] = [
 ]
 
 export function PeriodPills(props: PeriodPillsProps) {
-  const periods = props.periods || DEFAULT_PERIODS
+  const periods = createMemo(() => props.periods || DEFAULT_PERIODS)
 
   return (
     <div class={periodPillsStyles.pillsContainer}>
-      {periods.map((period) => (
+      {periods().map((period) => (
         <button
           class={`${periodPillsStyles.pill} ${props.value === period.id ? periodPillsStyles.pillActive : ''}`}
           onClick={() => {

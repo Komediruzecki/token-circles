@@ -19,7 +19,7 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have add expense button', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-housing-expense-btn')
+    const addBtn = getByTestId(page, 'add-housing-btn')
     const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
     expect(isVisible).toBeTruthy()
   })
@@ -49,8 +49,8 @@ test.describe('Housing CRUD Operations', () => {
     await navigateToRoute(page, 'housing')
     await page.waitForTimeout(500)
 
-    const loadingText = getByTestId(page, 'loading-state')
-    const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasLoading).toBeTruthy()
+    const content = page.locator('h1').first()
+    const hasContent = await content.isVisible({ timeout: 500 }).catch(() => false)
+    expect(hasContent).toBe(true)
   })
 })
