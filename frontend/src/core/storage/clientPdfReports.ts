@@ -608,13 +608,13 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     posY += lineDisplayH + 22
   }
 
-  // Monthly breakdown table
+  // Monthly breakdown table — columns fill full box width (565px)
   doc.addPage()
   addSectionTable(
     doc,
     'Monthly Breakdown',
     ['Month', 'Income', 'Expenses', 'Net', 'Running Bal.'],
-    [80, 100, 100, 100, 100],
+    [90, 118, 118, 118, 121],
     monthly.map((m, i) => {
       const n = m.income - m.expense
       const running = monthly.slice(0, i + 1).reduce((s, x) => s + x.income - x.expense, 0)
