@@ -904,7 +904,15 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
     // Validate request body against Zod schemas
     if (body !== null && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
       const validationError = validateBody(method, `/api${path}`, body)
-      if (validationError) return validationError
+      if (validationError) {
+        // Debug: log what triggered the validation failure to find the culprit
+        console.error(
+          '[routeApiRequest] Validation failed',
+          { method, path: `/api${path}`, body },
+          'Stack:', new Error().stack
+        )
+        return validationError
+      }
     }
 
     return route.handler({ method, path: `/api${path}`, params, query, body })

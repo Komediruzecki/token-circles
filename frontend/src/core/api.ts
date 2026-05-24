@@ -116,6 +116,14 @@ export class ApiClient {
         // Auth check 401s are expected when not logged in — don't log as errors
         const isAuthEndpoint = endpoint === '/auth/check' || endpoint === '/auth/me'
         if (!isAuthEndpoint || response.status !== 401) {
+          // Debug: trace POST /transactions failures
+          if (endpoint === '/transactions' && method === 'POST') {
+            console.error(
+              '[apiClient] POST /transactions failed',
+              { status: response.status, errorMsg, body: options.body },
+              'Stack:', new Error().stack
+            )
+          }
           logger.error(
             'API Error',
             { status: response.status, endpoint, message: errorMsg },

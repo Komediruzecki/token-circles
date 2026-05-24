@@ -35,6 +35,7 @@ interface SubscriptionCardProps {
   onMarkPaid: (id: number) => void
   onPause: (id: number) => void
   onDelete: (id: number) => void
+  onEdit: (id: number) => void
   markingPaid: () => Set<number>
 }
 
@@ -162,6 +163,13 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
             Pause
           </button>
         </Show>
+        <button
+          class={`${styles.actionBtn} ${styles.actionGhost}`}
+          onClick={() => { props.onEdit(sub().id); }}
+          title="Edit subscription"
+        >
+          Edit
+        </button>
         <ConfirmButton
           class={`${styles.actionBtn} ${styles.actionGhost}`}
           onConfirm={() => { props.onDelete(sub().id); }}

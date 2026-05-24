@@ -100,6 +100,7 @@ export default function Bills() {
   const [loading, setLoading] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
+  const [editingId, setEditingId] = createSignal<number | null>(null)
   const [formData, setFormData] = createSignal({
     name: '',
     amount: '',
@@ -221,9 +222,16 @@ export default function Bills() {
     }
 
     try {
-      await apiPost('/api/bills', data)
-      showToast('Bill saved successfully', 'success')
+      const id = editingId()
+      if (id) {
+        await apiPut(`/api/bills/${id}`, data)
+        showToast('Bill updated', 'success')
+      } else {
+        await apiPost('/api/bills', data)
+        showToast('Bill saved', 'success')
+      }
       setShowAddModal(false)
+      setEditingId(null)
       setFormData({
         name: '',
         amount: '',
@@ -238,6 +246,23 @@ export default function Bills() {
       console.error('Failed to save bill:', err)
       showToast('Failed to save bill', 'error')
     }
+  }
+
+  // Open edit modal pre-filled with bill data
+  const openEditModal = (idOrBill: number | Bill) => {
+    const bill = typeof idOrBill === 'number' ? bills().find((b) => b.id === idOrBill) : idOrBill
+    if (!bill) return
+    setEditingId(bill.id)
+    setFormData({
+      name: bill.name,
+      amount: bill.amount.toString(),
+      due_date: bill.due_date,
+      category: bill.category || '',
+      frequency: bill.frequency,
+      autopay: bill.autopay,
+      type: bill.type || 'bill',
+    })
+    setShowAddModal(true)
   }
 
   const [markingPaid, setMarkingPaid] = createSignal<Set<number>>(new Set())
@@ -332,8 +357,13 @@ export default function Bills() {
             data-test-id="add-bill-btn"
             class={styles.btnPrimary}
             onClick={() => {
+              setEditingId(null)
               setFormData({
                 ...formData(),
+                name: '',
+                amount: '',
+                due_date: '',
+                category: '',
                 type: billTab() === 'subscriptions' ? 'subscription' : 'bill',
               })
               setShowAddModal(true)
@@ -430,6 +460,7 @@ export default function Bills() {
                           onMarkPaid={markPaid}
                           onPause={pauseSubscription}
                           onDelete={deleteBill}
+                          onEdit={openEditModal}
                           markingPaid={markingPaid}
                         />
                       )}
@@ -464,6 +495,7 @@ export default function Bills() {
                         await loadBills()
                       }}
                       onDelete={deleteBill}
+                      onEdit={openEditModal}
                       markingPaid={markingPaid}
                     />
                   )}
@@ -479,6 +511,7 @@ export default function Bills() {
               <button
                 class={styles.btnPrimary}
                 onClick={() => {
+                  setEditingId(null)
                   setFormData({
                     name: '',
                     amount: '',
@@ -504,7 +537,8 @@ export default function Bills() {
             data-test-id="bills-add-btn-empty"
             class={styles.btnPrimary}
             onClick={() => {
-              setFormData({ ...formData(), type: 'bill' })
+              setEditingId(null)
+              setFormData({ name: '', amount: '', due_date: '', category: '', frequency: 'monthly', autopay: false, type: 'bill' })
               setShowAddModal(true)
             }}
           >
@@ -582,14 +616,22 @@ export default function Bills() {
                         class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
                       >
                         <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
-                        <button
-                          data-test-id="bill-mark-paid-btn"
-                          class={`${styles.btnPrimary} ${styles.btnSm}`}
-                          onClick={() => markPaid(bill.id)}
-                          disabled={markingPaid().has(bill.id)}
-                        >
-                          {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
-                        </button>
+                        <div class={styles.billActions}>
+                          <button
+                            class={`${styles.btnPrimary} ${styles.btnSm}`}
+                            onClick={() => markPaid(bill.id)}
+                            disabled={markingPaid().has(bill.id)}
+                          >
+                            {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
+                          </button>
+                          <button
+                            class={`${styles.btnGhost} ${styles.btnSm}`}
+                            onClick={() => { openEditModal(bill); }}
+                            title="Edit bill"
+                          >
+                            Edit
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -668,6 +710,13 @@ export default function Bills() {
                       <div class={styles.billAmount}>
                         <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
                         <div class={styles.billActions}>
+                          <button
+                            class={`${styles.btnGhost} ${styles.btnSm}`}
+                            onClick={() => { openEditModal(bill); }}
+                            title="Edit bill"
+                          >
+                            Edit
+                          </button>
                           {!bill.paid ? (
                             <button
                               data-test-id="bill-mark-paid-btn"
@@ -714,7 +763,7 @@ export default function Bills() {
         <div
           class={styles.modalOverlay}
           onclick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false)
+            if (e.target === e.currentTarget) { setShowAddModal(false); setEditingId(null) }
           }}
         >
           <div
@@ -724,8 +773,8 @@ export default function Bills() {
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>Add Bill</h3>
-              <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
+              <h3 class={styles.modalTitle}>{editingId() ? 'Edit' : 'Add'} {formData().type === 'subscription' ? 'Subscription' : 'Bill'}</h3>
+              <button class={styles.modalClose} onClick={() => { setShowAddModal(false); setEditingId(null) }}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -851,7 +900,7 @@ export default function Bills() {
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
-                  Add Bill
+                  {editingId() ? 'Update' : 'Add'} {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
                 </button>
               </div>
             </form>
