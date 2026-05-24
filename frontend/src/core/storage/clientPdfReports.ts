@@ -116,22 +116,28 @@ function addTitle(doc: jsPDF, title: string, subtitle: string, dark: boolean) {
   const sc = dark ? '#94a3b8' : '#64748b'
   doc.setTextColor(tc)
   doc.setFontSize(20)
-  doc.text(title, doc.internal.pageSize.getWidth() / 2, 25, { align: 'center' })
+  doc.text(title, doc.internal.pageSize.getWidth() / 2, 30, { align: 'center' })
   doc.setFontSize(11)
   doc.setTextColor(sc)
-  doc.text(subtitle, doc.internal.pageSize.getWidth() / 2, 33, { align: 'center' })
+  doc.text(subtitle, doc.internal.pageSize.getWidth() / 2, 42, { align: 'center' })
+  // Draw a separator line below the title
+  doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
+  doc.line(15, 48, doc.internal.pageSize.getWidth() - 15, 48)
 }
 
 function addSummaryBox(
   doc: jsPDF,
   items: { label: string; value: string; color: [number, number, number] }[],
   y: number,
-  dark: boolean
+  dark: boolean,
+  title?: string
 ): number {
   const pageW = doc.internal.pageSize.getWidth()
   const boxW = pageW - 30
   const colW = boxW / items.length
-  const boxH = 32
+  const hasTitle = !!title
+  const titleH = hasTitle ? 16 : 0
+  const boxH = 32 + titleH
   const x = 15
 
   // Background
@@ -139,24 +145,32 @@ function addSummaryBox(
   doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
   doc.roundedRect(x, y, boxW, boxH, 4, 4, 'FD')
 
+  // Title
+  if (hasTitle) {
+    doc.setFontSize(12)
+    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
+    doc.text(title.toUpperCase(), x + boxW / 2, y + 14, { align: 'center' })
+  }
+
   items.forEach((item, i) => {
     const cx = x + i * colW
+    const oy = titleH
     // Divider
     if (i > 0) {
       doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
-      doc.line(cx, y + 4, cx, y + boxH - 4)
+      doc.line(cx, y + oy + 4, cx, y + boxH - 4)
     }
     // Label
     doc.setFontSize(9)
     doc.setTextColor(dark ? 148 : 100, dark ? 163 : 116, dark ? 184 : 139)
-    doc.text(item.label.toUpperCase(), cx + colW / 2, y + 12, { align: 'center' })
+    doc.text(item.label.toUpperCase(), cx + colW / 2, y + oy + 12, { align: 'center' })
     // Value
     doc.setFontSize(16)
     doc.setTextColor(item.color[0], item.color[1], item.color[2])
-    doc.text(item.value, cx + colW / 2, y + 26, { align: 'center' })
+    doc.text(item.value, cx + colW / 2, y + oy + 26, { align: 'center' })
   })
 
-  return y + boxH + 12
+  return y + boxH + 16
 }
 
 function addSectionTable(
@@ -170,67 +184,74 @@ function addSectionTable(
   color?: [number, number, number]
 ) {
   const pageW = doc.internal.pageSize.getWidth()
-  const x = 15
-  const boxW = pageW - 30
+  const totalW = colWidths.reduce((s, w) => s + w, 0)
+  const x = (pageW - totalW) / 2
+  const boxW = totalW
+  const rowH = 10
+  const headerH = 10
+
+  // Card background
+  const totalH = (title ? 14 : 0) + headerH + rows.length * rowH + 6
+  doc.setFillColor(dark ? 30 : 255, dark ? 41 : 255, dark ? 59 : 255)
+  doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
+  doc.roundedRect(x, y, boxW, totalH, 3, 3, 'FD')
 
   // Section title
   if (title) {
-    doc.setFontSize(14)
+    doc.setFontSize(13)
     doc.setTextColor(
-      color?.[0] ?? (dark ? 227 : 30),
+      color?.[0] ?? (dark ? 226 : 30),
       color?.[1] ?? (dark ? 232 : 41),
       color?.[2] ?? (dark ? 240 : 59)
     )
-    doc.text(title, x, y + 8)
+    doc.text(title, x + 10, y + 10)
     y += 14
   }
 
   // Table header
   doc.setFillColor(dark ? 51 : 241, dark ? 65 : 245, dark ? 85 : 249)
-  doc.rect(x, y, boxW, 9, 'F')
+  doc.rect(x + 1, y, boxW - 2, headerH, 'F')
   doc.setFontSize(9)
   doc.setTextColor(dark ? 148 : 71, dark ? 163 : 85, dark ? 184 : 95)
   let cx = x
   columns.forEach((col, i) => {
     const align: 'left' | 'right' = i === 0 ? 'left' : 'right'
-    const padding = align === 'left' ? 6 : -6
+    const padding = align === 'left' ? 8 : -8
     doc.text(
       col.toUpperCase(),
       cx + (align === 'left' ? padding : colWidths[i] + padding),
-      y + 6.5,
+      y + 7.2,
       { align }
     )
     cx += colWidths[i]
   })
-  y += 9
+  y += headerH
 
   // Rows
   rows.forEach((row, ri) => {
     if (ri % 2 === 0) {
       doc.setFillColor(dark ? 26 : 248, dark ? 34 : 250, dark ? 50 : 252)
-      doc.rect(x, y, boxW, 8, 'F')
+      doc.rect(x + 1, y, boxW - 2, rowH, 'F')
     }
     doc.setFontSize(9)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
     let rx = x
     row.forEach((cell, ci) => {
       const align: 'left' | 'right' = ci === 0 ? 'left' : 'right'
-      const padding = align === 'left' ? 6 : -6
-      // Apply color to numeric cells if they start with €
+      const padding = align === 'left' ? 8 : -8
       let tc: [number, number, number] = [dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59]
       if (cell.startsWith('€') && ci > 0 && !cell.includes('-')) {
-        tc = dark ? [16, 185, 129] : [5, 150, 105] // green
+        tc = dark ? [16, 185, 129] : [5, 150, 105]
       } else if (cell.startsWith('-€')) {
-        tc = dark ? [248, 113, 113] : [220, 38, 38] // red
+        tc = dark ? [248, 113, 113] : [220, 38, 38]
       }
       doc.setTextColor(tc[0], tc[1], tc[2])
-      doc.text(cell, rx + (align === 'left' ? padding : colWidths[ci] + padding), y + 6, { align })
+      doc.text(cell, rx + (align === 'left' ? padding : colWidths[ci] + padding), y + 7, { align })
       rx += colWidths[ci]
     })
-    y += 8
+    y += rowH
   })
 
-  return y + 4
+  return y + 6
 }
 
 // ── Monthly PDF ─────────────────────────────────────────────────────────────
@@ -273,7 +294,8 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   const incomeSorted = Object.values(incomeByCat).sort((a, b) => b.total - a.total)
   const expenseSorted = Object.values(expenseByCat).sort((a, b) => b.total - a.total)
 
-  // Render charts offscreen
+  // Render charts offscreen — 2x for retina sharpness
+  const monthlyChartScale = 2
   const incomeChartUrl =
     incomeSorted.length > 0
       ? await renderChartViaWorker(
@@ -288,8 +310,8 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
               },
             ],
           },
-          340,
-          200,
+          275 * monthlyChartScale,
+          165 * monthlyChartScale,
           dark
         )
       : ''
@@ -308,8 +330,8 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
               },
             ],
           },
-          340,
-          200,
+          275 * monthlyChartScale,
+          165 * monthlyChartScale,
           dark
         )
       : ''
@@ -331,8 +353,9 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
     ],
-    42,
-    dark
+    55,
+    dark,
+    'Monthly Summary'
   )
 
   // Charts row
@@ -379,7 +402,7 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
       doc,
       'Category Breakdown',
       ['Category', 'Income', 'Expenses', 'Net'],
-      [140, 100, 100, 95],
+      [135, 90, 90, 90],
       categories.map(([name, v]) => {
         const net = v.income - v.expense
         return [
@@ -456,7 +479,21 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     return cumulative
   })
 
-  // Render charts
+  // Build PDF
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'px', format: 'a4' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+
+  // Render charts — use 2x resolution for retina sharpness.
+  // Display sizes are calculated first, then charts are rendered at 2x.
+  const chartScale = 2
+
+  // 2-column layout: doughnut + bar side by side, line full-width below
+  const colChartW = (pageW - 45) / 2
+  const colChartH = 170
+  const doughnutDisplayW = colChartW
+  const doughnutDisplayH = colChartH
   const doughnutUrl =
     topCategories.length > 0
       ? await renderChartViaWorker(
@@ -471,12 +508,14 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
               },
             ],
           },
-          340,
-          200,
+          doughnutDisplayW * chartScale,
+          doughnutDisplayH * chartScale,
           dark
         )
       : ''
 
+  const barDisplayW = colChartW
+  const barDisplayH = colChartH
   const barUrl =
     monthly.length > 0
       ? await renderChartViaWorker(
@@ -500,12 +539,14 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
               },
             ],
           },
-          450,
-          200,
+          barDisplayW * chartScale,
+          barDisplayH * chartScale,
           dark
         )
       : ''
 
+  const lineDisplayW = pageW - 30
+  const lineDisplayH = 120
   const lineUrl =
     cashFlow.length > 0
       ? await renderChartViaWorker(
@@ -524,16 +565,11 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
               },
             ],
           },
-          720,
-          180,
+          lineDisplayW * chartScale,
+          lineDisplayH * chartScale,
           dark
         )
       : ''
-
-  // Build PDF
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'px', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
 
   addTitle(
     doc,
@@ -552,77 +588,84 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
         value: `${net >= 0 ? '€' : '-€'}${fmt(Math.abs(net))}`,
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
+      {
+        label: 'Savings Rate',
+        value: `${savingsRate.toFixed(1)}%`,
+        color: savingsRate >= 0 ? [5, 150, 105] : [220, 38, 38],
+      },
     ],
-    42,
-    dark
+    52,
+    dark,
+    'Annual Summary'
   )
 
-  // Savings rate
-  doc.setFontSize(10)
-  doc.setTextColor(dark ? 148 : 100, dark ? 163 : 116, dark ? 184 : 139)
-  doc.text(`Savings Rate: ${savingsRate.toFixed(1)}%`, pageW / 2, posY, { align: 'center' })
-  posY += 8
-
-  // Category doughnut
-  if (doughnutUrl) {
-    doc.addImage(doughnutUrl, 'PNG', 15, posY, 170, 100)
-    doc.setFontSize(10)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-    doc.text('Spending by Category', 15 + 85, posY + 108, { align: 'center' })
-    posY += 120
-  }
-
-  // Monthly bar chart
-  if (barUrl) {
-    if (posY > 500) {
-      doc.addPage()
-      posY = 25
+  // Charts: 2-column grid (doughnut + bar side by side), then line full-width
+  if (doughnutUrl || barUrl) {
+    const chartLabelY = posY + colChartH + 12
+    if (doughnutUrl) {
+      doc.addImage(doughnutUrl, 'PNG', 15, posY, doughnutDisplayW, doughnutDisplayH)
+      doc.setFontSize(10)
+      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
+      doc.text('Spending by Category', 15 + doughnutDisplayW / 2, chartLabelY, { align: 'center' })
     }
-    const barW = Math.min(pageW - 30, 450)
-    const barH = barW * 0.45
-    doc.addImage(barUrl, 'PNG', (pageW - barW) / 2, posY, barW, barH)
-    doc.setFontSize(10)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-    doc.text('Monthly Income vs Expenses', pageW / 2, posY + barH + 12, { align: 'center' })
-    posY += barH + 20
+    if (barUrl) {
+      const barX = 15 + colChartW + 15
+      doc.addImage(barUrl, 'PNG', barX, posY, barDisplayW, barDisplayH)
+      doc.setFontSize(10)
+      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
+      doc.text('Monthly Income vs Expenses', barX + barDisplayW / 2, chartLabelY, { align: 'center' })
+    }
+    posY += colChartH + 28
   }
 
-  // Cash flow line chart
+  // Cash flow line chart (full-width)
   if (lineUrl && cashFlow.length > 0) {
-    if (posY > 520) {
+    if (posY + lineDisplayH + 22 > pageH - 25) {
       doc.addPage()
       posY = 25
     }
-    doc.addImage(lineUrl, 'PNG', 15, posY, pageW - 30, 90)
+    doc.addImage(lineUrl, 'PNG', 15, posY, lineDisplayW, lineDisplayH)
     doc.setFontSize(10)
     doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-    doc.text('Cumulative Cash Flow', pageW / 2, posY + 100, { align: 'center' })
-    posY += 110
+    doc.text('Cumulative Cash Flow', pageW / 2, posY + lineDisplayH + 12, { align: 'center' })
+    posY += lineDisplayH + 22
   }
 
-  // Monthly breakdown table
+  // Footer on first page
+  const fc = dark ? '#64748b' : '#94a3b8'
+  doc.setFontSize(8)
+  doc.setTextColor(fc)
+  doc.text(
+    `Generated by Finance Manager — ${new Date().toLocaleDateString()}`,
+    pageW / 2,
+    doc.internal.pageSize.getHeight() - 15,
+    { align: 'center' }
+  )
+
+  // Monthly breakdown table on page 2
   doc.addPage()
+  posY = 25
   addSectionTable(
     doc,
     'Monthly Breakdown',
-    ['Month', 'Income', 'Expenses', 'Net', 'Running Bal.'],
-    [80, 100, 100, 100, 100],
+    ['Month', 'Income', 'Expenses', 'Net', 'Running Balance'],
+    [65, 90, 90, 90, 100],
     monthly.map((m, i) => {
       const n = m.income - m.expense
       const running = monthly.slice(0, i + 1).reduce((s, x) => s + x.income - x.expense, 0)
       return [
-        m.month,
+        MONTHS[i],
         `€${fmt(m.income)}`,
         `€${fmt(m.expense)}`,
         n >= 0 ? `€${fmt(n)}` : `-€${fmt(Math.abs(n))}`,
         running >= 0 ? `€${fmt(running)}` : `-€${fmt(Math.abs(running))}`,
       ]
     }),
-    22,
+    posY,
     dark
   )
 
-  const fc = dark ? '#64748b' : '#94a3b8'
+  // Footer on page 2
   doc.setFontSize(8)
   doc.setTextColor(fc)
   doc.text(
@@ -699,8 +742,9 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
         color: (dark ? [226, 232, 240] : [30, 41, 59]) as [number, number, number],
       },
     ],
-    42,
-    dark
+    55,
+    dark,
+    'Tax Summary'
   )
 
   // Tax-deductible section
@@ -709,7 +753,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
       doc,
       'Tax-Deductible Expenses',
       ['Category', 'Transactions', 'Amount'],
-      [240, 100, 120],
+      [160, 70, 90],
       taxDeductible.map((r) => [r.catName, String(r.count), `€${fmt(r.total)}`]),
       posY,
       dark,
@@ -727,7 +771,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
       doc,
       'Non-Deductible Expenses',
       ['Category', 'Transactions', 'Amount'],
-      [240, 100, 120],
+      [160, 70, 90],
       nonDeductible.map((r) => [r.catName, String(r.count), `€${fmt(r.total)}`]),
       posY + 6,
       dark,
@@ -833,8 +877,9 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
     ],
-    42,
-    dark
+    55,
+    dark,
+    'P&L Summary'
   )
 
   doc.setFontSize(10)
@@ -848,7 +893,7 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
       doc,
       'Income',
       ['Category', 'Txns', 'Amount', '% of Total'],
-      [180, 60, 110, 90],
+      [150, 55, 95, 65],
       [
         ...incomeRows.map((r) => [
           r.name,
@@ -879,7 +924,7 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
       doc,
       'Expenses',
       ['Category', 'Txns', 'Amount', '% of Total'],
-      [180, 60, 110, 90],
+      [150, 55, 95, 65],
       [
         ...expenseRows.map((r) => [
           r.name,

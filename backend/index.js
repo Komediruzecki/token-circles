@@ -790,7 +790,7 @@ app.post('/api/profiles', apiRateLimiter, (req, res) => {
   }
 });
 
-app.patch('/api/profiles/:id', apiRateLimiter, (req, res) => {
+function updateProfileHandler(req, res) {
   try {
     if (!req.session.userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -813,7 +813,10 @@ app.patch('/api/profiles/:id', apiRateLimiter, (req, res) => {
     logError('error', err);
     res.status(500).json({ error: err.message });
   }
-});
+}
+
+app.put('/api/profiles/:id', apiRateLimiter, updateProfileHandler);
+app.patch('/api/profiles/:id', apiRateLimiter, updateProfileHandler);
 
 app.delete('/api/profiles/:id', apiRateLimiter, (req, res) => {
   try {
@@ -830,6 +833,27 @@ app.delete('/api/profiles/:id', apiRateLimiter, (req, res) => {
     if (req.repos.profiles.profileCount() <= 1) return res.status(400).json({ error: 'Cannot delete the last profile' });
     req.repos.profiles.deleteAllDataForProfile(pid);
     res.json(toCamelCase({ ok: true }));
+  } catch (err) {
+    console.error(err.message);
+    logError('error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reseed demo data — mirrors serverless route /api/profiles/reseed-demo
+app.post('/api/profiles/reseed-demo', apiRateLimiter, (req, res) => {
+  try {
+    const pid = getProfileId(req);
+    // Nuke all data for the current profile
+    req.repos.transactions.deleteAll(pid);
+    req.repos.budgets.deleteAll(pid);
+    req.repos.loans.deleteAll(pid);
+    req.repos.categories.deleteAll(pid);
+    req.repos.accounts.deleteAll(pid);
+    req.repos.goals.deleteAll(pid);
+    // Re-seed demo data for all profiles
+    db.seedThreeTierProfiles();
+    res.json({ ok: true, message: 'Demo data has been restored' });
   } catch (err) {
     console.error(err.message);
     logError('error', err);
