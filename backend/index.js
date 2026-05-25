@@ -6120,8 +6120,8 @@ app.get('/api/analytics/distinct-years', apiRateLimiter, (req, res) => {
       .all(...pids);
     const years = rows.map((r) => parseInt(r.year));
     const currentYear = new Date().getFullYear();
+    // Only add current year if there are no transaction years at all (new profile)
     if (years.length === 0) years.push(currentYear);
-    if (!years.includes(currentYear)) years.unshift(currentYear);
     res.json({ years });
   } catch (err) {
     console.error(err.message);

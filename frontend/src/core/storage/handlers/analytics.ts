@@ -15,10 +15,9 @@ export async function analyticsDistinctYears(): Promise<Response> {
     }
     const years = [...yearsSet].sort((a, b) => b - a)
     if (years.length === 0) years.push(currentYear)
-    if (!years.includes(currentYear)) years.unshift(currentYear)
     return json({ years })
   } catch (_err) {
-    return json({ years: [new Date().getFullYear()] })
+    return json({ years: [] })
   }
 }
 
