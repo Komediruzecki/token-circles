@@ -396,13 +396,18 @@ export default function Analytics() {
     loadMonthlyStats()
   })
 
-  // Reload when profile selection changes
+  // Reload when profile selection changes — untrack inner calls so
+  // they don't accidentally add stackedYear/categoryType/etc as dependencies
   createEffect(() => {
-    void state.profileVersion
-    loadYears()
-    loadData()
-    loadStackedData()
-    loadHeatmapData()
+    const pv = state.profileVersion
+    untrack(() => {
+      loadYears()
+      loadData()
+      loadStackedData()
+      loadHeatmapData()
+    })
+    // Keep pv as the only tracked dependency
+    void pv
   })
 
   // Reload summary stats silently when year or type changes (no loading flash)
