@@ -43,3 +43,34 @@ We will refactor the feature pages to use `createResource`. The files to update 
 ## Rollout Strategy
 
 Because this is a massive refactoring affecting the data flow of the entire application, it is recommended to rollout the pattern piece by piece, starting with an isolated page (e.g., `Budgets.tsx` or `Analytics.tsx`), ensuring stability, and then propagating the standard.
+
+---
+
+## Audit: `Analytics.tsx` Partial Migration (2026-05-26)
+
+A partial `createResource` migration has been applied to `Analytics.tsx`. This section documents the current state.
+
+### What was migrated to `createResource`
+
+| Resource | Source Signal | Replaces |
+|---|---|---|
+| `analyticsData` | `stackedYear()`, `categoryType()`, `state.profileVersion` | Old `loadData`, `refreshData`, and 3 `createEffect` blocks that manually triggered them |
+| `monthlyStatsResource` | `stackedYear()`, `monthlyMonth()` | Old `loadMonthlyStats` and its `createEffect` |
+| `yearsResource` | `state.profileVersion` | Old `loadYears` |
+
+### What still uses the old manual pattern (not yet migrated)
+
+| Function | Trigger | Notes |
+|---|---|---|
+| `loadHeatmapData` | Called manually from `onMount` and button handlers | Could become a `createResource` tracking `heatmapYear()` + `heatmapType()` |
+| `loadSankeyData` | Called manually from button handlers | Could become a resource tracking `sankeyYear()` + `sankeyMonth()` |
+| `loadStackedData` | Called manually from `onMount` and many button handlers | More complex -- involves `compareEnabled`, `compareYear`, `selectedWeek`, etc. |
+| `loadWeeks` | Called manually from button handlers | Small helper, borderline candidate |
+
+These are acceptable to leave as manual functions for now since they are primarily driven by explicit UI interactions (button clicks) rather than purely reactive state.
+
+### Issues found and fixed
+
+1. **Forward-reference readability:** `analyticsData` resource referenced `stackedYear()` and `categoryType()` which were declared much later in the function body. While valid JavaScript (the entire function body is hoisted), this made the code harder to follow. **Fixed:** moved signal declarations above the resource.
+2. **Missing error toast (UX regression):** The old `loadData` used `showToast()` to notify users of failed API calls. The new `createResource` fetcher silently logged errors to console but never toasted the user. **Fixed:** restored `showToast` import and added error handling via `createEffect` that watches `analyticsData.error`.
+3. **Remaining `createEffect` (line 173):** Propagates `yearsResource` into the `availableYears` signal and validates year selections. This is a valid bridge pattern -- the resource feeds a shared signal that many other parts of the component read. No change needed.

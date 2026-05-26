@@ -32,7 +32,7 @@ import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
 import SankeyChart from '../components/SankeyChart'
 import { api, formatCurrency } from '../core/api'
-import { apiGet } from '../core/api'
+import { apiGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { downloadBlob } from '../utils/chartExport'
@@ -41,6 +41,10 @@ import type { SankeyData, Transaction } from '../types/models'
 
 export default function Analytics() {
   const state = useAppState()
+
+  // ── Signals used by resources (declared first to avoid forward references) ──
+  const [categoryType, setCategoryType] = createSignal<'expense' | 'income'>('expense')
+  const [stackedYear, setStackedYear] = createSignal(new Date().getFullYear())
 
   // ── Resources (declarative data fetching, race-condition safe) ──────────
   const [analyticsData] = createResource(
@@ -92,6 +96,14 @@ export default function Analytics() {
   const loading = () => analyticsData.loading && !analyticsData()
   const data = () => analyticsData() ?? null
 
+  // Surface fetch errors to the user (restores toast lost during createResource migration)
+  createEffect(() => {
+    if (analyticsData.error) {
+      console.error('Failed to load analytics', analyticsData.error)
+      showToast('Failed to load analytics data', 'error')
+    }
+  })
+
   const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
   const chartColors = () => theme.getChartColors()
   const [heatmapType, setHeatmapType] = createSignal<'income' | 'expense'>('expense')
@@ -106,8 +118,7 @@ export default function Analytics() {
     nodes: [],
     links: [],
   })
-  const [categoryType, setCategoryType] = createSignal<'expense' | 'income'>('expense')
-  const [stackedYear, setStackedYear] = createSignal(new Date().getFullYear())
+  // categoryType and stackedYear are declared above (before resources that depend on them)
   const [stackedView, setStackedView] = createSignal<'year' | 'month'>('year')
   const [stackedMonth, setStackedMonth] = createSignal(new Date().getMonth() + 1)
   const [stackedData, setStackedData] = createSignal<{
