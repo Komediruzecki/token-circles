@@ -97,7 +97,6 @@ export default function Analytics() {
   )
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
   const [monthlyMonth, setMonthlyMonth] = createSignal(new Date().getMonth() + 1)
-  const [monthlyYear, setMonthlyYear] = createSignal(new Date().getFullYear())
   const [monthlyStats, setMonthlyStats] = createSignal<{
     income: number
     expense: number
@@ -120,9 +119,6 @@ export default function Analytics() {
         }
         if (!sorted.includes(sankeyYear())) {
           setSankeyYear(sorted[0])
-        }
-        if (!sorted.includes(monthlyYear())) {
-          setMonthlyYear(sorted[0])
         }
       }
     } catch (_e) {
@@ -178,7 +174,7 @@ export default function Analytics() {
       const now = new Date()
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
       const months = Math.max(24, monthsNeeded)
-      const [categoryRes, transactionsRes, monthlyRes] = await Promise.all([
+      const [categoryRes, _transactionsRes, monthlyRes] = await Promise.all([
         apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}&year=${year}`),
         apiGet<any>('/api/transactions/summary'),
         apiGet<any>(`/api/stats/monthly?months=${months}`),
@@ -212,16 +208,13 @@ export default function Analytics() {
       // Recent transactions from summary
       const recentTransactions: Transaction[] = []
 
+      const totalInc = byMonth.reduce((s, m) => s + m.income, 0)
+      const totalExp = byMonth.reduce((s, m) => s + m.expense, 0)
       setData({
         byCategory,
         byMonth,
         recentTransactions,
-        savingsRate:
-          transactionsRes?.totalIncome > 0
-            ? ((transactionsRes.totalIncome - transactionsRes.totalExpenses) /
-                transactionsRes.totalIncome) *
-              100
-            : 0,
+        savingsRate: totalInc > 0 ? ((totalInc - totalExp) / totalInc) * 100 : 0,
       })
     } catch (err) {
       console.error('Failed to load analytics', err)
@@ -233,7 +226,7 @@ export default function Analytics() {
 
   // Load monthly stats for the monthly savings card
   const loadMonthlyStats = async () => {
-    const year = monthlyYear()
+    const year = stackedYear()
     const month = monthlyMonth()
     try {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
@@ -398,7 +391,7 @@ export default function Analytics() {
   // Reload monthly stats when month or year selector changes
   createEffect(() => {
     monthlyMonth()
-    monthlyYear()
+    stackedYear()
     loadMonthlyStats()
   })
 
@@ -431,7 +424,7 @@ export default function Analytics() {
       const now = new Date()
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
       const months = Math.max(24, monthsNeeded)
-      const [categoryRes, transactionsRes, monthlyRes] = (await Promise.all([
+      const [categoryRes, _transactionsRes, monthlyRes] = (await Promise.all([
         apiGet<any>(`/api/analytics/category-trends?type=${type}&year=${year}`),
         apiGet<any>('/api/transactions/summary'),
         apiGet<any>(`/api/stats/monthly?months=${months}`),
@@ -460,16 +453,13 @@ export default function Analytics() {
             }))
         : []
 
+      const totalInc = byMonth.reduce((s, m) => s + m.income, 0)
+      const totalExp = byMonth.reduce((s, m) => s + m.expense, 0)
       setData({
         byCategory,
         byMonth,
         recentTransactions: [],
-        savingsRate:
-          transactionsRes?.totalIncome > 0
-            ? ((transactionsRes.totalIncome - transactionsRes.totalExpenses) /
-                transactionsRes.totalIncome) *
-              100
-            : 0,
+        savingsRate: totalInc > 0 ? ((totalInc - totalExp) / totalInc) * 100 : 0,
       })
     } catch (err) {
       console.error('Failed to refresh analytics', err)
@@ -501,7 +491,7 @@ export default function Analytics() {
               >
                 {formatPercent(data()!.savingsRate)}
               </div>
-              <div class={styles.statDesc}>Recommended: 20%+</div>
+              <div class={styles.statDesc}>{stackedYear()}</div>
             </div>
             <div class={styles.statCard}>
               <div class={styles.statLabel}>Total Income</div>
@@ -531,22 +521,13 @@ export default function Analytics() {
             <div class={styles.statCard} style="border-left:3px solid var(--primary)">
               <div class={styles.statLabel}>
                 Monthly Savings (
-                {new Date(monthlyYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
+                {new Date(stackedYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
                   month: 'long',
                   year: 'numeric',
                 })}
                 )
               </div>
               <div class={styles.heatmapControls} style="justify-content:flex-start;margin-top:8px">
-                <select
-                  class={styles.heatmapYearSelect}
-                  value={monthlyYear()}
-                  onchange={(e) => setMonthlyYear(Number(e.currentTarget.value))}
-                >
-                  {availableYears().map((year) => (
-                    <option value={year}>{year}</option>
-                  ))}
-                </select>
                 <select
                   class={styles.heatmapTypeSelect}
                   value={monthlyMonth()}
