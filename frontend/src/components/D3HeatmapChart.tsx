@@ -176,17 +176,9 @@ export default function D3HeatmapChart(props: Props) {
       .text(d3.format(',.0f')(maxVal))
   }
 
-  // Create tooltip element
+  // Create tooltip element and render heatmap
   onMount(() => {
-    // Create tooltip element
-    if (containerRef) {
-      tooltipEl = document.createElement('div')
-      tooltipEl.id = 'heatmap-tooltip'
-      tooltipEl.style.cssText =
-        'position:fixed;display:none;background:var(--card-bg,#1f2937);color:var(--text,#e5e7eb);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:1px solid var(--border,#374151);white-space:nowrap;'
-      document.body.appendChild(tooltipEl)
-    }
-
+    ensureTooltip()
     renderHeatmap()
     const observer = new ResizeObserver(() => {
       renderHeatmap()

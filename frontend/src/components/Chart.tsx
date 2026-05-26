@@ -27,9 +27,13 @@ export default function Chart(props: ChartProps) {
     const chartOptions = props.options
     const onReady = props.onReady
 
+    let cancelled = false
+
     // Lazy load Chart.js to avoid import issues
     import('chart.js/auto')
       .then(({ default: ChartJS }) => {
+        if (cancelled) return
+
         // Destroy existing chart
         const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart })
           .chartInstance
@@ -53,8 +57,18 @@ export default function Chart(props: ChartProps) {
         onReady?.(chart)
       })
       .catch((_err: unknown) => {
-        console.error('Failed to load Chart.js')
+        if (!cancelled) console.error('Failed to load Chart.js')
       })
+
+    onCleanup(() => {
+      cancelled = true
+      const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart })
+        .chartInstance
+      if (existingChart !== undefined) {
+        existingChart.destroy()
+        delete (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance
+      }
+    })
 
     onCleanup(() => {
       const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart })
