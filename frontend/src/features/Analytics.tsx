@@ -174,10 +174,14 @@ export default function Analytics() {
     setLoading(true)
     const year = stackedYear()
     try {
+      // Calculate enough months to include the full selected year
+      const now = new Date()
+      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
+      const months = Math.max(24, monthsNeeded)
       const [categoryRes, transactionsRes, monthlyRes] = await Promise.all([
         apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}&year=${year}`),
         apiGet<any>('/api/transactions/summary'),
-        apiGet<any>('/api/stats/monthly?months=24'),
+        apiGet<any>(`/api/stats/monthly?months=${months}`),
       ])
 
       // Transform category-trends response into doughnut data
@@ -233,7 +237,9 @@ export default function Analytics() {
     const month = monthlyMonth()
     try {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
-      const monthlyRes = await apiGet<any>('/api/stats/monthly?months=24')
+      const now = new Date()
+      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
+      const monthlyRes = await apiGet<any>(`/api/stats/monthly?months=${Math.max(24, monthsNeeded)}`)
       const months = Array.isArray(monthlyRes) ? monthlyRes : []
       const found = months.find((m: Record<string, unknown>) => m.month === mKey)
       if (found) {
@@ -422,10 +428,13 @@ export default function Analytics() {
   // Silent refresh: update summary stats without showing loading spinner
   const refreshData = async (year: number, type: string) => {
     try {
+      const now = new Date()
+      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
+      const months = Math.max(24, monthsNeeded)
       const [categoryRes, transactionsRes, monthlyRes] = (await Promise.all([
         apiGet<any>(`/api/analytics/category-trends?type=${type}&year=${year}`),
         apiGet<any>('/api/transactions/summary'),
-        apiGet<any>('/api/stats/monthly?months=24'),
+        apiGet<any>(`/api/stats/monthly?months=${months}`),
       ])) as [any, any, any]
 
       const byCategory = (categoryRes.datasets || [])
