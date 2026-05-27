@@ -82,4 +82,117 @@ describe('validation - validateBody', () => {
     })
     expect(result).toBeNull()
   })
+
+  it('validates bill create body', () => {
+    const result = validateBody('POST', '/api/bills', {
+      name: 'Netflix',
+      amount: 14.99,
+      due_date: '2026-06-01',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('validates loan create body', () => {
+    const result = validateBody('POST', '/api/loans', {
+      name: 'Mortgage',
+      principal: 200000,
+      interest_rate: 3.5,
+      start_date: '2024-01-15',
+      term_months: 360,
+    })
+    expect(result).toBeNull()
+  })
+
+  it('validates goal create body', () => {
+    const result = validateBody('POST', '/api/savings-goals', {
+      name: 'Vacation',
+      target_amount: 5000,
+    })
+    expect(result).toBeNull()
+  })
+
+  it('validates recurring create body', () => {
+    const result = validateBody('POST', '/api/recurring', {
+      description: 'Rent',
+      amount: 1200,
+      type: 'expense',
+      frequency: 'monthly',
+      next_date: '2026-06-01',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('validates tag create body', () => {
+    const result = validateBody('POST', '/api/tags', {
+      name: 'groceries',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('rejects tag with invalid color', () => {
+    const result = validateBody('POST', '/api/tags', {
+      name: 'groceries',
+      color: 'blue',
+    })
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(400)
+  })
+
+  it('validates portfolio holding create body', () => {
+    const result = validateBody('POST', '/api/portfolio/holdings', {
+      ticker: 'AAPL',
+      shares: 10,
+      purchase_price: 150,
+      purchase_date: '2024-01-15',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('validates settings update body with passthrough', () => {
+    const result = validateBody('PUT', '/api/settings', {
+      local_currency: 'USD',
+      unknown_key: 'ignored',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('rejects settings with invalid theme value', () => {
+    const result = validateBody('PUT', '/api/settings', {
+      theme: 'blue',
+    })
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(400)
+  })
+
+  it('validates profile create body', () => {
+    const result = validateBody('POST', '/api/profiles', {
+      name: 'My Profile',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('rejects profile with empty name', () => {
+    const result = validateBody('POST', '/api/profiles', {
+      name: '',
+    })
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(400)
+  })
+
+  it('returns null for unmapped POST route with numeric ID', () => {
+    const result = validateBody('POST', '/api/calculator/compound-interest', { principal: 1000 })
+    expect(result).toBeNull()
+  })
+
+  it('strips numeric IDs to find matching schema', () => {
+    const result = validateBody('POST', '/api/transactions/123', {
+      type: 'expense',
+      amount: 50,
+      description: 'Test',
+      date: '2026-05-13',
+      category_id: 1,
+    })
+    // URL /api/transactions/123 should match schema key 'POST:/api/transactions'
+    expect(result).toBeNull()
+  })
 })
