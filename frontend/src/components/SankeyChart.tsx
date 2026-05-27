@@ -27,6 +27,31 @@ interface SankeyLink {
   targetCategory?: string
 }
 
+/** Sankey node enriched by d3-sankey layout (includes positioning props) */
+interface SankeyNodeDatum extends SankeyNode {
+  x0: number
+  x1: number
+  y0: number
+  y1: number
+  value?: number
+  index?: number
+  sourceLinks?: SankeyLinkDatum[]
+  targetLinks?: SankeyLinkDatum[]
+}
+
+/** Sankey link enriched by d3-sankey layout (includes width + positioning) */
+interface SankeyLinkDatum {
+  source: SankeyNodeDatum | number | string
+  target: SankeyNodeDatum | number | string
+  value: number
+  sourceCategory?: string
+  targetCategory?: string
+  width: number
+  y0: number
+  y1: number
+  index?: number
+}
+
 interface Props {
   data: { nodes: SankeyNode[]; links: SankeyLink[] }
   height?: number
@@ -58,14 +83,13 @@ export default function SankeyChart(props: Props) {
       .attr('height', height)
       .attr('viewBox', [0, 0, width, height])
 
-    const sankeyGenerator = sankey()
+    const sankeyGenerator = sankey<SankeyNodeDatum, SankeyLinkDatum>()
       .nodeWidth(20)
       .nodePadding(10)
       .extent([
         [margin.left, margin.top],
         [width - margin.right, height - margin.bottom],
       ])
-      .nodeId((d: any) => d.name)
 
     const categoryColors: Record<string, string> = {
       budget: '#6366f1',
@@ -75,8 +99,8 @@ export default function SankeyChart(props: Props) {
     }
 
     const { nodes, links } = sankeyGenerator({
-      nodes: props.data.nodes.map((d) => ({ ...d }) as any),
-      links: props.data.links.map((d) => ({ ...d }) as any),
+      nodes: props.data.nodes.map((d) => ({ ...d, x0: 0, x1: 0, y0: 0, y1: 0 } satisfies SankeyNodeDatum)),
+      links: props.data.links.map((d) => ({ ...d, width: 0, y0: 0, y1: 0 } satisfies SankeyLinkDatum)),
     })
 
     // Draw links
@@ -88,17 +112,21 @@ export default function SankeyChart(props: Props) {
       .data(links)
       .join('path')
       .attr('d', sankeyLinkHorizontal())
-      .attr('stroke', (d: any) => {
-        const targetCat = d.target?.category || d.targetCategory
+      .attr('stroke', (d: SankeyLinkDatum) => {
+        const targetNode = typeof d.target === 'object' ? (d.target as SankeyNodeDatum) : null
+        const targetCat: string = targetNode?.category || d.targetCategory || ''
         return categoryColors[targetCat] || '#6366f1'
       })
-      .attr('stroke-width', (d: any) => Math.max(1, d.width))
+      .attr('stroke-width', (d: SankeyLinkDatum) => Math.max(1, d.width))
 
     link
       .append('title')
       .text(
-        (d: any) =>
-          `${d.source?.name || d.source} → ${d.target?.name || d.target}\n${d3.format(',.2f')(d.value)}`
+        (d: SankeyLinkDatum) => {
+          const srcName = typeof d.source === 'object' ? (d.source as SankeyNodeDatum).name : String(d.source)
+          const tgtName = typeof d.target === 'object' ? (d.target as SankeyNodeDatum).name : String(d.target)
+          return `${srcName} → ${tgtName}\n${d3.format(',.2f')(d.value)}`
+        }
       )
 
     // Draw nodes
@@ -107,14 +135,14 @@ export default function SankeyChart(props: Props) {
       .selectAll('rect')
       .data(nodes)
       .join('rect')
-      .attr('x', (d: any) => d.x0)
-      .attr('y', (d: any) => d.y0)
-      .attr('height', (d: any) => Math.max(0, d.y1 - d.y0))
-      .attr('width', (d: any) => d.x1 - d.x0)
-      .attr('fill', (d: any) => d.color || categoryColors[d.category] || '#6b7280')
+      .attr('x', (d: SankeyNodeDatum) => d.x0)
+      .attr('y', (d: SankeyNodeDatum) => d.y0)
+      .attr('height', (d: SankeyNodeDatum) => Math.max(0, d.y1 - d.y0))
+      .attr('width', (d: SankeyNodeDatum) => d.x1 - d.x0)
+      .attr('fill', (d: SankeyNodeDatum) => d.color || categoryColors[d.category] || '#6b7280')
       .attr('rx', 3)
 
-    node.append('title').text((d: any) => `${d.name}\n${d3.format(',.2f')(d.value || 0)}`)
+    node.append('title').text((d: SankeyNodeDatum) => `${d.name}\n${d3.format(',.2f')(d.value || 0)}`)
 
     // Draw labels
     svg
@@ -122,13 +150,13 @@ export default function SankeyChart(props: Props) {
       .selectAll('text')
       .data(nodes)
       .join('text')
-      .attr('x', (d: any) => (d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6))
-      .attr('y', (d: any) => (d.y0 + d.y1) / 2)
+      .attr('x', (d: SankeyNodeDatum) => (d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6))
+      .attr('y', (d: SankeyNodeDatum) => (d.y0 + d.y1) / 2)
       .attr('dy', '0.35em')
-      .attr('text-anchor', (d: any) => (d.x0 < width / 2 ? 'start' : 'end'))
+      .attr('text-anchor', (d: SankeyNodeDatum) => (d.x0 < width / 2 ? 'start' : 'end'))
       .attr('fill', 'var(--text)')
       .attr('font-size', '11px')
-      .text((d: any) => d.name)
+      .text((d: SankeyNodeDatum) => d.name)
   }
 
   onMount(() => {
