@@ -60,7 +60,7 @@ export default function D3HeatmapChart(props: Props) {
       .attr('height', height)
       .attr('viewBox', [0, 0, width, height])
 
-    const cellSize = Math.min(14, (width - margin.left - margin.right) / 53)
+    const cellSize = Math.max(10, Math.min(14, (width - margin.left - margin.right) / 53))
 
     const startDate = d3.timeYear.floor(new Date(props.year, 0, 1))
     const endDate = d3.timeYear.ceil(new Date(props.year, 11, 31))
@@ -196,5 +196,5 @@ export default function D3HeatmapChart(props: Props) {
     if (props.data && props.year && props.type) renderHeatmap()
   })
 
-  return <div ref={containerRef} style={{ width: '100%' }} />
+  return <div ref={containerRef} style={{ width: '100%', 'overflow-x': 'auto', '-webkit-overflow-scrolling': 'touch' }} />
 }
