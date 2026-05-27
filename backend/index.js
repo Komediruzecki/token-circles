@@ -507,6 +507,13 @@ app.use(require('./routes/housing')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/retirement')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/receipts')({ db, apiRateLimiter, logError, uploadReceipt }));
 app.use(require('./routes/storageMode')({ db, apiRateLimiter }));
+app.use(require('./routes/accounts')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/bills')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/savingsGoals')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/tags')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/transactions')({ db, apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/calculators')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/analytics')({ db, apiRateLimiter, logError }));
 // ── Remaining inline routes ──────────────────────────────────────────────────────
 
 app.post('/api/auth/login', authRateLimiter, async (req, res) => {
