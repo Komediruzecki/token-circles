@@ -516,49 +516,6 @@ app.use(require('./routes/calculators')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/analytics')({ db, apiRateLimiter, logError }));
 // ── Remaining inline routes ──────────────────────────────────────────────────────
 
-// Test endpoint: reset rate limit store
-app.post('/api/test/reset-rate-limit', (req, res) => {
-  if (global.__rateLimitStore) global.__rateLimitStore.clear();
-  if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
-  res.json(toCamelCase({ ok: true }));
-});
-
-// ========================
-
-
-function updateProfileHandler(req, res) {
-  try {
-    if (!req.session.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const pid = parseInt(req.params.id);
-    const { name } = req.body;
-    const profile = req.repos.profiles.getById(pid);
-    if (!profile) return res.status(404).json({ error: 'Profile not found' });
-    if (profile.user_id !== req.session.userId) {
-      return res.status(403).json({ error: "Cannot modify another user's profile" });
-    }
-    if (name !== undefined) {
-      if (!name.trim()) return res.status(400).json({ error: 'Name is required' });
-      req.repos.profiles.updateName(pid, name.trim());
-    }
-    const updated = req.repos.profiles.getById(pid);
-    res.json(updated);
-  } catch (err) {
-    console.error(err.message);
-    logError('error', err);
-    res.status(500).json({ error: err.message });
-  }
-}
-
-
-
-// ========================
-// SETTINGS (per-profile)
-// ========================
-
-
-
 // ========================
 // CATEGORIES (per-profile)
 // ========================
