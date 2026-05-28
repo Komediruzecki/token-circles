@@ -909,7 +909,8 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
         console.error(
           '[routeApiRequest] Validation failed',
           { method, path: `/api${path}`, body },
-          'Stack:', new Error().stack
+          'Stack:',
+          new Error().stack
         )
         return validationError
       }

@@ -99,8 +99,12 @@ export default function SankeyChart(props: Props) {
     }
 
     const { nodes, links } = sankeyGenerator({
-      nodes: props.data.nodes.map((d) => ({ ...d, x0: 0, x1: 0, y0: 0, y1: 0 } satisfies SankeyNodeDatum)),
-      links: props.data.links.map((d) => ({ ...d, width: 0, y0: 0, y1: 0 } satisfies SankeyLinkDatum)),
+      nodes: props.data.nodes.map(
+        (d) => ({ ...d, x0: 0, x1: 0, y0: 0, y1: 0 }) satisfies SankeyNodeDatum
+      ),
+      links: props.data.links.map(
+        (d) => ({ ...d, width: 0, y0: 0, y1: 0 }) satisfies SankeyLinkDatum
+      ),
     })
 
     // Draw links
@@ -119,15 +123,13 @@ export default function SankeyChart(props: Props) {
       })
       .attr('stroke-width', (d: SankeyLinkDatum) => Math.max(1, d.width))
 
-    link
-      .append('title')
-      .text(
-        (d: SankeyLinkDatum) => {
-          const srcName = typeof d.source === 'object' ? (d.source as SankeyNodeDatum).name : String(d.source)
-          const tgtName = typeof d.target === 'object' ? (d.target as SankeyNodeDatum).name : String(d.target)
-          return `${srcName} → ${tgtName}\n${d3.format(',.2f')(d.value)}`
-        }
-      )
+    link.append('title').text((d: SankeyLinkDatum) => {
+      const srcName =
+        typeof d.source === 'object' ? (d.source as SankeyNodeDatum).name : String(d.source)
+      const tgtName =
+        typeof d.target === 'object' ? (d.target as SankeyNodeDatum).name : String(d.target)
+      return `${srcName} → ${tgtName}\n${d3.format(',.2f')(d.value)}`
+    })
 
     // Draw nodes
     const node = svg
@@ -142,7 +144,9 @@ export default function SankeyChart(props: Props) {
       .attr('fill', (d: SankeyNodeDatum) => d.color || categoryColors[d.category] || '#6b7280')
       .attr('rx', 3)
 
-    node.append('title').text((d: SankeyNodeDatum) => `${d.name}\n${d3.format(',.2f')(d.value || 0)}`)
+    node
+      .append('title')
+      .text((d: SankeyNodeDatum) => `${d.name}\n${d3.format(',.2f')(d.value || 0)}`)
 
     // Draw labels
     svg

@@ -3,26 +3,26 @@
  * Reuses a single browser instance to avoid launching Chromium per-request.
  */
 
-let _browser = null
-let _booting = null
+let _browser = null;
+let _booting = null;
 
 function launchOptions() {
   return {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  }
+  };
 }
 
 async function getBrowser() {
-  if (_browser && _browser.isConnected()) return _browser
-  if (_booting) return _booting
-  const puppeteer = require('puppeteer')
-  _booting = puppeteer.launch(launchOptions())
+  if (_browser && _browser.isConnected()) return _browser;
+  if (_booting) return _booting;
+  const puppeteer = require('puppeteer');
+  _booting = puppeteer.launch(launchOptions());
   try {
-    _browser = await _booting
-    return _browser
+    _browser = await _booting;
+    return _browser;
   } finally {
-    _booting = null
+    _booting = null;
   }
 }
 
@@ -38,27 +38,27 @@ async function getBrowser() {
  */
 async function renderToPdf(exportData, options) {
   try {
-    const browser = await getBrowser()
-    const exportPage = await browser.newPage()
+    const browser = await getBrowser();
+    const exportPage = await browser.newPage();
 
     try {
       await exportPage.setViewport(
         options.viewport || { width: 800, height: 1000, deviceScaleFactor: 2 }
-      )
+      );
 
       await exportPage.evaluateOnNewDocument((data) => {
-        window.__DATA__ = data
-      }, exportData)
+        window.__DATA__ = data;
+      }, exportData);
 
-      const baseUrl = `http://localhost:${options.basePort}`
+      const baseUrl = `http://localhost:${options.basePort}`;
       await exportPage.goto(`${baseUrl}${options.pagePath}`, {
         waitUntil: 'networkidle0',
         timeout: 30000,
-      })
+      });
 
       await exportPage.waitForFunction(() => window.__RENDER_DONE__ === true, {
         timeout: 30000,
-      })
+      });
 
       return Buffer.from(
         await exportPage.pdf({
@@ -71,14 +71,14 @@ async function renderToPdf(exportData, options) {
             left: '15px',
           },
         })
-      )
+      );
     } finally {
-      await exportPage.close()
+      await exportPage.close();
     }
   } catch (err) {
-    console.error('Puppeteer render failed:', err.message)
-    return null
+    console.error('Puppeteer render failed:', err.message);
+    return null;
   }
 }
 
-module.exports = { renderToPdf }
+module.exports = { renderToPdf };

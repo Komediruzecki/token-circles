@@ -122,7 +122,10 @@ export const recurringUpdateSchema = recurringCreateSchema.partial()
 
 export const tagCreateSchema = z.object({
   name: z.string().min(1).max(50),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
 })
 
 export const tagUpdateSchema = tagCreateSchema.partial()

@@ -2,7 +2,7 @@ const express = require('express');
 const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/settings', apiRateLimiter, (req, res) => {
@@ -32,9 +32,9 @@ module.exports = function({ db, apiRateLimiter, logError }) {
       const pid = getProfileId(req);
       // Validate currency code (ISO 4217)
       if (req.body.currency && !/^[A-Z]{3}$/.test(req.body.currency)) {
-        return res
-          .status(422)
-          .json({ error: 'Invalid currency code. Must be 3-letter ISO 4217 code (e.g., USD, EUR).' });
+        return res.status(422).json({
+          error: 'Invalid currency code. Must be 3-letter ISO 4217 code (e.g., USD, EUR).',
+        });
       }
       // Validate locale code (BCP 47 language tags - simplified)
       if (req.body.locale) {
@@ -72,7 +72,10 @@ module.exports = function({ db, apiRateLimiter, logError }) {
         });
       } else {
         // Reset to SQLite
-        res.json({ ok: true, message: 'SQLite storage configured. Please restart the application.' });
+        res.json({
+          ok: true,
+          message: 'SQLite storage configured. Please restart the application.',
+        });
       }
     } catch (err) {
       console.error(err.message);

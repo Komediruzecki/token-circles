@@ -59,10 +59,18 @@ export default function Categories() {
         apiGet<Category[]>('/api/categories'),
         apiGet<any[]>('/api/budgets/summary').catch(() => [] as any[]),
       ])
-      const summary: Record<number, { spent: number; budget: number; remaining: number; percent_used: number }> = {}
+      const summary: Record<
+        number,
+        { spent: number; budget: number; remaining: number; percent_used: number }
+      > = {}
       if (Array.isArray(budgetRes)) {
         for (const b of budgetRes) {
-          summary[b.category_id] = { spent: b.spent || 0, budget: b.amount || 0, remaining: b.remaining || 0, percent_used: b.percentage || 0 }
+          summary[b.category_id] = {
+            spent: b.spent || 0,
+            budget: b.amount || 0,
+            remaining: b.remaining || 0,
+            percent_used: b.percentage || 0,
+          }
         }
       }
       return { categories: allRes, budgetSummary: summary }
@@ -370,16 +378,18 @@ export default function Categories() {
                   <div class={styles.categoryColors}>
                     <span class={styles.colorLabel}>Color:</span>
                     <div class={styles.colorPicker}>
-                      <For each={[
-                        '#ef4444',
-                        '#f97316',
-                        '#eab308',
-                        '#22c55e',
-                        '#3b82f6',
-                        '#8b5cf6',
-                        '#ec4899',
-                        '#6b7280',
-                      ]}>
+                      <For
+                        each={[
+                          '#ef4444',
+                          '#f97316',
+                          '#eab308',
+                          '#22c55e',
+                          '#3b82f6',
+                          '#8b5cf6',
+                          '#ec4899',
+                          '#6b7280',
+                        ]}
+                      >
                         {(color) => (
                           <button
                             class={`${styles.colorBtn} ${category.color === color ? styles.active : ''}`}
@@ -484,16 +494,18 @@ export default function Categories() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.colorPicker}>
-                  <For each={[
-                    '#ef4444',
-                    '#f97316',
-                    '#eab308',
-                    '#22c55e',
-                    '#3b82f6',
-                    '#8b5cf6',
-                    '#ec4899',
-                    '#6b7280',
-                  ]}>
+                  <For
+                    each={[
+                      '#ef4444',
+                      '#f97316',
+                      '#eab308',
+                      '#22c55e',
+                      '#3b82f6',
+                      '#8b5cf6',
+                      '#ec4899',
+                      '#6b7280',
+                    ]}
+                  >
                     {(color) => (
                       <button
                         class={`${styles.colorPickerBtn} ${formData().color === color ? styles.active : ''}`}

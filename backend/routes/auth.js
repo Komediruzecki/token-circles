@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { toCamelCase } = require('../utils');
 
-module.exports = function({ db, apiRateLimiter, authRateLimiter, requireAuth, logError }) {
+module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, logError }) {
   const router = express.Router();
 
   router.post('/api/auth/login', authRateLimiter, async (req, res) => {

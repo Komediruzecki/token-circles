@@ -10,7 +10,9 @@ function isBillPaidForCurrentPeriod(bill, now) {
 
   if (bill.frequency === 'monthly') {
     // Paid if last_paid is in the current month
-    return lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear();
+    return (
+      lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
+    );
   } else if (bill.frequency === 'weekly') {
     // Paid if last_paid is within the last 7 days
     const weekAgo = new Date(today);
@@ -28,7 +30,7 @@ function isBillPaidForCurrentPeriod(bill, now) {
   return false;
 }
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/bills', apiRateLimiter, (req, res) => {
@@ -212,7 +214,8 @@ module.exports = function({ db, apiRateLimiter, logError }) {
         .prepare('SELECT id FROM bills WHERE id = ? AND profile_id = ?')
         .get(req.params.id, pid);
       if (!existing) return res.status(404).json({ error: 'Not found' });
-      const { name, amount, frequency, day_of_month, category_id, is_active, notes, type } = req.body;
+      const { name, amount, frequency, day_of_month, category_id, is_active, notes, type } =
+        req.body;
       db.prepare(
         `
         UPDATE bills SET name = ?, amount = ?, frequency = ?, day_of_month = ?, category_id = ?, is_active = ?, notes = ?, type = ?

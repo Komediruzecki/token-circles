@@ -121,7 +121,8 @@ export class ApiClient {
             console.error(
               '[apiClient] POST /transactions failed',
               { status: response.status, errorMsg, body: options.body },
-              'Stack:', new Error().stack
+              'Stack:',
+              new Error().stack
             )
           }
           logger.error(
@@ -1006,7 +1007,8 @@ export class ApiClient {
   }
 
   createRecurring(
-    data: Partial<Models.RecurringTransaction> & Pick<Models.RecurringTransaction, 'description' | 'amount' | 'type' | 'frequency'>
+    data: Partial<Models.RecurringTransaction> &
+      Pick<Models.RecurringTransaction, 'description' | 'amount' | 'type' | 'frequency'>
   ): Promise<Models.RecurringTransaction> {
     return this.request<Models.RecurringTransaction>('/recurring', { method: 'POST', body: data })
   }

@@ -613,7 +613,9 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
       doc.addImage(barUrl, 'PNG', barX, posY, barDisplayW, barDisplayH)
       doc.setFontSize(10)
       doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-      doc.text('Monthly Income vs Expenses', barX + barDisplayW / 2, chartLabelY, { align: 'center' })
+      doc.text('Monthly Income vs Expenses', barX + barDisplayW / 2, chartLabelY, {
+        align: 'center',
+      })
     }
     posY += colChartH + 28
   }

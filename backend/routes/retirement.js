@@ -2,7 +2,7 @@ const express = require('express');
 const { toCamelCase, calculateRetirementProjection } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   // ========================
@@ -36,8 +36,16 @@ module.exports = function({ db, apiRateLimiter, logError }) {
     try {
       const pid = getProfileId(req);
       const {
-        name, target_amount, current_amount, deadline, target_date, notes,
-        current_age, retirement_age, monthly_contribution, expected_return_rate,
+        name,
+        target_amount,
+        current_amount,
+        deadline,
+        target_date,
+        notes,
+        current_age,
+        retirement_age,
+        monthly_contribution,
+        expected_return_rate,
       } = req.body;
       const dl = deadline || target_date || null;
       if (!name || target_amount == null) {
@@ -48,9 +56,27 @@ module.exports = function({ db, apiRateLimiter, logError }) {
           `INSERT INTO retirement_goals (profile_id, name, target_amount, current_amount, deadline, notes, current_age, retirement_age, monthly_contribution, expected_return_rate)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(pid, name, target_amount, current_amount || 0, dl, notes || '',
-          current_age || 30, retirement_age || 65, monthly_contribution || 0, expected_return_rate || 7);
-      res.json({ id: info.lastInsertRowid, name, target_amount, current_amount: current_amount || 0, deadline: dl, notes, profile_id: pid });
+        .run(
+          pid,
+          name,
+          target_amount,
+          current_amount || 0,
+          dl,
+          notes || '',
+          current_age || 30,
+          retirement_age || 65,
+          monthly_contribution || 0,
+          expected_return_rate || 7
+        );
+      res.json({
+        id: info.lastInsertRowid,
+        name,
+        target_amount,
+        current_amount: current_amount || 0,
+        deadline: dl,
+        notes,
+        profile_id: pid,
+      });
     } catch (err) {
       console.error(err.message);
       logError('error', err);
@@ -62,8 +88,16 @@ module.exports = function({ db, apiRateLimiter, logError }) {
     try {
       const pid = getProfileId(req);
       const {
-        name, target_amount, current_amount, deadline, target_date, notes,
-        current_age, retirement_age, monthly_contribution, expected_return_rate,
+        name,
+        target_amount,
+        current_amount,
+        deadline,
+        target_date,
+        notes,
+        current_age,
+        retirement_age,
+        monthly_contribution,
+        expected_return_rate,
       } = req.body;
       const dl = deadline || target_date || null;
       const result = db
@@ -72,9 +106,19 @@ module.exports = function({ db, apiRateLimiter, logError }) {
            current_age=?, retirement_age=?, monthly_contribution=?, expected_return_rate=?
            WHERE id=? AND profile_id=?`
         )
-        .run(name, target_amount, current_amount, dl, notes || '',
-          current_age || 30, retirement_age || 65, monthly_contribution || 0, expected_return_rate || 7,
-          req.params.id, pid);
+        .run(
+          name,
+          target_amount,
+          current_amount,
+          dl,
+          notes || '',
+          current_age || 30,
+          retirement_age || 65,
+          monthly_contribution || 0,
+          expected_return_rate || 7,
+          req.params.id,
+          pid
+        );
       if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
       res.json(toCamelCase({ ok: true }));
     } catch (err) {

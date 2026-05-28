@@ -22,7 +22,10 @@ function getProfileIds(req) {
   }
   const qp = req.query.profile_ids;
   if (qp) {
-    const ids = String(qp).split(',').map((id) => parseInt(id.trim())).filter((id) => !isNaN(id));
+    const ids = String(qp)
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id));
     if (ids.length > 0) return ids;
   }
   return [getProfileId(req)];

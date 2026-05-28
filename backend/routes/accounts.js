@@ -1,7 +1,7 @@
 const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/accounts', apiRateLimiter, (req, res) => {
@@ -23,7 +23,8 @@ module.exports = function({ db, apiRateLimiter, logError }) {
       if (!name) return res.status(400).json({ error: 'Name is required' });
       const validTypes = ['giro', 'ib', 'savings', 'cash'];
       const accountType = validTypes.includes(type) ? type : 'giro';
-      const startBalance = starting_balance !== undefined ? parseFloat(starting_balance) : (parseFloat(balance) || 0);
+      const startBalance =
+        starting_balance !== undefined ? parseFloat(starting_balance) : parseFloat(balance) || 0;
       const startDate = starting_date || null;
       const id = req.repos.accounts.create({
         name: name.trim(),
@@ -154,7 +155,9 @@ module.exports = function({ db, apiRateLimiter, logError }) {
         )
         .get(pid);
       const reconciled = db
-        .prepare(`SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`)
+        .prepare(
+          `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`
+        )
         .get(pid);
 
       res.json({

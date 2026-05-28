@@ -4,12 +4,12 @@
  */
 
 function createDocument(options = {}) {
-  const PDFDocument = require('pdfkit')
+  const PDFDocument = require('pdfkit');
   return new PDFDocument({
     size: 'A4',
     margin: 50,
     ...options,
-  })
+  });
 }
 
-module.exports = { createDocument }
+module.exports = { createDocument };

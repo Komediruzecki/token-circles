@@ -1,7 +1,7 @@
 const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   // ========================

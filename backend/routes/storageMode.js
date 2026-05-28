@@ -1,6 +1,6 @@
 const express = require('express');
 
-module.exports = function({ db, apiRateLimiter }) {
+module.exports = function ({ db, apiRateLimiter }) {
   const router = express.Router();
 
   router.get('/api/storage-mode', (req, res) => {
@@ -17,7 +17,10 @@ module.exports = function({ db, apiRateLimiter }) {
   router.post('/api/storage-mode', apiRateLimiter, (req, res) => {
     try {
       const { mode } = req.body;
-      db.prepare('INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, 0)').run('storage_mode', mode);
+      db.prepare('INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, 0)').run(
+        'storage_mode',
+        mode
+      );
       res.json({ ok: true, mode });
     } catch (err) {
       console.error(err.message);

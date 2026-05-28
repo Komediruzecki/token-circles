@@ -6,7 +6,9 @@
   padding: 16px;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 .card:hover {
   border-color: var(--primary);
@@ -153,7 +155,9 @@
   margin-top: 8px;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 0.2s, transform 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
 }
 .card:hover .actions {
   opacity: 1;

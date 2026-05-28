@@ -30,9 +30,15 @@ function getCategoryIcon(name) {
     [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, 'coffee'],
     [/hous|rent|mortgage|home|lease|property|real\s*estate/i, 'home'],
     [/utilit|electric|water|gas\s*bill|sewer|trash|garbage|recycling|power|energy/i, 'zap'],
-    [/entertain|fun|game|movie|cinema|theatre|theater|concert|music|stream|netflix|spotify|hulu|disney|hbo/i, 'film'],
+    [
+      /entertain|fun|game|movie|cinema|theatre|theater|concert|music|stream|netflix|spotify|hulu|disney|hbo/i,
+      'film',
+    ],
     [/shop|retail|cloth|apparel|mall|amazon|walmart|target|costco/i, 'shopping-cart'],
-    [/health|medical|doctor|dentist|pharma|hospital|clinic|therapy|vet|vision|eye|glasses/i, 'heart'],
+    [
+      /health|medical|doctor|dentist|pharma|hospital|clinic|therapy|vet|vision|eye|glasses/i,
+      'heart',
+    ],
     [/edu|school|college|university|tuition|book|course|class|learn|study|student/i, 'book'],
     [/travel|flight|airfare|airline|hotel|airbnb|vacation|trip|holiday/i, 'plane'],
     [/insur/i, 'shield'],
@@ -59,9 +65,16 @@ function getCategoryIcon(name) {
 
 // Retirement projection calculation helper
 function calculateRetirementProjection(
-  database, profileId, settings = null, currentAge = 30, retirementAge = 65,
-  currentSavings = 0, monthlyContribution = 500, annualReturn = 7,
-  withdrawalRate = 4, country = 'US'
+  database,
+  profileId,
+  settings = null,
+  currentAge = 30,
+  retirementAge = 65,
+  currentSavings = 0,
+  monthlyContribution = 500,
+  annualReturn = 7,
+  withdrawalRate = 4,
+  country = 'US'
 ) {
   const monthsToRetirement = (retirementAge - currentAge) * 12;
   const annualContribution = monthlyContribution * 12;
@@ -99,7 +112,8 @@ function calculateRetirementProjection(
   const yearsOfRunway = Math.round(retirementSavings / (annualWithdrawal / 12));
 
   return {
-    currentAge, retirementAge,
+    currentAge,
+    retirementAge,
     currentSavings: Math.round(currentSavings),
     monthlyContribution: Math.round(monthlyContribution),
     annualReturn: Math.round(annualReturn),
@@ -111,8 +125,10 @@ function calculateRetirementProjection(
     yearsInRetirement,
     balanceAtRetirement: Math.round(balance),
     finalBalance: Math.round(finalBalance),
-    shortfall, yearsOfRunway,
-    current_age: currentAge, retirement_age: retirementAge,
+    shortfall,
+    yearsOfRunway,
+    current_age: currentAge,
+    retirement_age: retirementAge,
     current_amount: Math.round(currentSavings),
     annual_contribution: Math.round(annualContribution),
     expected_return: Math.round(annualReturn),
@@ -120,7 +136,7 @@ function calculateRetirementProjection(
     years_to_retire: retirementAge - currentAge,
     projected_total: Math.round(balance),
     projected_income: Math.round(balance > 0 ? balance * 0.04 : 0),
-    monthly_income_in_retirement: Math.round(balance > 0 ? balance * 0.04 / 12 : 0),
+    monthly_income_in_retirement: Math.round(balance > 0 ? (balance * 0.04) / 12 : 0),
   };
 }
 

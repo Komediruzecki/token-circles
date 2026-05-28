@@ -65,8 +65,12 @@ function migrate() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_profile ON transactions(profile_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_profile_date ON transactions(profile_id, date)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_profile_type_date ON transactions(profile_id, type, date)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_transactions_profile_date ON transactions(profile_id, date)'
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_transactions_profile_type_date ON transactions(profile_id, type, date)'
+  );
 
   // Create budgets table
   db.exec(`
@@ -103,9 +107,17 @@ function migrate() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_savings_goals_profile ON savings_goals(profile_id)');
 
   // Add category_id column if upgrading from older schema
-  try { db.exec('ALTER TABLE savings_goals ADD COLUMN category_id INTEGER'); } catch (_) { /* exists */ }
+  try {
+    db.exec('ALTER TABLE savings_goals ADD COLUMN category_id INTEGER');
+  } catch (_) {
+    /* exists */
+  }
 
-  try { db.exec('CREATE INDEX IF NOT EXISTS idx_savings_goals_category ON savings_goals(category_id)'); } catch (_) { /* missing column */ }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_savings_goals_category ON savings_goals(category_id)');
+  } catch (_) {
+    /* missing column */
+  }
 
   // Create retirement_goals table
   db.exec(`
@@ -124,7 +136,9 @@ function migrate() {
       profile_id INTEGER NOT NULL DEFAULT 1
     );
   `);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_retirement_goals_profile ON retirement_goals(profile_id)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_retirement_goals_profile ON retirement_goals(profile_id)'
+  );
 
   // Create emergency_fund_config table
   db.exec(`
@@ -294,7 +308,11 @@ function migrate() {
 `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_housings_profile ON housings(profile_id)');
   // Add type column if upgrading from older schema
-  try { db.exec('ALTER TABLE housings ADD COLUMN type TEXT NOT NULL DEFAULT \'other\''); } catch (_) { /* exists */ }
+  try {
+    db.exec("ALTER TABLE housings ADD COLUMN type TEXT NOT NULL DEFAULT 'other'");
+  } catch (_) {
+    /* exists */
+  }
 
   // Create zero-based budgeting table
   db.exec(`
@@ -528,12 +546,16 @@ function migrate() {
     );
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_portfolio_profile ON portfolio_holdings(profile_id)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_portfolio_ticker ON portfolio_holdings(profile_id, ticker)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_portfolio_ticker ON portfolio_holdings(profile_id, ticker)'
+  );
 
   // Migration: Add updated_at column to portfolio_holdings
   if (!columnExists('portfolio_holdings', 'updated_at')) {
     try {
-      db.exec("ALTER TABLE portfolio_holdings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+      db.exec(
+        "ALTER TABLE portfolio_holdings ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))"
+      );
     } catch (e) {}
   }
 
@@ -549,7 +571,7 @@ function migrate() {
     try {
       db.exec('ALTER TABLE accounts ADD COLUMN starting_date TEXT DEFAULT NULL');
       // Migrate existing accounts: set starting_date = created_at
-      db.exec("UPDATE accounts SET starting_date = created_at WHERE starting_date IS NULL");
+      db.exec('UPDATE accounts SET starting_date = created_at WHERE starting_date IS NULL');
     } catch (e) {}
   }
 
@@ -1493,12 +1515,36 @@ function seedBills(profileId, config) {
     },
     { name: 'Electricity Bill', amount: 150, frequency: 'monthly', day_of_month: 15, type: 'bill' },
     { name: 'Natural Gas Bill', amount: 80, frequency: 'monthly', day_of_month: 20, type: 'bill' },
-    { name: 'Internet Service', amount: 70, frequency: 'monthly', day_of_month: 5, type: 'subscription' },
+    {
+      name: 'Internet Service',
+      amount: 70,
+      frequency: 'monthly',
+      day_of_month: 5,
+      type: 'subscription',
+    },
     { name: 'Car Insurance', amount: 120, frequency: 'monthly', day_of_month: 10, type: 'bill' },
     { name: 'Health Insurance', amount: 200, frequency: 'monthly', day_of_month: 1, type: 'bill' },
-    { name: 'Netflix', amount: 15.99, frequency: 'monthly', day_of_month: 10, type: 'subscription' },
-    { name: 'Spotify', amount: 11.99, frequency: 'monthly', day_of_month: 15, type: 'subscription' },
-    { name: 'Cloud Storage', amount: 9.99, frequency: 'monthly', day_of_month: 20, type: 'subscription' },
+    {
+      name: 'Netflix',
+      amount: 15.99,
+      frequency: 'monthly',
+      day_of_month: 10,
+      type: 'subscription',
+    },
+    {
+      name: 'Spotify',
+      amount: 11.99,
+      frequency: 'monthly',
+      day_of_month: 15,
+      type: 'subscription',
+    },
+    {
+      name: 'Cloud Storage',
+      amount: 9.99,
+      frequency: 'monthly',
+      day_of_month: 20,
+      type: 'subscription',
+    },
   ];
 
   const currentYear = new Date().getFullYear();
@@ -1555,25 +1601,85 @@ function seedPortfolio(profileId, tier) {
   // Portfolio configurations per tier
   const portfolios = {
     low: [
-      { ticker: 'SPY', shares: 5, price: 420.00, date: '2025-01-15', notes: 'S&P 500 ETF - starter position' },
-      { ticker: 'VTI', shares: 8, price: 210.00, date: '2025-03-10', notes: 'Total US Stock Market ETF' },
+      {
+        ticker: 'SPY',
+        shares: 5,
+        price: 420.0,
+        date: '2025-01-15',
+        notes: 'S&P 500 ETF - starter position',
+      },
+      {
+        ticker: 'VTI',
+        shares: 8,
+        price: 210.0,
+        date: '2025-03-10',
+        notes: 'Total US Stock Market ETF',
+      },
     ],
     mid: [
-      { ticker: 'SPY', shares: 20, price: 410.00, date: '2024-06-15', notes: 'S&P 500 ETF - core position' },
-      { ticker: 'QQQ', shares: 15, price: 350.00, date: '2024-08-01', notes: 'Nasdaq-100 ETF' },
-      { ticker: 'AMD', shares: 50, price: 120.00, date: '2025-02-20', notes: 'AMD semiconductor growth' },
-      { ticker: 'VTI', shares: 25, price: 215.00, date: '2024-11-10', notes: 'Total US Stock Market ETF' },
-      { ticker: 'AAPL', shares: 30, price: 175.00, date: '2025-01-05', notes: 'Apple Inc.' },
+      {
+        ticker: 'SPY',
+        shares: 20,
+        price: 410.0,
+        date: '2024-06-15',
+        notes: 'S&P 500 ETF - core position',
+      },
+      { ticker: 'QQQ', shares: 15, price: 350.0, date: '2024-08-01', notes: 'Nasdaq-100 ETF' },
+      {
+        ticker: 'AMD',
+        shares: 50,
+        price: 120.0,
+        date: '2025-02-20',
+        notes: 'AMD semiconductor growth',
+      },
+      {
+        ticker: 'VTI',
+        shares: 25,
+        price: 215.0,
+        date: '2024-11-10',
+        notes: 'Total US Stock Market ETF',
+      },
+      { ticker: 'AAPL', shares: 30, price: 175.0, date: '2025-01-05', notes: 'Apple Inc.' },
     ],
     high: [
-      { ticker: 'SPY', shares: 75, price: 400.00, date: '2024-01-15', notes: 'S&P 500 ETF - large core position' },
-      { ticker: 'QQQ', shares: 60, price: 340.00, date: '2024-03-20', notes: 'Nasdaq-100 ETF' },
-      { ticker: 'NVDA', shares: 100, price: 85.00, date: '2024-05-10', notes: 'NVIDIA - AI/GPU growth' },
-      { ticker: 'AMD', shares: 150, price: 110.00, date: '2024-08-15', notes: 'AMD semiconductor' },
-      { ticker: 'AAPL', shares: 80, price: 170.00, date: '2024-06-01', notes: 'Apple Inc. - core holding' },
-      { ticker: 'VTI', shares: 100, price: 205.00, date: '2024-09-01', notes: 'Total US Stock Market ETF' },
-      { ticker: 'MSFT', shares: 40, price: 380.00, date: '2025-01-10', notes: 'Microsoft - cloud/AI play' },
-      { ticker: 'GOOGL', shares: 35, price: 140.00, date: '2025-02-15', notes: 'Alphabet Inc.' },
+      {
+        ticker: 'SPY',
+        shares: 75,
+        price: 400.0,
+        date: '2024-01-15',
+        notes: 'S&P 500 ETF - large core position',
+      },
+      { ticker: 'QQQ', shares: 60, price: 340.0, date: '2024-03-20', notes: 'Nasdaq-100 ETF' },
+      {
+        ticker: 'NVDA',
+        shares: 100,
+        price: 85.0,
+        date: '2024-05-10',
+        notes: 'NVIDIA - AI/GPU growth',
+      },
+      { ticker: 'AMD', shares: 150, price: 110.0, date: '2024-08-15', notes: 'AMD semiconductor' },
+      {
+        ticker: 'AAPL',
+        shares: 80,
+        price: 170.0,
+        date: '2024-06-01',
+        notes: 'Apple Inc. - core holding',
+      },
+      {
+        ticker: 'VTI',
+        shares: 100,
+        price: 205.0,
+        date: '2024-09-01',
+        notes: 'Total US Stock Market ETF',
+      },
+      {
+        ticker: 'MSFT',
+        shares: 40,
+        price: 380.0,
+        date: '2025-01-10',
+        notes: 'Microsoft - cloud/AI play',
+      },
+      { ticker: 'GOOGL', shares: 35, price: 140.0, date: '2025-02-15', notes: 'Alphabet Inc.' },
     ],
   };
 
@@ -1598,30 +1704,119 @@ function seedRecurringTransactions(profileId, config, catId) {
 
   const recurring = [
     // Income
-    { desc: 'Monthly Salary', amount: config.monthlySalary, type: 'income', cat: 'Salary Income', freq: 'monthly', dom: 1 },
+    {
+      desc: 'Monthly Salary',
+      amount: config.monthlySalary,
+      type: 'income',
+      cat: 'Salary Income',
+      freq: 'monthly',
+      dom: 1,
+    },
     // Housing
-    { desc: 'Rent Payment', amount: Math.round((config.rent.min + config.rent.max) / 2), type: 'expense', cat: 'Rent / Mortgage', freq: 'monthly', dom: 5 },
+    {
+      desc: 'Rent Payment',
+      amount: Math.round((config.rent.min + config.rent.max) / 2),
+      type: 'expense',
+      cat: 'Rent / Mortgage',
+      freq: 'monthly',
+      dom: 5,
+    },
     // Utilities
-    { desc: 'Electric Bill', amount: Math.round(config.utilities.max * 0.6), type: 'expense', cat: 'Utilities', freq: 'monthly', dom: 10 },
-    { desc: 'Water Bill', amount: Math.round(config.utilities.max * 0.25), type: 'expense', cat: 'Utilities', freq: 'monthly', dom: 15 },
-    { desc: 'Internet Service', amount: Math.round(config.utilities.max * 0.35), type: 'expense', cat: 'Utilities', freq: 'monthly', dom: 20 },
+    {
+      desc: 'Electric Bill',
+      amount: Math.round(config.utilities.max * 0.6),
+      type: 'expense',
+      cat: 'Utilities',
+      freq: 'monthly',
+      dom: 10,
+    },
+    {
+      desc: 'Water Bill',
+      amount: Math.round(config.utilities.max * 0.25),
+      type: 'expense',
+      cat: 'Utilities',
+      freq: 'monthly',
+      dom: 15,
+    },
+    {
+      desc: 'Internet Service',
+      amount: Math.round(config.utilities.max * 0.35),
+      type: 'expense',
+      cat: 'Utilities',
+      freq: 'monthly',
+      dom: 20,
+    },
     // Subscriptions
-    { desc: 'Streaming Services', amount: Math.round(config.subscriptions.max * 0.6), type: 'expense', cat: 'Subscriptions', freq: 'monthly', dom: 3 },
-    { desc: 'Gym Membership', amount: Math.round(config.subscriptions.max * 0.4), type: 'expense', cat: 'Subscriptions', freq: 'monthly', dom: 1 },
+    {
+      desc: 'Streaming Services',
+      amount: Math.round(config.subscriptions.max * 0.6),
+      type: 'expense',
+      cat: 'Subscriptions',
+      freq: 'monthly',
+      dom: 3,
+    },
+    {
+      desc: 'Gym Membership',
+      amount: Math.round(config.subscriptions.max * 0.4),
+      type: 'expense',
+      cat: 'Subscriptions',
+      freq: 'monthly',
+      dom: 1,
+    },
     // Transportation
-    { desc: 'Car Payment', amount: Math.round((config.carPayment.min + config.carPayment.max) / 2), type: 'expense', cat: 'Car', freq: 'monthly', dom: 7 },
-    { desc: 'Fuel', amount: Math.round((config.gas.min + config.gas.max) / 2), type: 'expense', cat: 'Transportation', freq: 'weekly', dom: null },
+    {
+      desc: 'Car Payment',
+      amount: Math.round((config.carPayment.min + config.carPayment.max) / 2),
+      type: 'expense',
+      cat: 'Car',
+      freq: 'monthly',
+      dom: 7,
+    },
+    {
+      desc: 'Fuel',
+      amount: Math.round((config.gas.min + config.gas.max) / 2),
+      type: 'expense',
+      cat: 'Transportation',
+      freq: 'weekly',
+      dom: null,
+    },
     // Insurance
-    { desc: 'Health Insurance', amount: Math.round(config.healthcare.max * 0.7), type: 'expense', cat: 'Insurance', freq: 'monthly', dom: 1 },
-    { desc: 'Car Insurance', amount: Math.round(config.healthcare.max * 0.3), type: 'expense', cat: 'Insurance', freq: 'monthly', dom: 15 },
+    {
+      desc: 'Health Insurance',
+      amount: Math.round(config.healthcare.max * 0.7),
+      type: 'expense',
+      cat: 'Insurance',
+      freq: 'monthly',
+      dom: 1,
+    },
+    {
+      desc: 'Car Insurance',
+      amount: Math.round(config.healthcare.max * 0.3),
+      type: 'expense',
+      cat: 'Insurance',
+      freq: 'monthly',
+      dom: 15,
+    },
     // Groceries
-    { desc: 'Weekly Groceries', amount: Math.round(config.groceries.max / 4), type: 'expense', cat: 'Groceries', freq: 'weekly', dom: null },
+    {
+      desc: 'Weekly Groceries',
+      amount: Math.round(config.groceries.max / 4),
+      type: 'expense',
+      cat: 'Groceries',
+      freq: 'weekly',
+      dom: null,
+    },
   ];
 
   // Add investments for mid and high tiers
   if (config.investments) {
     recurring.push({
-      desc: 'Monthly Investment', amount: Math.round((config.investments.min + config.investments.max) / 2), type: 'expense', cat: 'Investments / Stocks / ETF', freq: 'monthly', dom: 2,
+      desc: 'Monthly Investment',
+      amount: Math.round((config.investments.min + config.investments.max) / 2),
+      type: 'expense',
+      cat: 'Investments / Stocks / ETF',
+      freq: 'monthly',
+      dom: 2,
     });
   }
 

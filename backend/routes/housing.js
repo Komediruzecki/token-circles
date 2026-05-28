@@ -1,7 +1,7 @@
 const express = require('express');
 const { getProfileId } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/housing', apiRateLimiter, (req, res) => {
@@ -50,7 +50,9 @@ module.exports = function({ db, apiRateLimiter, logError }) {
 
       const amount = parseFloat(monthly_amount);
       if (!property_name || isNaN(amount) || amount <= 0) {
-        return res.status(400).json({ error: 'Property name and a valid monthly amount are required' });
+        return res
+          .status(400)
+          .json({ error: 'Property name and a valid monthly amount are required' });
       }
 
       // Calculate due_date from due_day and due_month

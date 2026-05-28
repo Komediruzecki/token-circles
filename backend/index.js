@@ -306,7 +306,10 @@ app.get('/api/logs', async (req, res) => {
 
 app.post('/api/logs/clear', async (req, res) => {
   try {
-    await fs.promises.writeFile(LOGS_FILE, JSON.stringify({ version: '1.0', max_entries: 500, entries: [] }));
+    await fs.promises.writeFile(
+      LOGS_FILE,
+      JSON.stringify({ version: '1.0', max_entries: 500, entries: [] })
+    );
     res.json(toCamelCase({ ok: true }));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -314,32 +317,36 @@ app.post('/api/logs/clear', async (req, res) => {
 });
 
 // Static files - serve built files from dist if available, otherwise serve source files
-const distPath = path.join(__dirname, '..', 'frontend', 'dist')
-const serveDist = fs.existsSync(distPath) && fs.statSync(distPath).isDirectory()
+const distPath = path.join(__dirname, '..', 'frontend', 'dist');
+const serveDist = fs.existsSync(distPath) && fs.statSync(distPath).isDirectory();
 
 if (serveDist) {
   // Serve production build from dist folder
-  app.use(express.static(distPath, {
-    setHeaders: (res, filepath) => {
-      const ext = path.extname(filepath).toLowerCase()
-      // Use correct MIME types for static assets
-      const mimeType = mime.lookup(ext)
-      if (mimeType) {
-        res.setHeader('Content-Type', mimeType)
-      }
-    }
-  }))
+  app.use(
+    express.static(distPath, {
+      setHeaders: (res, filepath) => {
+        const ext = path.extname(filepath).toLowerCase();
+        // Use correct MIME types for static assets
+        const mimeType = mime.lookup(ext);
+        if (mimeType) {
+          res.setHeader('Content-Type', mimeType);
+        }
+      },
+    })
+  );
 } else {
   // In dev mode, serve source files from frontend folder
-  app.use(express.static(path.join(__dirname, '..', 'frontend'), {
-    setHeaders: (res, filepath) => {
-      const ext = path.extname(filepath).toLowerCase()
-      // TypeScript and JSX files should be served as JavaScript
-      if (ext === '.tsx' || ext === '.ts') {
-        res.setHeader('Content-Type', 'application/javascript')
-      }
-    }
-  }))
+  app.use(
+    express.static(path.join(__dirname, '..', 'frontend'), {
+      setHeaders: (res, filepath) => {
+        const ext = path.extname(filepath).toLowerCase();
+        // TypeScript and JSX files should be served as JavaScript
+        if (ext === '.tsx' || ext === '.ts') {
+          res.setHeader('Content-Type', 'application/javascript');
+        }
+      },
+    })
+  );
 }
 
 // Multer for file uploads
@@ -417,7 +424,15 @@ function requireAuth(req, res, next) {
 }
 
 // ── Route dependencies ──────────────────────────────────────────────────────────
-const routeDeps = { db, apiRateLimiter, authRateLimiter, requireAuth, logError, uploadReceipt, importUpload };
+const routeDeps = {
+  db,
+  apiRateLimiter,
+  authRateLimiter,
+  requireAuth,
+  logError,
+  uploadReceipt,
+  uploadImport,
+};
 // ── Mount extracted route modules ────────────────────────────────────────────────
 app.use(require('./routes/appInfo')());
 app.use(require('./routes/auth')(routeDeps));
@@ -441,9 +456,27 @@ app.use(require('./routes/categories')({ db, apiRateLimiter, logError, requireAu
 app.use(require('./routes/budgets')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/dashboard')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/exportRoutes')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/importRoutes')({ db, apiRateLimiter, logError, importUpload, spreadsheetService }));
+app.use(
+  require('./routes/importRoutes')({
+    db,
+    apiRateLimiter,
+    logError,
+    uploadImport,
+    spreadsheetService,
+  })
+);
 app.use(require('./routes/portfolio')({ db, apiRateLimiter, logError, yahooFinanceService }));
-app.use(require('./routes/reports')({ db, apiRateLimiter, logError, spreadsheetService, pdfService, pdfRenderService, requireAuth }));
+app.use(
+  require('./routes/reports')({
+    db,
+    apiRateLimiter,
+    logError,
+    spreadsheetService,
+    pdfService,
+    pdfRenderService,
+    requireAuth,
+  })
+);
 // Global error handler middleware
 // Sanitizes error messages before sending to client
 app.use((err, req, res, next) => {

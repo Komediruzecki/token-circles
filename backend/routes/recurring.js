@@ -2,7 +2,7 @@ const express = require('express');
 const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/recurring', apiRateLimiter, (req, res) => {

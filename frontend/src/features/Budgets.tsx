@@ -134,11 +134,15 @@ export default function Budgets() {
       const unallocated = summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0
       return {
         allocations: allocationsList,
-        summary: { ...summaryRes, categories: summaryRes?.allocations || summaryRes?.categories || [] },
+        summary: {
+          ...summaryRes,
+          categories: summaryRes?.allocations || summaryRes?.categories || [],
+        },
         forecastData: forecastDataRaw || null,
-        budgetMessage: unallocated > 0
-          ? `Unallocated: ${new Intl.NumberFormat(undefined, { style: 'currency', currency: getLocalCurrency() }).format(unallocated)}`
-          : `All income allocated!`,
+        budgetMessage:
+          unallocated > 0
+            ? `Unallocated: ${new Intl.NumberFormat(undefined, { style: 'currency', currency: getLocalCurrency() }).format(unallocated)}`
+            : `All income allocated!`,
       }
     }
   )
@@ -1200,16 +1204,18 @@ export default function Budgets() {
                       <div class={styles.catColorPicker}>
                         <span class={styles.catColorLabel}>Color:</span>
                         <div class={styles.catColorDots}>
-                          <For each={[
-                            '#ef4444',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                          ]}>
+                          <For
+                            each={[
+                              '#ef4444',
+                              '#f97316',
+                              '#eab308',
+                              '#22c55e',
+                              '#3b82f6',
+                              '#8b5cf6',
+                              '#ec4899',
+                              '#6b7280',
+                            ]}
+                          >
                             {(color) => (
                               <button
                                 class={`${styles.catColorDot} ${category.color === color ? styles.catColorDotActive : ''}`}
@@ -1379,16 +1385,18 @@ export default function Budgets() {
               <div class={styles.catFormGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.catColorDots}>
-                  <For each={[
-                    '#ef4444',
-                    '#f97316',
-                    '#eab308',
-                    '#22c55e',
-                    '#3b82f6',
-                    '#8b5cf6',
-                    '#ec4899',
-                    '#6b7280',
-                  ]}>
+                  <For
+                    each={[
+                      '#ef4444',
+                      '#f97316',
+                      '#eab308',
+                      '#22c55e',
+                      '#3b82f6',
+                      '#8b5cf6',
+                      '#ec4899',
+                      '#6b7280',
+                    ]}
+                  >
                     {(color) => (
                       <button
                         class={`${styles.catColorDot} ${styles.catColorDotLarge} ${catFormData().color === color ? styles.catColorDotActive : ''}`}

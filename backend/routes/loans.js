@@ -3,7 +3,7 @@ const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const loanCalc = require('../models/loanCalculator');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/loans', apiRateLimiter, (req, res) => {
@@ -35,15 +35,30 @@ module.exports = function({ db, apiRateLimiter, logError }) {
       const { name, principal, interest_rate, start_date, term_months, rate_periods } = req.body;
       const interestRate = interest_rate || 5.0;
       const loanId = req.repos.loans.create({
-        name, principal, interest_rate: interestRate, start_date, term_months, profile_id: pid,
+        name,
+        principal,
+        interest_rate: interestRate,
+        start_date,
+        term_months,
+        profile_id: pid,
       });
 
       if (rate_periods && rate_periods.length > 0) {
         for (const rp of rate_periods) {
-          req.repos.loans.addRatePeriod({ loan_id: loanId, rate: rp.rate, start_month: rp.start_month, end_month: rp.end_month || null });
+          req.repos.loans.addRatePeriod({
+            loan_id: loanId,
+            rate: rp.rate,
+            start_month: rp.start_month,
+            end_month: rp.end_month || null,
+          });
         }
       } else {
-        req.repos.loans.addRatePeriod({ loan_id: loanId, rate: interestRate, start_month: 1, end_month: null });
+        req.repos.loans.addRatePeriod({
+          loan_id: loanId,
+          rate: interestRate,
+          start_month: 1,
+          end_month: null,
+        });
       }
 
       res.json({
@@ -82,14 +97,23 @@ module.exports = function({ db, apiRateLimiter, logError }) {
       const pid = getProfileId(req);
       const { name, principal, interest_rate, start_date, term_months, rate_periods } = req.body;
       const result = req.repos.loans.update(req.params.id, pid, {
-        name, principal, interest_rate: interest_rate || 5.0, start_date, term_months,
+        name,
+        principal,
+        interest_rate: interest_rate || 5.0,
+        start_date,
+        term_months,
       });
       if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
 
       if (rate_periods !== undefined) {
         req.repos.loans.deleteRatePeriods(req.params.id);
         for (const rp of rate_periods) {
-          req.repos.loans.addRatePeriod({ loan_id: req.params.id, rate: rp.rate, start_month: rp.start_month, end_month: rp.end_month || null });
+          req.repos.loans.addRatePeriod({
+            loan_id: req.params.id,
+            rate: rp.rate,
+            start_month: rp.start_month,
+            end_month: rp.end_month || null,
+          });
         }
       }
 
@@ -121,7 +145,12 @@ module.exports = function({ db, apiRateLimiter, logError }) {
       const loan = req.repos.loans.getById(req.params.id, pid);
       if (!loan) return res.status(404).json({ error: 'Loan not found' });
       const { rate, start_month, end_month } = req.body;
-      const id = req.repos.loans.addRatePeriod({ loan_id: req.params.id, rate, start_month, end_month: end_month || null });
+      const id = req.repos.loans.addRatePeriod({
+        loan_id: req.params.id,
+        rate,
+        start_month,
+        end_month: end_month || null,
+      });
       res.json({ id });
     } catch (err) {
       console.error(err.message);
@@ -138,7 +167,11 @@ module.exports = function({ db, apiRateLimiter, logError }) {
         .get(req.params.id, pid);
       if (!loan) return res.status(404).json({ error: 'Loan not found' });
       const { rate, start_month, end_month } = req.body;
-      req.repos.loans.updateRatePeriod(req.params.rateId, req.params.id, { rate, start_month, end_month: end_month || null });
+      req.repos.loans.updateRatePeriod(req.params.rateId, req.params.id, {
+        rate,
+        start_month,
+        end_month: end_month || null,
+      });
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -170,7 +203,12 @@ module.exports = function({ db, apiRateLimiter, logError }) {
         .get(req.params.id, pid);
       if (!loan) return res.status(404).json({ error: 'Loan not found' });
       const { month, amount, note } = req.body;
-      const id = req.repos.loans.addPrepayment({ loan_id: req.params.id, month, amount, note: note || '' });
+      const id = req.repos.loans.addPrepayment({
+        loan_id: req.params.id,
+        month,
+        amount,
+        note: note || '',
+      });
       res.json({ id });
     } catch (err) {
       console.error(err.message);
@@ -210,7 +248,9 @@ module.exports = function({ db, apiRateLimiter, logError }) {
         .all(req.params.id);
 
       // Prepend the loan's initial rate as the first rate period (months 1 to before first user-set change)
-      const initialRatePeriod = [{ rate: loan.interest_rate, start_month: 1, end_month: undefined }];
+      const initialRatePeriod = [
+        { rate: loan.interest_rate, start_month: 1, end_month: undefined },
+      ];
       const allRatePeriods = [
         ...initialRatePeriod,
         ...ratePeriods.map((rp) => ({

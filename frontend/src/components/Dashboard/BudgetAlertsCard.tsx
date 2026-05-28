@@ -26,7 +26,7 @@ export default function BudgetAlertsCard() {
       const data = (await apiGet<{ alerts: BudgetAlert[] }>(
         '/api/budgets/alerts?threshold=80'
       )) as any
-      return (data?.alerts && Array.isArray(data.alerts)) ? data.alerts : []
+      return data?.alerts && Array.isArray(data.alerts) ? data.alerts : []
     }
   )
   const loading = () => alertsResource.loading

@@ -13,7 +13,17 @@ interface RecurringSectionProps {
   onRefreshTransactions: () => void
 }
 
-type RecurringFormData = Pick<RecurringTransaction, 'description' | 'amount' | 'type' | 'frequency' | 'day_of_month' | 'next_date' | 'category_id' | 'notes'>
+type RecurringFormData = Pick<
+  RecurringTransaction,
+  | 'description'
+  | 'amount'
+  | 'type'
+  | 'frequency'
+  | 'day_of_month'
+  | 'next_date'
+  | 'category_id'
+  | 'notes'
+>
 
 export default function RecurringSection(props: RecurringSectionProps) {
   const [items, setItems] = createSignal<RecurringTransaction[]>([])

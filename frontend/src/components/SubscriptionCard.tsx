@@ -73,8 +73,7 @@ function formatDate(dateStr: string): string {
 
 export default function SubscriptionCard(props: SubscriptionCardProps) {
   const sub = () => props.subscription
-  const brand = () =>
-    matchBrand(sub().name, sub().category_color)
+  const brand = () => matchBrand(sub().name, sub().category_color)
   const isActive = () => sub().is_active !== 0
   const isPaying = () => props.markingPaid().has(sub().id)
   const categoryLabel = () => sub().category_name || sub().category || brand().defaultCategory
@@ -112,7 +111,14 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
       {/* Meta row: due date + category */}
       <div class={styles.metaRow}>
         <span class={`${styles.due} ${dueClass(sub().due_date)}`}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
             <line x1="16" y1="2" x2="16" y2="6" />
             <line x1="8" y1="2" x2="8" y2="6" />
@@ -122,7 +128,10 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
           {' · '}
           {formatDate(sub().due_date)}
         </span>
-        <span class={styles.categoryPill} style={{ 'background-color': brand().bgColor, color: brand().color }}>
+        <span
+          class={styles.categoryPill}
+          style={{ 'background-color': brand().bgColor, color: brand().color }}
+        >
           {categoryLabel()}
         </span>
       </div>
@@ -141,23 +150,32 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
       <div class={styles.actions}>
         <button
           class={`${styles.actionBtn} ${styles.actionPrimary}`}
-          onClick={() => { props.onMarkPaid(sub().id); }}
+          onClick={() => {
+            props.onMarkPaid(sub().id)
+          }}
           disabled={isPaying()}
         >
           {isPaying() ? 'Paying...' : 'Mark Paid'}
         </button>
-        <Show when={isActive()} fallback={
-          <button
-            class={`${styles.actionBtn} ${styles.actionPrimary}`}
-            onClick={() => { props.onPause(sub().id); }}
-            title="Resume subscription"
-          >
-            Resume
-          </button>
-        }>
+        <Show
+          when={isActive()}
+          fallback={
+            <button
+              class={`${styles.actionBtn} ${styles.actionPrimary}`}
+              onClick={() => {
+                props.onPause(sub().id)
+              }}
+              title="Resume subscription"
+            >
+              Resume
+            </button>
+          }
+        >
           <button
             class={`${styles.actionBtn} ${styles.actionGhost}`}
-            onClick={() => { props.onPause(sub().id); }}
+            onClick={() => {
+              props.onPause(sub().id)
+            }}
             title="Pause subscription"
           >
             Pause
@@ -165,14 +183,18 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
         </Show>
         <button
           class={`${styles.actionBtn} ${styles.actionGhost}`}
-          onClick={() => { props.onEdit(sub().id); }}
+          onClick={() => {
+            props.onEdit(sub().id)
+          }}
           title="Edit subscription"
         >
           Edit
         </button>
         <ConfirmButton
           class={`${styles.actionBtn} ${styles.actionGhost}`}
-          onConfirm={() => { props.onDelete(sub().id); }}
+          onConfirm={() => {
+            props.onDelete(sub().id)
+          }}
           label="Delete"
         />
       </div>

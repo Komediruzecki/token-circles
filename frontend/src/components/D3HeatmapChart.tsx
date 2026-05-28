@@ -196,5 +196,10 @@ export default function D3HeatmapChart(props: Props) {
     if (props.data && props.year && props.type) renderHeatmap()
   })
 
-  return <div ref={containerRef} style={{ width: '100%', 'overflow-x': 'auto', '-webkit-overflow-scrolling': 'touch' }} />
+  return (
+    <div
+      ref={containerRef}
+      style={{ width: '100%', 'overflow-x': 'auto', '-webkit-overflow-scrolling': 'touch' }}
+    />
+  )
 }

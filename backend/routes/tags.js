@@ -18,7 +18,7 @@ const TAG_COLORS = [
   '#a855f7',
 ];
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/tags', apiRateLimiter, (req, res) => {

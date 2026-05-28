@@ -90,22 +90,22 @@ export default function Analytics() {
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
       const months = Math.max(24, monthsNeeded)
       const [categoryRes, , monthlyRes] = await Promise.all([
-        apiGet<{ datasets: CategoryTrendsRow[] }>(`/api/analytics/category-trends?type=${type}&year=${year}`),
+        apiGet<{ datasets: CategoryTrendsRow[] }>(
+          `/api/analytics/category-trends?type=${type}&year=${year}`
+        ),
         apiGet<Record<string, unknown>>('/api/transactions/summary'),
         apiGet<MonthlyStatsRow[]>(`/api/stats/monthly?months=${months}`),
       ])
 
-      const byCategory = (categoryRes.datasets || [])
-        .slice(0, 10)
-        .map((d, i) => {
-          const dataArr = d.data || []
-          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
-          return {
-            category_id: i,
-            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
-            amount: total,
-          }
-        })
+      const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d, i) => {
+        const dataArr = d.data || []
+        const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+        return {
+          category_id: i,
+          category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+          amount: total,
+        }
+      })
 
       const byMonth = Array.isArray(monthlyRes)
         ? monthlyRes
@@ -194,13 +194,19 @@ export default function Analytics() {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
       const now = new Date()
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
-      const monthlyRes = await apiGet<MonthlyStatsRow[]>(`/api/stats/monthly?months=${Math.max(24, monthsNeeded)}`)
+      const monthlyRes = await apiGet<MonthlyStatsRow[]>(
+        `/api/stats/monthly?months=${Math.max(24, monthsNeeded)}`
+      )
       const months = Array.isArray(monthlyRes) ? monthlyRes : []
       const found = months.find((m) => m.month === mKey)
       if (found) {
         const income = found.income || 0
         const expense = found.expense || 0
-        return { income, expense, savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0 }
+        return {
+          income,
+          expense,
+          savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0,
+        }
       }
       return { income: 0, expense: 0, savingsRate: 0 }
     }
@@ -236,7 +242,9 @@ export default function Analytics() {
       return
     }
     try {
-      const res = await apiGet<{ weeks: WeekData[] }>(`/api/analytics/weeks?year=${year}&month=${month}`)
+      const res = await apiGet<{ weeks: WeekData[] }>(
+        `/api/analytics/weeks?year=${year}&month=${month}`
+      )
       setWeeks(res.weeks || [])
     } catch (_e) {
       console.error('Failed to load weeks')
@@ -313,7 +321,9 @@ export default function Analytics() {
       }
       const week = selectedWeek()
       if (week) params.set('week', week)
-      const res = await apiGet<CategoryTrendsResponse>(`/api/analytics/category-trends?${params.toString()}`)
+      const res = await apiGet<CategoryTrendsResponse>(
+        `/api/analytics/category-trends?${params.toString()}`
+      )
       setStackedData({
         labels: res.labels || [],
         datasets: (res.datasets || []).map((d) => ({ ...d, color: d.color || '#6366f1' })),
@@ -331,7 +341,9 @@ export default function Analytics() {
         const cmpWeek = selectedWeek()
         if (cmpWeek) cmpParams.set('week', cmpWeek)
         try {
-          const cmpRes = await apiGet<CategoryTrendsResponse>(`/api/analytics/category-trends?${cmpParams.toString()}`)
+          const cmpRes = await apiGet<CategoryTrendsResponse>(
+            `/api/analytics/category-trends?${cmpParams.toString()}`
+          )
           setCompareData({
             labels: cmpRes.labels || [],
             datasets: (cmpRes.datasets || []).map((d) => ({ ...d, color: d.color || '#6366f1' })),
@@ -463,7 +475,6 @@ export default function Analytics() {
               </div>
               <div class={styles.heatmapControls} style="justify-content:flex-start;margin-top:8px">
                 <select
-
                   class={styles.heatmapTypeSelect}
                   value={monthlyMonth()}
                   onchange={(e) => setMonthlyMonth(Number(e.currentTarget.value))}
@@ -736,7 +747,8 @@ export default function Analytics() {
                         },
                         tooltip: {
                           callbacks: {
-                            label: (ctx) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number)}`,
+                            label: (ctx) =>
+                              `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number)}`,
                           },
                         },
                       },
@@ -825,7 +837,9 @@ export default function Analytics() {
                   <Chart
                     type="doughnut"
                     data={{
-                      labels: data()!.byCategory.map((item: { category_name: string }) => item.category_name),
+                      labels: data()!.byCategory.map(
+                        (item: { category_name: string }) => item.category_name
+                      ),
                       datasets: [
                         {
                           data: data()!.byCategory.map((item: { amount: number }) => item.amount),
@@ -1251,7 +1265,11 @@ export default function Analytics() {
                 <div class={styles.chartContainer}>
                   <div class={styles.categoryBars}>
                     {(() => {
-                      const total = data()!.byCategory.reduce((s: number, c: { amount: number }) => s + c.amount, 0) || 1
+                      const total =
+                        data()!.byCategory.reduce(
+                          (s: number, c: { amount: number }) => s + c.amount,
+                          0
+                        ) || 1
                       return (
                         <For each={data()!.byCategory}>
                           {(item) => {
@@ -1288,7 +1306,10 @@ export default function Analytics() {
                     }}
                   >
                     {(() => {
-                      const total = data()!.byCategory.reduce((s: number, c: { amount: number }) => s + c.amount, 0)
+                      const total = data()!.byCategory.reduce(
+                        (s: number, c: { amount: number }) => s + c.amount,
+                        0
+                      )
                       const count = data()!.byCategory.length
                       const avg = count > 0 ? total / count : 0
                       const monthly = total / 6

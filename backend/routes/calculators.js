@@ -1,7 +1,7 @@
 const express = require('express');
 const { getProfileId } = require('../middleware/profile');
 
-module.exports = function({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/calculator/emergency-fund', apiRateLimiter, (req, res) => {
