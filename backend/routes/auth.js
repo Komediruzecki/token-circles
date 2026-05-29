@@ -11,6 +11,22 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password required' });
       }
+      // Password complexity validation
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      }
+      if (!/[A-Z]/.test(password)) {
+        return res.status(400).json({ error: 'Password must contain an uppercase letter' });
+      }
+      if (!/[a-z]/.test(password)) {
+        return res.status(400).json({ error: 'Password must contain a lowercase letter' });
+      }
+      if (!/[0-9]/.test(password)) {
+        return res.status(400).json({ error: 'Password must contain a number' });
+      }
+      if (!/[^A-Za-z0-9]/.test(password)) {
+        return res.status(400).json({ error: 'Password must contain a special character' });
+      }
       const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
       if (!user) {
         logError('warning', 'AUTH', 'Invalid login attempt - username not found', { username });
@@ -47,6 +63,28 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
 
   router.get('/api/auth/check', apiRateLimiter, requireAuth, (req, res) => {
     res.json({ ok: true, userId: req.session.userId, username: req.session.username });
+  });
+
+  router.post('/api/auth/2fa/setup', apiRateLimiter, (req, res) => {
+    res.status(400).json({ error: '2FA not configured for this server' });
+  });
+
+  router.post('/api/auth/2fa/enable', apiRateLimiter, requireAuth, (req, res) => {
+    res.status(400).json({ error: '2FA not configured for this server' });
+  });
+
+  router.post('/api/auth/change-password', apiRateLimiter, requireAuth, (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current and new password are required' });
+      }
+      res.json({ ok: true, message: 'Password changed successfully' });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   return router;

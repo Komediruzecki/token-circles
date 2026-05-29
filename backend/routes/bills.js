@@ -178,15 +178,24 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.post('/api/bills', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const { name, amount, frequency, day_of_month, category_id, notes, type } = req.body;
+      const { name, amount, frequency, day_of_month, category_id, notes, type, dueDate } = req.body;
       if (!name || amount === undefined) {
         return res.status(400).json({ error: 'Name and amount are required' });
+      }
+      if (!dueDate) {
+        return res.status(400).json({ error: 'Due date is required' });
+      }
+      if (isNaN(Date.parse(dueDate))) {
+        return res.status(400).json({ error: 'Invalid due date format' });
+      }
+      if (parseFloat(amount) <= 0) {
+        return res.status(400).json({ error: 'Amount must be positive' });
       }
       const info = db
         .prepare(
           `
-        INSERT INTO bills (profile_id, name, amount, frequency, day_of_month, category_id, notes, type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO bills (profile_id, name, amount, frequency, day_of_month, category_id, notes, type, due_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
         .run(
@@ -197,7 +206,8 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
           day_of_month || null,
           category_id || null,
           notes || '',
-          type || 'bill'
+          type || 'bill',
+          dueDate
         );
       res.json({ id: info.lastInsertRowid });
     } catch (err) {
