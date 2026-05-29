@@ -12,6 +12,7 @@ module.exports = function ({
   requireAuth,
 }) {
   const router = express.Router();
+  const customReports = new Map(); // in-memory store for custom reports
   const PORT = process.env.PORT || 3847;
 
   function sanitizeInput(input) {
@@ -926,12 +927,16 @@ module.exports = function ({
       if (!sanitizedName || sanitizedName.trim().length < 1) {
         return res.status(400).json({ error: 'Invalid report name' });
       }
-      res.json({
-        reportId: Date.now(),
+      const id = Date.now();
+      const report = {
+        id,
+        reportId: id,
         name: sanitizedName,
         type: type || 'custom',
         createdAt: new Date().toISOString(),
-      });
+      };
+      customReports.set(id, report);
+      res.json(report);
     } catch (err) {
       console.error(err.message);
       logError('error', err);
@@ -1254,6 +1259,116 @@ module.exports = function ({
     } catch (err) {
       console.error(err.message);
       logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Overview Report ─────────────────────────────────────────────────
+  router.get('/api/reports/overview', apiRateLimiter, (req, res) => {
+    try {
+      const pid = getProfileId(req);
+      const { startDate, endDate, type, includeCategories } = req.query;
+
+      let incomeWhere = `profile_id = ? AND type = 'income'`;
+      let expenseWhere = `profile_id = ? AND type = 'expense'`;
+      const params = [pid];
+
+      if (startDate) {
+        incomeWhere += ` AND date >= ?`;
+        expenseWhere += ` AND date >= ?`;
+        params.push(startDate, startDate);
+      }
+      if (endDate) {
+        incomeWhere += ` AND date <= ?`;
+        expenseWhere += ` AND date <= ?`;
+        params.push(endDate, endDate);
+      }
+
+      const totalIncome = db
+        .prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`)
+        .get(...params.slice(0, Math.ceil(params.length / 2)))?.total || 0;
+      const totalExpenses = db
+        .prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`)
+        .get(...params.slice(Math.ceil(params.length / 2)))?.total || 0;
+
+      const countParams = type
+        ? [pid, type, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])]
+        : [pid];
+
+      let countQuery = `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ?`;
+      if (type) countQuery += ` AND type = ?`;
+      if (startDate) countQuery += ` AND date >= ?`;
+      if (endDate) countQuery += ` AND date <= ?`;
+
+      const transactionCount = db.prepare(countQuery).get(...countParams)?.count || 0;
+
+      const response = {
+        totalIncome,
+        totalExpenses,
+        netBalance: totalIncome - totalExpenses,
+        transactionCount,
+      };
+
+      if (includeCategories === 'true') {
+        response.categoryBreakdown = db
+          .prepare(
+            `SELECT c.name, c.id, SUM(t.amount) as total
+             FROM transactions t
+             LEFT JOIN categories c ON t.category_id = c.id
+             WHERE t.profile_id = ?
+             GROUP BY c.id
+             ORDER BY total DESC`
+          )
+          .all(pid);
+      }
+
+      res.json(response);
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Custom Report CRUD ──────────────────────────────────────────────
+
+  router.get('/api/reports/custom/:id', apiRateLimiter, (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const report = customReports.get(id);
+      if (!report) return res.status(404).json({ error: 'Report not found' });
+      res.json(report);
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.put('/api/reports/custom/:id', apiRateLimiter, (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const report = customReports.get(id);
+      if (!report) return res.status(404).json({ error: 'Report not found' });
+      const updated = { ...report, ...req.body, id, updatedAt: new Date().toISOString() };
+      customReports.set(id, updated);
+      res.json(updated);
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.delete('/api/reports/custom/:id', apiRateLimiter, (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (!customReports.has(id)) return res.status(404).json({ error: 'Report not found' });
+      customReports.delete(id);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
       res.status(500).json({ error: err.message });
     }
   });

@@ -56,6 +56,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
+  router.get('/api/recurring/:id', apiRateLimiter, (req, res) => {
+    try {
+      const pid = getProfileId(req);
+      const r = db
+        .prepare('SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?')
+        .get(req.params.id, pid);
+      if (!r) return res.status(404).json({ error: 'Not found' });
+      res.json(toCamelCase(r));
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   router.put('/api/recurring/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
