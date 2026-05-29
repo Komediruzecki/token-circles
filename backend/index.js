@@ -451,6 +451,7 @@ app.use(require('./routes/savingsGoals')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/tags')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/transactions')({ db, apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/calculators')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/tax')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/analytics')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/categories')({ db, apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/budgets')({ db, apiRateLimiter, logError }));

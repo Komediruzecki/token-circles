@@ -1,14 +1,375 @@
 const express = require('express');
-const { getProfileId } = require('../middleware/profile');
+const { calcMonthlyPayment } = require('../models/loanCalculator');
 
 module.exports = function ({ db, apiRateLimiter, logError }) {
   const router = express.Router();
+
+  // ── Loan Payment Calculator ──────────────────────────────────────────
+  router.get('/api/calculators/loans', apiRateLimiter, (req, res) => {
+    try {
+      const principal = parseFloat(req.query.principal);
+      const rate = parseFloat(req.query.rate);
+      const term = parseFloat(req.query.term);
+
+      if (isNaN(principal) || principal <= 0)
+        return res.status(400).json({ error: 'Principal must be a positive number' });
+      if (isNaN(rate) || rate < 0)
+        return res.status(400).json({ error: 'Rate must be a non-negative number' });
+      if (isNaN(term) || term < 1 || !Number.isInteger(term))
+        return res.status(400).json({ error: 'Term must be a positive integer' });
+
+      const monthlyPayment = calcMonthlyPayment(principal, rate, term);
+      const totalPayment = monthlyPayment * term;
+      const totalInterest = totalPayment - principal;
+
+      res.json({
+        monthlyPayment: Math.round(monthlyPayment * 100) / 100,
+        totalPayment: Math.round(totalPayment * 100) / 100,
+        totalInterest: Math.round(totalInterest * 100) / 100,
+        principal,
+        rate,
+        termMonths: term,
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Mortgage Calculator ──────────────────────────────────────────────
+  router.get('/api/calculators/mortgages', apiRateLimiter, (req, res) => {
+    try {
+      const principal = parseFloat(req.query.principal);
+      const rate = parseFloat(req.query.rate);
+      const term = parseFloat(req.query.term);
+      const downPayment = parseFloat(req.query.downPayment) || 0;
+      const downPaymentPercent = parseFloat(req.query.downPaymentPercent) || 0;
+      const propertyTax = parseFloat(req.query.propertyTax) || 0;
+      const monthlyInsurance = parseFloat(req.query.monthlyInsurance) || 0;
+      const noPmi = req.query.noPmi === 'true';
+
+      if (isNaN(principal) || principal <= 0)
+        return res.status(400).json({ error: 'Principal must be a positive number' });
+      if (isNaN(rate) || rate < 0)
+        return res.status(400).json({ error: 'Rate must be non-negative' });
+      if (isNaN(term) || term < 1)
+        return res.status(400).json({ error: 'Term must be a positive integer' });
+
+      let effectiveDown = downPayment;
+      if (downPaymentPercent > 0) {
+        effectiveDown = principal * (downPaymentPercent / 100);
+      }
+
+      const loanAmount = principal - effectiveDown;
+      const termMonths = term;
+      const monthlyPayment = calcMonthlyPayment(loanAmount, rate, termMonths);
+
+      // PMI: typically 0.5-1% of loan annually if down payment < 20%
+      let pmi = 0;
+      if (!noPmi && effectiveDown / principal < 0.2) {
+        pmi = (loanAmount * 0.0075) / 12; // 0.75% annual PMI
+      }
+
+      const totalMonthly = monthlyPayment + propertyTax / 12 + monthlyInsurance + pmi;
+      const totalPayment = totalMonthly * termMonths;
+      const totalInterest = totalPayment - loanAmount - propertyTax * term - monthlyInsurance * termMonths - pmi * termMonths;
+
+      res.json({
+        monthlyPayment: Math.round(totalMonthly * 100) / 100,
+        principalAndInterest: Math.round(monthlyPayment * 100) / 100,
+        propertyTax: Math.round(propertyTax / 12 * 100) / 100,
+        insurance: Math.round(monthlyInsurance * 100) / 100,
+        pmi: Math.round(pmi * 100) / 100,
+        totalPayment: Math.round(totalPayment * 100) / 100,
+        totalInterest: Math.round(totalInterest * 100) / 100,
+        loanAmount: Math.round(loanAmount * 100) / 100,
+        downPayment: effectiveDown,
+        rate,
+        termYears: term,
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Savings Goal Calculator ──────────────────────────────────────────
+  router.get('/api/calculators/savings', apiRateLimiter, (req, res) => {
+    try {
+      const goalAmount = parseFloat(req.query.goalAmount);
+      const currentAmount = parseFloat(req.query.currentAmount);
+      const monthlyContribution = parseFloat(req.query.monthlyContribution);
+      const annualRate = parseFloat(req.query.annualRate);
+
+      if (isNaN(goalAmount) || goalAmount <= 0)
+        return res.status(400).json({ error: 'Goal amount must be positive' });
+      if (isNaN(currentAmount))
+        return res.status(400).json({ error: 'Current amount is required' });
+      if (isNaN(monthlyContribution))
+        return res.status(400).json({ error: 'Monthly contribution is required' });
+      if (monthlyContribution < 0)
+        return res.status(400).json({ error: 'Monthly contribution must be non-negative' });
+      if (isNaN(annualRate) || annualRate < 0)
+        return res.status(400).json({ error: 'Annual rate must be non-negative' });
+
+      if (currentAmount >= goalAmount) {
+        return res.json({
+          monthsToGoal: 0,
+          yearsToGoal: 0,
+          goalAmount,
+          currentAmount,
+          monthlyContribution,
+          annualRate,
+          finalBalance: currentAmount,
+          status: 'already_achieved',
+        });
+      }
+
+      const monthlyRate = annualRate / 100 / 12;
+      let balance = currentAmount;
+      let months = 0;
+      const maxMonths = 1200; // 100 years safety cap
+
+      while (balance < goalAmount && months < maxMonths) {
+        balance = balance * (1 + monthlyRate) + monthlyContribution;
+        months++;
+      }
+
+      if (months >= maxMonths && balance < goalAmount) {
+        return res.json({
+          monthsToGoal: -1,
+          yearsToGoal: -1,
+          goalAmount,
+          currentAmount,
+          monthlyContribution,
+          annualRate,
+          finalBalance: Math.round(balance * 100) / 100,
+          status: 'not_achievable',
+        });
+      }
+
+      res.json({
+        monthsToGoal: months,
+        yearsToGoal: Math.round((months / 12) * 10) / 10,
+        goalAmount,
+        currentAmount,
+        monthlyContribution,
+        annualRate,
+        finalBalance: Math.round(balance * 100) / 100,
+        status: 'on_track',
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Retirement Calculator ────────────────────────────────────────────
+  router.get('/api/calculators/retirement', apiRateLimiter, (req, res) => {
+    try {
+      const currentAge = parseInt(req.query.currentAge);
+      const retirementAge = parseInt(req.query.retirementAge);
+      const currentSavings = parseFloat(req.query.currentSavings);
+      const monthlyContribution = parseFloat(req.query.monthlyContribution);
+      const annualReturn = parseFloat(req.query.annualReturn);
+      const withdrawalRate = parseFloat(req.query.withdrawalRate);
+      const country = (req.query.country || 'US').toUpperCase();
+
+      if (isNaN(currentAge) || isNaN(retirementAge) || isNaN(currentSavings) || isNaN(monthlyContribution) || isNaN(annualReturn) || isNaN(withdrawalRate))
+        return res.status(400).json({ error: 'All numeric parameters are required' });
+      if (monthlyContribution < 0)
+        return res.status(400).json({ error: 'Monthly contribution must be non-negative' });
+      if (retirementAge <= currentAge)
+        return res.status(400).json({ error: 'Retirement age must be greater than current age' });
+      if (!['US', 'CA', 'GB', 'AU', 'DE', 'FR'].includes(country))
+        return res.status(400).json({ error: 'Unsupported country code' });
+
+      const yearsToRetirement = retirementAge - currentAge;
+      const monthlyRate = annualReturn / 100 / 12;
+
+      // Future value of current savings
+      const futureValueCurrent = currentSavings * Math.pow(1 + monthlyRate, yearsToRetirement * 12);
+
+      // Future value of monthly contributions (annuity formula)
+      let futureValueContributions = 0;
+      if (monthlyRate > 0) {
+        futureValueContributions = monthlyContribution * ((Math.pow(1 + monthlyRate, yearsToRetirement * 12) - 1) / monthlyRate);
+      } else {
+        futureValueContributions = monthlyContribution * yearsToRetirement * 12;
+      }
+
+      const retirementSavings = futureValueCurrent + futureValueContributions;
+      const annualWithdrawal = retirementSavings * (withdrawalRate / 100);
+      const yearsInRetirement = withdrawalRate > 0 ? Math.floor(retirementSavings / annualWithdrawal) : 30;
+      const shortfall = yearsInRetirement < 30 ? (30 - yearsInRetirement) * annualWithdrawal : 0;
+      const yearsOfRunway = annualWithdrawal > 0 ? Math.floor(retirementSavings / annualWithdrawal) : 999;
+
+      res.json({
+        currentAge,
+        retirementAge,
+        yearsToRetirement,
+        retirementSavings: Math.round(retirementSavings * 100) / 100,
+        annualWithdrawal: Math.round(annualWithdrawal * 100) / 100,
+        yearsInRetirement,
+        yearsOfRunway,
+        shortfall: Math.round(shortfall * 100) / 100,
+        monthlyContribution,
+        annualReturn,
+        withdrawalRate,
+        country,
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Amortization Schedule ────────────────────────────────────────────
+  router.get('/api/calculators/loans/amortization', apiRateLimiter, (req, res) => {
+    try {
+      const principal = parseFloat(req.query.principal);
+      const rate = parseFloat(req.query.rate);
+      const term = parseFloat(req.query.term);
+
+      if (isNaN(principal) || principal <= 0)
+        return res.status(400).json({ error: 'Principal must be positive' });
+      if (isNaN(rate) || rate < 0)
+        return res.status(400).json({ error: 'Rate must be non-negative' });
+      if (isNaN(term) || term < 1 || !Number.isInteger(term))
+        return res.status(400).json({ error: 'Term must be a positive integer' });
+
+      const monthlyRate = rate / 100 / 12;
+      const termMonths = term; // term is already in months for amortization
+      const monthlyPayment = rate === 0
+        ? principal / termMonths
+        : (principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths))) / (Math.pow(1 + monthlyRate, termMonths) - 1);
+
+      let balance = principal;
+      const schedule = [];
+      const startDate = new Date();
+
+      for (let i = 1; i <= termMonths; i++) {
+        const interest = balance * monthlyRate;
+        const principalPayment = monthlyPayment - interest;
+        balance = Math.max(0, balance - principalPayment);
+
+        const d = new Date(startDate);
+        d.setMonth(d.getMonth() + i);
+        schedule.push({
+          month: i,
+          payment: Math.round(monthlyPayment * 100) / 100,
+          principal: Math.round(principalPayment * 100) / 100,
+          interest: Math.round(interest * 100) / 100,
+          balance: Math.round(balance * 100) / 100,
+          date: d.toISOString().split('T')[0],
+        });
+      }
+
+      res.json({
+        schedule,
+        principal,
+        rate,
+        termYears: term,
+        termMonths,
+        monthlyPayment: Math.round(monthlyPayment * 100) / 100,
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Currency Converter ───────────────────────────────────────────────
+  const FIXED_RATES = {
+    USD: 1, EUR: 0.92, GBP: 0.79, CAD: 1.36, AUD: 1.53,
+    JPY: 149.5, CHF: 0.89, CNY: 7.24, INR: 83.1, MXN: 17.2,
+    BRL: 5.1, KRW: 1320, SEK: 10.5, NOK: 10.7, NZD: 1.65,
+  };
+
+  router.get('/api/calculators/currency', apiRateLimiter, (req, res) => {
+    try {
+      const from = (req.query.from || '').toUpperCase();
+      const to = (req.query.to || '').toUpperCase();
+      const amount = parseFloat(req.query.amount);
+
+      if (!FIXED_RATES[from] || !FIXED_RATES[to])
+        return res.status(400).json({ error: 'Unsupported currency code' });
+      if (isNaN(amount) || amount <= 0)
+        return res.status(400).json({ error: 'Amount must be a positive number' });
+
+      const rate = FIXED_RATES[to] / FIXED_RATES[from];
+      const convertedAmount = amount * rate;
+
+      res.json({
+        amount,
+        from,
+        to,
+        rate: Math.round(rate * 10000) / 10000,
+        convertedAmount: Math.round(convertedAmount * 100) / 100,
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Unit Converter ───────────────────────────────────────────────────
+  const UNIT_CONVERSIONS = {
+    // Distance
+    'miles:kilometers': (v) => v * 1.60934,
+    'kilometers:miles': (v) => v / 1.60934,
+    'meters:feet': (v) => v * 3.28084,
+    'feet:meters': (v) => v / 3.28084,
+    // Weight
+    'pounds:kilograms': (v) => v * 0.453592,
+    'kilograms:pounds': (v) => v / 0.453592,
+    // Temperature
+    'celsius:fahrenheit': (v) => v * 9 / 5 + 32,
+    'fahrenheit:celsius': (v) => (v - 32) * 5 / 9,
+    // Volume
+    'gallons:liters': (v) => v * 3.78541,
+    'liters:gallons': (v) => v / 3.78541,
+    // Area
+    'square_miles:acres': (v) => v * 640,
+    'acres:square_miles': (v) => v / 640,
+  };
+
+  router.get('/api/calculators/units', apiRateLimiter, (req, res) => {
+    try {
+      const value = parseFloat(req.query.value);
+      const from = (req.query.from || '').toLowerCase();
+      const to = (req.query.to || '').toLowerCase();
+
+      if (isNaN(value))
+        return res.status(400).json({ error: 'Value must be a number' });
+
+      const key = `${from}:${to}`;
+      const converter = UNIT_CONVERSIONS[key];
+
+      if (!converter)
+        return res.status(400).json({ error: `Unsupported unit conversion: ${from} to ${to}` });
+
+      const result = converter(value);
+
+      res.json({
+        value,
+        from,
+        to,
+        result: Math.round(result * 10000) / 10000,
+      });
+    } catch (err) {
+      logError('error', 'calculator', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Emergency Fund Calculator (legacy) ──────────────────────────────
+  const { getProfileId } = require('../middleware/profile');
 
   router.get('/api/calculator/emergency-fund', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
 
-      // Get monthly expenses from last 12 months
       const twelveMonthsAgo = new Date();
       twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
       const dateStr = twelveMonthsAgo.toISOString().split('T')[0];
@@ -20,10 +381,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
         )
         .all(pid, dateStr);
 
-      // Group by month and calculate average
       const monthlyTotals = {};
       for (const r of expenseRows) {
-        const m = r.date.substring(0, 7); // YYYY-MM
+        const m = r.date.substring(0, 7);
         monthlyTotals[m] = (monthlyTotals[m] || 0) + Math.abs(r.amount);
       }
       const monthsWithData = Object.keys(monthlyTotals).length;
@@ -32,7 +392,6 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
           ? Object.values(monthlyTotals).reduce((a, b) => a + b, 0) / monthsWithData
           : 0;
 
-      // Get account balances (emergency fund = savings accounts)
       const accounts = db
         .prepare('SELECT name, type, balance FROM accounts WHERE profile_id = ?')
         .all(pid);
@@ -41,9 +400,6 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
         .filter((a) => a.type === 'savings')
         .reduce((s, a) => s + a.balance, 0);
 
-      const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-
-      // Coverage levels
       const coverage = [
         { months: 3, label: 'Starter', ratio: 3 },
         { months: 6, label: 'Standard', ratio: 6 },
@@ -64,92 +420,56 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       res.json({
         avgMonthlyExpenses: Math.round(avgMonthlyExpenses),
         totalEmergencyFund: Math.round(totalEmergencyFund),
-        totalBalance: Math.round(totalBalance),
-        monthsWithData,
         coverage,
-        accounts: accounts.filter((a) => a.type === 'savings'),
+        monthsOfCoverage: avgMonthlyExpenses > 0 ? Math.round(totalEmergencyFund / avgMonthlyExpenses) : 999,
       });
     } catch (err) {
-      console.error(err.message);
-      logError('error', err);
+      logError('error', 'calculator', err, req);
       res.status(500).json({ error: err.message });
     }
   });
 
   router.post('/api/calculator/compound-interest', apiRateLimiter, (req, res) => {
     try {
-      const {
-        principal = 0,
-        monthlyContribution = 0,
-        annualReturn = 7,
-        years = 10,
-        compoundsPerYear = 12,
-      } = req.body;
+      const { principal, monthlyContribution, annualRate, years, compoundFrequency } = req.body;
 
-      const rate = annualReturn / 100;
-      const n = compoundsPerYear;
+      if (!principal || principal < 0)
+        return res.status(400).json({ error: 'Valid principal is required' });
+      if (isNaN(parseFloat(annualRate)))
+        return res.status(400).json({ error: 'Valid annual rate is required' });
 
-      const projection = [];
-      let balance = principal;
-      let totalContributions = principal;
+      const P = parseFloat(principal);
+      const r = parseFloat(annualRate) / 100;
+      const n = compoundFrequency || 12;
+      const t = parseFloat(years) || 10;
+      const PMT = parseFloat(monthlyContribution) || 0;
 
-      for (let y = 0; y <= years; y++) {
-        projection.push({
-          year: y,
-          balance: Math.round(balance),
-          contributions: Math.round(totalContributions),
-          interest: Math.round(balance - totalContributions),
-        });
+      const futureValuePrincipal = P * Math.pow(1 + r / n, n * t);
 
-        // Compound for this year
-        const yearlyContribution = monthlyContribution * 12;
-        for (let p = 0; p < n; p++) {
-          balance = balance * (1 + rate / n) + monthlyContribution;
-        }
-        totalContributions += yearlyContribution;
+      let futureValueContributions = 0;
+      if (PMT > 0 && r > 0) {
+        const monthlyRate = r / 12;
+        futureValueContributions = PMT * ((Math.pow(1 + monthlyRate, t * 12) - 1) / monthlyRate);
+      } else if (PMT > 0) {
+        futureValueContributions = PMT * t * 12;
       }
 
-      // Scenario comparisons: vary return rate
-      const scenarios = [
-        { name: 'Conservative', return: 4, color: '#3b82f6' },
-        { name: 'Moderate', return: 6, color: '#10b981' },
-        { name: 'Optimistic', return: 8, color: '#8b5cf6' },
-      ].map((s) => {
-        const r = s.return / 100;
-        let bal = principal;
-        let contrib = principal;
-        for (let y = 0; y <= years; y++) {
-          if (y > 0) {
-            for (let p = 0; p < n; p++) {
-              bal = bal * (1 + r / n) + monthlyContribution;
-            }
-            contrib += monthlyContribution * 12;
-          }
-        }
-        return {
-          name: s.name,
-          return: s.return,
-          color: s.color,
-          finalBalance: Math.round(bal),
-          totalContributions: Math.round(contrib),
-          interest: Math.round(bal - contrib),
-        };
-      });
+      const totalFutureValue = futureValuePrincipal + futureValueContributions;
+      const totalContributions = P + PMT * t * 12;
+      const interestEarned = totalFutureValue - totalContributions;
 
       res.json({
-        projection,
-        principal,
-        monthlyContribution,
-        annualReturn,
-        years,
-        finalBalance: projection[projection.length - 1].balance,
-        totalContributions: projection[projection.length - 1].contributions,
-        totalInterest: projection[projection.length - 1].interest,
-        scenarios,
+        futureValue: Math.round(totalFutureValue * 100) / 100,
+        totalContributions: Math.round(totalContributions * 100) / 100,
+        interestEarned: Math.round(interestEarned * 100) / 100,
+        principal: P,
+        monthlyContribution: PMT,
+        annualRate: parseFloat(annualRate),
+        years: t,
+        compoundFrequency: n,
       });
     } catch (err) {
-      console.error(err.message);
-      logError('error', err);
+      logError('error', 'calculator', err, req);
       res.status(500).json({ error: err.message });
     }
   });
