@@ -66,7 +66,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     try {
       const pid = getProfileId(req);
       const tag = db
-        .prepare('SELECT id, name, color, created_at as createdAt FROM tags WHERE id = ? AND profile_id = ?')
+        .prepare(
+          'SELECT id, name, color, created_at as createdAt FROM tags WHERE id = ? AND profile_id = ?'
+        )
         .get(req.params.id, pid);
       if (!tag) return res.status(404).json({ error: 'Tag not found' });
       res.json(tag);

@@ -4,7 +4,7 @@ const { getProfileId } = require('../middleware/profile');
 // 2025 US Federal tax brackets (simplified)
 const FEDERAL_BRACKETS = {
   single: [
-    { rate: 0.10, upTo: 11600 },
+    { rate: 0.1, upTo: 11600 },
     { rate: 0.12, upTo: 47150 },
     { rate: 0.22, upTo: 100525 },
     { rate: 0.24, upTo: 191950 },
@@ -13,7 +13,7 @@ const FEDERAL_BRACKETS = {
     { rate: 0.37, upTo: Infinity },
   ],
   married_joint: [
-    { rate: 0.10, upTo: 23200 },
+    { rate: 0.1, upTo: 23200 },
     { rate: 0.12, upTo: 94300 },
     { rate: 0.22, upTo: 201050 },
     { rate: 0.24, upTo: 383900 },
@@ -22,7 +22,7 @@ const FEDERAL_BRACKETS = {
     { rate: 0.37, upTo: Infinity },
   ],
   head_of_household: [
-    { rate: 0.10, upTo: 16550 },
+    { rate: 0.1, upTo: 16550 },
     { rate: 0.12, upTo: 63100 },
     { rate: 0.22, upTo: 100500 },
     { rate: 0.24, upTo: 191950 },
@@ -33,8 +33,16 @@ const FEDERAL_BRACKETS = {
 };
 
 const STATE_TAX_RATES = {
-  CA: 0.093, NY: 0.0685, TX: 0, FL: 0, WA: 0, IL: 0.0495,
-  MA: 0.05, PA: 0.0307, NJ: 0.0637, OH: 0.0399,
+  CA: 0.093,
+  NY: 0.0685,
+  TX: 0,
+  FL: 0,
+  WA: 0,
+  IL: 0.0495,
+  MA: 0.05,
+  PA: 0.0307,
+  NJ: 0.0637,
+  OH: 0.0399,
 };
 
 const VALID_STATES = Object.keys(STATE_TAX_RATES);

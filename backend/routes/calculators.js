@@ -72,12 +72,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
       const totalMonthly = monthlyPayment + propertyTax / 12 + monthlyInsurance + pmi;
       const totalPayment = totalMonthly * termMonths;
-      const totalInterest = totalPayment - loanAmount - propertyTax * term - monthlyInsurance * termMonths - pmi * termMonths;
+      const totalInterest =
+        totalPayment -
+        loanAmount -
+        propertyTax * term -
+        monthlyInsurance * termMonths -
+        pmi * termMonths;
 
       res.json({
         monthlyPayment: Math.round(totalMonthly * 100) / 100,
         principalAndInterest: Math.round(monthlyPayment * 100) / 100,
-        propertyTax: Math.round(propertyTax / 12 * 100) / 100,
+        propertyTax: Math.round((propertyTax / 12) * 100) / 100,
         insurance: Math.round(monthlyInsurance * 100) / 100,
         pmi: Math.round(pmi * 100) / 100,
         totalPayment: Math.round(totalPayment * 100) / 100,
@@ -175,7 +180,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       const withdrawalRate = parseFloat(req.query.withdrawalRate);
       const country = (req.query.country || 'US').toUpperCase();
 
-      if (isNaN(currentAge) || isNaN(retirementAge) || isNaN(currentSavings) || isNaN(monthlyContribution) || isNaN(annualReturn) || isNaN(withdrawalRate))
+      if (
+        isNaN(currentAge) ||
+        isNaN(retirementAge) ||
+        isNaN(currentSavings) ||
+        isNaN(monthlyContribution) ||
+        isNaN(annualReturn) ||
+        isNaN(withdrawalRate)
+      )
         return res.status(400).json({ error: 'All numeric parameters are required' });
       if (monthlyContribution < 0)
         return res.status(400).json({ error: 'Monthly contribution must be non-negative' });
@@ -193,16 +205,20 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       // Future value of monthly contributions (annuity formula)
       let futureValueContributions = 0;
       if (monthlyRate > 0) {
-        futureValueContributions = monthlyContribution * ((Math.pow(1 + monthlyRate, yearsToRetirement * 12) - 1) / monthlyRate);
+        futureValueContributions =
+          monthlyContribution *
+          ((Math.pow(1 + monthlyRate, yearsToRetirement * 12) - 1) / monthlyRate);
       } else {
         futureValueContributions = monthlyContribution * yearsToRetirement * 12;
       }
 
       const retirementSavings = futureValueCurrent + futureValueContributions;
       const annualWithdrawal = retirementSavings * (withdrawalRate / 100);
-      const yearsInRetirement = withdrawalRate > 0 ? Math.floor(retirementSavings / annualWithdrawal) : 30;
+      const yearsInRetirement =
+        withdrawalRate > 0 ? Math.floor(retirementSavings / annualWithdrawal) : 30;
       const shortfall = yearsInRetirement < 30 ? (30 - yearsInRetirement) * annualWithdrawal : 0;
-      const yearsOfRunway = annualWithdrawal > 0 ? Math.floor(retirementSavings / annualWithdrawal) : 999;
+      const yearsOfRunway =
+        annualWithdrawal > 0 ? Math.floor(retirementSavings / annualWithdrawal) : 999;
 
       res.json({
         currentAge,
@@ -240,9 +256,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
       const monthlyRate = rate / 100 / 12;
       const termMonths = term; // term is already in months for amortization
-      const monthlyPayment = rate === 0
-        ? principal / termMonths
-        : (principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths))) / (Math.pow(1 + monthlyRate, termMonths) - 1);
+      const monthlyPayment =
+        rate === 0
+          ? principal / termMonths
+          : (principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths))) /
+            (Math.pow(1 + monthlyRate, termMonths) - 1);
 
       let balance = principal;
       const schedule = [];
@@ -281,9 +299,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
   // ── Currency Converter ───────────────────────────────────────────────
   const FIXED_RATES = {
-    USD: 1, EUR: 0.92, GBP: 0.79, CAD: 1.36, AUD: 1.53,
-    JPY: 149.5, CHF: 0.89, CNY: 7.24, INR: 83.1, MXN: 17.2,
-    BRL: 5.1, KRW: 1320, SEK: 10.5, NOK: 10.7, NZD: 1.65,
+    USD: 1,
+    EUR: 0.92,
+    GBP: 0.79,
+    CAD: 1.36,
+    AUD: 1.53,
+    JPY: 149.5,
+    CHF: 0.89,
+    CNY: 7.24,
+    INR: 83.1,
+    MXN: 17.2,
+    BRL: 5.1,
+    KRW: 1320,
+    SEK: 10.5,
+    NOK: 10.7,
+    NZD: 1.65,
   };
 
   router.get('/api/calculators/currency', apiRateLimiter, (req, res) => {
@@ -324,8 +354,8 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     'pounds:kilograms': (v) => v * 0.453592,
     'kilograms:pounds': (v) => v / 0.453592,
     // Temperature
-    'celsius:fahrenheit': (v) => v * 9 / 5 + 32,
-    'fahrenheit:celsius': (v) => (v - 32) * 5 / 9,
+    'celsius:fahrenheit': (v) => (v * 9) / 5 + 32,
+    'fahrenheit:celsius': (v) => ((v - 32) * 5) / 9,
     // Volume
     'gallons:liters': (v) => v * 3.78541,
     'liters:gallons': (v) => v / 3.78541,
@@ -340,8 +370,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       const from = (req.query.from || '').toLowerCase();
       const to = (req.query.to || '').toLowerCase();
 
-      if (isNaN(value))
-        return res.status(400).json({ error: 'Value must be a number' });
+      if (isNaN(value)) return res.status(400).json({ error: 'Value must be a number' });
 
       const key = `${from}:${to}`;
       const converter = UNIT_CONVERSIONS[key];
@@ -421,7 +450,8 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
         avgMonthlyExpenses: Math.round(avgMonthlyExpenses),
         totalEmergencyFund: Math.round(totalEmergencyFund),
         coverage,
-        monthsOfCoverage: avgMonthlyExpenses > 0 ? Math.round(totalEmergencyFund / avgMonthlyExpenses) : 999,
+        monthsOfCoverage:
+          avgMonthlyExpenses > 0 ? Math.round(totalEmergencyFund / avgMonthlyExpenses) : 999,
       });
     } catch (err) {
       logError('error', 'calculator', err, req);

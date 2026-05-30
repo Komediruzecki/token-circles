@@ -99,12 +99,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.use('/api/receipts/upload', multerErrorHandler);
 
   // POST /api/receipts — test-expected upload path
-  router.post(
-    '/api/receipts',
-    apiRateLimiter,
-    uploadReceipt.single('receipt'),
-    handleUpload
-  );
+  router.post('/api/receipts', apiRateLimiter, uploadReceipt.single('receipt'), handleUpload);
   router.use('/api/receipts', multerErrorHandler);
 
   // GET /api/receipts/:id
