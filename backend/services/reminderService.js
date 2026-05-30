@@ -1,20 +1,23 @@
 const db = require('../database');
 const { sendMail } = require('./emailService');
 
-function getUsersWithEmail() {
-  return db.prepare("SELECT * FROM users WHERE email IS NOT NULL AND email != ''").all();
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-function hasNotificationEnabled(profileId, key) {
+function getUsersWithEmail() {
+  return db.prepare("SELECT id, email FROM users WHERE email IS NOT NULL AND email != ''").all();
+}
+
+function hasNotificationEnabled(userId, key) {
   const row = db
     .prepare('SELECT value FROM settings WHERE key = ? AND profile_id = ?')
-    .get(key, profileId);
+    .get(key, userId);
   return row && row.value === 'true';
-}
-
-function getEmailForUser(userId) {
-  const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
-  return user ? user.email : null;
 }
 
 function getProfileIdsForUser(userId) {
@@ -79,8 +82,10 @@ function getUpcomingBills(profileId) {
     if (!bill.due_date) continue;
     const dueDate = new Date(bill.due_date);
     const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-    if (diffDays >= 0 && diffDays <= 7) {
-      upcoming.push({ ...bill, daysUntilDue: diffDays });
+    if (diffDays < 0) {
+      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: true });
+    } else if (diffDays <= 7) {
+      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: false });
     }
   }
   return upcoming.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
@@ -97,7 +102,7 @@ function getSpendingReport(profileId) {
     db
       .prepare(
         `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-       WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
+         WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
       )
       .get(profileId, startDate, endDate)?.total || 0;
 
@@ -105,7 +110,7 @@ function getSpendingReport(profileId) {
     db
       .prepare(
         `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-       WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`
+         WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`
       )
       .get(profileId, startDate, endDate)?.total || 0;
 
@@ -123,7 +128,7 @@ function getSpendingReport(profileId) {
     db
       .prepare(
         `SELECT COUNT(*) as c FROM transactions
-       WHERE profile_id = ? AND date >= ? AND date <= ?`
+         WHERE profile_id = ? AND date >= ? AND date <= ?`
       )
       .get(profileId, startDate, endDate)?.c || 0;
 
@@ -138,27 +143,36 @@ function getSpendingReport(profileId) {
   };
 }
 
-function budgetAlertHtml(alerts) {
-  const rows = alerts
+// ── Email HTML templates ───────────────────────────────────────────────
+
+function budgetAlertHtml(allAlerts) {
+  if (allAlerts.length === 0) return null;
+
+  const rows = allAlerts
     .map(
       (a) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${a.categoryColor};margin-right:8px"></span>
-        ${a.categoryName}
+        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${escapeHtml(a.categoryColor)};margin-right:8px"></span>
+        ${escapeHtml(a.categoryName)}
       </td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${a.budgetAmount.toFixed(2)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${a.spent.toFixed(2)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;color:${a.status === 'over' ? '#ef4444' : '#f59e0b'}">
-        ${a.status === 'over' ? 'OVER' : a.percentage}%
+        ${a.status === 'over' ? 'OVER' : a.percentage + '%'}
       </td>
     </tr>`
     )
     .join('');
 
+  const hasOverBudget = allAlerts.some((a) => a.status === 'over');
+  const description = hasOverBudget
+    ? 'The following budgets have exceeded their limit:'
+    : 'The following budgets are approaching their limit (80%+ used):';
+
   return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
     <h2 style="color:#1f2937">Budget Alert</h2>
-    <p>The following budgets have exceeded ${alerts[0]?.status === 'over' ? 'their limit' : '80% of their limit'}:</p>
+    <p>${description}</p>
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="background:#f3f4f6">
         <th style="padding:8px;text-align:left">Category</th>
@@ -173,13 +187,15 @@ function budgetAlertHtml(alerts) {
 }
 
 function spendingReportHtml(report) {
+  if (report.transactionCount === 0) return null;
+
   const categories = report.categoryBreakdown
     .map(
       (c) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c.color || '#6b7280'};margin-right:8px"></span>
-        ${c.name || 'Uncategorized'}
+        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${escapeHtml(c.color || '#6b7280')};margin-right:8px"></span>
+        ${escapeHtml(c.name || 'Uncategorized')}
       </td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(c.total || 0).toFixed(2)}</td>
     </tr>`
@@ -204,15 +220,17 @@ function spendingReportHtml(report) {
 }
 
 function billsReminderHtml(bills) {
+  if (bills.length === 0) return null;
+
   const rows = bills
     .map(
       (b) => `
     <tr>
-      <td style="padding:8px;border-bottom:1px solid #eee">${b.name}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee">${escapeHtml(b.name)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(b.amount || 0).toFixed(2)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${b.due_date || '-'}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;color:${b.daysUntilDue === 0 ? '#ef4444' : '#f59e0b'}">
-        ${b.daysUntilDue === 0 ? 'Today' : b.daysUntilDue === 1 ? 'Tomorrow' : `${b.daysUntilDue} days`}
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;color:${b.overdue ? '#ef4444' : b.daysUntilDue === 0 ? '#ef4444' : b.daysUntilDue <= 2 ? '#f59e0b' : '#6b7280'}">
+        ${b.overdue ? 'Overdue' : b.daysUntilDue === 0 ? 'Today' : b.daysUntilDue === 1 ? 'Tomorrow' : b.daysUntilDue + ' days'}
       </td>
     </tr>`
     )
@@ -220,13 +238,13 @@ function billsReminderHtml(bills) {
 
   return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
     <h2 style="color:#1f2937">Upcoming Bills</h2>
-    <p>${bills.length} bill${bills.length !== 1 ? 's' : ''} due in the next 7 days:</p>
+    <p>${bills.length} bill${bills.length !== 1 ? 's' : ''} due or overdue:</p>
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="background:#f3f4f6">
         <th style="padding:8px;text-align:left">Bill</th>
         <th style="padding:8px;text-align:right">Amount</th>
         <th style="padding:8px;text-align:right">Due Date</th>
-        <th style="padding:8px;text-align:right">Due In</th>
+        <th style="padding:8px;text-align:right">Status</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -234,18 +252,43 @@ function billsReminderHtml(bills) {
   </body></html>`;
 }
 
+// ── Sender functions ───────────────────────────────────────────────────
+
 async function sendBudgetAlerts() {
   console.log('[reminder] Running budget alerts check...');
   const users = getUsersWithEmail();
   for (const user of users) {
-    if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
-    if (!hasNotificationEnabled(user.id, 'email_budget_alerts')) continue;
-    const profileIds = getProfileIdsForUser(user.id);
-    for (const pid of profileIds) {
-      const alerts = getBudgetAlerts(pid);
-      if (alerts.length === 0) continue;
-      await sendMail(user.email, 'Budget Alert — Finance Manager', budgetAlertHtml(alerts));
-      break; // one email per user, even with multiple profiles
+    try {
+      if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
+      if (!hasNotificationEnabled(user.id, 'email_budget_alerts')) continue;
+
+      const profileIds = getProfileIdsForUser(user.id);
+      const allAlerts = [];
+      for (const pid of profileIds) {
+        try {
+          allAlerts.push(...getBudgetAlerts(pid));
+        } catch (e) {
+          console.error(`[reminder] Budget alerts failed for profile ${pid}:`, e.message);
+        }
+      }
+
+      if (allAlerts.length === 0) continue;
+      // Deduplicate by category, keeping highest severity
+      const seen = new Set();
+      const deduped = [];
+      for (const a of allAlerts.sort((a, b) => b.percentage - a.percentage)) {
+        if (!seen.has(a.categoryName)) {
+          seen.add(a.categoryName);
+          deduped.push(a);
+        }
+      }
+
+      const html = budgetAlertHtml(deduped);
+      if (html) {
+        await sendMail(user.email, 'Budget Alert — Finance Manager', html);
+      }
+    } catch (e) {
+      console.error(`[reminder] Budget alerts failed for user ${user.id}:`, e.message);
     }
   }
 }
@@ -254,14 +297,26 @@ async function sendSpendingReports() {
   console.log('[reminder] Running spending report...');
   const users = getUsersWithEmail();
   for (const user of users) {
-    if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
-    if (!hasNotificationEnabled(user.id, 'email_spending_report')) continue;
-    const profileIds = getProfileIdsForUser(user.id);
-    for (const pid of profileIds) {
-      const report = getSpendingReport(pid);
-      if (report.transactionCount === 0) continue;
-      await sendMail(user.email, 'Spending Report — Finance Manager', spendingReportHtml(report));
-      break;
+    try {
+      if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
+      if (!hasNotificationEnabled(user.id, 'email_spending_report')) continue;
+
+      const profileIds = getProfileIdsForUser(user.id);
+      // Send per-profile report for the first profile with data
+      for (const pid of profileIds) {
+        try {
+          const report = getSpendingReport(pid);
+          const html = spendingReportHtml(report);
+          if (html) {
+            await sendMail(user.email, 'Spending Report — Finance Manager', html);
+            break; // one report per user is enough
+          }
+        } catch (e) {
+          console.error(`[reminder] Spending report failed for profile ${pid}:`, e.message);
+        }
+      }
+    } catch (e) {
+      console.error(`[reminder] Spending report failed for user ${user.id}:`, e.message);
     }
   }
 }
@@ -270,15 +325,29 @@ async function sendBillsReminders() {
   console.log('[reminder] Running bills reminder check...');
   const users = getUsersWithEmail();
   for (const user of users) {
-    if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
-    if (!hasNotificationEnabled(user.id, 'email_bills_reminders')) continue;
-    const profileIds = getProfileIdsForUser(user.id);
-    let allBills = [];
-    for (const pid of profileIds) {
-      allBills = allBills.concat(getUpcomingBills(pid));
+    try {
+      if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
+      if (!hasNotificationEnabled(user.id, 'email_bills_reminders')) continue;
+
+      const profileIds = getProfileIdsForUser(user.id);
+      let allBills = [];
+      for (const pid of profileIds) {
+        try {
+          allBills = allBills.concat(getUpcomingBills(pid));
+        } catch (e) {
+          console.error(`[reminder] Bills check failed for profile ${pid}:`, e.message);
+        }
+      }
+
+      if (allBills.length === 0) continue;
+
+      const html = billsReminderHtml(allBills);
+      if (html) {
+        await sendMail(user.email, 'Upcoming Bills — Finance Manager', html);
+      }
+    } catch (e) {
+      console.error(`[reminder] Bills reminder failed for user ${user.id}:`, e.message);
     }
-    if (allBills.length === 0) continue;
-    await sendMail(user.email, 'Upcoming Bills — Finance Manager', billsReminderHtml(allBills));
   }
 }
 
