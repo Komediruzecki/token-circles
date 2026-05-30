@@ -1284,12 +1284,18 @@ module.exports = function ({
         params.push(endDate, endDate);
       }
 
-      const totalIncome = db
-        .prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`)
-        .get(...params.slice(0, Math.ceil(params.length / 2)))?.total || 0;
-      const totalExpenses = db
-        .prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`)
-        .get(...params.slice(Math.ceil(params.length / 2)))?.total || 0;
+      const totalIncome =
+        db
+          .prepare(
+            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`
+          )
+          .get(...params.slice(0, Math.ceil(params.length / 2)))?.total || 0;
+      const totalExpenses =
+        db
+          .prepare(
+            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`
+          )
+          .get(...params.slice(Math.ceil(params.length / 2)))?.total || 0;
 
       const countParams = type
         ? [pid, type, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])]
@@ -1384,18 +1390,20 @@ module.exports = function ({
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const startDate = d.toISOString().split('T')[0];
         const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
-        const income = db
-          .prepare(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+        const income =
+          db
+            .prepare(
+              `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
              WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
-          )
-          .get(pid, startDate, endDate)?.total || 0;
-        const expenses = db
-          .prepare(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+            )
+            .get(pid, startDate, endDate)?.total || 0;
+        const expenses =
+          db
+            .prepare(
+              `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
              WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`
-          )
-          .get(pid, startDate, endDate)?.total || 0;
+            )
+            .get(pid, startDate, endDate)?.total || 0;
         comparison.push({
           month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
           income,
@@ -1427,7 +1435,13 @@ module.exports = function ({
       const { name, type, params } = req.body;
       if (!name) return res.status(400).json({ error: 'Report name is required' });
       const id = Date.now();
-      customReports.set(id, { id, name, type: type || 'custom', params: params || {}, createdAt: new Date().toISOString() });
+      customReports.set(id, {
+        id,
+        name,
+        type: type || 'custom',
+        params: params || {},
+        createdAt: new Date().toISOString(),
+      });
       res.json({ id, name, ok: true });
     } catch (err) {
       console.error(err.message);

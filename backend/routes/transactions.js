@@ -367,7 +367,8 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
       if (decimalMatch && decimalMatch[1].length > 2) {
         return res.status(400).json({ error: 'Amount must have at most 2 decimal places' });
       }
-      const resolvedDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().split('T')[0];
+      const resolvedDate =
+        date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().split('T')[0];
 
       // Resolve account_id from means_of_payment (FROM) if not explicitly provided
       let resolvedAccountId = account_id || null;
