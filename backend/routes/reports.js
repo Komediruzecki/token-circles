@@ -1373,5 +1373,68 @@ module.exports = function ({
     }
   });
 
+  // ── Report Comparison ────────────────────────────────────────────────
+  router.get('/api/reports/compare', apiRateLimiter, (req, res) => {
+    try {
+      const pid = getProfileId(req);
+      const { periods } = req.query;
+      const comparison = [];
+      const now = new Date();
+      for (let i = 0; i < 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const startDate = d.toISOString().split('T')[0];
+        const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+        const income = db
+          .prepare(
+            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+             WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
+          )
+          .get(pid, startDate, endDate)?.total || 0;
+        const expenses = db
+          .prepare(
+            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+             WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`
+          )
+          .get(pid, startDate, endDate)?.total || 0;
+        comparison.push({
+          month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+          income,
+          expenses,
+          net: income - expenses,
+        });
+      }
+      res.json({ comparison });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Saved Reports ────────────────────────────────────────────────────
+  router.get('/api/reports/saved', apiRateLimiter, (req, res) => {
+    try {
+      res.json({ reports: [] });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/api/reports/save', apiRateLimiter, (req, res) => {
+    try {
+      const { name, type, params } = req.body;
+      if (!name) return res.status(400).json({ error: 'Report name is required' });
+      const id = Date.now();
+      customReports.set(id, { id, name, type: type || 'custom', params: params || {}, createdAt: new Date().toISOString() });
+      res.json({ id, name, ok: true });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err, req);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };

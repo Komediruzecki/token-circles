@@ -175,5 +175,29 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
+  router.put('/api/profiles/me/password', apiRateLimiter, (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current and new password are required' });
+      }
+      const bcrypt = require('bcrypt');
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      const valid = bcrypt.compareSync(currentPassword, user.password_hash);
+      if (!valid) return res.status(400).json({ error: 'Current password is incorrect' });
+      const hash = bcrypt.hashSync(newPassword, 10);
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.session.userId);
+      res.json({ ok: true, message: 'Password changed successfully' });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };

@@ -291,5 +291,37 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
+  router.get('/api/bills/summary', apiRateLimiter, (req, res) => {
+    try {
+      const pid = getProfileId(req);
+      const bills = db.prepare('SELECT * FROM bills WHERE profile_id = ?').all(pid);
+      const totalAmount = bills.reduce((s, b) => s + (b.amount || 0), 0);
+      res.json({ totalAmount, activeCount: bills.length, bills });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.get('/api/bills/notifications', apiRateLimiter, (req, res) => {
+    try {
+      const pid = getProfileId(req);
+      const bills = db.prepare('SELECT * FROM bills WHERE profile_id = ?').all(pid);
+      const today = new Date();
+      const upcoming = bills.filter((b) => {
+        if (!b.due_date) return false;
+        const dueDate = new Date(b.due_date);
+        const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+        return diffDays >= 0 && diffDays <= 7;
+      });
+      res.json({ notifications: upcoming, count: upcoming.length });
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };
