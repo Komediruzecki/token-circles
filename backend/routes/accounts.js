@@ -44,6 +44,19 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
+  router.get('/api/accounts/:id', apiRateLimiter, (req, res) => {
+    try {
+      const pid = getProfileId(req);
+      const account = req.repos.accounts.getById(req.params.id, pid);
+      if (!account) return res.status(404).json({ error: 'Account not found' });
+      res.json(account);
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   router.put('/api/accounts/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
