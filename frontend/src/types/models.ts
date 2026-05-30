@@ -263,6 +263,14 @@ export interface Settings {
   [key: string]: unknown
 }
 
+export interface NotificationSettings {
+  email: string
+  emailNotifications: boolean
+  budgetAlerts: boolean
+  billsReminders: boolean
+  spendingReport: boolean
+}
+
 // ============ EMERGENCY FUND ============
 export interface EmergencyFundConfig {
   monthly_expenses: number

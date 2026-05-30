@@ -575,6 +575,13 @@ function migrate() {
     } catch (e) {}
   }
 
+  // Migration: Add email column to users table
+  if (!columnExists('users', 'email')) {
+    try {
+      db.exec("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''");
+    } catch (e) {}
+  }
+
   // Seed demo user if no users exist
   const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
   if (userCount.c === 0) {

@@ -453,6 +453,7 @@ app.use(require('./routes/transactions')({ db, apiRateLimiter, logError, require
 app.use(require('./routes/calculators')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/tax')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/analytics')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/notifications')({ db, apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/categories')({ db, apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/budgets')({ db, apiRateLimiter, logError }));
 app.use(require('./routes/dashboard')({ db, apiRateLimiter, logError }));
@@ -533,4 +534,38 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Finance Manager running on port ${PORT}`);
+
+  // ── Email Reminder Scheduler ─────────────────────────────────────────
+  try {
+    const cron = require('node-cron');
+    const reminderService = require('./services/reminderService');
+
+    // Budget alerts: Monday 9 AM
+    cron.schedule('0 9 * * 1', () => {
+      console.log('[cron] Running scheduled budget alerts...');
+      reminderService.sendBudgetAlerts().catch((e) =>
+        console.error('[cron] Budget alert error:', e.message)
+      );
+    });
+
+    // Spending report: every other Thursday 10 AM (1st-7th and 15th-21st of month)
+    cron.schedule('0 10 1-7,15-21 * 4', () => {
+      console.log('[cron] Running scheduled spending report...');
+      reminderService.sendSpendingReports().catch((e) =>
+        console.error('[cron] Spending report error:', e.message)
+      );
+    });
+
+    // Bills reminder: daily 8 AM
+    cron.schedule('0 8 * * *', () => {
+      console.log('[cron] Running scheduled bills reminder...');
+      reminderService.sendBillsReminders().catch((e) =>
+        console.error('[cron] Bills reminder error:', e.message)
+      );
+    });
+
+    console.log('[cron] Email reminder scheduler started');
+  } catch (e) {
+    console.warn('[cron] Scheduler not started (node-cron may not be installed):', e.message);
+  }
 });
