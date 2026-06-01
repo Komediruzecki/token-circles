@@ -32,22 +32,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       const pid = getProfileId(req);
       const { description, amount, type, category_id, frequency, day_of_month, next_date, notes } =
         req.body;
-      const info = db
-        .prepare(
-          `INSERT INTO recurring_transactions (profile_id, description, amount, type, category_id, frequency, day_of_month, next_date, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          pid,
-          description || '',
-          amount,
-          type || 'expense',
-          category_id || null,
-          frequency || 'monthly',
-          day_of_month || null,
-          next_date || null,
-          notes || ''
-        );
+      const info = req.repos.recurring.create({
+        profile_id: pid,
+        description: description || '',
+        amount,
+        type: type || 'expense',
+        category_id: category_id || null,
+        frequency: frequency || 'monthly',
+        day_of_month: day_of_month || null,
+        next_date: next_date || null,
+        notes: notes || '',
+      });
       res.json({ id: info.lastInsertRowid });
     } catch (err) {
       console.error(err.message);
@@ -59,9 +54,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/recurring/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const r = db
-        .prepare('SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const r = req.repos.recurring.getById(req.params.id, pid);
       if (!r) return res.status(404).json({ error: 'Not found' });
       res.json(toCamelCase(r));
     } catch (err) {
@@ -74,9 +67,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.put('/api/recurring/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const existing = db
-        .prepare('SELECT id FROM recurring_transactions WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const existing = req.repos.recurring.getById(req.params.id, pid);
       if (!existing) return res.status(404).json({ error: 'Not found' });
       const {
         description,
@@ -89,21 +80,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
         notes,
         active,
       } = req.body;
-      db.prepare(
-        `UPDATE recurring_transactions SET description=?, amount=?, type=?, category_id=?, frequency=?, day_of_month=?, next_date=?, notes=?, active=? WHERE id=? AND profile_id=?`
-      ).run(
-        description ?? '',
-        amount ?? 0,
-        type ?? 'expense',
-        category_id ?? null,
-        frequency ?? 'monthly',
-        day_of_month ?? null,
-        next_date ?? null,
-        notes ?? '',
-        active ?? 1,
-        req.params.id,
-        pid
-      );
+      req.repos.recurring.update(req.params.id, pid, {
+        description: description ?? '',
+        amount: amount ?? 0,
+        type: type ?? 'expense',
+        category_id: category_id ?? null,
+        frequency: frequency ?? 'monthly',
+        day_of_month: day_of_month ?? null,
+        next_date: next_date ?? null,
+        notes: notes ?? '',
+        active: active ?? 1,
+      });
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -115,10 +102,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.delete('/api/recurring/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      db.prepare('DELETE FROM recurring_transactions WHERE id = ? AND profile_id = ?').run(
-        req.params.id,
-        pid
-      );
+      req.repos.recurring.deleteById(req.params.id, pid);
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -130,32 +114,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.post('/api/recurring/:id/populate', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const r = db
-        .prepare('SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
-      if (!r) return res.status(404).json({ error: 'Not found' });
-      const date = r.next_date || new Date().toISOString().split('T')[0];
-      const info = db
-        .prepare(
-          `INSERT INTO transactions (profile_id, description, amount, type, category_id, date, notes, beneficiary, payor)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(pid, r.description, r.amount, r.type, r.category_id, date, r.notes || '', '', '');
+      const result = req.repos.recurring.populate(req.params.id, pid);
+      if (!result) return res.status(404).json({ error: 'Not found' });
 
       // Advance next_date
+      const date = result.next_date || new Date().toISOString().split('T')[0];
       let next = new Date(date);
-      if (r.frequency === 'monthly') next.setMonth(next.getMonth() + 1);
-      else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7);
-      else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+      if (result.frequency === 'monthly') next.setMonth(next.getMonth() + 1);
+      else if (result.frequency === 'weekly') next.setDate(next.getDate() + 7);
+      else if (result.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
       const nextStr = next.toISOString().split('T')[0];
-      db.prepare('UPDATE recurring_transactions SET next_date = ? WHERE id = ?').run(
-        nextStr,
-        req.params.id
-      );
+      req.repos.recurring.update(req.params.id, pid, { next_date: nextStr });
 
       res.json({
         ok: true,
-        transactionId: info.lastInsertRowid,
+        transactionId: result.transactionId,
         next_date: nextStr,
       });
     } catch (err) {

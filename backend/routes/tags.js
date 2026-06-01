@@ -18,15 +18,13 @@ const TAG_COLORS = [
   '#a855f7',
 ];
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/tags', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const rows = db
-        .prepare('SELECT id, name, color, created_at FROM tags WHERE profile_id = ? ORDER BY name')
-        .all(pid);
+      const rows = req.repos.tags.list(pid);
       res.json(rows);
     } catch (err) {
       console.error(err.message);
@@ -44,13 +42,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       }
       let tagColor = color;
       if (!tagColor) {
-        // Cycle through palette based on existing tag count
-        const count = db.prepare('SELECT COUNT(*) as c FROM tags WHERE profile_id = ?').get(pid).c;
+        const count = req.repos.tags.list(pid).length;
         tagColor = TAG_COLORS[count % TAG_COLORS.length];
       }
-      const info = db
-        .prepare('INSERT INTO tags (name, color, profile_id) VALUES (?, ?, ?)')
-        .run(name.trim(), tagColor, pid);
+      const info = req.repos.tags.create({ name: name.trim(), color: tagColor, profile_id: pid });
       res.json({ id: info.lastInsertRowid, name: name.trim(), color: tagColor });
     } catch (err) {
       console.error(err.message);
@@ -65,11 +60,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/tags/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const tag = db
-        .prepare(
-          'SELECT id, name, color, created_at as createdAt FROM tags WHERE id = ? AND profile_id = ?'
-        )
-        .get(req.params.id, pid);
+      const tag = req.repos.tags.getById(req.params.id, pid);
       if (!tag) return res.status(404).json({ error: 'Tag not found' });
       res.json(tag);
     } catch (err) {
@@ -86,9 +77,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: 'Tag name is required' });
       }
-      const result = db
-        .prepare('UPDATE tags SET name = ?, color = ? WHERE id = ? AND profile_id = ?')
-        .run(name.trim(), color || '#6b7280', req.params.id, pid);
+      const result = req.repos.tags.update(req.params.id, pid, {
+        name: name.trim(),
+        color: color || '#6b7280',
+      });
       if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
@@ -104,9 +96,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.delete('/api/tags/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const result = db
-        .prepare('DELETE FROM tags WHERE id = ? AND profile_id = ?')
-        .run(req.params.id, pid);
+      const result = req.repos.tags.deleteById(req.params.id, pid);
       if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
@@ -124,20 +114,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       if (!Array.isArray(tagIds)) {
         return res.status(400).json({ error: 'tagIds must be an array' });
       }
-      // Verify transaction belongs to profile
-      const tx = db
-        .prepare('SELECT id FROM transactions WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const tx = req.repos.transactions.getById(req.params.id, pid);
       if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-      // Replace existing tags with new ones
-      db.prepare('DELETE FROM transaction_tags WHERE transaction_id = ?').run(req.params.id);
-      const insertStmt = db.prepare(
-        'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
-      );
-      for (const tagId of tagIds) {
-        insertStmt.run(req.params.id, tagId);
-      }
+      req.repos.tags.setTransactionTags(req.params.id, tagIds);
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -154,19 +134,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       if (!Array.isArray(tagIds)) {
         return res.status(400).json({ error: 'tagIds must be an array' });
       }
-      // Verify transaction belongs to profile
-      const tx = db
-        .prepare('SELECT id FROM transactions WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const tx = req.repos.transactions.getById(req.params.id, pid);
       if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-      db.prepare('DELETE FROM transaction_tags WHERE transaction_id = ?').run(req.params.id);
-      const insertStmt = db.prepare(
-        'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
-      );
-      for (const tagId of tagIds) {
-        insertStmt.run(req.params.id, tagId);
-      }
+      req.repos.tags.setTransactionTags(req.params.id, tagIds);
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -179,23 +150,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/transactions/:id/tags', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      // Verify transaction belongs to profile
-      const tx = db
-        .prepare('SELECT id FROM transactions WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const tx = req.repos.transactions.getById(req.params.id, pid);
       if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-      const tags = db
-        .prepare(
-          `
-          SELECT t.id, t.name, t.color
-          FROM tags t
-          JOIN transaction_tags tt ON t.id = tt.tag_id
-          WHERE tt.transaction_id = ? AND t.profile_id = ?
-          ORDER BY t.name
-        `
-        )
-        .all(req.params.id, pid);
+      const tags = req.repos.tags.getTagsForTransaction(req.params.id, pid);
       res.json(tags);
     } catch (err) {
       console.error(err.message);
@@ -210,43 +168,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       const pid = getProfileId(req);
       const { startDate, endDate, category_ids, type, limit, offset } = req.query;
 
-      let sql = `
-        SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon
-        FROM transactions t
-        LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-        JOIN transaction_tags tt ON t.id = tt.transaction_id
-        WHERE t.profile_id = ? AND tt.tag_id = ?
-      `;
-      const params = [pid, req.params.tagId];
-
-      if (startDate) {
-        sql += ' AND t.date >= ?';
-        params.push(startDate);
-      }
-      if (endDate) {
-        sql += ' AND t.date <= ?';
-        params.push(endDate);
-      }
-      if (category_ids) {
-        const ids = category_ids
-          .split(',')
-          .map((id) => parseInt(id))
-          .filter((id) => !isNaN(id));
-        if (ids.length > 0) {
-          sql += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
-          params.push(...ids);
-        }
-      }
-      if (type) {
-        sql += ' AND t.type = ?';
-        params.push(type);
-      }
-
-      sql += ' ORDER BY t.date DESC, t.id DESC';
-      if (limit) sql += ` LIMIT ${parseInt(limit)}`;
-      if (offset) sql += ` OFFSET ${parseInt(offset)}`;
-
-      const rows = db.prepare(sql).all(...params);
+      const rows = req.repos.tags.getTransactionsByTag(req.params.tagId, pid, {
+        startDate,
+        endDate,
+        category_ids,
+        type,
+        limit: limit ? parseInt(limit) : undefined,
+        offset: offset ? parseInt(offset) : undefined,
+      });
       res.json({ rows, total: rows.length });
     } catch (err) {
       console.error(err.message);

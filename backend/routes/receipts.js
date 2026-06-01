@@ -5,7 +5,7 @@ const multer = require('multer');
 const { getProfileId } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 
-module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
+module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
   const router = express.Router();
 
   // ── Upload helper ────────────────────────────────────────────────────
@@ -26,18 +26,15 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
       const stats = fs.statSync(storagePath);
       const fileType = req.file.mimetype;
 
-      const stmt = db.prepare(
-        `INSERT INTO receipts (transaction_id, filename, original_name, file_type, file_size, storage_path, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
-      );
-      const result = stmt.run(
-        transaction_id || null,
+      const result = req.repos.receipts.create({
+        transaction_id: transaction_id || null,
         filename,
-        req.file.originalname,
-        fileType,
-        stats.size,
-        storagePath,
-        pid
-      );
+        original_name: req.file.originalname,
+        file_type: fileType,
+        file_size: stats.size,
+        storage_path: storagePath,
+        profile_id: pid,
+      });
 
       res.json({
         id: result.lastInsertRowid,
@@ -78,9 +75,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.get('/api/receipts', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const receipts = db
-        .prepare('SELECT * FROM receipts WHERE profile_id = ? ORDER BY id DESC')
-        .all(pid);
+      const receipts = req.repos.receipts.list(pid);
       res.json(receipts.map((r) => toCamelCase(r)));
     } catch (err) {
       console.error(err.message);
@@ -106,7 +101,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.get('/api/receipts/:id', apiRateLimiter, (req, res) => {
     try {
       const { id } = req.params;
-      const receipt = db.prepare('SELECT * FROM receipts WHERE id = ?').get(id);
+      const receipt = req.repos.receipts.getById(id);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json(toCamelCase(receipt));
     } catch (err) {
@@ -120,9 +115,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
     try {
       const pid = getProfileId(req);
       const { transactionId } = req.params;
-      const receipt = db
-        .prepare('SELECT * FROM receipts WHERE transaction_id = ? AND profile_id = ?')
-        .get(transactionId, pid);
+      const receipt = req.repos.receipts.getByTransactionId(transactionId, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json(toCamelCase(receipt));
     } catch (err) {
@@ -159,16 +152,14 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
     try {
       const pid = getProfileId(req);
       const { id } = req.params;
-      const receipt = db
-        .prepare('SELECT * FROM receipts WHERE id = ? AND profile_id = ?')
-        .get(id, pid);
+      const receipt = req.repos.receipts.getByIdAndProfile(id, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       try {
         if (fs.existsSync(receipt.storage_path)) fs.unlinkSync(receipt.storage_path);
       } catch (err) {
         console.error('Error deleting receipt file:', err);
       }
-      db.prepare('DELETE FROM receipts WHERE id = ?').run(id);
+      req.repos.receipts.deleteById(id);
       res.json({ message: 'Receipt deleted successfully' });
     } catch (err) {
       console.error(err.message);
@@ -181,9 +172,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.post('/api/receipts/:id/share', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const receipt = db
-        .prepare('SELECT * FROM receipts WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const receipt = req.repos.receipts.getByIdAndProfile(req.params.id, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json({
         ok: true,
@@ -201,9 +190,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.post('/api/receipts/:id/split', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const receipt = db
-        .prepare('SELECT * FROM receipts WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const receipt = req.repos.receipts.getByIdAndProfile(req.params.id, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json({
         ok: true,
@@ -221,9 +208,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.post('/api/receipts/:id/categorize', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const receipt = db
-        .prepare('SELECT * FROM receipts WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const receipt = req.repos.receipts.getByIdAndProfile(req.params.id, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json({
         ok: true,
@@ -241,9 +226,7 @@ module.exports = function ({ db, apiRateLimiter, uploadReceipt, logError }) {
   router.post('/api/receipts/:id/export', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const receipt = db
-        .prepare('SELECT * FROM receipts WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const receipt = req.repos.receipts.getByIdAndProfile(req.params.id, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json({
         ok: true,

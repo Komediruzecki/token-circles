@@ -8,22 +8,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     try {
       const pid = getProfileId(req);
 
+      // Custom ordering by due_date ASC (repo defaults to created_at DESC)
       const housings = db
         .prepare(
-          `
-        SELECT
-          id,
-          name,
-          type,
-          monthly_amount,
-          due_date,
-          autopay,
-          notes,
-          created_at
-        FROM housings
-        WHERE profile_id = ?
-        ORDER BY due_date ASC
-      `
+          `SELECT id, name, type, monthly_amount, due_date, autopay, notes, created_at
+           FROM housings WHERE profile_id = ? ORDER BY due_date ASC`
         )
         .all(pid);
 
@@ -55,17 +44,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
           .json({ error: 'Property name and a valid monthly amount are required' });
       }
 
-      // Calculate due_date from due_day and due_month
       const due_date = `${(due_month || 1).toString().padStart(2, '0')}-${(due_day || 1).toString().padStart(2, '0')}`;
 
-      const info = db
-        .prepare(
-          `
-        INSERT INTO housings (profile_id, name, type, monthly_amount, due_date, autopay, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `
-        )
-        .run(pid, property_name, type || 'other', amount, due_date, autopay ? 1 : 0, notes || '');
+      const info = req.repos.housing.create({
+        profile_id: pid,
+        name: property_name,
+        type: type || 'other',
+        monthly_amount: amount,
+        due_date,
+        autopay: autopay ? 1 : 0,
+        notes: notes || '',
+      });
 
       res.json({ id: info.lastInsertRowid });
     } catch (err) {
@@ -78,29 +67,20 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.put('/api/housing/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const { type, property_name, monthly_amount, due_day, due_month, autopay, notes } = req.body;
+      const { property_name, monthly_amount, due_day, due_month, autopay, notes } = req.body;
 
-      const existing = db
-        .prepare('SELECT id FROM housings WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const existing = req.repos.housing.getById(req.params.id, pid);
       if (!existing) return res.status(404).json({ error: 'Not found' });
 
       const due_date = `${due_month.toString().padStart(2, '0')}-${due_day.toString().padStart(2, '0')}`;
 
-      db.prepare(
-        `
-        UPDATE housings SET name = ?, monthly_amount = ?, due_date = ?, autopay = ?, notes = ?
-        WHERE id = ? AND profile_id = ?
-      `
-      ).run(
-        property_name,
-        parseFloat(monthly_amount),
+      req.repos.housing.update(req.params.id, pid, {
+        name: property_name,
+        monthly_amount: parseFloat(monthly_amount),
         due_date,
-        autopay ? 1 : 0,
-        notes || '',
-        req.params.id,
-        pid
-      );
+        autopay: autopay ? 1 : 0,
+        notes: notes || '',
+      });
 
       res.json({ success: true });
     } catch (err) {
@@ -113,12 +93,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.delete('/api/housing/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const existing = db
-        .prepare('SELECT id FROM housings WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const existing = req.repos.housing.getById(req.params.id, pid);
       if (!existing) return res.status(404).json({ error: 'Not found' });
 
-      db.prepare('DELETE FROM housings WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
+      req.repos.housing.deleteById(req.params.id, pid);
       res.json({ success: true });
     } catch (err) {
       console.error(err.message);
