@@ -343,7 +343,7 @@ module.exports = function ({
   // =====================
 
   // JSON tax summary
-  router.get('/api/reports/tax-summary', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/tax-summary', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pids = getProfileIds(req);
       const inClause = pids.map(() => '?').join(',');
@@ -401,7 +401,7 @@ module.exports = function ({
   });
 
   // Year-end tax summary PDF
-  router.get('/api/reports/tax-summary-pdf', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/tax-summary-pdf', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const { year } = req.query;
       if (!year || !/^\d{4}$/.test(String(year))) {
@@ -624,7 +624,7 @@ module.exports = function ({
   // =====================
 
   // JSON P&L summary
-  router.get('/api/reports/pl-summary', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/pl-summary', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pids = getProfileIds(req);
       const inClause = pids.map(() => '?').join(',');
@@ -681,7 +681,7 @@ module.exports = function ({
   });
 
   // Year-end P&L PDF
-  router.get('/api/reports/pl-summary-pdf', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/pl-summary-pdf', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const { year } = req.query;
       if (!year || !/^\d{4}$/.test(String(year))) {
@@ -1264,7 +1264,7 @@ module.exports = function ({
   });
 
   // ── Overview Report ─────────────────────────────────────────────────
-  router.get('/api/reports/overview', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/overview', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { startDate, endDate, type, includeCategories } = req.query;
@@ -1341,7 +1341,7 @@ module.exports = function ({
 
   // ── Custom Report CRUD ──────────────────────────────────────────────
 
-  router.get('/api/reports/custom/:id', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/custom/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const report = customReports.get(id);
@@ -1354,7 +1354,7 @@ module.exports = function ({
     }
   });
 
-  router.put('/api/reports/custom/:id', apiRateLimiter, (req, res) => {
+  router.put('/api/reports/custom/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const report = customReports.get(id);
@@ -1369,7 +1369,7 @@ module.exports = function ({
     }
   });
 
-  router.delete('/api/reports/custom/:id', apiRateLimiter, (req, res) => {
+  router.delete('/api/reports/custom/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (!customReports.has(id)) return res.status(404).json({ error: 'Report not found' });
@@ -1383,7 +1383,7 @@ module.exports = function ({
   });
 
   // ── Report Comparison ────────────────────────────────────────────────
-  router.get('/api/reports/compare', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/compare', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { periods } = req.query;
@@ -1423,7 +1423,7 @@ module.exports = function ({
   });
 
   // ── Saved Reports ────────────────────────────────────────────────────
-  router.get('/api/reports/saved', apiRateLimiter, (req, res) => {
+  router.get('/api/reports/saved', apiRateLimiter, requireAuth, (req, res) => {
     try {
       res.json({ reports: [] });
     } catch (err) {
@@ -1433,7 +1433,7 @@ module.exports = function ({
     }
   });
 
-  router.post('/api/reports/save', apiRateLimiter, (req, res) => {
+  router.post('/api/reports/save', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const { name, type, params } = req.body;
       if (!name) return res.status(400).json({ error: 'Report name is required' });

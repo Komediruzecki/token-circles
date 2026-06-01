@@ -187,8 +187,14 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
       } else {
         sql += ` ORDER BY t.date DESC, t.id DESC`;
       }
-      if (limit) sql += ` LIMIT ${parseInt(limit)}`;
-      if (offset) sql += ` OFFSET ${parseInt(offset)}`;
+      if (limit) {
+        const lim = parseInt(limit);
+        sql += ` LIMIT ${isNaN(lim) ? 50 : Math.min(lim, 1000)}`;
+      }
+      if (offset) {
+        const off = parseInt(offset);
+        if (!isNaN(off)) sql += ` OFFSET ${off}`;
+      }
       const rows = db.prepare(sql).all(...params);
 
       // Attach tags to each transaction
