@@ -191,24 +191,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       if (parseFloat(amount) <= 0) {
         return res.status(400).json({ error: 'Amount must be positive' });
       }
-      const info = db
-        .prepare(
-          `
-        INSERT INTO bills (profile_id, name, amount, frequency, day_of_month, category_id, notes, type, due_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-        )
-        .run(
-          pid,
-          name,
-          amount,
-          frequency || 'monthly',
-          day_of_month || null,
-          category_id || null,
-          notes || '',
-          type || 'bill',
-          dueDate
-        );
+      const info = req.repos.bills.create({
+        profile_id: pid,
+        name,
+        amount,
+        frequency: frequency || 'monthly',
+        day_of_month: day_of_month || null,
+        category_id: category_id || null,
+        notes: notes || '',
+        type: type || 'bill',
+        due_date: dueDate,
+      });
       res.json({ id: info.lastInsertRowid });
     } catch (err) {
       console.error(err.message);
@@ -220,29 +213,20 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.put('/api/bills/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const existing = db
-        .prepare('SELECT id FROM bills WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const existing = req.repos.bills.getById(req.params.id, pid);
       if (!existing) return res.status(404).json({ error: 'Not found' });
       const { name, amount, frequency, day_of_month, category_id, is_active, notes, type } =
         req.body;
-      db.prepare(
-        `
-        UPDATE bills SET name = ?, amount = ?, frequency = ?, day_of_month = ?, category_id = ?, is_active = ?, notes = ?, type = ?
-        WHERE id = ? AND profile_id = ?
-      `
-      ).run(
-        name ?? '',
-        amount ?? 0,
-        frequency ?? 'monthly',
-        day_of_month ?? null,
-        category_id ?? null,
-        is_active ?? 1,
-        notes ?? '',
-        type ?? 'bill',
-        req.params.id,
-        pid
-      );
+      req.repos.bills.update(req.params.id, pid, {
+        name: name ?? '',
+        amount: amount ?? 0,
+        frequency: frequency ?? 'monthly',
+        day_of_month: day_of_month ?? null,
+        category_id: category_id ?? null,
+        is_active: is_active ?? 1,
+        notes: notes ?? '',
+        type: type ?? 'bill',
+      });
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -254,7 +238,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.delete('/api/bills/:id', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      db.prepare('DELETE FROM bills WHERE id = ? AND profile_id = ?').run(req.params.id, pid);
+      req.repos.bills.deleteById(req.params.id, pid);
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       console.error(err.message);
@@ -266,22 +250,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.post('/api/bills/:id/mark-paid', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const bill = db
-        .prepare('SELECT * FROM bills WHERE id = ? AND profile_id = ?')
-        .get(req.params.id, pid);
+      const bill = req.repos.bills.getById(req.params.id, pid);
       if (!bill) return res.status(404).json({ error: 'Not found' });
 
       const todayStr = new Date().toISOString().split('T')[0];
-      const info = db
-        .prepare(
-          `
-        INSERT INTO transactions (profile_id, description, amount, type, category_id, date, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `
-        )
-        .run(pid, bill.name, bill.amount, 'expense', bill.category_id, todayStr, bill.notes || '');
+      const info = req.repos.transactions.create({
+        profile_id: pid,
+        description: bill.name,
+        amount: bill.amount,
+        type: 'expense',
+        category_id: bill.category_id,
+        date: todayStr,
+        notes: bill.notes || '',
+      });
 
-      db.prepare('UPDATE bills SET last_paid = ? WHERE id = ?').run(todayStr, req.params.id);
+      req.repos.bills.markPaid(req.params.id, pid);
 
       res.json({ ok: true, transactionId: info.lastInsertRowid });
     } catch (err) {
@@ -294,9 +277,8 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/bills/summary', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const bills = db.prepare('SELECT * FROM bills WHERE profile_id = ?').all(pid);
-      const totalAmount = bills.reduce((s, b) => s + (b.amount || 0), 0);
-      res.json({ totalAmount, activeCount: bills.length, bills });
+      const summary = req.repos.bills.getSummary(pid);
+      res.json(summary);
     } catch (err) {
       console.error(err.message);
       logError('error', err);
@@ -307,7 +289,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/bills/notifications', apiRateLimiter, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const bills = db.prepare('SELECT * FROM bills WHERE profile_id = ?').all(pid);
+      const bills = req.repos.bills.list(pid);
       const today = new Date();
       const upcoming = bills.filter((b) => {
         if (!b.due_date) return false;

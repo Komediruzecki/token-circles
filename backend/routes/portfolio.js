@@ -140,23 +140,16 @@ module.exports = function ({ db, apiRateLimiter, logError, yahooFinanceService }
           .json({ error: 'ticker, shares, purchase_price, and purchase_date are required' });
       }
 
-      const result = db
-        .prepare(
-          `INSERT INTO portfolio_holdings (ticker, shares, purchase_price, purchase_date, notes, profile_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          String(ticker).toUpperCase(),
-          parseFloat(shares),
-          parseFloat(purchase_price),
-          purchase_date,
-          notes || '',
-          pid
-        );
+      const result = req.repos.portfolio.create({
+        ticker: String(ticker).toUpperCase(),
+        shares: parseFloat(shares),
+        purchase_price: parseFloat(purchase_price),
+        purchase_date,
+        notes: notes || '',
+        profile_id: pid,
+      });
 
-      const holding = db
-        .prepare('SELECT * FROM portfolio_holdings WHERE id = ?')
-        .get(result.lastInsertRowid);
+      const holding = req.repos.portfolio.getById(result.lastInsertRowid, pid);
       res.status(201).json(toCamelCase(holding));
     } catch (err) {
       console.error(err.message);
@@ -171,27 +164,22 @@ module.exports = function ({ db, apiRateLimiter, logError, yahooFinanceService }
       const holdingId = parseInt(req.params.id);
       const { ticker, shares, purchase_price, purchase_date, notes } = req.body;
 
-      const existing = db
-        .prepare('SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?')
-        .get(holdingId, pid);
+      const existing = req.repos.portfolio.getById(holdingId, pid);
       if (!existing) {
         return res.status(404).json({ error: 'Holding not found' });
       }
 
-      db.prepare(
-        `UPDATE portfolio_holdings SET ticker = ?, shares = ?, purchase_price = ?, purchase_date = ?, notes = ?, updated_at = datetime('now')
-       WHERE id = ? AND profile_id = ?`
-      ).run(
-        String(ticker || existing.ticker).toUpperCase(),
-        shares !== undefined ? parseFloat(shares) : existing.shares,
-        purchase_price !== undefined ? parseFloat(purchase_price) : existing.purchase_price,
-        purchase_date || existing.purchase_date,
-        notes !== undefined ? notes : existing.notes,
-        holdingId,
-        pid
-      );
+      req.repos.portfolio.update(holdingId, pid, {
+        ticker: String(ticker || existing.ticker).toUpperCase(),
+        shares: shares !== undefined ? parseFloat(shares) : existing.shares,
+        purchase_price:
+          purchase_price !== undefined ? parseFloat(purchase_price) : existing.purchase_price,
+        purchase_date: purchase_date || existing.purchase_date,
+        notes: notes !== undefined ? notes : existing.notes,
+        updated_at: new Date().toISOString(),
+      });
 
-      const holding = db.prepare('SELECT * FROM portfolio_holdings WHERE id = ?').get(holdingId);
+      const holding = req.repos.portfolio.getById(holdingId, pid);
       res.json(toCamelCase(holding));
     } catch (err) {
       console.error(err.message);
@@ -205,17 +193,12 @@ module.exports = function ({ db, apiRateLimiter, logError, yahooFinanceService }
       const pid = getProfileId(req);
       const holdingId = parseInt(req.params.id);
 
-      const existing = db
-        .prepare('SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?')
-        .get(holdingId, pid);
+      const existing = req.repos.portfolio.getById(holdingId, pid);
       if (!existing) {
         return res.status(404).json({ error: 'Holding not found' });
       }
 
-      db.prepare('DELETE FROM portfolio_holdings WHERE id = ? AND profile_id = ?').run(
-        holdingId,
-        pid
-      );
+      req.repos.portfolio.deleteById(holdingId, pid);
       res.json({ ok: true });
     } catch (err) {
       console.error(err.message);
