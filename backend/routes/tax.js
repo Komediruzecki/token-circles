@@ -200,6 +200,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
 
   // ── Tax Estimate ─────────────────────────────────────────────────────
   const estimateCounter = { value: 0 };
+  const estimateStore = new Map();
 
   router.post('/api/tax/estimates', apiRateLimiter, requireAuth, (req, res) => {
     try {
@@ -232,6 +233,8 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
         stateTax,
         effectiveTaxRate,
       };
+
+      estimateStore.set(id, result);
 
       // PDF export via query param
       if (req.query.export === 'pdf') {
@@ -268,7 +271,13 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   // ── Tax Estimate by ID (for PDF export) ──────────────────────────────
   router.get('/api/tax/estimates/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
-      // Return a basic estimate (estimates are ephemeral/not stored)
+      const id = parseInt(req.params.id);
+      const estimate = estimateStore.get(id);
+
+      if (!estimate) {
+        return res.status(404).json({ error: 'Estimate not found. Create one via POST /api/tax/estimates.' });
+      }
+
       if (req.query.export === 'pdf') {
         const { createDocument } = require('../services/pdfService');
         const doc = createDocument({ margin: 50 });
@@ -281,20 +290,18 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
         });
         doc.fontSize(18).text('Tax Estimate', { align: 'center' });
         doc.moveDown();
-        doc.fontSize(12).text(`Estimate ID: ${req.params.id}`);
+        doc.fontSize(12).text(`Annual Income: $${estimate.annualIncome.toFixed(2)}`);
+        doc.text(`Filing Status: ${estimate.filingStatus}`);
+        doc.text(`State: ${estimate.state}`);
+        doc.text(`Federal Tax: $${estimate.federalTax.toFixed(2)}`);
+        doc.text(`State Tax: $${estimate.stateTax.toFixed(2)}`);
+        doc.text(`Estimated Tax: $${estimate.estimatedTax.toFixed(2)}`);
+        doc.text(`Effective Rate: ${estimate.effectiveTaxRate}%`);
         doc.end();
         return;
       }
-      res.json({
-        id: parseInt(req.params.id),
-        annualIncome: 80000,
-        filingStatus: 'single',
-        state: 'CA',
-        estimatedTax: 14200,
-        federalTax: 9600,
-        stateTax: 4600,
-        effectiveTaxRate: 17.75,
-      });
+
+      res.json(estimate);
     } catch (err) {
       console.error(err.message);
       logError('error', 'tax', err, req);
@@ -356,8 +363,11 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       let endDate = `${year}-12-31`;
       if (quarter) {
         const q = parseInt(quarter);
-        startDate = `${year}-${String((q - 1) * 3 + 1).padStart(2, '0')}-01`;
-        endDate = `${year}-${String(q * 3).padStart(2, '0')}-31`;
+        const firstMonthOfQuarter = (q - 1) * 3;
+        startDate = `${year}-${String(firstMonthOfQuarter + 1).padStart(2, '0')}-01`;
+        // Last day of the quarter's last month
+        const lastDay = new Date(year, firstMonthOfQuarter + 3, 0).getDate();
+        endDate = `${year}-${String(firstMonthOfQuarter + 3).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
       }
 
       const incomeRow = db

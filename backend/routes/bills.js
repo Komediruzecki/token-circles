@@ -3,8 +3,8 @@ const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 
 function isBillPaidForCurrentPeriod(bill, now) {
-  if (!bill.last_paid) return false;
-  const lastPaid = new Date(bill.last_paid);
+  if (!bill.last_paid_date) return false;
+  const lastPaid = new Date(bill.last_paid_date);
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 

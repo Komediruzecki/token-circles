@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 
 let transporter = null;
+let fromAddress = '';
 
 function getTransporter() {
   if (transporter) return transporter;
@@ -9,7 +10,7 @@ function getTransporter() {
   const port = parseInt(process.env.SMTP_PORT || '587');
   const user = process.env.SMTP_USER || '';
   const pass = process.env.SMTP_PASS || '';
-  const from = process.env.SMTP_FROM || 'finance-manager@localhost';
+  fromAddress = process.env.SMTP_FROM || 'finance-manager@localhost';
 
   if (user && pass) {
     transporter = nodemailer.createTransport({
@@ -26,10 +27,8 @@ function getTransporter() {
     });
   }
 
-  transporter.from = from;
-
   if (process.env.SMTP_HOST) {
-    console.log(`[email] SMTP configured: ${host}:${port}${user ? ' (auth)' : ''}, from: ${from}`);
+    console.log(`[email] SMTP configured: ${host}:${port}${user ? ' (auth)' : ''}, from: ${fromAddress}`);
   } else {
     console.log('[email] No SMTP_HOST set — emails will be logged to console only');
   }
@@ -44,7 +43,6 @@ async function sendMail(to, subject, html) {
   }
 
   const transport = getTransporter();
-  const from = transport.from;
 
   // Dev mode: log to console when no SMTP configured
   if (!process.env.SMTP_HOST) {
@@ -55,7 +53,7 @@ async function sendMail(to, subject, html) {
   }
 
   try {
-    const info = await transport.sendMail({ from, to, subject, html });
+    const info = await transport.sendMail({ from: fromAddress, to, subject, html });
     console.log(`[email] Sent to ${to}: ${info.messageId}`);
     return { sent: true, messageId: info.messageId };
   } catch (err) {

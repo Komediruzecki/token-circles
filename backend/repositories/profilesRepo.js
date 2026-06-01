@@ -57,6 +57,10 @@ class ProfilesRepository extends BaseRepository {
       'receipts',
       'portfolio_holdings',
       'bills',
+      'housings',
+      'recurring_transactions',
+      'tags',
+      'transaction_tags',
       'settings',
     ];
     const deleteAll = this.db.transaction(() => {
