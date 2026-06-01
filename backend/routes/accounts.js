@@ -1,7 +1,7 @@
 const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
   router.get('/api/accounts', apiRateLimiter, (req, res) => {
@@ -16,7 +16,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
-  router.post('/api/accounts', apiRateLimiter, (req, res) => {
+  router.post('/api/accounts', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
@@ -57,7 +57,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
-  router.put('/api/accounts/:id', apiRateLimiter, (req, res) => {
+  router.put('/api/accounts/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
@@ -85,7 +85,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
-  router.delete('/api/accounts/:id', apiRateLimiter, (req, res) => {
+  router.delete('/api/accounts/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const existing = req.repos.accounts.getById(req.params.id, pid);
@@ -117,7 +117,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
-  router.post('/api/accounts/:id/history', apiRateLimiter, (req, res) => {
+  router.post('/api/accounts/:id/history', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const account = req.repos.accounts.getById(req.params.id, pid);
@@ -134,7 +134,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
   });
 
-  router.delete('/api/accounts/:id/history', apiRateLimiter, (req, res) => {
+  router.delete('/api/accounts/:id/history', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const account = req.repos.accounts.getById(req.params.id, pid);

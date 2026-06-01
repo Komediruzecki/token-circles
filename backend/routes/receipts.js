@@ -100,8 +100,9 @@ module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
   // GET /api/receipts/:id
   router.get('/api/receipts/:id', apiRateLimiter, (req, res) => {
     try {
+      const pid = getProfileId(req);
       const { id } = req.params;
-      const receipt = req.repos.receipts.getById(id);
+      const receipt = req.repos.receipts.getByIdAndProfile(id, pid);
       if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
       res.json(toCamelCase(receipt));
     } catch (err) {
@@ -159,7 +160,7 @@ module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
       } catch (err) {
         console.error('Error deleting receipt file:', err);
       }
-      req.repos.receipts.deleteById(id);
+      req.repos.receipts.deleteByIdAndProfile(id, pid);
       res.json({ message: 'Receipt deleted successfully' });
     } catch (err) {
       console.error(err.message);

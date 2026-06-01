@@ -506,10 +506,10 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
   });
 
   // Bulk update: PUT /api/transactions/bulk
-  router.put('/api/transactions/bulk', apiRateLimiter, (req, res) => {
+  router.put('/api/transactions/bulk', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pids = getProfileIds(req);
-      const inClause = pids.map(() => '?').join('');
+      const inClause = pids.map(() => '?').join(',');
       // Support both 'ids' and 'transactionIds' field names
       let ids = req.body.ids || req.body.transactionIds || [];
       const action = req.body.action || req.body._method || 'update';
@@ -902,7 +902,7 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
     }
   });
 
-  router.delete('/api/transactions', apiRateLimiter, (req, res) => {
+  router.delete('/api/transactions', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const pids = getProfileIds(req);
@@ -923,7 +923,7 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
   // RECONCILIATION (per-profile)
   // ========================
   // Toggle reconciled status for a single transaction
-  router.patch('/api/transactions/:id/reconcile', apiRateLimiter, (req, res) => {
+  router.patch('/api/transactions/:id/reconcile', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const existing = db
@@ -948,7 +948,7 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
   });
 
   // Bulk reconcile transactions by date range
-  router.post('/api/transactions/reconcile/bulk', apiRateLimiter, (req, res) => {
+  router.post('/api/transactions/reconcile/bulk', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { startDate, endDate } = req.body;
@@ -993,7 +993,7 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
   });
 
   // Batch mark transactions as reconciled by ID list
-  router.put('/api/transactions/reconcile-batch', apiRateLimiter, (req, res) => {
+  router.put('/api/transactions/reconcile-batch', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { transaction_ids } = req.body;
