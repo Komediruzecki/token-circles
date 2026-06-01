@@ -60,20 +60,25 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   router.put('/api/accounts/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
-      const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
+      const body = req.body || {};
+      const { name, type, currency, balance, notes, starting_balance, starting_date } = body;
       const existing = req.repos.accounts.getById(req.params.id, pid);
       if (!existing) return res.status(404).json({ error: 'Account not found' });
       const validTypes = ['giro', 'ib', 'savings', 'cash'];
       const accountType = validTypes.includes(type) ? type : 'giro';
 
+      const balanceVal = parseFloat(balance);
       const data = {
-        name: name.trim(),
+        name: typeof name === 'string' ? name.trim() : existing.name,
         type: accountType,
         currency: currency || 'USD',
-        balance: parseFloat(balance) || 0,
+        balance: isNaN(balanceVal) ? existing.balance : balanceVal,
         notes: notes || '',
       };
-      if (starting_balance !== undefined) data.starting_balance = parseFloat(starting_balance) || 0;
+      if (starting_balance !== undefined) {
+        const sb = parseFloat(starting_balance);
+        data.starting_balance = isNaN(sb) ? 0 : sb;
+      }
       if (starting_date !== undefined) data.starting_date = starting_date || null;
 
       req.repos.accounts.update(req.params.id, pid, data);
@@ -123,7 +128,8 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       const account = req.repos.accounts.getById(req.params.id, pid);
       if (!account) return res.status(404).json({ error: 'Account not found' });
 
-      const balance = parseFloat(req.body.balance ?? account.balance);
+      const balance = parseFloat((req.body || {}).balance ?? account.balance);
+      if (isNaN(balance)) return res.status(400).json({ error: 'Invalid balance value' });
       const recordedAt = new Date().toISOString();
       const id = req.repos.accounts.addBalanceEntry(req.params.id, balance, recordedAt);
       res.json({ id, balance, recorded_at: recordedAt });

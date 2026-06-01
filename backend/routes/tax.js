@@ -206,8 +206,8 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
     try {
       const { annualIncome, filingStatus, state, export: exportFormat } = req.body;
 
-      if (!annualIncome || annualIncome < 0)
-        return res.status(400).json({ error: 'Annual income must be a positive number' });
+      if (annualIncome === undefined || annualIncome === null || isNaN(parseFloat(annualIncome)) || parseFloat(annualIncome) < 0)
+        return res.status(400).json({ error: 'Annual income must be a non-negative number' });
       if (!filingStatus || !VALID_FILING_STATUSES.includes(filingStatus))
         return res.status(400).json({ error: 'Invalid filing status' });
       if (!state || !VALID_STATES.includes(state.toUpperCase()))
