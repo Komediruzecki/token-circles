@@ -1271,17 +1271,20 @@ module.exports = function ({
 
       let incomeWhere = `profile_id = ? AND type = 'income'`;
       let expenseWhere = `profile_id = ? AND type = 'expense'`;
-      const params = [pid];
+      const incomeParams = [pid];
+      const expenseParams = [pid];
 
       if (startDate) {
         incomeWhere += ` AND date >= ?`;
         expenseWhere += ` AND date >= ?`;
-        params.push(startDate, startDate);
+        incomeParams.push(startDate);
+        expenseParams.push(startDate);
       }
       if (endDate) {
         incomeWhere += ` AND date <= ?`;
         expenseWhere += ` AND date <= ?`;
-        params.push(endDate, endDate);
+        incomeParams.push(endDate);
+        expenseParams.push(endDate);
       }
 
       const totalIncome =
@@ -1289,13 +1292,13 @@ module.exports = function ({
           .prepare(
             `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`
           )
-          .get(...params.slice(0, Math.ceil(params.length / 2)))?.total || 0;
+          .get(...incomeParams)?.total || 0;
       const totalExpenses =
         db
           .prepare(
             `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`
           )
-          .get(...params.slice(Math.ceil(params.length / 2)))?.total || 0;
+          .get(...expenseParams)?.total || 0;
 
       const countParams = type
         ? [pid, type, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])]

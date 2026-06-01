@@ -65,11 +65,11 @@ function calculateFederalTax(income, filingStatus) {
   return Math.round(tax * 100) / 100;
 }
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
   // ── Tax Summary ──────────────────────────────────────────────────────
-  router.get('/api/tax/summary', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/summary', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const year = req.query.year || new Date().getFullYear();
@@ -141,7 +141,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   });
 
   // ── Tax Deductions ───────────────────────────────────────────────────
-  router.get('/api/tax/deductions', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/deductions', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { category, startDate, endDate } = req.query;
@@ -174,7 +174,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   });
 
   // ── Tax Income ───────────────────────────────────────────────────────
-  router.get('/api/tax/income', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/income', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const { type } = req.query;
@@ -201,7 +201,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   // ── Tax Estimate ─────────────────────────────────────────────────────
   const estimateCounter = { value: 0 };
 
-  router.post('/api/tax/estimates', apiRateLimiter, (req, res) => {
+  router.post('/api/tax/estimates', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const { annualIncome, filingStatus, state, export: exportFormat } = req.body;
 
@@ -266,7 +266,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   });
 
   // ── Tax Estimate by ID (for PDF export) ──────────────────────────────
-  router.get('/api/tax/estimates/:id', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/estimates/:id', apiRateLimiter, requireAuth, (req, res) => {
     try {
       // Return a basic estimate (estimates are ephemeral/not stored)
       if (req.query.export === 'pdf') {
@@ -303,7 +303,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   });
 
   // ── Tax Progress ─────────────────────────────────────────────────────
-  router.get('/api/tax/progress', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/progress', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const year = req.query.year || new Date().getFullYear();
@@ -346,7 +346,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   });
 
   // ── Federal Tax ──────────────────────────────────────────────────────
-  router.get('/api/tax/federal', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/federal', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const year = req.query.year || new Date().getFullYear();
@@ -379,7 +379,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   });
 
   // ── State Tax ────────────────────────────────────────────────────────
-  router.get('/api/tax/state', apiRateLimiter, (req, res) => {
+  router.get('/api/tax/state', apiRateLimiter, requireAuth, (req, res) => {
     try {
       const pid = getProfileId(req);
       const state = (req.query.state || 'CA').toUpperCase();

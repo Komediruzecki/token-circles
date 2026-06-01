@@ -2,6 +2,15 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { toCamelCase } = require('../utils');
 
+function validatePasswordComplexity(password) {
+  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain a lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain a number';
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must contain a special character';
+  return null;
+}
+
 module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, logError }) {
   const router = express.Router();
 
@@ -10,22 +19,6 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
       const { username, password } = req.body;
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password required' });
-      }
-      // Password complexity validation
-      if (password.length < 8) {
-        return res.status(400).json({ error: 'Password must be at least 8 characters' });
-      }
-      if (!/[A-Z]/.test(password)) {
-        return res.status(400).json({ error: 'Password must contain an uppercase letter' });
-      }
-      if (!/[a-z]/.test(password)) {
-        return res.status(400).json({ error: 'Password must contain a lowercase letter' });
-      }
-      if (!/[0-9]/.test(password)) {
-        return res.status(400).json({ error: 'Password must contain a number' });
-      }
-      if (!/[^A-Za-z0-9]/.test(password)) {
-        return res.status(400).json({ error: 'Password must contain a special character' });
       }
       const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
       if (!user) {
@@ -45,7 +38,7 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
     } catch (err) {
       console.error(err.message);
       logError('error', err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: 'Login failed' });
     }
   });
 
@@ -73,17 +66,36 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
     res.status(400).json({ error: '2FA not configured for this server' });
   });
 
-  router.post('/api/auth/change-password', apiRateLimiter, requireAuth, (req, res) => {
+  router.post('/api/auth/change-password', apiRateLimiter, requireAuth, async (req, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
       if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: 'Current and new password are required' });
       }
+
+      const passwordError = validatePasswordComplexity(newPassword);
+      if (passwordError) {
+        return res.status(400).json({ error: passwordError });
+      }
+
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const valid = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!valid) {
+        return res.status(400).json({ error: 'Current password is incorrect' });
+      }
+
+      const hash = await bcrypt.hash(newPassword, 10);
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.session.userId);
+
       res.json({ ok: true, message: 'Password changed successfully' });
     } catch (err) {
       console.error(err.message);
       logError('error', err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: 'Failed to change password' });
     }
   });
 

@@ -460,9 +460,8 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
           for (const cat of categories) {
             const catTokens = cat.name
               .toLowerCase()
-              .replace(/[^a-z]/g, '')
-              .split('')
-              .filter((c) => c.length > 2);
+              .split(/[^a-z]+/)
+              .filter((t) => t.length > 2);
 
             // Calculate token overlap
             let matches = 0;
