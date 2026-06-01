@@ -6,17 +6,26 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isValidHexColor(color) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(color || ''));
+}
+
+function sanitizeColor(color) {
+  return isValidHexColor(color) ? color : '#6b7280';
 }
 
 function getUsersWithEmail() {
   return db.prepare("SELECT id, email FROM users WHERE email IS NOT NULL AND email != ''").all();
 }
 
-function hasNotificationEnabled(userId, key) {
+function hasNotificationEnabled(profileId, key) {
   const row = db
     .prepare('SELECT value FROM settings WHERE key = ? AND profile_id = ?')
-    .get(key, userId);
+    .get(key, profileId);
   return row && row.value === 'true';
 }
 
@@ -27,10 +36,15 @@ function getProfileIdsForUser(userId) {
     .map((r) => r.id);
 }
 
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
 function getBudgetAlerts(profileId, threshold = 80) {
   const now = new Date();
-  const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
+  const monthStart = startOfMonth(now).toISOString().split('T')[0];
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthEnd = nextMonth.toISOString().split('T')[0];
 
   const budgets = db
     .prepare(
@@ -39,7 +53,7 @@ function getBudgetAlerts(profileId, threshold = 80) {
        LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
        WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`
     )
-    .all(profileId, startDate);
+    .all(profileId, monthStart);
 
   const spentMap = {};
   const spentRows = db
@@ -48,7 +62,7 @@ function getBudgetAlerts(profileId, threshold = 80) {
        FROM transactions WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date < ?
        GROUP BY category_id`
     )
-    .all(profileId, startDate, endDate);
+    .all(profileId, monthStart, monthEnd);
   for (const row of spentRows) {
     spentMap[row.category_id] = Math.abs(row.total);
   }
@@ -94,7 +108,11 @@ function getUpcomingBills(profileId) {
 function getSpendingReport(profileId) {
   const now = new Date();
   const endDate = now.toISOString().split('T')[0];
-  const startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+  // Clamp day to last day of previous month to avoid month-boundary drift
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastDayOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  const day = Math.min(now.getDate(), lastDayOfPrevMonth);
+  const startDate = new Date(now.getFullYear(), now.getMonth() - 1, day)
     .toISOString()
     .split('T')[0];
 
@@ -153,11 +171,11 @@ function budgetAlertHtml(allAlerts) {
       (a) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${escapeHtml(a.categoryColor)};margin-right:8px"></span>
+        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${sanitizeColor(a.categoryColor)};margin-right:8px"></span>
         ${escapeHtml(a.categoryName)}
       </td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${a.budgetAmount.toFixed(2)}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${a.spent.toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(a.budgetAmount || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(a.spent || 0).toFixed(2)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;color:${a.status === 'over' ? '#ef4444' : '#f59e0b'}">
         ${a.status === 'over' ? 'OVER' : a.percentage + '%'}
       </td>
@@ -194,7 +212,7 @@ function spendingReportHtml(report) {
       (c) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${escapeHtml(c.color || '#6b7280')};margin-right:8px"></span>
+        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${sanitizeColor(c.color || '#6b7280')};margin-right:8px"></span>
         ${escapeHtml(c.name || 'Uncategorized')}
       </td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(c.total || 0).toFixed(2)}</td>
@@ -204,11 +222,11 @@ function spendingReportHtml(report) {
 
   return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
     <h2 style="color:#1f2937">Spending Report</h2>
-    <p>${report.startDate} to ${report.endDate}</p>
+    <p>${escapeHtml(report.startDate)} to ${escapeHtml(report.endDate)}</p>
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-      <tr><td style="padding:8px">Total Income</td><td style="padding:8px;text-align:right;color:#10b981">$${report.totalIncome.toFixed(2)}</td></tr>
-      <tr><td style="padding:8px">Total Expenses</td><td style="padding:8px;text-align:right;color:#ef4444">$${report.totalExpenses.toFixed(2)}</td></tr>
-      <tr style="font-weight:bold"><td style="padding:8px;border-top:2px solid #1f2937">Net</td><td style="padding:8px;text-align:right;border-top:2px solid #1f2937">$${report.netBalance.toFixed(2)}</td></tr>
+      <tr><td style="padding:8px">Total Income</td><td style="padding:8px;text-align:right;color:#10b981">$${(report.totalIncome || 0).toFixed(2)}</td></tr>
+      <tr><td style="padding:8px">Total Expenses</td><td style="padding:8px;text-align:right;color:#ef4444">$${(report.totalExpenses || 0).toFixed(2)}</td></tr>
+      <tr style="font-weight:bold"><td style="padding:8px;border-top:2px solid #1f2937">Net</td><td style="padding:8px;text-align:right;border-top:2px solid #1f2937">$${(report.netBalance || 0).toFixed(2)}</td></tr>
     </table>
     <h3>Top Spending Categories</h3>
     <table style="width:100%;border-collapse:collapse">
@@ -228,7 +246,7 @@ function billsReminderHtml(bills) {
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">${escapeHtml(b.name)}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(b.amount || 0).toFixed(2)}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${b.due_date || '-'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${escapeHtml(b.due_date || '-')}</td>
       <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;color:${b.overdue ? '#ef4444' : b.daysUntilDue === 0 ? '#ef4444' : b.daysUntilDue <= 2 ? '#f59e0b' : '#6b7280'}">
         ${b.overdue ? 'Overdue' : b.daysUntilDue === 0 ? 'Today' : b.daysUntilDue === 1 ? 'Tomorrow' : b.daysUntilDue + ' days'}
       </td>
@@ -252,41 +270,98 @@ function billsReminderHtml(bills) {
   </body></html>`;
 }
 
-// ── Sender functions ───────────────────────────────────────────────────
+// ── Per-user sender helpers ─────────────────────────────────────────────
+
+function getPrimaryProfileId(userId) {
+  const profileIds = getProfileIdsForUser(userId);
+  return profileIds.length > 0 ? profileIds[0] : null;
+}
+
+async function sendBudgetAlertsForUser(user) {
+  const profileIds = getProfileIdsForUser(user.id);
+  if (profileIds.length === 0) return;
+  const primaryPid = profileIds[0];
+  if (!hasNotificationEnabled(primaryPid, 'email_notifications')) return;
+  if (!hasNotificationEnabled(primaryPid, 'email_budget_alerts')) return;
+
+  const allAlerts = [];
+  for (const pid of profileIds) {
+    try {
+      allAlerts.push(...getBudgetAlerts(pid));
+    } catch (e) {
+      console.error(`[reminder] Budget alerts failed for profile ${pid}:`, e.message);
+    }
+  }
+
+  if (allAlerts.length === 0) return;
+  const seen = new Set();
+  const deduped = [];
+  for (const a of allAlerts.sort((a, b) => b.percentage - a.percentage)) {
+    if (!seen.has(a.categoryName)) {
+      seen.add(a.categoryName);
+      deduped.push(a);
+    }
+  }
+
+  const html = budgetAlertHtml(deduped);
+  if (html) {
+    await sendMail(user.email, 'Budget Alert — Finance Manager', html);
+  }
+}
+
+async function sendSpendingReportForUser(user) {
+  const profileIds = getProfileIdsForUser(user.id);
+  if (profileIds.length === 0) return;
+  const primaryPid = profileIds[0];
+  if (!hasNotificationEnabled(primaryPid, 'email_notifications')) return;
+  if (!hasNotificationEnabled(primaryPid, 'email_spending_report')) return;
+
+  for (const pid of profileIds) {
+    try {
+      const report = getSpendingReport(pid);
+      const html = spendingReportHtml(report);
+      if (html) {
+        await sendMail(user.email, 'Spending Report — Finance Manager', html);
+        break;
+      }
+    } catch (e) {
+      console.error(`[reminder] Spending report failed for profile ${pid}:`, e.message);
+    }
+  }
+}
+
+async function sendBillsRemindersForUser(user) {
+  const profileIds = getProfileIdsForUser(user.id);
+  if (profileIds.length === 0) return;
+  const primaryPid = profileIds[0];
+  if (!hasNotificationEnabled(primaryPid, 'email_notifications')) return;
+  if (!hasNotificationEnabled(primaryPid, 'email_bills_reminders')) return;
+
+  let allBills = [];
+  for (const pid of profileIds) {
+    try {
+      allBills = allBills.concat(getUpcomingBills(pid));
+    } catch (e) {
+      console.error(`[reminder] Bills check failed for profile ${pid}:`, e.message);
+    }
+  }
+
+  if (allBills.length === 0) return;
+
+  const html = billsReminderHtml(allBills);
+  if (html) {
+    await sendMail(user.email, 'Upcoming Bills — Finance Manager', html);
+  }
+}
+
+// ── Cron sender functions (all users) ───────────────────────────────────
 
 async function sendBudgetAlerts() {
   console.log('[reminder] Running budget alerts check...');
   const users = getUsersWithEmail();
   for (const user of users) {
     try {
-      if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
-      if (!hasNotificationEnabled(user.id, 'email_budget_alerts')) continue;
-
-      const profileIds = getProfileIdsForUser(user.id);
-      const allAlerts = [];
-      for (const pid of profileIds) {
-        try {
-          allAlerts.push(...getBudgetAlerts(pid));
-        } catch (e) {
-          console.error(`[reminder] Budget alerts failed for profile ${pid}:`, e.message);
-        }
-      }
-
-      if (allAlerts.length === 0) continue;
-      // Deduplicate by category, keeping highest severity
-      const seen = new Set();
-      const deduped = [];
-      for (const a of allAlerts.sort((a, b) => b.percentage - a.percentage)) {
-        if (!seen.has(a.categoryName)) {
-          seen.add(a.categoryName);
-          deduped.push(a);
-        }
-      }
-
-      const html = budgetAlertHtml(deduped);
-      if (html) {
-        await sendMail(user.email, 'Budget Alert — Finance Manager', html);
-      }
+      await sendBudgetAlertsForUser(user);
     } catch (e) {
       console.error(`[reminder] Budget alerts failed for user ${user.id}:`, e.message);
     }
@@ -298,23 +373,7 @@ async function sendSpendingReports() {
   const users = getUsersWithEmail();
   for (const user of users) {
     try {
-      if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
-      if (!hasNotificationEnabled(user.id, 'email_spending_report')) continue;
-
-      const profileIds = getProfileIdsForUser(user.id);
-      // Send per-profile report for the first profile with data
-      for (const pid of profileIds) {
-        try {
-          const report = getSpendingReport(pid);
-          const html = spendingReportHtml(report);
-          if (html) {
-            await sendMail(user.email, 'Spending Report — Finance Manager', html);
-            break; // one report per user is enough
-          }
-        } catch (e) {
-          console.error(`[reminder] Spending report failed for profile ${pid}:`, e.message);
-        }
-      }
+      await sendSpendingReportForUser(user);
     } catch (e) {
       console.error(`[reminder] Spending report failed for user ${user.id}:`, e.message);
     }
@@ -326,25 +385,7 @@ async function sendBillsReminders() {
   const users = getUsersWithEmail();
   for (const user of users) {
     try {
-      if (!hasNotificationEnabled(user.id, 'email_notifications')) continue;
-      if (!hasNotificationEnabled(user.id, 'email_bills_reminders')) continue;
-
-      const profileIds = getProfileIdsForUser(user.id);
-      let allBills = [];
-      for (const pid of profileIds) {
-        try {
-          allBills = allBills.concat(getUpcomingBills(pid));
-        } catch (e) {
-          console.error(`[reminder] Bills check failed for profile ${pid}:`, e.message);
-        }
-      }
-
-      if (allBills.length === 0) continue;
-
-      const html = billsReminderHtml(allBills);
-      if (html) {
-        await sendMail(user.email, 'Upcoming Bills — Finance Manager', html);
-      }
+      await sendBillsRemindersForUser(user);
     } catch (e) {
       console.error(`[reminder] Bills reminder failed for user ${user.id}:`, e.message);
     }
@@ -355,6 +396,9 @@ module.exports = {
   sendBudgetAlerts,
   sendSpendingReports,
   sendBillsReminders,
+  sendBudgetAlertsForUser,
+  sendSpendingReportForUser,
+  sendBillsRemindersForUser,
   getBudgetAlerts,
   getSpendingReport,
   getUpcomingBills,

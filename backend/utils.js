@@ -140,4 +140,12 @@ function calculateRetirementProjection(
   };
 }
 
-module.exports = { toCamelCase, getCategoryIcon, calculateRetirementProjection };
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ''));
+}
+
+function isValidHexColor(color) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(color || ''));
+}
+
+module.exports = { toCamelCase, getCategoryIcon, calculateRetirementProjection, isValidEmail, isValidHexColor };
