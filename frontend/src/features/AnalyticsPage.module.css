@@ -929,6 +929,20 @@
   .chart-title {
     font-size: 16px;
   }
+
+  .chartsFullWidth {
+    margin-bottom: 12px;
+  }
+
+  .averages {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .avgCard {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+  }
 }
 
 .chartsTwoCol {

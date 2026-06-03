@@ -26,7 +26,7 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createEffect, createMemo, createSignal, For, onMount, untrack } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
 import ExportChartButton from '../components/ExportChartButton'
@@ -37,19 +37,109 @@ import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import { downloadBlob } from '../utils/chartExport'
 import styles from './AnalyticsPage.module.css'
+import type { Chart as ChartJS } from 'chart.js'
 import type { SankeyData, Transaction } from '../types/models'
 
-interface AnalyticsData {
-  byCategory: Array<{ category_id: number; category_name: string; amount: number }>
-  byMonth: Array<{ month: string; income: number; expense: number }>
-  recentTransactions: Transaction[]
-  savingsRate: number
+interface CategoryTrendsRow {
+  category: string
+  category_name?: string
+  color?: string
+  data: number[]
+}
+
+interface MonthlyStatsRow {
+  month: string
+  income: number
+  expense: number
+}
+
+interface WeekData {
+  week: number
+  label: string
+  income: number
+  expense: number
+}
+
+interface SankeyResponse {
+  nodes: SankeyData['nodes']
+  links: SankeyData['links']
+}
+
+interface CategoryTrendsResponse {
+  labels: string[]
+  datasets: CategoryTrendsRow[]
+  numDays?: number
+}
+
+interface HeatmapResponse {
+  dates: Record<string, number>
 }
 
 export default function Analytics() {
   const state = useAppState()
-  const [data, setData] = createSignal<AnalyticsData | null>(null)
-  const [loading, setLoading] = createSignal(true)
+
+  // ── Signals used by resources (declared first to avoid forward references) ──
+  const [categoryType, setCategoryType] = createSignal<'expense' | 'income'>('expense')
+  const [stackedYear, setStackedYear] = createSignal(new Date().getFullYear())
+
+  // ── Resources (declarative data fetching, race-condition safe) ──────────
+  const [analyticsData] = createResource(
+    () => ({ year: stackedYear(), type: categoryType(), pv: state.profileVersion }),
+    async ({ year, type }) => {
+      const now = new Date()
+      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
+      const months = Math.max(24, monthsNeeded)
+      const [categoryRes, , monthlyRes] = await Promise.all([
+        apiGet<{ datasets: CategoryTrendsRow[] }>(
+          `/api/analytics/category-trends?type=${type}&year=${year}`
+        ),
+        apiGet<Record<string, unknown>>('/api/transactions/summary'),
+        apiGet<MonthlyStatsRow[]>(`/api/stats/monthly?months=${months}`),
+      ])
+
+      const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d, i) => {
+        const dataArr = d.data || []
+        const total = dataArr.reduce((a: number, b: number) => a + b, 0)
+        return {
+          category_id: i,
+          category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+          amount: total,
+        }
+      })
+
+      const byMonth = Array.isArray(monthlyRes)
+        ? monthlyRes
+            .filter((m) => m.month.startsWith(String(year)))
+            .map((m) => ({
+              month: m.month,
+              income: m.income || 0,
+              expense: m.expense || 0,
+            }))
+        : []
+
+      const totalInc = byMonth.reduce((s, m) => s + m.income, 0)
+      const totalExp = byMonth.reduce((s, m) => s + m.expense, 0)
+      return {
+        byCategory,
+        byMonth,
+        savingsRate: totalInc > 0 ? ((totalInc - totalExp) / totalInc) * 100 : 0,
+        recentTransactions: [] as Transaction[],
+      }
+    }
+  )
+
+  // Derived: loading when resource is in initial fetch and no data yet
+  const loading = () => analyticsData.loading && !analyticsData()
+  const data = () => analyticsData() ?? null
+
+  // Surface fetch errors to the user (restores toast lost during createResource migration)
+  createEffect(() => {
+    if (analyticsData.error) {
+      console.error('Failed to load analytics', analyticsData.error)
+      showToast('Failed to load analytics data', 'error')
+    }
+  })
+
   const [heatmapYear, setHeatmapYear] = createSignal(new Date().getFullYear())
   const chartColors = () => theme.getChartColors()
   const [heatmapType, setHeatmapType] = createSignal<'income' | 'expense'>('expense')
@@ -64,8 +154,7 @@ export default function Analytics() {
     nodes: [],
     links: [],
   })
-  const [categoryType, setCategoryType] = createSignal<'expense' | 'income'>('expense')
-  const [stackedYear, setStackedYear] = createSignal(new Date().getFullYear())
+  // categoryType and stackedYear are declared above (before resources that depend on them)
   const [stackedView, setStackedView] = createSignal<'year' | 'month'>('year')
   const [stackedMonth, setStackedMonth] = createSignal(new Date().getMonth() + 1)
   const [stackedData, setStackedData] = createSignal<{
@@ -88,43 +177,61 @@ export default function Analytics() {
     transactions: Transaction[]
     loading: boolean
   } | null>(null)
-  const [categoryChart, setCategoryChart] = createSignal<any>(undefined)
-  const [stackedChart, setStackedChart] = createSignal<any>(undefined)
-  const [monthlyChart, setMonthlyChart] = createSignal<any>(undefined)
+  const [categoryChart, setCategoryChart] = createSignal<ChartJS | undefined>(undefined)
+  const [stackedChart, setStackedChart] = createSignal<ChartJS | undefined>(undefined)
+  const [monthlyChart, setMonthlyChart] = createSignal<ChartJS | undefined>(undefined)
   const [sankeyContainer, setSankeyContainer] = createSignal<HTMLDivElement | undefined>(undefined)
   const [heatmapContainer, setHeatmapContainer] = createSignal<HTMLDivElement | undefined>(
     undefined
   )
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
   const [monthlyMonth, setMonthlyMonth] = createSignal(new Date().getMonth() + 1)
-  const [monthlyStats, setMonthlyStats] = createSignal<{
-    income: number
-    expense: number
-    savingsRate: number
-  } | null>(null)
 
-  // Load available years from data and validate selected years
-  const loadYears = async () => {
-    try {
-      const { years } = await api.getTransactionYears()
-      if (years.length > 0) {
-        const sorted = [...years].sort((a, b) => b - a)
-        setAvailableYears(sorted)
-        // Validate selected years exist in available range; fall back to latest if not
-        if (!sorted.includes(stackedYear())) {
-          setStackedYear(sorted[0])
-        }
-        if (!sorted.includes(heatmapYear())) {
-          setHeatmapYear(sorted[0])
-        }
-        if (!sorted.includes(sankeyYear())) {
-          setSankeyYear(sorted[0])
+  // Monthly stats resource — auto-fetches when year/month change
+  const [monthlyStatsResource] = createResource(
+    () => ({ year: stackedYear(), month: monthlyMonth() }),
+    async ({ year, month }) => {
+      const mKey = `${year}-${String(month).padStart(2, '0')}`
+      const now = new Date()
+      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
+      const monthlyRes = await apiGet<MonthlyStatsRow[]>(
+        `/api/stats/monthly?months=${Math.max(24, monthsNeeded)}`
+      )
+      const months = Array.isArray(monthlyRes) ? monthlyRes : []
+      const found = months.find((m) => m.month === mKey)
+      if (found) {
+        const income = found.income || 0
+        const expense = found.expense || 0
+        return {
+          income,
+          expense,
+          savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0,
         }
       }
-    } catch (_e) {
-      // keep default
+      return { income: 0, expense: 0, savingsRate: 0 }
     }
-  }
+  )
+  const monthlyStats = () => monthlyStatsResource() ?? null
+
+  // Available years resource — auto-fetches on profile change
+  const [yearsResource] = createResource(
+    () => state.profileVersion,
+    async () => {
+      const { years } = await api.getTransactionYears()
+      if (years.length > 0) return [...years].sort((a, b) => b - a)
+      return [new Date().getFullYear()]
+    }
+  )
+  // Propagate years to signal and validate selections
+  createEffect(() => {
+    const sorted = yearsResource()
+    if (sorted && sorted.length > 0) {
+      setAvailableYears(sorted)
+      if (!sorted.includes(stackedYear())) setStackedYear(sorted[0])
+      if (!sorted.includes(heatmapYear())) setHeatmapYear(sorted[0])
+      if (!sorted.includes(sankeyYear())) setSankeyYear(sorted[0])
+    }
+  })
 
   // Load weeks for month drill-down
   const loadWeeks = async () => {
@@ -135,7 +242,9 @@ export default function Analytics() {
       return
     }
     try {
-      const res = await apiGet<any>(`/api/analytics/weeks?year=${year}&month=${month}`)
+      const res = await apiGet<{ weeks: WeekData[] }>(
+        `/api/analytics/weeks?year=${year}&month=${month}`
+      )
       setWeeks(res.weeks || [])
     } catch (_e) {
       console.error('Failed to load weeks')
@@ -148,7 +257,7 @@ export default function Analytics() {
     setHeatmapModal({ dateStr, amount, transactions: [], loading: true })
     try {
       const type = heatmapType()
-      const res = await apiGet<any>(
+      const res = await apiGet<{ transactions?: Transaction[]; rows?: Transaction[] }>(
         `/api/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`
       )
       const list = Array.isArray(res?.transactions)
@@ -165,96 +274,10 @@ export default function Analytics() {
 
   const closeHeatmapModal = () => setHeatmapModal(null)
 
-  // Load analytics data (summary stats + doughnut + income/expense line)
-  const loadData = async () => {
-    setLoading(true)
-    const year = stackedYear()
-    try {
-      // Calculate enough months to include the full selected year
-      const now = new Date()
-      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
-      const months = Math.max(24, monthsNeeded)
-      const [categoryRes, _transactionsRes, monthlyRes] = await Promise.all([
-        apiGet<any>(`/api/analytics/category-trends?type=${categoryType()}&year=${year}`),
-        apiGet<any>('/api/transactions/summary'),
-        apiGet<any>(`/api/stats/monthly?months=${months}`),
-      ])
-
-      // Transform category-trends response into doughnut data
-      const byCategory = (categoryRes.datasets || [])
-        .slice(0, 10)
-        .map((d: Record<string, unknown>, i: number) => {
-          const dataArr = (d.data as number[]) || []
-          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
-          return {
-            category_id: i,
-            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
-            amount: total,
-          }
-        })
-
-      // Monthly data from /api/stats/monthly, filtered to selected year
-      const yearPrefix = String(year)
-      const byMonth = Array.isArray(monthlyRes)
-        ? monthlyRes
-            .filter((m: Record<string, unknown>) => (m.month as string).startsWith(yearPrefix))
-            .map((m: Record<string, unknown>) => ({
-              month: m.month as string,
-              income: (m.income as number) || 0,
-              expense: (m.expense as number) || 0,
-            }))
-        : []
-
-      // Recent transactions from summary
-      const recentTransactions: Transaction[] = []
-
-      const totalInc = byMonth.reduce((s, m) => s + m.income, 0)
-      const totalExp = byMonth.reduce((s, m) => s + m.expense, 0)
-      setData({
-        byCategory,
-        byMonth,
-        recentTransactions,
-        savingsRate: totalInc > 0 ? ((totalInc - totalExp) / totalInc) * 100 : 0,
-      })
-    } catch (err) {
-      console.error('Failed to load analytics', err)
-      showToast('Failed to load analytics data', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Load monthly stats for the monthly savings card
-  const loadMonthlyStats = async () => {
-    const year = stackedYear()
-    const month = monthlyMonth()
-    try {
-      const mKey = `${year}-${String(month).padStart(2, '0')}`
-      const now = new Date()
-      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
-      const monthlyRes = await apiGet<any>(`/api/stats/monthly?months=${Math.max(24, monthsNeeded)}`)
-      const months = Array.isArray(monthlyRes) ? monthlyRes : []
-      const found = months.find((m: Record<string, unknown>) => m.month === mKey)
-      if (found) {
-        const income = (found.income as number) || 0
-        const expense = (found.expense as number) || 0
-        setMonthlyStats({
-          income,
-          expense,
-          savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0,
-        })
-      } else {
-        setMonthlyStats({ income: 0, expense: 0, savingsRate: 0 })
-      }
-    } catch {
-      setMonthlyStats(null)
-    }
-  }
-
   // Load heatmap data
   const loadHeatmapData = async () => {
     try {
-      const res = await apiGet<any>(
+      const res = await apiGet<HeatmapResponse>(
         `/api/analytics/daily-heatmap?year=${heatmapYear()}&type=${heatmapType()}`
       )
       const dataMap = new Map<string, number>()
@@ -275,7 +298,7 @@ export default function Analytics() {
   // Load sankey data
   const loadSankeyData = async () => {
     try {
-      const res = await apiGet<any>(
+      const res = await apiGet<SankeyResponse>(
         `/api/analytics/sankey?year=${sankeyYear()}&month=${sankeyMonth()}`
       )
       setSankeyData({ nodes: res.nodes || [], links: res.links || [] })
@@ -298,10 +321,12 @@ export default function Analytics() {
       }
       const week = selectedWeek()
       if (week) params.set('week', week)
-      const res = await apiGet<any>(`/api/analytics/category-trends?${params.toString()}`)
+      const res = await apiGet<CategoryTrendsResponse>(
+        `/api/analytics/category-trends?${params.toString()}`
+      )
       setStackedData({
         labels: res.labels || [],
-        datasets: res.datasets || [],
+        datasets: (res.datasets || []).map((d) => ({ ...d, color: d.color || '#6366f1' })),
         numDays: res.numDays || 0,
       })
 
@@ -316,10 +341,12 @@ export default function Analytics() {
         const cmpWeek = selectedWeek()
         if (cmpWeek) cmpParams.set('week', cmpWeek)
         try {
-          const cmpRes = await apiGet<any>(`/api/analytics/category-trends?${cmpParams.toString()}`)
+          const cmpRes = await apiGet<CategoryTrendsResponse>(
+            `/api/analytics/category-trends?${cmpParams.toString()}`
+          )
           setCompareData({
             labels: cmpRes.labels || [],
-            datasets: cmpRes.datasets || [],
+            datasets: (cmpRes.datasets || []).map((d) => ({ ...d, color: d.color || '#6366f1' })),
           })
         } catch (_e) {
           console.error('Failed to load comparison data')
@@ -381,90 +408,9 @@ export default function Analytics() {
   }
 
   onMount(() => {
-    loadYears()
-    loadData()
     loadStackedData()
     loadHeatmapData()
-    loadMonthlyStats()
   })
-
-  // Reload monthly stats when month or year selector changes
-  createEffect(() => {
-    monthlyMonth()
-    stackedYear()
-    loadMonthlyStats()
-  })
-
-  // Reload when profile selection changes — untrack inner calls so
-  // they don't accidentally add stackedYear/categoryType/etc as dependencies
-  createEffect(() => {
-    const pv = state.profileVersion
-    untrack(() => {
-      loadYears()
-      loadData()
-      loadStackedData()
-      loadHeatmapData()
-    })
-    // Keep pv as the only tracked dependency
-    void pv
-  })
-
-  // Reload summary stats silently when year or type changes (no loading flash)
-  createEffect(() => {
-    const year = stackedYear()
-    const type = categoryType()
-    // Only refresh if data already exists — otherwise onMount handles it.
-    // Use untrack to avoid re-triggering this effect when setData writes back.
-    if (untrack(data)) refreshData(year, type)
-  })
-
-  // Silent refresh: update summary stats without showing loading spinner
-  const refreshData = async (year: number, type: string) => {
-    try {
-      const now = new Date()
-      const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
-      const months = Math.max(24, monthsNeeded)
-      const [categoryRes, _transactionsRes, monthlyRes] = (await Promise.all([
-        apiGet<any>(`/api/analytics/category-trends?type=${type}&year=${year}`),
-        apiGet<any>('/api/transactions/summary'),
-        apiGet<any>(`/api/stats/monthly?months=${months}`),
-      ])) as [any, any, any]
-
-      const byCategory = (categoryRes.datasets || [])
-        .slice(0, 10)
-        .map((d: Record<string, unknown>, i: number) => {
-          const dataArr = (d.data as number[]) || []
-          const total = dataArr.reduce((a: number, b: number) => a + b, 0)
-          return {
-            category_id: i,
-            category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
-            amount: total,
-          }
-        })
-
-      const yearPrefix = String(year)
-      const byMonth = Array.isArray(monthlyRes)
-        ? monthlyRes
-            .filter((m: Record<string, unknown>) => (m.month as string).startsWith(yearPrefix))
-            .map((m: Record<string, unknown>) => ({
-              month: m.month as string,
-              income: (m.income as number) || 0,
-              expense: (m.expense as number) || 0,
-            }))
-        : []
-
-      const totalInc = byMonth.reduce((s, m) => s + m.income, 0)
-      const totalExp = byMonth.reduce((s, m) => s + m.expense, 0)
-      setData({
-        byCategory,
-        byMonth,
-        recentTransactions: [],
-        savingsRate: totalInc > 0 ? ((totalInc - totalExp) / totalInc) * 100 : 0,
-      })
-    } catch (err) {
-      console.error('Failed to refresh analytics', err)
-    }
-  }
 
   return (
     <div class={`page page-analytics page-enter ${styles.analyticsPage}`}>
@@ -529,7 +475,6 @@ export default function Analytics() {
               </div>
               <div class={styles.heatmapControls} style="justify-content:flex-start;margin-top:8px">
                 <select
-
                   class={styles.heatmapTypeSelect}
                   value={monthlyMonth()}
                   onchange={(e) => setMonthlyMonth(Number(e.currentTarget.value))}
@@ -783,7 +728,7 @@ export default function Analytics() {
                           stacked: true,
                           beginAtZero: true,
                           ticks: {
-                            callback: (value: any) => formatCurrency(value),
+                            callback: (value: string | number) => formatCurrency(value as number),
                             color: chartColors().text,
                           },
                           grid: { color: chartColors().border },
@@ -802,7 +747,8 @@ export default function Analytics() {
                         },
                         tooltip: {
                           callbacks: {
-                            label: (ctx: any) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`,
+                            label: (ctx) =>
+                              `${ctx.dataset.label}: ${formatCurrency(ctx.raw as number)}`,
                           },
                         },
                       },
@@ -891,10 +837,12 @@ export default function Analytics() {
                   <Chart
                     type="doughnut"
                     data={{
-                      labels: data()!.byCategory.map((item) => item.category_name),
+                      labels: data()!.byCategory.map(
+                        (item: { category_name: string }) => item.category_name
+                      ),
                       datasets: [
                         {
-                          data: data()!.byCategory.map((item) => item.amount),
+                          data: data()!.byCategory.map((item: { amount: number }) => item.amount),
                           backgroundColor: [
                             '#dc2626',
                             '#f97316',
@@ -986,7 +934,7 @@ export default function Analytics() {
                         y: {
                           beginAtZero: true,
                           ticks: {
-                            callback: (value: any) => formatCurrency(value),
+                            callback: (value: string | number) => formatCurrency(value as number),
                             color: chartColors().text,
                           },
                           grid: { color: chartColors().border },
@@ -1317,7 +1265,11 @@ export default function Analytics() {
                 <div class={styles.chartContainer}>
                   <div class={styles.categoryBars}>
                     {(() => {
-                      const total = data()!.byCategory.reduce((s, c) => s + c.amount, 0) || 1
+                      const total =
+                        data()!.byCategory.reduce(
+                          (s: number, c: { amount: number }) => s + c.amount,
+                          0
+                        ) || 1
                       return (
                         <For each={data()!.byCategory}>
                           {(item) => {
@@ -1354,7 +1306,10 @@ export default function Analytics() {
                     }}
                   >
                     {(() => {
-                      const total = data()!.byCategory.reduce((s, c) => s + c.amount, 0)
+                      const total = data()!.byCategory.reduce(
+                        (s: number, c: { amount: number }) => s + c.amount,
+                        0
+                      )
                       const count = data()!.byCategory.length
                       const avg = count > 0 ? total / count : 0
                       const monthly = total / 6

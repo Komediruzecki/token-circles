@@ -30,7 +30,7 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createResource, createSignal, For, onMount } from 'solid-js'
 import CategoryIcon from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
@@ -50,33 +50,15 @@ interface Category {
 
 export default function Categories() {
   const state = useAppState()
-  const [categories, setCategories] = createSignal<Category[]>([])
-  const [loading, setLoading] = createSignal(true)
-  const [showAddModal, setShowAddModal] = createSignal(false)
-  const [showBudgetModal, setShowBudgetModal] = createSignal(false)
-  const [editingCategory, setEditingCategory] = createSignal<Category | null>(null)
-  const [selectedCategory, setSelectedCategory] = createSignal<Category | null>(null)
-  const [budgetAmount, setBudgetAmount] = createSignal('')
-  const [filterType, setFilterType] = createSignal<'all' | 'expense' | 'income'>('all')
-  const [budgetSummary, setBudgetSummary] = createSignal<
-    Record<number, { spent: number; budget: number; remaining: number; percent_used: number }>
-  >({})
-  const [formData, setFormData] = createSignal({
-    name: '',
-    type: 'expense' as 'expense' | 'income',
-    color: '#3b82f6',
-    icon: '',
-  })
 
-  // Load categories
-  const loadCategories = async () => {
-    setLoading(true)
-    try {
+  // Categories resource — fetches categories + budget summary
+  const [categoriesResource, { refetch: refetchCategories }] = createResource(
+    () => state.profileVersion,
+    async () => {
       const [allRes, budgetRes] = await Promise.all([
         apiGet<Category[]>('/api/categories'),
         apiGet<any[]>('/api/budgets/summary').catch(() => [] as any[]),
       ])
-      setCategories(allRes)
       const summary: Record<
         number,
         { spent: number; budget: number; remaining: number; percent_used: number }
@@ -91,14 +73,25 @@ export default function Categories() {
           }
         }
       }
-      setBudgetSummary(summary)
-    } catch (err) {
-      console.error('Failed to load categories:', err)
-      showToast('Failed to load categories', 'error')
-    } finally {
-      setLoading(false)
+      return { categories: allRes, budgetSummary: summary }
     }
-  }
+  )
+  const loading = () => categoriesResource.loading && !categoriesResource()
+  const categories = () => categoriesResource()?.categories ?? []
+  const budgetSummary = () => categoriesResource()?.budgetSummary ?? {}
+
+  const [showAddModal, setShowAddModal] = createSignal(false)
+  const [showBudgetModal, setShowBudgetModal] = createSignal(false)
+  const [editingCategory, setEditingCategory] = createSignal<Category | null>(null)
+  const [selectedCategory, setSelectedCategory] = createSignal<Category | null>(null)
+  const [budgetAmount, setBudgetAmount] = createSignal('')
+  const [filterType, setFilterType] = createSignal<'all' | 'expense' | 'income'>('all')
+  const [formData, setFormData] = createSignal({
+    name: '',
+    type: 'expense' as 'expense' | 'income',
+    color: '#3b82f6',
+    icon: '',
+  })
 
   // Handle form submit
   const handleSubmit = async (e: Event) => {
@@ -121,7 +114,7 @@ export default function Categories() {
       setShowAddModal(false)
       setEditingCategory(null)
       setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
-      loadCategories()
+      refetchCategories()
     } catch (err) {
       console.error('Failed to save category:', err)
       showToast('Failed to save category', 'error')
@@ -133,7 +126,7 @@ export default function Categories() {
     try {
       await apiDelete(`/api/categories/${id}`)
       showToast('Category deleted successfully', 'success')
-      loadCategories()
+      refetchCategories()
     } catch (err) {
       console.error('Failed to delete category:', err)
       showToast('Failed to delete category', 'error')
@@ -144,7 +137,7 @@ export default function Categories() {
   const updateColor = async (id: number, color: string) => {
     try {
       await apiPut(`/api/categories/${id}`, { color })
-      loadCategories()
+      refetchCategories()
     } catch (err) {
       console.error('Failed to update color:', err)
       showToast('Failed to update color', 'error')
@@ -185,7 +178,7 @@ export default function Categories() {
       showToast('Budget set successfully', 'success')
       setShowBudgetModal(false)
       setSelectedCategory(null)
-      loadCategories()
+      refetchCategories()
     } catch (err) {
       console.error('Failed to set budget', err)
       showToast('Failed to set budget', 'error')
@@ -194,11 +187,11 @@ export default function Categories() {
 
   // OnMount
   onMount(() => {
-    loadCategories()
+    refetchCategories()
   })
   createEffect(() => {
     void state.profileVersion
-    void loadCategories()
+    void refetchCategories()
   })
 
   const categoryIconColors: Record<string, string> = {
@@ -385,16 +378,18 @@ export default function Categories() {
                   <div class={styles.categoryColors}>
                     <span class={styles.colorLabel}>Color:</span>
                     <div class={styles.colorPicker}>
-                      <For each={[
-                        '#ef4444',
-                        '#f97316',
-                        '#eab308',
-                        '#22c55e',
-                        '#3b82f6',
-                        '#8b5cf6',
-                        '#ec4899',
-                        '#6b7280',
-                      ]}>
+                      <For
+                        each={[
+                          '#ef4444',
+                          '#f97316',
+                          '#eab308',
+                          '#22c55e',
+                          '#3b82f6',
+                          '#8b5cf6',
+                          '#ec4899',
+                          '#6b7280',
+                        ]}
+                      >
                         {(color) => (
                           <button
                             class={`${styles.colorBtn} ${category.color === color ? styles.active : ''}`}
@@ -499,16 +494,18 @@ export default function Categories() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.colorPicker}>
-                  <For each={[
-                    '#ef4444',
-                    '#f97316',
-                    '#eab308',
-                    '#22c55e',
-                    '#3b82f6',
-                    '#8b5cf6',
-                    '#ec4899',
-                    '#6b7280',
-                  ]}>
+                  <For
+                    each={[
+                      '#ef4444',
+                      '#f97316',
+                      '#eab308',
+                      '#22c55e',
+                      '#3b82f6',
+                      '#8b5cf6',
+                      '#ec4899',
+                      '#6b7280',
+                    ]}
+                  >
                     {(color) => (
                       <button
                         class={`${styles.colorPickerBtn} ${formData().color === color ? styles.active : ''}`}

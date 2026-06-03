@@ -13,6 +13,18 @@ interface RecurringSectionProps {
   onRefreshTransactions: () => void
 }
 
+type RecurringFormData = Pick<
+  RecurringTransaction,
+  | 'description'
+  | 'amount'
+  | 'type'
+  | 'frequency'
+  | 'day_of_month'
+  | 'next_date'
+  | 'category_id'
+  | 'notes'
+>
+
 export default function RecurringSection(props: RecurringSectionProps) {
   const [items, setItems] = createSignal<RecurringTransaction[]>([])
   const [isModalOpen, setIsModalOpen] = createSignal(false)
@@ -73,23 +85,23 @@ export default function RecurringSection(props: RecurringSectionProps) {
   }
 
   const handleSave = async () => {
-    const data: Record<string, unknown> = {
+    const data = {
       description: formDescription(),
       amount: parseFloat(formAmount() || '0'),
-      type: formType(),
-      frequency: formFrequency(),
+      type: formType() as RecurringTransaction['type'],
+      frequency: formFrequency() as RecurringTransaction['frequency'],
       day_of_month: formDay() ? parseInt(formDay()) : null,
       next_date: formNextDate(),
       category_id: formCategory(),
       notes: formNotes() || null,
-    }
+    } satisfies RecurringFormData
 
     try {
       const id = editingId()
       if (id) {
-        await api.updateRecurring(id, data as any)
+        await api.updateRecurring(id, data)
       } else {
-        await api.createRecurring(data as any)
+        await api.createRecurring(data)
       }
       setIsModalOpen(false)
       await loadItems()

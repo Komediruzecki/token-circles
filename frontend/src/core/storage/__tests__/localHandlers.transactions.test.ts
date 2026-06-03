@@ -139,13 +139,19 @@ describe('localHandlers - transactions', () => {
 
   it('filters by category_id', async () => {
     await transactionsCreate({
-      amount: 50, type: 'expense', date: '2026-05-20',
-      description: 'CatFilter Tx', category_id: 1,
+      amount: 50,
+      type: 'expense',
+      date: '2026-05-20',
+      description: 'CatFilter Tx',
+      category_id: 1,
     })
     // Create a second transaction with different category_id to verify filter
     await transactionsCreate({
-      amount: 30, type: 'expense', date: '2026-05-21',
-      description: 'Other Tx', category_id: 99,
+      amount: 30,
+      type: 'expense',
+      date: '2026-05-21',
+      description: 'Other Tx',
+      category_id: 99,
     })
     const res = await transactionsList(new URLSearchParams({ category_id: '1' }))
     const list = await res.json()
@@ -157,12 +163,18 @@ describe('localHandlers - transactions', () => {
 
   it('filters by type', async () => {
     await transactionsCreate({
-      amount: 50, type: 'expense', date: '2026-05-20',
-      description: 'Expense Tx', category_id: 1,
+      amount: 50,
+      type: 'expense',
+      date: '2026-05-20',
+      description: 'Expense Tx',
+      category_id: 1,
     })
     await transactionsCreate({
-      amount: 100, type: 'income', date: '2026-05-20',
-      description: 'Income Tx', category_id: null,
+      amount: 100,
+      type: 'income',
+      date: '2026-05-20',
+      description: 'Income Tx',
+      category_id: null,
     })
     const res = await transactionsList(new URLSearchParams({ type: 'income' }))
     const list = await res.json()
@@ -213,8 +225,11 @@ describe('localHandlers - transactions', () => {
   // ── Reconciliation ──
   it('reconcile toggle switches reconciled state', async () => {
     const createRes = await transactionsCreate({
-      amount: 50, type: 'expense', date: '2026-05-20',
-      description: 'To Reconcile', category_id: 1,
+      amount: 50,
+      type: 'expense',
+      date: '2026-05-20',
+      description: 'To Reconcile',
+      category_id: 1,
     })
     const created = await createRes.json()
 
@@ -238,12 +253,18 @@ describe('localHandlers - transactions', () => {
 
   it('reconcile bulk marks range as reconciled', async () => {
     await transactionsCreate({
-      amount: 10, type: 'expense', date: '2026-06-01',
-      description: 'Bulk T1', category_id: 1,
+      amount: 10,
+      type: 'expense',
+      date: '2026-06-01',
+      description: 'Bulk T1',
+      category_id: 1,
     })
     await transactionsCreate({
-      amount: 20, type: 'expense', date: '2026-06-02',
-      description: 'Bulk T2', category_id: 1,
+      amount: 20,
+      type: 'expense',
+      date: '2026-06-02',
+      description: 'Bulk T2',
+      category_id: 1,
     })
     const res = await reconcileBulk({ date_from: '2026-06-01', date_to: '2026-06-30' })
     expect(res.status).toBe(200)
@@ -252,24 +273,39 @@ describe('localHandlers - transactions', () => {
   })
 
   it('reconcile batch works with ids', async () => {
-    const c1 = await (await transactionsCreate({
-      amount: 10, type: 'expense', date: '2026-06-01',
-      description: 'Batch T1', category_id: 1,
-    })).json()
-    const c2 = await (await transactionsCreate({
-      amount: 20, type: 'expense', date: '2026-06-02',
-      description: 'Batch T2', category_id: 1,
-    })).json()
+    const c1 = await (
+      await transactionsCreate({
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-01',
+        description: 'Batch T1',
+        category_id: 1,
+      })
+    ).json()
+    const c2 = await (
+      await transactionsCreate({
+        amount: 20,
+        type: 'expense',
+        date: '2026-06-02',
+        description: 'Batch T2',
+        category_id: 1,
+      })
+    ).json()
     const res = await reconcileBatch({ transaction_ids: [c1.id, c2.id] })
     expect(res.status).toBe(200)
   })
 
   // ── Bulk operations ──
   it('bulk update changes category_id', async () => {
-    const c1 = await (await transactionsCreate({
-      amount: 10, type: 'expense', date: '2026-06-01',
-      description: 'BulkUp T1', category_id: 1,
-    })).json()
+    const c1 = await (
+      await transactionsCreate({
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-01',
+        description: 'BulkUp T1',
+        category_id: 1,
+      })
+    ).json()
     const res = await transactionsBulk({
       ids: [c1.id],
       action: 'update',
@@ -279,10 +315,15 @@ describe('localHandlers - transactions', () => {
   })
 
   it('bulk delete removes transactions', async () => {
-    const c1 = await (await transactionsCreate({
-      amount: 10, type: 'expense', date: '2026-06-01',
-      description: 'BulkDel T1', category_id: 1,
-    })).json()
+    const c1 = await (
+      await transactionsCreate({
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-01',
+        description: 'BulkDel T1',
+        category_id: 1,
+      })
+    ).json()
     const res = await transactionsBulk({ ids: [c1.id], action: 'delete' })
     expect(res.status).toBe(200)
     const data = await res.json()
@@ -302,8 +343,11 @@ describe('localHandlers - transactions', () => {
   // ── Export ──
   it('exports transactions as CSV', async () => {
     await transactionsCreate({
-      amount: 50, type: 'expense', date: '2026-05-20',
-      description: 'Export Tx', category_id: 1,
+      amount: 50,
+      type: 'expense',
+      date: '2026-05-20',
+      description: 'Export Tx',
+      category_id: 1,
     })
     const res = await transactionsExport(new URLSearchParams())
     expect(res.status).toBe(200)
@@ -315,12 +359,18 @@ describe('localHandlers - transactions', () => {
   // ── Summary ──
   it('summary returns totals', async () => {
     await transactionsCreate({
-      amount: 100, type: 'income', date: '2026-05-20',
-      description: 'Summary Income', category_id: null,
+      amount: 100,
+      type: 'income',
+      date: '2026-05-20',
+      description: 'Summary Income',
+      category_id: null,
     })
     await transactionsCreate({
-      amount: 30, type: 'expense', date: '2026-05-20',
-      description: 'Summary Expense', category_id: 1,
+      amount: 30,
+      type: 'expense',
+      date: '2026-05-20',
+      description: 'Summary Expense',
+      category_id: 1,
     })
     const res = await transactionsSummary()
     expect(res.status).toBe(200)
@@ -344,10 +394,7 @@ describe('localHandlers - transactions', () => {
     // but the handler itself returns ok() unconditionally.
     // In practice, the sub-handler (transactionsUpdate) wraps adapter.updateTransaction
     // which is a fire-and-forget for non-existent records (idempotent).
-    const res = await transactionsUpdate(
-      { p1: '99999' },
-      { amount: 500, description: 'Ghost' }
-    )
+    const res = await transactionsUpdate({ p1: '99999' }, { amount: 500, description: 'Ghost' })
     expect(res.status).toBe(200)
   })
 })

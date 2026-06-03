@@ -31,7 +31,7 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import { createMemo, createResource, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
@@ -52,10 +52,28 @@ interface Account {
 
 export default function Accounts() {
   const state = useAppState()
-  const [accounts, setAccounts] = createSignal<Account[]>([])
-  const [transactions, setTransactions] = createSignal<any[]>([])
-  const [profiles, setProfiles] = createSignal<Array<{ id: number; name: string }>>([])
-  const [loading, setLoading] = createSignal(true)
+
+  // Accounts resource — fetches accounts, transactions, and profiles
+  const [accountsResource, { refetch: refetchAccounts }] = createResource(
+    () => state.profileVersion,
+    async () => {
+      const [accountsRes, txRes, profilesRes] = await Promise.all([
+        apiGet<Account[]>('/api/accounts'),
+        apiGet<any>(`/api/transactions?limit=500`),
+        apiGet<Array<{ id: number; name: string }>>('/api/profiles').catch(() => []),
+      ])
+      const txList = Array.isArray(txRes) ? txRes : txRes?.transactions || txRes?.rows || []
+      return {
+        accounts: accountsRes,
+        transactions: Array.isArray(txList) ? txList : [],
+        profiles: profilesRes,
+      }
+    }
+  )
+  const loading = () => accountsResource.loading && !accountsResource()
+  const accounts = () => accountsResource()?.accounts ?? []
+  const transactions = () => accountsResource()?.transactions ?? []
+  const profiles = () => accountsResource()?.profiles ?? []
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [formData, setFormData] = createSignal({
     name: '',
@@ -94,27 +112,6 @@ export default function Accounts() {
     }))
   })
 
-  // Load accounts, transactions, and profiles
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const [accountsRes, txRes, profilesRes] = await Promise.all([
-        apiGet<Account[]>('/api/accounts'),
-        apiGet<any>(`/api/transactions?limit=500`),
-        apiGet<Array<{ id: number; name: string }>>('/api/profiles').catch(() => []),
-      ])
-      setAccounts(accountsRes)
-      setProfiles(profilesRes)
-      const txList = Array.isArray(txRes) ? txRes : txRes?.transactions || txRes?.rows || []
-      setTransactions(Array.isArray(txList) ? txList : [])
-    } catch (err) {
-      console.error('Failed to load accounts', err)
-      showToast('Failed to load accounts', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Handle form submit
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
@@ -143,7 +140,7 @@ export default function Accounts() {
         starting_balance: '',
         starting_date: '',
       })
-      loadData()
+      refetchAccounts()
     } catch (err) {
       console.error('Failed to save account', err)
       showToast('Failed to create account', 'error')
@@ -155,7 +152,7 @@ export default function Accounts() {
     try {
       await apiDelete(`/api/accounts/${id}`)
       showToast('Account deleted successfully', 'success')
-      loadData()
+      refetchAccounts()
     } catch (err) {
       console.error('Failed to delete account', err)
       showToast('Failed to delete account', 'error')
@@ -205,15 +202,6 @@ export default function Accounts() {
   const formatAmount = (amount: number): string => {
     return formatCurrency(amount)
   }
-
-  onMount(() => {
-    loadData()
-  })
-
-  createEffect(() => {
-    void state.profileVersion
-    loadData()
-  })
 
   // Calculate total balance
   const totalBalance = createMemo(() => {

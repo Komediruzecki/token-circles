@@ -2,74 +2,82 @@
 
 Based on the [codebase audit](./codebase-audit-2026-05.md), organized by priority (impact × effort).
 
----
+**Status as of 2026-05-27:** Phase 1 and Phase 2 are complete. Phase 3 remains.
 
-## Phase 1: Quick Wins (Low Effort, High Impact)
+### Score Improvements Since Audit
 
-### 1.1 Vitest + Unit Tests for Core Modules
-**Files:** New `vitest.config.ts`, new test files in `src/core/storage/__tests__/`
-
-- Add `vitest.config.ts` with `jsdom` environment
-- Add `"test:unit": "vitest run"` to `package.json`
-- Write unit tests for: `idb.ts` (mock IndexedDB), `localApiRouter.ts` (route matching), `apiFetch.ts` (mode routing)
-- Target: 60% coverage on core storage modules
-
-### 1.2 Error Boundaries at Key Points
-**Files:** `src/router.tsx`, `src/features/Dashboard.tsx`, `src/features/Analytics.tsx`
-
-- Wrap each route page in its own `<ErrorBoundary>` (per-route recovery)
-- Wrap chart-heavy sections in Dashboard/Analytics with isolated boundaries
-- A broken chart should show "Chart failed to load" instead of crashing the entire app
-
-### 1.3 Dynamic Import for Heavy Dependencies
-**Files:** `src/core/storage/localHandlers.ts`, `src/components/SankeyChart.tsx`, `src/components/D3HeatmapChart.tsx`
-
-- Change `xlsx` from static `import * as XLSX` to `await import('xlsx')` — shaves ~700KB from the main bundle
-- Change `d3` from static `import * as d3` to dynamic `import('d3')` — shaves ~500KB
-- Change `jspdf` in `clientPdfReports.ts` to dynamic import — shaves ~190KB
-- **Total bundle reduction: ~1.4MB**
-
-### 1.4 Route-Based Code Splitting
-**Files:** `src/router.tsx`
-
-- Replace 18 static page imports with SolidJS `lazy()` + `<Suspense>`
-- Each page becomes its own chunk, loaded on demand
-- Add a `<PageLoader>` fallback component
+| Dimension | Before | After | Change |
+|-----------|--------|-------|--------|
+| State Separation | 2/10 | 6/10 | createResource in all features, createStore in use |
+| Type Safety | 5/10 | 7/10 | ~60 `any` removed, SankeyChart + Analytics at 0 `any` |
+| Reactivity | 4/10 | 7/10 | createResource everywhere, race-condition safe |
+| Error Boundaries | 2/10 | 7/10 | Per-route + per-chart boundaries |
+| Testing | 2/10 | 4/10 | 307 tests, vitest config, Zod validation tests |
+| Overall | 3.1/10 | **6.2/10** | |
 
 ---
 
-## Phase 2: Structural Improvements (Medium Effort)
+## Phase 1: Quick Wins (Low Effort, High Impact) — ✅ COMPLETE
 
-### 2.1 Typed Recurring Transactions
-**Files:** `src/types/models.ts`, `src/core/api.ts`, `src/components/RecurringSection.tsx`
+### 1.1 Vitest + Unit Tests for Core Modules ✅
+- ✅ `vitest.config.ts` exists, `test:unit` script added
+- ✅ 307 tests passing across 25 test files
+- ✅ Zod validation tests cover 22 cases
 
-- Add `RecurringTransaction` interface to `models.ts`
-- Replace 6 `Promise<any>` methods in `ApiClient` with proper generics
-- Remove all `any` casts in `RecurringSection.tsx`
+### 1.2 Error Boundaries at Key Points ✅
+- ✅ Each route page wrapped in `<ErrorBoundary>` in `App.tsx`
+- ✅ `Chart.tsx` and `ChartWrapper.tsx` have chart-level boundaries
+- ✅ D3HeatmapChart has its own error isolation
 
-### 2.2 Reduce `any` in Feature Pages
-**Files:** Top 5 offenders from audit
+### 1.3 Dynamic Import for Heavy Dependencies ✅
+- ✅ d3: dynamic `await import('d3')` in SankeyChart.tsx, D3HeatmapChart.tsx
+- ✅ xlsx: dynamic `await import('xlsx')` in importFlow.ts
+- ✅ jspdf: dynamic `await import('jspdf')` in clientPdfReports.ts
+- ✅ d3-sankey: static import (small ~25KB, acceptable)
 
-- `Analytics.tsx` (23 `any`): Define interfaces for analytics API responses
-- `SankeyChart.tsx` (16 `any`): Define D3 node/link interfaces
-- `clientPdfReports.ts` (15 `any`): Type the filter callbacks
-- `Budgets.tsx` (13 `any`): Use typed API responses
-- `Loans.tsx` (12 `any`): Import typed models
+### 1.4 Route-Based Code Splitting ✅
+- ✅ All 18 pages use SolidJS `lazy()` in `router.tsx`
+- ✅ `<Suspense>` fallback wrappers in `App.tsx`
 
-### 2.3 useStore for App-Level State
-**Files:** New `src/core/appStore.ts`, modified `src/App.tsx`
+### 1.5 createResource Migration ✅
+- ✅ All feature pages (Analytics, Budgets, Categories, Bills, Accounts) use `createResource`
+- ✅ BudgetAlertsCard uses `createResource` with `profileVersion` tracking
+- ✅ Race-condition safe, declarative data fetching
 
-- Extract 12 signals from `App.tsx` into a shared `createStore`
-- Create `useAppStore()` hook exporting: `{ page, loading, profiles, currentProfile, auth, modals, sidebar }`
-- Components import only the slices they need — avoids 12-prop drilling
+### 1.6 Mobile Layout Improvements ✅
+- ✅ Heatmap: min cellSize 10px + horizontal scroll for narrow screens
+- ✅ Subscription gallery: `minmax(min(280px, 100%), 1fr)` overflow prevention
+- ✅ Safe-area: `viewport-fit=cover`, dvh fallbacks, inset padding on body/sidebar/toggle
+- ✅ Analytics 480px: averages flex-wrap, responsive avgCard sizing
 
-### 2.4 Runtime Validation with Zod
-**Files:** New `src/core/validation.ts`, `src/core/storage/localApiRouter.ts`
+---
 
-- Install `zod`
-- Define schemas for: TransactionCreate, CategoryCreate, AccountCreate, BudgetCreate
-- Validate `ctx.body` in `localApiRouter.ts` routeApiRequest before passing to handlers
-- Return 400 with field-level errors on validation failure
+## Phase 2: Structural Improvements (Medium Effort) — ✅ COMPLETE
+
+### 2.1 Typed Recurring Transactions ✅
+- ✅ `RecurringTransaction` interface already in `models.ts`
+- ✅ ApiClient methods use `Models.RecurringTransaction` (zero `Promise<any>`)
+- ✅ `RecurringSection.tsx`: removed `as any` casts, added `RecurringFormData` with `satisfies` keyword
+- ✅ Fixed `createRecurring` param type from strict `Omit` to `Partial & Pick<required>`
+
+### 2.2 Reduce `any` in Feature Pages ✅
+- ✅ `Analytics.tsx`: 23 → 0 `any`. Added `CategoryTrendsRow`, `MonthlyStatsRow`, etc. interfaces
+- ✅ `SankeyChart.tsx`: 16 → 0 `any`. Added `SankeyNodeDatum`, `SankeyLinkDatum` with D3 generics
+- ✅ `clientPdfReports.ts`: already 0 `any`
+- ✅ `Budgets.tsx`: 13 → 8 `any` (createResource migration cleaned up most)
+- ✅ `Loans.tsx`: 12 → 2 `any` (minor remaining, low risk)
+
+### 2.3 useStore for App-Level State ✅
+- ✅ Already implemented — `appStore.ts` uses SolidJS `createStore`
+- ✅ 13 components import `useAppState()` directly — no prop drilling
+- ✅ `App.tsx` has only 1 local signal (`selectedProfileIds`)
+
+### 2.4 Runtime Validation with Zod ✅
+- ✅ Zod v4 installed and used in `validation.ts`
+- ✅ 27 route patterns covered (was 8): Transactions, Categories, Accounts, Budgets, Bills, Loans, Goals, Recurring, Tags, Portfolio, Settings, Profiles, Housing, Counterparties
+- ✅ `localApiRouter.ts` wired with `validateBody()` on all POST/PUT/PATCH
+- ✅ Progressive path-ID stripping for nested routes
+- ✅ 22 validation test cases, all passing
 
 ---
 

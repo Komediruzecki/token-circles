@@ -2,7 +2,7 @@
  * Dashboard Settings Component - Configure widget visibility and order
  */
 
-import { createSignal, For,onMount } from 'solid-js'
+import { createSignal, For, onMount } from 'solid-js'
 import styles from './DashboardSettings.module.css'
 import type { Component } from 'solid-js'
 
@@ -195,7 +195,9 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
               >
                 <span class={styles.widgetIcon}>{widget.icon}</span>
                 <span class={styles.widgetName}>{widget.name}</span>
-                <span class={styles.widgetStatus}>{isVisible(widget.id) ? 'Visible' : 'Hidden'}</span>
+                <span class={styles.widgetStatus}>
+                  {isVisible(widget.id) ? 'Visible' : 'Hidden'}
+                </span>
               </button>
             </div>
           )}

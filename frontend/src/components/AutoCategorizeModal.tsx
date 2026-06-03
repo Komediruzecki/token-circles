@@ -2,7 +2,7 @@
  * Auto Categorize Modal Component
  * Suggests categories based on description patterns and allows user to accept/reject
  */
-import { createEffect, createMemo, createSignal, For,onCleanup, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount } from 'solid-js'
 import { api } from '../core/api'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
@@ -147,67 +147,67 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
               <For each={uncategorized()}>
                 {(tx) => {
                   const matching = findMatchingCategory(tx.description)
-                const isSelected = tx.id in pendingUpdates()
+                  const isSelected = tx.id in pendingUpdates()
 
-                return (
-                  <>
-                    <div
-                      class={`${autoCategorizeModalStyles.transactionItem} ${isSelected ? autoCategorizeModalStyles.selected : ''}`}
-                    >
-                      <div class={autoCategorizeModalStyles.txInfo}>
-                        <p class={autoCategorizeModalStyles.txDescription}>{tx.description}</p>
-                        {matching ? (
-                          <span
-                            class={`${autoCategorizeModalStyles.badge} ${autoCategorizeModalStyles.confidenceHigh}`}
-                          >
-                            {matching.category_name}
-                          </span>
-                        ) : (
-                          <span class={autoCategorizeModalStyles.badge}>No match</span>
-                        )}
-                      </div>
-                      <button
-                        class={autoCategorizeModalStyles.selectBtn}
-                        onClick={() => {
-                          if (matching) {
-                            applyCategory(tx.id, matching.category_id)
-                          }
-                        }}
-                        disabled={applying() || !matching}
-                        type="button"
-                        aria-label={`Apply ${matching?.category_name}`}
+                  return (
+                    <>
+                      <div
+                        class={`${autoCategorizeModalStyles.transactionItem} ${isSelected ? autoCategorizeModalStyles.selected : ''}`}
                       >
-                        {applying() && tx.id in pendingUpdates() ? (
-                          <svg class={autoCategorizeModalStyles.spinnerIcon} viewBox="0 0 24 24">
-                            <circle
-                              cx="12"
-                              cy="12"
-                              r="10"
+                        <div class={autoCategorizeModalStyles.txInfo}>
+                          <p class={autoCategorizeModalStyles.txDescription}>{tx.description}</p>
+                          {matching ? (
+                            <span
+                              class={`${autoCategorizeModalStyles.badge} ${autoCategorizeModalStyles.confidenceHigh}`}
+                            >
+                              {matching.category_name}
+                            </span>
+                          ) : (
+                            <span class={autoCategorizeModalStyles.badge}>No match</span>
+                          )}
+                        </div>
+                        <button
+                          class={autoCategorizeModalStyles.selectBtn}
+                          onClick={() => {
+                            if (matching) {
+                              applyCategory(tx.id, matching.category_id)
+                            }
+                          }}
+                          disabled={applying() || !matching}
+                          type="button"
+                          aria-label={`Apply ${matching?.category_name}`}
+                        >
+                          {applying() && tx.id in pendingUpdates() ? (
+                            <svg class={autoCategorizeModalStyles.spinnerIcon} viewBox="0 0 24 24">
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                stroke-width="3"
+                                stroke-dasharray="30"
+                                stroke-dashoffset="60"
+                              />
+                            </svg>
+                          ) : isSelected ? (
+                            <svg
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="none"
                               stroke="currentColor"
-                              stroke-width="3"
-                              stroke-dasharray="30"
-                              stroke-dashoffset="60"
-                            />
-                          </svg>
-                        ) : isSelected ? (
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : (
-                          '+'
-                        )}
-                      </button>
-                    </div>
-                  </>
-                )
-              }}
+                              stroke-width="2"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : (
+                            '+'
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )
+                }}
               </For>
             </div>
           )}

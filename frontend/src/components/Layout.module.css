@@ -67,7 +67,8 @@
   top: 0;
   left: 0;
   height: 100vh;
-  padding: 20px 0 120px 0;
+  height: 100dvh;
+  padding: 20px 0 calc(120px + env(safe-area-inset-bottom, 0px)) 0;
   z-index: 100;
   overflow-y: auto;
   overflow-x: hidden;
@@ -297,8 +298,8 @@
 .mobile-toggle {
   display: none;
   position: fixed;
-  top: 12px;
-  left: 12px;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
   z-index: 101;
   width: 36px;
   height: 36px;

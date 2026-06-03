@@ -2,8 +2,9 @@
  * Budget Alerts Card Component
  * Shows budget alerts for the current period — fetches from API
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createResource, For } from 'solid-js'
 import { apiGet, formatCurrency } from '../../core/api'
+import { useAppState } from '../../core/appStore'
 import styles from './BudgetAlertsCard.module.css'
 
 interface BudgetAlert {
@@ -18,23 +19,18 @@ interface BudgetAlert {
 }
 
 export default function BudgetAlertsCard() {
-  const [alerts, setAlerts] = createSignal<BudgetAlert[]>([])
-  const [loading, setLoading] = createSignal(true)
-
-  onMount(async () => {
-    try {
+  const state = useAppState()
+  const [alertsResource] = createResource(
+    () => state.profileVersion,
+    async () => {
       const data = (await apiGet<{ alerts: BudgetAlert[] }>(
         '/api/budgets/alerts?threshold=80'
       )) as any
-      if (data?.alerts && Array.isArray(data.alerts)) {
-        setAlerts(data.alerts)
-      }
-    } catch {
-      // keep defaults
-    } finally {
-      setLoading(false)
+      return data?.alerts && Array.isArray(data.alerts) ? data.alerts : []
     }
-  })
+  )
+  const loading = () => alertsResource.loading
+  const alerts = () => alertsResource() ?? []
 
   const statusClass = (status: string) => {
     if (status === 'over') return styles.over

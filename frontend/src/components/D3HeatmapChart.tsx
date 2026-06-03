@@ -60,7 +60,7 @@ export default function D3HeatmapChart(props: Props) {
       .attr('height', height)
       .attr('viewBox', [0, 0, width, height])
 
-    const cellSize = Math.min(14, (width - margin.left - margin.right) / 53)
+    const cellSize = Math.max(10, Math.min(14, (width - margin.left - margin.right) / 53))
 
     const startDate = d3.timeYear.floor(new Date(props.year, 0, 1))
     const endDate = d3.timeYear.ceil(new Date(props.year, 11, 31))
@@ -176,17 +176,9 @@ export default function D3HeatmapChart(props: Props) {
       .text(d3.format(',.0f')(maxVal))
   }
 
-  // Create tooltip element
+  // Create tooltip element and render heatmap
   onMount(() => {
-    // Create tooltip element
-    if (containerRef) {
-      tooltipEl = document.createElement('div')
-      tooltipEl.id = 'heatmap-tooltip'
-      tooltipEl.style.cssText =
-        'position:fixed;display:none;background:var(--card-bg,#1f2937);color:var(--text,#e5e7eb);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:1px solid var(--border,#374151);white-space:nowrap;'
-      document.body.appendChild(tooltipEl)
-    }
-
+    ensureTooltip()
     renderHeatmap()
     const observer = new ResizeObserver(() => {
       renderHeatmap()
@@ -204,5 +196,10 @@ export default function D3HeatmapChart(props: Props) {
     if (props.data && props.year && props.type) renderHeatmap()
   })
 
-  return <div ref={containerRef} style={{ width: '100%' }} />
+  return (
+    <div
+      ref={containerRef}
+      style={{ width: '100%', 'overflow-x': 'auto', '-webkit-overflow-scrolling': 'touch' }}
+    />
+  )
 }

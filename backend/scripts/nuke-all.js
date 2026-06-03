@@ -5,11 +5,11 @@
  *
  * Use --no-seed flag to skip re-seeding (empty DB).
  */
-const db = require('../database')
+const db = require('../database');
 
-const skipSeed = process.argv.includes('--no-seed')
+const skipSeed = process.argv.includes('--no-seed');
 
-console.log('Nuking ALL data...')
+console.log('Nuking ALL data...');
 
 // Order matters: child tables first, then parents
 const allTables = [
@@ -35,37 +35,37 @@ const allTables = [
   'portfolio_holdings',
   'settings',
   'profiles',
-]
+];
 
-let total = 0
+let total = 0;
 for (const table of allTables) {
-  const r = db.prepare(`DELETE FROM ${table}`).run()
-  console.log(`  ${table}: ${r.changes} rows`)
-  total += r.changes
+  const r = db.prepare(`DELETE FROM ${table}`).run();
+  console.log(`  ${table}: ${r.changes} rows`);
+  total += r.changes;
 }
 
 // Reset autoincrement
-db.prepare('DELETE FROM sqlite_sequence').run()
-console.log('  sqlite_sequence: reset')
+db.prepare('DELETE FROM sqlite_sequence').run();
+console.log('  sqlite_sequence: reset');
 
-console.log(`\nTotal rows deleted: ${total}`)
+console.log(`\nTotal rows deleted: ${total}`);
 
 if (!skipSeed) {
-  console.log('\nRe-seeding demo profiles...')
-  db.seedThreeTierProfiles()
+  console.log('\nRe-seeding demo profiles...');
+  db.seedThreeTierProfiles();
 
   const counts = {
     profiles: db.prepare('SELECT COUNT(*) as c FROM profiles').get().c,
     transactions: db.prepare('SELECT COUNT(*) as c FROM transactions').get().c,
     accounts: db.prepare('SELECT COUNT(*) as c FROM accounts').get().c,
     portfolio: db.prepare('SELECT COUNT(*) as c FROM portfolio_holdings').get().c,
-  }
+  };
 
-  console.log('\n=== Results ===')
+  console.log('\n=== Results ===');
   for (const [k, v] of Object.entries(counts)) {
-    console.log(`  ${k}: ${v}`)
+    console.log(`  ${k}: ${v}`);
   }
-  console.log('\nAll data nuked and re-seeded.')
+  console.log('\nAll data nuked and re-seeded.');
 } else {
-  console.log('\nAll data nuked. No seed data was created (--no-seed).')
+  console.log('\nAll data nuked. No seed data was created (--no-seed).');
 }

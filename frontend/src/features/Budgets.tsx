@@ -30,7 +30,7 @@
  * Budgets Component
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
-import { createEffect, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createResource, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
@@ -107,17 +107,53 @@ interface Category {
 export default function Budgets() {
   const state = useAppState()
   const [month, setMonth] = createSignal(new Date().toISOString().slice(0, 7))
-  const [loading, setLoading] = createSignal(true)
+  const [improvements, setImprovements] = createSignal<BudgetImprovement[]>([])
   const [error, setError] = createSignal<string | null>(null)
-  const [allocations, setAllocations] = createSignal<CategoryAllocation[]>([])
-  const [summary, setSummary] = createSignal<ZeroBasedSummary | null>(null)
+  const [budgetMessage, setBudgetMessage] = createSignal<string>('')
+  const [budgetResource, { refetch: refetchBudget }] = createResource(
+    () => ({ m: month(), pv: state.profileVersion }),
+    async ({ m }) => {
+      const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
+        apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
+        apiGet<any>(`/api/budgets/zero-based/summary?month=${m}`),
+        apiGet<ForecastData>(`/api/budgets/forecast?month=${m}`).catch(() => null),
+      ])
+
+      const allocationsList = (allocationsRes?.allocations || allocationsRes?.categories || []).map(
+        (item: ZeroBasedAllocation): any => ({
+          ...item,
+          amount: item.amount || item.allocated || 0,
+          allocated: item.amount || item.allocated || 0,
+          status:
+            item.status ||
+            (item.percent_used > 100 ? 'over' : item.percent_used >= 90 ? 'warning' : 'ok'),
+          is_fully_allocated:
+            item.is_fully_allocated ?? (((item as any).is_budgeted as boolean) && item.amount > 0),
+        })
+      )
+      const unallocated = summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0
+      return {
+        allocations: allocationsList,
+        summary: {
+          ...summaryRes,
+          categories: summaryRes?.allocations || summaryRes?.categories || [],
+        },
+        forecastData: forecastDataRaw || null,
+        budgetMessage:
+          unallocated > 0
+            ? `Unallocated: ${new Intl.NumberFormat(undefined, { style: 'currency', currency: getLocalCurrency() }).format(unallocated)}`
+            : `All income allocated!`,
+      }
+    }
+  )
+  const loading = () => budgetResource.loading && !budgetResource()
+  const allocations = () => budgetResource()?.allocations ?? []
+  const summary = () => (budgetResource()?.summary ?? null) as ZeroBasedSummary | null
+  const forecastData = () => budgetResource()?.forecastData ?? null
+
   const [showAllocateModal, setShowAllocateModal] = createSignal(false)
   const [selectedCategory, setSelectedCategory] = createSignal<CategoryAllocation | null>(null)
   const [allocateAmount, setAllocateAmount] = createSignal('')
-  const [budgetMessage, setBudgetMessage] = createSignal<string>('')
-  const [forecastData, setForecastData] = createSignal<ForecastData | null>(null)
-
-  const [improvements, setImprovements] = createSignal<BudgetImprovement[]>([])
   const [showMonthPicker, setShowMonthPicker] = createSignal(false)
   const [showYearPicker, setShowYearPicker] = createSignal(false)
 
@@ -191,53 +227,6 @@ export default function Budgets() {
     setMonth(date.toISOString().slice(0, 7))
   }
 
-  // Get current allocations and summary
-  const loadData = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
-        apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${month()}`),
-        apiGet<any>(`/api/budgets/zero-based/summary?month=${month()}`),
-        apiGet<ForecastData>(`/api/budgets/forecast?month=${month()}`).catch(() => null),
-      ])
-
-      const allocationsList = (allocationsRes?.allocations || allocationsRes?.categories || []).map(
-        (item: ZeroBasedAllocation) => ({
-          ...item,
-          amount: item.amount || item.allocated || 0,
-          allocated: item.amount || item.allocated || 0,
-          status:
-            item.status ||
-            (item.percent_used > 100 ? 'over' : item.percent_used >= 90 ? 'warning' : 'ok'),
-          is_fully_allocated:
-            item.is_fully_allocated ?? (((item as any).is_budgeted as boolean) && item.amount > 0),
-        })
-      )
-      setAllocations(allocationsList as any)
-      setSummary({
-        ...summaryRes,
-        categories: summaryRes?.allocations || summaryRes?.categories || [],
-      } as any)
-      const unallocated = summaryRes?.zero_based_remaining || summaryRes?.zeroBasedRemaining || 0
-      setBudgetMessage(
-        unallocated > 0
-          ? `Unallocated: ${new Intl.NumberFormat(undefined, { style: 'currency', currency: getLocalCurrency() }).format(unallocated)}`
-          : `All income allocated!`
-      )
-
-      if (forecastDataRaw) {
-        setForecastData(forecastDataRaw)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load budget data')
-      showToast('Failed to load budget data', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Load historical improvements data for trend chart
   const loadImprovements = async () => {
     try {
@@ -261,7 +250,7 @@ export default function Budgets() {
       )
       if (result.ok) {
         showToast(`Duplicated ${result.count} budgets from last month`, 'success')
-        await loadData()
+        await refetchBudget()
       } else {
         showToast(result.message || 'Nothing to duplicate', 'info')
       }
@@ -283,7 +272,7 @@ export default function Budgets() {
       )
       if (result.ok) {
         showToast(`Set ${result.count} budgets from last month's expenses`, 'success')
-        await loadData()
+        await refetchBudget()
       } else {
         showToast(result.message || 'No expenses found', 'info')
       }
@@ -299,7 +288,7 @@ export default function Budgets() {
         rollover_enabled: enabled,
       })
       showToast(enabled ? 'Rollover enabled' : 'Rollover disabled', 'success')
-      await loadData()
+      await refetchBudget()
     } catch {
       showToast('Failed to update rollover', 'error')
     }
@@ -322,7 +311,7 @@ export default function Budgets() {
       showToast('Budget allocated successfully!', 'success')
       setShowAllocateModal(false)
       setAllocateAmount('')
-      loadData()
+      refetchBudget()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to allocate budget')
       showToast('Failed to allocate budget', 'error')
@@ -495,14 +484,12 @@ export default function Budgets() {
     void state.profileVersion
     loadImprovements()
     loadCategories()
-    loadData()
     loadYearRange()
   })
 
-  // Load data when month changes
+  // Reload categories when month changes (budget resource auto-refetches via source tracking)
   createEffect(() => {
-    void month() // track month dependency
-    loadData()
+    void month()
     loadCategories()
   })
 
@@ -885,7 +872,7 @@ export default function Budgets() {
             </div>
 
             {/* Refresh Forecast Button */}
-            <Button variant="outline" onClick={loadData}>
+            <Button variant="outline" onClick={refetchBudget}>
               Refresh Forecast
             </Button>
           </>
@@ -1217,16 +1204,18 @@ export default function Budgets() {
                       <div class={styles.catColorPicker}>
                         <span class={styles.catColorLabel}>Color:</span>
                         <div class={styles.catColorDots}>
-                          <For each={[
-                            '#ef4444',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                          ]}>
+                          <For
+                            each={[
+                              '#ef4444',
+                              '#f97316',
+                              '#eab308',
+                              '#22c55e',
+                              '#3b82f6',
+                              '#8b5cf6',
+                              '#ec4899',
+                              '#6b7280',
+                            ]}
+                          >
                             {(color) => (
                               <button
                                 class={`${styles.catColorDot} ${category.color === color ? styles.catColorDotActive : ''}`}
@@ -1396,16 +1385,18 @@ export default function Budgets() {
               <div class={styles.catFormGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.catColorDots}>
-                  <For each={[
-                    '#ef4444',
-                    '#f97316',
-                    '#eab308',
-                    '#22c55e',
-                    '#3b82f6',
-                    '#8b5cf6',
-                    '#ec4899',
-                    '#6b7280',
-                  ]}>
+                  <For
+                    each={[
+                      '#ef4444',
+                      '#f97316',
+                      '#eab308',
+                      '#22c55e',
+                      '#3b82f6',
+                      '#8b5cf6',
+                      '#ec4899',
+                      '#6b7280',
+                    ]}
+                  >
                     {(color) => (
                       <button
                         class={`${styles.catColorDot} ${styles.catColorDotLarge} ${catFormData().color === color ? styles.catColorDotActive : ''}`}
