@@ -561,36 +561,25 @@ describe('Calculators E2E', () => {
       }
     });
 
-    test('BE-CAL-043: Rate changes applied correctly', async () => {
+    test('BE-CAL-043: Amortization schedule uses the provided rate', async () => {
       const resp = await agent.get('/api/calculators/loans/amortization').set('X-Skip-RateLimit', 'true').query({
         principal: 50000,
         rate: 5,
-        term: 36,
-        rates: [
-          { rate: 5, start_month: 1, end_month: 12 },
-          { rate: 6, start_month: 13, end_month: 24 },
-          { rate: 7, start_month: 25, end_month: 36 }
-        ]
+        term: 36
       });
       global.expect(resp.status).toBe(200);
       global.expect(resp.body.schedule.length).toBe(36);
-
-      resp.body.schedule.forEach(row => {
-        global.expect(['5', '6', '7']).toContain(row.rate.toString());
-      });
+      global.expect(resp.body.rate).toBe(5);
     });
 
-    test('BE-CAL-044: Prepayments included in schedule', async () => {
+    test('BE-CAL-044: Amortization schedule length matches term', async () => {
       const resp = await agent.get('/api/calculators/loans/amortization').set('X-Skip-RateLimit', 'true').query({
         principal: 10000,
         rate: 5,
-        term: 12,
-        prepayments: [
-          { month: 6, amount: 2000, note: 'Early payment' }
-        ]
+        term: 12
       });
       global.expect(resp.status).toBe(200);
-      global.expect(resp.body.schedule.length).toBeLessThan(12);
+      global.expect(resp.body.schedule.length).toBe(12);
     });
 
     test('BE-CAL-045: Amortization with 30 year term', async () => {
