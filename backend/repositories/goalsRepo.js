@@ -17,15 +17,15 @@ class GoalsRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('savings_goals', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('savings_goals', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('savings_goals', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('savings_goals', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('savings_goals', 'profile_id = ?', profileId);
+    return super.delete('savings_goals', 'profile_id = ?', profileId);
   }
 }
 

@@ -29,11 +29,11 @@ class ReceiptsRepository extends BaseRepository {
   }
 
   deleteByIdAndProfile(id, profileId) {
-    return this.delete('receipts', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('receipts', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id) {
-    return this.delete('receipts', 'id = ?', id);
+    return super.delete('receipts', 'id = ?', id);
   }
 }
 

@@ -29,15 +29,15 @@ class TagsRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('tags', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('tags', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('tags', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('tags', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('tags', 'profile_id = ?', profileId);
+    return super.delete('tags', 'profile_id = ?', profileId);
   }
 
   getTagsForTransaction(transactionId, profileId) {

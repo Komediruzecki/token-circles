@@ -31,20 +31,20 @@ class BillsRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('bills', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('bills', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('bills', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('bills', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('bills', 'profile_id = ?', profileId);
+    return super.delete('bills', 'profile_id = ?', profileId);
   }
 
   markPaid(id, profileId) {
     const today = new Date().toISOString().split('T')[0];
-    return this.update('bills', { last_paid_date: today }, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('bills', { last_paid_date: today }, 'id = ? AND profile_id = ?', id, profileId);
   }
 }
 

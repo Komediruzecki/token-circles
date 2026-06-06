@@ -14,15 +14,15 @@ class HousingRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('housings', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('housings', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('housings', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('housings', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('housings', 'profile_id = ?', profileId);
+    return super.delete('housings', 'profile_id = ?', profileId);
   }
 }
 

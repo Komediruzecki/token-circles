@@ -525,7 +525,7 @@ describe('Recurring Transactions E2E', () => {
       global.expect(resp.status).toBe(200);
       global.expect(resp.body).toHaveProperty('createdAt');
       // Should be a valid date string
-      global.expect(new Date(resp.body.createdAt).toString()).not.toBe('Invalid Date');
+      global.expect(isNaN(new Date(resp.body.createdAt).getTime())).toBe(false);
     });
 
     test('BE-REC-038: Default values are applied on creation', async () => {

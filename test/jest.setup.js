@@ -401,8 +401,26 @@ beforeEach(() => {
   if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
 });
 
-// Also clear after all tests
-afterAll(() => {
+// Also clear after all tests in each file
+afterAll(async () => {
   if (global.__rateLimitStore) global.__rateLimitStore.clear();
   if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
+  // Reset test user password after each test file to prevent cascading failures
+  try {
+    const http = require('http');
+    const body = JSON.stringify({});
+    await new Promise((resolve) => {
+      const req = http.request({
+        hostname: 'localhost', port: 3847, path: '/api/test/reset-password',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': String(Buffer.byteLength(body)),
+          'X-Skip-RateLimit': 'true'
+        }
+      }, () => resolve());
+      req.write(body);
+      req.end();
+    });
+  } catch (e) {}
 });

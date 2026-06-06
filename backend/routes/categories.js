@@ -52,7 +52,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       const {
         name,
         color = '#6b7280',
-        icon = null,
+        icon = 'tag',
         type = 'expense',
         parent_id: parentIdParam,
         tax_deductible,
@@ -68,10 +68,10 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
         return res.status(400).json({ error: 'Category name already exists for this profile' });
       }
 
-      const id = req.repos.categories.create({
+      const result = req.repos.categories.create({
         name: name.trim(),
         color: color.trim(),
-        icon,
+        icon: icon || 'tag',
         type: type.trim(),
         parent_id,
         tax_deductible: tax_deductible ? 1 : 0,
@@ -80,7 +80,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
 
       res.json(
         toCamelCase({
-          id,
+          id: result.lastInsertRowid,
           name: name.trim(),
           color: color.trim(),
           icon: icon,

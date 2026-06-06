@@ -34,7 +34,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       const pid = getProfileId(req);
       const { name, principal, interest_rate, start_date, term_months, rate_periods } = req.body;
       const interestRate = interest_rate || 5.0;
-      const loanId = req.repos.loans.create({
+      const result = req.repos.loans.create({
         name,
         principal,
         interest_rate: interestRate,
@@ -42,6 +42,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
         term_months,
         profile_id: pid,
       });
+      const loanId = result.lastInsertRowid;
 
       if (rate_periods && rate_periods.length > 0) {
         for (const rp of rate_periods) {

@@ -33,7 +33,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     try {
       const pid = getProfileId(req);
       const { category_id, amount, period, start_date, end_date, rollover_enabled } = req.body;
-      const id = req.repos.budgets.create({
+      const result = req.repos.budgets.create({
         category_id,
         amount,
         period: period || 'monthly',
@@ -42,7 +42,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
         rollover_enabled: rollover_enabled ? 1 : 0,
         profile_id: pid,
       });
-      res.json({ id, ...req.body, profile_id: pid });
+      res.json({ id: result.lastInsertRowid, ...req.body, profile_id: pid });
     } catch (err) {
       console.error(err.message);
       logError('error', err);

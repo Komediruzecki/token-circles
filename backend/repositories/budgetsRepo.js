@@ -26,15 +26,15 @@ class BudgetsRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('budgets', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('budgets', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('budgets', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('budgets', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('budgets', 'profile_id = ?', profileId);
+    return super.delete('budgets', 'profile_id = ?', profileId);
   }
 
   duplicateLast(profileId, year, month) {

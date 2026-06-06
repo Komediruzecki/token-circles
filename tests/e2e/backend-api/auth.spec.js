@@ -16,6 +16,8 @@ describe('Authentication & Security E2E', () => {
   });
 
   afterAll(async () => {
+    // Reset password hash after change-password tests
+    await agent.post('/api/test/reset-password').set('X-Skip-RateLimit', 'true').catch(() => {});
     // Clean up test profile if created
     if (testProfileId) {
       try {
@@ -64,10 +66,8 @@ describe('Authentication & Security E2E', () => {
       global.expect(res.status).toBe(200);
       global.expect(res.body.ok).toBe(true);
 
-      // Restore original password so subsequent tests are not affected
-      await agent
-        .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'NewPass1!', newPassword: 'add2' });
+      // Restore original password via test endpoint (add2 fails complexity validation)
+      await agent.post('/api/test/reset-password').set('X-Skip-RateLimit', 'true');
     });
 
     test('BE-AUTH-005: Returns 401 when not authenticated', async () => {
@@ -190,7 +190,8 @@ describe('Authentication & Security E2E', () => {
     });
 
     test('BE-AUTH-014: Returns 401 when session invalid', async () => {
-      const meRes = await agent.get('/api/auth/me').set('X-Skip-RateLimit', 'true');
+      const freshAgent = request.agent(BASE_URL);
+      const meRes = await freshAgent.get('/api/auth/me').set('X-Skip-RateLimit', 'true');
       global.expect(meRes.status).toBe(401);
     });
   });

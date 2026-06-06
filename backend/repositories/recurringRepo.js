@@ -30,15 +30,15 @@ class RecurringRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('recurring_transactions', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('recurring_transactions', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('recurring_transactions', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('recurring_transactions', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('recurring_transactions', 'profile_id = ?', profileId);
+    return super.delete('recurring_transactions', 'profile_id = ?', profileId);
   }
 
   populate(id, profileId) {

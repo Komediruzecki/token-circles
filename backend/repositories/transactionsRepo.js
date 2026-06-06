@@ -59,15 +59,15 @@ class TransactionsRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('transactions', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('transactions', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('transactions', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('transactions', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('transactions', 'profile_id = ?', profileId);
+    return super.delete('transactions', 'profile_id = ?', profileId);
   }
 
   deleteAllForProfile(profileId) {

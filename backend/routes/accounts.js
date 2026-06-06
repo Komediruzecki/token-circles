@@ -26,7 +26,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       const startBalance =
         starting_balance !== undefined ? parseFloat(starting_balance) : parseFloat(balance) || 0;
       const startDate = starting_date || null;
-      const id = req.repos.accounts.create({
+      const result = req.repos.accounts.create({
         name: name.trim(),
         type: accountType,
         currency: currency || 'USD',
@@ -36,7 +36,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
         starting_balance: startBalance,
         starting_date: startDate,
       });
-      res.json({ id, message: 'Account created' });
+      res.json({ id: result.lastInsertRowid, message: 'Account created' });
     } catch (err) {
       console.error(err.message);
       logError('error', err);

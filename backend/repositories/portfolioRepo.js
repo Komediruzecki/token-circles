@@ -21,15 +21,15 @@ class PortfolioRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('portfolio_holdings', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('portfolio_holdings', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('portfolio_holdings', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('portfolio_holdings', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('portfolio_holdings', 'profile_id = ?', profileId);
+    return super.delete('portfolio_holdings', 'profile_id = ?', profileId);
   }
 }
 
