@@ -69,8 +69,8 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       const existing = req.repos.profiles.getByName(name.trim());
       if (existing)
         return res.status(400).json({ error: 'A profile with this name already exists' });
-      const id = req.repos.profiles.create(name.trim(), req.session.userId);
-      res.json({ id, name: name.trim(), transaction_count: 0, account_count: 0, budget_count: 0 });
+      const result = req.repos.profiles.create(name.trim(), req.session.userId);
+      res.json({ id: result.lastInsertRowid, name: name.trim(), transaction_count: 0, account_count: 0, budget_count: 0 });
     } catch (err) {
       console.error(err.message);
       logError('error', err);

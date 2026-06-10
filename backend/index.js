@@ -509,6 +509,17 @@ if (process.env.NODE_ENV === 'test') {
     if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
     res.json(toCamelCase({ ok: true }));
   });
+
+  app.post('/api/test/reset-password', (req, res) => {
+    try {
+      const bcrypt = require('bcrypt');
+      const hash = bcrypt.hashSync('add2', 10);
+      db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'maff');
+      res.json(toCamelCase({ ok: true }));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
 
 // Serve index.html for client-side routes (SPA navigation) only

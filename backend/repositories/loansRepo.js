@@ -14,15 +14,15 @@ class LoansRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('loans', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('loans', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('loans', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('loans', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('loans', 'profile_id = ?', profileId);
+    return super.delete('loans', 'profile_id = ?', profileId);
   }
 
   getRatePeriods(loanId) {
@@ -37,11 +37,11 @@ class LoansRepository extends BaseRepository {
   }
 
   updateRatePeriod(id, loanId, data) {
-    return this.update('loan_rate_periods', data, 'id = ? AND loan_id = ?', id, loanId);
+    return super.update('loan_rate_periods', data, 'id = ? AND loan_id = ?', id, loanId);
   }
 
   deleteRatePeriodById(id, loanId) {
-    return this.delete('loan_rate_periods', 'id = ? AND loan_id = ?', id, loanId);
+    return super.delete('loan_rate_periods', 'id = ? AND loan_id = ?', id, loanId);
   }
 
   getPrepayments(loanId) {
@@ -53,11 +53,11 @@ class LoansRepository extends BaseRepository {
   }
 
   deleteRatePeriods(loanId) {
-    return this.delete('loan_rate_periods', 'loan_id = ?', loanId);
+    return super.delete('loan_rate_periods', 'loan_id = ?', loanId);
   }
 
   deletePrepayment(id, loanId) {
-    return this.delete('loan_prepayments', 'id = ? AND loan_id = ?', id, loanId);
+    return super.delete('loan_prepayments', 'id = ? AND loan_id = ?', id, loanId);
   }
 }
 

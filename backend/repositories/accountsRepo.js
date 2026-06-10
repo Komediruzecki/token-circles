@@ -17,15 +17,15 @@ class AccountsRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('accounts', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('accounts', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('accounts', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('accounts', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('accounts', 'profile_id = ?', profileId);
+    return super.delete('accounts', 'profile_id = ?', profileId);
   }
 
   addBalanceEntry(accountId, balance, recordedAt, notes = '') {
@@ -45,7 +45,7 @@ class AccountsRepository extends BaseRepository {
   }
 
   deleteBalanceHistory(accountId) {
-    return this.delete('account_balance_history', 'account_id = ?', accountId);
+    return super.delete('account_balance_history', 'account_id = ?', accountId);
   }
 }
 

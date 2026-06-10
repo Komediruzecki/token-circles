@@ -10,6 +10,12 @@ const { AccountsRepository } = require('./accountsRepo');
 const { BudgetsRepository } = require('./budgetsRepo');
 const { GoalsRepository } = require('./goalsRepo');
 const { LoansRepository } = require('./loansRepo');
+const { BillsRepository } = require('./billsRepo');
+const { TagsRepository } = require('./tagsRepo');
+const { HousingRepository } = require('./housingRepo');
+const { PortfolioRepository } = require('./portfolioRepo');
+const { ReceiptsRepository } = require('./receiptsRepo');
+const { RecurringRepository } = require('./recurringRepo');
 
 /**
  * @param {import('better-sqlite3').Database} db
@@ -23,6 +29,12 @@ function initRepositories(db) {
     budgets: new BudgetsRepository(db),
     goals: new GoalsRepository(db),
     loans: new LoansRepository(db),
+    bills: new BillsRepository(db),
+    tags: new TagsRepository(db),
+    housing: new HousingRepository(db),
+    portfolio: new PortfolioRepository(db),
+    receipts: new ReceiptsRepository(db),
+    recurring: new RecurringRepository(db),
   };
 }
 

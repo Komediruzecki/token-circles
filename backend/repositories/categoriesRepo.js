@@ -25,15 +25,15 @@ class CategoriesRepository extends BaseRepository {
   }
 
   update(id, profileId, data) {
-    return this.update('categories', data, 'id = ? AND profile_id = ?', id, profileId);
+    return super.update('categories', data, 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteById(id, profileId) {
-    return this.delete('categories', 'id = ? AND profile_id = ?', id, profileId);
+    return super.delete('categories', 'id = ? AND profile_id = ?', id, profileId);
   }
 
   deleteAll(profileId) {
-    return this.delete('categories', 'profile_id = ?', profileId);
+    return super.delete('categories', 'profile_id = ?', profileId);
   }
 
   seedDefaults(profileId, defaults) {

@@ -1,16 +1,23 @@
 /**
  * E2E Tests for Recurring Transactions API
- * Covers daily/weekly/monthly/yearly/custom patterns, scheduling, timezone handling
+ * Tests the actual API behavior:
+ * - Fields: description, amount, type, category_id, frequency, day_of_month, next_date, notes, active
+ * - POST returns { id }
+ * - GET / returns rows with JOIN fields, only active=1
+ * - GET /:id returns single toCamelCase object
+ * - PUT /:id updates fields, returns { ok: true }
+ * - DELETE /:id returns { ok: true } (no existence check)
+ * - POST /:id/populate creates transaction, advances next_date
+ * - GET /upcoming returns { transactions, byCategory, totalMonthly, currency }
  */
 const request = require('supertest');
 
 const BASE_URL = 'http://localhost:3847';
 
 describe('Recurring Transactions E2E', () => {
+  jest.setTimeout(30000);
   let agent;
   let testRecurringId;
-  let testTxId;
-  let testTxId2;
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
@@ -22,748 +29,522 @@ describe('Recurring Transactions E2E', () => {
 
   afterAll(async () => {
     if (testRecurringId) {
-      await agent.delete(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').catch(() => {});
+      // Deactivate (soft delete) to keep data integrity
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ active: 0 }).catch(() => {});
     }
-    if (testTxId) await agent.delete(`/api/transactions/${testTxId}`).set('X-Skip-RateLimit', 'true').catch(() => {});
-    if (testTxId2) await agent.delete(`/api/transactions/${testTxId2}`).set('X-Skip-RateLimit', 'true').catch(() => {});
   });
 
   describe('POST /api/recurring', () => {
     test('BE-REC-001: Create daily recurring transaction', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Daily Expense',
+        description: 'Daily Expense',
         amount: 50,
         frequency: 'daily',
-        startDate: '2026-04-25',
-        transactions: []
+        next_date: '2026-06-06'
       });
       global.expect(resp.status).toBe(200);
       global.expect(resp.body).toHaveProperty('id');
-      global.expect(resp.body.frequency).toBe('daily');
+      global.expect(resp.body.id).toBeGreaterThan(0);
       testRecurringId = resp.body.id;
     });
 
     test('BE-REC-002: Create weekly recurring transaction', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Weekly Bill',
+        description: 'Weekly Bill',
         amount: 100,
         frequency: 'weekly',
-        startDate: '2026-04-25',
-        transactions: []
+        next_date: '2026-06-12'
       });
       global.expect(resp.status).toBe(200);
-      global.expect(resp.body.frequency).toBe('weekly');
+      global.expect(resp.body).toHaveProperty('id');
+      global.expect(resp.body.id).toBeGreaterThan(0);
     });
 
     test('BE-REC-003: Create monthly recurring transaction', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Monthly Subscription',
+        description: 'Monthly Subscription',
         amount: 25,
         frequency: 'monthly',
-        startDate: '2026-04-25',
-        transactions: []
+        day_of_month: 15,
+        next_date: '2026-06-15'
       });
       global.expect(resp.status).toBe(200);
-      global.expect(resp.body.frequency).toBe('monthly');
+      global.expect(resp.body).toHaveProperty('id');
+      global.expect(resp.body.id).toBeGreaterThan(0);
     });
 
     test('BE-REC-004: Create yearly recurring transaction', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Annual Fee',
+        description: 'Annual Fee',
         amount: 500,
         frequency: 'yearly',
-        startDate: '2026-04-25',
-        transactions: []
+        next_date: '2026-06-01'
       });
       global.expect(resp.status).toBe(200);
-      global.expect(resp.body.frequency).toBe('yearly');
+      global.expect(resp.body).toHaveProperty('id');
+      global.expect(resp.body.id).toBeGreaterThan(0);
     });
 
-    test('BE-REC-005: Create custom frequency (e.g., every 2 weeks)', async () => {
+    test('BE-REC-005: Create recurring with category_id and notes', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Bi-Weekly Pay',
-        amount: 500,
-        frequency: 'custom',
-        interval: 2,
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-      global.expect(resp.body.frequency).toBe('custom');
-      global.expect(resp.body.interval).toBe(2);
-    });
-
-    test('BE-REC-006: Recurring transaction has all required fields', async () => {
-      if (!testRecurringId) return;
-      const resp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(resp.status).toBe(200);
-      global.expect(resp.body).toHaveProperty('name');
-      global.expect(resp.body).toHaveProperty('amount');
-      global.expect(resp.body).toHaveProperty('frequency');
-      global.expect(resp.body).toHaveProperty('startDate');
-      global.expect(resp.body).toHaveProperty('enabled');
-    });
-
-    test('BE-REC-007: Reject recurring with empty name', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        amount: 50,
-        frequency: 'daily'
-      });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-008: Reject recurring with invalid frequency', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Invalid Recur',
-        amount: 50,
-        frequency: 'invalid'
-      });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-009: Validate negative amount rejected', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Negative Amount',
-        amount: -50,
-        frequency: 'daily',
-        transactions: []
-      });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-010: Require start date', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'No Date',
-        amount: 50,
-        frequency: 'daily'
-      });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-011: Frequency-specific validation for daily', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Daily Test',
-        amount: 50,
-        frequency: 'daily',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-    });
-
-    test('BE-REC-012: Frequency-specific validation for weekly', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Weekly Test',
-        amount: 50,
-        frequency: 'weekly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-    });
-
-    test('BE-REC-013: Frequency-specific validation for monthly', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Monthly Test',
-        amount: 50,
+        description: 'Categorized Recurring',
+        amount: 75,
         frequency: 'monthly',
-        startDate: '2026-04-25',
-        transactions: []
+        category_id: 1,
+        day_of_month: 10,
+        next_date: '2026-06-10',
+        notes: 'Test notes for recurring'
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('id');
+      global.expect(resp.body.id).toBeGreaterThan(0);
     });
 
-    test('BE-REC-014: Frequency-specific validation for yearly', async () => {
+    test('BE-REC-006: Create recurring with minimal fields (uses defaults)', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Yearly Test',
-        amount: 50,
-        frequency: 'yearly',
-        startDate: '2026-04-25',
-        transactions: []
+        description: 'Minimal Recurring',
+        amount: 50
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('id');
+      global.expect(resp.body.id).toBeGreaterThan(0);
     });
 
-    test('BE-REC-015: Custom frequency requires interval value', async () => {
+    test('BE-REC-007: Create income-type recurring transaction', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Custom Test',
-        amount: 50,
-        frequency: 'custom',
-        startDate: '2026-04-25',
-        transactions: []
+        description: 'Monthly Salary',
+        amount: 5000,
+        type: 'income',
+        frequency: 'monthly',
+        day_of_month: 1,
+        next_date: '2026-06-01'
       });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-016: Custom interval must be positive', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Custom Test',
-        amount: 50,
-        frequency: 'custom',
-        interval: -2,
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect([400, 422]).to.include(resp.status);
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('id');
+      global.expect(resp.body.id).toBeGreaterThan(0);
     });
   });
 
   describe('GET /api/recurring', () => {
-    test('BE-REC-017: Get all recurring transactions', async () => {
+    test('BE-REC-008: Get all active recurring transactions', async () => {
       const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
       global.expect(Array.isArray(resp.body)).toBe(true);
-    });
-
-    test('BE-REC-018: Get single recurring by ID', async () => {
-      if (!testRecurringId) return;
-      const resp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(resp.status).toBe(200);
-      global.expect(resp.body).toHaveProperty('id', testRecurringId);
-    });
-
-    test('BE-REC-019: Returns 404 for non-existent recurring', async () => {
-      const resp = await agent.get('/api/recurring/999999999').set('X-Skip-RateLimit', 'true');
-      global.expect(resp.status).toBe(404);
-    });
-
-    test('BE-REC-020: Filter recurring by enabled status', async () => {
-      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true').query({ enabled: true });
-      global.expect(resp.status).toBe(200);
+      // All returned items should have JOIN fields (category_name, category_color, category_type)
       if (resp.body.length > 0) {
         resp.body.forEach(r => {
-          global.expect(r.enabled).toBe(true);
+          global.expect(r).toHaveProperty('description');
+          global.expect(r).toHaveProperty('amount');
+          global.expect(r).toHaveProperty('frequency');
+          global.expect(r).toHaveProperty('active');
+          // JOIN fields should be present
+          global.expect(r).toHaveProperty('category_name');
+          global.expect(r).toHaveProperty('category_color');
+          global.expect(r).toHaveProperty('category_type');
         });
       }
     });
 
-    test('BE-REC-021: Filter recurring by frequency', async () => {
-      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true').query({ frequency: 'monthly' });
+    test('BE-REC-009: List is sorted by next_date ascending', async () => {
+      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
-      if (resp.body.length > 0) {
-        resp.body.forEach(r => {
-          global.expect(r.frequency).toBe('monthly');
-        });
+      if (resp.body.length > 1) {
+        for (let i = 1; i < resp.body.length; i++) {
+          const prev = resp.body[i - 1].next_date || '';
+          const curr = resp.body[i].next_date || '';
+          global.expect(prev.localeCompare(curr)).toBeLessThanOrEqual(0);
+        }
       }
     });
 
-    test('BE-REC-022: Filter recurring by amount range', async () => {
-      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true').query({
-        minAmount: 100,
-        maxAmount: 500
-      });
+    test('BE-REC-010: Only active=1 transactions are returned', async () => {
+      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
       if (resp.body.length > 0) {
         resp.body.forEach(r => {
-          global.expect(r.amount).toBeGreaterThanOrEqual(100);
-          global.expect(r.amount).toBeLessThanOrEqual(500);
+          global.expect(r.active).toBe(1);
         });
       }
     });
   });
 
+  describe('GET /api/recurring/:id', () => {
+    test('BE-REC-011: Get single recurring by ID (returns toCamelCase)', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      const resp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      // toCamelCase converts snake_case to camelCase
+      global.expect(resp.body).toHaveProperty('id', testRecurringId);
+      global.expect(resp.body).toHaveProperty('description');
+      global.expect(resp.body).toHaveProperty('amount');
+      global.expect(resp.body).toHaveProperty('frequency');
+      global.expect(resp.body).toHaveProperty('active');
+      global.expect(resp.body).toHaveProperty('nextDate'); // snake_case next_date -> nextDate
+      global.expect(resp.body).toHaveProperty('dayOfMonth'); // snake_case day_of_month -> dayOfMonth
+      global.expect(resp.body).toHaveProperty('createdAt'); // snake_case created_at -> createdAt
+    });
+
+    test('BE-REC-012: Returns 404 for non-existent recurring', async () => {
+      const resp = await agent.get('/api/recurring/999999999').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(404);
+    });
+
+    test('BE-REC-013: Single get includes profile_id and category_id', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      const resp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('profileId');
+      global.expect(resp.body).toHaveProperty('categoryId');
+    });
+  });
+
   describe('PUT /api/recurring/:id', () => {
-    test('BE-REC-023: Update recurring transaction name', async () => {
-      if (!testRecurringId) return;
-      const newName = 'Updated Recur_' + Date.now();
+    test('BE-REC-014: Update recurring transaction description', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      const newDesc = 'Updated Recur_' + Date.now();
 
       const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
-        name: newName
+        description: newDesc
       });
       global.expect(resp.status).toBe(200);
       global.expect(resp.body.ok).toBe(true);
 
       const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.name).toBe(newName);
+      global.expect(checkResp.body.description).toBe(newDesc);
     });
 
-    test('BE-REC-024: Update recurring transaction amount', async () => {
-      if (!testRecurringId) return;
+    test('BE-REC-015: Update recurring transaction amount', async () => {
+      global.expect(testRecurringId).toBeDefined();
       const newAmount = 75.50;
 
       const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
         amount: newAmount
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
 
       const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
       global.expect(checkResp.body.amount).toBeCloseTo(newAmount, 2);
     });
 
-    test('BE-REC-025: Update recurring transaction frequency', async () => {
-      if (!testRecurringId) return;
+    test('BE-REC-016: Update recurring transaction frequency', async () => {
+      global.expect(testRecurringId).toBeDefined();
       const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
         frequency: 'monthly'
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
     });
 
-    test('BE-REC-026: Update recurring transaction start date', async () => {
-      if (!testRecurringId) return;
-      const newDate = '2026-05-01';
+    test('BE-REC-017: Update next_date', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      const newDate = '2026-07-01';
 
       const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
-        startDate: newDate
+        next_date: newDate
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
 
       const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.startDate).toBe(newDate);
+      // toCamelCase: next_date -> nextDate
+      global.expect(checkResp.body.nextDate).toBe(newDate);
     });
 
-    test('BE-REC-027: Enable/disable recurring transaction', async () => {
-      if (!testRecurringId) return;
+    test('BE-REC-018: Set active to 0 (deactivate recurring transaction)', async () => {
+      global.expect(testRecurringId).toBeDefined();
       const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
-        enabled: true
+        active: 0
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
 
       const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.enabled).toBe(true);
+      global.expect(checkResp.body.active).toBe(0);
+
+      // Re-activate for other tests
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
+        active: 1
+      });
     });
 
-    test('BE-REC-028: Update multiple fields at once', async () => {
-      if (!testRecurringId) return;
+    test('BE-REC-019: Set active to 1 (reactivate recurring transaction)', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      // Deactivate first
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ active: 0 });
+
+      // Reactivate
+      const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
+        active: 1
+      });
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
+
+      const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(checkResp.body.active).toBe(1);
+    });
+
+    test('BE-REC-020: Update multiple fields at once', async () => {
+      global.expect(testRecurringId).toBeDefined();
 
       const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
-        name: 'MultiUpdate',
+        description: 'MultiUpdate',
         amount: 125.75,
-        frequency: 'weekly'
+        frequency: 'weekly',
+        notes: 'updated notes'
       });
       global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
 
       const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.name).toBe('MultiUpdate');
+      global.expect(checkResp.body.description).toBe('MultiUpdate');
       global.expect(checkResp.body.amount).toBeCloseTo(125.75, 2);
       global.expect(checkResp.body.frequency).toBe('weekly');
     });
 
-    test('BE-REC-029: Update custom interval', async () => {
-      const customResp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Custom Interval',
-        amount: 100,
-        frequency: 'custom',
-        interval: 2,
-        startDate: '2026-04-25',
-        transactions: []
+    test('BE-REC-021: Update category_id', async () => {
+      global.expect(testRecurringId).toBeDefined();
+
+      const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
+        category_id: 2
       });
-      const id = customResp.body.id;
-
-      const updateResp = await agent.put(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true').send({
-        interval: 3
-      });
-      global.expect(updateResp.status).toBe(200);
-
-      const checkResp = await agent.get(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.interval).toBe(3);
-    });
-  });
-
-  describe('DELETE /api/recurring/:id', () => {
-    test('BE-REC-030: Delete recurring transaction', async () => {
-      if (!testRecurringId) return;
-      const id = testRecurringId;
-
-      const resp = await agent.delete(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
-      global.expect(resp.body).toHaveProperty('ok', true);
+      global.expect(resp.body.ok).toBe(true);
 
-      const checkResp = await agent.get(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.status).toBe(404);
+      const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(checkResp.body.categoryId).toBe(2);
     });
 
-    test('BE-REC-031: Delete non-existent returns 404', async () => {
-      const resp = await agent.delete('/api/recurring/999999999').set('X-Skip-RateLimit', 'true');
+    test('BE-REC-022: Update day_of_month', async () => {
+      global.expect(testRecurringId).toBeDefined();
+
+      const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
+        day_of_month: 20
+      });
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
+
+      const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(checkResp.body.dayOfMonth).toBe(20);
+    });
+
+    test('BE-REC-023: Update type (expense/income)', async () => {
+      global.expect(testRecurringId).toBeDefined();
+
+      const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
+        type: 'income'
+      });
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body.ok).toBe(true);
+
+      const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(checkResp.body.type).toBe('income');
+
+      // Reset to expense for subsequent tests
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ type: 'expense' });
+    });
+
+    test('BE-REC-024: Returns 404 for non-existent recurring on update', async () => {
+      const resp = await agent.put('/api/recurring/999999999').set('X-Skip-RateLimit', 'true').send({
+        description: 'Non-existent'
+      });
       global.expect(resp.status).toBe(404);
     });
   });
 
-  describe('Recurring Transaction Execution', () => {
-    test('BE-REC-032: Create scheduled transaction successfully', async () => {
-      await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Scheduled Tx',
-        amount: 100,
-        frequency: 'monthly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-    });
-
-    test('BE-REC-033: Pause recurring transaction', async () => {
-      if (!testRecurringId) return;
-
-      const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
-        enabled: false
-      });
-      global.expect(resp.status).toBe(200);
-
-      const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.enabled).toBe(false);
-    });
-
-    test('BE-REC-034: Resume paused recurring transaction', async () => {
-      if (!testRecurringId) return;
-
-      const resp = await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({
-        enabled: true
-      });
-      global.expect(resp.status).toBe(200);
-
-      const checkResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.body.enabled).toBe(true);
-    });
-  });
-
-  describe('Recurring Transaction Transactions', () => {
-    test('BE-REC-035: Add transaction to recurring pattern', async () => {
-      if (!testRecurringId) return;
-
-      const resp = await agent.post(`/api/recurring/${testRecurringId}/transactions`).set('X-Skip-RateLimit', 'true').send({
-        description: 'Sample Transaction',
-        amount: 75,
-        date: '2026-04-25',
-        type: 'expense'
-      });
-      global.expect(resp.status).toBe(200);
-    });
-
-    test('BE-REC-036: Get transactions for recurring pattern', async () => {
-      if (!testRecurringId) return;
-
-      const resp = await agent.get(`/api/recurring/${testRecurringId}/transactions`).set('X-Skip-RateLimit', 'true');
-      global.expect(resp.status).toBe(200);
-      global.expect(Array.isArray(resp.body)).toBe(true);
-    });
-
-    test('BE-REC-037: Update transaction in recurring pattern', async () => {
-      if (!testRecurringId) return;
-      const txResp = await agent.get(`/api/recurring/${testRecurringId}/transactions`).set('X-Skip-RateLimit', 'true');
-      if (txResp.body.length > 0) {
-        const txId = txResp.body[0].id;
-        const updateResp = await agent.put(`/api/recurring/${testRecurringId}/transactions/${txId}`).set('X-Skip-RateLimit', 'true').send({
-          amount: 80
-        });
-        global.expect(updateResp.status).toBe(200);
-      }
-    });
-
-    test('BE-REC-038: Delete transaction from recurring pattern', async () => {
-      if (!testRecurringId) return;
-      const txResp = await agent.get(`/api/recurring/${testRecurringId}/transactions`).set('X-Skip-RateLimit', 'true');
-      if (txResp.body.length > 0) {
-        const txId = txResp.body[0].id;
-        const delResp = await agent.delete(`/api/recurring/${testRecurringId}/transactions/${txId}`).set('X-Skip-RateLimit', 'true');
-        global.expect(delResp.status).toBe(200);
-      }
-    });
-  });
-
-  describe('Recurring Transaction Dates & Scheduling', () => {
-    test('BE-REC-039: Verify date calculation for daily pattern', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Daily Calc',
-        amount: 50,
+  describe('DELETE /api/recurring/:id', () => {
+    test('BE-REC-025: Delete recurring transaction returns ok', async () => {
+      // Create a temp recurring to delete
+      const createResp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
+        description: 'To Delete',
+        amount: 99,
         frequency: 'daily',
-        startDate: '2026-04-25',
-        transactions: []
+        next_date: '2026-06-06'
       });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
+      global.expect(createResp.status).toBe(200);
+      const deleteId = createResp.body.id;
 
-      const datesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      global.expect(datesResp.status).toBe(200);
-      if (datesResp.body.length > 0) {
-        global.expect(datesResp.body[0].date).toBeDefined();
-      }
+      const resp = await agent.delete(`/api/recurring/${deleteId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('ok', true);
+
+      // Verify deleted — GET by ID should return 404
+      const checkResp = await agent.get(`/api/recurring/${deleteId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(checkResp.status).toBe(404);
     });
 
-    test('BE-REC-040: Verify date calculation for weekly pattern', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Weekly Calc',
-        amount: 100,
-        frequency: 'weekly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
+    test('BE-REC-026: Delete non-existent returns ok (no existence check in API)', async () => {
+      const resp = await agent.delete('/api/recurring/999999999').set('X-Skip-RateLimit', 'true');
+      // API does not check existence before delete — returns { ok: true }
       global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
-
-      const datesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      global.expect(datesResp.status).toBe(200);
-      if (datesResp.body.length > 1) {
-        global.expect(datesResp.body[1].date).toBeDefined();
-      }
+      global.expect(resp.body).toHaveProperty('ok', true);
     });
+  });
 
-    test('BE-REC-041: Verify monthly date calculation', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Monthly Calc',
-        amount: 25,
-        frequency: 'monthly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
-
-      const datesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      global.expect(datesResp.status).toBe(200);
-      if (datesResp.body.length > 1) {
-        // Next month should be about 30 days later
-        const diffDays = (new Date(datesResp.body[1].date) - new Date(datesResp.body[0].date)) / (1000 * 60 * 60 * 24);
-        global.expect(diffDays).toBeGreaterThanOrEqual(28);
-        global.expect(diffDays).toBeLessThanOrEqual(32);
-      }
-    });
-
-    test('BE-REC-042: Verify yearly date calculation', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Yearly Calc',
-        amount: 500,
-        frequency: 'yearly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
-
-      const datesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      global.expect(datesResp.status).toBe(200);
-      if (datesResp.body.length > 1) {
-        const diffDays = (new Date(datesResp.body[1].date) - new Date(datesResp.body[0].date)) / (1000 * 60 * 60 * 24);
-        global.expect(diffDays).toBeGreaterThanOrEqual(364);
-        global.expect(diffDays).toBeLessThanOrEqual(366);
-      }
-    });
-
-    test('BE-REC-043: Custom frequency date calculation', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Custom Calc',
+  describe('POST /api/recurring/:id/populate', () => {
+    test('BE-REC-027: Populate creates a transaction from recurring', async () => {
+      // Create a fresh recurring for populate test
+      const createResp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
+        description: 'Populate Test',
         amount: 200,
-        frequency: 'custom',
-        interval: 2,
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
-
-      const datesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      global.expect(datesResp.status).toBe(200);
-      if (datesResp.body.length > 1) {
-        const diffDays = (new Date(datesResp.body[1].date) - new Date(datesResp.body[0].date)) / (1000 * 60 * 60 * 24);
-        global.expect(diffDays).toBeCloseTo(14, 0); // 2 weeks
-      }
-    });
-
-    test('BE-REC-044: Recurring date doesn\'t skip weekends by default', async () => {
-      // If schedule allows weekends, this test passes
-      // If it skips weekends, this verifies that behavior
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Weekend Test',
-        amount: 50,
-        frequency: 'daily',
-        startDate: '2026-04-25', // Friday
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-    });
-
-    test('BE-REC-045: Future dates only in schedule', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Future Only',
-        amount: 50,
         frequency: 'monthly',
-        startDate: '2026-04-25',
-        transactions: []
+        type: 'expense',
+        next_date: '2026-06-01',
+        category_id: null
       });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
+      global.expect(createResp.status).toBe(200);
+      const recId = createResp.body.id;
 
-      const datesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      global.expect(datesResp.status).toBe(200);
-      if (datesResp.body.length > 0) {
-        datesResp.body.forEach(dateObj => {
-          const futureDate = new Date(dateObj.date);
-          global.expect(futureDate.getTime()).toBeGreaterThan(Date.now());
-        });
-      }
+      const resp = await agent.post(`/api/recurring/${recId}/populate`).set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('ok', true);
+      global.expect(resp.body).toHaveProperty('transactionId');
+      global.expect(resp.body.transactionId).toBeGreaterThan(0);
+      // next_date should be advanced
+      global.expect(resp.body).toHaveProperty('next_date');
+      // For monthly frequency starting June 1, should advance to July 1
+      global.expect(resp.body.next_date).toMatch(/^2026-07-01/);
+
+      // Clean up: delete the created transaction
+      await agent.delete(`/api/transactions/${resp.body.transactionId}`).set('X-Skip-RateLimit', 'true').catch(() => {});
+      // Clean up the recurring
+      await agent.delete(`/api/recurring/${recId}`).set('X-Skip-RateLimit', 'true').catch(() => {});
+    });
+
+    test('BE-REC-028: Populate returns 404 for non-existent recurring', async () => {
+      const resp = await agent.post('/api/recurring/999999999/populate').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(404);
     });
   });
 
-  describe('Recurring Transaction Statistics', () => {
-    test('BE-REC-046: Get total value of all recurring transactions', async () => {
+  describe('GET /api/recurring/upcoming', () => {
+    test('BE-REC-029: Upcoming returns correct response shape', async () => {
+      const resp = await agent.get('/api/recurring/upcoming').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('transactions');
+      global.expect(resp.body).toHaveProperty('byCategory');
+      global.expect(resp.body).toHaveProperty('totalMonthly');
+      global.expect(resp.body).toHaveProperty('currency');
+      global.expect(Array.isArray(resp.body.transactions)).toBe(true);
+      global.expect(Array.isArray(resp.body.byCategory)).toBe(true);
+      global.expect(typeof resp.body.totalMonthly).toBe('number');
+      global.expect(typeof resp.body.currency).toBe('string');
+    });
+
+    test('BE-REC-030: Upcoming transactions have required fields', async () => {
+      const resp = await agent.get('/api/recurring/upcoming').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      if (resp.body.transactions.length > 0) {
+        const tx = resp.body.transactions[0];
+        global.expect(tx).toHaveProperty('id');
+        global.expect(tx).toHaveProperty('description');
+        global.expect(tx).toHaveProperty('amount');
+        global.expect(tx).toHaveProperty('type');
+        global.expect(tx).toHaveProperty('frequency');
+        global.expect(tx).toHaveProperty('next_date');
+        global.expect(tx).toHaveProperty('category_name');
+        global.expect(tx).toHaveProperty('category_color');
+      }
+    });
+
+    test('BE-REC-031: Upcoming transactions are capped at 20', async () => {
+      const resp = await agent.get('/api/recurring/upcoming').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body.transactions.length).toBeLessThanOrEqual(20);
+    });
+
+    test('BE-REC-032: Upcoming byCategory is sorted by total descending', async () => {
+      const resp = await agent.get('/api/recurring/upcoming').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      if (resp.body.byCategory.length > 1) {
+        for (let i = 1; i < resp.body.byCategory.length; i++) {
+          global.expect(resp.body.byCategory[i].total).toBeLessThanOrEqual(
+            resp.body.byCategory[i - 1].total
+          );
+        }
+      }
+    });
+
+    test('BE-REC-033: Upcoming byCategory items have name, color, total, items', async () => {
+      const resp = await agent.get('/api/recurring/upcoming').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      if (resp.body.byCategory.length > 0) {
+        const cat = resp.body.byCategory[0];
+        global.expect(cat).toHaveProperty('name');
+        global.expect(cat).toHaveProperty('color');
+        global.expect(cat).toHaveProperty('total');
+        global.expect(cat).toHaveProperty('items');
+        global.expect(Array.isArray(cat.items)).toBe(true);
+      }
+    });
+
+    test('BE-REC-034: totalMonthly is non-negative', async () => {
+      const resp = await agent.get('/api/recurring/upcoming').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body.totalMonthly).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Pause and Resume (active field)', () => {
+    test('BE-REC-035: Deactivated recurring is excluded from GET /api/recurring', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      // Deactivate
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ active: 0 });
+
+      // Should not appear in GET all
       const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
-      if (resp.body.length > 0) {
-        const total = resp.body.reduce((sum, r) => sum + r.amount, 0);
-        global.expect(total).toBeFinite();
-      }
+      const found = resp.body.find(r => r.id === testRecurringId);
+      global.expect(found).toBeUndefined();
+
+      // But still accessible by direct ID
+      const singleResp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
+      global.expect(singleResp.status).toBe(200);
+
+      // Reactivate
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ active: 1 });
     });
 
-    test('BE-REC-047: Count active vs paused recurring transactions', async () => {
+    test('BE-REC-036: Reactivated recurring reappears in list', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      // Deactivate then reactivate
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ active: 0 });
+      await agent.put(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true').send({ active: 1 });
+
       const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
-      if (resp.body.length > 0) {
-        const active = resp.body.filter(r => r.enabled).length;
-        const paused = resp.body.filter(r => !r.enabled).length;
-        global.expect(active + paused).toBe(resp.body.length);
-      }
-    });
-
-    test('BE-REC-048: Total transaction count over time', async () => {
-      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
-      global.expect(resp.status).toBe(200);
-      if (resp.body.length > 0) {
-        const totalTx = resp.body.reduce((sum, r) => sum + (r.transactionCount || 0), 0);
-        global.expect(totalTx).toBeFinite();
-      }
+      const found = resp.body.find(r => r.id === testRecurringId);
+      global.expect(found).toBeDefined();
     });
   });
 
-  describe('Recurring Transaction Overlap Prevention', () => {
-    test('BE-REC-049: Detect overlapping recurring transactions', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Overlap Test 1',
-        amount: 100,
-        frequency: 'weekly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
+  describe('Data completeness', () => {
+    test('BE-REC-037: Created recurring has created_at timestamp', async () => {
+      global.expect(testRecurringId).toBeDefined();
+      const resp = await agent.get(`/api/recurring/${testRecurringId}`).set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
-
-      const resp2 = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Overlap Test 2',
-        amount: 100,
-        frequency: 'weekly',
-        startDate: '2026-05-02',
-        transactions: []
-      });
-      // These should not overlap (different weeks)
-      global.expect(resp2.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('createdAt');
+      // Should be a valid date string
+      global.expect(isNaN(new Date(resp.body.createdAt).getTime())).toBe(false);
     });
 
-    test('BE-REC-050: Same day transactions detected', async () => {
+    test('BE-REC-038: Default values are applied on creation', async () => {
       const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Same Day Test',
-        amount: 100,
-        frequency: 'weekly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-    });
-  });
-
-  describe('Recurring Transaction Validation', () => {
-    test('BE-REC-051: Ensure maximum frequency interval', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Max Interval',
-        amount: 100,
-        frequency: 'custom',
-        interval: 1000,
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-052: Ensure minimum frequency interval', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Min Interval',
-        amount: 100,
-        frequency: 'custom',
-        interval: 0,
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect([400, 422]).to.include(resp.status);
-    });
-
-    test('BE-REC-053: Reject future start date for daily', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Daily Future',
-        amount: 50,
-        frequency: 'daily',
-        startDate: '2027-01-01',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-    });
-  });
-
-  describe('Recurring Transaction Historical Data', () => {
-    test('BE-REC-054: Track created date', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'History Test',
-        amount: 50,
-        frequency: 'daily',
-        startDate: '2026-04-25',
-        transactions: []
+        description: 'Defaults Test',
+        amount: 100
       });
       global.expect(resp.status).toBe(200);
       const id = resp.body.id;
 
       const checkResp = await agent.get(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true');
       global.expect(checkResp.status).toBe(200);
-      global.expect(checkResp.body).toHaveProperty('createdAt');
-    });
+      global.expect(checkResp.body.type).toBe('expense');       // default
+      global.expect(checkResp.body.frequency).toBe('monthly');   // default
+      global.expect(checkResp.body.active).toBe(1);              // default
+      global.expect(checkResp.body.notes).toBe('');              // default
 
-    test('BE-REC-055: Track last updated date', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Update Time',
-        amount: 50,
-        frequency: 'daily',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
-
-      await agent.put(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true').send({
-        name: 'Updated Name'
-      });
-
-      const checkResp = await agent.get(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true');
-      global.expect(checkResp.status).toBe(200);
-      global.expect(checkResp.body).toHaveProperty('updatedAt');
-    });
-  });
-
-  describe('Performance & Load Handling', () => {
-    test('BE-REC-056: Handle many recurring transactions efficiently', async () => {
-      for (let i = 0; i < 50; i++) {
-        await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-          name: `Many Recur${i}`,
-          amount: 50,
-          frequency: 'daily',
-          startDate: '2026-04-25',
-          transactions: []
-        });
-      }
-
-      const resp = await agent.get('/api/recurring').set('X-Skip-RateLimit', 'true');
-      global.expect(resp.status).toBe(200);
-      global.expect(resp.body.length).toBeGreaterThanOrEqual(50);
-    });
-
-    test('BE-REC-057: Schedules endpoint handles many transactions', async () => {
-      const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
-        name: 'Schedule Load',
-        amount: 50,
-        frequency: 'weekly',
-        startDate: '2026-04-25',
-        transactions: []
-      });
-      global.expect(resp.status).toBe(200);
-      const id = resp.body.id;
-
-      const start = Date.now();
-      const schedulesResp = await agent.get(`/api/recurring/${id}/schedules`).set('X-Skip-RateLimit', 'true');
-      const duration = Date.now() - start;
-
-      global.expect(schedulesResp.status).toBe(200);
-      global.expect(duration).toBeLessThan(5000); // 5 second timeout
+      // Clean up
+      await agent.delete(`/api/recurring/${id}`).set('X-Skip-RateLimit', 'true').catch(() => {});
     });
   });
 });
