@@ -130,10 +130,10 @@ The backend provides a health check endpoint to verify the service is running:
 }
 ```
 
-**Live site URLs:**
-- Frontend: https://finance-manager.clodhost.com
-- API: https://finance-manager.clodhost.com/api
-- Health Check: https://finance-manager.clodhost.com/api/health
+**Live site URLs (example):**
+- Frontend: `https://your-domain.com`
+- API: `https://your-domain.com/api`
+- Health Check: `https://your-domain.com/api/health`
 
 The backend exposes a REST API. All endpoints require an `X-Profile-Id` header (integer profile ID).
 
@@ -213,28 +213,29 @@ Tests require the backend server running on port 3847 with `NODE_ENV=test`. The 
 
 ### Architecture
 
-This project uses **frontend/ and backend/** as the source of truth (ground truth). The deployment process:
+This project uses **frontend/** and **backend/** as the source of truth.
 
-1. **Development Repo** (`/tmp/finance-manager-2`): Contains source code in `frontend/` and `backend/`
-2. **Production Build**: Built via Vite and deployed to `/var/www/finance-manager.clodhost.com/frontend/dist`
-3. **Production Backend**: Source code synced to `/var/www/finance-manager.clodhost.com/backend/index.js` and `database.js`
+1. **Development**: Work directly in `frontend/` and `backend/`
+2. **Production Build**: Build the frontend with Vite, deploy the `dist/` output to your web server
+3. **Production Backend**: Run `backend/index.js` behind a reverse proxy (Apache/Nginx)
 
 ### Deployment Process
 
 ```bash
-# 1. Build frontend (from ground truth)
-cd /tmp/finance-manager-2/frontend
+# 1. Build frontend
+cd frontend
 npm run build
 
-# 2. Deploy frontend to production
-./deploy.sh  # or manually copy dist/ to /var/www/finance-manager.clodhost.com/frontend/
+# 2. Deploy frontend (example: copy build to your web root)
+cp -r dist/ /var/www/your-site.com/frontend/
 
-# 3. Sync backend from ground truth
-cp /tmp/finance-manager-2/backend/index.js /var/www/finance-manager.clodhost.com/backend/index.js
-cp /tmp/finance-manager-2/backend/database.js /var/www/finance-manager.clodhost.com/backend/database.js
+# 3. Deploy backend
+cp -r backend/ /opt/finance-manager/backend/
+cd /opt/finance-manager/backend
+npm install --production
 
-# 4. Restart backend service
-systemctl restart finance-manager.service
+# 4. Start backend (use pm2 or systemd in production)
+NODE_ENV=production SESSION_SECRET=your-secret node index.js
 ```
 
 ### Live Site URLs

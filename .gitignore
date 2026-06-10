@@ -33,3 +33,24 @@ dist/
 
 .idea
 assets/receipts/
+
+# Runtime files
+*.pid
+
+# Editor backup files
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+test-results/
+test-output.png
+
+# Symlinks (machine-specific)
+backend/db
+public/frontend
