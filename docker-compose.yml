@@ -10,6 +10,17 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3847
+      # REQUIRED: Set a strong random secret for session encryption
+      # Generate with: openssl rand -hex 32
+      SESSION_SECRET: ${SESSION_SECRET}
+      # Comma-separated list of allowed CORS origins (include https:// prefix in production)
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3847}
+      # Optional SMTP settings for email notifications
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@localhost}
     volumes:
       # Persist SQLite database across container restarts
       - fm-db-data:/app/db

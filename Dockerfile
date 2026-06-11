@@ -32,6 +32,9 @@ RUN mkdir -p db assets && chown -R node:node /app
 COPY --from=builder --chown=node:node /build/node_modules ./node_modules
 
 # 3. Copy application source with correct ownership
+# NOTE: The frontend must be pre-built before building the Docker image.
+# Run `cd frontend && npm install && npm run build` first.
+# This creates frontend/dist/ which is served by the backend.
 COPY --chown=node:node backend/ ./backend/
 COPY --chown=node:node frontend/ ./frontend/
 
