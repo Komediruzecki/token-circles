@@ -1,0 +1,2689 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Finance Manager API",
+    "description": "REST API for the Finance Manager personal finance tracker. All endpoints are profile-scoped via the `X-Profile-Id` header.",
+    "version": "1.1.0",
+    "license": { "name": "MIT" },
+    "contact": { "url": "https://github.com/Komediruzecki/finance-manager" }
+  },
+  "servers": [
+    { "url": "http://localhost:3847", "description": "Local development" }
+  ],
+  "security": [
+    { "cookieAuth": [] }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "connect.sid"
+      }
+    },
+    "parameters": {
+      "profileId": {
+        "name": "X-Profile-Id",
+        "in": "header",
+        "schema": { "type": "integer", "default": 1 },
+        "description": "Profile scope for data isolation"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "description": "Error message" }
+        }
+      },
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "description": { "type": "string" },
+          "amount": { "type": "number" },
+          "date": { "type": "string", "format": "date" },
+          "type": { "type": "string", "enum": ["income", "expense", "transfer"] },
+          "category_id": { "type": "integer", "nullable": true },
+          "account_id": { "type": "integer", "nullable": true },
+          "transfer_account_id": { "type": "integer", "nullable": true },
+          "beneficiary": { "type": "string", "nullable": true },
+          "payor": { "type": "string", "nullable": true },
+          "currency": { "type": "string" },
+          "amount_local": { "type": "number", "nullable": true },
+          "means_of_payment": { "type": "string", "nullable": true },
+          "exchange_rate": { "type": "number", "nullable": true },
+          "notes": { "type": "string", "nullable": true },
+          "reconciled": { "type": "integer" },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "currency": { "type": "string" },
+          "balance": { "type": "number" },
+          "notes": { "type": "string", "nullable": true },
+          "starting_balance": { "type": "number" },
+          "starting_date": { "type": "string", "format": "date", "nullable": true },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "color": { "type": "string" },
+          "icon": { "type": "string" },
+          "type": { "type": "string", "enum": ["income", "expense"] },
+          "parent_id": { "type": "integer", "nullable": true },
+          "parent_name": { "type": "string", "nullable": true },
+          "tax_deductible": { "type": "integer" },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "Budget": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "category_id": { "type": "integer" },
+          "amount": { "type": "number" },
+          "period": { "type": "string" },
+          "start_date": { "type": "string", "format": "date" },
+          "end_date": { "type": "string", "format": "date", "nullable": true },
+          "rollover_enabled": { "type": "integer" },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "Bill": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "amount": { "type": "number" },
+          "due_date": { "type": "string", "format": "date" },
+          "frequency": { "type": "string" },
+          "day_of_month": { "type": "integer", "nullable": true },
+          "category_id": { "type": "integer", "nullable": true },
+          "is_active": { "type": "integer" },
+          "notes": { "type": "string", "nullable": true },
+          "type": { "type": "string" },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "Loan": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "principal": { "type": "number" },
+          "interest_rate": { "type": "number" },
+          "start_date": { "type": "string", "format": "date" },
+          "term_months": { "type": "integer" },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "SavingsGoal": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "target_amount": { "type": "number" },
+          "current_amount": { "type": "number" },
+          "deadline": { "type": "string", "format": "date", "nullable": true },
+          "notes": { "type": "string", "nullable": true },
+          "category_id": { "type": "integer", "nullable": true },
+          "profile_id": { "type": "integer" }
+        }
+      },
+      "Tag": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "color": { "type": "string" }
+        }
+      },
+      "Recurring": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "description": { "type": "string" },
+          "amount": { "type": "number" },
+          "type": { "type": "string", "enum": ["income", "expense"] },
+          "category_id": { "type": "integer", "nullable": true },
+          "frequency": { "type": "string" },
+          "day_of_month": { "type": "integer", "nullable": true },
+          "next_date": { "type": "string", "format": "date" },
+          "notes": { "type": "string", "nullable": true },
+          "active": { "type": "integer" },
+          "profile_id": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": {
+          "200": { "description": "Server is healthy" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" },
+          "429": { "description": "Rate limited" }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "responses": { "200": { "description": "Logged out" } }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user",
+        "responses": { "200": { "description": "Current user info" } }
+      }
+    },
+    "/api/auth/check": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Check auth status",
+        "responses": { "200": { "description": "Auth status" } }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Change password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["currentPassword", "newPassword"],
+                "properties": {
+                  "currentPassword": { "type": "string" },
+                  "newPassword": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Password changed" } }
+      }
+    },
+    "/api/profiles": {
+      "get": {
+        "tags": ["Profiles"],
+        "summary": "List all profiles",
+        "responses": { "200": { "description": "Array of profiles with counts" } }
+      },
+      "post": {
+        "tags": ["Profiles"],
+        "summary": "Create profile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": { "name": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Profile created" } }
+      }
+    },
+    "/api/profiles/{id}": {
+      "put": {
+        "tags": ["Profiles"],
+        "summary": "Update profile",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Profile updated" } }
+      },
+      "patch": {
+        "tags": ["Profiles"],
+        "summary": "Patch profile",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Profile patched" } }
+      },
+      "delete": {
+        "tags": ["Profiles"],
+        "summary": "Delete profile",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Profile deleted" } }
+      }
+    },
+    "/api/profiles/reseed-demo": {
+      "post": {
+        "tags": ["Profiles"],
+        "summary": "Reseed demo data",
+        "responses": { "200": { "description": "Demo data reseeded" } }
+      }
+    },
+    "/api/profile/data": {
+      "delete": {
+        "tags": ["Profiles"],
+        "summary": "Clear profile data",
+        "responses": { "200": { "description": "Data cleared" } }
+      }
+    },
+    "/api/profiles/me/password": {
+      "put": {
+        "tags": ["Profiles"],
+        "summary": "Update current user password",
+        "responses": { "200": { "description": "Password updated" } }
+      }
+    },
+    "/api/transactions": {
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "List transactions",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "category_ids", "in": "query", "schema": { "type": "string" }, "description": "Comma-separated category IDs" },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["income", "expense", "transfer"] } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "reconciled", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer" } },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } },
+          { "name": "order", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"] } },
+          { "name": "tag_ids", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": { "type": "array", "items": { "$ref": "#/components/schemas/Transaction" } },
+                    "total": { "type": "integer" },
+                    "limit": { "type": "integer" },
+                    "offset": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Transactions"],
+        "summary": "Create transaction",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["description", "amount"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "amount": { "type": "number" },
+                  "date": { "type": "string", "format": "date" },
+                  "beneficiary": { "type": "string" },
+                  "payor": { "type": "string" },
+                  "category_id": { "type": "integer" },
+                  "currency": { "type": "string" },
+                  "amount_local": { "type": "number" },
+                  "means_of_payment": { "type": "string" },
+                  "exchange_rate": { "type": "number" },
+                  "type": { "type": "string", "enum": ["income", "expense", "transfer"] },
+                  "notes": { "type": "string" },
+                  "account_id": { "type": "integer" },
+                  "transfer_account_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Transaction created" } }
+      },
+      "delete": {
+        "tags": ["Transactions"],
+        "summary": "Delete all transactions",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "All transactions deleted" } }
+      }
+    },
+    "/api/transactions/summary": {
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "Transaction summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "category_ids", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Summary totals" } }
+      }
+    },
+    "/api/transactions/{id}": {
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "Get transaction",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Transaction with tags and category" } }
+      },
+      "put": {
+        "tags": ["Transactions"],
+        "summary": "Update transaction",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": { "type": "string" },
+                  "amount": { "type": "number" },
+                  "date": { "type": "string", "format": "date" },
+                  "category_id": { "type": "integer" },
+                  "account_id": { "type": "integer" },
+                  "transfer_account_id": { "type": "integer" },
+                  "reconciled": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Transaction updated" } }
+      },
+      "delete": {
+        "tags": ["Transactions"],
+        "summary": "Delete transaction",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Transaction deleted" } }
+      }
+    },
+    "/api/transactions/{id}/reconcile": {
+      "patch": {
+        "tags": ["Transactions"],
+        "summary": "Toggle reconciliation status",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Reconciliation toggled" } }
+      }
+    },
+    "/api/transactions/{id}/tags": {
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "Get transaction tags",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Tags for transaction" } }
+      },
+      "post": {
+        "tags": ["Transactions"],
+        "summary": "Set transaction tags",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "tagIds": { "type": "array", "items": { "type": "integer" } } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Tags set" } }
+      },
+      "put": {
+        "tags": ["Transactions"],
+        "summary": "Replace transaction tags",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Tags replaced" } }
+      }
+    },
+    "/api/transactions/bulk": {
+      "put": {
+        "tags": ["Transactions"],
+        "summary": "Bulk update/delete transactions",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "integer" } },
+                  "transactionIds": { "type": "array", "items": { "type": "integer" } },
+                  "action": { "type": "string", "enum": ["update", "delete"] },
+                  "data": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Bulk operation result" } }
+      }
+    },
+    "/api/transactions/reconcile/bulk": {
+      "post": {
+        "tags": ["Transactions"],
+        "summary": "Bulk reconcile by date range",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["startDate", "endDate"],
+                "properties": {
+                  "startDate": { "type": "string", "format": "date" },
+                  "endDate": { "type": "string", "format": "date" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Transactions reconciled" } }
+      }
+    },
+    "/api/transactions/reconcile/summary": {
+      "get": {
+        "tags": ["Transactions"],
+        "summary": "Reconciliation summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Reconciliation counts and totals" } }
+      }
+    },
+    "/api/transactions/reconcile-batch": {
+      "put": {
+        "tags": ["Transactions"],
+        "summary": "Batch reconcile transactions",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "transaction_ids": { "type": "array", "items": { "type": "integer" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Batch reconciled" } }
+      }
+    },
+    "/api/transactions/by-tag/{tagId}": {
+      "get": {
+        "tags": ["Tags"],
+        "summary": "List transactions by tag",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "tagId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Transactions with tag" } }
+      }
+    },
+    "/api/accounts": {
+      "get": {
+        "tags": ["Accounts"],
+        "summary": "List accounts",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of accounts" } }
+      },
+      "post": {
+        "tags": ["Accounts"],
+        "summary": "Create account",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "type": { "type": "string" },
+                  "currency": { "type": "string" },
+                  "balance": { "type": "number" },
+                  "notes": { "type": "string" },
+                  "starting_balance": { "type": "number" },
+                  "starting_date": { "type": "string", "format": "date" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Account created" } }
+      }
+    },
+    "/api/accounts/{id}": {
+      "get": {
+        "tags": ["Accounts"],
+        "summary": "Get account",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Account details" } }
+      },
+      "put": {
+        "tags": ["Accounts"],
+        "summary": "Update account",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Account updated" } }
+      },
+      "delete": {
+        "tags": ["Accounts"],
+        "summary": "Delete account",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Account deleted" } }
+      }
+    },
+    "/api/accounts/{id}/history": {
+      "get": {
+        "tags": ["Accounts"],
+        "summary": "Get account balance history",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Balance history array" } }
+      },
+      "post": {
+        "tags": ["Accounts"],
+        "summary": "Add balance history entry",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["balance"],
+                "properties": { "balance": { "type": "number" } }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Balance recorded" } }
+      },
+      "delete": {
+        "tags": ["Accounts"],
+        "summary": "Clear balance history",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "History cleared" } }
+      }
+    },
+    "/api/accounts/{id}/reconciliation-summary": {
+      "get": {
+        "tags": ["Accounts"],
+        "summary": "Account reconciliation summary",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Reconciliation counts" } }
+      }
+    },
+    "/api/accounts/history/timeline": {
+      "get": {
+        "tags": ["Accounts"],
+        "summary": "Net worth timeline",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Timeline of net worth by date" } }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "List categories",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "income", "in": "query", "schema": { "type": "string" } },
+          { "name": "expense", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Array of categories" } }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Create category",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "color": { "type": "string" },
+                  "icon": { "type": "string", "default": "tag" },
+                  "type": { "type": "string", "enum": ["income", "expense"], "default": "expense" },
+                  "parent_id": { "type": "integer" },
+                  "tax_deductible": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Category created" } }
+      },
+      "delete": {
+        "tags": ["Categories"],
+        "summary": "Delete all categories",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "All categories deleted" } }
+      }
+    },
+    "/api/categories/{id}": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "Get category",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Category details" } }
+      },
+      "put": {
+        "tags": ["Categories"],
+        "summary": "Update category",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Category updated" } }
+      },
+      "delete": {
+        "tags": ["Categories"],
+        "summary": "Delete category",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Category deleted" } }
+      }
+    },
+    "/api/categories/mappings": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "List learned category mappings",
+        "responses": { "200": { "description": "Array of merchant-to-category mappings" } }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Create mapping",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["pattern", "category_id"],
+                "properties": {
+                  "pattern": { "type": "string" },
+                  "category_id": { "type": "integer" },
+                  "confidence": { "type": "number" },
+                  "use_count": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Mapping created" } }
+      }
+    },
+    "/api/categories/mappings/{id}": {
+      "delete": {
+        "tags": ["Categories"],
+        "summary": "Delete mapping",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Mapping deleted" } }
+      }
+    },
+    "/api/categories/auto-map": {
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Auto-map transactions to categories",
+        "responses": { "200": { "description": "Mapping result" } }
+      }
+    },
+    "/api/categories/apply-mappings": {
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Apply category mappings",
+        "responses": { "200": { "description": "Mappings applied" } }
+      }
+    },
+    "/api/budgets": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "List budgets",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of budgets with category info" } }
+      },
+      "post": {
+        "tags": ["Budgets"],
+        "summary": "Create budget",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["category_id", "amount", "period", "start_date"],
+                "properties": {
+                  "category_id": { "type": "integer" },
+                  "amount": { "type": "number" },
+                  "period": { "type": "string" },
+                  "start_date": { "type": "string", "format": "date" },
+                  "end_date": { "type": "string", "format": "date" },
+                  "rollover_enabled": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Budget created" } }
+      }
+    },
+    "/api/budgets/{id}": {
+      "put": {
+        "tags": ["Budgets"],
+        "summary": "Update budget",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Budget updated" } }
+      },
+      "delete": {
+        "tags": ["Budgets"],
+        "summary": "Delete budget",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Budget deleted" } }
+      }
+    },
+    "/api/budgets/{id}/rollover": {
+      "put": {
+        "tags": ["Budgets"],
+        "summary": "Update budget rollover",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Rollover updated" } }
+      }
+    },
+    "/api/budgets/summary": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Budget summary by period",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } },
+          { "name": "apply_rollover", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Budget summary with spending" } }
+      }
+    },
+    "/api/budgets/duplicate-last": {
+      "post": {
+        "tags": ["Budgets"],
+        "summary": "Duplicate last month's budgets",
+        "responses": { "200": { "description": "Budgets duplicated" } }
+      }
+    },
+    "/api/budgets/from-expenses": {
+      "post": {
+        "tags": ["Budgets"],
+        "summary": "Create budgets from expense history",
+        "responses": { "200": { "description": "Budgets created" } }
+      }
+    },
+    "/api/budgets/history": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Budget spending history",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "category_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "months", "in": "query", "schema": { "type": "integer", "default": 6 } }
+        ],
+        "responses": { "200": { "description": "Monthly budget vs spending history" } }
+      }
+    },
+    "/api/budgets/improvements": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Budget improvement trends",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "months", "in": "query", "schema": { "type": "integer", "default": 6 } }
+        ],
+        "responses": { "200": { "description": "Adherence improvement data" } }
+      }
+    },
+    "/api/budgets/alerts": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Budget alerts",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "threshold", "in": "query", "schema": { "type": "integer", "default": 80 } },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Budgets exceeding threshold" } }
+      }
+    },
+    "/api/budgets/zero-based": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Zero-based budget view",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "month", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Zero-based budget allocations" } }
+      }
+    },
+    "/api/budgets/allocate": {
+      "post": {
+        "tags": ["Budgets"],
+        "summary": "Allocate zero-based budget",
+        "parameters": [
+          { "name": "month", "in": "query", "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["category_id", "amount"],
+                "properties": {
+                  "category_id": { "type": "integer" },
+                  "amount": { "type": "number" },
+                  "period": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Allocation created" } }
+      }
+    },
+    "/api/budgets/zero-based/summary": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Zero-based budget summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "month", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Zero-based budget summary" } }
+      }
+    },
+    "/api/budgets/forecast": {
+      "get": {
+        "tags": ["Budgets"],
+        "summary": "Budget forecast",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "month", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Budget forecast data" } }
+      }
+    },
+    "/api/bills": {
+      "get": {
+        "tags": ["Bills"],
+        "summary": "List bills",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "paid", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Array of bills" } }
+      },
+      "post": {
+        "tags": ["Bills"],
+        "summary": "Create bill",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "amount", "dueDate"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "amount": { "type": "number" },
+                  "dueDate": { "type": "string", "format": "date" },
+                  "frequency": { "type": "string" },
+                  "day_of_month": { "type": "integer" },
+                  "category_id": { "type": "integer" },
+                  "notes": { "type": "string" },
+                  "type": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Bill created" } }
+      }
+    },
+    "/api/bills/upcoming": {
+      "get": {
+        "tags": ["Bills"],
+        "summary": "Upcoming bills",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Upcoming bills with due info" } }
+      }
+    },
+    "/api/bills/{id}": {
+      "put": {
+        "tags": ["Bills"],
+        "summary": "Update bill",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Bill updated" } }
+      },
+      "delete": {
+        "tags": ["Bills"],
+        "summary": "Delete bill",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Bill deleted" } }
+      }
+    },
+    "/api/bills/{id}/mark-paid": {
+      "post": {
+        "tags": ["Bills"],
+        "summary": "Mark bill as paid",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Bill marked as paid, transaction created" } }
+      }
+    },
+    "/api/bills/summary": {
+      "get": {
+        "tags": ["Bills"],
+        "summary": "Bills summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Bills summary" } }
+      }
+    },
+    "/api/bills/notifications": {
+      "get": {
+        "tags": ["Bills"],
+        "summary": "Bill notifications",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Bill notifications" } }
+      }
+    },
+    "/api/recurring": {
+      "get": {
+        "tags": ["Recurring"],
+        "summary": "List recurring transactions",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of active recurring transactions" } }
+      },
+      "post": {
+        "tags": ["Recurring"],
+        "summary": "Create recurring transaction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "description": { "type": "string" },
+                  "amount": { "type": "number" },
+                  "type": { "type": "string", "enum": ["income", "expense"] },
+                  "category_id": { "type": "integer" },
+                  "frequency": { "type": "string" },
+                  "day_of_month": { "type": "integer" },
+                  "next_date": { "type": "string", "format": "date" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Recurring transaction created" } }
+      }
+    },
+    "/api/recurring/upcoming": {
+      "get": {
+        "tags": ["Recurring"],
+        "summary": "Upcoming recurring transactions",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Upcoming recurring with category breakdown" } }
+      }
+    },
+    "/api/recurring/{id}": {
+      "get": {
+        "tags": ["Recurring"],
+        "summary": "Get recurring transaction",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Recurring transaction details" } }
+      },
+      "put": {
+        "tags": ["Recurring"],
+        "summary": "Update recurring transaction",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Recurring transaction updated" } }
+      },
+      "delete": {
+        "tags": ["Recurring"],
+        "summary": "Delete recurring transaction",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Recurring transaction deleted" } }
+      }
+    },
+    "/api/recurring/{id}/populate": {
+      "post": {
+        "tags": ["Recurring"],
+        "summary": "Populate next recurring transaction",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Transaction created from recurring" } }
+      }
+    },
+    "/api/tags": {
+      "get": {
+        "tags": ["Tags"],
+        "summary": "List tags",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of tags" } }
+      },
+      "post": {
+        "tags": ["Tags"],
+        "summary": "Create tag",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "color": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Tag created with auto-assigned color if none provided" } }
+      }
+    },
+    "/api/tags/{id}": {
+      "get": {
+        "tags": ["Tags"],
+        "summary": "Get tag",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Tag details" } }
+      },
+      "put": {
+        "tags": ["Tags"],
+        "summary": "Update tag",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "color": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Tag updated" } }
+      },
+      "delete": {
+        "tags": ["Tags"],
+        "summary": "Delete tag",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Tag deleted" } }
+      }
+    },
+    "/api/loans": {
+      "get": {
+        "tags": ["Loans"],
+        "summary": "List loans",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of loans with prepayment totals" } }
+      },
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Create loan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "principal": { "type": "number" },
+                  "interest_rate": { "type": "number" },
+                  "start_date": { "type": "string", "format": "date" },
+                  "term_months": { "type": "integer" },
+                  "rate_periods": { "type": "array" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Loan created" } }
+      }
+    },
+    "/api/loans/{id}": {
+      "get": {
+        "tags": ["Loans"],
+        "summary": "Get loan",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Loan with rate periods and prepayments" } }
+      },
+      "put": {
+        "tags": ["Loans"],
+        "summary": "Update loan",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Loan updated" } }
+      },
+      "delete": {
+        "tags": ["Loans"],
+        "summary": "Delete loan",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Loan deleted" } }
+      }
+    },
+    "/api/loans/{id}/calculate": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Calculate loan schedule",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Amortization schedule with prepayment comparison" } }
+      }
+    },
+    "/api/loans/{id}/rates": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Add rate period",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "201": { "description": "Rate period added" } }
+      }
+    },
+    "/api/loans/{id}/rates/{rateId}": {
+      "put": {
+        "tags": ["Loans"],
+        "summary": "Update rate period",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "rateId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Rate period updated" } }
+      },
+      "delete": {
+        "tags": ["Loans"],
+        "summary": "Delete rate period",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "rateId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Rate period deleted" } }
+      }
+    },
+    "/api/loans/{id}/prepayments": {
+      "post": {
+        "tags": ["Loans"],
+        "summary": "Add prepayment",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "201": { "description": "Prepayment added" } }
+      }
+    },
+    "/api/loans/{id}/prepayments/{prepayId}": {
+      "delete": {
+        "tags": ["Loans"],
+        "summary": "Delete prepayment",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "prepayId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Prepayment deleted" } }
+      }
+    },
+    "/api/savings-goals": {
+      "get": {
+        "tags": ["Savings Goals"],
+        "summary": "List savings goals",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of savings goals" } }
+      },
+      "post": {
+        "tags": ["Savings Goals"],
+        "summary": "Create savings goal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "target_amount"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "target_amount": { "type": "number" },
+                  "current_amount": { "type": "number" },
+                  "deadline": { "type": "string", "format": "date" },
+                  "notes": { "type": "string" },
+                  "category_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Savings goal created" } }
+      }
+    },
+    "/api/savings-goals/{id}": {
+      "put": {
+        "tags": ["Savings Goals"],
+        "summary": "Update savings goal",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Goal updated" } }
+      },
+      "delete": {
+        "tags": ["Savings Goals"],
+        "summary": "Delete savings goal",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Goal deleted" } }
+      }
+    },
+    "/api/savings-goals/{id}/contribute": {
+      "post": {
+        "tags": ["Savings Goals"],
+        "summary": "Contribute to savings goal",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": { "amount": { "type": "number" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Contribution recorded" } }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Dashboard overview",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "date_from", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "date_to", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "all", "in": "query", "schema": { "type": "string" } },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Dashboard data with income, expenses, alerts" } }
+      }
+    },
+    "/api/dashboard/summary": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Dashboard summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Period summary with MoM deltas" } }
+      }
+    },
+    "/api/dashboard/charts": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Dashboard chart data",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "months", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Chart data (byCategory, monthly, cashFlow)" } }
+      }
+    },
+    "/api/dashboard/net-worth": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Net worth",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Net worth with account breakdown" } }
+      }
+    },
+    "/api/stats/monthly": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Monthly income/expense stats",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "months", "in": "query", "schema": { "type": "integer", "default": 24 } }
+        ],
+        "responses": { "200": { "description": "Array of monthly stats" } }
+      }
+    },
+    "/api/analytics/daily-heatmap": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Daily spending heatmap",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Heatmap data for year" } }
+      }
+    },
+    "/api/analytics/distinct-years": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Distinct years with data",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "List of years" } }
+      }
+    },
+    "/api/analytics/weeks": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Weekly breakdown",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Weekly spending data" } }
+      }
+    },
+    "/api/analytics/category-trends": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Category spending trends",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } },
+          { "name": "week", "in": "query", "schema": { "type": "integer" } },
+          { "name": "type", "in": "query", "schema": { "type": "string", "default": "expense" } }
+        ],
+        "responses": { "200": { "description": "Category trend chart data" } }
+      }
+    },
+    "/api/analytics/sankey": {
+      "get": {
+        "tags": ["Analytics"],
+        "summary": "Sankey cash flow diagram",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Nodes and links for Sankey diagram" } }
+      }
+    },
+    "/api/counterparties": {
+      "get": {
+        "tags": ["Counterparties"],
+        "summary": "List counterparties",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of counterparties with incoming/outgoing/net" } }
+      }
+    },
+    "/api/housing": {
+      "get": {
+        "tags": ["Housing"],
+        "summary": "List housing entries",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Housing entries with total monthly" } }
+      },
+      "post": {
+        "tags": ["Housing"],
+        "summary": "Create housing entry",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "property_name": { "type": "string" },
+                  "monthly_amount": { "type": "number" },
+                  "due_day": { "type": "integer" },
+                  "due_month": { "type": "integer" },
+                  "autopay": { "type": "integer" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Housing entry created" } }
+      }
+    },
+    "/api/housing/{id}": {
+      "put": {
+        "tags": ["Housing"],
+        "summary": "Update housing entry",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Housing updated" } }
+      },
+      "delete": {
+        "tags": ["Housing"],
+        "summary": "Delete housing entry",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Housing deleted" } }
+      }
+    },
+    "/api/portfolio/holdings": {
+      "get": {
+        "tags": ["Portfolio"],
+        "summary": "List holdings",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Holdings with current prices and market values" } }
+      },
+      "post": {
+        "tags": ["Portfolio"],
+        "summary": "Add holding",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["ticker", "shares", "purchase_price", "purchase_date"],
+                "properties": {
+                  "ticker": { "type": "string" },
+                  "shares": { "type": "number" },
+                  "purchase_price": { "type": "number" },
+                  "purchase_date": { "type": "string", "format": "date" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Holding created" } }
+      }
+    },
+    "/api/portfolio/holdings/{id}": {
+      "put": {
+        "tags": ["Portfolio"],
+        "summary": "Update holding",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Holding updated" } }
+      },
+      "delete": {
+        "tags": ["Portfolio"],
+        "summary": "Delete holding",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Holding deleted" } }
+      }
+    },
+    "/api/portfolio/summary": {
+      "get": {
+        "tags": ["Portfolio"],
+        "summary": "Portfolio summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Total value, gains, allocation" } }
+      }
+    },
+    "/api/portfolio/prices": {
+      "post": {
+        "tags": ["Portfolio"],
+        "summary": "Fetch current prices",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "tickers": { "type": "array", "items": { "type": "string" } } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Price data keyed by symbol" } }
+      }
+    },
+    "/api/receipts": {
+      "get": {
+        "tags": ["Receipts"],
+        "summary": "List receipts",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of receipts" } }
+      },
+      "post": {
+        "tags": ["Receipts"],
+        "summary": "Upload receipt",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "receipt": { "type": "string", "format": "binary" },
+                  "transaction_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Receipt uploaded" } }
+      }
+    },
+    "/api/receipts/upload": {
+      "post": {
+        "tags": ["Receipts"],
+        "summary": "Upload receipt (alias)",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "receipt": { "type": "string", "format": "binary" },
+                  "transaction_id": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Receipt uploaded" } }
+      }
+    },
+    "/api/receipts/{id}": {
+      "get": {
+        "tags": ["Receipts"],
+        "summary": "Get receipt",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Receipt details" } }
+      },
+      "delete": {
+        "tags": ["Receipts"],
+        "summary": "Delete receipt",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Receipt deleted" } }
+      }
+    },
+    "/api/receipts/{id}/share": {
+      "post": {
+        "tags": ["Receipts"],
+        "summary": "Share receipt",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Share URL generated" } }
+      }
+    },
+    "/api/receipts/{id}/split": {
+      "post": {
+        "tags": ["Receipts"],
+        "summary": "Split receipt",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Receipt split" } }
+      }
+    },
+    "/api/receipts/{id}/categorize": {
+      "post": {
+        "tags": ["Receipts"],
+        "summary": "Categorize receipt",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Receipt categorized" } }
+      }
+    },
+    "/api/receipts/{id}/export": {
+      "post": {
+        "tags": ["Receipts"],
+        "summary": "Export receipt",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Export URL" } }
+      }
+    },
+    "/api/receipts/transaction/{transactionId}": {
+      "get": {
+        "tags": ["Receipts"],
+        "summary": "Get receipt by transaction",
+        "parameters": [
+          { "name": "transactionId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Receipt for transaction" } }
+      }
+    },
+    "/api/receipts/file/{filename}": {
+      "get": {
+        "tags": ["Receipts"],
+        "summary": "Get receipt file",
+        "parameters": [
+          { "name": "filename", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Receipt image file", "content": { "image/*": {} } } }
+      }
+    },
+    "/api/reports/monthly-pdf": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Monthly PDF report",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "month", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "PDF file", "content": { "application/pdf": {} } } }
+      }
+    },
+    "/api/reports/tax-summary": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Tax summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Tax summary by year" } }
+      }
+    },
+    "/api/reports/tax-summary-pdf": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Tax summary PDF",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "PDF file" } }
+      }
+    },
+    "/api/reports/pl-summary": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "P&L summary",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Profit & loss summary" } }
+      }
+    },
+    "/api/reports/pl-summary-pdf": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "P&L summary PDF",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "PDF file" } }
+      }
+    },
+    "/api/reports/annual-pdf": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Annual PDF report",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "theme", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "PDF file" } }
+      }
+    },
+    "/api/reports/overview": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Report overview",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "includeCategories", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Report overview" } }
+      }
+    },
+    "/api/reports/compare": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Period comparison",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "periods", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Comparison data" } }
+      }
+    },
+    "/api/reports/saved": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Saved reports",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Array of saved reports" } }
+      }
+    },
+    "/api/reports/save": {
+      "post": {
+        "tags": ["Reports"],
+        "summary": "Save a report",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "type": { "type": "string" },
+                  "params": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Report saved" } }
+      }
+    },
+    "/api/reports/custom": {
+      "post": {
+        "tags": ["Reports"],
+        "summary": "Create custom report",
+        "responses": { "201": { "description": "Custom report created" } }
+      }
+    },
+    "/api/reports/custom/{id}": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get custom report",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Custom report" } }
+      },
+      "put": {
+        "tags": ["Reports"],
+        "summary": "Update custom report",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Report updated" } }
+      },
+      "delete": {
+        "tags": ["Reports"],
+        "summary": "Delete custom report",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Report deleted" } }
+      }
+    },
+    "/api/retirement-goals": {
+      "get": {
+        "tags": ["Retirement"],
+        "summary": "List retirement goals",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Goals and settings" } }
+      },
+      "post": {
+        "tags": ["Retirement"],
+        "summary": "Create retirement goal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "target_amount"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "target_amount": { "type": "number" },
+                  "current_amount": { "type": "number" },
+                  "deadline": { "type": "string", "format": "date" },
+                  "target_date": { "type": "string", "format": "date" },
+                  "notes": { "type": "string" },
+                  "current_age": { "type": "integer" },
+                  "retirement_age": { "type": "integer" },
+                  "monthly_contribution": { "type": "number" },
+                  "expected_return_rate": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Retirement goal created" } }
+      }
+    },
+    "/api/retirement-goals/{id}": {
+      "put": {
+        "tags": ["Retirement"],
+        "summary": "Update retirement goal",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Goal updated" } }
+      },
+      "delete": {
+        "tags": ["Retirement"],
+        "summary": "Delete retirement goal",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Goal deleted" } }
+      }
+    },
+    "/api/retirement/projection": {
+      "get": {
+        "tags": ["Retirement"],
+        "summary": "Retirement projection",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "currentAge", "in": "query", "schema": { "type": "integer" } },
+          { "name": "retirementAge", "in": "query", "schema": { "type": "integer" } },
+          { "name": "currentSavings", "in": "query", "schema": { "type": "number" } },
+          { "name": "monthlyContribution", "in": "query", "schema": { "type": "number" } },
+          { "name": "annualReturn", "in": "query", "schema": { "type": "number" } },
+          { "name": "withdrawalRate", "in": "query", "schema": { "type": "number" } },
+          { "name": "country", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Retirement projection" } }
+      }
+    },
+    "/api/calculator/emergency-fund": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Emergency fund calculation",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Emergency fund status" } }
+      }
+    },
+    "/api/calculator/compound-interest": {
+      "post": {
+        "tags": ["Calculators"],
+        "summary": "Compound interest calculator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "principal": { "type": "number" },
+                  "monthlyContribution": { "type": "number" },
+                  "annualRate": { "type": "number" },
+                  "years": { "type": "integer" },
+                  "compoundFrequency": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Future value calculation" } }
+      }
+    },
+    "/api/calculator/retire": {
+      "post": {
+        "tags": ["Calculators"],
+        "summary": "FIRE retirement calculator",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentAge": { "type": "integer" },
+                  "retirementAge": { "type": "integer" },
+                  "currentSavings": { "type": "number" },
+                  "monthlyContribution": { "type": "number" },
+                  "annualReturn": { "type": "number" },
+                  "annualExpenses": { "type": "number" },
+                  "withdrawalRate": { "type": "number" },
+                  "inflationRate": { "type": "number" },
+                  "expensesAtRetirement": { "type": "number" },
+                  "country": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "FIRE number and timeline" } }
+      }
+    },
+    "/api/calculators/loans": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Loan payment calculator",
+        "parameters": [
+          { "name": "principal", "in": "query", "schema": { "type": "number" } },
+          { "name": "rate", "in": "query", "schema": { "type": "number" } },
+          { "name": "term", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Monthly payment, total payment, total interest" } }
+      }
+    },
+    "/api/calculators/mortgages": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Mortgage calculator",
+        "parameters": [
+          { "name": "principal", "in": "query", "schema": { "type": "number" } },
+          { "name": "rate", "in": "query", "schema": { "type": "number" } },
+          { "name": "term", "in": "query", "schema": { "type": "integer" } },
+          { "name": "downPayment", "in": "query", "schema": { "type": "number" } },
+          { "name": "downPaymentPercent", "in": "query", "schema": { "type": "number" } },
+          { "name": "propertyTax", "in": "query", "schema": { "type": "number" } },
+          { "name": "monthlyInsurance", "in": "query", "schema": { "type": "number" } },
+          { "name": "noPmi", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Detailed mortgage breakdown" } }
+      }
+    },
+    "/api/calculators/savings": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Savings goal calculator",
+        "parameters": [
+          { "name": "goalAmount", "in": "query", "schema": { "type": "number" } },
+          { "name": "currentAmount", "in": "query", "schema": { "type": "number" } },
+          { "name": "monthlyContribution", "in": "query", "schema": { "type": "number" } },
+          { "name": "annualRate", "in": "query", "schema": { "type": "number" } }
+        ],
+        "responses": { "200": { "description": "Time to reach savings goal" } }
+      }
+    },
+    "/api/calculators/retirement": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Retirement calculator",
+        "parameters": [
+          { "name": "currentAge", "in": "query", "schema": { "type": "integer" } },
+          { "name": "retirementAge", "in": "query", "schema": { "type": "integer" } },
+          { "name": "currentSavings", "in": "query", "schema": { "type": "number" } },
+          { "name": "monthlyContribution", "in": "query", "schema": { "type": "number" } },
+          { "name": "annualReturn", "in": "query", "schema": { "type": "number" } },
+          { "name": "withdrawalRate", "in": "query", "schema": { "type": "number" } },
+          { "name": "country", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Retirement forecast" } }
+      }
+    },
+    "/api/calculators/loans/amortization": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Loan amortization schedule",
+        "parameters": [
+          { "name": "principal", "in": "query", "schema": { "type": "number" } },
+          { "name": "rate", "in": "query", "schema": { "type": "number" } },
+          { "name": "term", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Full amortization schedule" } }
+      }
+    },
+    "/api/calculators/currency": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Currency converter",
+        "parameters": [
+          { "name": "from", "in": "query", "schema": { "type": "string" } },
+          { "name": "to", "in": "query", "schema": { "type": "string" } },
+          { "name": "amount", "in": "query", "schema": { "type": "number" } }
+        ],
+        "responses": { "200": { "description": "Converted amount" } }
+      }
+    },
+    "/api/calculators/units": {
+      "get": {
+        "tags": ["Calculators"],
+        "summary": "Unit converter",
+        "parameters": [
+          { "name": "value", "in": "query", "schema": { "type": "number" } },
+          { "name": "from", "in": "query", "schema": { "type": "string" } },
+          { "name": "to", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Converted value" } }
+      }
+    },
+    "/api/tax/summary": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "Tax summary",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "export", "in": "query", "schema": { "type": "string" } },
+          { "name": "includeBreakdown", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Tax summary with breakdown" } }
+      }
+    },
+    "/api/tax/deductions": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "Tax deductions",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } }
+        ],
+        "responses": { "200": { "description": "Deduction totals and list" } }
+      }
+    },
+    "/api/tax/income": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "Tax income breakdown",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "type", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Income totals by type" } }
+      }
+    },
+    "/api/tax/estimates": {
+      "post": {
+        "tags": ["Tax"],
+        "summary": "Tax estimate",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "export", "in": "query", "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["annualIncome", "filingStatus", "state"],
+                "properties": {
+                  "annualIncome": { "type": "number" },
+                  "filingStatus": { "type": "string", "enum": ["single", "married_joint", "head_of_household"] },
+                  "state": { "type": "string", "description": "Two-letter state code" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Tax estimate with federal/state breakdown" } }
+      }
+    },
+    "/api/tax/estimates/{id}": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "Get tax estimate",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "export", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Tax estimate" } }
+      }
+    },
+    "/api/tax/progress": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "Tax progress",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Monthly tax progress" } }
+      }
+    },
+    "/api/tax/federal": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "Federal tax summary",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } },
+          { "name": "quarter", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Federal tax total" } }
+      }
+    },
+    "/api/tax/state": {
+      "get": {
+        "tags": ["Tax"],
+        "summary": "State tax summary",
+        "security": [{ "cookieAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "state", "in": "query", "schema": { "type": "string", "default": "CA" } },
+          { "name": "year", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "State tax total" } }
+      }
+    },
+    "/api/notifications/settings": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get notification settings",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Notification preferences" } }
+      },
+      "put": {
+        "tags": ["Notifications"],
+        "summary": "Update notification settings",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "emailNotifications": { "type": "integer" },
+                  "budgetAlerts": { "type": "integer" },
+                  "billsReminders": { "type": "integer" },
+                  "spendingReport": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Settings updated" } }
+      }
+    },
+    "/api/notifications/test-email": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Send test email",
+        "security": [{ "cookieAuth": [] }],
+        "responses": { "200": { "description": "Test email result" } }
+      }
+    },
+    "/api/notifications/trigger": {
+      "post": {
+        "tags": ["Notifications"],
+        "summary": "Trigger notification",
+        "security": [{ "cookieAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "type": { "type": "string", "enum": ["budget-alert", "report", "bills"] } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Notification triggered" } }
+      }
+    },
+    "/api/import/upload": {
+      "post": {
+        "tags": ["Import"],
+        "summary": "Upload file for import",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "sheetName": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Parsed file data" } }
+      }
+    },
+    "/api/import/file-sheet": {
+      "post": {
+        "tags": ["Import"],
+        "summary": "Select sheet for import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fileId": { "type": "string" },
+                  "sheetName": { "type": "string" },
+                  "mapping": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sheet data with duplicates" } }
+      }
+    },
+    "/api/import/googlesheet": {
+      "post": {
+        "tags": ["Import"],
+        "summary": "Import from Google Sheet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": { "type": "string" },
+                  "sheetName": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Sheet data" } }
+      }
+    },
+    "/api/import/execute": {
+      "post": {
+        "tags": ["Import"],
+        "summary": "Execute import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": { "type": "array" },
+                  "mapping": { "type": "object" },
+                  "categoryTypes": { "type": "object" },
+                  "accountTypes": { "type": "object" },
+                  "accountBalances": { "type": "object" },
+                  "accountBalanceDates": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Import result" } }
+      }
+    },
+    "/api/export": {
+      "get": {
+        "tags": ["Export"],
+        "summary": "Full data export",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Complete data export" } }
+      }
+    },
+    "/api/export/{type}": {
+      "get": {
+        "tags": ["Export"],
+        "summary": "Export by type",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" },
+          { "name": "type", "in": "path", "required": true, "schema": { "type": "string", "enum": ["transactions", "categories", "accounts", "budgets", "loans", "recurring"] } },
+          { "name": "format", "in": "query", "schema": { "type": "string", "enum": ["csv", "json"] } }
+        ],
+        "responses": { "200": { "description": "Exported data" } }
+      }
+    },
+    "/api/import": {
+      "post": {
+        "tags": ["Export"],
+        "summary": "Import full data",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": { "type": "string" },
+                  "profiles": { "type": "array" },
+                  "transactions": { "type": "array" },
+                  "categories": { "type": "array" },
+                  "accounts": { "type": "array" },
+                  "budgets": { "type": "array" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Import result" } }
+      }
+    },
+    "/api/import/preview": {
+      "post": {
+        "tags": ["Export"],
+        "summary": "Preview import",
+        "responses": { "200": { "description": "Import preview with duplicate detection" } }
+      }
+    },
+    "/api/clear-all": {
+      "delete": {
+        "tags": ["Export"],
+        "summary": "Clear all data",
+        "responses": { "200": { "description": "All data cleared" } }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Get settings",
+        "parameters": [
+          { "$ref": "#/components/parameters/profileId" }
+        ],
+        "responses": { "200": { "description": "Key-value settings" } }
+      },
+      "put": {
+        "tags": ["Settings"],
+        "summary": "Update settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Any key-value pairs. currency must be 3-letter ISO 4217. locale must be BCP 47."
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Settings updated" } }
+      }
+    },
+    "/api/settings/set-storage": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Set storage type",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "type": { "type": "string", "enum": ["postgresql", "sqlite"] } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Storage mode set" } }
+      }
+    },
+    "/api/storage-mode": {
+      "get": {
+        "tags": ["Storage Mode"],
+        "summary": "Get storage mode",
+        "responses": { "200": { "description": "Current storage mode" } }
+      },
+      "post": {
+        "tags": ["Storage Mode"],
+        "summary": "Set storage mode",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "mode": { "type": "string", "enum": ["sqlite", "postgresql"] } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Storage mode set" } }
+      }
+    },
+    "/api/app-info": {
+      "get": {
+        "tags": ["App Info"],
+        "summary": "Application info",
+        "responses": { "200": { "description": "Version, repository, node version" } }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Profiles" },
+    { "name": "Transactions" },
+    { "name": "Accounts" },
+    { "name": "Categories" },
+    { "name": "Budgets" },
+    { "name": "Bills" },
+    { "name": "Recurring" },
+    { "name": "Tags" },
+    { "name": "Loans" },
+    { "name": "Savings Goals" },
+    { "name": "Dashboard" },
+    { "name": "Analytics" },
+    { "name": "Counterparties" },
+    { "name": "Housing" },
+    { "name": "Portfolio" },
+    { "name": "Receipts" },
+    { "name": "Reports" },
+    { "name": "Retirement" },
+    { "name": "Calculators" },
+    { "name": "Tax" },
+    { "name": "Notifications" },
+    { "name": "Import" },
+    { "name": "Export" },
+    { "name": "Settings" },
+    { "name": "Storage Mode" },
+    { "name": "App Info" }
+  ]
+}

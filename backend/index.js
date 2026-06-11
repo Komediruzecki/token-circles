@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger.json');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -269,6 +271,13 @@ app.use(reposMiddleware(db));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), database: 'connected' });
 });
+
+// API documentation
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customSiteTitle: 'Finance Manager API Docs',
+  customCss: '.swagger-ui .topbar { display: none }',
+}));
+app.get('/api/docs.json', (req, res) => res.json(swaggerDocument));
 
 // ==================== LOGS API ====================
 app.get('/api/logs', async (req, res) => {
