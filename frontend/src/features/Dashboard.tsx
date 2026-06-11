@@ -1,32 +1,4 @@
 /**
- * Dashboard Component - EARS Specification
- *
- * GIVEN: A user is on the Dashboard page
- * WHEN: The page loads with valid data
- * THEN: The header displays "Dashboard" and "Your financial overview"
- *
- * GIVEN: A user is viewing the Dashboard with monthly data
- * WHEN: They navigate to different months or years
- * THEN: All metrics, charts, and widgets update to reflect the selected period
- *
- * GIVEN: A user has spent more than their budget
- * WHEN: The Dashboard displays Budget Alerts widget
- * THEN: It shows overdue budgets with amounts and due dates
- *
- * GIVEN: A user has savings goals with target amounts
- * WHEN: The Dashboard displays Savings Rate widget
- * THEN: It shows current savings rate and progress toward goals
- *
- * GIVEN: A user has recurring payments setup
- * WHEN: The Dashboard displays Recurring Insights widget
- * THEN: It shows upcoming bill reminders and payment frequency summaries
- *
- * GIVEN: A user wants to see transaction history
- * WHEN: The Dashboard shows Recent Transactions
- * THEN: It displays up to 5 most recent transactions with amounts and categories
- */
-
-/**
  * Dashboard Component
  */
 
@@ -44,6 +16,47 @@ import { useAppState } from '../core/appStore'
 import styles from './DashboardPage.module.css'
 import type * as Models from '../types/models'
 
+const DEFAULT_WIDGET_ORDER = [
+  'metrics',
+  'category-chart',
+  'recent-transactions',
+  'upcoming-bills',
+  'savings-rate',
+  'budget-alerts',
+  'recurring-insights',
+  'income-vs-expenses',
+]
+
+const DEFAULT_VISIBLE = [
+  'metrics',
+  'category-chart',
+  'recent-transactions',
+  'upcoming-bills',
+  'savings-rate',
+  'budget-alerts',
+]
+
+function loadWidgetPrefs() {
+  const saved = localStorage.getItem('dashboard_widgets')
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      const visible =
+        parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)
+          ? parsed.visibleWidgets
+          : DEFAULT_VISIBLE
+      const order =
+        parsed.widgetOrder && Array.isArray(parsed.widgetOrder) && parsed.widgetOrder.length > 0
+          ? parsed.widgetOrder
+          : DEFAULT_WIDGET_ORDER
+      return { visible, order }
+    } catch {
+      /* ignore */
+    }
+  }
+  return { visible: DEFAULT_VISIBLE, order: DEFAULT_WIDGET_ORDER }
+}
+
 export default function Dashboard() {
   const state = useAppState()
   const [month, setMonth] = createSignal(5)
@@ -57,29 +70,11 @@ export default function Dashboard() {
   const [dataMaxYear, setDataMaxYear] = createSignal<number | undefined>(undefined)
   const [dataYears, setDataYears] = createSignal<number[] | undefined>(undefined)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
-  const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(
-    (() => {
-      const saved = localStorage.getItem('dashboard_widgets')
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          if (parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)) {
-            return parsed.visibleWidgets
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      return [
-        'metrics',
-        'category-chart',
-        'recent-transactions',
-        'upcoming-bills',
-        'savings-rate',
-        'budget-alerts',
-      ]
-    })()
-  )
+
+  const prefs = loadWidgetPrefs()
+  const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(prefs.visible)
+  const [widgetOrder, setWidgetOrder] = createSignal<string[]>(prefs.order)
+
   const [savingsGoal, setSavingsGoal] = createSignal(
     (() => {
       const stored = localStorage.getItem('savingsGoal')
@@ -99,7 +94,6 @@ export default function Dashboard() {
     void loadYearRange()
   })
 
-  // Reload when profile selection changes
   createEffect(() => {
     void state.profileVersion
     void loadMonthlyData()
@@ -108,9 +102,7 @@ export default function Dashboard() {
 
   createEffect(() => {
     month()
-    year() // track dependencies
-    // When PeriodNavigator changes month/year, use standard month-based filtering
-    // Skip if all-time is active (pill change triggers its own load)
+    year()
     if (!allTime()) {
       void loadDashboard()
     }
@@ -165,7 +157,7 @@ export default function Dashboard() {
       const expenses = timeline.map((t) => (t.netChange < 0 ? Math.abs(t.netChange) : 0))
       setMonthlyData({ labels, income, expenses, netWorth })
     } catch {
-      // Don't show error for monthly data - it's optional
+      /* optional */
     }
   }
 
@@ -239,21 +231,216 @@ export default function Dashboard() {
   const showSettings = () => setShowSettingsModal(true)
 
   const handleSettingsSave = () => {
-    const saved = localStorage.getItem('dashboard_widgets')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)) {
-          setVisibleWidgets(parsed.visibleWidgets)
-        }
-      } catch {
-        /* ignore */
-      }
-    }
+    const prefs = loadWidgetPrefs()
+    setVisibleWidgets(prefs.visible)
+    setWidgetOrder(prefs.order)
     setShowSettingsModal(false)
   }
 
   const isWidgetVisible = (id: string) => visibleWidgets().includes(id)
+
+  const renderWidget = (id: string) => {
+    switch (id) {
+      case 'budget-alerts':
+        return (
+          <div class={styles.widgetCard}>
+            <div class={styles.widgetHeader}>
+              <div class={styles.widgetTitle}>Budget Alerts</div>
+              <a href="#budgets" class={styles.widgetLink}>View All</a>
+            </div>
+            <BudgetAlertsCard />
+          </div>
+        )
+      case 'savings-rate':
+        return (
+          <div class={styles.widgetCard}>
+            <div class={styles.widgetHeader}>
+              <div class={styles.widgetTitle}>Savings Rate</div>
+              <a href="#budgets" class={styles.widgetLink}>Details</a>
+            </div>
+            <SavingsRateCard
+              savingsRate={
+                metrics()!.totalIncome > 0
+                  ? ((metrics()!.totalIncome - metrics()!.totalExpenses) /
+                      metrics()!.totalIncome) *
+                    100
+                  : 0
+              }
+              monthlySavings={metrics()!.totalIncome - metrics()!.totalExpenses}
+              goal={savingsGoal()}
+              onGoalChange={handleSavingsGoalChange}
+            />
+          </div>
+        )
+      case 'category-chart':
+        return (
+          <div class={styles.card}>
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Spending by Category</div>
+            </div>
+            <div class={styles.chartContainerTall}>
+              {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
+                <ChartErrorBoundary title="Spending by Category chart">
+                  <ChartWrapper
+                    type="doughnut"
+                    data={{
+                      labels: metrics()!.expenseByCategory.map(
+                        (item: any) => item.category_name || 'Uncategorized'
+                      ),
+                      datasets: [
+                        {
+                          data: metrics()!.expenseByCategory.map((item: any) => item.total),
+                          backgroundColor: [
+                            '#dc2626', '#f97316', '#eab308', '#22c55e', '#06b6d4',
+                            '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6',
+                          ],
+                        },
+                      ],
+                    }}
+                    options={{
+                      plugins: {
+                        legend: {
+                          position: 'right',
+                          align: 'start',
+                          labels: {
+                            padding: 8,
+                            font: { size: 11 },
+                            usePointStyle: true,
+                            boxWidth: 8,
+                          },
+                        },
+                      },
+                    }}
+                    height={400}
+                    showExport
+                    filename="spending-by-category"
+                  />
+                </ChartErrorBoundary>
+              ) : (
+                <div class={styles.emptyState}>No expense data to display</div>
+              )}
+            </div>
+          </div>
+        )
+      case 'recent-transactions':
+        return (
+          <Show when={(metrics()!.recentTransactions?.length ?? 0) > 0}>
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Recent Transactions</div>
+                <a href="#transactions" class={styles.btnLink}>View All →</a>
+              </div>
+              <div class={styles.transactionList}>
+                <For each={metrics()!.recentTransactions.slice(0, 5)}>
+                  {(tx) => (
+                    <div class={styles.transactionItem}>
+                      <div class={styles.transactionIcon} style={{ background: getIconColor(tx.type) }}>
+                        {getIcon(tx.type)}
+                      </div>
+                      <div class={styles.transactionDetails}>
+                        <div class={styles.transactionName}>{tx.description}</div>
+                        <div class={styles.transactionMeta}>
+                          {formatDate(tx.date)} •{' '}
+                          {tx.category_name || (tx.category_id ? `#${tx.category_id}` : 'No category')}
+                        </div>
+                      </div>
+                      <div
+                        class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                      >
+                        {tx.type === 'expense' ? '-' : '+'}
+                        {formatCurrency(tx.amount)}
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+        )
+      case 'upcoming-bills':
+        return (
+          <Show when={(metrics()!.upcomingBills?.length ?? 0) > 0}>
+            <div class={styles.card}>
+              <div class={styles.cardHeader}>
+                <div class={styles.cardTitle}>Upcoming Bills</div>
+                <a href="#bills" class={styles.btnLink}>View All →</a>
+              </div>
+              <div class={styles.transactionList}>
+                <For each={metrics()!.upcomingBills.slice(0, 5)}>
+                  {(bill: any) => (
+                    <div class={styles.transactionItem}>
+                      <div class={styles.transactionIcon} style={{ background: getIconColor('expense') }}>
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div class={styles.transactionDetails}>
+                        <div class={styles.transactionName}>{bill.name}</div>
+                        <div class={styles.transactionMeta}>
+                          Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
+                        </div>
+                      </div>
+                      <div class={`${styles.transactionAmount} ${styles.expense}`}>
+                        {formatCurrency(bill.amount)}
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+        )
+      case 'recurring-insights':
+        return (
+          <div class={styles.card}>
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Recurring Insights</div>
+            </div>
+            <RecurringInsightsCard />
+          </div>
+        )
+      case 'income-vs-expenses':
+        return (
+          <div class={styles.card} style="margin-bottom: 16px;">
+            <div class={styles.cardHeader}>
+              <div class={styles.cardTitle}>Income vs Expenses</div>
+            </div>
+            <div class={styles.chartContainer}>
+              <ChartWrapper
+                type="bar"
+                data={{
+                  labels: ['Income', 'Expenses', 'Net'],
+                  datasets: [
+                    {
+                      label: 'Amount',
+                      data: [
+                        metrics()!.totalIncome || 0,
+                        metrics()!.totalExpenses || 0,
+                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
+                      ],
+                      backgroundColor: [
+                        '#22C55E',
+                        '#DC2626',
+                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
+                          ? '#22C55E'
+                          : '#DC2626',
+                      ],
+                      borderRadius: 8,
+                    },
+                  ],
+                }}
+                options={{ scales: { y: { grace: '10%' } } }}
+                height={250}
+                showExport
+                filename="income-vs-expenses"
+              />
+            </div>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
 
   return (
     <div data-test-id="dashboard-container">
@@ -307,22 +494,14 @@ export default function Dashboard() {
           </div>
           <button class={styles.btnSecondary} onClick={showSettings}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
             Dashboard Views
           </button>
           <button class={styles.btnPrimary} onClick={() => loadDashboard()}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             Refresh
           </button>
@@ -333,7 +512,7 @@ export default function Dashboard() {
         <div class={styles.emptyState}>Loading...</div>
       ) : metrics() ? (
         <>
-          {/* Metrics Grid */}
+          {/* Metrics Grid — always visible */}
           <Show when={isWidgetVisible('metrics')}>
             <div class={styles.metricsGrid} data-test-id="dashboard-metrics">
               <div class={`${styles.metricCard} ${styles.networth}`}>
@@ -343,20 +522,8 @@ export default function Dashboard() {
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momBalanceDelta != null && (
                   <div class={styles.metricDelta}>
-                    <span
-                      class={
-                        metrics()!.momBalanceDelta! > 0
-                          ? styles.positive
-                          : metrics()!.momBalanceDelta! < 0
-                            ? styles.negative
-                            : styles.neutral
-                      }
-                    >
-                      {metrics()!.momBalanceDelta! > 0
-                        ? '↑'
-                        : metrics()!.momBalanceDelta! < 0
-                          ? '↓'
-                          : '→'}
+                    <span class={metrics()!.momBalanceDelta! > 0 ? styles.positive : metrics()!.momBalanceDelta! < 0 ? styles.negative : styles.neutral}>
+                      {metrics()!.momBalanceDelta! > 0 ? '↑' : metrics()!.momBalanceDelta! < 0 ? '↓' : '→'}
                       {Math.abs(metrics()!.momBalanceDelta!).toFixed(2)}
                     </span>
                     <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -365,27 +532,13 @@ export default function Dashboard() {
               </div>
               <div class={`${styles.metricCard} ${styles.income}`}>
                 <div class={styles.metricLabel}>Income</div>
-                <div class={`${styles.metricValue} ${styles.positive}`}>
-                  {formatCurrency(metrics()!.totalIncome)}
-                </div>
+                <div class={`${styles.metricValue} ${styles.positive}`}>{formatCurrency(metrics()!.totalIncome)}</div>
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momIncomeDelta != null && (
                   <div class={styles.metricDelta}>
-                    <span
-                      class={
-                        metrics()!.momIncomeDelta! > 0
-                          ? styles.positive
-                          : metrics()!.momIncomeDelta! < 0
-                            ? styles.negative
-                            : styles.neutral
-                      }
-                    >
-                      {metrics()!.momIncomeDelta! > 0
-                        ? '↑'
-                        : metrics()!.momIncomeDelta! < 0
-                          ? '↓'
-                          : '→'}
+                    <span class={metrics()!.momIncomeDelta! > 0 ? styles.positive : metrics()!.momIncomeDelta! < 0 ? styles.negative : styles.neutral}>
+                      {metrics()!.momIncomeDelta! > 0 ? '↑' : metrics()!.momIncomeDelta! < 0 ? '↓' : '→'}
                       {Math.abs(metrics()!.momIncomeDelta!).toFixed(2)}
                     </span>
                     <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -394,27 +547,13 @@ export default function Dashboard() {
               </div>
               <div class={`${styles.metricCard} ${styles.expense}`}>
                 <div class={styles.metricLabel}>Expenses</div>
-                <div class={`${styles.metricValue} ${styles.expense}`}>
-                  {formatCurrency(metrics()!.totalExpenses)}
-                </div>
+                <div class={`${styles.metricValue} ${styles.expense}`}>{formatCurrency(metrics()!.totalExpenses)}</div>
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momExpenseDelta != null && (
                   <div class={styles.metricDelta}>
-                    <span
-                      class={
-                        metrics()!.momExpenseDelta! > 0
-                          ? styles.positive
-                          : metrics()!.momExpenseDelta! < 0
-                            ? styles.negative
-                            : styles.neutral
-                      }
-                    >
-                      {metrics()!.momExpenseDelta! > 0
-                        ? '↑'
-                        : metrics()!.momExpenseDelta! < 0
-                          ? '↓'
-                          : '→'}
+                    <span class={metrics()!.momExpenseDelta! > 0 ? styles.positive : metrics()!.momExpenseDelta! < 0 ? styles.negative : styles.neutral}>
+                      {metrics()!.momExpenseDelta! > 0 ? '↑' : metrics()!.momExpenseDelta! < 0 ? '↓' : '→'}
                       {Math.abs(metrics()!.momExpenseDelta!).toFixed(2)}
                     </span>
                     <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -423,13 +562,7 @@ export default function Dashboard() {
               </div>
               <div class={`${styles.metricCard} ${styles.balance}`}>
                 <div class={styles.metricLabel}>Balance</div>
-                <div
-                  class={`${styles.metricValue} ${
-                    metrics()!.totalIncome - metrics()!.totalExpenses >= 0
-                      ? styles.positive
-                      : styles.expense
-                  }`}
-                >
+                <div class={`${styles.metricValue} ${metrics()!.totalIncome - metrics()!.totalExpenses >= 0 ? styles.positive : styles.expense}`}>
                   {formatCurrency(metrics()!.totalIncome - metrics()!.totalExpenses)}
                 </div>
                 <div class={styles.metricSubtext}>Monthly net</div>
@@ -437,7 +570,7 @@ export default function Dashboard() {
             </div>
           </Show>
 
-          {/* Charts Section */}
+          {/* Charts Section — always visible */}
           <div class={styles.chartsGrid} role="region" aria-label="charts overview">
             <div class={styles.card}>
               <div class={styles.cardHeader}>
@@ -472,7 +605,6 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Cash Flow (12 Months)</div>
@@ -516,263 +648,26 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Widget Cards */}
+          {/* Dynamic Widgets — rendered in saved order, only visible widgets shown */}
           <div class={styles.widgetsGrid}>
-            <Show when={isWidgetVisible('budget-alerts')}>
-              <div class={styles.widgetCard}>
-                <div class={styles.widgetHeader}>
-                  <div class={styles.widgetTitle}>Budget Alerts</div>
-                  <a href="#budgets" class={styles.widgetLink}>
-                    View All
-                  </a>
-                </div>
-                <BudgetAlertsCard />
-              </div>
-            </Show>
-
-            <Show when={isWidgetVisible('savings-rate')}>
-              <div class={styles.widgetCard}>
-                <div class={styles.widgetHeader}>
-                  <div class={styles.widgetTitle}>Savings Rate</div>
-                  <a href="#budgets" class={styles.widgetLink}>
-                    Details
-                  </a>
-                </div>
-                <SavingsRateCard
-                  savingsRate={
-                    metrics()!.totalIncome > 0
-                      ? ((metrics()!.totalIncome - metrics()!.totalExpenses) /
-                          metrics()!.totalIncome) *
-                        100
-                      : 0
-                  }
-                  monthlySavings={metrics()!.totalIncome - metrics()!.totalExpenses}
-                  goal={savingsGoal()}
-                  onGoalChange={handleSavingsGoalChange}
-                />
-              </div>
-            </Show>
+            <For each={widgetOrder()}>
+              {(widgetId) => (
+                <>
+                  {isWidgetVisible(widgetId) && widgetId !== 'metrics' ? renderWidget(widgetId) : null}
+                </>
+              )}
+            </For>
           </div>
-
-          {/* Recurring Insights — full-width row */}
-          <div class={styles.card}>
-            <div class={styles.cardHeader}>
-              <div class={styles.cardTitle}>Recurring Insights</div>
-            </div>
-            <RecurringInsightsCard />
-          </div>
-
-          {/* Spending by Category — full-width with taller chart */}
-          <div class={styles.chartsRow}>
-            <Show when={isWidgetVisible('category-chart')}>
-              <div class={styles.card}>
-                <div class={styles.cardHeader}>
-                  <div class={styles.cardTitle}>Spending by Category</div>
-                </div>
-                <div class={styles.chartContainerTall}>
-                  {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
-                    <ChartErrorBoundary title="Spending by Category chart">
-                      <ChartWrapper
-                        type="doughnut"
-                        data={{
-                          labels: metrics()!.expenseByCategory.map(
-                            (item: any) => item.category_name || 'Uncategorized'
-                          ),
-                          datasets: [
-                            {
-                              data: metrics()!.expenseByCategory.map((item: any) => item.total),
-                              backgroundColor: [
-                                '#dc2626',
-                                '#f97316',
-                                '#eab308',
-                                '#22c55e',
-                                '#06b6d4',
-                                '#3b82f6',
-                                '#8b5cf6',
-                                '#ec4899',
-                                '#6b7280',
-                                '#14b8a6',
-                              ],
-                            },
-                          ],
-                        }}
-                        options={{
-                          plugins: {
-                            legend: {
-                              position: 'right',
-                              align: 'start',
-                              labels: {
-                                padding: 8,
-                                font: { size: 11 },
-                                usePointStyle: true,
-                                boxWidth: 8,
-                              },
-                            },
-                          },
-                        }}
-                        height={400}
-                        showExport
-                        filename="spending-by-category"
-                      />
-                    </ChartErrorBoundary>
-                  ) : (
-                    <div class={styles.emptyState}>No expense data to display</div>
-                  )}
-                </div>
-              </div>
-            </Show>
-          </div>
-
-          {/* Income vs Expenses */}
-          <div class={styles.card} style="margin-bottom: 16px;">
-            <div class={styles.cardHeader}>
-              <div class={styles.cardTitle}>Income vs Expenses</div>
-            </div>
-            <div class={styles.chartContainer}>
-              <ChartWrapper
-                type="bar"
-                data={{
-                  labels: ['Income', 'Expenses', 'Net'],
-                  datasets: [
-                    {
-                      label: 'Amount',
-                      data: [
-                        metrics()!.totalIncome || 0,
-                        metrics()!.totalExpenses || 0,
-                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
-                      ],
-                      backgroundColor: [
-                        '#22C55E',
-                        '#DC2626',
-                        (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
-                          ? '#22C55E'
-                          : '#DC2626',
-                      ],
-                      borderRadius: 8,
-                    },
-                  ],
-                }}
-                options={{
-                  scales: {
-                    y: {
-                      grace: '10%',
-                    },
-                  },
-                }}
-                height={250}
-                showExport
-                filename="income-vs-expenses"
-              />
-            </div>
-          </div>
-
-          {/* Recent Transactions */}
-          <Show
-            when={
-              isWidgetVisible('recent-transactions') &&
-              metrics()!.recentTransactions &&
-              metrics()!.recentTransactions.length > 0
-            }
-          >
-            <div class={styles.card}>
-              <div class={styles.cardHeader}>
-                <div class={styles.cardTitle}>Recent Transactions</div>
-                <a href="#transactions" class={styles.btnLink}>
-                  View All →
-                </a>
-              </div>
-              <div class={styles.transactionList}>
-                <For each={metrics()!.recentTransactions.slice(0, 5)}>
-                  {(tx) => (
-                    <div class={styles.transactionItem}>
-                      <div
-                        class={styles.transactionIcon}
-                        style={{ background: getIconColor(tx.type) }}
-                      >
-                        {getIcon(tx.type)}
-                      </div>
-                      <div class={styles.transactionDetails}>
-                        <div class={styles.transactionName}>{tx.description}</div>
-                        <div class={styles.transactionMeta}>
-                          {formatDate(tx.date)} •{' '}
-                          {tx.category_name ||
-                            (tx.category_id ? `#${tx.category_id}` : 'No category')}
-                        </div>
-                      </div>
-                      <div
-                        class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
-                      >
-                        {tx.type === 'expense' ? '-' : '+'}
-                        {formatCurrency(tx.amount)}
-                      </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </Show>
-
-          {/* Upcoming Bills */}
-          <Show
-            when={isWidgetVisible('upcoming-bills') && (metrics()!.upcomingBills?.length ?? 0) > 0}
-          >
-            <div class={styles.card}>
-              <div class={styles.cardHeader}>
-                <div class={styles.cardTitle}>Upcoming Bills</div>
-                <a href="#bills" class={styles.btnLink}>
-                  View All →
-                </a>
-              </div>
-              <div class={styles.transactionList}>
-                <For each={metrics()!.upcomingBills.slice(0, 5)}>
-                  {(bill: any) => (
-                    <div class={styles.transactionItem}>
-                      <div
-                        class={styles.transactionIcon}
-                        style={{ background: getIconColor('expense') }}
-                      >
-                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </div>
-                      <div class={styles.transactionDetails}>
-                        <div class={styles.transactionName}>{bill.name}</div>
-                        <div class={styles.transactionMeta}>
-                          Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
-                        </div>
-                      </div>
-                      <div class={`${styles.transactionAmount} ${styles.expense}`}>
-                        {formatCurrency(bill.amount)}
-                      </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </Show>
 
           {/* Widget Settings Modal */}
           <Show when={showSettingsModal()}>
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
-              <div
-                class={`${styles.modal} ${styles.modalMd}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                }}
-              >
+              <div class={`${styles.modal} ${styles.modalMd}`} onClick={(e) => { e.stopPropagation() }}>
                 <div class={styles.modalHeader}>
                   <div class={styles.modalTitle}>Dashboard Views</div>
                   <button class={styles.modalClose} onClick={() => setShowSettingsModal(false)}>
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18L18 6M6 6l12 12"
-                      />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
@@ -794,23 +689,13 @@ function getIcon(type: string) {
   if (type === 'income') {
     return (
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M7 11l5-5m0 0l5 5m-5-5v12"
-        />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
       </svg>
     )
   }
   return (
     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        stroke-width="2"
-        d="M17 13l-5 5m0 0l-5-5m5 5V6"
-      />
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
     </svg>
   )
 }
