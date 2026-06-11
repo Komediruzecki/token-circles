@@ -148,7 +148,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
   // Drag-and-drop handlers
   const handleDragStart = (e: DragEvent, idx: number) => {
     setDragIdx(idx)
-    const el = e.target as HTMLElement
+    const el = e.currentTarget as HTMLElement
     el.classList.add(styles.dragging)
     e.dataTransfer!.effectAllowed = 'move'
     e.dataTransfer!.setData('text/plain', String(idx))
@@ -156,7 +156,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
 
   const handleDragEnd = (e: DragEvent) => {
     setDragIdx(null)
-    const el = e.target as HTMLElement
+    const el = e.currentTarget as HTMLElement
     el.classList.remove(styles.dragging)
   }
 
@@ -176,11 +176,15 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
     setWidgetOrder(order)
   }
 
-  // Sort widgets display by widgetOrder
+  // Sort widgets display by widgetOrder (with fallback for corrupted data)
   const orderedWidgets = () => {
     const order = widgetOrder()
+    if (!order || order.length === 0) {
+      return widgets
+    }
     const widgetMap = new Map(widgets.map((w) => [w.id, w]))
-    return order.map((id) => widgetMap.get(id)).filter(Boolean) as typeof widgets
+    const result = order.map((id) => widgetMap.get(id)).filter(Boolean) as typeof widgets
+    return result.length > 0 ? result : widgets
   }
 
   const saveSettings = () => {

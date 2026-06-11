@@ -649,15 +649,13 @@ export default function Dashboard() {
           </div>
 
           {/* Dynamic Widgets — rendered in saved order, only visible widgets shown */}
-          <div class={styles.widgetsGrid}>
-            <For each={widgetOrder()}>
-              {(widgetId) => (
-                <>
-                  {isWidgetVisible(widgetId) && widgetId !== 'metrics' ? renderWidget(widgetId) : null}
-                </>
-              )}
-            </For>
-          </div>
+          <For each={widgetOrder()}>
+            {(widgetId) => (
+              <>
+                {isWidgetVisible(widgetId) && widgetId !== 'metrics' ? renderWidget(widgetId) : null}
+              </>
+            )}
+          </For>
 
           {/* Widget Settings Modal */}
           <Show when={showSettingsModal()}>
