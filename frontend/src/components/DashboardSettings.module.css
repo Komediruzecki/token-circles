@@ -22,7 +22,45 @@
 }
 
 .setting-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.draggable {
+  cursor: default;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 100%;
+  cursor: grab;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  padding: 12px 4px 12px 0;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.drag-handle:hover {
+  opacity: 1;
+}
+
+.dragging {
+  opacity: 0.5;
+}
+
+.drag-over {
+  border-top: 2px solid var(--primary);
+}
+
+.drag-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
 }
 
 .widget-toggle {
