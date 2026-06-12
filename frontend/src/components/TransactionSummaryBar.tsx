@@ -22,14 +22,19 @@ interface TransactionSummaryBarProps {
   netBalance: number
   transactionCount: number
   currency?: string
+  label?: string
+  variant?: 'default' | 'page'
 }
 
 export default function TransactionSummaryBar(props: TransactionSummaryBarProps) {
   const currency = createMemo(() => props.currency || getLocalCurrency())
   const isPositive = createMemo(() => props.netBalance >= 0)
+  const barClass = () =>
+    props.variant === 'page' ? `${styles.summaryBar} ${styles.summaryBarPage}` : styles.summaryBar
 
   return (
-    <div class={styles.summaryBar}>
+    <div class={barClass()}>
+      {props.label && <span class={styles.periodLabel}>{props.label}</span>}
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Total Amount</span>
         <span class={`${styles.summaryValue} ${styles.total}`}>

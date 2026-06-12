@@ -107,9 +107,9 @@ export default function Transactions() {
     refreshTransactions()
   })
 
-  // Calculate transaction totals
+  // Calculate filtered-period totals (respects all active filters)
   createEffect(() => {
-    const txs = transactions()
+    const txs = filteredTransactions()
     const income = txs
       .filter((t) => t.type === 'income')
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
@@ -121,6 +121,27 @@ export default function Transactions() {
     setTotalExpenses(expenses)
     setNetBalance(income - expenses)
     setTotalAmount(total)
+  })
+
+  // Page-level totals
+  const pageIncome = createMemo(() =>
+    paginatedTransactions().filter((t) => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
+  const pageExpenses = createMemo(() =>
+    paginatedTransactions().filter((t) => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
+  const pageTotal = createMemo(() =>
+    paginatedTransactions().reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
+
+  // Period label for summary context
+  const periodLabel = createMemo(() => {
+    if (selectedPreset() === 'all' || (!dateRange().from && !dateRange().to)) return 'All Time'
+    if (selectedPreset() === 'month' || filterMonth()) return 'This Month'
+    if (selectedPreset() === 'lastMonth') return 'Last Month'
+    if (selectedPreset() === 'year') return 'This Year'
+    if (dateRange().from && dateRange().to) return `${dateRange().from} – ${dateRange().to}`
+    return 'Filtered Period'
   })
 
   // _loadTransactionReceipt - placeholder for receipt loading
@@ -619,13 +640,14 @@ export default function Transactions() {
         onChange={handleFilterChange}
       />
 
-      {/* Transaction Summary Bar */}
+      {/* Period Summary Bar */}
       <TransactionSummaryBar
         totalAmount={totalAmount()}
         totalIncome={totalIncome()}
         totalExpenses={totalExpenses()}
         netBalance={netBalance()}
         transactionCount={filteredTransactions().length}
+        label={periodLabel()}
       />
 
       {/* Bulk Action Bar */}
@@ -1181,6 +1203,17 @@ export default function Transactions() {
         <div class={styles.loading}>Loading transactions...</div>
       ) : (
         <>
+          {/* Page Summary (top) */}
+          <TransactionSummaryBar
+            totalAmount={pageTotal()}
+            totalIncome={pageIncome()}
+            totalExpenses={pageExpenses()}
+            netBalance={pageIncome() - pageExpenses()}
+            transactionCount={paginatedTransactions().length}
+            label={`Page ${currentPage()} of ${totalPages()}`}
+            variant="page"
+          />
+
           {/* Top Pagination */}
           {totalPages() > 1 && (
             <Pagination
@@ -1200,6 +1233,16 @@ export default function Transactions() {
             sortOrder={sortOrder()}
             onEdit={handleEditTransaction}
             onDelete={handleDeleteTransaction}
+          />
+          {/* Page Summary (bottom) */}
+          <TransactionSummaryBar
+            totalAmount={pageTotal()}
+            totalIncome={pageIncome()}
+            totalExpenses={pageExpenses()}
+            netBalance={pageIncome() - pageExpenses()}
+            transactionCount={paginatedTransactions().length}
+            label={`Page ${currentPage()} of ${totalPages()}`}
+            variant="page"
           />
           {totalPages() > 1 && (
             <Pagination
