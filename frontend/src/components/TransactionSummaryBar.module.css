@@ -45,3 +45,29 @@
   height: 32px;
   background-color: var(--border-color);
 }
+
+.periodLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 16px;
+  white-space: nowrap;
+}
+
+.summaryBarPage {
+  padding: 8px 16px;
+  margin-bottom: 8px;
+  background-color: var(--bg-tertiary, var(--bg-secondary));
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.summaryBarPage .summaryValue {
+  font-size: 14px;
+}
+
+.summaryBarPage .summaryLabel {
+  font-size: 10px;
+}
