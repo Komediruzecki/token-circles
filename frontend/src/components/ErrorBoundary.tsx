@@ -12,10 +12,19 @@ function addToLog(msg: string) {
   setErrorLog((prev) => [...prev.slice(-19), msg])
 }
 
+function isBenignError(msg: string): boolean {
+  if (!msg) return false
+  // ResizeObserver loop errors are harmless — browsers fire them when
+  // chart resize callbacks overlap. The spec says they can be ignored.
+  return /ResizeObserver loop/i.test(msg)
+}
+
 export const ErrorBoundary: Component<Props> = (props) => {
   onMount(() => {
     const handleGlobalError = (event: ErrorEvent) => {
-      const err = event.error || new Error(event.message)
+      const msg = event.message || (event.error ? String(event.error) : '')
+      if (isBenignError(msg)) return
+      const err = event.error || new Error(msg)
       addToLog(`[${new Date().toISOString()}] ${err.message || String(err)}`)
       if (!fatalError()) {
         setFatalError(err)
@@ -25,6 +34,7 @@ export const ErrorBoundary: Component<Props> = (props) => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const err =
         event.reason instanceof Error ? event.reason : new Error(String(event.reason))
+      if (isBenignError(err.message)) return
       addToLog(`[${new Date().toISOString()}] Unhandled: ${err.message}`)
       if (!fatalError()) {
         setFatalError(err)
