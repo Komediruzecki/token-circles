@@ -548,8 +548,11 @@ app.get('*', (req, res) => {
     return res.status(404).send('File not found');
   }
 
-  // For all other paths, serve index.html for SPA routes
-  res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
+  // Serve the correct index.html based on whether dist build exists
+  const indexPath = serveDist
+    ? path.join(__dirname, '..', 'frontend', 'dist', 'index.html')
+    : path.join(__dirname, '..', 'frontend', 'index.html');
+  res.sendFile(indexPath);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
