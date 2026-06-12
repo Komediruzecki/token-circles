@@ -201,10 +201,9 @@ export default function Bills() {
     const data = {
       name: formData().name,
       amount: parseFloat(formData().amount),
-      due_date: formData().due_date,
-      category: formData().category || undefined,
+      dueDate: formData().due_date,
+      category_id: formData().category ? parseInt(formData().category, 10) : undefined,
       frequency: formData().frequency,
-      autopay: formData().autopay,
       type: formData().type,
     }
 
