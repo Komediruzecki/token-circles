@@ -28,10 +28,6 @@
     "test": "cd frontend && npm run test",
     "test:backend": "cd backend && npm run test"
   },
-  "devDependencies": {
-    "vite-plugin-pwa": "^1.2.0"
-  },
-  "dependencies": {
-    "swagger-ui-express": "^5.0.1"
-  }
+  "devDependencies": {},
+  "dependencies": {}
 }

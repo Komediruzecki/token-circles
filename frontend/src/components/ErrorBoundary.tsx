@@ -5,21 +5,19 @@ interface Props {
   children: JSX.Element
 }
 
-const [fatalError, setFatalError] = createSignal<Error | null>(null)
-const [errorLog, setErrorLog] = createSignal<string[]>([])
-
-function addToLog(msg: string) {
-  setErrorLog((prev) => [...prev.slice(-19), msg])
-}
-
 function isBenignError(msg: string): boolean {
   if (!msg) return false
-  // ResizeObserver loop errors are harmless — browsers fire them when
-  // chart resize callbacks overlap. The spec says they can be ignored.
   return /ResizeObserver loop/i.test(msg)
 }
 
 export const ErrorBoundary: Component<Props> = (props) => {
+  const [fatalError, setFatalError] = createSignal<Error | null>(null)
+  const [errorLog, setErrorLog] = createSignal<string[]>([])
+
+  function addToLog(msg: string) {
+    setErrorLog((prev) => [...prev.slice(-19), msg])
+  }
+
   onMount(() => {
     const handleGlobalError = (event: ErrorEvent) => {
       const msg = event.message || (event.error ? String(event.error) : '')
@@ -74,10 +72,8 @@ export const ErrorBoundary: Component<Props> = (props) => {
     <SolidErrorBoundary
       fallback={(err, _reset) => {
         addToLog(`[${new Date().toISOString()}] Render error: ${err.toString()}`)
-
         const displayError = fatalError() || err
         const logs = errorLog()
-
         return (
           <CrashModal
             error={displayError}
@@ -163,7 +159,7 @@ function CrashModal(props: {
           <strong>Error:</strong> {props.error.toString()}
           {props.logs.length > 0 && (
             <>
-              <div style={{ margin: '8px 0', borderTop: '1px solid #4b5563' }} />
+              <div style={{ margin: '8px 0', 'border-top': '1px solid #4b5563' }} />
               <strong>Log:</strong>
               {'\n'}
               {props.logs.join('\n')}
