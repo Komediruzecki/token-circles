@@ -99,7 +99,7 @@ export default defineConfig({
               request.destination === 'script' || request.destination === 'style',
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'finance-manager-js-css-v2',
+              cacheName: 'finance-manager-js-css-v3',
               networkTimeoutSeconds: 10,
               expiration: {
                 maxEntries: 30,
@@ -114,7 +114,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/finance-manager\.clodhost\.com\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'finance-manager-v2',
+              cacheName: 'finance-manager-v3',
               expiration: {
                 maxEntries: 60,
                 maxAgeSeconds: 1 * 24 * 60 * 60, // 1 day
