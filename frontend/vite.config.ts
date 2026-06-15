@@ -44,6 +44,16 @@ export default defineConfig({
     ANALYZE_BUNDLE ? bundleAnalyzer() : undefined,
     ...(process.env.NODE_ENV !== 'production' ? [devtools({ targetOrigin: 'auto' })] : []),
     {
+      name: 'sw-cleanup-on-version-change',
+      transformIndexHtml(html) {
+        const ver = packageJson.version
+        return html.replace(
+          '<head>',
+          `<head><script>(function(){var k='fm-sw-ver',v='${ver}';if(localStorage.getItem(k)!==v){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});localStorage.setItem(k,v)}})()</script>`
+        )
+      },
+    },
+    {
       name: 'copy-export-html',
       writeBundle() {
         const exportFiles = ['export.html', 'export-monthly.html', 'chart.umd.min.js']
