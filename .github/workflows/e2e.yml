@@ -2,9 +2,9 @@ name: E2E Tests
 
 on:
   push:
-    branches: [main, fix/transition-to-solidjs]
+    branches: [main]
   pull_request:
-    branches: [main, fix/transition-to-solidjs]
+    branches: [main]
 
 jobs:
   e2e:

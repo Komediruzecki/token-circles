@@ -193,21 +193,9 @@ The backend exposes a REST API. All endpoints require an `X-Profile-Id` header (
 
 ## Contributing
 
-1. Pick an open issue from GitHub Issues
-2. Create a feature branch: `git checkout -b feat/issue-NUMBER-short-description`
-3. Make changes and commit using Conventional Commits
-4. Push and open a PR against `main`
-5. Ensure CI passes before requesting review
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for full guidelines on setting up, testing, and submitting pull requests.
 
-### Testing
-
-```bash
-npm test              # Run all tests
-npm test -- --watch  # Watch mode
-npx jest <path>      # Run specific test file
-```
-
-Tests require the backend server running on port 3847 with `NODE_ENV=test`. The test database (`db/test.db`) and rate limit stores are reset automatically between test files. The server must have the `test.db` database seeded before running tests — run `npm test` once to initialize.
+All contributors are expected to follow our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Deployment
 
