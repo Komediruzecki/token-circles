@@ -123,17 +123,6 @@ export default function Transactions() {
     setTotalAmount(total)
   })
 
-  // Page-level totals
-  const pageIncome = createMemo(() =>
-    paginatedTransactions().filter((t) => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0)
-  )
-  const pageExpenses = createMemo(() =>
-    paginatedTransactions().filter((t) => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0)
-  )
-  const pageTotal = createMemo(() =>
-    paginatedTransactions().reduce((s, t) => s + Math.abs(t.amount), 0)
-  )
-
   // Period label for summary context
   const periodLabel = createMemo(() => {
     if (selectedPreset() === 'all' || (!dateRange().from && !dateRange().to)) return 'All Time'
@@ -411,6 +400,17 @@ export default function Transactions() {
     const start = (currentPage() - 1) * itemsPerPage()
     return filtered.slice(start, start + itemsPerPage())
   })
+
+  // Page-level totals (defined after paginatedTransactions to avoid TDZ — createMemo runs eagerly)
+  const pageIncome = createMemo(() =>
+    paginatedTransactions().filter((t) => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
+  const pageExpenses = createMemo(() =>
+    paginatedTransactions().filter((t) => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
+  const pageTotal = createMemo(() =>
+    paginatedTransactions().reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
 
   const totalPages = createMemo(() => Math.ceil(filteredTransactions().length / itemsPerPage()))
 
