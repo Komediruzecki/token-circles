@@ -2,14 +2,16 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Finance Manager, please report it by opening an issue on GitHub. Do not include sensitive details in public issues — instead, note that you found a potential security issue and a maintainer will provide a secure channel for details.
+If you discover a security vulnerability in Finance Manager, please use GitHub's [private vulnerability reporting](https://github.com/Komediruzecki/finance-manager/security/advisories/new) to disclose it securely. Alternatively, you can open a public issue stating that you found a potential security issue and a maintainer will provide a private channel for details.
+
+Do not include exploit details or sensitive information in public issues.
 
 ## Supported Versions
 
 | Version | Supported |
 |---------|-----------|
-| 2.x (latest) | Yes |
-| < 2.0 | No |
+| 4.x (latest) | Yes |
+| < 4.0 | No |
 
 ## Security Features
 
