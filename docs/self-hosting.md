@@ -325,7 +325,43 @@ SQLite uses WAL mode. Ensure only one container instance is running and do not a
 
 Wait for the health check to pass (`docker inspect finance-manager --format '{{.State.Health.Status}}'`). The container has a 10-second start period.
 
+## Reverse Proxy (Apache)
+
+As an alternative to nginx, here's a minimal Apache configuration with TLS:
+
+```apache
+<VirtualHost *:80>
+    ServerName finance.yourdomain.com
+    Redirect permanent / https://finance.yourdomain.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName finance.yourdomain.com
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/finance.yourdomain.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/finance.yourdomain.com/privkey.pem
+
+    # Proxy to the Docker container
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:3847/
+    ProxyPassReverse / http://127.0.0.1:3847/
+
+    # Allow large file uploads
+    LimitRequestBody 52428800
+
+    ErrorLog ${APACHE_LOG_DIR}/finance-error.log
+    CustomLog ${APACHE_LOG_DIR}/finance-access.log combined
+</VirtualHost>
+```
+
+Enable required modules and restart:
+
+```bash
+sudo a2enmod proxy proxy_http ssl rewrite
+sudo systemctl reload apache2
+```
+
 ### See also
 
 - [docs/docker.md](docker.md) — detailed Docker operations reference
-- [docs/apache-setup.md](apache-setup.md) — Apache reverse proxy setup (alternative to nginx)
