@@ -1,46 +1,14 @@
-# Finance Manager — Master TODO
+# Roadmap
 
-<!-- STATUS KEY: [x] done  [~] in-progress  [ ] planned  [?] idea -->
+This document outlines planned improvements and future directions for Finance Manager. Items are roughly ordered by priority within each section.
 
----
-
-## What's Built
-
-### Backend (26 API route modules + 15 repos + 6 services)
-- REST API at `localhost:3847` with Express, SQLite (better-sqlite3), bcrypt, Helmet
-- Profile-based data isolation (`X-Profile-Id` header), session auth, rate limiting
-- Repository pattern: `BaseRepository` + 15 domain repos (`/backend/repositories/`)
-- Routes: accounts, analytics, appInfo, auth, bills, budgets, calculators, categories,
-  counterparties, dashboard, export, housing, import, loans, notifications, portfolio,
-  profiles, receipts, recurring, reports, retirement, savingsGoals, settings, storageMode,
-  tags, tax, transactions
-- Services: email (nodemailer), PDF (pdfkit + puppeteer render), spreadsheets (xlsx),
-  reminders (cron-scheduled budget/spending/bills emails), Yahoo Finance (portfolio)
-
-### Frontend (SolidJS + TypeScript + Vite)
-- Full SPA with client-only Dexie (IndexedDB) mode and server-backed SQLite mode
-- 30+ feature pages including calculators (compound interest, emergency fund, FIRE,
-  rent-vs-buy, retirement, loan amortization), portfolio tracking, counterparties
-- Dashboard with budget alerts, recurring insights, savings rate, period navigation
-- Import (CSV/XLSX) with duplicate detection, export (CSV/PDF/JSON)
-- Tag system, category auto-mapping from merchant patterns, bulk operations
-- Dark/light mode, mobile responsive
-
-### Testing (451 E2E + backend unit + frontend unit)
-- 451 E2E backend API tests (16 spec files, `test/e2e/backend-api/`)
-- Backend unit tests: auth, loans, health, security, analytics, export, retirement, etc.
-- Frontend unit tests: localHandlers, components, calculators, storage
-
-### DevOps
-- Dockerfile + .dockerignore for containerized deployment
-- Deploy script, nuke/reset scripts in `scripts/`
-- GitHub PR workflow (branch from main, conventional commits)
+Contributions toward any of these are welcome — please open an issue to discuss before starting work.
 
 ---
 
-## Backend — Next Priorities
+## Backend
 
-- [ ] **API docs (OpenAPI/Swagger)** — Generate from route annotations or write by hand
+- [ ] **API docs (OpenAPI/Swagger)** — Auto-generated from route annotations or hand-written spec
 - [ ] **WebSocket for real-time updates** — Push dashboard/balance changes to frontend
 - [ ] **Bank feed/webhook ingestion** — Accept structured bank data via webhook
 - [ ] **Multi-currency auto-conversion** — Fetch live rates and store historical conversions
@@ -50,7 +18,7 @@
 - [ ] **GraphQL endpoint** — Alternative to REST for complex dashboard queries
 - [ ] **Server-sent events for cron progress** — Stream long-running report generation
 
-## Frontend — Next Priorities
+## Frontend
 
 - [ ] **Dashboard widget customization** — Drag to reorder, show/hide individual widgets
 - [ ] **Full keyboard navigation** — Tab order, shortcuts for power users
@@ -97,8 +65,6 @@
 - [ ] **API reference docs** — Every endpoint with request/response examples
 - [ ] **User guide** — Screenshots, feature walkthrough
 - [ ] **Self-hosting guide** — Docker, reverse proxy, env vars, backups
-- [ ] **CODE_OF_CONDUCT.md**
-- [ ] **CONTRIBUTING.md** — Dev setup, branch strategy, commit conventions
 
 ## Code Quality
 

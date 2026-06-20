@@ -20,6 +20,7 @@ frontend/assets/
 frontend/index-old.html
 
 # Environment
+.env
 .env.local
 .env.*.local
 

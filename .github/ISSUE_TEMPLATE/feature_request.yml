@@ -1,0 +1,39 @@
+name: Feature Request
+description: Suggest an idea for Finance Manager
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please check the [ROADMAP.md](https://github.com/Komediruzecki/finance-manager/blob/main/ROADMAP.md) first to see if it's already planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: What problem would this feature solve? Is it related to a frustration?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe what you'd like to see implemented
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or alternative approaches you've thought of
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Frontend
+        - Backend/API
+        - Documentation
+        - DevOps/CI
+        - Other
+    validations:
+      required: true
