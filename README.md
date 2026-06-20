@@ -1,12 +1,32 @@
-# Finance Manager - Personal Finance Tracker
+# Finance Manager — Personal Finance Tracker
 
-A comprehensive personal finance management application built with SolidJS for the frontend and Express for the backend.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-4.0.0-blue" alt="Version 4.0.0">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License MIT">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome">
+</p>
+
+A comprehensive personal finance management application built with **SolidJS** + **TypeScript** for the frontend and **Express** + **SQLite** for the backend.
+
+## Quick Start
+
+```bash
+git clone https://github.com/Komediruzecki/finance-manager.git
+cd finance-manager
+npm install
+npm run start       # Start backend on port 3847
+npm run dev         # Start frontend dev server on port 5173
+```
+
+Open `http://localhost:5173` in your browser. The default login is `maff` / `add2`.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for full development setup.
 
 ## Tech Stack
 
 - **Frontend**: SolidJS + TypeScript + Vite
 - **Backend**: Node.js + Express REST API
-- **Database**: SQLite (better-sqlite3) with WAL mode - also supports PostgreSQL
+- **Database**: SQLite (better-sqlite3) with WAL mode — also supports PostgreSQL
 - **Charts**: Chart.js
 - **PDF Generation**: PDFKit (fallback) and Puppeteer (charts)
 - **Data Import**: XLSX (Excel)
@@ -15,129 +35,66 @@ A comprehensive personal finance management application built with SolidJS for t
 
 ```
 finance-manager/
-├── .github/           # GitHub workflows and CI/CD configuration
-├── .claude/           # Claude Code project settings
+├── .github/           # GitHub workflows, issue/PR templates
 ├── backend/           # Node.js/Express backend API
 │   ├── index.js       # Main server entry point
 │   ├── database.js    # SQLite schema, migrations, and seed data
-│   ├── models/        # Business logic
-│   └── package.json   # Backend dependencies
+│   └── models/        # Business logic
 ├── frontend/          # SolidJS + TypeScript frontend
 │   ├── src/           # Source code (components, features, core)
 │   ├── package.json   # Frontend dependencies
-│   ├── vite.config.js # Vite configuration
-│   └── index.html     # Production build output
-├── docs/              # Documentation and migration reports
-├── db/                # SQLite database files
-├── logs/              # Application logs
-└── test/              # E2E tests
-```
-
-## Installation
-
-```bash
-# Install all dependencies (backend and frontend)
-npm install
-```
-
-## Development
-
-```bash
-# Start frontend development server
-npm run dev
-
-# Start backend server
-npm run start
-```
-
-## Building
-
-```bash
-# Build frontend for production
-npm run build
+│   └── vite.config.js # Vite configuration
+├── docs/              # Documentation (specs, guides, postmortems)
+├── test/              # E2E and unit tests
+└── scripts/           # Utility scripts
 ```
 
 ## Features
 
-### Transactions
-- Add/edit/delete income and expense transactions
-- Assign categories, notes, and payment method
-- Quick add via keyboard shortcut (Ctrl+Shift+T)
-- Bulk operations (update, delete)
-- CSV and JSON export
-
-### Budgets
-- Monthly budget tracking per category
-- Visual progress indicators
-- Compare actual vs budgeted spending
-
-### Categories
-- Custom income/expense categories with colors and icons
-- Budget limits per category
-- Tax-deductible flags
+### Core
+- **Transactions** — Add/edit/delete income and expense transactions with categories, tags, notes, and payment methods. Quick add via `Ctrl+Shift+T`. Bulk operations.
+- **Accounts** — Multiple account types (giro, savings, IB, cash) with balance tracking, starting balances, and transfer handling.
+- **Categories** — Custom income/expense categories with colors, icons, budget limits, and tax-deductible flags.
+- **Tags** — Flexible tagging system with auto-generated colors for cross-category organization.
+- **Budgets** — Monthly category budgets with progress indicators and rollover support.
 
 ### Analytics
 - Category spending trends over time
-- Top categories breakdown
 - Budget vs actual flow (Sankey diagram)
 - Spending heatmap calendar
-- Monthly/yearly summaries
-- Period comparison overlay
-- Dark/light theme support
+- Monthly/yearly summaries with period comparison overlay
+- Portfolio tracker with real-time Yahoo Finance prices
 
-### Loan Calculator
-- Track multiple loans with variable interest rate periods
-- Amortization schedule with prepayment modeling
-- Chart visualization of principal vs interest over time
+### Calculators
+- **Loan Calculator** — Amortization schedules with variable interest rates, prepayments, and principal/interest charts
+- **Retirement Calculator** — Compound interest projections and savings goal planning
+- **Compound Interest**, **Emergency Fund**, **FIRE**, and **Rent vs Buy** calculators
 
-### Data Import
-- Import transactions from Excel (.xlsx, .xls)
-- Google Sheets integration
-- Column mapping and preview
-- Automatic category color mapping on re-import
+### Import & Export
+- Import from Excel (.xlsx, .xls) and Google Sheets with column mapping
+- Export to CSV, JSON, and PDF (monthly/annual reports with charts)
+- Tax summary and profit & loss reports
 
-### Reports
-- Monthly PDF reports with charts
-- Annual financial reports with charts
-- Tax summary reports (deductible/non-deductible)
-- Profit & loss (P&L) reports
-
-### Accounts
-- Multiple account support (checking, savings, credit card)
-- Balance history tracking
-- Currency support per account
-
-### Retirement Calculator
-- Compound interest projections
-- Savings goal planning
+### Other
+- Dark/light theme with mobile-responsive layout
+- Counterparties view (who-owes-who from transaction data)
+- Category auto-mapping from merchant description patterns
+- Session-based authentication with bcrypt password hashing
 
 ## API
 
+The backend exposes a REST API on port 3847. All endpoints require an `X-Profile-Id` header (integer profile ID).
+
 ### Health Check
 
-The backend provides a health check endpoint to verify the service is running:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | API health status (check if backend is running) |
-
-**Example response:**
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-04-27T09:58:47.946Z",
-  "database": "connected"
-}
+```
+GET /api/health → { status: "ok", timestamp: "...", database: "connected" }
 ```
 
-**Live site URLs (example):**
-- Frontend: `https://your-domain.com`
-- API: `https://your-domain.com/api`
-- Health Check: `https://your-domain.com/api/health`
+### Full Endpoint Reference
 
-The backend exposes a REST API. All endpoints require an `X-Profile-Id` header (integer profile ID).
-
-### Endpoints
+<details>
+<summary>Click to expand — all API endpoints</summary>
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -152,12 +109,10 @@ The backend exposes a REST API. All endpoints require an `X-Profile-Id` header (
 | POST | `/api/categories` | Create category |
 | PUT | `/api/categories/:id` | Update category |
 | DELETE | `/api/categories/:id` | Delete category |
-| DELETE | `/api/categories` | Delete all categories |
-| GET | `/api/transactions` | List transactions (supports sort, filter, pagination) |
+| GET | `/api/transactions` | List transactions (sort, filter, pagination) |
 | POST | `/api/transactions` | Create transaction |
 | PUT | `/api/transactions/:id` | Update transaction |
 | DELETE | `/api/transactions/:id` | Delete transaction |
-| DELETE | `/api/transactions` | Delete all transactions |
 | PUT | `/api/transactions/bulk` | Bulk update/delete transactions |
 | GET | `/api/budgets` | List budgets |
 | POST | `/api/budgets` | Create/update budgets |
@@ -191,48 +146,47 @@ The backend exposes a REST API. All endpoints require an `X-Profile-Id` header (
 | POST | `/api/import/googlesheet` | Import from Google Sheets |
 | POST | `/api/import/execute` | Execute import |
 
-## Contributing
+</details>
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for full guidelines on setting up, testing, and submitting pull requests.
-
-All contributors are expected to follow our [Code of Conduct](./CODE_OF_CONDUCT.md).
+API documentation is also available at `/api/docs` (Swagger UI) when the server is running.
 
 ## Deployment
 
-### Architecture
+See [docs/self-hosting.md](./docs/self-hosting.md) for detailed deployment instructions.
 
-This project uses **frontend/** and **backend/** as the source of truth.
+### Quick Docker Deployment
 
-1. **Development**: Work directly in `frontend/` and `backend/`
-2. **Production Build**: Build the frontend with Vite, deploy the `dist/` output to your web server
-3. **Production Backend**: Run `backend/index.js` behind a reverse proxy (Apache/Nginx)
+```bash
+# Set required environment variables
+export SESSION_SECRET=$(openssl rand -hex 32)
+export ALLOWED_ORIGINS=https://your-domain.com
 
-### Deployment Process
+# Start
+docker compose up -d
+```
+
+### Manual Deployment
 
 ```bash
 # 1. Build frontend
-cd frontend
-npm run build
+cd frontend && npm run build
 
-# 2. Deploy frontend (example: copy build to your web root)
-cp -r dist/ /var/www/your-site.com/frontend/
+# 2. Serve frontend/backend behind a reverse proxy (Apache/Nginx)
+#    pointing /api to the Express server on port 3847
 
-# 3. Deploy backend
-cp -r backend/ /opt/finance-manager/backend/
-cd /opt/finance-manager/backend
-npm install --production
-
-# 4. Start backend (use pm2 or systemd in production)
-NODE_ENV=production SESSION_SECRET=your-secret node index.js
+# 3. Start backend
+NODE_ENV=production SESSION_SECRET=your-secret node backend/index.js
 ```
 
-### Live Site URLs
+## Documentation
 
-| Service | URL |
-|---------|-----|
-| Frontend | https://finance-manager.clodhost.com |
-| Backend API | https://finance-manager.clodhost.com/api |
-| Health Check | https://finance-manager.clodhost.com/api/health |
-| API Docs | https://finance-manager.clodhost.com/api/docs |
+- [Contributing Guide](./CONTRIBUTING.md) — Setup, workflow, testing, PR guidelines
+- [Code of Conduct](./CODE_OF_CONDUCT.md) — Community standards
+- [Security Policy](./SECURITY.md) — Vulnerability reporting
+- [Roadmap](./ROADMAP.md) — Planned features and improvements
+- [Changelog](./CHANGELOG.md) — Version history
+- [Docs Index](./docs/README.md) — All documentation
 
-The backend runs via systemd as `finance-manager.service` listening on port 3847, served through Apache reverse proxy.
+## License
+
+MIT — see [LICENSE](./LICENSE) for details.
