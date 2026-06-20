@@ -5,6 +5,18 @@ All notable changes to Finance Manager will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Transactions page crash caused by `createMemo` TDZ reference in SolidJS
+- Missing `swagger-ui-express` and `mime-types` backend dependencies
+
+### Changed
+- Improved public repo readiness: CODE_OF_CONDUCT, CONTRIBUTING, issue/PR templates
+- Cleaned docs/ directory structure with organized specs, postmortems, and archive
+- Replaced internal todo.md with public ROADMAP.md
+- Added `.env.example` with documented environment variables
+
 ## [4.0.0] — 2026-05-11
 
 ### Added
