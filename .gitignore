@@ -19,6 +19,9 @@ coverage/
 frontend/assets/
 frontend/index-old.html
 
+# Local planning (public roadmap is ROADMAP.md)
+todo.md
+
 # Environment
 .env
 .env.local
