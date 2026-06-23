@@ -108,6 +108,30 @@ class TransactionsRepository extends BaseRepository {
       id
     );
   }
+
+  updateCategory(id, profileId, categoryId) {
+    return this.run(
+      "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?",
+      categoryId,
+      id,
+      profileId
+    );
+  }
+
+  batchUpdateCategory(updates) {
+    const stmt = this.db.prepare(
+      "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?"
+    );
+    const runAll = this.db.transaction((items) => {
+      let count = 0;
+      for (const item of items) {
+        const result = stmt.run(item.category_id, item.transaction_id, item.profile_id);
+        if (result.changes > 0) count++;
+      }
+      return { changes: count };
+    });
+    return runAll(updates);
+  }
 }
 
 module.exports = { TransactionsRepository };

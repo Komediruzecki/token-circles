@@ -27,6 +27,15 @@ class GoalsRepository extends BaseRepository {
   deleteAll(profileId) {
     return super.delete('savings_goals', 'profile_id = ?', profileId);
   }
+
+  updateAmount(id, profileId, amount) {
+    return this.run(
+      'UPDATE savings_goals SET current_amount = ? WHERE id = ? AND profile_id = ?',
+      amount,
+      id,
+      profileId
+    );
+  }
 }
 
 module.exports = { GoalsRepository };

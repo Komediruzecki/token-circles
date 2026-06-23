@@ -489,23 +489,32 @@ app.use(
   })
 );
 // Global error handler middleware
-// Sanitizes error messages before sending to client
-app.use((err, req, res, next) => {
-  console.error(err.message);
-  logError('error', err);
+// Centralized: all asyncHandler-wrapped routes forward errors here.
+// No more per-route try/catch needed.
+const { AppError } = require('./lib/errors');
 
-  // Check if this is a known/safe error type
+app.use((err, req, res, next) => {
+  // Always log the full error for diagnostics
+  console.error(err.message);
+  logError('error', 'server', err, req);
+
+  // Handle JSON parse errors from body-parser
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ error: 'Invalid JSON in request body' });
   }
 
-  // Log unexpected errors but don't expose details to client
+  // Handle known operational errors (AppError and subclasses)
+  if (err instanceof AppError) {
+    const body = { error: err.message };
+    if (err.details) body.details = err.details;
+    return res.status(err.statusCode).json(body);
+  }
+
+  // Hide unexpected error details in production
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction) {
-    // Generic error message in production
     res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
   } else {
-    // More details in development for debugging
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
