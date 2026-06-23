@@ -57,6 +57,7 @@
  */
 
 import { createMemo, createResource, createSignal, For } from 'solid-js'
+import BillCalendar from './BillCalendar'
 import ConfirmButton from '../components/ConfirmButton'
 import SubscriptionCard from '../components/SubscriptionCard'
 import { formatCurrency } from '../core/api'
@@ -131,8 +132,8 @@ export default function Bills() {
     color: '#6b7280',
   })
 
-  // Tab state: 'all' | 'subscriptions'
-  const [billTab, setBillTab] = createSignal<'all' | 'subscriptions'>('all')
+  // Tab state: 'all' | 'subscriptions' | 'calendar'
+  const [billTab, setBillTab] = createSignal<'all' | 'subscriptions' | 'calendar'>('all')
 
   // Memoized filtered lists
   const subscriptions = createMemo(() =>
@@ -396,12 +397,30 @@ export default function Bills() {
             <span class={styles.tabBadge}>{activeSubscriptions().length}</span>
           )}
         </button>
+        <button
+          class={`${styles.tabBtn} ${billTab() === 'calendar' ? styles.tabActive : ''}`}
+          onClick={() => setBillTab('calendar')}
+        >
+          <svg
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Calendar
+        </button>
       </div>
 
       {loading() ? (
         <div data-test-id="loading-state" class={styles.emptyState}>
           Loading bills...
         </div>
+      ) : billTab() === 'calendar' ? (
+        <BillCalendar onRefresh={refetchBills} />
       ) : billTab() === 'subscriptions' ? (
         <div class={styles.subscriptionView}>
           {/* Subscription Summary Card */}

@@ -261,4 +261,106 @@ describe('Bills E2E', () => {
       global.expect([400, 422]).to.include(resp.status);
     });
   });
+
+  describe('GET /api/bills/calendar', () => {
+    test('BE-BIL-027: Calendar returns correct structure for current month', async () => {
+      const now = new Date();
+      const resp = await agent
+        .get(`/api/bills/calendar?year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
+        .set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      global.expect(resp.body).toHaveProperty('year');
+      global.expect(resp.body).toHaveProperty('month');
+      global.expect(resp.body).toHaveProperty('monthLabel');
+      global.expect(resp.body).toHaveProperty('firstDow');
+      global.expect(resp.body).toHaveProperty('days');
+      global.expect(resp.body).toHaveProperty('summary');
+      global.expect(resp.body.summary).toHaveProperty('totalAmount');
+      global.expect(resp.body.summary).toHaveProperty('paidAmount');
+      global.expect(resp.body.summary).toHaveProperty('billCount');
+    });
+
+    test('BE-BIL-028: Calendar defaults to current month when no params', async () => {
+      const resp = await agent.get('/api/bills/calendar').set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      const now = new Date();
+      global.expect(resp.body.month).toBe(now.getMonth() + 1);
+      global.expect(resp.body.year).toBe(now.getFullYear());
+    });
+
+    test('BE-BIL-029: Calendar rejects invalid month', async () => {
+      const resp = await agent
+        .get('/api/bills/calendar?year=2026&month=13')
+        .set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(400);
+    });
+
+    test('BE-BIL-030: Calendar rejects invalid year', async () => {
+      const resp = await agent
+        .get('/api/bills/calendar?year=1899&month=6')
+        .set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(400);
+    });
+
+    test('BE-BIL-031: Calendar days are keyed by day number 1..lastDay', async () => {
+      const resp = await agent
+        .get('/api/bills/calendar?year=2026&month=6')
+        .set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      const days = resp.body.days;
+      // June has 30 days — check all day keys exist
+      for (let d = 1; d <= 30; d++) {
+        global.expect(days).toHaveProperty(String(d));
+        global.expect(Array.isArray(days[String(d)])).toBe(true);
+      }
+      // Day 31 should not exist for June
+      global.expect(days).not.toHaveProperty('31');
+    });
+
+    test('BE-BIL-032: Bill created with due_date appears in calendar on that day', async () => {
+      // Create a bill for a specific date
+      const createResp = await agent.post('/api/bills').set('X-Skip-RateLimit', 'true').send({
+        name: 'Calendar Test Bill',
+        amount: 42,
+        dueDate: '2026-06-15',
+        frequency: 'monthly'
+      });
+      if (createResp.status === 200) {
+        const newId = createResp.body.id;
+        // Check calendar for June 2026
+        const calResp = await agent
+          .get('/api/bills/calendar?year=2026&month=6')
+          .set('X-Skip-RateLimit', 'true');
+        global.expect(calResp.status).toBe(200);
+        const day15 = calResp.body.days['15'] || [];
+        const found = day15.find((b) => b.id === newId);
+        global.expect(found).toBeDefined();
+        global.expect(found.name).toBe('Calendar Test Bill');
+        global.expect(found.amount).toBe(42);
+
+        // Clean up
+        await agent.delete(`/api/bills/${newId}`).set('X-Skip-RateLimit', 'true');
+      }
+    });
+
+    test('BE-BIL-033: Calendar bill items have expected fields', async () => {
+      const resp = await agent
+        .get('/api/bills/calendar?year=2026&month=6')
+        .set('X-Skip-RateLimit', 'true');
+      global.expect(resp.status).toBe(200);
+      // Collect all bills from all days
+      const allBills = Object.values(resp.body.days).flat();
+      if (allBills.length > 0) {
+        const bill = allBills[0];
+        global.expect(bill).toHaveProperty('id');
+        global.expect(bill).toHaveProperty('name');
+        global.expect(bill).toHaveProperty('amount');
+        global.expect(bill).toHaveProperty('frequency');
+        global.expect(bill).toHaveProperty('date');
+        global.expect(bill).toHaveProperty('paid');
+        global.expect(bill).toHaveProperty('type');
+        global.expect(bill).toHaveProperty('is_overdue');
+      }
+    });
+  });
 });

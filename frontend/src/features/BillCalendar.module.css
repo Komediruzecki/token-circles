@@ -1,0 +1,385 @@
+/* BillCalendar — monthly calendar view for bills */
+
+.calendarWrap {
+  /* full width */
+}
+
+/* ---- Month Header ---- */
+.monthHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.navBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.navBtn:hover {
+  background: var(--bg-secondary, #f1f5f9);
+  border-color: var(--primary);
+}
+.monthLabelGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.monthLabel {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.todayBtn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.todayBtn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ---- Summary Bar ---- */
+.calSummary {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.calSummaryItem {
+  flex: 1;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.calSummaryLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.calSummaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.calSummaryPaid {
+  color: var(--success, #10b981);
+}
+
+/* ---- Calendar Grid ---- */
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.dayHeader {
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.dayCell {
+  background: var(--card-bg);
+  min-height: 80px;
+  padding: 6px;
+  cursor: default;
+  position: relative;
+  transition: background 0.1s;
+}
+.dayCell.dayEmpty {
+  background: var(--bg, #f9fafb);
+}
+.dayCell.hasBills {
+  cursor: pointer;
+}
+.dayCell.hasBills:hover {
+  background: var(--bg-secondary, #f1f5f9);
+}
+.dayCell.today {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.dayCell.daySelected {
+  background: rgba(59, 130, 246, 0.08);
+}
+.dayNumber {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.today .dayNumber {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* Day status tints */
+.dayCell.dayOverdue {
+  border-left: 3px solid var(--danger, #ef4444);
+}
+.dayCell.dayUpcoming {
+  border-left: 3px solid var(--warning, #f59e0b);
+}
+.dayCell.dayAllPaid {
+  border-left: 3px solid var(--success, #10b981);
+}
+
+/* ---- Bill dots ---- */
+.billDots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+.billDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dotPaid {
+  background-color: var(--success, #10b981) !important;
+}
+.dotOverdue {
+  background-color: var(--danger, #ef4444) !important;
+}
+.dotUpcoming {
+  /* uses category_color if set, else default */
+}
+.moreBills {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 8px;
+}
+
+/* ---- Popover ---- */
+.popoverBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  /* invisible backdrop to catch clicks outside */
+}
+.popover {
+  position: fixed;
+  z-index: 999;
+  width: 320px;
+  max-width: calc(100vw - 20px);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.popoverHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary, #f8fafc);
+}
+.popoverTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.popoverClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.popoverClose:hover {
+  background: var(--bg, #f1f5f9);
+  color: var(--text);
+}
+.popoverBody {
+  padding: 8px 16px 12px;
+  max-height: 40vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.popoverBill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.popoverBill:last-child {
+  border-bottom: none;
+}
+.popoverBillOverdue {
+  background: rgba(239, 68, 68, 0.03);
+  margin: 0 -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.popoverBillLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.popoverBillColor {
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.popoverBillInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.popoverBillName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.popoverBillMeta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.popoverBillRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.popoverBillAmount {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.amountOverdue {
+  color: var(--danger, #ef4444);
+}
+.popoverMarkPaid {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.popoverMarkPaid:hover {
+  background: var(--primary-hover);
+}
+.popoverMarkPaid:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.popoverPaidCheck {
+  font-size: 16px;
+  color: var(--success, #10b981);
+  font-weight: 700;
+}
+
+/* Loading state */
+.loadingState {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .dayCell {
+    min-height: 60px;
+    padding: 4px;
+  }
+  .dayNumber {
+    font-size: 11px;
+  }
+  .billDots {
+    gap: 2px;
+    margin-top: 4px;
+  }
+  .billDot {
+    width: 6px;
+    height: 6px;
+  }
+  .dayHeader {
+    font-size: 10px;
+    padding: 8px 2px;
+  }
+  .monthLabel {
+    font-size: 16px;
+  }
+  .calSummary {
+    flex-wrap: wrap;
+  }
+  .calSummaryItem {
+    min-width: 90px;
+  }
+  .calSummaryValue {
+    font-size: 16px;
+  }
+  .popover {
+    width: 280px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dayCell {
+    min-height: 44px;
+    padding: 2px;
+  }
+  .dayNumber {
+    font-size: 10px;
+  }
+  .billDot {
+    width: 5px;
+    height: 5px;
+  }
+}

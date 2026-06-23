@@ -51,6 +51,57 @@ class CategoriesRepository extends BaseRepository {
       );
     }
   }
+
+  // Category mappings (learned patterns for auto-categorization)
+
+  getMapping(profileId, pattern) {
+    return this.get(
+      'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
+      profileId,
+      pattern
+    );
+  }
+
+  updateMapping(id, categoryId, confidence, useCount) {
+    return this.run(
+      'UPDATE category_mappings SET category_id = ?, confidence = ?, use_count = ? WHERE id = ?',
+      categoryId,
+      confidence,
+      useCount
+    );
+  }
+
+  insertMapping(profileId, pattern, categoryId, confidence) {
+    return this.run(
+      'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)',
+      profileId,
+      pattern,
+      categoryId,
+      confidence,
+      1
+    );
+  }
+
+  upsertMapping(profileId, pattern, categoryId, confidence) {
+    const existing = this.getMapping(profileId, pattern);
+    if (existing) {
+      const newUseCount = (existing.use_count || 0) + 1;
+      this.updateMapping(existing.id, categoryId, confidence || 0.9, newUseCount);
+      return { id: existing.id, use_count: newUseCount, updated: true };
+    } else {
+      const info = this.db.prepare(
+        'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)'
+      ).run(profileId, pattern, categoryId, confidence || 0.9, 1);
+      return { id: info.lastInsertRowid, use_count: 1, updated: false };
+    }
+  }
+
+  listMappings(profileId) {
+    return this.all(
+      'SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count FROM category_mappings cm WHERE cm.profile_id = ?',
+      profileId
+    );
+  }
 }
 
 module.exports = { CategoriesRepository };

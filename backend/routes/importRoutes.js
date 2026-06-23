@@ -4,6 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { getCategoryIcon } = require('../utils');
+const { asyncHandler } = require('../lib/errors');
 
 module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreadsheetService }) {
   const router = express.Router();
@@ -27,130 +28,110 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
 
   const importFiles = {};
 
-  router.post('/api/import/upload', apiRateLimiter, uploadImport.single('file'), (req, res) => {
-    try {
-      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-      const { sheetNames, sheets, workbook } = spreadsheetService.readFile(req.file.path);
+  router.post('/api/import/upload', apiRateLimiter, uploadImport.single('file'), asyncHandler((req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const { sheetNames, sheets, workbook } = spreadsheetService.readFile(req.file.path);
 
-      const selectedSheet =
-        req.body.sheetName && sheetNames.includes(req.body.sheetName)
-          ? req.body.sheetName
-          : sheetNames[0];
-      const data = spreadsheetService.sheetToJson(sheets[selectedSheet], { header: 1 });
+    const selectedSheet =
+      req.body.sheetName && sheetNames.includes(req.body.sheetName)
+        ? req.body.sheetName
+        : sheetNames[0];
+    const data = spreadsheetService.sheetToJson(sheets[selectedSheet], { header: 1 });
 
-      const fileId = Date.now().toString(36);
-      importFiles[fileId] = {
-        path: req.file.path,
-        workbook,
-        uploadedAt: Date.now(),
-      };
+    const fileId = Date.now().toString(36);
+    importFiles[fileId] = {
+      path: req.file.path,
+      workbook,
+      uploadedAt: Date.now(),
+    };
 
-      res.json({
-        fileId,
-        filename: req.file.originalname,
-        sheetName: selectedSheet,
-        sheetNames,
-        headers: (data[0] || []).map(String),
-        rows: data.slice(1).filter((r) => r.some((c) => c != null && c !== '')),
-        totalRows: data.length - 1,
-      });
+    res.json({
+      fileId,
+      filename: req.file.originalname,
+      sheetName: selectedSheet,
+      sheetNames,
+      headers: (data[0] || []).map(String),
+      rows: data.slice(1).filter((r) => r.some((c) => c != null && c !== '')),
+      totalRows: data.length - 1,
+    });
 
-      // Cleanup old entries
-      const cutoff = Date.now() - 3600000;
-      Object.keys(importFiles).forEach((k) => {
-        if (importFiles[k].uploadedAt < cutoff) {
-          try {
-            fs.unlinkSync(importFiles[k].path);
-          } catch (e) {}
-          delete importFiles[k];
-        }
-      });
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      // Check if error is related to invalid file type
-      if (err.message && err.message.includes('Invalid file type')) {
-        res.status(400).json({ error: err.message });
-      } else if (err.message && err.message.includes('Cannot read')) {
-        res
-          .status(400)
-          .json({ error: 'Invalid file format. Please upload a valid spreadsheet file.' });
-      } else {
-        res.status(500).json({ error: 'Import failed. Please try again.' });
+    // Cleanup old entries
+    const cutoff = Date.now() - 3600000;
+    Object.keys(importFiles).forEach((k) => {
+      if (importFiles[k].uploadedAt < cutoff) {
+        try {
+          fs.unlinkSync(importFiles[k].path);
+        } catch (e) {}
+        delete importFiles[k];
       }
-    }
-  });
+    });
+  }));
   router.use('/api/import/upload', (err, req, res, next) => {
     if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: 'File too large. Maximum size is 50MB.' });
-      }
-      return res.status(400).json({ error: err.message });
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 50MB.' });
+    }
+    return res.status(400).json({ error: err.message });
     }
     if (err.message && err.message.includes('Invalid file type')) {
-      return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: err.message });
     }
     next(err);
   });
-  router.post('/api/import/file-sheet', apiRateLimiter, (req, res) => {
-    try {
-      const { fileId, sheetName, mapping } = req.body;
-      const entry = importFiles[fileId];
-      if (!entry) return res.status(400).json({ error: 'File session expired. Please re-upload.' });
+  router.post('/api/import/file-sheet', apiRateLimiter, asyncHandler((req, res) => {
+    const { fileId, sheetName, mapping } = req.body;
+    const entry = importFiles[fileId];
+    if (!entry) return res.status(400).json({ error: 'File session expired. Please re-upload.' });
 
-      const sheetNames = entry.workbook.SheetNames;
-      if (!sheetNames.includes(sheetName))
-        return res.status(400).json({ error: 'Sheet not found' });
+    const sheetNames = entry.workbook.SheetNames;
+    if (!sheetNames.includes(sheetName))
+      return res.status(400).json({ error: 'Sheet not found' });
 
-      const sheet = entry.workbook.Sheets[sheetName];
-      const data = spreadsheetService.sheetToJson(sheet, { header: 1 });
-      const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ''));
+    const sheet = entry.workbook.Sheets[sheetName];
+    const data = spreadsheetService.sheetToJson(sheet, { header: 1 });
+    const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ''));
 
-      // Server-side duplicate detection
-      let duplicateCount = 0;
-      let duplicateIndices = [];
-      if (
-        mapping &&
-        mapping.description !== undefined &&
-        mapping.amount !== undefined &&
-        mapping.date !== undefined
-      ) {
-        const seen = new Map();
-        rows.forEach((row, idx) => {
-          const desc = (row[mapping.description] || '').toString().toLowerCase().trim();
-          const amount = (row[mapping.amount] || '').toString().trim();
-          const date = (row[mapping.date] || '').toString().trim();
-          if (!desc && !amount && !date) return;
-          const key = `${date}|${amount}|${desc}`;
-          if (seen.has(key)) {
-            duplicateIndices.push(idx);
-            const origIdx = seen.get(key);
-            if (!duplicateIndices.includes(origIdx)) duplicateIndices.push(origIdx);
-          } else {
-            seen.set(key, idx);
-          }
-        });
-        duplicateIndices = duplicateIndices.sort((a, b) => a - b);
-        duplicateCount = duplicateIndices.length;
-      }
-
-      res.json({
-        fileId,
-        sheetName,
-        sheetNames,
-        headers: (data[0] || []).map(String),
-        rows,
-        totalRows: data.length - 1,
-        duplicateCount,
-        duplicateIndices,
+    // Server-side duplicate detection
+    let duplicateCount = 0;
+    let duplicateIndices = [];
+    if (
+      mapping &&
+      mapping.description !== undefined &&
+      mapping.amount !== undefined &&
+      mapping.date !== undefined
+    ) {
+      const seen = new Map();
+      rows.forEach((row, idx) => {
+        const desc = (row[mapping.description] || '').toString().toLowerCase().trim();
+        const amount = (row[mapping.amount] || '').toString().trim();
+        const date = (row[mapping.date] || '').toString().trim();
+        if (!desc && !amount && !date) return;
+        const key = `${date}|${amount}|${desc}`;
+        if (seen.has(key)) {
+          duplicateIndices.push(idx);
+          const origIdx = seen.get(key);
+          if (!duplicateIndices.includes(origIdx)) duplicateIndices.push(origIdx);
+        } else {
+          seen.set(key, idx);
+        }
       });
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
+      duplicateIndices = duplicateIndices.sort((a, b) => a - b);
+      duplicateCount = duplicateIndices.length;
     }
-  });
-  router.post('/api/import/googlesheet', apiRateLimiter, (req, res) => {
+
+    res.json({
+      fileId,
+      sheetName,
+      sheetNames,
+      headers: (data[0] || []).map(String),
+      rows,
+      totalRows: data.length - 1,
+      duplicateCount,
+      duplicateIndices,
+    });
+
+  }));
+  router.post('/api/import/googlesheet', apiRateLimiter, asyncHandler((req, res) => {
     const { url, sheetName } = req.body;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
@@ -300,274 +281,269 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
         res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + err.message });
       }
     })();
-  });
-  router.post('/api/import/execute', apiRateLimiter, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const pids = getProfileIds(req);
-      const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } =
-        req.body;
-      if (!rows || !mapping) return res.status(400).json({ error: 'Missing data' });
+  }));
+  router.post('/api/import/execute', apiRateLimiter, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const pids = getProfileIds(req);
+    const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } =
+      req.body;
+    if (!rows || !mapping) return res.status(400).json({ error: 'Missing data' });
 
-      const insert = db.prepare(`
-      INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    const insert = db.prepare(`
+    INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
+      currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-      const getCat = db.prepare(
-        'SELECT id, color FROM categories WHERE LOWER(name) = LOWER(?) AND profile_id = ? LIMIT 1'
-      );
-      const insertCat = db.prepare(
-        'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
-      );
-      const insertAccount = db.prepare(
-        'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      );
-      const insertBalanceHistory = db.prepare(
-        'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)'
-      );
+    const getCat = db.prepare(
+      'SELECT id, color FROM categories WHERE LOWER(name) = LOWER(?) AND profile_id = ? LIMIT 1'
+    );
+    const insertCat = db.prepare(
+      'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
+    );
+    const insertAccount = db.prepare(
+      'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    const insertBalanceHistory = db.prepare(
+      'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)'
+    );
 
-      // Create accounts for categories marked as 'account' type
-      // Also populate a name→accountId map for resolving Means of Payment (FROM) and Category (TO)
-      const accountIdMap = new Map();
+    // Create accounts for categories marked as 'account' type
+    // Also populate a name→accountId map for resolving Means of Payment (FROM) and Category (TO)
+    const accountIdMap = new Map();
 
-      // First, add existing accounts to the map so they can be referenced by name
-      const existingAccounts = db
-        .prepare(
-          `SELECT id, name FROM accounts WHERE profile_id IN (${pids.map(() => '?').join(',')})`
-        )
-        .all(...pids);
-      for (const acc of existingAccounts) {
-        accountIdMap.set(acc.name.toLowerCase(), acc.id);
+    // First, add existing accounts to the map so they can be referenced by name
+    const existingAccounts = db
+      .prepare(
+        `SELECT id, name FROM accounts WHERE profile_id IN (${pids.map(() => '?').join(',')})`
+      )
+      .all(...pids);
+    for (const acc of existingAccounts) {
+      accountIdMap.set(acc.name.toLowerCase(), acc.id);
+    }
+
+    if (categoryTypes) {
+      for (const [catName, catType] of Object.entries(categoryTypes)) {
+        if (catType !== 'account') continue;
+        // Skip if account with this name already exists
+        if (accountIdMap.has(String(catName).trim().toLowerCase())) continue;
+        const accType = (accountTypes && accountTypes[catName]) || 'giro';
+        const balance = parseFloat((accountBalances && accountBalances[catName]) || '0') || 0;
+        const balanceDate =
+          (accountBalanceDates && accountBalanceDates[catName]) ||
+          new Date().toISOString().split('T')[0];
+        const result = insertAccount.run(
+          catName,
+          accType,
+          'USD',
+          balance,
+          '',
+          pid,
+          balance,
+          balanceDate
+        );
+        const accountId = result.lastInsertRowid;
+        accountIdMap.set(catName.toLowerCase(), accountId);
+        // Record initial balance history
+        insertBalanceHistory.run(accountId, balance, balanceDate);
       }
+    }
 
-      if (categoryTypes) {
-        for (const [catName, catType] of Object.entries(categoryTypes)) {
-          if (catType !== 'account') continue;
-          // Skip if account with this name already exists
-          if (accountIdMap.has(String(catName).trim().toLowerCase())) continue;
-          const accType = (accountTypes && accountTypes[catName]) || 'giro';
-          const balance = parseFloat((accountBalances && accountBalances[catName]) || '0') || 0;
-          const balanceDate =
-            (accountBalanceDates && accountBalanceDates[catName]) ||
-            new Date().toISOString().split('T')[0];
-          const result = insertAccount.run(
-            catName,
-            accType,
-            'USD',
-            balance,
-            '',
-            pid,
-            balance,
-            balanceDate
-          );
-          const accountId = result.lastInsertRowid;
-          accountIdMap.set(catName.toLowerCase(), accountId);
-          // Record initial balance history
-          insertBalanceHistory.run(accountId, balance, balanceDate);
-        }
-      }
+    // Diverse color palette for new categories
+    const newCategoryColors = [
+      '#ef4444',
+      '#f97316',
+      '#f59e0b',
+      '#eab308',
+      '#84cc16',
+      '#22c55e',
+      '#14b8a6',
+      '#06b6d4',
+      '#0ea5e9',
+      '#3b82f6',
+      '#6366f1',
+      '#8b5cf6',
+      '#a855f7',
+      '#d946ef',
+      '#ec4899',
+      '#f43f5e',
+      '#64748b',
+      '#78716c',
+    ];
+    let colorIndex = 0;
 
-      // Diverse color palette for new categories
-      const newCategoryColors = [
-        '#ef4444',
-        '#f97316',
-        '#f59e0b',
-        '#eab308',
-        '#84cc16',
-        '#22c55e',
-        '#14b8a6',
-        '#06b6d4',
-        '#0ea5e9',
-        '#3b82f6',
-        '#6366f1',
-        '#8b5cf6',
-        '#a855f7',
-        '#d946ef',
-        '#ec4899',
-        '#f43f5e',
-        '#64748b',
-        '#78716c',
-      ];
-      let colorIndex = 0;
-
-      let imported = 0;
-      const insertMany = db.transaction((rows) => {
-        for (const row of rows) {
-          const categoryId = (() => {
-            const catName = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
-            if (!catName || !String(catName).trim()) return null;
-            const existing = getCat.get(String(catName).trim(), pid);
-            if (existing) return existing.id;
-            // Reuse the same diverse color each time a new category is created (consistent within same import)
-            const color = newCategoryColors[colorIndex % newCategoryColors.length];
-            colorIndex++;
-            const icon = getCategoryIcon(String(catName).trim());
-            // Use user-specified type, or auto-detect from category name keywords
-            const catType =
-              (categoryTypes && categoryTypes[catName]) ||
-              (() => {
-                const lower = String(catName).toLowerCase();
-                const incomeKeywords = [
-                  'salary',
-                  'income',
-                  'wages',
-                  'wage',
-                  'payroll',
-                  'revenue',
-                  'dividend',
-                  'refund',
-                  'bonus',
-                  'paycheck',
-                  'pay cheque',
-                  'interest',
-                  'credit',
-                  'received',
-                  'royalt',
-                  'reimbursement',
-                ];
-                return incomeKeywords.some((kw) => lower.includes(kw)) ? 'income' : 'expense';
-              })();
-            const r = insertCat.run(String(catName).trim(), catType, color, icon, pid);
-            return r.lastInsertRowid;
-          })();
-
-          const amountRaw =
-            parseFloat(row[mapping.amount] || row[mapping.Amount] || row[mapping.AMOUNT]) || 0;
-          const amount = Math.abs(amountRaw);
-          const dateRaw =
-            row[mapping.date] ||
-            row[mapping.Date] ||
-            row[mapping.DATE] ||
-            new Date().toISOString().split('T')[0];
-          const currency =
-            row[mapping.currency] || row[mapping.Currency] || row[mapping.CURRENCY] || 'USD';
-
-          // Determine transaction type
-          let validatedType;
+    let imported = 0;
+    const insertMany = db.transaction((rows) => {
+      for (const row of rows) {
+        const categoryId = (() => {
           const catName = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
-          const catType = catName ? categoryTypes?.[String(catName).trim()] : null;
+          if (!catName || !String(catName).trim()) return null;
+          const existing = getCat.get(String(catName).trim(), pid);
+          if (existing) return existing.id;
+          // Reuse the same diverse color each time a new category is created (consistent within same import)
+          const color = newCategoryColors[colorIndex % newCategoryColors.length];
+          colorIndex++;
+          const icon = getCategoryIcon(String(catName).trim());
+          // Use user-specified type, or auto-detect from category name keywords
+          const catType =
+            (categoryTypes && categoryTypes[catName]) ||
+            (() => {
+              const lower = String(catName).toLowerCase();
+              const incomeKeywords = [
+                'salary',
+                'income',
+                'wages',
+                'wage',
+                'payroll',
+                'revenue',
+                'dividend',
+                'refund',
+                'bonus',
+                'paycheck',
+                'pay cheque',
+                'interest',
+                'credit',
+                'received',
+                'royalt',
+                'reimbursement',
+              ];
+              return incomeKeywords.some((kw) => lower.includes(kw)) ? 'income' : 'expense';
+            })();
+          const r = insertCat.run(String(catName).trim(), catType, color, icon, pid);
+          return r.lastInsertRowid;
+        })();
 
-          if (mapping.type) {
-            const rawType = String(row[mapping.type] || '')
-              .trim()
-              .toLowerCase();
-            if (['income', 'expense', 'transfer'].includes(rawType)) {
-              validatedType = rawType;
-            } else if (catType && (catType === 'income' || catType === 'expense')) {
-              validatedType = catType;
-            } else {
-              // Auto-detect based on amount sign or common keywords
-              validatedType =
-                amountRaw < 0 ||
-                rawType.includes('expense') ||
-                rawType.includes('debit') ||
-                rawType.includes('spent')
-                  ? 'expense'
-                  : amountRaw > 0 ||
-                      rawType.includes('income') ||
-                      rawType.includes('credit') ||
-                      rawType.includes('received')
-                    ? 'income'
-                    : 'expense';
-            }
+        const amountRaw =
+          parseFloat(row[mapping.amount] || row[mapping.Amount] || row[mapping.AMOUNT]) || 0;
+        const amount = Math.abs(amountRaw);
+        const dateRaw =
+          row[mapping.date] ||
+          row[mapping.Date] ||
+          row[mapping.DATE] ||
+          new Date().toISOString().split('T')[0];
+        const currency =
+          row[mapping.currency] || row[mapping.Currency] || row[mapping.CURRENCY] || 'USD';
+
+        // Determine transaction type
+        let validatedType;
+        const catName = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
+        const catType = catName ? categoryTypes?.[String(catName).trim()] : null;
+
+        if (mapping.type) {
+          const rawType = String(row[mapping.type] || '')
+            .trim()
+            .toLowerCase();
+          if (['income', 'expense', 'transfer'].includes(rawType)) {
+            validatedType = rawType;
           } else if (catType && (catType === 'income' || catType === 'expense')) {
             validatedType = catType;
           } else {
-            // No type mapped — auto-detect from amount sign
-            validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
+            // Auto-detect based on amount sign or common keywords
+            validatedType =
+              amountRaw < 0 ||
+              rawType.includes('expense') ||
+              rawType.includes('debit') ||
+              rawType.includes('spent')
+                ? 'expense'
+                : amountRaw > 0 ||
+                    rawType.includes('income') ||
+                    rawType.includes('credit') ||
+                    rawType.includes('received')
+                  ? 'income'
+                  : 'expense';
           }
+        } else if (catType && (catType === 'income' || catType === 'expense')) {
+          validatedType = catType;
+        } else {
+          // No type mapped — auto-detect from amount sign
+          validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
+        }
 
-          // Determine account_id from Means of Payment (FROM account)
-          const mopName =
-            row[mapping.means_of_payment] ||
+        // Determine account_id from Means of Payment (FROM account)
+        const mopName =
+          row[mapping.means_of_payment] ||
+          row[mapping.MeansOfPayment] ||
+          row[mapping.MEANS_OF_PAYMENT] ||
+          '';
+        const accountId = mopName
+          ? accountIdMap.get(String(mopName).trim().toLowerCase()) || null
+          : null;
+
+        // Determine transfer_account_id from Category when it's an account type (TO account)
+        const catNameForTransfer =
+          row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
+        const transferAccountId = catNameForTransfer
+          ? accountIdMap.get(String(catNameForTransfer).trim().toLowerCase()) || null
+          : null;
+
+        insert.run(
+          row[mapping.description] || row[mapping.Description] || row[mapping.DESCRIPTION] || '',
+          amount,
+          parseDateString(dateRaw),
+          row[mapping.beneficiary] || row[mapping.Beneficiary] || row[mapping.BENEFICIARY] || '',
+          row[mapping.payor] || row[mapping.Payor] || row[mapping.PAYOR] || '',
+          categoryId,
+          currency,
+          parseFloat(row[mapping.amount_local] || row[mapping.AmountLocal] || amount) || amount,
+          row[mapping.means_of_payment] ||
             row[mapping.MeansOfPayment] ||
             row[mapping.MEANS_OF_PAYMENT] ||
-            '';
-          const accountId = mopName
-            ? accountIdMap.get(String(mopName).trim().toLowerCase()) || null
-            : null;
-
-          // Determine transfer_account_id from Category when it's an account type (TO account)
-          const catNameForTransfer =
-            row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
-          const transferAccountId = catNameForTransfer
-            ? accountIdMap.get(String(catNameForTransfer).trim().toLowerCase()) || null
-            : null;
-
-          insert.run(
-            row[mapping.description] || row[mapping.Description] || row[mapping.DESCRIPTION] || '',
-            amount,
-            parseDateString(dateRaw),
-            row[mapping.beneficiary] || row[mapping.Beneficiary] || row[mapping.BENEFICIARY] || '',
-            row[mapping.payor] || row[mapping.Payor] || row[mapping.PAYOR] || '',
-            categoryId,
-            currency,
-            parseFloat(row[mapping.amount_local] || row[mapping.AmountLocal] || amount) || amount,
-            row[mapping.means_of_payment] ||
-              row[mapping.MeansOfPayment] ||
-              row[mapping.MEANS_OF_PAYMENT] ||
-              '',
-            parseFloat(row[mapping.exchange_rate] || row[mapping.ExchangeRate] || 1.0) || 1.0,
-            validatedType,
-            row[mapping.notes] || row[mapping.Notes] || row[mapping.NOTES] || '',
-            pid,
-            accountId,
-            transferAccountId
-          );
-          imported++;
-        }
-      });
-
-      insertMany(rows);
-
-      // Recompute account balances from all linked transactions
-      for (const [_name, accountId] of accountIdMap) {
-        const account = db
-          .prepare('SELECT starting_balance FROM accounts WHERE id = ?')
-          .get(accountId);
-        const startBalance = account ? account.starting_balance || 0 : 0;
-        // Money OUT: expense or transfer FROM this account (account_id = this)
-        const moneyOut = db
-          .prepare(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type IN ('expense', 'transfer')"
-          )
-          .get(accountId);
-        // Money IN: income TO this account (account_id = this, type=income)
-        const moneyInDirect = db
-          .prepare(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = 'income'"
-          )
-          .get(accountId);
-        // Money IN: transfer or income TO this account via transfer_account_id
-        const moneyInTransfer = db
-          .prepare(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE transfer_account_id = ? AND type IN ('income', 'transfer')"
-          )
-          .get(accountId);
-        const computedBalance =
-          startBalance -
-          (moneyOut.total || 0) +
-          (moneyInDirect.total || 0) +
-          (moneyInTransfer.total || 0);
-        db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(
-          Math.round(computedBalance * 100) / 100,
-          accountId
+            '',
+          parseFloat(row[mapping.exchange_rate] || row[mapping.ExchangeRate] || 1.0) || 1.0,
+          validatedType,
+          row[mapping.notes] || row[mapping.Notes] || row[mapping.NOTES] || '',
+          pid,
+          accountId,
+          transferAccountId
         );
+        imported++;
       }
+    });
 
-      res.json({
-        imported,
-        accounts_created: accountIdMap.size,
-        message: `Successfully imported ${imported} transactions`,
-      });
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
+    insertMany(rows);
+
+    // Recompute account balances from all linked transactions
+    for (const [_name, accountId] of accountIdMap) {
+      const account = db
+        .prepare('SELECT starting_balance FROM accounts WHERE id = ?')
+        .get(accountId);
+      const startBalance = account ? account.starting_balance || 0 : 0;
+      // Money OUT: expense or transfer FROM this account (account_id = this)
+      const moneyOut = db
+        .prepare(
+          "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type IN ('expense', 'transfer')"
+        )
+        .get(accountId);
+      // Money IN: income TO this account (account_id = this, type=income)
+      const moneyInDirect = db
+        .prepare(
+          "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = 'income'"
+        )
+        .get(accountId);
+      // Money IN: transfer or income TO this account via transfer_account_id
+      const moneyInTransfer = db
+        .prepare(
+          "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE transfer_account_id = ? AND type IN ('income', 'transfer')"
+        )
+        .get(accountId);
+      const computedBalance =
+        startBalance -
+        (moneyOut.total || 0) +
+        (moneyInDirect.total || 0) +
+        (moneyInTransfer.total || 0);
+      db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(
+        Math.round(computedBalance * 100) / 100,
+        accountId
+      );
     }
-  });
+
+    res.json({
+      imported,
+      accounts_created: accountIdMap.size,
+      message: `Successfully imported ${imported} transactions`,
+    });
+
+  }));
 
   return router;
 };

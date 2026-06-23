@@ -50,9 +50,14 @@ class ProfilesRepository extends BaseRepository {
       'transactions',
       'budgets',
       'categories',
+      'budgets_zero_based',
       'loans',
+      'loan_rate_periods',
+      'loan_prepayments',
       'accounts',
-      'goals',
+      'savings_goals',
+      'retirement_goals',
+      'emergency_fund_config',
       'account_balance_history',
       'receipts',
       'portfolio_holdings',
@@ -61,6 +66,7 @@ class ProfilesRepository extends BaseRepository {
       'recurring_transactions',
       'tags',
       'transaction_tags',
+      'category_mappings',
       'settings',
     ];
     const deleteAll = this.db.transaction(() => {

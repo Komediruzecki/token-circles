@@ -2,99 +2,90 @@
 const express = require('express');
 const { getCategoryIcon, toCamelCase } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
+const { asyncHandler } = require('../lib/errors');
 
 module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/categories', apiRateLimiter, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const { type, income, expense } = req.query;
-      let whereClause = 'WHERE c.profile_id = ?';
-      const params = [pid];
+  router.get('/api/categories', apiRateLimiter, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const { type, income, expense } = req.query;
+    let whereClause = 'WHERE c.profile_id = ?';
+    const params = [pid];
 
-      if (type || income || expense) {
-        const types = [];
-        if (type === 'income') types.push('income');
-        if (type === 'expense') types.push('expense');
-        if (income === 'true') types.push('income');
-        if (expense === 'true') types.push('expense');
+    if (type || income || expense) {
+      const types = [];
+      if (type === 'income') types.push('income');
+      if (type === 'expense') types.push('expense');
+      if (income === 'true') types.push('income');
+      if (expense === 'true') types.push('expense');
 
-        if (types.length > 0) {
-          const placeholders = types.map(() => '?').join(',');
-          whereClause += ` AND c.type IN (${placeholders})`;
-          params.push(...types);
-        }
+      if (types.length > 0) {
+        const placeholders = types.map(() => '?').join(',');
+        whereClause += ` AND c.type IN (${placeholders})`;
+        params.push(...types);
       }
-
-      const rows = db
-        .prepare(
-          `
-      SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, p.name as parent_name
-      FROM categories c
-      LEFT JOIN categories p ON c.parent_id = p.id AND p.profile_id = c.profile_id
-      ${whereClause}
-      ORDER BY c.type, c.name
-    `
-        )
-        .all(...params);
-      res.json(toCamelCase(rows));
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
     }
-  });
 
-  router.post('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const {
-        name,
-        color = '#6b7280',
-        icon = 'tag',
-        type = 'expense',
-        parent_id: parentIdParam,
-        tax_deductible,
-      } = req.body;
-      const parent_id = parentIdParam !== undefined ? parentIdParam : req.body.parentId || null;
+    const rows = db
+      .prepare(
+        `
+    SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, p.name as parent_name
+    FROM categories c
+    LEFT JOIN categories p ON c.parent_id = p.id AND p.profile_id = c.profile_id
+    ${whereClause}
+    ORDER BY c.type, c.name
+    `
+      )
+      .all(...params);
+    res.json(toCamelCase(rows));
 
-      if (!name || typeof name !== 'string' || name.trim() === '') {
-        return res.status(400).json({ error: 'Category name is required' });
-      }
+  }));
 
-      const existing = req.repos.categories.getByName(name.trim(), pid);
-      if (existing) {
-        return res.status(400).json({ error: 'Category name already exists for this profile' });
-      }
+  router.post('/api/categories', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const {
+      name,
+      color = '#6b7280',
+      icon = 'tag',
+      type = 'expense',
+      parent_id: parentIdParam,
+      tax_deductible,
+    } = req.body;
+    const parent_id = parentIdParam !== undefined ? parentIdParam : req.body.parentId || null;
 
-      const result = req.repos.categories.create({
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+
+    const existing = req.repos.categories.getByName(name.trim(), pid);
+    if (existing) {
+      return res.status(400).json({ error: 'Category name already exists for this profile' });
+    }
+
+    const result = req.repos.categories.create({
+      name: name.trim(),
+      color: color.trim(),
+      icon: icon || 'tag',
+      type: type.trim(),
+      parent_id,
+      tax_deductible: tax_deductible ? 1 : 0,
+      profile_id: pid,
+    });
+
+    res.json(
+      toCamelCase({
+        id: result.lastInsertRowid,
         name: name.trim(),
         color: color.trim(),
-        icon: icon || 'tag',
+        icon: icon,
         type: type.trim(),
         parent_id,
-        tax_deductible: tax_deductible ? 1 : 0,
         profile_id: pid,
-      });
+      })
+    );
 
-      res.json(
-        toCamelCase({
-          id: result.lastInsertRowid,
-          name: name.trim(),
-          color: color.trim(),
-          icon: icon,
-          type: type.trim(),
-          parent_id,
-          profile_id: pid,
-        })
-      );
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+  }));
 
   // ==================== CATEGORY MAPPINGS ====================
 
@@ -200,370 +191,325 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   ];
 
   // Get learned mappings for profile
-  router.get('/api/categories/mappings', apiRateLimiter, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const rows = db
-        .prepare(
-          `
-      SELECT cm.*, c.name as category_name, c.color as category_color
-      FROM category_mappings cm
-      JOIN categories c ON cm.category_id = c.id
-      WHERE cm.profile_id = ?
-      ORDER BY cm.use_count DESC, cm.confidence DESC
+  router.get('/api/categories/mappings', apiRateLimiter, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const rows = db
+      .prepare(
+        `
+    SELECT cm.*, c.name as category_name, c.color as category_color
+    FROM category_mappings cm
+    JOIN categories c ON cm.category_id = c.id
+    WHERE cm.profile_id = ?
+    ORDER BY cm.use_count DESC, cm.confidence DESC
     `
-        )
-        .all(pid);
-      res.json(toCamelCase(rows));
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+      )
+      .all(pid);
+    res.json(toCamelCase(rows));
+
+  }));
 
   // Add/update a mapping
-  router.post('/api/categories/mappings', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const { pattern, category_id, confidence, use_count } = req.body;
+  router.post('/api/categories/mappings', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const { pattern, category_id, confidence, use_count } = req.body;
 
-      // Validation
-      if (!pattern || typeof pattern !== 'string' || pattern.trim() === '') {
-        return res.status(400).json({ error: 'Pattern is required' });
-      }
-      if (!category_id || typeof category_id !== 'number' || category_id <= 0) {
-        return res.status(400).json({ error: 'Valid category_id is required' });
-      }
-
-      // Check if mapping already exists
-      const existing = db
-        .prepare('SELECT id, use_count FROM category_mappings WHERE profile_id=? AND pattern=?')
-        .get(pid, pattern);
-
-      if (existing) {
-        // Update existing mapping
-        db.prepare(
-          `
-        UPDATE category_mappings
-        SET category_id=?, confidence=?, use_count=?
-        WHERE id=?
-      `
-        ).run(category_id, confidence || 0.9, (use_count || existing.use_count) + 1, existing.id);
-        res.json(
-          toCamelCase({
-            ok: true,
-            id: existing.id,
-            use_count: (use_count || existing.use_count) + 1,
-          })
-        );
-      } else {
-        // Insert new mapping
-        const info = db
-          .prepare(
-            `
-        INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
-        VALUES (?, ?, ?, ?, ?)
-      `
-          )
-          .run(pid, pattern.trim(), category_id, confidence || 0.9, use_count || 1);
-        res.json(toCamelCase({ ok: true, id: info.lastInsertRowid }));
-      }
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
+    // Validation
+    if (!pattern || typeof pattern !== 'string' || pattern.trim() === '') {
+      return res.status(400).json({ error: 'Pattern is required' });
     }
-  });
+    if (!category_id || typeof category_id !== 'number' || category_id <= 0) {
+      return res.status(400).json({ error: 'Valid category_id is required' });
+    }
+
+    // Check if mapping already exists
+    const existing = db
+      .prepare('SELECT id, use_count FROM category_mappings WHERE profile_id=? AND pattern=?')
+      .get(pid, pattern);
+
+    if (existing) {
+      // Update existing mapping
+      db.prepare(
+        `
+      UPDATE category_mappings
+      SET category_id=?, confidence=?, use_count=?
+      WHERE id=?
+    `
+      ).run(category_id, confidence || 0.9, (use_count || existing.use_count) + 1, existing.id);
+      res.json(
+        toCamelCase({
+          ok: true,
+          id: existing.id,
+          use_count: (use_count || existing.use_count) + 1,
+        })
+      );
+    } else {
+      // Insert new mapping
+      const info = db
+        .prepare(
+          `
+      INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
+      VALUES (?, ?, ?, ?, ?)
+    `
+        )
+        .run(pid, pattern.trim(), category_id, confidence || 0.9, use_count || 1);
+      res.json(toCamelCase({ ok: true, id: info.lastInsertRowid }));
+    }
+
+  }));
 
   // Delete a mapping
-  router.delete('/api/categories/mappings/:id', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const result = db
-        .prepare('DELETE FROM category_mappings WHERE id=? AND profile_id=?')
-        .run(req.params.id, pid);
-      if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-      res.json(toCamelCase({ ok: true }));
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+  router.delete('/api/categories/mappings/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const result = db
+      .prepare('DELETE FROM category_mappings WHERE id=? AND profile_id=?')
+      .run(req.params.id, pid);
+    if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(toCamelCase({ ok: true }));
+
+  }));
 
   // ==================== CATEGORY CRUD ====================
 
-  router.delete('/api/categories', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      req.repos.categories.deleteAll(pid);
-      res.json({ ok: true, message: 'All categories deleted' });
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
+  router.delete('/api/categories', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    req.repos.categories.deleteAll(pid);
+    res.json({ ok: true, message: 'All categories deleted' });
+
+  }));
+
+  router.get('/api/categories/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const cat = req.repos.categories.getById(req.params.id, pid);
+    if (!cat) {
+      return res.status(404).json({ error: 'Not found' });
     }
-  });
+    res.json(toCamelCase(cat));
 
-  router.get('/api/categories/:id', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const cat = req.repos.categories.getById(req.params.id, pid);
-      if (!cat) {
-        return res.status(404).json({ error: 'Not found' });
-      }
-      res.json(toCamelCase(cat));
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+  }));
 
-  router.put('/api/categories/:id', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const existing = req.repos.categories.getById(req.params.id, pid);
-      if (!existing) return res.status(404).json({ error: 'Category not found' });
+  router.put('/api/categories/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const existing = req.repos.categories.getById(req.params.id, pid);
+    if (!existing) return res.status(404).json({ error: 'Category not found' });
 
-      const { name, color, icon, type, parent_id: parentIdParam, tax_deductible } = req.body;
-      const parent_id = parentIdParam !== undefined ? parentIdParam : req.body.parentId || null;
-      req.repos.categories.update(req.params.id, pid, {
-        name: name !== undefined ? name : existing.name,
-        color: color !== undefined ? color : existing.color,
-        icon: icon !== undefined ? icon : existing.icon,
-        type: type !== undefined ? type : existing.type,
-        parent_id: parent_id || null,
-        tax_deductible: tax_deductible ? 1 : 0,
-      });
-      res.json(toCamelCase({ ok: true }));
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+    const { name, color, icon, type, parent_id: parentIdParam, tax_deductible } = req.body;
+    const parent_id = parentIdParam !== undefined ? parentIdParam : req.body.parentId || null;
+    req.repos.categories.update(req.params.id, pid, {
+      name: name !== undefined ? name : existing.name,
+      color: color !== undefined ? color : existing.color,
+      icon: icon !== undefined ? icon : existing.icon,
+      type: type !== undefined ? type : existing.type,
+      parent_id: parent_id || null,
+      tax_deductible: tax_deductible ? 1 : 0,
+    });
+    res.json(toCamelCase({ ok: true }));
 
-  router.delete('/api/categories/:id', apiRateLimiter, requireAuth, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const result = req.repos.categories.deleteById(req.params.id, pid);
-      if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-      res.json(toCamelCase({ ok: true }));
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
-  router.post('/api/categories/auto-map', apiRateLimiter, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const { transaction_ids, description, amount } = req.body;
+  }));
 
-      // Fetch categories and learned mappings for matching
-      const categories = db.prepare('SELECT * FROM categories WHERE profile_id = ?').all(pid);
-      const learnedMappings = db
-        .prepare(
-          `
-      SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count
-      FROM category_mappings cm
-      WHERE cm.profile_id = ?
+  router.delete('/api/categories/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const result = req.repos.categories.deleteById(req.params.id, pid);
+    if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(toCamelCase({ ok: true }));
+
+  }));
+  router.post('/api/categories/auto-map', apiRateLimiter, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const { transaction_ids, description, amount } = req.body;
+
+    // Fetch categories and learned mappings for matching
+    const categories = db.prepare('SELECT * FROM categories WHERE profile_id = ?').all(pid);
+    const learnedMappings = db
+      .prepare(
+        `
+    SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count
+    FROM category_mappings cm
+    WHERE cm.profile_id = ?
     `
-        )
-        .all(pid);
+      )
+      .all(pid);
 
-      // If transaction_ids provided, use those; otherwise filter by description+amount
-      let txQuery = `
-      SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, c.name as category_name
-      FROM transactions t
-      LEFT JOIN categories c ON t.category_id = c.id
-      WHERE t.profile_id = ? AND (t.category_id IS NULL OR c.name = 'Other')
+    // If transaction_ids provided, use those; otherwise filter by description+amount
+    let txQuery = `
+    SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, c.name as category_name
+    FROM transactions t
+    LEFT JOIN categories c ON t.category_id = c.id
+    WHERE t.profile_id = ? AND (t.category_id IS NULL OR c.name = 'Other')
     `;
-      let params = [pid];
+    let params = [pid];
 
-      if (transaction_ids && transaction_ids.length > 0) {
-        txQuery += ' AND t.id IN (' + transaction_ids.map(() => '?').join(',') + ')';
-        params = params.concat(transaction_ids);
-      } else if (description && amount) {
-        // Match by description and amount
-        const normalizedDesc = description
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9]/g, '');
-        const amountMatch = amount.toString().replace(/[^0-9.]/g, '');
-        txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
-        params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
+    if (transaction_ids && transaction_ids.length > 0) {
+      txQuery += ' AND t.id IN (' + transaction_ids.map(() => '?').join(',') + ')';
+      params = params.concat(transaction_ids);
+    } else if (description && amount) {
+      // Match by description and amount
+      const normalizedDesc = description
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]/g, '');
+      const amountMatch = amount.toString().replace(/[^0-9.]/g, '');
+      txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
+      params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
+    }
+
+    const transactions = db.prepare(txQuery).all(...params);
+
+    const proposedMappings = [];
+
+    for (const tx of transactions) {
+      const searchText =
+        `${tx.description} ${tx.beneficiary || ''} ${tx.payor || ''}`.toLowerCase();
+      const normalizedSearch = searchText.replace(/[^a-z0-9]/g, '');
+
+      let bestMatch = null;
+      let bestScore = 0;
+
+      // 1. Check learned mappings first (highest priority, boosted by use_count)
+      for (const mapping of learnedMappings) {
+        const patternLower = mapping.pattern.toLowerCase();
+        if (normalizedSearch.includes(patternLower.replace(/[^a-z0-9]/g, ''))) {
+          const score =
+            mapping.confidence * Math.min(1 + Math.log10(mapping.use_count + 1) * 0.2, 1.5);
+          if (score > bestScore) {
+            bestScore = score;
+            const cat = categories.find((c) => c.id === mapping.category_id);
+            if (cat) {
+              bestMatch = {
+                category_id: cat.id,
+                category_name: cat.name,
+                category_color: cat.color,
+                confidence: score,
+              };
+            }
+          }
+        }
       }
 
-      const transactions = db.prepare(txQuery).all(...params);
-
-      const proposedMappings = [];
-
-      for (const tx of transactions) {
-        const searchText =
-          `${tx.description} ${tx.beneficiary || ''} ${tx.payor || ''}`.toLowerCase();
-        const normalizedSearch = searchText.replace(/[^a-z0-9]/g, '');
-
-        let bestMatch = null;
-        let bestScore = 0;
-
-        // 1. Check learned mappings first (highest priority, boosted by use_count)
-        for (const mapping of learnedMappings) {
-          const patternLower = mapping.pattern.toLowerCase();
+      // 2. Check merchant dictionary
+      if (!bestMatch || bestScore < 0.8) {
+        for (const merchant of MERCHANT_DICTIONARY) {
+          const patternLower = merchant.pattern.toLowerCase();
           if (normalizedSearch.includes(patternLower.replace(/[^a-z0-9]/g, ''))) {
-            const score =
-              mapping.confidence * Math.min(1 + Math.log10(mapping.use_count + 1) * 0.2, 1.5);
-            if (score > bestScore) {
-              bestScore = score;
-              const cat = categories.find((c) => c.id === mapping.category_id);
+            if (merchant.confidence > bestScore) {
+              bestScore = merchant.confidence;
+              const cat = categories.find(
+                (c) => c.name.toLowerCase() === merchant.category.toLowerCase()
+              );
               if (cat) {
                 bestMatch = {
                   category_id: cat.id,
                   category_name: cat.name,
                   category_color: cat.color,
-                  confidence: score,
+                  confidence: merchant.confidence,
                 };
               }
             }
           }
-        }
-
-        // 2. Check merchant dictionary
-        if (!bestMatch || bestScore < 0.8) {
-          for (const merchant of MERCHANT_DICTIONARY) {
-            const patternLower = merchant.pattern.toLowerCase();
-            if (normalizedSearch.includes(patternLower.replace(/[^a-z0-9]/g, ''))) {
-              if (merchant.confidence > bestScore) {
-                bestScore = merchant.confidence;
-                const cat = categories.find(
-                  (c) => c.name.toLowerCase() === merchant.category.toLowerCase()
-                );
-                if (cat) {
-                  bestMatch = {
-                    category_id: cat.id,
-                    category_name: cat.name,
-                    category_color: cat.color,
-                    confidence: merchant.confidence,
-                  };
-                }
-              }
-            }
-          }
-        }
-
-        // 3. Token overlap matching with category names
-        if (!bestMatch || bestScore < 0.6) {
-          const searchTokens = normalizedSearch.split(/[0-9]+/).filter((t) => t.length > 2);
-
-          for (const cat of categories) {
-            const catTokens = cat.name
-              .toLowerCase()
-              .split(/[^a-z]+/)
-              .filter((t) => t.length > 2);
-
-            // Calculate token overlap
-            let matches = 0;
-            for (const token of searchTokens) {
-              if (
-                cat.name.toLowerCase().includes(token) ||
-                (token.length > 3 &&
-                  cat.name
-                    .toLowerCase()
-                    .split('')
-                    .some((c) => c.startsWith(token.slice(0, 3))))
-              ) {
-                matches++;
-              }
-            }
-
-            if (matches > 0) {
-              const score = (matches / Math.max(searchTokens.length, catTokens.length)) * 0.5;
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = {
-                  category_id: cat.id,
-                  category_name: cat.name,
-                  category_color: cat.color,
-                  confidence: score,
-                };
-              }
-            }
-          }
-        }
-
-        if (bestMatch) {
-          proposedMappings.push({
-            transaction_id: tx.id,
-            description: tx.description,
-            proposed_category_id: bestMatch.category_id,
-            proposed_category_name: bestMatch.category_name,
-            proposed_category_color: bestMatch.category_color,
-            confidence: Math.min(bestMatch.confidence, 1),
-          });
         }
       }
 
-      res.json({
-        total: transactions.length,
-        mapped: proposedMappings.length,
-        mappings: proposedMappings,
-      });
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
+      // 3. Token overlap matching with category names
+      if (!bestMatch || bestScore < 0.6) {
+        const searchTokens = normalizedSearch.split(/[0-9]+/).filter((t) => t.length > 2);
+
+        for (const cat of categories) {
+          const catTokens = cat.name
+            .toLowerCase()
+            .split(/[^a-z]+/)
+            .filter((t) => t.length > 2);
+
+          // Calculate token overlap
+          let matches = 0;
+          for (const token of searchTokens) {
+            if (
+              cat.name.toLowerCase().includes(token) ||
+              (token.length > 3 &&
+                cat.name
+                  .toLowerCase()
+                  .split('')
+                  .some((c) => c.startsWith(token.slice(0, 3))))
+            ) {
+              matches++;
+            }
+          }
+
+          if (matches > 0) {
+            const score = (matches / Math.max(searchTokens.length, catTokens.length)) * 0.5;
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = {
+                category_id: cat.id,
+                category_name: cat.name,
+                category_color: cat.color,
+                confidence: score,
+              };
+            }
+          }
+        }
+      }
+
+      if (bestMatch) {
+        proposedMappings.push({
+          transaction_id: tx.id,
+          description: tx.description,
+          proposed_category_id: bestMatch.category_id,
+          proposed_category_name: bestMatch.category_name,
+          proposed_category_color: bestMatch.category_color,
+          confidence: Math.min(bestMatch.confidence, 1),
+        });
+      }
     }
-  });
+
+    res.json({
+      total: transactions.length,
+      mapped: proposedMappings.length,
+      mappings: proposedMappings,
+    });
+
+  }));
 
   // Apply confirmed mappings to transactions
-  router.post('/api/categories/apply-mappings', apiRateLimiter, (req, res) => {
-    try {
-      const pid = getProfileId(req);
-      const { mappings } = req.body;
+  router.post('/api/categories/apply-mappings', apiRateLimiter, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const { mappings } = req.body;
 
-      if (!mappings || !Array.isArray(mappings)) {
-        return res.status(400).json({ error: 'Invalid mappings array' });
-      }
+    if (!mappings || !Array.isArray(mappings)) {
+      return res.status(400).json({ error: 'Invalid mappings array' });
+    }
 
-      const updateTx = db.prepare(
-        "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?"
-      );
-      const insertMapping = db.prepare(`
-      INSERT OR REPLACE INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
-      VALUES (?, ?, ?, ?, 1)
+    const updateTx = db.prepare(
+      "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?"
+    );
+    const insertMapping = db.prepare(`
+    INSERT OR REPLACE INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
+    VALUES (?, ?, ?, ?, 1)
     `);
 
-      let updated = 0;
+    let updated = 0;
 
-      for (const mapping of mappings) {
-        const { transaction_id, category_id, pattern } = mapping;
+    for (const mapping of mappings) {
+      const { transaction_id, category_id, pattern } = mapping;
 
-        // Update transaction
-        const result = updateTx.run(category_id, transaction_id, pid);
-        if (result.changes > 0) updated++;
+      // Update transaction
+      const result = updateTx.run(category_id, transaction_id, pid);
+      if (result.changes > 0) updated++;
 
-        // Store mapping for future use
-        if (pattern) {
-          const normalizedPattern = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (normalizedPattern.length >= 3) {
-            try {
-              insertMapping.run(pid, normalizedPattern, category_id, 0.9);
-            } catch (e) {
-              // Ignore duplicate errors
-            }
+      // Store mapping for future use
+      if (pattern) {
+        const normalizedPattern = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normalizedPattern.length >= 3) {
+          try {
+            insertMapping.run(pid, normalizedPattern, category_id, 0.9);
+          } catch (e) {
+            // Ignore duplicate errors
           }
         }
       }
-
-      res.json({ ok: true, updated });
-    } catch (err) {
-      console.error(err.message);
-      logError('error', err);
-      res.status(500).json({ error: err.message });
     }
-  });
+
+    res.json({ ok: true, updated });
+
+  }));
 
   return router;
 };

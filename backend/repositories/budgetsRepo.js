@@ -37,6 +37,27 @@ class BudgetsRepository extends BaseRepository {
     return super.delete('budgets', 'profile_id = ?', profileId);
   }
 
+  deleteByDateRange(profileId, startDate, endDate) {
+    return this.run(
+      'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
+      profileId,
+      startDate,
+      endDate
+    );
+  }
+
+  bulkCreateMonthly(profileId, startDate, entries) {
+    const insert = this.db.prepare(
+      'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
+    );
+    const runAll = this.db.transaction(() => {
+      for (const item of entries) {
+        insert.run(item.category_id, item.total, 'monthly', startDate, profileId);
+      }
+    });
+    runAll();
+  }
+
   duplicateLast(profileId, year, month) {
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
