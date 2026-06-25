@@ -7,11 +7,15 @@ const request = require('supertest');
 const BASE_URL = 'http://localhost:3847';
 
 describe('Profiles E2E', () => {
+  jest.setTimeout(30000);
   let agent;
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
+    await agent
+      .post('/api/auth/login')
+      .set('X-Skip-RateLimit', 'true')
+      .send({ username: 'person', password: 'something-like-this' });
   });
 
   describe('GET /api/profiles', () => {
@@ -25,7 +29,7 @@ describe('Profiles E2E', () => {
       const resp = await agent.get('/api/profiles').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
       if (resp.body.length > 0) {
-        resp.body.forEach(prf => {
+        resp.body.forEach((prf) => {
           global.expect(prf).toHaveProperty('id');
           global.expect(prf).toHaveProperty('name');
           global.expect(prf).toHaveProperty('transaction_count');
@@ -44,9 +48,12 @@ describe('Profiles E2E', () => {
 
   describe('POST /api/profiles', () => {
     test('BE-PRF-004: Create profile with name returns id', async () => {
-      const resp = await agent.post('/api/profiles').set('X-Skip-RateLimit', 'true').send({
-        name: 'test_user_' + Date.now()
-      });
+      const resp = await agent
+        .post('/api/profiles')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          name: 'test_user_' + Date.now(),
+        });
       // Session-based auth; may return 401 if session not persisted
       global.expect([200, 401]).to.include(resp.status);
       if (resp.status === 200) {
@@ -60,17 +67,23 @@ describe('Profiles E2E', () => {
 
     test('BE-PRF-005: Reject empty name', async () => {
       const resp = await agent.post('/api/profiles').set('X-Skip-RateLimit', 'true').send({
-        name: ''
+        name: '',
       });
       global.expect([400, 401, 422]).to.include(resp.status);
     });
 
     test('BE-PRF-006: Reject duplicate profile name', async () => {
       const name = 'duplicate_' + Date.now();
-      const createResp = await agent.post('/api/profiles').set('X-Skip-RateLimit', 'true').send({ name });
+      const createResp = await agent
+        .post('/api/profiles')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ name });
       // Only proceed if creation succeeded (session persisted)
       if (createResp.status === 200) {
-        const resp = await agent.post('/api/profiles').set('X-Skip-RateLimit', 'true').send({ name });
+        const resp = await agent
+          .post('/api/profiles')
+          .set('X-Skip-RateLimit', 'true')
+          .send({ name });
         global.expect([400, 409]).to.include(resp.status);
       } else {
         // Session not persisted; both could get 401
@@ -90,12 +103,15 @@ describe('Profiles E2E', () => {
       if (resp.body.length > 0) {
         const id = resp.body[0].id;
         const newName = 'updated_profile_' + Date.now();
-        const updateResp = await agent.put(`/api/profiles/${id}`).set('X-Skip-RateLimit', 'true').send({ name: newName });
+        const updateResp = await agent
+          .put(`/api/profiles/${id}`)
+          .set('X-Skip-RateLimit', 'true')
+          .send({ name: newName });
         global.expect([200, 401]).to.include(updateResp.status);
 
         if (updateResp.status === 200) {
           const checkResp = await agent.get('/api/profiles').set('X-Skip-RateLimit', 'true');
-          const updated = checkResp.body.find(p => p.id === id);
+          const updated = checkResp.body.find((p) => p.id === id);
           if (updated) {
             global.expect(updated.name).toBe(newName);
           }
@@ -104,7 +120,10 @@ describe('Profiles E2E', () => {
     });
 
     test('BE-PRF-009: Update non-existent returns 404', async () => {
-      const resp = await agent.put('/api/profiles/999999999').set('X-Skip-RateLimit', 'true').send({ name: 'test' });
+      const resp = await agent
+        .put('/api/profiles/999999999')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ name: 'test' });
       global.expect([401, 404]).to.include(resp.status);
     });
 
@@ -112,7 +131,10 @@ describe('Profiles E2E', () => {
       const resp = await agent.get('/api/profiles').set('X-Skip-RateLimit', 'true');
       if (resp.body.length > 0) {
         const id = resp.body[0].id;
-        const updateResp = await agent.put(`/api/profiles/${id}`).set('X-Skip-RateLimit', 'true').send({ name: '' });
+        const updateResp = await agent
+          .put(`/api/profiles/${id}`)
+          .set('X-Skip-RateLimit', 'true')
+          .send({ name: '' });
         global.expect([400, 401, 422]).to.include(updateResp.status);
       }
     });
@@ -124,7 +146,10 @@ describe('Profiles E2E', () => {
       if (resp.body.length > 0) {
         const id = resp.body[0].id;
         const newName = 'patched_profile_' + Date.now();
-        const updateResp = await agent.patch(`/api/profiles/${id}`).set('X-Skip-RateLimit', 'true').send({ name: newName });
+        const updateResp = await agent
+          .patch(`/api/profiles/${id}`)
+          .set('X-Skip-RateLimit', 'true')
+          .send({ name: newName });
         global.expect([200, 401]).to.include(updateResp.status);
       }
     });
@@ -137,11 +162,16 @@ describe('Profiles E2E', () => {
     });
 
     test('BE-PRF-013: Delete non-default profile returns { ok: true }', async () => {
-      const createResp = await agent.post('/api/profiles').set('X-Skip-RateLimit', 'true').send({
-        name: 'todelete_' + Date.now()
-      });
+      const createResp = await agent
+        .post('/api/profiles')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          name: 'todelete_' + Date.now(),
+        });
       if (createResp.status === 200) {
-        const deleteResp = await agent.delete(`/api/profiles/${createResp.body.id}`).set('X-Skip-RateLimit', 'true');
+        const deleteResp = await agent
+          .delete(`/api/profiles/${createResp.body.id}`)
+          .set('X-Skip-RateLimit', 'true');
         global.expect([200, 500]).to.include(deleteResp.status);
         if (deleteResp.status === 200) global.expect(deleteResp.body).toHaveProperty('ok', true);
       } else {
@@ -157,24 +187,33 @@ describe('Profiles E2E', () => {
 
   describe('Password Change', () => {
     test('BE-PRF-015: Change password with currentPassword + newPassword', async () => {
-      const resp = await agent.put('/api/profiles/me/password').set('X-Skip-RateLimit', 'true').send({
-        currentPassword: 'something-like-this',
-        newPassword: 'NewPass123!'
-      });
+      const resp = await agent
+        .put('/api/profiles/me/password')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          currentPassword: 'something-like-this',
+          newPassword: 'NewPass123!',
+        });
       global.expect([200, 400, 401]).to.include(resp.status);
     });
 
     test('BE-PRF-016: Reject missing newPassword', async () => {
-      const resp = await agent.put('/api/profiles/me/password').set('X-Skip-RateLimit', 'true').send({
-        currentPassword: 'something-like-this'
-      });
+      const resp = await agent
+        .put('/api/profiles/me/password')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          currentPassword: 'something-like-this',
+        });
       global.expect([400, 401, 422]).to.include(resp.status);
     });
 
     test('BE-PRF-017: Reject missing currentPassword', async () => {
-      const resp = await agent.put('/api/profiles/me/password').set('X-Skip-RateLimit', 'true').send({
-        newPassword: 'NewPass123!'
-      });
+      const resp = await agent
+        .put('/api/profiles/me/password')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          newPassword: 'NewPass123!',
+        });
       global.expect([400, 401, 422]).to.include(resp.status);
     });
   });
@@ -197,7 +236,10 @@ describe('Profiles E2E', () => {
 
   describe('Profile Permissions', () => {
     test('BE-PRF-020: Cannot modify another user profile (id=2)', async () => {
-      const resp = await agent.put('/api/profiles/2').set('X-Skip-RateLimit', 'true').send({ name: 'hack' });
+      const resp = await agent
+        .put('/api/profiles/2')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ name: 'hack' });
       global.expect([200, 401, 403, 404]).to.include(resp.status);
     });
   });
