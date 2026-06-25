@@ -38,6 +38,7 @@ jobs:
         run: npm run build
 
       - name: Run E2E tests
+        working-directory: ./frontend
         env:
           CI: true
           PLAYWRIGHT_HEADLESS: true
