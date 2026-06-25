@@ -15,7 +15,7 @@ describe('Bulk Transaction API', () => {
       .set('X-Skip-RateLimit', 'true');
     const loginRes = await request(BASE_URL).post('/api/auth/login')
       .set('X-Skip-RateLimit', 'true')
-      .send({ username: 'maff', password: 'add2' });
+      .send({ username: 'person', password: 'something-like-this' });
     authCookie = loginRes.headers['set-cookie'];
   });
 

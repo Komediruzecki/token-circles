@@ -11,7 +11,7 @@ describe('Security E2E', () => {
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
+    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
     if (loginRes.headers['set-cookie']) {
       agent.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
     }
@@ -40,7 +40,7 @@ describe('Security E2E', () => {
       // Even after rate limit may be triggered, skipped requests should work
       const resp = await agent.post('/api/auth/login')
         .set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       global.expect([200, 401]).to.include(resp.status);
     });

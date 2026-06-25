@@ -11,7 +11,7 @@ describe('Profiles E2E', () => {
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
+    await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
   });
 
   describe('GET /api/profiles', () => {
@@ -158,7 +158,7 @@ describe('Profiles E2E', () => {
   describe('Password Change', () => {
     test('BE-PRF-015: Change password with currentPassword + newPassword', async () => {
       const resp = await agent.put('/api/profiles/me/password').set('X-Skip-RateLimit', 'true').send({
-        currentPassword: 'add2',
+        currentPassword: 'something-like-this',
         newPassword: 'NewPass123!'
       });
       global.expect([200, 400, 401]).to.include(resp.status);
@@ -166,7 +166,7 @@ describe('Profiles E2E', () => {
 
     test('BE-PRF-016: Reject missing newPassword', async () => {
       const resp = await agent.put('/api/profiles/me/password').set('X-Skip-RateLimit', 'true').send({
-        currentPassword: 'add2'
+        currentPassword: 'something-like-this'
       });
       global.expect([400, 401, 422]).to.include(resp.status);
     });

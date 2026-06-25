@@ -21,8 +21,8 @@ describe('Cross-Profile Isolation E2E', () => {
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
     const login = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({
-      username: 'maff',
-      password: 'add2'
+      username: 'person',
+      password: 'something-like-this'
     });
     if (login.headers['set-cookie']) {
       agent.jar.setCookie(login.headers['set-cookie'][0], BASE_URL);

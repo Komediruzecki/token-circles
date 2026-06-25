@@ -1,10 +1,12 @@
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env.local') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger.json');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
 const session = require('express-session');
@@ -529,8 +531,8 @@ if (process.env.NODE_ENV === 'test') {
   app.post('/api/test/reset-password', (req, res) => {
     try {
       const bcrypt = require('bcrypt');
-      const hash = bcrypt.hashSync('add2', 12);
-      db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'maff');
+      const hash = bcrypt.hashSync('something-like-this', 12);
+      db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'person');
       res.json(toCamelCase({ ok: true }));
     } catch (err) {
       res.status(500).json({ error: err.message });

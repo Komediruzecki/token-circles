@@ -19,7 +19,7 @@ function createTestApp(users) {
   }));
 
   // Mock user database
-  const userDb = users || [{ id: 1, username: 'maff', password_hash: bcrypt.hashSync('add2', 10) }];
+  const userDb = users || [{ id: 1, username: 'person', password_hash: bcrypt.hashSync('something-like-this', 10) }];
 
   function requireAuth(req, res, next) {
     if (!req.session.userId) {
@@ -95,7 +95,7 @@ describe('Authentication', () => {
       const app = createTestApp();
       const res = await request(app)
         .post('/api/auth/login')
-        .send({ username: 'maff', password: 'wrongpassword' });
+        .send({ username: 'person', password: 'wrongpassword' });
       expect(res.status).toBe(401);
       expect(res.body.error).toBe('Invalid credentials');
     });
@@ -104,10 +104,10 @@ describe('Authentication', () => {
       const app = createTestApp();
       const res = await request(app)
         .post('/api/auth/login')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
-      expect(res.body.username).toBe('maff');
+      expect(res.body.username).toBe('person');
     });
   });
 
@@ -125,13 +125,13 @@ describe('Authentication', () => {
       // First login
       await request(app)
         .post('/api/auth/login')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
       // Then check /me
       const agent = request.agent(app);
-      await agent.post('/api/auth/login').send({ username: 'maff', password: 'add2' });
+      await agent.post('/api/auth/login').send({ username: 'person', password: 'something-like-this' });
       const res = await agent.get('/api/auth/me');
       expect(res.status).toBe(200);
-      expect(res.body.username).toBe('maff');
+      expect(res.body.username).toBe('person');
       expect(res.body.userId).toBeDefined();
     });
   });
@@ -141,7 +141,7 @@ describe('Authentication', () => {
       const app = createTestApp();
       const agent = request.agent(app);
       // First login
-      await agent.post('/api/auth/login').send({ username: 'maff', password: 'add2' });
+      await agent.post('/api/auth/login').send({ username: 'person', password: 'something-like-this' });
       // Then logout
       const res = await agent.post('/api/auth/logout');
       expect(res.status).toBe(200);
@@ -152,7 +152,7 @@ describe('Authentication', () => {
       const app = createTestApp();
       const agent = request.agent(app);
       // Login
-      await agent.post('/api/auth/login').send({ username: 'maff', password: 'add2' });
+      await agent.post('/api/auth/login').send({ username: 'person', password: 'something-like-this' });
       // Logout
       await agent.post('/api/auth/logout');
       // Try to access /me
@@ -164,15 +164,15 @@ describe('Authentication', () => {
 
 describe('Password Hashing', () => {
   test('bcrypt correctly hashes and verifies password', async () => {
-    const password = 'add2';
+    const password = 'something-like-this';
     const hash = bcrypt.hashSync(password, 10);
     expect(bcrypt.compareSync(password, hash)).toBe(true);
     expect(bcrypt.compareSync('wrong', hash)).toBe(false);
   });
 
   test('demo user password is correctly hashed', () => {
-    const hash = bcrypt.hashSync('add2', 10);
-    expect(hash).not.toBe('add2'); // Should not be plain text
+    const hash = bcrypt.hashSync('something-like-this', 10);
+    expect(hash).not.toBe('something-like-this'); // Should not be plain text
     expect(hash.length).toBeGreaterThan(50); // bcrypt hashes are long
   });
 });

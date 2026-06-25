@@ -14,7 +14,7 @@ describe('Tag API', () => {
   beforeAll(async () => {
     agent = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
     // Log in
-    const loginRes = await agent.post('/api/auth/login').send({ username: 'maff', password: 'add2' });
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'person', password: 'something-like-this' });
     if (loginRes.headers['set-cookie']) {
       agent.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
     }

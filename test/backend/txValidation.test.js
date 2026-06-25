@@ -11,7 +11,7 @@ const api = request.agent(BASE_URL).set('X-Skip-RateLimit', 'true');
 describe('Transaction API validation', () => {
   beforeAll(async () => {
     // Log in to get auth cookie
-    const loginRes = await api.post('/api/auth/login').send({ username: 'maff', password: 'add2' });
+    const loginRes = await api.post('/api/auth/login').send({ username: 'person', password: 'something-like-this' });
     // Set the cookie on the agent so it persists
     if (loginRes.headers['set-cookie']) {
       api.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);

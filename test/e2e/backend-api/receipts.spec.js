@@ -11,7 +11,7 @@ describe('Receipts E2E', () => {
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
+    await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
   });
 
   describe('Receipt Upload', () => {

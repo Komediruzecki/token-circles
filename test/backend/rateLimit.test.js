@@ -13,7 +13,7 @@ describe('API Rate Limiting', () => {
     await request(BASE_URL).post('/api/test/reset-rate-limit');
     const loginRes = await request(BASE_URL).post('/api/auth/login')
       .set('X-Skip-RateLimit', 'true')
-      .send({ username: 'maff', password: 'add2' });
+      .send({ username: 'person', password: 'something-like-this' });
     authCookie = loginRes.headers['set-cookie'];
   });
 
@@ -82,7 +82,7 @@ describe('API Rate Limiting', () => {
         .set('X-Skip-RateLimit', 'true');
       const resp = await request(BASE_URL).post('/api/auth/login')
         .set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'wrong' });
+        .send({ username: 'person', password: 'wrong' });
 
       expect(resp.headers).toHaveProperty('x-ratelimit-limit');
       expect(resp.headers).toHaveProperty('x-ratelimit-remaining');
@@ -196,7 +196,7 @@ describe('API Rate Limiting', () => {
         .set('X-Skip-RateLimit', 'true');
       const loginRes = await request(BASE_URL).post('/api/auth/login')
         .set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
       authCookie = loginRes.headers['set-cookie'];
     });
 

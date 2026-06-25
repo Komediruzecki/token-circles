@@ -30,7 +30,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-001: Login with valid credentials returns 200 and sets session cookie', async () => {
       const loginRes = await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       global.expect(loginRes.status).toBe(200);
       global.expect(loginRes.headers['set-cookie']).toBeDefined();
@@ -57,11 +57,11 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-004: Successfully changes password with valid current and new passwords', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'NewPass1!' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'NewPass1!' });
 
       global.expect(res.status).toBe(200);
       global.expect(res.body.ok).toBe(true);
@@ -75,7 +75,7 @@ describe('Authentication & Security E2E', () => {
 
       const res = await unauthAgent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'NewPass1!' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'NewPass1!' });
 
       global.expect(res.status).toBe(401);
     });
@@ -83,7 +83,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-006: Returns 400 when currentPassword or newPassword is missing', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const resNoCurrent = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
@@ -93,7 +93,7 @@ describe('Authentication & Security E2E', () => {
 
       const resNoNew = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2' });
+        .send({ currentPassword: 'something-like-this' });
 
       global.expect(resNoNew.status).toBe(400);
     });
@@ -101,11 +101,11 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-007: Password complexity validation rejects passwords shorter than 8 characters', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'Sh0rt!' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'Sh0rt!' });
 
       global.expect(res.status).toBe(400);
       global.expect(res.body.error).toMatch(/at least 8 characters/);
@@ -114,11 +114,11 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-008: Password complexity validation requires uppercase letter', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'password1!' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'password1!' });
 
       global.expect(res.status).toBe(400);
       global.expect(res.body.error).toMatch(/uppercase letter/);
@@ -127,11 +127,11 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-009: Password complexity validation requires lowercase letter', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'PASSWORD1!' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'PASSWORD1!' });
 
       global.expect(res.status).toBe(400);
       global.expect(res.body.error).toMatch(/lowercase letter/);
@@ -140,11 +140,11 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-010: Password complexity validation requires number', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'Password!' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'Password!' });
 
       global.expect(res.status).toBe(400);
       global.expect(res.body.error).toMatch(/number/);
@@ -153,11 +153,11 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-011: Password complexity validation requires special character', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
-        .send({ currentPassword: 'add2', newPassword: 'Password1' });
+        .send({ currentPassword: 'something-like-this', newPassword: 'Password1' });
 
       global.expect(res.status).toBe(400);
       global.expect(res.body.error).toMatch(/special character/);
@@ -166,7 +166,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-012: Returns 400 when current password is incorrect', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent
         .post('/api/auth/change-password').set('X-Skip-RateLimit', 'true')
@@ -181,7 +181,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-013: Returns authenticated user profile when session valid', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const meRes = await agent.get('/api/auth/me').set('X-Skip-RateLimit', 'true');
       global.expect(meRes.status).toBe(200);
@@ -200,7 +200,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-015: Logout clears session cookie', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const logoutRes = await agent.post('/api/auth/logout').set('X-Skip-RateLimit', 'true');
       global.expect(logoutRes.status).toBe(200);
@@ -214,7 +214,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-016: Rate limiter rejects requests exceeding threshold', async () => {
       const loginRes = await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       global.expect(loginRes.status).toBe(200);
 
@@ -235,7 +235,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-017: Rate limiter resets after timeout', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       // Skip rate limit for many attempts
       for (let i = 0; i < 15; i++) {
@@ -247,7 +247,7 @@ describe('Authentication & Security E2E', () => {
       // Should be able to login again after waiting (in production this would be a fixed timeout)
       const validRes = await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       global.expect(validRes.status).toBe(200);
     });
@@ -260,11 +260,11 @@ describe('Authentication & Security E2E', () => {
 
       const login1 = await session1
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const login2 = await session2
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       global.expect(login1.status).toBe(200);
       global.expect(login2.status).toBe(200);
@@ -272,14 +272,14 @@ describe('Authentication & Security E2E', () => {
       const me1 = await session1.get('/api/auth/me').set('X-Skip-RateLimit', 'true');
       const me2 = await session2.get('/api/auth/me').set('X-Skip-RateLimit', 'true');
 
-      global.expect(me1.body.username).toBe('maff');
-      global.expect(me2.body.username).toBe('maff');
+      global.expect(me1.body.username).toBe('person');
+      global.expect(me2.body.username).toBe('person');
     });
 
     test('BE-AUTH-019: Session timeout after inactivity', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       // Wait for session timeout (hard to test programmatically, testing exists at 30min in config)
       const meRes = await agent.get('/api/auth/me').set('X-Skip-RateLimit', 'true');
@@ -291,7 +291,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-020: Response includes security headers', async () => {
       const res = await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       global.expect(res.headers['x-content-type-options']).toBe('nosniff');
       global.expect(res.headers['x-xss-protection']).toBeDefined();
@@ -304,7 +304,7 @@ describe('Authentication & Security E2E', () => {
       // Test that endpoint exists
       const res = await agent
         .post('/api/auth/password-reset').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff' });
+        .send({ username: 'person' });
 
       global.expect([200, 404, 400]).to.include(res.status);
     });
@@ -313,7 +313,7 @@ describe('Authentication & Security E2E', () => {
       // This depends on implementation
       const res = await agent
         .post('/api/auth/password-reset').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff' });
+        .send({ username: 'person' });
 
       if (res.status === 200) {
         global.expect(res.body).toHaveProperty('resetToken');
@@ -326,7 +326,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-023: 2FA setup endpoint available', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       const res = await agent.post('/api/auth/2fa/setup').set('X-Skip-RateLimit', 'true');
 
@@ -336,7 +336,7 @@ describe('Authentication & Security E2E', () => {
     test('BE-AUTH-024: 2FA enabled with QR code', async () => {
       await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2' });
+        .send({ username: 'person', password: 'something-like-this' });
 
       // Requires 2FA to be enabled on user profile
       const res = await agent.post('/api/auth/2fa/enable').set('X-Skip-RateLimit', 'true');
@@ -351,7 +351,7 @@ describe('Authentication & Security E2E', () => {
       // This requires a user with 2FA enabled
       const res = await agent
         .post('/api/auth/login').set('X-Skip-RateLimit', 'true')
-        .send({ username: 'maff', password: 'add2', code: '123456' });
+        .send({ username: 'person', password: 'something-like-this', code: '123456' });
 
       global.expect([200, 401]).to.include(res.status);
     });

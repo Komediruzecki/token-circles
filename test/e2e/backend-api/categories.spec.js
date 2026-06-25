@@ -19,7 +19,7 @@ describe('Categories E2E', () => {
     const loginRes = await agent
       .post('/api/auth/login')
       .set('X-Skip-RateLimit', 'true')
-      .send({ username: 'maff', password: 'add2' });
+      .send({ username: 'person', password: 'something-like-this' });
     if (loginRes.headers['set-cookie']) {
       agent.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
     }

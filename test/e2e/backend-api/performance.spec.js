@@ -11,7 +11,7 @@ describe('Performance E2E', () => {
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
+    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
     if (loginRes.headers['set-cookie']) {
       agent.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
     }
@@ -126,8 +126,8 @@ describe('Performance E2E', () => {
     test('BE-PERF-010: Auth endpoints respond quickly', async () => {
       const start = Date.now();
       const resp = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({
-        username: 'maff',
-        password: 'add2'
+        username: 'person',
+        password: 'something-like-this'
       });
       const duration = Date.now() - start;
 

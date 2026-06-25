@@ -11,7 +11,7 @@ describe('Calculators E2E', () => {
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
+    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
     if (loginRes.headers['set-cookie']) {
       agent.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
     }
@@ -490,7 +490,7 @@ describe('Calculators E2E', () => {
 
     test('BE-CAL-038: Amortization schedule includes all expected fields', async () => {
       if (!agent.jar._cookieJar || agent.jar._cookieJar.store.size === 0) {
-        await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'maff', password: 'add2' });
+        await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
       }
 
       const resp = await agent.get('/api/calculators/loans/amortization').set('X-Skip-RateLimit', 'true').query({

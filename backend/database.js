@@ -25,9 +25,11 @@ if (fs.existsSync(schemaPath)) {
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get();
 if (userCount.c === 0) {
   const bcrypt = require('bcrypt');
-  const passwordHash = bcrypt.hashSync('add2', 12);
+  const defaultUsername = process.env.DEFAULT_USERNAME || 'person';
+  const defaultPassword = process.env.DEFAULT_PASSWORD || 'something-like-this';
+  const passwordHash = bcrypt.hashSync(defaultPassword, 12);
   db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(
-    'maff',
+    defaultUsername,
     passwordHash
   );
 }

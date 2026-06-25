@@ -18,7 +18,7 @@ npm run start       # Start backend on port 3847
 npm run dev         # Start frontend dev server on port 5173
 ```
 
-Open `http://localhost:5173` in your browser. The default login is `maff` / `add2`.
+Open `http://localhost:5173` in your browser.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for full development setup.
 
