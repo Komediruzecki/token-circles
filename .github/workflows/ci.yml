@@ -51,13 +51,21 @@ jobs:
             sleep 0.5
           done
 
-          # Run tests
+          # Run backend tests
+          npm run test:backend
+          BACKEND_TEST_EXIT=$?
+
+          # Run frontend tests
           npm test
-          TEST_EXIT=$?
+          FRONTEND_TEST_EXIT=$?
 
           # Cleanup
           kill $SERVER_PID 2>/dev/null
-          exit $TEST_EXIT
+          
+          if [ $BACKEND_TEST_EXIT -ne 0 ] || [ $FRONTEND_TEST_EXIT -ne 0 ]; then
+            exit 1
+          fi
+          exit 0
         env:
           NODE_ENV: test
 
