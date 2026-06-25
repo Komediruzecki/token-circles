@@ -10,6 +10,7 @@ const fsp = fs.promises;
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
 const db = require('./database');
+const { seedThreeTierProfiles } = require('./database');
 const mime = require('mime-types');
 const { reposMiddleware } = require('./repositories');
 const { toCamelCase } = require('./utils');
@@ -434,7 +435,6 @@ function requireAuth(req, res, next) {
 
 // ── Route dependencies ──────────────────────────────────────────────────────────
 const routeDeps = {
-  db,
   apiRateLimiter,
   authRateLimiter,
   requireAuth,
@@ -445,41 +445,39 @@ const routeDeps = {
 // ── Mount extracted route modules ────────────────────────────────────────────────
 app.use(require('./routes/appInfo')());
 app.use(require('./routes/auth')(routeDeps));
-app.use(require('./routes/profiles')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/settings')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/loans')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/recurring')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/counterparties')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/housing')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/retirement')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/receipts')({ db, apiRateLimiter, logError, uploadReceipt }));
-app.use(require('./routes/storageMode')({ db, apiRateLimiter }));
-app.use(require('./routes/accounts')({ db, apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/bills')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/savingsGoals')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/tags')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/transactions')({ db, apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/calculators')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/tax')({ db, apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/analytics')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/notifications')({ db, apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/categories')({ db, apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/budgets')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/dashboard')({ db, apiRateLimiter, logError }));
-app.use(require('./routes/exportRoutes')({ db, apiRateLimiter, logError }));
+app.use(require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles }));
+app.use(require('./routes/settings')({ apiRateLimiter }));
+app.use(require('./routes/loans')({ apiRateLimiter, logError }));
+app.use(require('./routes/recurring')({ apiRateLimiter, logError }));
+app.use(require('./routes/counterparties')({ apiRateLimiter, logError }));
+app.use(require('./routes/housing')({ apiRateLimiter, logError }));
+app.use(require('./routes/retirement')({ apiRateLimiter, logError }));
+app.use(require('./routes/receipts')({ apiRateLimiter, logError, uploadReceipt }));
+app.use(require('./routes/storageMode')({ apiRateLimiter }));
+app.use(require('./routes/accounts')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/bills')({ apiRateLimiter, logError }));
+app.use(require('./routes/savingsGoals')({ apiRateLimiter }));
+app.use(require('./routes/tags')({ apiRateLimiter, logError }));
+app.use(require('./routes/transactions')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/calculators')({ apiRateLimiter, logError }));
+app.use(require('./routes/tax')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/analytics')({ apiRateLimiter, logError }));
+app.use(require('./routes/notifications')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/categories')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/budgets')({ apiRateLimiter }));
+app.use(require('./routes/dashboard')({ apiRateLimiter, logError }));
+app.use(require('./routes/exportRoutes')({ apiRateLimiter, logError }));
 app.use(
   require('./routes/importRoutes')({
-    db,
     apiRateLimiter,
     logError,
     uploadImport,
     spreadsheetService,
   })
 );
-app.use(require('./routes/portfolio')({ db, apiRateLimiter, logError, yahooFinanceService }));
+app.use(require('./routes/portfolio')({ apiRateLimiter, logError, yahooFinanceService }));
 app.use(
   require('./routes/reports')({
-    db,
     apiRateLimiter,
     logError,
     spreadsheetService,

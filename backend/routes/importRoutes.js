@@ -6,7 +6,7 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { getCategoryIcon } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreadsheetService }) {
+module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheetService }) {
   const router = express.Router();
 
   function parseDateString(dateStr) {
@@ -289,35 +289,17 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
       req.body;
     if (!rows || !mapping) return res.status(400).json({ error: 'Missing data' });
 
-    const insert = db.prepare(`
-    INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-      currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const getCat = db.prepare(
-      'SELECT id, color FROM categories WHERE LOWER(name) = LOWER(?) AND profile_id = ? LIMIT 1'
-    );
-    const insertCat = db.prepare(
-      'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
-    );
-    const insertAccount = db.prepare(
-      'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    const insertBalanceHistory = db.prepare(
-      'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)'
-    );
+    const repos = req.repos;
 
     // Create accounts for categories marked as 'account' type
     // Also populate a name→accountId map for resolving Means of Payment (FROM) and Category (TO)
     const accountIdMap = new Map();
 
     // First, add existing accounts to the map so they can be referenced by name
-    const existingAccounts = db
-      .prepare(
-        `SELECT id, name FROM accounts WHERE profile_id IN (${pids.map(() => '?').join(',')})`
-      )
-      .all(...pids);
+    const existingAccounts = repos.accounts.all(
+      `SELECT id, name FROM accounts WHERE profile_id IN (${pids.map(() => '?').join(',')})`,
+      ...pids
+    );
     for (const acc of existingAccounts) {
       accountIdMap.set(acc.name.toLowerCase(), acc.id);
     }
@@ -332,7 +314,8 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
         const balanceDate =
           (accountBalanceDates && accountBalanceDates[catName]) ||
           new Date().toISOString().split('T')[0];
-        const result = insertAccount.run(
+        const result = repos.accounts.run(
+          'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           catName,
           accType,
           'USD',
@@ -345,7 +328,12 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
         const accountId = result.lastInsertRowid;
         accountIdMap.set(catName.toLowerCase(), accountId);
         // Record initial balance history
-        insertBalanceHistory.run(accountId, balance, balanceDate);
+        repos.accounts.run(
+          'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)',
+          accountId,
+          balance,
+          balanceDate
+        );
       }
     }
 
@@ -373,12 +361,17 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
     let colorIndex = 0;
 
     let imported = 0;
+    const db = repos.transactions.db;
     const insertMany = db.transaction((rows) => {
       for (const row of rows) {
         const categoryId = (() => {
           const catName = row[mapping.category] || row[mapping.Category] || row[mapping.CATEGORY];
           if (!catName || !String(catName).trim()) return null;
-          const existing = getCat.get(String(catName).trim(), pid);
+          const existing = repos.categories.get(
+            'SELECT id, color FROM categories WHERE LOWER(name) = LOWER(?) AND profile_id = ? LIMIT 1',
+            String(catName).trim(),
+            pid
+          );
           if (existing) return existing.id;
           // Reuse the same diverse color each time a new category is created (consistent within same import)
           const color = newCategoryColors[colorIndex % newCategoryColors.length];
@@ -409,7 +402,14 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
               ];
               return incomeKeywords.some((kw) => lower.includes(kw)) ? 'income' : 'expense';
             })();
-          const r = insertCat.run(String(catName).trim(), catType, color, icon, pid);
+          const r = repos.categories.run(
+            'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)',
+            String(catName).trim(),
+            catType,
+            color,
+            icon,
+            pid
+          );
           return r.lastInsertRowid;
         })();
 
@@ -476,7 +476,10 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
           ? accountIdMap.get(String(catNameForTransfer).trim().toLowerCase()) || null
           : null;
 
-        insert.run(
+        repos.transactions.run(
+          `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
+            currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           row[mapping.description] || row[mapping.Description] || row[mapping.DESCRIPTION] || '',
           amount,
           parseDateString(dateRaw),
@@ -504,34 +507,33 @@ module.exports = function ({ db, apiRateLimiter, logError, uploadImport, spreads
 
     // Recompute account balances from all linked transactions
     for (const [_name, accountId] of accountIdMap) {
-      const account = db
-        .prepare('SELECT starting_balance FROM accounts WHERE id = ?')
-        .get(accountId);
+      const account = repos.accounts.get(
+        'SELECT starting_balance FROM accounts WHERE id = ?',
+        accountId
+      );
       const startBalance = account ? account.starting_balance || 0 : 0;
       // Money OUT: expense or transfer FROM this account (account_id = this)
-      const moneyOut = db
-        .prepare(
-          "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type IN ('expense', 'transfer')"
-        )
-        .get(accountId);
+      const moneyOut = repos.transactions.get(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type IN ('expense', 'transfer')",
+        accountId
+      );
       // Money IN: income TO this account (account_id = this, type=income)
-      const moneyInDirect = db
-        .prepare(
-          "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = 'income'"
-        )
-        .get(accountId);
+      const moneyInDirect = repos.transactions.get(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = 'income'",
+        accountId
+      );
       // Money IN: transfer or income TO this account via transfer_account_id
-      const moneyInTransfer = db
-        .prepare(
-          "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE transfer_account_id = ? AND type IN ('income', 'transfer')"
-        )
-        .get(accountId);
+      const moneyInTransfer = repos.transactions.get(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE transfer_account_id = ? AND type IN ('income', 'transfer')",
+        accountId
+      );
       const computedBalance =
         startBalance -
         (moneyOut.total || 0) +
         (moneyInDirect.total || 0) +
         (moneyInTransfer.total || 0);
-      db.prepare('UPDATE accounts SET balance = ? WHERE id = ?').run(
+      repos.accounts.run(
+        'UPDATE accounts SET balance = ? WHERE id = ?',
         Math.round(computedBalance * 100) / 100,
         accountId
       );

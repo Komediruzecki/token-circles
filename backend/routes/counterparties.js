@@ -2,7 +2,7 @@ const express = require('express');
 const { getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/counterparties', apiRateLimiter, asyncHandler((req, res) => {
@@ -10,30 +10,28 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const inClause = pids.map(() => '?').join(',');
 
     // Aggregate outgoing by beneficiary (we pay them = expense)
-    const outgoing = db
-      .prepare(
-        `
+    const outgoing = req.repos.transactions.all(
+      `
       SELECT beneficiary AS name, 'outgoing' AS direction, SUM(amount) AS total, COUNT(*) AS count
       FROM transactions
       WHERE beneficiary != '' AND type = 'expense'
         AND profile_id IN (${inClause})
       GROUP BY beneficiary
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
     // Aggregate incoming by payor (they pay us = income)
-    const incoming = db
-      .prepare(
-        `
+    const incoming = req.repos.transactions.all(
+      `
       SELECT payor AS name, 'incoming' AS direction, SUM(amount) AS total, COUNT(*) AS count
       FROM transactions
       WHERE payor != '' AND type = 'income'
         AND profile_id IN (${inClause})
       GROUP BY payor
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
     // Merge by name to compute net
     const map = new Map();

@@ -3,7 +3,7 @@ const { toCamelCase, calculateRetirementProjection } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   // ========================
@@ -13,14 +13,15 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/retirement-goals', apiRateLimiter, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
-    const rows = db
-      .prepare(
-        `SELECT * FROM retirement_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC`
-      )
-      .all(...pids);
-    const settings = db
-      .prepare('SELECT * FROM settings WHERE key = ? AND profile_id = ?')
-      .get('retirement_settings', pids[0]);
+    const rows = req.repos.retirementGoals.all(
+      `SELECT * FROM retirement_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC`,
+      ...pids
+    );
+    const settingsRow = req.repos.settings.all(
+      'SELECT * FROM settings WHERE key = ? AND profile_id = ?',
+      'retirement_settings', pids[0]
+    );
+    const settings = settingsRow.length ? settingsRow[0] : null;
     res.json({
       goals: rows,
       settings: settings ? JSON.parse(settings.value) : {},
@@ -46,23 +47,18 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     if (!name || target_amount == null) {
       return res.status(400).json({ error: 'Name and target amount are required' });
     }
-    const info = db
-      .prepare(
-        `INSERT INTO retirement_goals (profile_id, name, target_amount, current_amount, deadline, notes, current_age, retirement_age, monthly_contribution, expected_return_rate)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        pid,
-        name,
-        target_amount,
-        current_amount || 0,
-        dl,
-        notes || '',
-        current_age || 30,
-        retirement_age || 65,
-        monthly_contribution || 0,
-        expected_return_rate || 7
-      );
+    const info = req.repos.retirementGoals.create({
+      profile_id: pid,
+      name,
+      target_amount,
+      current_amount: current_amount || 0,
+      deadline: dl,
+      notes: notes || '',
+      current_age: current_age || 30,
+      retirement_age: retirement_age || 65,
+      monthly_contribution: monthly_contribution || 0,
+      expected_return_rate: expected_return_rate || 7,
+    });
     res.json({
       id: info.lastInsertRowid,
       name,
@@ -90,25 +86,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       expected_return_rate,
     } = req.body;
     const dl = deadline || target_date || null;
-    const result = db
-      .prepare(
-        `UPDATE retirement_goals SET name=?, target_amount=?, current_amount=?, deadline=?, notes=?,
-         current_age=?, retirement_age=?, monthly_contribution=?, expected_return_rate=?
-         WHERE id=? AND profile_id=?`
-      )
-      .run(
-        name,
-        target_amount,
-        current_amount,
-        dl,
-        notes || '',
-        current_age || 30,
-        retirement_age || 65,
-        monthly_contribution || 0,
-        expected_return_rate || 7,
-        req.params.id,
-        pid
-      );
+    const result = req.repos.retirementGoals.update(req.params.id, pid, {
+      name,
+      target_amount,
+      current_amount,
+      deadline: dl,
+      notes: notes || '',
+      current_age: current_age || 30,
+      retirement_age: retirement_age || 65,
+      monthly_contribution: monthly_contribution || 0,
+      expected_return_rate: expected_return_rate || 7,
+    });
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
     res.json(toCamelCase({ ok: true }));
 
@@ -116,9 +104,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
   router.delete('/api/retirement-goals/:id', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const result = db
-      .prepare('DELETE FROM retirement_goals WHERE id=? AND profile_id=?')
-      .run(req.params.id, pid);
+    const result = req.repos.retirementGoals.deleteById(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
     res.json(toCamelCase({ ok: true }));
 
@@ -274,12 +260,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const pid = getProfileId(req);
     const params = req.query;
 
-    const settings = db
-      .prepare('SELECT * FROM settings WHERE key = ? AND profile_id = ?')
-      .get('retirement_goals', pid);
+    const settingsRow = req.repos.settings.all(
+      'SELECT * FROM settings WHERE key = ? AND profile_id = ?',
+      'retirement_goals', pid
+    );
+    const settings = settingsRow.length ? settingsRow[0] : null;
 
     const result = calculateRetirementProjection(
-      db,
+      null,
       pid,
       settings ? JSON.parse(settings.value) : null,
       parseFloat(params.currentAge || params.age || 30) || 30,

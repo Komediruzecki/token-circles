@@ -1,8 +1,9 @@
 const express = require('express');
 const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
+const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles }) {
   const router = express.Router();
 
   function updateProfileHandler(req, res) {
@@ -92,7 +93,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     req.repos.categories.deleteAll(pid);
     req.repos.accounts.deleteAll(pid);
     req.repos.goals.deleteAll(pid);
-    db.seedThreeTierProfiles();
+    seedThreeTierProfiles();
     res.json({ ok: true, message: 'Demo data has been restored' });
 
   }));
@@ -154,13 +155,12 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       return res.status(400).json({ error: 'Current and new password are required' });
     }
     const bcrypt = require('bcrypt');
-const { asyncHandler } = require('../lib/errors');
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+    const user = req.repos.users.getById(req.session.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     const valid = bcrypt.compareSync(currentPassword, user.password_hash);
     if (!valid) return res.status(400).json({ error: 'Current password is incorrect' });
     const hash = bcrypt.hashSync(newPassword, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.session.userId);
+    req.repos.users.updatePassword(req.session.userId, hash);
     res.json({ ok: true, message: 'Password changed successfully' });
 
   }));

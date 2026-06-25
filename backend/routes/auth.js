@@ -12,7 +12,7 @@ function validatePasswordComplexity(password) {
   return null;
 }
 
-module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, logError }) {
+module.exports = function ({ apiRateLimiter, authRateLimiter, requireAuth, logError }) {
   const router = express.Router();
 
   router.post('/api/auth/login', authRateLimiter, asyncHandler(async (req, res) => {
@@ -20,7 +20,7 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
     }
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const user = req.repos.users.getByUsername(username);
     if (!user) {
       logError('warning', 'AUTH', 'Invalid login attempt - username not found', { username });
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -72,7 +72,7 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
       return res.status(400).json({ error: passwordError });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+    const user = req.repos.users.getById(req.session.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -83,7 +83,7 @@ module.exports = function ({ db, apiRateLimiter, authRateLimiter, requireAuth, l
     }
 
     const hash = await bcrypt.hash(newPassword, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.session.userId);
+    req.repos.users.updatePassword(req.session.userId, hash);
 
     res.json({ ok: true, message: 'Password changed successfully' });
   }));

@@ -1,7 +1,9 @@
 const express = require('express');
 const { calcMonthlyPayment } = require('../models/loanCalculator');
+const { getProfileId } = require('../middleware/profile');
+const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   // ── Loan Payment Calculator ──────────────────────────────────────────
@@ -365,9 +367,6 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   }));
 
   // ── Emergency Fund Calculator (legacy) ──────────────────────────────
-  const { getProfileId } = require('../middleware/profile');
-const { asyncHandler } = require('../lib/errors');
-
   router.get('/api/calculator/emergency-fund', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
 
@@ -375,12 +374,11 @@ const { asyncHandler } = require('../lib/errors');
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
     const dateStr = twelveMonthsAgo.toISOString().split('T')[0];
 
-    const expenseRows = db
-      .prepare(
-        `SELECT amount, date FROM transactions
-         WHERE profile_id = ? AND type = 'expense' AND date >= ?`
-      )
-      .all(pid, dateStr);
+    const expenseRows = req.repos.transactions.all(
+      `SELECT amount, date FROM transactions
+       WHERE profile_id = ? AND type = 'expense' AND date >= ?`,
+      pid, dateStr
+    );
 
     const monthlyTotals = {};
     for (const r of expenseRows) {
@@ -393,9 +391,10 @@ const { asyncHandler } = require('../lib/errors');
         ? Object.values(monthlyTotals).reduce((a, b) => a + b, 0) / monthsWithData
         : 0;
 
-    const accounts = db
-      .prepare('SELECT name, type, balance FROM accounts WHERE profile_id = ?')
-      .all(pid);
+    const accounts = req.repos.accounts.all(
+      'SELECT name, type, balance FROM accounts WHERE profile_id = ?',
+      pid
+    );
 
     const totalEmergencyFund = accounts
       .filter((a) => a.type === 'savings')

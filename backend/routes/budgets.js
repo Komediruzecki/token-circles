@@ -4,23 +4,12 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/budgets', apiRateLimiter, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
-    const inClause = pids.map(() => '?').join(',');
-    const rows = db
-      .prepare(
-        `
-    SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
-    FROM budgets b
-    JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-    WHERE b.profile_id IN (${inClause})
-    ORDER BY b.id DESC
-    `
-      )
-      .all(...pids);
+    const rows = req.repos.budgets.listByProfiles(pids);
     res.json(rows);
 
   }));
@@ -93,18 +82,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
     values.push(req.params.id, pid);
 
-    const result = db
-      .prepare(`UPDATE budgets SET ${updates.join(', ')} WHERE id = ? AND profile_id = ?`)
-      .run(...values);
+    const result = req.repos.budgets.run(
+      `UPDATE budgets SET ${updates.join(', ')} WHERE id = ? AND profile_id = ?`,
+      ...values
+    );
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Budget not found' });
     }
 
     // Return updated budget
-    const budget = db
-      .prepare('SELECT * FROM budgets WHERE id = ? AND profile_id = ?')
-      .get(req.params.id, pid);
+    const budget = req.repos.budgets.getById(req.params.id, pid);
 
     res.json({ ok: true, budget });
 
@@ -120,28 +108,16 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const nextY = m === 12 ? y + 1 : y;
     const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
 
-    const budgets = db
-      .prepare(
-        `
-    SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon, c.type
-    FROM budgets b
-    JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-    WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)
-    `
-      )
-      .all(pid, startDate);
+    const budgets = req.repos.budgets.listActive(pid, startDate);
 
     // Use amount_local if available (for imported transactions), otherwise amount
-    const spent = db
-      .prepare(
-        `
-    SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
-    FROM transactions
-    WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
-    GROUP BY category_id
-    `
-      )
-      .all(pid, startDate, endDate);
+    const spent = req.repos.transactions.all(
+      `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+      pid, startDate, endDate
+    );
 
     const spentMap = {};
     for (const s of spent) spentMap[s.category_id] = s.total;
@@ -153,27 +129,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const prevEnd = `${y}-${String(m).padStart(2, '0')}-01`;
 
     // Get previous month's budgets with their spent amounts
-    const prevBudgets = db
-      .prepare(
-        `
-      SELECT b.category_id, b.amount as budget_amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
-      FROM budgets b
-      WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?
-    `
-      )
-      .all(pid, prevStart, prevEnd);
+    const prevBudgets = req.repos.budgets.all(
+      `SELECT b.category_id, b.amount as budget_amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
+       FROM budgets b
+       WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?`,
+      pid, prevStart, prevEnd
+    );
 
     // Get previous month's spent
-    const prevSpent = db
-      .prepare(
-        `
-      SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
-      FROM transactions
-      WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
-      GROUP BY category_id
-    `
-      )
-      .all(pid, prevStart, prevEnd);
+    const prevSpent = req.repos.transactions.all(
+      `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+      pid, prevStart, prevEnd
+    );
 
     const prevSpentMap = {};
     for (const s of prevSpent) prevSpentMap[s.category_id] = s.total;
@@ -237,15 +207,12 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
 
     // Get previous month's budgets
-    const prevBudgets = db
-      .prepare(
-        `
-      SELECT category_id, amount, period
-      FROM budgets
-      WHERE profile_id = ? AND start_date >= ? AND start_date < ?
-    `
-      )
-      .all(pid, prevStart, `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`);
+    const prevBudgets = req.repos.budgets.all(
+      `SELECT category_id, amount, period
+       FROM budgets
+       WHERE profile_id = ? AND start_date >= ? AND start_date < ?`,
+      pid, prevStart, `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`
+    );
 
     if (prevBudgets.length === 0) {
       return res.json({ ok: false, message: 'No budgets found for previous month' });
@@ -276,17 +243,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const prevEnd = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
 
     // Get actual expenses by category
-    const expenses = db
-      .prepare(
-        `
-      SELECT t.category_id, c.name, SUM(COALESCE(t.amount_local, t.amount)) as total
-      FROM transactions t
-      JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-      WHERE t.profile_id = ? AND t.date >= ? AND t.date < ? AND t.type = 'expense' AND t.category_id IS NOT NULL
-      GROUP BY t.category_id
-    `
-      )
-      .all(pid, prevStart, prevEnd);
+    const expenses = req.repos.transactions.all(
+      `SELECT t.category_id, c.name, SUM(COALESCE(t.amount_local, t.amount)) as total
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id = ? AND t.date >= ? AND t.date < ? AND t.type = 'expense' AND t.category_id IS NOT NULL
+       GROUP BY t.category_id`,
+      pid, prevStart, prevEnd
+    );
 
     if (expenses.length === 0) {
       return res.json({ ok: false, message: 'No expenses found for previous month' });
@@ -298,17 +262,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
 
     // Clear existing budgets for current month
-    db.prepare(
-      'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?'
-    ).run(pid, currStart, `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`);
+    req.repos.budgets.deleteByDateRange(pid, currStart, `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`);
 
-    const insert = db.prepare(
-      "INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, 'monthly', ?, ?)"
-    );
-
-    for (const e of expenses) {
-      insert.run(e.category_id, e.total, currStart, pid);
-    }
+    req.repos.budgets.bulkCreateMonthly(pid, currStart, expenses);
 
     res.json({ ok: true, count: expenses.length });
 
@@ -319,24 +275,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const pid = getProfileId(req);
     const { category_id, months = 6 } = req.query;
 
-    const history = db
-      .prepare(
-        `
-      SELECT b.start_date as month, b.amount as budget_amount,
-             COALESCE(SUM(COALESCE(t.amount_local, t.amount)), 0) as spent
-      FROM budgets b
-      LEFT JOIN transactions t ON t.category_id = b.category_id
-        AND t.profile_id = b.profile_id
-        AND t.date >= b.start_date
-        AND t.date < date(b.start_date, '+1 month')
-        AND t.type = 'expense'
-      WHERE b.profile_id = ? AND b.category_id = ?
-      GROUP BY b.start_date
-      ORDER BY b.start_date DESC
-      LIMIT ?
-    `
-      )
-      .all(pid, parseInt(category_id), parseInt(months));
+    const history = req.repos.budgets.all(
+      `SELECT b.start_date as month, b.amount as budget_amount,
+              COALESCE(SUM(COALESCE(t.amount_local, t.amount)), 0) as spent
+       FROM budgets b
+       LEFT JOIN transactions t ON t.category_id = b.category_id
+         AND t.profile_id = b.profile_id
+         AND t.date >= b.start_date
+         AND t.date < date(b.start_date, '+1 month')
+         AND t.type = 'expense'
+       WHERE b.profile_id = ? AND b.category_id = ?
+       GROUP BY b.start_date
+       ORDER BY b.start_date DESC
+       LIMIT ?`,
+      pid, parseInt(category_id), parseInt(months)
+    );
 
     res.json(history);
 
@@ -349,63 +302,57 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const numMonths = parseInt(months);
 
     // Get monthly aggregated adherence
-    const history = db
-      .prepare(
-        `
-    WITH monthly_data AS (
-      SELECT
-        strftime('%Y-%m', b.start_date) as month,
-        b.amount as budget_amount,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
-      FROM budgets b
-      LEFT JOIN transactions t ON t.category_id = b.category_id
-        AND t.profile_id = b.profile_id
-        AND t.date >= b.start_date
-        AND t.date < date(b.start_date, '+1 month')
-      WHERE b.profile_id = ?
-      GROUP BY b.start_date
-    ),
-    aggregated AS (
+    const history = req.repos.budgets.all(
+      `WITH monthly_data AS (
+        SELECT
+          strftime('%Y-%m', b.start_date) as month,
+          b.amount as budget_amount,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+        FROM budgets b
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+          AND t.profile_id = b.profile_id
+          AND t.date >= b.start_date
+          AND t.date < date(b.start_date, '+1 month')
+        WHERE b.profile_id = ?
+        GROUP BY b.start_date
+      ),
+      aggregated AS (
+        SELECT
+          month,
+          SUM(budget_amount) as total_budget,
+          SUM(spent) as total_spent,
+          CASE WHEN SUM(budget_amount) > 0 THEN (SUM(spent) / SUM(budget_amount) * 100) ELSE 0 END as adherence_pct
+        FROM monthly_data
+        GROUP BY month
+        ORDER BY month DESC
+      )
       SELECT
         month,
-        SUM(budget_amount) as total_budget,
-        SUM(spent) as total_spent,
-        CASE WHEN SUM(budget_amount) > 0 THEN (SUM(spent) / SUM(budget_amount) * 100) ELSE 0 END as adherence_pct
-      FROM monthly_data
-      GROUP BY month
+        total_budget,
+        total_spent,
+        adherence_pct,
+        LAG(adherence_pct) OVER (ORDER BY month) as prev_adherence,
+        CASE WHEN LAG(adherence_pct) OVER (ORDER BY month) IS NOT NULL
+             THEN adherence_pct - LAG(adherence_pct) OVER (ORDER BY month)
+             ELSE NULL END as change_pct
+      FROM aggregated
       ORDER BY month DESC
-    )
-    SELECT
-      month,
-      total_budget,
-      total_spent,
-      adherence_pct,
-      LAG(adherence_pct) OVER (ORDER BY month) as prev_adherence,
-      CASE WHEN LAG(adherence_pct) OVER (ORDER BY month) IS NOT NULL
-           THEN adherence_pct - LAG(adherence_pct) OVER (ORDER BY month)
-           ELSE NULL END as change_pct
-    FROM aggregated
-    ORDER BY month DESC
-    LIMIT ?
-    `
-      )
-      .all(pid, numMonths);
+      LIMIT ?`,
+      pid, numMonths
+    );
 
     // Get category breakdown for latest month (for donut chart)
     let categoryBudgets = [];
     if (history.length > 0) {
       const latestMonth = history[0].month;
-      const catData = db
-        .prepare(
-          `
-      SELECT c.name, c.color, b.amount as budget_amount
-      FROM budgets b
-      JOIN categories c ON c.id = b.category_id
-      WHERE b.profile_id = ? AND strftime('%Y-%m', b.start_date) = ?
-      ORDER BY b.amount DESC
-    `
-        )
-        .all(pid, latestMonth);
+      const catData = req.repos.budgets.all(
+        `SELECT c.name, c.color, b.amount as budget_amount
+         FROM budgets b
+         JOIN categories c ON c.id = b.category_id
+         WHERE b.profile_id = ? AND strftime('%Y-%m', b.start_date) = ?
+         ORDER BY b.amount DESC`,
+        pid, latestMonth
+      );
       categoryBudgets = catData;
     }
 
@@ -443,23 +390,15 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
     }
 
-    const budgets = db
-      .prepare(
-        `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
-       FROM budgets b
-       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-       WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`
-      )
-      .all(pid, startDate);
+    const budgets = req.repos.budgets.listActive(pid, startDate);
 
-    const spent = db
-      .prepare(
-        `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+    const spent = req.repos.transactions.all(
+      `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
        FROM transactions
        WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
-       GROUP BY category_id`
-      )
-      .all(pid, startDate, endDate);
+       GROUP BY category_id`,
+      pid, startDate, endDate
+    );
 
     const spentMap = {};
     for (const s of spent) spentMap[s.category_id] = Math.abs(s.total);
@@ -503,54 +442,47 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const endOfMonth = nextMonth.toISOString().slice(0, 10);
 
     // Get all expense categories for this profile
-    const categories = db
-      .prepare(
-        `SELECT id, name, color, icon FROM categories WHERE profile_id = ? AND type = 'expense' ORDER BY name`
-      )
-      .all(pid);
+    const categories = req.repos.categories.all(
+      `SELECT id, name, color, icon FROM categories WHERE profile_id = ? AND type = 'expense' ORDER BY name`,
+      pid
+    );
 
     // Get existing budgets for this month
-    const budgets = db
-      .prepare(
-        `SELECT * FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ? AND period = 'monthly'`
-      )
-      .all(pid, startOfMonth, endOfMonth);
+    const budgets = req.repos.budgets.all(
+      `SELECT * FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ? AND period = 'monthly'`,
+      pid, startOfMonth, endOfMonth
+    );
 
     const budgetMap = {};
     budgets.forEach((b) => (budgetMap[b.category_id] = b));
 
     // Get actual spending for this month
-    const spent = db
-      .prepare(
-        `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
-     FROM transactions
-     WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
-     GROUP BY category_id`
-      )
-      .all(pid, startOfMonth, endOfMonth);
+    const spent = req.repos.transactions.all(
+      `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+      pid, startOfMonth, endOfMonth
+    );
 
     const spentMap = {};
     spent.forEach((s) => (spentMap[s.category_id] = Math.abs(s.total)));
 
     // Calculate remaining amount for zero-based budgeting
-    const remaining =
-      db
-        .prepare(
-          `SELECT SUM(COALESCE(amount_local, amount)) as total
-     FROM transactions
-     WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'
-    `
-        )
-        .all(pid, startOfMonth, endOfMonth)[0]?.total || 0;
+    const incomeRows = req.repos.transactions.all(
+      `SELECT SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'`,
+      pid, startOfMonth, endOfMonth
+    );
+    const remaining = incomeRows[0]?.total || 0;
 
     // Calculate already budgeted amounts
-    const alreadyBudgetedRows = db
-      .prepare(
-        `SELECT SUM(amount) as total FROM budgets
-     WHERE profile_id = ? AND start_date >= ? AND start_date < ?
-    `
-      )
-      .all(pid, startOfMonth, endOfMonth);
+    const alreadyBudgetedRows = req.repos.budgets.all(
+      `SELECT SUM(amount) as total FROM budgets
+       WHERE profile_id = ? AND start_date >= ? AND start_date < ?`,
+      pid, startOfMonth, endOfMonth
+    );
     const alreadyBudgeted = (alreadyBudgetedRows && alreadyBudgetedRows[0]?.total) ?? 0;
 
     // Calculate unassigned budget for this month
@@ -607,11 +539,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const start_date = `${month}-01`;
 
     // Check if budget already exists for this category and month
-    const existing = db
-      .prepare(
-        `SELECT * FROM budgets WHERE category_id = ? AND profile_id = ? AND start_date = ? AND period = ?`
-      )
-      .get(category_id, pid, start_date, period);
+    const existing = req.repos.budgets.getByCategoryForMonth(
+      category_id, pid, start_date, budgetPeriod
+    );
 
     if (existing) {
       return res.status(400).json({
@@ -619,17 +549,19 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       });
     }
 
-    const info = db
-      .prepare(
-        'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
-      )
-      .run(category_id, amount, period, start_date, pid);
+    const info = req.repos.budgets.create({
+      category_id,
+      amount,
+      period: budgetPeriod,
+      start_date,
+      profile_id: pid,
+    });
 
     res.json({
       id: info.lastInsertRowid,
       category_id,
       amount,
-      period,
+      period: budgetPeriod,
       start_date,
       profile_id: pid,
       message: 'Budget allocated successfully',
@@ -648,38 +580,34 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const endOfMonth = nextMonth.toISOString().slice(0, 10);
 
     // Get allocations (budgets for this month)
-    const budgets = db
-      .prepare(
-        `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
-     FROM budgets b
-     JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ? AND b.period = 'monthly'`
-      )
-      .all(pid, startOfMonth, endOfMonth);
+    const budgets = req.repos.budgets.all(
+      `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+       FROM budgets b
+       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+       WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ? AND b.period = 'monthly'`,
+      pid, startOfMonth, endOfMonth
+    );
 
     // Get actual spending by category
-    const spent = db
-      .prepare(
-        `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
-     FROM transactions
-     WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
-     GROUP BY category_id`
-      )
-      .all(pid, startOfMonth, endOfMonth);
+    const spent = req.repos.transactions.all(
+      `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+      pid, startOfMonth, endOfMonth
+    );
 
     const spentMap = {};
     spent.forEach((s) => (spentMap[s.category_id] = Math.abs(s.total)));
 
     // Get total income for this month
-    const income =
-      db
-        .prepare(
-          `SELECT SUM(COALESCE(amount_local, amount)) as total
-     FROM transactions
-     WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'
-    `
-        )
-        .all(pid, startOfMonth, endOfMonth)[0]?.total || 0;
+    const incomeRows = req.repos.transactions.all(
+      `SELECT SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'`,
+      pid, startOfMonth, endOfMonth
+    );
+    const income = incomeRows[0]?.total || 0;
 
     // Calculate summary
     const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
@@ -763,17 +691,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       .toISOString()
       .slice(0, 10);
 
-    const budgets = db
-      .prepare(
-        `
-    SELECT b.*, c.name as category_name, c.color as category_color
-    FROM budgets b
-    JOIN categories c ON c.id = b.category_id
-    WHERE b.profile_id = ? AND b.start_date <= ?
-    ORDER BY b.start_date DESC
-    `
-      )
-      .all(pid, month);
+    const budgets = req.repos.budgets.all(
+      `SELECT b.*, c.name as category_name, c.color as category_color
+       FROM budgets b
+       JOIN categories c ON c.id = b.category_id
+       WHERE b.profile_id = ? AND b.start_date <= ?
+       ORDER BY b.start_date DESC`,
+      pid, month
+    );
 
     if (budgets.length === 0) {
       return res.json({
@@ -790,25 +715,22 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const startHistory = oneYearAgo.toISOString().slice(0, 7);
 
-    const historicalData = db
-      .prepare(
-        `
-    SELECT
-      strftime('%Y-%m', date) as month,
-      b.category_id,
-      b.period,
-      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
-    FROM budgets b
-    LEFT JOIN transactions t ON t.category_id = b.category_id
-      AND t.profile_id = b.profile_id
-      AND t.date >= b.start_date
-      AND t.date < date(b.start_date, '+1 month')
-      AND t.type = 'expense'
-    WHERE b.profile_id = ?
-    GROUP BY month, b.category_id, b.period
-    `
-      )
-      .all(pid);
+    const historicalData = req.repos.budgets.all(
+      `SELECT
+        strftime('%Y-%m', date) as month,
+        b.category_id,
+        b.period,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+      FROM budgets b
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND t.profile_id = b.profile_id
+        AND t.date >= b.start_date
+        AND t.date < date(b.start_date, '+1 month')
+        AND t.type = 'expense'
+      WHERE b.profile_id = ?
+      GROUP BY month, b.category_id, b.period`,
+      pid
+    );
 
     // Build category historical averages
     const categoryAverages = {};
@@ -893,25 +815,22 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       });
     }
 
-    const historyData = db
-      .prepare(
-        `
-    SELECT
-      strftime('%Y-%m', start_date) as month,
-      SUM(b.amount) as total_budget,
-      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
-    FROM budgets b
-    LEFT JOIN transactions t ON t.category_id = b.category_id
-      AND t.profile_id = b.profile_id
-      AND t.date >= b.start_date
-      AND t.date < date(b.start_date, '+1 month')
-    WHERE b.profile_id = ? AND strftime('%Y-%m', start_date) <= ?
-    GROUP BY month
-    ORDER BY month DESC
-    LIMIT ?
-    `
-      )
-      .all(pid, now.toISOString().slice(0, 7), 6);
+    const historyData = req.repos.budgets.all(
+      `SELECT
+        strftime('%Y-%m', start_date) as month,
+        SUM(b.amount) as total_budget,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
+      FROM budgets b
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND t.profile_id = b.profile_id
+        AND t.date >= b.start_date
+        AND t.date < date(b.start_date, '+1 month')
+      WHERE b.profile_id = ? AND strftime('%Y-%m', start_date) <= ?
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT ?`,
+      pid, now.toISOString().slice(0, 7), 6
+    );
 
     const history = historyData.map((h) => ({
       month: h.month,

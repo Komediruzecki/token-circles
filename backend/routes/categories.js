@@ -10,34 +10,12 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   router.get('/api/categories', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const { type, income, expense } = req.query;
-    let whereClause = 'WHERE c.profile_id = ?';
-    const params = [pid];
 
-    if (type || income || expense) {
-      const types = [];
-      if (type === 'income') types.push('income');
-      if (type === 'expense') types.push('expense');
-      if (income === 'true') types.push('income');
-      if (expense === 'true') types.push('expense');
+    const types = [];
+    if (type === 'income' || income === 'true') types.push('income');
+    if (type === 'expense' || expense === 'true') types.push('expense');
 
-      if (types.length > 0) {
-        const placeholders = types.map(() => '?').join(',');
-        whereClause += ` AND c.type IN (${placeholders})`;
-        params.push(...types);
-      }
-    }
-
-    const rows = db
-      .prepare(
-        `
-    SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, p.name as parent_name
-    FROM categories c
-    LEFT JOIN categories p ON c.parent_id = p.id AND p.profile_id = c.profile_id
-    ${whereClause}
-    ORDER BY c.type, c.name
-    `
-      )
-      .all(...params);
+    const rows = req.repos.categories.listFull(pid, types.length > 0 ? types : null);
     res.json(toCamelCase(rows));
 
   }));
@@ -193,17 +171,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   // Get learned mappings for profile
   router.get('/api/categories/mappings', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const rows = db
-      .prepare(
-        `
-    SELECT cm.*, c.name as category_name, c.color as category_color
-    FROM category_mappings cm
-    JOIN categories c ON cm.category_id = c.id
-    WHERE cm.profile_id = ?
-    ORDER BY cm.use_count DESC, cm.confidence DESC
-    `
-      )
-      .all(pid);
+    const rows = req.repos.categories.listMappingsWithCategory(pid);
     res.json(toCamelCase(rows));
 
   }));
@@ -221,48 +189,26 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       return res.status(400).json({ error: 'Valid category_id is required' });
     }
 
-    // Check if mapping already exists
-    const existing = db
-      .prepare('SELECT id, use_count FROM category_mappings WHERE profile_id=? AND pattern=?')
-      .get(pid, pattern);
-
-    if (existing) {
-      // Update existing mapping
-      db.prepare(
-        `
-      UPDATE category_mappings
-      SET category_id=?, confidence=?, use_count=?
-      WHERE id=?
-    `
-      ).run(category_id, confidence || 0.9, (use_count || existing.use_count) + 1, existing.id);
-      res.json(
-        toCamelCase({
-          ok: true,
-          id: existing.id,
-          use_count: (use_count || existing.use_count) + 1,
-        })
-      );
-    } else {
-      // Insert new mapping
-      const info = db
-        .prepare(
-          `
-      INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
-      VALUES (?, ?, ?, ?, ?)
-    `
-        )
-        .run(pid, pattern.trim(), category_id, confidence || 0.9, use_count || 1);
-      res.json(toCamelCase({ ok: true, id: info.lastInsertRowid }));
-    }
+    const result = req.repos.categories.upsertMapping(
+      pid,
+      pattern.trim(),
+      category_id,
+      confidence || 0.9
+    );
+    res.json(
+      toCamelCase({
+        ok: true,
+        id: result.id,
+        use_count: result.use_count,
+      })
+    );
 
   }));
 
   // Delete a mapping
   router.delete('/api/categories/mappings/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const result = db
-      .prepare('DELETE FROM category_mappings WHERE id=? AND profile_id=?')
-      .run(req.params.id, pid);
+    const result = req.repos.categories.deleteMapping(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
     res.json(toCamelCase({ ok: true }));
 
@@ -318,16 +264,8 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
     const { transaction_ids, description, amount } = req.body;
 
     // Fetch categories and learned mappings for matching
-    const categories = db.prepare('SELECT * FROM categories WHERE profile_id = ?').all(pid);
-    const learnedMappings = db
-      .prepare(
-        `
-    SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count
-    FROM category_mappings cm
-    WHERE cm.profile_id = ?
-    `
-      )
-      .all(pid);
+    const categories = req.repos.categories.list(pid);
+    const learnedMappings = req.repos.categories.listMappings(pid);
 
     // If transaction_ids provided, use those; otherwise filter by description+amount
     let txQuery = `
@@ -352,7 +290,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
     }
 
-    const transactions = db.prepare(txQuery).all(...params);
+    const transactions = req.repos.transactions.all(txQuery, ...params);
 
     const proposedMappings = [];
 
@@ -477,21 +415,18 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       return res.status(400).json({ error: 'Invalid mappings array' });
     }
 
-    const updateTx = db.prepare(
-      "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?"
-    );
-    const insertMapping = db.prepare(`
-    INSERT OR REPLACE INTO category_mappings (profile_id, pattern, category_id, confidence, use_count)
-    VALUES (?, ?, ?, ?, 1)
-    `);
-
     let updated = 0;
 
     for (const mapping of mappings) {
       const { transaction_id, category_id, pattern } = mapping;
 
       // Update transaction
-      const result = updateTx.run(category_id, transaction_id, pid);
+      const result = req.repos.transactions.run(
+        "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?",
+        category_id,
+        transaction_id,
+        pid
+      );
       if (result.changes > 0) updated++;
 
       // Store mapping for future use
@@ -499,7 +434,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
         const normalizedPattern = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (normalizedPattern.length >= 3) {
           try {
-            insertMapping.run(pid, normalizedPattern, category_id, 0.9);
+            req.repos.categories.upsertMapping(pid, normalizedPattern, category_id, 0.9);
           } catch (e) {
             // Ignore duplicate errors
           }
