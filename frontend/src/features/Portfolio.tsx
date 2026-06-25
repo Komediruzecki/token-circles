@@ -60,8 +60,8 @@ export default function Portfolio() {
     setFormData({
       ticker: h.ticker,
       shares: String(h.shares),
-      purchasePrice: String(h.purchasePrice),
-      purchaseDate: h.purchaseDate,
+      purchasePrice: String(h.purchase_price),
+      purchaseDate: h.purchase_date,
       notes: h.notes || '',
     })
     setShowAddModal(true)
@@ -253,9 +253,9 @@ export default function Portfolio() {
                           <span class={styles.ticker}>{h.ticker}</span>
                         </td>
                         <td class={styles.right}>{h.shares}</td>
-                        <td class={styles.right}>{formatAmount(h.purchasePrice)}</td>
+                        <td class={styles.right}>{formatAmount(h.purchase_price)}</td>
                         <td class={styles.right}>
-                          {formatAmount(h.currentPrice || h.purchasePrice)}
+                          {formatAmount(h.currentPrice || h.purchase_price)}
                         </td>
                         <td class={styles.right}>{formatAmount(h.marketValue || 0)}</td>
                         <td

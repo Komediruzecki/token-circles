@@ -428,11 +428,14 @@ export interface PortfolioHolding {
   id: number
   ticker: string
   shares: number
-  purchasePrice: number
-  purchaseDate: string
+  // Stored columns are snake_case (the API returns raw DB rows since the backend
+  // no longer camelCases responses).
+  purchase_price: number
+  purchase_date: string
   notes: string
-  createdAt: string
-  profileId: ProfileId
+  created_at: string
+  profile_id: ProfileId
+  // Computed by the backend at read time — these stay camelCase.
   currentPrice?: number
   marketValue?: number
   costBasis?: number
