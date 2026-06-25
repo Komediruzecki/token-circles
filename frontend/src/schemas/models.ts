@@ -13,10 +13,10 @@ export const CategorySchema = z.object({
   icon: z.string(),
   type: z.enum(['income', 'expense', 'transfer']),
   parent_id: z.number().nullable(),
-  tax_deductible: z.boolean().or(z.number().transform(n => !!n)),
+  tax_deductible: z.boolean().or(z.number().transform((n) => !!n)),
   created_at: z.string(),
   profile_id: z.number(),
-  parent_name: z.string().optional(),
+  parent_name: z.string().nullable().optional(),
 })
 
 export const AccountSchema = z.object({
@@ -52,7 +52,10 @@ export const TransactionSchema = z.object({
   transfer_account_id: z.number().nullable().optional(),
   category_name: z.string().optional().nullable(),
   category_color: z.string().optional().nullable(),
-  reconciled: z.boolean().or(z.number().transform(n => !!n)).optional(),
+  reconciled: z
+    .boolean()
+    .or(z.number().transform((n) => !!n))
+    .optional(),
   means_of_payment: z.string().optional().nullable(),
   tags: z.array(z.object({ id: z.number(), name: z.string(), color: z.string() })).optional(),
   receipt_id: z.number().nullable().optional(),
@@ -98,7 +101,7 @@ export const BillSchema = z.object({
   amount: z.number(),
   due_date: z.string(),
   category_id: z.number().nullable(),
-  recurring: z.boolean().or(z.number().transform(n => !!n)),
+  recurring: z.boolean().or(z.number().transform((n) => !!n)),
   last_paid_date: z.string().nullable(),
   next_due_date: z.string().nullable(),
   profile_id: z.number(),

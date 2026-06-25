@@ -49,7 +49,9 @@ function seedThreeTierProfiles() {
   ];
 
   // Insert the three profiles
-  const insertProfile = db.prepare('INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, ?, ?)');
+  const insertProfile = db.prepare(
+    'INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, ?, ?)'
+  );
   for (const p of profiles) {
     insertProfile.run(p.id, p.name, 1);
   }
@@ -1028,7 +1030,7 @@ function seedBills(profileId, config) {
       nextDueDate,
       1, // recurring
       null, // category_id
-      null, // last_paid_date
+      bill.name === 'Rent / Mortgage' ? new Date().toISOString() : null, // last_paid_date
       bill.type || 'bill'
     );
   }
@@ -1281,8 +1283,6 @@ function seedRecurringTransactions(profileId, config, catId) {
 function randRange(min, max) {
   return min + Math.random() * (max - min);
 }
-
-
 
 module.exports = db;
 module.exports.seedThreeTierProfiles = seedThreeTierProfiles;

@@ -13,7 +13,7 @@ class CategoriesRepository extends BaseRepository {
   }
 
   listFull(profileId, types) {
-    let sql = `SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, p.name as parent_name
+    let sql = `SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, c.profile_id, p.name as parent_name
                FROM categories c
                LEFT JOIN categories p ON c.parent_id = p.id AND p.profile_id = c.profile_id
                WHERE c.profile_id = ?`;
@@ -104,9 +104,11 @@ class CategoriesRepository extends BaseRepository {
       this.updateMapping(existing.id, categoryId, confidence || 0.9, newUseCount);
       return { id: existing.id, use_count: newUseCount, updated: true };
     } else {
-      const info = this.db.prepare(
-        'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)'
-      ).run(profileId, pattern, categoryId, confidence || 0.9, 1);
+      const info = this.db
+        .prepare(
+          'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)'
+        )
+        .run(profileId, pattern, categoryId, confidence || 0.9, 1);
       return { id: info.lastInsertRowid, use_count: 1, updated: false };
     }
   }

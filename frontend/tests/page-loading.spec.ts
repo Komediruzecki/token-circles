@@ -47,7 +47,7 @@ test.describe('Page Loading Tests @smoke', () => {
       await page.waitForTimeout(500)
 
       // Assert no console errors
-      expect(errors.length).toBe(0)
+      expect(errors.length, `Console errors: ${errors.join(', ')}`).toBe(0)
 
       // Assert no page errors
       expect(rejectionErrors.length).toBe(0)
@@ -162,7 +162,7 @@ test.describe('Component Loading Tests', () => {
     const table = page.locator('table')
     await expect(table).toBeVisible({ timeout: 5000 })
 
-    expect(errors.length).toBe(0)
+    expect(errors.length, `Console errors: ${errors.join(', ')}`).toBe(0)
   })
 })
 

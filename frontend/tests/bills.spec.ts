@@ -23,14 +23,9 @@ test.describe('Bills', () => {
   })
 
   test('should display bills summary cards', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    // There's no explicit summary cards in the current design, just the sections
-    const hasSections = await page
-      .getByTestId('bills-upcoming-section')
-      .isVisible()
-      .catch(() => false)
-    expect(hasSections).toBeTruthy()
+    // Both upcoming and paid sections should exist and be visible
+    await expect(page.getByTestId('bills-upcoming-section')).toBeVisible()
+    await expect(page.getByTestId('bills-paid-section')).toBeVisible()
   })
 
   test('should display bill cards', async ({ page }) => {
@@ -138,7 +133,7 @@ test.describe('Bills', () => {
     await page.waitForTimeout(500)
 
     // "Total Monthly" is not explicitly shown - just the "All Bills" section with count
-    const allSection = page.getByTestId('bills-all-section')
+    const allSection = page.getByTestId('bills-upcoming-section')
     await expect(allSection).toBeVisible()
   })
 

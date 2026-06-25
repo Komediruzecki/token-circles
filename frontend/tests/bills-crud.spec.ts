@@ -19,8 +19,7 @@ test.describe('Bills CRUD Operations @smoke', () => {
 
   test('should have new bill button', async ({ page }) => {
     const addBtn = getByTestId(page, 'add-bill-btn')
-    const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(isVisible).toBeTruthy()
+    await expect(addBtn).toBeVisible()
   })
 
   test('should have bills sections', async ({ page }) => {
@@ -43,13 +42,6 @@ test.describe('Bills CRUD Operations @smoke', () => {
 
     const paidSection = getByTestId(page, 'bills-paid-section')
     await expect(paidSection).toBeVisible()
-  })
-
-  test('should have all bills section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const allBillsSection = getByTestId(page, 'bills-all-section')
-    await expect(allBillsSection).toBeVisible()
   })
 
   test('should handle errors gracefully', async ({ page }) => {

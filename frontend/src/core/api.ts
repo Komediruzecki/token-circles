@@ -146,7 +146,7 @@ export class ApiClient {
       }
 
       const rawData = await response.json()
-      
+
       if (schema) {
         try {
           return schema.parse(rawData)
@@ -156,7 +156,6 @@ export class ApiClient {
         }
       }
 
-       
       return rawData
     } catch (error) {
       // Don't re-log errors from auth endpoints — already handled above or expected
@@ -266,7 +265,14 @@ export class ApiClient {
       queryParams.append('type', params.type)
     }
 
-    return this.request<Models.Transaction[]>(`/transactions?${queryParams.toString()}`, z.array(Schemas.TransactionSchema))
+    const res = await this.request<any>(
+      `/transactions?${queryParams.toString()}`,
+      z.union([
+        z.array(Schemas.TransactionSchema),
+        z.object({ rows: z.array(Schemas.TransactionSchema) }).passthrough(),
+      ])
+    )
+    return Array.isArray(res) ? res : res.rows || []
   }
 
   /**
@@ -384,10 +390,14 @@ export class ApiClient {
    * Auto-map uncategorized transactions
    */
   async autoMapTransactions(transactionIds: number[]): Promise<{ ok: boolean; mapped: number }> {
-    return this.request<{ ok: boolean; mapped: number }>('/categories/auto-map', Schemas.GenericSchema, {
-      method: 'POST',
-      body: { transaction_ids: transactionIds },
-    })
+    return this.request<{ ok: boolean; mapped: number }>(
+      '/categories/auto-map',
+      Schemas.GenericSchema,
+      {
+        method: 'POST',
+        body: { transaction_ids: transactionIds },
+      }
+    )
   }
 
   // ============ ACCOUNTS ============
@@ -716,7 +726,10 @@ export class ApiClient {
    * Uses the analytics distinct-years endpoint.
    */
   async getTransactionYears(): Promise<{ minYear: number; maxYear: number; years: number[] }> {
-    const res = await this.request<{ years: number[] }>('/analytics/distinct-years', Schemas.GenericSchema)
+    const res = await this.request<{ years: number[] }>(
+      '/analytics/distinct-years',
+      Schemas.GenericSchema
+    )
     const years = res.years || []
     return {
       minYear: years.length > 0 ? Math.min(...years) : new Date().getFullYear(),
@@ -761,7 +774,10 @@ export class ApiClient {
    */
   async getDashboardCharts(months?: number): Promise<Models.DashboardChartsResponse> {
     const params = months ? `?months=${months}` : ''
-    return this.request<Models.DashboardChartsResponse>(`/dashboard/charts${params}`, Schemas.GenericSchema)
+    return this.request<Models.DashboardChartsResponse>(
+      `/dashboard/charts${params}`,
+      Schemas.GenericSchema
+    )
   }
 
   /**
@@ -877,7 +893,10 @@ export class ApiClient {
    * Get exchange rate for a specific currency pair
    */
   async getExchangeRate(base: string, target: string): Promise<{ rate: number }> {
-    return this.request<{ rate: number }>(`/exchange-rates/${base}/${target}`, Schemas.GenericSchema)
+    return this.request<{ rate: number }>(
+      `/exchange-rates/${base}/${target}`,
+      Schemas.GenericSchema
+    )
   }
 
   // ============ HEALTH ============
@@ -926,7 +945,10 @@ export class ApiClient {
    * Get all receipts for a transaction
    */
   async getReceiptsForTransaction(transactionId: number): Promise<Models.Receipt[]> {
-    return this.request<Models.Receipt[]>(`/receipts/transaction/${transactionId}`, Schemas.GenericSchema)
+    return this.request<Models.Receipt[]>(
+      `/receipts/transaction/${transactionId}`,
+      Schemas.GenericSchema
+    )
   }
 
   /**
@@ -1028,7 +1050,10 @@ export class ApiClient {
     data: Partial<Models.RecurringTransaction> &
       Pick<Models.RecurringTransaction, 'description' | 'amount' | 'type' | 'frequency'>
   ): Promise<Models.RecurringTransaction> {
-    return this.request<Models.RecurringTransaction>('/recurring', Schemas.GenericSchema, { method: 'POST', body: data })
+    return this.request<Models.RecurringTransaction>('/recurring', Schemas.GenericSchema, {
+      method: 'POST',
+      body: data,
+    })
   }
 
   updateRecurring(
