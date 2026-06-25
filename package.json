@@ -18,6 +18,7 @@
     "backend"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev": "cd frontend && npm run dev",
     "start": "cd backend && npm run start",
     "build": "cd frontend && npm run build",
