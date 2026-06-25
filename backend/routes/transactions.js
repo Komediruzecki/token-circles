@@ -29,7 +29,7 @@ function parseDateString(dateStr) {
   }
   const s = String(dateStr).trim();
   // Try DD/MM/YYYY or DD-MM-YYYY (European)
-  const euMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const euMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (euMatch) {
     const [, d, m, y] = euMatch;
     return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toISOString().split('T')[0];
