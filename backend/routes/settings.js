@@ -3,14 +3,12 @@ const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter }) {
   const router = express.Router();
 
   router.get('/api/settings', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const rows = db
-      .prepare('SELECT key, value FROM settings WHERE profile_id = ? OR profile_id IS NULL')
-      .all(pid);
+    const rows = req.repos.settings.getAll(pid);
     const settings = {};
     for (const r of rows) settings[r.key] = r.value;
     // Add user preferences section
@@ -42,11 +40,8 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       }
     }
 
-    const upsert = db.prepare(
-      'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)'
-    );
     const entries = Object.entries(req.body);
-    for (const [k, v] of entries) upsert.run(k, String(v), pid);
+    for (const [k, v] of entries) req.repos.settings.upsert(k, String(v), pid);
     res.json(toCamelCase({ ok: true }));
 
   }));

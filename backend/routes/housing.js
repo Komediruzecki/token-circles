@@ -2,19 +2,18 @@ const express = require('express');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/housing', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
 
     // Custom ordering by due_date ASC (repo defaults to created_at DESC)
-    const housings = db
-      .prepare(
-        `SELECT id, name, type, monthly_amount, due_date, autopay, notes, created_at
-         FROM housings WHERE profile_id = ? ORDER BY due_date ASC`
-      )
-      .all(pid);
+    const housings = req.repos.housing.all(
+      `SELECT id, name, type, monthly_amount, due_date, autopay, notes, created_at
+       FROM housings WHERE profile_id = ? ORDER BY due_date ASC`,
+      pid
+    );
 
     const totalMonthly = housings.reduce(
       (sum, h) => sum + Math.abs(parseFloat(h.monthly_amount) || 0),

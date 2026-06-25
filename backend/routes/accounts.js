@@ -2,7 +2,7 @@ const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
+module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
   router.get('/api/accounts', apiRateLimiter, asyncHandler((req, res) => {
@@ -119,25 +119,24 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   // Get reconciliation summary for a specific account
   router.get('/api/accounts/:id/reconciliation-summary', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const account = db
-      .prepare('SELECT id, name FROM accounts WHERE id = ? AND profile_id = ?')
-      .get(req.params.id, pid);
+    const account = req.repos.accounts.get(
+      'SELECT id, name FROM accounts WHERE id = ? AND profile_id = ?',
+      req.params.id, pid
+    );
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
     // Get unreconciled transactions for this account
     // Note: accounts table doesn't directly link to transactions, so we show all profile transactions
-    const unreconciled = db
-      .prepare(
-        `SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
-         FROM transactions
-         WHERE profile_id = ? AND (reconciled = 0 OR reconciled IS NULL)`
-      )
-      .get(pid);
-    const reconciled = db
-      .prepare(
-        `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`
-      )
-      .get(pid);
+    const unreconciled = req.repos.transactions.get(
+      `SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+       FROM transactions
+       WHERE profile_id = ? AND (reconciled = 0 OR reconciled IS NULL)`,
+      pid
+    );
+    const reconciled = req.repos.transactions.get(
+      `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`,
+      pid
+    );
 
     res.json({
       account_id: account.id,
@@ -154,16 +153,15 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
   router.get('/api/accounts/history/timeline', apiRateLimiter, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
-    const rows = db
-      .prepare(
-        `SELECT abh.recorded_at as date, SUM(abh.balance) as net_worth
-         FROM account_balance_history abh
-         JOIN accounts a ON abh.account_id = a.id
-         WHERE a.profile_id IN (${inClause})
-         GROUP BY date(abh.recorded_at)
-         ORDER BY date ASC`
-      )
-      .all(...pids);
+    const rows = req.repos.accounts.all(
+      `SELECT abh.recorded_at as date, SUM(abh.balance) as net_worth
+       FROM account_balance_history abh
+       JOIN accounts a ON abh.account_id = a.id
+       WHERE a.profile_id IN (${inClause})
+       GROUP BY date(abh.recorded_at)
+       ORDER BY date ASC`,
+      ...pids
+    );
     res.json(rows);
 
   }));

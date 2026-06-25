@@ -8,6 +8,14 @@ class GoalsRepository extends BaseRepository {
     );
   }
 
+  listByProfiles(profileIds) {
+    const inClause = profileIds.map(() => '?').join(',');
+    return this.all(
+      `SELECT * FROM savings_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC`,
+      ...profileIds
+    );
+  }
+
   getById(id, profileId) {
     return this.get('SELECT * FROM savings_goals WHERE id = ? AND profile_id = ?', id, profileId);
   }

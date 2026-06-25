@@ -4,7 +4,7 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/export/:type', apiRateLimiter, asyncHandler((req, res) => {
@@ -16,82 +16,76 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     let data, filename;
     switch (type) {
       case 'transactions': {
-        const rows = db
-          .prepare(
-            `
+        const rows = req.repos.transactions.all(
+          `
         SELECT t.date, t.description, t.amount, t.type, t.currency, t.means_of_payment, t.beneficiary, t.payor, t.notes, c.name as category
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
         WHERE t.profile_id IN (${inClause})
         ORDER BY t.date DESC
-      `
-          )
-          .all(...pids);
+      `,
+          ...pids
+        );
         data = rows;
         filename = 'transactions';
         break;
       }
       case 'categories': {
-        const rows = db
-          .prepare(
-            `
+        const rows = req.repos.categories.all(
+          `
         SELECT name, color, icon, type, parent_id FROM categories WHERE profile_id IN (${inClause})
-      `
-          )
-          .all(...pids);
+      `,
+          ...pids
+        );
         data = rows;
         filename = 'categories';
         break;
       }
       case 'accounts': {
-        const rows = db
-          .prepare(
-            `
+        const rows = req.repos.accounts.all(
+          `
         SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id IN (${inClause})
-      `
-          )
-          .all(...pids);
+      `,
+          ...pids
+        );
         data = rows;
         filename = 'accounts';
         break;
       }
       case 'budgets': {
-        const rows = db
-          .prepare(
-            `
+        const rows = req.repos.budgets.all(
+          `
         SELECT b.*, c.name as category_name FROM budgets b
         JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
         WHERE b.profile_id IN (${inClause})
-      `
-          )
-          .all(...pids);
+      `,
+          ...pids
+        );
         data = rows;
         filename = 'budgets';
         break;
       }
       case 'loans': {
-        const rows = db
-          .prepare(
-            `
+        const rows = req.repos.loans.all(
+          `
         SELECT l.name, l.principal, l.interest_rate, l.start_date, l.term_months,
           (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid
         FROM loans l WHERE l.profile_id IN (${inClause})
-      `
-          )
-          .all(...pids);
+      `,
+          ...pids
+        );
         data = rows;
         filename = 'loans';
         break;
       }
       case 'recurring': {
-        const rows = db
-          .prepare(
-            `
+        const rows = req.repos.recurring.all(
+          `
         SELECT description, amount, type, frequency, day_of_month, next_date, notes, active
         FROM recurring_transactions WHERE profile_id IN (${inClause})
-      `
-          )
-          .all(...pids);
+      `,
+          ...pids
+        );
         data = rows;
         filename = 'recurring_transactions';
         break;
@@ -136,106 +130,91 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const inClause = pids.map(() => '?').join(',');
 
     // Get all data
-    const transactions = db
-      .prepare(
-        `
+    const transactions = req.repos.transactions.all(
+      `
     SELECT t.* FROM transactions t
     WHERE t.profile_id IN (${inClause})
     ORDER BY t.date DESC
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const categories = db
-      .prepare(
-        `
+    const categories = req.repos.categories.all(
+      `
     SELECT c.* FROM categories c
     WHERE c.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const accounts = db
-      .prepare(
-        `
+    const accounts = req.repos.accounts.all(
+      `
     SELECT a.* FROM accounts a
     WHERE a.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const budgets = db
-      .prepare(
-        `
+    const budgets = req.repos.budgets.all(
+      `
     SELECT b.* FROM budgets b
     WHERE b.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const loans = db
-      .prepare(
-        `
+    const loans = req.repos.loans.all(
+      `
     SELECT l.* FROM loans l
     WHERE l.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const profiles = db.prepare(`SELECT * FROM profiles`).all();
+    const profiles = req.repos.profiles.all(`SELECT * FROM profiles`);
 
-    const goals = db
-      .prepare(
-        `
+    const goals = req.repos.goals.all(
+      `
     SELECT sg.* FROM savings_goals sg
     WHERE sg.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const balanceHistory = db
-      .prepare(
-        `
+    const balanceHistory = req.repos.accounts.all(
+      `
     SELECT abh.* FROM account_balance_history abh
     JOIN accounts a ON a.id = abh.account_id
     WHERE a.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const settings = db
-      .prepare(
-        `
-    SELECT s.key, s.value
-    FROM settings s
-    WHERE s.profile_id = ? OR s.profile_id IS NULL
-    `
-      )
-      .get(getProfileId(req));
+    const settings = req.repos.settings.getAll(getProfileId(req));
 
     // Build settings object
     const settingsObj = {};
-    if (settings) {
-      settingsObj[settings.key] = settings.value;
+    if (Array.isArray(settings)) {
+      for (const s of settings) {
+        settingsObj[s.key] = s.value;
+      }
     }
 
-    const retirementGoals = db
-      .prepare(
-        `
+    const retirementGoals = req.repos.goals.all(
+      `
     SELECT rg.* FROM retirement_goals rg
     WHERE rg.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const portfolioHoldings = db
-      .prepare(
-        `
+    const portfolioHoldings = req.repos.portfolio.all(
+      `
     SELECT ph.* FROM portfolio_holdings ph
     WHERE ph.profile_id IN (${inClause})
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
     res.json({
       version: '2.0',
@@ -267,64 +246,59 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
     // Create transaction record ID counter
     let txId = Math.max(
-      ...(db.prepare('SELECT MAX(id) as max FROM transactions').get()?.max || [0])
+      ...(req.repos.transactions.get('SELECT MAX(id) as max FROM transactions')?.max || [0])
     );
     let catId = Math.max(
-      ...(db.prepare('SELECT MAX(id) as max FROM categories').get()?.max || [0])
+      ...(req.repos.categories.get('SELECT MAX(id) as max FROM categories')?.max || [0])
     );
     let accId = Math.max(
-      ...(db.prepare('SELECT MAX(id) as max FROM accounts').get()?.max || [0])
+      ...(req.repos.accounts.get('SELECT MAX(id) as max FROM accounts')?.max || [0])
     );
     let budgetId = Math.max(
-      ...(db.prepare('SELECT MAX(id) as max FROM budgets').get()?.max || [0])
+      ...(req.repos.budgets.get('SELECT MAX(id) as max FROM budgets')?.max || [0])
     );
-    let loanId = Math.max(...(db.prepare('SELECT MAX(id) as max FROM loans').get()?.max || [0]));
+    let loanId = Math.max(
+      ...(req.repos.loans.get('SELECT MAX(id) as max FROM loans')?.max || [0])
+    );
 
     // Map category names to IDs for reference
     const categoryMap = new Map();
 
     // Insert profiles
     if (data.profiles && data.profiles.length > 0) {
-      const insertProfile = db.prepare(`INSERT INTO profiles (name, created_at) VALUES (?, ?)`);
       for (const p of data.profiles) {
-        insertProfile.run(p.name, p.created_at || new Date().toISOString());
+        req.repos.profiles.run(
+          `INSERT INTO profiles (name, created_at) VALUES (?, ?)`,
+          p.name,
+          p.created_at || new Date().toISOString()
+        );
       }
     }
 
     // Insert categories
-    const insertCat = db.prepare(`
-    INSERT INTO categories (name, color, icon, type, profile_id, tax_deductible, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
     if (data.categories && data.categories.length > 0) {
       for (const cat of data.categories) {
-        // Convert category data to match schema
-        const insertData = [
+        catId++;
+        req.repos.categories.run(
+          `INSERT INTO categories (name, color, icon, type, profile_id, tax_deductible, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           cat.name || cat.category_name,
           cat.color || '#6b7280',
           cat.icon || 'tag',
           cat.type || 'expense',
           pid,
           cat.tax_deductible ? 1 : 0,
-          cat.created_at || new Date().toISOString(),
-        ];
-        catId++;
-        insertCat.run(...insertData);
+          cat.created_at || new Date().toISOString()
+        );
         categoryMap.set(cat.name, catId);
       }
     }
 
     // Insert accounts
-    const insertAcc = db.prepare(`
-    INSERT INTO accounts (name, type, currency, balance, notes, profile_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
     if (data.accounts && data.accounts.length > 0) {
       for (const acc of data.accounts) {
         accId++;
-        insertAcc.run(
+        req.repos.accounts.run(
+          `INSERT INTO accounts (name, type, currency, balance, notes, profile_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           acc.name,
           acc.type || 'giro',
           acc.currency || 'EUR',
@@ -337,15 +311,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Insert budgets
-    const insertBudget = db.prepare(`
-    INSERT INTO budgets (category_id, amount, period, start_date, end_date, rollover_enabled, rollover_amount, profile_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
     if (data.budgets && data.budgets.length > 0) {
       for (const b of data.budgets) {
         budgetId++;
-        insertBudget.run(
+        req.repos.budgets.run(
+          `INSERT INTO budgets (category_id, amount, period, start_date, end_date, rollover_enabled, rollover_amount, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           b.category_id || null,
           b.amount || 0,
           b.period || 'monthly',
@@ -359,15 +329,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Insert loans
-    const insertLoan = db.prepare(`
-    INSERT INTO loans (name, principal, interest_rate, start_date, term_months, profile_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
     if (data.loans && data.loans.length > 0) {
       for (const l of data.loans) {
         loanId++;
-        insertLoan.run(
+        req.repos.loans.run(
+          `INSERT INTO loans (name, principal, interest_rate, start_date, term_months, profile_id) VALUES (?, ?, ?, ?, ?, ?)`,
           l.name,
           l.principal || 0,
           l.interest_rate || 5.0,
@@ -379,18 +345,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Insert transactions
-    const insertTx = db.prepare(`
-    INSERT INTO transactions (date, description, amount, type, currency, means_of_payment, beneficiary, payor, notes, category_id, profile_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
     let importedCount = 0;
 
     if (data.transactions && data.transactions.length > 0) {
       for (const tx of data.transactions) {
         txId++;
         const catIdForTx = categoryMap.get(tx.description || tx.category_name) || null;
-        insertTx.run(
+        req.repos.transactions.run(
+          `INSERT INTO transactions (date, description, amount, type, currency, means_of_payment, beneficiary, payor, notes, category_id, profile_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           tx.date,
           tx.description || tx.category_name,
           parseFloat(tx.amount) || 0,
@@ -410,12 +372,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
     // Insert goals
     if (data.goals && data.goals.length > 0) {
-      const insertGoal = db.prepare(`
-      INSERT INTO savings_goals (name, target_amount, current_amount, deadline, notes, category_id, profile_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
       for (const g of data.goals) {
-        insertGoal.run(
+        req.repos.goals.run(
+          `INSERT INTO savings_goals (name, target_amount, current_amount, deadline, notes, category_id, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           g.name,
           g.target_amount || 0,
           g.current_amount || 0,
@@ -429,12 +388,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
     // Insert retirement goals
     if (data.retirementGoals && data.retirementGoals.length > 0) {
-      const insertRg = db.prepare(`
-      INSERT INTO retirement_goals (name, target_amount, current_amount, deadline, notes, current_age, retirement_age, monthly_contribution, expected_return_rate, profile_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
       for (const g of data.retirementGoals) {
-        insertRg.run(
+        req.repos.goals.run(
+          `INSERT INTO retirement_goals (name, target_amount, current_amount, deadline, notes, current_age, retirement_age, monthly_contribution, expected_return_rate, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           g.name,
           g.target_amount || 0,
           g.current_amount || 0,
@@ -452,24 +408,20 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     // Insert balance history
     if (data.balanceHistory) {
       if (Array.isArray(data.balanceHistory)) {
-        const insertBH = db.prepare(`
-        INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)
-      `);
         for (const entry of data.balanceHistory) {
-          insertBH.run(
+          req.repos.accounts.run(
+            `INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)`,
             entry.account_id,
             entry.balance,
             entry.recorded_at || new Date().toISOString()
           );
         }
       } else if (typeof data.balanceHistory === 'object') {
-        const insertBH = db.prepare(`
-        INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)
-      `);
         for (const [accountId, entries] of Object.entries(data.balanceHistory)) {
           if (Array.isArray(entries)) {
             for (const entry of entries) {
-              insertBH.run(
+              req.repos.accounts.run(
+                `INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)`,
                 parseInt(accountId),
                 entry.balance,
                 entry.recorded_at || new Date().toISOString()
@@ -482,12 +434,9 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
     // Insert portfolio holdings
     if (data.portfolioHoldings && data.portfolioHoldings.length > 0) {
-      const insertHolding = db.prepare(`
-      INSERT INTO portfolio_holdings (ticker, shares, purchase_price, purchase_date, notes, profile_id)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
       for (const h of data.portfolioHoldings) {
-        insertHolding.run(
+        req.repos.portfolio.run(
+          `INSERT INTO portfolio_holdings (ticker, shares, purchase_price, purchase_date, notes, profile_id) VALUES (?, ?, ?, ?, ?, ?)`,
           h.ticker,
           h.shares,
           h.purchase_price || h.purchasePrice,
@@ -500,12 +449,13 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
     // Update settings
     if (data.settings && Object.keys(data.settings).length > 0) {
-      const upsertSettings = db.prepare(`
-      INSERT OR REPLACE INTO settings (key, value, profile_id)
-      VALUES (?, ?, ?)
-    `);
       for (const [key, value] of Object.entries(data.settings)) {
-        upsertSettings.run(key, String(value), pid);
+        req.repos.settings.run(
+          `INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)`,
+          key,
+          String(value),
+          pid
+        );
       }
     }
 
@@ -528,12 +478,14 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const pid = getProfileId(req);
 
     // Get existing data for duplicate detection
-    const existingTransactions = db
-      .prepare('SELECT id, date, description, amount FROM transactions WHERE profile_id = ?')
-      .all(pid);
-    const existingCategories = db
-      .prepare('SELECT name FROM categories WHERE profile_id = ?')
-      .all(pid);
+    const existingTransactions = req.repos.transactions.all(
+      'SELECT id, date, description, amount FROM transactions WHERE profile_id = ?',
+      pid
+    );
+    const existingCategories = req.repos.categories.all(
+      'SELECT name FROM categories WHERE profile_id = ?',
+      pid
+    );
 
     // Build lookup maps for duplicates
     const existingTransactionMap = new Map();
@@ -600,19 +552,21 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   // Clear all data (dangerous!)
   router.delete('/api/clear-all', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    db.prepare(
-      'DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)'
-    ).run(pid);
-    db.prepare(
-      'DELETE FROM loan_rate_periods WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)'
-    ).run(pid);
-    db.prepare('DELETE FROM transactions WHERE profile_id = ?').run(pid);
-    db.prepare('DELETE FROM budgets WHERE profile_id = ?').run(pid);
-    db.prepare('DELETE FROM loans WHERE profile_id = ?').run(pid);
-    db.prepare('DELETE FROM categories WHERE profile_id = ?').run(pid);
-    db.prepare('DELETE FROM accounts WHERE profile_id = ?').run(pid);
+    req.repos.loans.run(
+      'DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)',
+      pid
+    );
+    req.repos.loans.run(
+      'DELETE FROM loan_rate_periods WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)',
+      pid
+    );
+    req.repos.transactions.run('DELETE FROM transactions WHERE profile_id = ?', pid);
+    req.repos.budgets.run('DELETE FROM budgets WHERE profile_id = ?', pid);
+    req.repos.loans.run('DELETE FROM loans WHERE profile_id = ?', pid);
+    req.repos.categories.run('DELETE FROM categories WHERE profile_id = ?', pid);
+    req.repos.accounts.run('DELETE FROM accounts WHERE profile_id = ?', pid);
     // Also clear settings
-    db.prepare('DELETE FROM settings WHERE profile_id = ?').run(pid);
+    req.repos.settings.run('DELETE FROM settings WHERE profile_id = ?', pid);
 
     res.json({ ok: true, message: 'All data cleared' });
 

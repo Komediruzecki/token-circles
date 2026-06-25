@@ -2,7 +2,7 @@ const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   // ========================
@@ -18,18 +18,17 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const endStr = endDate.toISOString().split('T')[0];
 
     // Use amount_local if available (for imported transactions), otherwise amount
-    const rows = db
-      .prepare(
-        `
+    const rows = req.repos.transactions.all(
+      `
       SELECT strftime('%Y-%m', date) as month, type,
         SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count
       FROM transactions
       WHERE profile_id = ? AND date >= ? AND date <= ? AND type IN ('income', 'expense')
       GROUP BY month, type
       ORDER BY month
-    `
-      )
-      .all(pid, startStr, endStr);
+    `,
+      pid, startStr, endStr
+    );
 
     const map = {};
     for (const r of rows) {
@@ -57,16 +56,15 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
 
-    const rows = db
-      .prepare(
-        `SELECT date, SUM(amount) as total
-         FROM transactions
-         WHERE profile_id IN (${inClause})
-           AND substr(date, 1, 4) = ?
-           AND type = ?
-         GROUP BY date`
-      )
-      .all(...pids, String(year), type);
+    const rows = req.repos.transactions.all(
+      `SELECT date, SUM(amount) as total
+       FROM transactions
+       WHERE profile_id IN (${inClause})
+         AND substr(date, 1, 4) = ?
+         AND type = ?
+       GROUP BY date`,
+      ...pids, String(year), type
+    );
 
     const dates = {};
     for (const r of rows) {
@@ -83,11 +81,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   router.get('/api/analytics/distinct-years', apiRateLimiter, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
-    const rows = db
-      .prepare(
-        `SELECT DISTINCT substr(date, 1, 4) as year FROM transactions WHERE profile_id IN (${inClause}) ORDER BY year DESC`
-      )
-      .all(...pids);
+    const rows = req.repos.transactions.all(
+      `SELECT DISTINCT substr(date, 1, 4) as year FROM transactions WHERE profile_id IN (${inClause}) ORDER BY year DESC`,
+      ...pids
+    );
     const years = rows.map((r) => parseInt(r.year));
     const currentYear = new Date().getFullYear();
     if (years.length === 0) years.push(currentYear);
@@ -167,17 +164,15 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const numDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
 
     // Transactions and categories filtered by type (income or expense)
-    const transactions = db
-      .prepare(
-        `SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = ? AND t.date >= ? AND t.date <= ? ORDER BY t.date`
-      )
-      .all(...pids, type, startStr, endStr);
+    const transactions = req.repos.transactions.all(
+      `SELECT t.date, COALESCE(t.amount_local, t.amount) as amount, c.id as cat_id, c.name as cat_name, c.color as cat_color FROM transactions t JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = ? AND t.date >= ? AND t.date <= ? ORDER BY t.date`,
+      ...pids, type, startStr, endStr
+    );
 
-    const categories = db
-      .prepare(
-        `SELECT id, name, color FROM categories WHERE profile_id IN (${inClause}) AND type = ? ORDER BY name`
-      )
-      .all(...pids, type);
+    const categories = req.repos.categories.all(
+      `SELECT id, name, color FROM categories WHERE profile_id IN (${inClause}) AND type = ? ORDER BY name`,
+      ...pids, type
+    );
 
     // Generate labels based on view level
     const labels = [];
@@ -288,30 +283,28 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const endStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
     // Get budgets for this month
-    const budgets = db
-      .prepare(
-        `
+    const budgets = req.repos.budgets.all(
+      `
       SELECT b.category_id, b.amount as budget_amount, c.name as cat_name, c.color as cat_color
       FROM budgets b
       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
       WHERE b.profile_id IN (${inClause}) AND (b.period = 'month' OR b.period = 'monthly')
       AND strftime('%Y-%m', b.start_date) <= ? AND (b.end_date IS NULL OR strftime('%Y-%m', b.end_date) >= ?)
       GROUP BY b.category_id
-    `
-      )
-      .all(...pids, `${year}-${month}`, `${year}-${month}`);
+    `,
+      ...pids, `${year}-${month}`, `${year}-${month}`
+    );
 
     // Get actual spending for this month
-    const actualSpending = db
-      .prepare(
-        `
+    const actualSpending = req.repos.transactions.all(
+      `
       SELECT t.category_id, SUM(COALESCE(t.amount_local, t.amount)) as actual_amount
       FROM transactions t
       WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
       GROUP BY t.category_id
-    `
-      )
-      .all(...pids, startStr, endStr);
+    `,
+      ...pids, startStr, endStr
+    );
 
     // Create maps for easy lookup
     const budgetMap = new Map(budgets.map((b) => [b.category_id, b]));
@@ -369,9 +362,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     // If no budgets, use actual spending as flow
     if (budgets.length === 0) {
       actualSpending.forEach((a) => {
-        const cat = db
-          .prepare('SELECT name, color FROM categories WHERE id = ?')
-          .get(a.category_id);
+        const cat = req.repos.categories.get(
+          'SELECT name, color FROM categories WHERE id = ?',
+          a.category_id
+        );
         if (cat) {
           if (!nodeNames.has(cat.name)) {
             nodes.push({ name: cat.name, category: 'category', color: cat.color });

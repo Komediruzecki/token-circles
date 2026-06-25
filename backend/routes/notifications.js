@@ -5,17 +5,15 @@ const { getProfileId } = require('../middleware/profile');
 const { isValidEmail } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
+module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
   const router = express.Router();
 
   // ── Get notification settings ────────────────────────────────────────
   router.get('/api/notifications/settings', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+    const user = req.repos.users.getById(req.session.userId);
 
-    const rows = db
-      .prepare("SELECT key, value FROM settings WHERE profile_id = ? AND key LIKE 'email_%'")
-      .all(pid);
+    const rows = req.repos.settings.listByPrefix(pid, 'email_');
 
     const settings = { email: user?.email || '' };
     for (const r of rows) {
@@ -43,23 +41,20 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
       if (trimmedEmail && !isValidEmail(trimmedEmail)) {
         return res.status(400).json({ error: 'Invalid email format' });
       }
-      db.prepare('UPDATE users SET email = ? WHERE id = ?').run(trimmedEmail, req.session.userId);
+      req.repos.users.updateEmail(req.session.userId, trimmedEmail);
     }
 
-    const upsert = db.prepare(
-      'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)'
-    );
     if (emailNotifications !== undefined) {
-      upsert.run('email_notifications', emailNotifications ? 'true' : 'false', pid);
+      req.repos.settings.upsert('email_notifications', emailNotifications ? 'true' : 'false', pid);
     }
     if (budgetAlerts !== undefined) {
-      upsert.run('email_budget_alerts', budgetAlerts ? 'true' : 'false', pid);
+      req.repos.settings.upsert('email_budget_alerts', budgetAlerts ? 'true' : 'false', pid);
     }
     if (billsReminders !== undefined) {
-      upsert.run('email_bills_reminders', billsReminders ? 'true' : 'false', pid);
+      req.repos.settings.upsert('email_bills_reminders', billsReminders ? 'true' : 'false', pid);
     }
     if (spendingReport !== undefined) {
-      upsert.run('email_spending_report', spendingReport ? 'true' : 'false', pid);
+      req.repos.settings.upsert('email_spending_report', spendingReport ? 'true' : 'false', pid);
     }
 
     res.json({ ok: true });
@@ -68,7 +63,7 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
 
   // ── Send test email ──────────────────────────────────────────────────
   router.post('/api/notifications/test-email', apiRateLimiter, requireAuth, async (req, res) => {
-    const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+    const user = req.repos.users.getById(req.session.userId);
     const recipient = user?.email;
 
     if (!recipient) {
@@ -88,7 +83,7 @@ module.exports = function ({ db, apiRateLimiter, requireAuth, logError }) {
   // ── Manually trigger a reminder (scoped to requesting user only) ─────
   router.post('/api/notifications/trigger', apiRateLimiter, requireAuth, async (req, res) => {
     const { type } = req.body;
-    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
+    const user = req.repos.users.getById(req.session.userId);
 
     if (!user || !user.email) {
       return res.status(400).json({ error: 'No email address configured for your account' });

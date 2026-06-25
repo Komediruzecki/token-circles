@@ -1,11 +1,11 @@
 const express = require('express');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter }) {
+module.exports = function ({ apiRateLimiter }) {
   const router = express.Router();
 
   router.get('/api/storage-mode', asyncHandler((req, res) => {
-    const rows = db.prepare('SELECT value FROM settings WHERE key = ?').all('storage_mode');
+    const rows = req.repos.settings.getValue('storage_mode');
     const mode = rows.length > 0 ? rows[0].value : 'sqlite';
     res.json({ mode });
 
@@ -13,10 +13,7 @@ module.exports = function ({ db, apiRateLimiter }) {
 
   router.post('/api/storage-mode', apiRateLimiter, asyncHandler((req, res) => {
     const { mode } = req.body;
-    db.prepare('INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, 0)').run(
-      'storage_mode',
-      mode
-    );
+    req.repos.settings.upsert('storage_mode', mode, 0);
     res.json({ ok: true, mode });
 
   }));

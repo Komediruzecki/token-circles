@@ -3,7 +3,7 @@ const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/dashboard', apiRateLimiter, async (req, res) => {
@@ -11,12 +11,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const inClause = pids.map(() => '?').join(',');
 
     // Get settings for currency
-    const currencyRow = db
-      .prepare(
-        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`
-      )
-      .get(...pids);
-    const currency = currencyRow ? currencyRow.value : 'EUR';
+    const currencyRows = req.repos.settings.all(
+      `SELECT value FROM settings WHERE key = ? AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+      'local_currency', ...pids
+    );
+    const currency = currencyRows.length ? currencyRows[0].value : 'EUR';
 
     // Get summary (income, expenses, balance, recent transactions)
     const dateFrom = req.query.date_from;
@@ -45,11 +44,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
     const prevEndDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
 
-    const monthly = db
-      .prepare(
-        `SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`
-      )
-      .all(...pids, startDate, endDate);
+    const monthly = req.repos.transactions.all(
+      `SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`,
+      ...pids, startDate, endDate
+    );
 
     const summary = { income: 0, expense: 0, balance: 0 };
     for (const r of monthly) {
@@ -59,11 +57,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Get previous month summary for MoM delta
-    const prevMonthly = db
-      .prepare(
-        `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`
-      )
-      .all(...pids, prevStartDate, prevEndDate);
+    const prevMonthly = req.repos.transactions.all(
+      `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`,
+      ...pids, prevStartDate, prevEndDate
+    );
 
     const prevSummary = { income: 0, expense: 0, balance: 0 };
     for (const r of prevMonthly) {
@@ -77,38 +74,32 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const momBalanceDelta =
       summary.income - summary.expense - (prevSummary.income - prevSummary.expense);
 
-    const recent = db
-      .prepare(
-        `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id DESC LIMIT 10`
-      )
-      .all(...pids, startDate, endDate);
+    const recent = req.repos.transactions.all(
+      `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id DESC LIMIT 10`,
+      ...pids, startDate, endDate
+    );
 
     // Get category breakdown for expenses
-    const expenseByCategory = db
-      .prepare(
-        `SELECT c.name as category_name, c.color as category_color, SUM(COALESCE(t.amount_local, t.amount)) as total FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ? GROUP BY c.id, c.name, c.color ORDER BY total DESC`
-      )
-      .all(...pids, startDate, endDate);
+    const expenseByCategory = req.repos.transactions.all(
+      `SELECT c.name as category_name, c.color as category_color, SUM(COALESCE(t.amount_local, t.amount)) as total FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ? GROUP BY c.id, c.name, c.color ORDER BY total DESC`,
+      ...pids, startDate, endDate
+    );
 
     // Get account balances
-    const accounts = db
-      .prepare(
-        `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id IN (${inClause})`
-      )
-      .all(...pids);
+    const accounts = req.repos.accounts.all(
+      `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id IN (${inClause})`,
+      ...pids
+    );
     const balance = accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
 
     // Get upcoming bills
     const today = new Date();
-    const upcomingBills = db
-      .prepare(
-        `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`
-      )
-      .all(
-        ...pids,
-        today.toISOString().split('T')[0],
-        new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      );
+    const upcomingBills = req.repos.bills.all(
+      `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`,
+      ...pids,
+      today.toISOString().split('T')[0],
+      new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    );
 
     res.json({
       totalIncome: summary.income,
@@ -151,16 +142,15 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Use amount_local if available (for imported transactions), otherwise amount
-    const monthly = db
-      .prepare(
-        `
+    const monthly = req.repos.transactions.all(
+      `
     SELECT type, SUM(COALESCE(amount_local, amount)) as total, COUNT(*) as count
     FROM transactions
     WHERE profile_id IN (${inClause}) AND date >= ? AND date < ?
     GROUP BY type
-    `
-      )
-      .all(...pids, startDate, endDate);
+    `,
+      ...pids, startDate, endDate
+    );
 
     const summary = { income: 0, expense: 0, transfer: 0, balance: 0 };
     for (const r of monthly) {
@@ -170,28 +160,26 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
     summary.balance = summary.income - summary.expense;
 
-    const recent = db
-      .prepare(
-        `
+    const recent = req.repos.transactions.all(
+      `
     SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
     WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date < ?
     ORDER BY t.date DESC, t.id DESC
     LIMIT 10
-    `
-      )
-      .all(...pids, startDate, endDate);
+    `,
+      ...pids, startDate, endDate
+    );
 
     // Use amount_local if available (for imported transactions), otherwise amount
     const yearStart = `${y}-01-01`;
-    const ytd = db
-      .prepare(
-        `
+    const ytd = req.repos.transactions.all(
+      `
     SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? GROUP BY type
-    `
-      )
-      .all(...pids, yearStart);
+    `,
+      ...pids, yearStart
+    );
     const ytdSummary = { income: 0, expense: 0 };
     for (const r of ytd) {
       if (r.type === 'income') ytdSummary.income = r.total;
@@ -216,11 +204,10 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       prevEndDate = `${y}-01-01`;
     }
 
-    const prevMonthly = db
-      .prepare(
-        `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? GROUP BY type`
-      )
-      .all(...pids, prevStartDate, prevEndDate);
+    const prevMonthly = req.repos.transactions.all(
+      `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? GROUP BY type`,
+      ...pids, prevStartDate, prevEndDate
+    );
     const prevSummary = { income: 0, expense: 0 };
     for (const r of prevMonthly) {
       if (r.type === 'income') prevSummary.income = r.total;
@@ -228,12 +215,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Get currency setting
-    const currencyRow = db
-      .prepare(
-        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`
-      )
-      .get(...pids);
-    const currency = currencyRow ? currencyRow.value : 'EUR';
+    const currencyRows = req.repos.settings.all(
+      `SELECT value FROM settings WHERE key = ? AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+      'local_currency', ...pids
+    );
+    const currency = currencyRows.length ? currencyRows[0].value : 'EUR';
 
     res.json({
       summary,
@@ -257,30 +243,28 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const endStr = endDate.toISOString().split('T')[0];
 
     // Use amount_local if available (for imported transactions), otherwise amount
-    const byCategory = db
-      .prepare(
-        `
+    const byCategory = req.repos.transactions.all(
+      `
     SELECT c.name, c.color, c.icon, SUM(COALESCE(t.amount_local, t.amount)) as total, COUNT(*) as count
     FROM transactions t
     JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
     WHERE t.profile_id IN (${inClause}) AND t.type = 'expense'
     GROUP BY c.id
     ORDER BY total DESC
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
-    const monthly = db
-      .prepare(
-        `
+    const monthly = req.repos.transactions.all(
+      `
     SELECT strftime('%Y-%m', date) as month, type, SUM(COALESCE(amount_local, amount)) as total
     FROM transactions
     WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income', 'expense')
     GROUP BY month, type
     ORDER BY month
-    `
-      )
-      .all(...pids, startStr, endStr);
+    `,
+      ...pids, startStr, endStr
+    );
 
     const monthlyMap = {};
     for (const r of monthly) {
@@ -297,12 +281,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     }
 
     // Get currency setting
-    const currencyRow = db
-      .prepare(
-        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`
-      )
-      .get(...pids);
-    const currency = currencyRow ? currencyRow.value : 'EUR';
+    const currencyRows = req.repos.settings.all(
+      `SELECT value FROM settings WHERE key = ? AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+      'local_currency', ...pids
+    );
+    const currency = currencyRows.length ? currencyRows[0].value : 'EUR';
 
     res.json({
       byCategory,
@@ -317,25 +300,23 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     // Get account balances
-    const accounts = db
-      .prepare(
-        `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id IN (${inClause})`
-      )
-      .all(...pids);
+    const accounts = req.repos.accounts.all(
+      `SELECT id, name, type, currency, balance FROM accounts WHERE profile_id IN (${inClause})`,
+      ...pids
+    );
     const totalNetWorth = accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
 
     // Get monthly net flow (income - expense) from earliest transaction to now
-    const monthly = db
-      .prepare(
-        `
+    const monthly = req.repos.transactions.all(
+      `
     SELECT strftime('%Y-%m', date) as month, type, SUM(COALESCE(amount_local, amount)) as total
     FROM transactions
     WHERE profile_id IN (${inClause}) AND type IN ('income', 'expense')
     GROUP BY month, type
     ORDER BY month
-    `
-      )
-      .all(...pids);
+    `,
+      ...pids
+    );
 
     const monthlyMap = {};
     for (const r of monthly) {

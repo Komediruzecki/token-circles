@@ -3,22 +3,21 @@ const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/recurring', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const rows = db
-      .prepare(
-        `
+    const rows = req.repos.recurring.all(
+      `
       SELECT r.*, c.name as category_name, c.color as category_color, c.type as category_type
       FROM recurring_transactions r
       LEFT JOIN categories c ON r.category_id = c.id
       WHERE r.profile_id = ? AND r.active = 1
       ORDER BY r.next_date ASC
-    `
-      )
-      .all(pid);
+    `,
+      pid
+    );
     res.json(rows);
 
   }));
@@ -49,17 +48,16 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 30);
 
-    const recurring = db
-      .prepare(
-        `
+    const recurring = req.repos.recurring.all(
+      `
       SELECT r.id, r.description, r.amount, r.type, r.frequency, r.day_of_month, r.next_date,
              c.name as category_name, c.color as category_color
       FROM recurring_transactions r
       LEFT JOIN categories c ON r.category_id = c.id
       WHERE r.profile_id = ? AND r.active = 1
-    `
-      )
-      .all(pid);
+    `,
+      pid
+    );
 
     const upcoming = [];
     for (const r of recurring) {
@@ -114,10 +112,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
       totalMonthly += item.amount;
     }
 
-    const currencyRow = db
-      .prepare("SELECT value FROM settings WHERE key = 'local_currency' AND profile_id = ?")
-      .get(pid);
-    const currency = currencyRow ? currencyRow.value : 'EUR';
+    const currencyRow = req.repos.settings.all(
+      "SELECT value FROM settings WHERE key = ? AND profile_id = ?",
+      'local_currency', pid
+    );
+    const currency = currencyRow.length ? currencyRow[0].value : 'EUR';
 
     res.json({
       transactions: upcoming.slice(0, 20),

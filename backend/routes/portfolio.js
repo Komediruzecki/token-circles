@@ -4,17 +4,16 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError, yahooFinanceService }) {
+module.exports = function ({ apiRateLimiter, logError, yahooFinanceService }) {
   const router = express.Router();
 
   router.get('/api/portfolio/holdings', apiRateLimiter, async (req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
-    const holdings = db
-      .prepare(
-        `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause}) ORDER BY purchase_date DESC`
-      )
-      .all(...pids);
+    const holdings = req.repos.portfolio.all(
+      `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause}) ORDER BY purchase_date DESC`,
+      ...pids
+    );
 
     // Try to fetch current prices
     const tickers = [...new Set(holdings.map((h) => h.ticker))];
@@ -45,9 +44,10 @@ module.exports = function ({ db, apiRateLimiter, logError, yahooFinanceService }
   router.get('/api/portfolio/summary', apiRateLimiter, async (req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
-    const holdings = db
-      .prepare(`SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause})`)
-      .all(...pids);
+    const holdings = req.repos.portfolio.all(
+      `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause})`,
+      ...pids
+    );
 
     if (holdings.length === 0) {
       return res.json({

@@ -8,8 +8,41 @@ class BudgetsRepository extends BaseRepository {
     );
   }
 
+  listByProfiles(profileIds) {
+    const inClause = profileIds.map(() => '?').join(',');
+    return this.all(
+      `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+       FROM budgets b
+       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+       WHERE b.profile_id IN (${inClause})
+       ORDER BY b.id DESC`,
+      ...profileIds
+    );
+  }
+
+  listActive(profileId, startDate) {
+    return this.all(
+      `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+       FROM budgets b
+       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+       WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
+      profileId,
+      startDate
+    );
+  }
+
   getById(id, profileId) {
     return this.get('SELECT * FROM budgets WHERE id = ? AND profile_id = ?', id, profileId);
+  }
+
+  getByCategoryForMonth(categoryId, profileId, startDate, period) {
+    return this.get(
+      'SELECT * FROM budgets WHERE category_id = ? AND profile_id = ? AND start_date = ? AND period = ?',
+      categoryId,
+      profileId,
+      startDate,
+      period
+    );
   }
 
   getByCategory(categoryId, profileId, period) {
