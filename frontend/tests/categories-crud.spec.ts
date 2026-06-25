@@ -20,8 +20,7 @@ test.describe('Categories CRUD Operations @smoke', () => {
 
   test('should have new category button', async ({ page }) => {
     const addBtn = getByTestId(page, 'add-category-btn')
-    const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(isVisible).toBeTruthy()
+    await expect(addBtn).toBeVisible({ timeout: 10000 })
   })
 
   test('should handle errors gracefully', async ({ page }) => {
@@ -51,8 +50,10 @@ test.describe('Categories CRUD Operations @smoke', () => {
 
     const loadingText = getByTestId(page, 'loading-state')
     const contentArea = getByTestId(page, 'categories-grid')
-    const hasLoading = await loadingText.isVisible({ timeout: 500 }).catch(() => false)
-    const hasContent = await contentArea.isVisible({ timeout: 500 }).catch(() => false)
-    expect(hasLoading || hasContent).toBeTruthy()
+    await expect(async () => {
+      const hasLoading = await loadingText.isVisible()
+      const hasContent = await contentArea.isVisible()
+      expect(hasLoading || hasContent).toBeTruthy()
+    }).toPass({ timeout: 10000 })
   })
 })
