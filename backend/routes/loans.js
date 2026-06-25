@@ -4,23 +4,22 @@ const { getProfileId } = require('../middleware/profile');
 const loanCalc = require('../models/loanCalculator');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/loans', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const rows = db
-      .prepare(
-        `
+    const rows = req.repos.loans.all(
+      `
       SELECT l.*,
         (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid,
         (SELECT COUNT(*) FROM loan_prepayments WHERE loan_id = l.id) as prepayment_count
       FROM loans l
       WHERE l.profile_id = ?
       ORDER BY l.created_at DESC
-    `
-      )
-      .all(pid);
+    `,
+      pid
+    );
     res.json(rows);
 
   }));
@@ -133,9 +132,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
 
   router.put('/api/loans/:id/rates/:rateId', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const loan = db
-      .prepare('SELECT id FROM loans WHERE id=? AND profile_id=?')
-      .get(req.params.id, pid);
+    const loan = req.repos.loans.getById(req.params.id, pid);
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
     const { rate, start_month, end_month } = req.body;
     req.repos.loans.updateRatePeriod(req.params.rateId, req.params.id, {
@@ -159,9 +156,7 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   // Prepayments CRUD
   router.post('/api/loans/:id/prepayments', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const loan = db
-      .prepare('SELECT id FROM loans WHERE id=? AND profile_id=?')
-      .get(req.params.id, pid);
+    const loan = req.repos.loans.getById(req.params.id, pid);
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
     const { month, amount, note } = req.body;
     const id = req.repos.loans.addPrepayment({
@@ -186,17 +181,11 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
   // Calculate amortization
   router.post('/api/loans/:id/calculate', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const loan = db
-      .prepare('SELECT * FROM loans WHERE id=? AND profile_id=?')
-      .get(req.params.id, pid);
+    const loan = req.repos.loans.getById(req.params.id, pid);
     if (!loan) return res.status(404).json({ error: 'Not found' });
 
-    const ratePeriods = db
-      .prepare('SELECT * FROM loan_rate_periods WHERE loan_id=? ORDER BY start_month')
-      .all(req.params.id);
-    const prepayments = db
-      .prepare('SELECT * FROM loan_prepayments WHERE loan_id=? ORDER BY month')
-      .all(req.params.id);
+    const ratePeriods = req.repos.loans.getRatePeriods(req.params.id);
+    const prepayments = req.repos.loans.getPrepayments(req.params.id);
 
     // Prepend the loan's initial rate as the first rate period (months 1 to before first user-set change)
     const initialRatePeriod = [

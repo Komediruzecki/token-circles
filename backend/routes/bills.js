@@ -31,22 +31,21 @@ function isBillPaidForCurrentPeriod(bill, now) {
   return false;
 }
 
-module.exports = function ({ db, apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError }) {
   const router = express.Router();
 
   router.get('/api/bills', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const rows = db
-      .prepare(
-        `
+    const rows = req.repos.bills.all(
+      `
       SELECT b.*, c.name as category_name, c.color as category_color
       FROM bills b
       LEFT JOIN categories c ON b.category_id = c.id
       WHERE b.profile_id = ?
       ORDER BY b.is_active DESC, b.name ASC
-    `
-      )
-      .all(pid);
+    `,
+      pid
+    );
 
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -78,17 +77,16 @@ module.exports = function ({ db, apiRateLimiter, logError }) {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
-    const bills = db
-      .prepare(
-        `
+    const bills = req.repos.bills.all(
+      `
       SELECT b.*, c.name as category_name, c.color as category_color
       FROM bills b
       LEFT JOIN categories c ON b.category_id = c.id
       WHERE b.profile_id = ? AND b.is_active = 1
       ORDER BY b.name ASC
-    `
-      )
-      .all(pid);
+    `,
+      pid
+    );
 
     const upcoming = bills.map((b) => {
       let nextDue = null;

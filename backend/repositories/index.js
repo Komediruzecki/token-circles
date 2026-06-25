@@ -18,6 +18,7 @@ const { ReceiptsRepository } = require('./receiptsRepo');
 const { RecurringRepository } = require('./recurringRepo');
 const { UsersRepository } = require('./usersRepo');
 const { SettingsRepository } = require('./settingsRepo');
+const { RetirementGoalsRepository } = require('./retirementGoalsRepo');
 
 /**
  * @param {import('better-sqlite3').Database} db
@@ -39,6 +40,7 @@ function initRepositories(db) {
     recurring: new RecurringRepository(db),
     users: new UsersRepository(db),
     settings: new SettingsRepository(db),
+    retirementGoals: new RetirementGoalsRepository(db),
   };
 }
 

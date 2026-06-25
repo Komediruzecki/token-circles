@@ -4,7 +4,6 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
 module.exports = function ({
-  db,
   apiRateLimiter,
   logError,
   spreadsheetService,
@@ -101,25 +100,21 @@ module.exports = function ({
     const monthName = monthNames[parseInt(month) - 1] || month;
 
     // Fetch settings for currency
-    const settings = db
-      .prepare(
-        `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`
-      )
-      .get(...pids);
+    const settings = req.repos.settings.get(
+      `SELECT value FROM settings WHERE key = 'local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+      ...pids
+    );
     const currency = settings ? settings.value : 'EUR';
 
     // Fetch transactions for the month
-    const transactions = db
-      .prepare(
-        `
-    SELECT t.date, t.amount, t.description, c.name as cat_name, c.type as cat_type, c.color as cat_color, t.type as tx_type
-    FROM transactions t
-    LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
-    ORDER BY t.date
-    `
-      )
-      .all(...pids, startStr, endStr);
+    const transactions = req.repos.transactions.all(
+      `SELECT t.date, t.amount, t.description, c.name as cat_name, c.type as cat_type, c.color as cat_color, t.type as tx_type
+       FROM transactions t
+       LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
+       ORDER BY t.date`,
+      ...pids, startStr, endStr
+    );
 
     // Aggregate by category
     const incomeByCat = {};
@@ -348,17 +343,14 @@ module.exports = function ({
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
 
-    const rows = db
-      .prepare(
-        `
-    SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
-    ORDER BY c.tax_deductible DESC, c.name, t.date
-    `
-      )
-      .all(...pids, startStr, endStr);
+    const rows = req.repos.transactions.all(
+      `SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
+       ORDER BY c.tax_deductible DESC, c.name, t.date`,
+      ...pids, startStr, endStr
+    );
 
     const taxDeductible = rows.filter((r) => r.tax_deductible);
     const nonDeductible = rows.filter((r) => !r.tax_deductible);
@@ -403,27 +395,23 @@ module.exports = function ({
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
 
-    const rows = db
-      .prepare(
-        `
-    SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
-    ORDER BY c.tax_deductible DESC, c.name, t.date
-    `
-      )
-      .all(...pids, startStr, endStr);
+    const rows = req.repos.transactions.all(
+      `SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
+       ORDER BY c.tax_deductible DESC, c.name, t.date`,
+      ...pids, startStr, endStr
+    );
 
     const taxRows = rows.filter((r) => r.tax_deductible);
     const nonRows = rows.filter((r) => !r.tax_deductible);
 
     const currency =
-      db
-        .prepare(
-          `SELECT value FROM settings WHERE key='local_currency' AND profile_id IN (${inClause}) ORDER BY profile_id DESC LIMIT 1`
-        )
-        .get(...pids)?.value || 'USD';
+      req.repos.settings.get(
+        `SELECT value FROM settings WHERE key='local_currency' AND profile_id IN (${inClause}) ORDER BY profile_id DESC LIMIT 1`,
+        ...pids
+      )?.value || 'USD';
     const symbols = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF ' };
     const fmt = (amt) =>
       (symbols[currency] || currency + ' ') +
@@ -619,17 +607,14 @@ module.exports = function ({
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
 
-    const rows = db
-      .prepare(
-        `
-    SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
-    ORDER BY t.type, c.name, t.date
-    `
-      )
-      .all(...pids, startStr, endStr);
+    const rows = req.repos.transactions.all(
+      `SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
+       ORDER BY t.type, c.name, t.date`,
+      ...pids, startStr, endStr
+    );
 
     const income = rows.filter((r) => r.type === 'income');
     const expenses = rows.filter((r) => r.type === 'expense');
@@ -673,27 +658,23 @@ module.exports = function ({
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
 
-    const rows = db
-      .prepare(
-        `
-    SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
-    ORDER BY t.type, c.name, t.date
-    `
-      )
-      .all(...pids, startStr, endStr);
+    const rows = req.repos.transactions.all(
+      `SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
+       ORDER BY t.type, c.name, t.date`,
+      ...pids, startStr, endStr
+    );
 
     const incomeRows = rows.filter((r) => r.type === 'income');
     const expenseRows = rows.filter((r) => r.type === 'expense');
 
     const currency =
-      db
-        .prepare(
-          `SELECT value FROM settings WHERE key='local_currency' AND profile_id IN (${inClause}) ORDER BY profile_id DESC LIMIT 1`
-        )
-        .get(...pids)?.value || 'USD';
+      req.repos.settings.get(
+        `SELECT value FROM settings WHERE key='local_currency' AND profile_id IN (${inClause}) ORDER BY profile_id DESC LIMIT 1`,
+        ...pids
+      )?.value || 'USD';
     const symbols = { EUR: '€', USD: '$', GBP: '£', CHF: 'CHF ' };
     const fmt = (amt) =>
       (symbols[currency] || currency + ' ') +
@@ -929,40 +910,35 @@ module.exports = function ({
     const inClause = pids.map(() => '?').join(',');
 
     // --- Fetch all data server-side ---
-    const currencyRow = db
-      .prepare(
-        `SELECT value FROM settings WHERE key='local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`
-      )
-      .get(...pids);
+    const currencyRow = req.repos.settings.get(
+      `SELECT value FROM settings WHERE key='local_currency' AND (profile_id IN (${inClause}) OR profile_id IS NULL) ORDER BY profile_id DESC LIMIT 1`,
+      ...pids
+    );
     const currency = currencyRow?.value || 'USD';
 
     // Category breakdown (for doughnut chart)
-    const byCategory = db
-      .prepare(
-        `
-    SELECT c.name, c.color, SUM(COALESCE(t.amount_local, t.amount)) as total
-    FROM transactions t
-    JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
-    GROUP BY c.id
-    ORDER BY total DESC
-    `
-      )
-      .all(...pids, `${year}-01-01`, `${year}-12-31`);
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+    const byCategory = req.repos.transactions.all(
+      `SELECT c.name, c.color, SUM(COALESCE(t.amount_local, t.amount)) as total
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.type = 'expense' AND t.date >= ? AND t.date <= ?
+       GROUP BY c.id
+       ORDER BY total DESC`,
+      ...pids, startDate, endDate
+    );
 
     // Monthly data for bar and line charts + breakdown table
-    const monthly = db
-      .prepare(
-        `
-    SELECT strftime('%m', date) as month_num,
-           type, SUM(COALESCE(amount_local, amount)) as total
-    FROM transactions
-    WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income', 'expense')
-    GROUP BY month_num, type
-    ORDER BY month_num
-    `
-      )
-      .all(...pids, `${year}-01-01`, `${year}-12-31`);
+    const monthly = req.repos.transactions.all(
+      `SELECT strftime('%m', date) as month_num,
+              type, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income', 'expense')
+       GROUP BY month_num, type
+       ORDER BY month_num`,
+      ...pids, startDate, endDate
+    );
 
     const monthlyMap = {};
     for (let m = 1; m <= 12; m++) {
@@ -1253,17 +1229,15 @@ module.exports = function ({
     }
 
     const totalIncome =
-      db
-        .prepare(
-          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`
-        )
-        .get(...incomeParams)?.total || 0;
+      req.repos.transactions.get(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`,
+        ...incomeParams
+      )?.total || 0;
     const totalExpenses =
-      db
-        .prepare(
-          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`
-        )
-        .get(...expenseParams)?.total || 0;
+      req.repos.transactions.get(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`,
+        ...expenseParams
+      )?.total || 0;
 
     const countParams = type
       ? [pid, type, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])]
@@ -1274,7 +1248,7 @@ module.exports = function ({
     if (startDate) countQuery += ` AND date >= ?`;
     if (endDate) countQuery += ` AND date <= ?`;
 
-    const transactionCount = db.prepare(countQuery).get(...countParams)?.count || 0;
+    const transactionCount = req.repos.transactions.get(countQuery, ...countParams)?.count || 0;
 
     const response = {
       totalIncome,
@@ -1284,16 +1258,15 @@ module.exports = function ({
     };
 
     if (includeCategories === 'true') {
-      response.categoryBreakdown = db
-        .prepare(
-          `SELECT c.name, c.id, SUM(t.amount) as total
-           FROM transactions t
-           LEFT JOIN categories c ON t.category_id = c.id
-           WHERE t.profile_id = ?
-           GROUP BY c.id
-           ORDER BY total DESC`
-        )
-        .all(pid);
+      response.categoryBreakdown = req.repos.transactions.all(
+        `SELECT c.name, c.id, SUM(t.amount) as total
+         FROM transactions t
+         LEFT JOIN categories c ON t.category_id = c.id
+         WHERE t.profile_id = ?
+         GROUP BY c.id
+         ORDER BY total DESC`,
+        pid
+      );
     }
 
     res.json(response);
@@ -1339,19 +1312,17 @@ module.exports = function ({
       const startDate = d.toISOString().split('T')[0];
       const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
       const income =
-        db
-          .prepare(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-           WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
-          )
-          .get(pid, startDate, endDate)?.total || 0;
+        req.repos.transactions.get(
+          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+           WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
+          pid, startDate, endDate
+        )?.total || 0;
       const expenses =
-        db
-          .prepare(
-            `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-           WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`
-          )
-          .get(pid, startDate, endDate)?.total || 0;
+        req.repos.transactions.get(
+          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+           WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`,
+          pid, startDate, endDate
+        )?.total || 0;
       comparison.push({
         month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
         income,

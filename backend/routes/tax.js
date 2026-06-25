@@ -1,5 +1,6 @@
 const express = require('express');
 const { getProfileId } = require('../middleware/profile');
+const { asyncHandler } = require('../lib/errors');
 
 // 2025 US Federal tax brackets (simplified)
 const FEDERAL_BRACKETS = {
@@ -65,7 +66,7 @@ function calculateFederalTax(income, filingStatus) {
   return Math.round(tax * 100) / 100;
 }
 
-module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
+module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
   // ── Tax Summary ──────────────────────────────────────────────────────
@@ -78,22 +79,20 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
     const endDate = `${year}-12-31`;
 
     // Get total income
-    const incomeRows = db
-      .prepare(
-        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-         WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
-      )
-      .get(pid, startDate, endDate);
-    const totalIncome = incomeRows.total || 0;
+    const incomeRows = req.repos.transactions.get(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
+      pid, startDate, endDate
+    );
+    const totalIncome = incomeRows ? incomeRows.total : 0;
 
     // Get total deductions (transactions marked as deduction)
-    const deductionRows = db
-      .prepare(
-        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-         WHERE profile_id = ? AND type = 'deduction' AND date >= ? AND date <= ?`
-      )
-      .get(pid, startDate, endDate);
-    const totalDeductions = deductionRows.total || 0;
+    const deductionRows = req.repos.transactions.get(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE profile_id = ? AND type = 'deduction' AND date >= ? AND date <= ?`,
+      pid, startDate, endDate
+    );
+    const totalDeductions = deductionRows ? deductionRows.total : 0;
 
     const taxableIncome = totalIncome - totalDeductions;
 
@@ -121,13 +120,12 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
     const response = { totalIncome, totalDeductions, taxableIncome, year };
 
     if (req.query.includeBreakdown === 'true') {
-      const breakdown = db
-        .prepare(
-          `SELECT description, amount, date, type FROM transactions
-           WHERE profile_id = ? AND date >= ? AND date <= ? AND (type = 'income' OR type = 'deduction')
-           ORDER BY date DESC`
-        )
-        .all(pid, startDate, endDate);
+      const breakdown = req.repos.transactions.all(
+        `SELECT description, amount, date, type FROM transactions
+         WHERE profile_id = ? AND date >= ? AND date <= ? AND (type = 'income' OR type = 'deduction')
+         ORDER BY date DESC`,
+        pid, startDate, endDate
+      );
       response.breakdown = breakdown;
     }
 
@@ -156,7 +154,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       params.push(endDate);
     }
 
-    const deductions = db.prepare(query).all(...params);
+    const deductions = req.repos.transactions.all(query, ...params);
     const totalDeductions = deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
 
     res.json({ totalDeductions, deductions, count: deductions.length });
@@ -176,7 +174,7 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
       params.push(`%${type}%`);
     }
 
-    const incomeRows = db.prepare(query).all(...params);
+    const incomeRows = req.repos.transactions.all(query, ...params);
     const totalIncome = incomeRows.reduce((sum, r) => sum + (r.amount || 0), 0);
 
     res.json({ totalIncome, incomeRows, count: incomeRows.length });
@@ -259,7 +257,6 @@ module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
 
     if (req.query.export === 'pdf') {
       const { createDocument } = require('../services/pdfService');
-const { asyncHandler } = require('../lib/errors');
       const doc = createDocument({ margin: 50 });
       const chunks = [];
       doc.on('data', (chunk) => chunks.push(chunk));
@@ -296,24 +293,22 @@ const { asyncHandler } = require('../lib/errors');
       const startDate = `${year}-${monthStr}-01`;
       const endDate = `${year}-${monthStr}-31`;
 
-      const incomeRow = db
-        .prepare(
-          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-           WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
-        )
-        .get(pid, startDate, endDate);
+      const incomeRow = req.repos.transactions.get(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+         WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
+        pid, startDate, endDate
+      );
 
-      const deductionRow = db
-        .prepare(
-          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-           WHERE profile_id = ? AND type = 'deduction' AND date >= ? AND date <= ?`
-        )
-        .get(pid, startDate, endDate);
+      const deductionRow = req.repos.transactions.get(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+         WHERE profile_id = ? AND type = 'deduction' AND date >= ? AND date <= ?`,
+        pid, startDate, endDate
+      );
 
       monthlyProgress.push({
         month,
-        income: incomeRow.total || 0,
-        deductions: deductionRow.total || 0,
+        income: incomeRow ? incomeRow.total : 0,
+        deductions: deductionRow ? deductionRow.total : 0,
         estimated: 0,
         paid: 0,
       });
@@ -340,14 +335,13 @@ const { asyncHandler } = require('../lib/errors');
       endDate = `${year}-${String(firstMonthOfQuarter + 3).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
-    const incomeRow = db
-      .prepare(
-        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-         WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
-      )
-      .get(pid, startDate, endDate);
+    const incomeRow = req.repos.transactions.get(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
+      pid, startDate, endDate
+    );
 
-    const totalIncome = incomeRow.total || 0;
+    const totalIncome = incomeRow ? incomeRow.total : 0;
     const totalFederalTax = calculateFederalTax(totalIncome, 'single');
 
     res.json({ totalFederalTax, totalIncome, year, quarter: quarter ? parseInt(quarter) : null });
@@ -366,14 +360,13 @@ const { asyncHandler } = require('../lib/errors');
     const startDate = `${year}-01-01`;
     const endDate = `${year}-12-31`;
 
-    const incomeRow = db
-      .prepare(
-        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-         WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`
-      )
-      .get(pid, startDate, endDate);
+    const incomeRow = req.repos.transactions.get(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
+      pid, startDate, endDate
+    );
 
-    const totalIncome = incomeRow.total || 0;
+    const totalIncome = incomeRow ? incomeRow.total : 0;
     const rate = STATE_TAX_RATES[state] || 0;
     const totalStateTax = Math.round(totalIncome * rate * 100) / 100;
 
