@@ -46,6 +46,8 @@
     "@babel/preset-env": "^7.29.2",
     "chai": "^4.4.1",
     "eslint": "^9.39.4",
+    "eslint-plugin-security": "^4.0.1",
+    "eslint-plugin-sonarjs": "^4.1.0",
     "jest": "^29.7.0",
     "prettier": "^3.8.3",
     "supertest": "^7.2.2"

@@ -17,7 +17,8 @@ module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
     const { transaction_id } = req.body;
-    const filename = `${Date.now()}-${req.file.originalname}`;
+    const ext = path.extname(req.file.originalname || '');
+    const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
     const uploadsDir = path.join(__dirname, '..', 'uploads', 'receipts');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
@@ -114,7 +115,14 @@ module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
 
   router.get('/api/receipts/file/:filename', apiRateLimiter, asyncHandler((req, res) => {
     const { filename } = req.params;
-    const storagePath = path.join(__dirname, '..', 'uploads', 'receipts', filename);
+    const baseDir = path.join(__dirname, '..', 'uploads', 'receipts');
+    const storagePath = path.resolve(baseDir, filename);
+
+    // Validate path traversal
+    if (!storagePath.startsWith(baseDir)) {
+      return res.status(403).json({ error: 'Invalid file path' });
+    }
+
     if (!fs.existsSync(storagePath)) return res.status(404).json({ error: 'File not found' });
     const ext = path.extname(filename).toLowerCase();
     let contentType = 'application/octet-stream';

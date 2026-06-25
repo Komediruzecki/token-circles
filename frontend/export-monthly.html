@@ -353,6 +353,14 @@
           return sym + amt.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
         }
 
+        // HTML Escaper for XSS protection
+        function escapeHtml(str) {
+          if (!str) return '';
+          return String(str).replace(/[&<>"']/g, function(m) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m];
+          });
+        }
+
         const data = window.__DATA__
         if (!data) {
           document.body.innerHTML =
@@ -413,7 +421,7 @@
           new Chart(incomeCtx, {
             type: 'doughnut',
             data: {
-              labels: incomeFiltered.map((c) => c.name),
+              labels: incomeFiltered.map((c) => escapeHtml(c.name)),
               datasets: [
                 {
                   data: incomeFiltered.map((c) => c.total),
@@ -454,7 +462,7 @@
           new Chart(expenseCtx, {
             type: 'doughnut',
             data: {
-              labels: expenseFiltered.map((c) => c.name),
+              labels: expenseFiltered.map((c) => escapeHtml(c.name)),
               datasets: [
                 {
                   data: expenseFiltered.map((c) => c.total),
@@ -516,9 +524,9 @@
           const tr = document.createElement('tr')
           tr.innerHTML =
             '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' +
-            (c.color || '#6b7280') +
+            escapeHtml(c.color || '#6b7280') +
             ';margin-right:6px;"></span>' +
-            c.name +
+            escapeHtml(c.name) +
             '</td>' +
             '<td class="val-income">' +
             fmt(c.income) +

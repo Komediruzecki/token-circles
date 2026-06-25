@@ -5,30 +5,55 @@
 
 // Helper: get profile ID from request (header first, then query param, then 1)
 function getProfileId(req) {
-  return parseInt(req.headers['x-profile-id'] || req.query.profile_id || 1);
+  const id = parseInt(req.headers['x-profile-id'] || req.query.profile_id || 1);
+  if (req.session && req.session.userId && req.repos && req.repos.profiles) {
+    const profile = req.repos.profiles.getById(id);
+    if (!profile || profile.user_id !== req.session.userId) {
+      const err = new Error('Access denied to this profile');
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+  return id;
 }
 
 // Helper: get profile IDs from request (supports JSON array via header)
 function getProfileIds(req) {
+  let ids = [];
   const header = req.headers['x-profile-ids'];
   if (header) {
     try {
       const parsed = JSON.parse(header);
       if (Array.isArray(parsed) && parsed.length > 0)
-        return parsed.map((id) => parseInt(id)).filter((id) => !isNaN(id));
+        ids = parsed.map((id) => parseInt(id)).filter((id) => !isNaN(id));
     } catch (e) {
       // single ID fallback
     }
   }
-  const qp = req.query.profile_ids;
-  if (qp) {
-    const ids = String(qp)
-      .split(',')
-      .map((id) => parseInt(id.trim()))
-      .filter((id) => !isNaN(id));
-    if (ids.length > 0) return ids;
+  if (ids.length === 0) {
+    const qp = req.query.profile_ids;
+    if (qp) {
+      ids = String(qp)
+        .split(',')
+        .map((id) => parseInt(id.trim()))
+        .filter((id) => !isNaN(id));
+    }
   }
-  return [getProfileId(req)];
+  if (ids.length === 0) {
+    ids = [parseInt(req.headers['x-profile-id'] || req.query.profile_id || 1)];
+  }
+  
+  if (req.session && req.session.userId && req.repos && req.repos.profiles) {
+    for (const id of ids) {
+      const profile = req.repos.profiles.getById(id);
+      if (!profile || profile.user_id !== req.session.userId) {
+        const err = new Error('Access denied to profile ' + id);
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+  }
+  return ids;
 }
 
 // Helper: wrap all data queries with profile_id

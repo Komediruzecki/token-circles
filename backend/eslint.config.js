@@ -1,7 +1,11 @@
 import js from '@eslint/js';
+import pluginSecurity from 'eslint-plugin-security';
+import pluginSonarjs from 'eslint-plugin-sonarjs';
 
 export default [
   js.configs.recommended,
+  pluginSecurity.configs.recommended,
+  pluginSonarjs.configs.recommended,
   {
     files: ['**/*.js'],
     languageOptions: {

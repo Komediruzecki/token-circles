@@ -63,3 +63,4 @@ backend/db
 public/frontend
 
 assets/local/
+.audit_telemetry/

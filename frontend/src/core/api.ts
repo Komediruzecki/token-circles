@@ -97,8 +97,8 @@ export class ApiClient {
     }
 
     // For DELETE without body, don't set Content-Type
-    if (method === 'DELETE') {
-      requestOptions.headers = {}
+    if (method === 'DELETE' && body === undefined) {
+      delete (requestOptions.headers as Record<string, string>)['Content-Type']
     }
 
     try {

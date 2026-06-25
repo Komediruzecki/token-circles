@@ -27,7 +27,7 @@ export default defineConfig({
   build: {
     emptyOutDir: true,
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: process.env.NODE_ENV !== 'production',
     target: 'esnext',
     // minify: 'esbuild',
     // rollupOptions: {

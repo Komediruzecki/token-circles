@@ -93,7 +93,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // Allow cookies over HTTP for dev/localhost
+      secure: process.env.NODE_ENV === 'production', // Allow cookies over HTTP for dev/localhost
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -134,7 +134,7 @@ const apiRateLimiter = (() => {
 
   return (req, res, next) => {
     // Skip rate limiting if X-Skip-RateLimit header is present (for testing)
-    if (req.headers['x-skip-ratelimit'] === 'true') return next();
+    if (process.env.NODE_ENV === 'test' && req.headers['x-skip-ratelimit'] === 'true') return next();
 
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -185,7 +185,7 @@ const authRateLimiter = (() => {
 
   return (req, res, next) => {
     // Skip rate limiting if X-Skip-RateLimit header is present (for testing)
-    if (req.headers['x-skip-ratelimit'] === 'true') return next();
+    if (process.env.NODE_ENV === 'test' && req.headers['x-skip-ratelimit'] === 'true') return next();
 
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -263,7 +263,7 @@ app.use(
 );
 
 // Body parsing
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 // Repository middleware — attaches req.repos to every request
 app.use(reposMiddleware(db));
@@ -281,7 +281,7 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
 app.get('/api/docs.json', (req, res) => res.json(swaggerDocument));
 
 // ==================== LOGS API ====================
-app.get('/api/logs', async (req, res) => {
+app.get('/api/logs', requireAuth, async (req, res) => {
   try {
     const level = req.query.level;
     const limit = parseInt(req.query.limit) || 50;
@@ -314,7 +314,7 @@ app.get('/api/logs', async (req, res) => {
   }
 });
 
-app.post('/api/logs/clear', async (req, res) => {
+app.post('/api/logs/clear', requireAuth, async (req, res) => {
   try {
     await fs.promises.writeFile(
       LOGS_FILE,
@@ -445,7 +445,7 @@ const routeDeps = {
 // ── Mount extracted route modules ────────────────────────────────────────────────
 app.use(require('./routes/appInfo')());
 app.use(require('./routes/auth')(routeDeps));
-app.use(require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles }));
+app.use(require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }));
 app.use(require('./routes/settings')({ apiRateLimiter }));
 app.use(require('./routes/loans')({ apiRateLimiter, logError }));
 app.use(require('./routes/recurring')({ apiRateLimiter, logError }));
@@ -466,7 +466,7 @@ app.use(require('./routes/notifications')({ apiRateLimiter, logError, requireAut
 app.use(require('./routes/categories')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/budgets')({ apiRateLimiter }));
 app.use(require('./routes/dashboard')({ apiRateLimiter, logError }));
-app.use(require('./routes/exportRoutes')({ apiRateLimiter, logError }));
+app.use(require('./routes/exportRoutes')({ apiRateLimiter, logError, requireAuth }));
 app.use(
   require('./routes/importRoutes')({
     apiRateLimiter,
@@ -529,7 +529,7 @@ if (process.env.NODE_ENV === 'test') {
   app.post('/api/test/reset-password', (req, res) => {
     try {
       const bcrypt = require('bcrypt');
-      const hash = bcrypt.hashSync('add2', 10);
+      const hash = bcrypt.hashSync('add2', 12);
       db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'maff');
       res.json(toCamelCase({ ok: true }));
     } catch (err) {

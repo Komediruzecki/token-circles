@@ -30,10 +30,13 @@ module.exports = function ({ apiRateLimiter, authRateLimiter, requireAuth, logEr
       logError('warning', 'AUTH', 'Invalid login attempt - wrong password', { username });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    req.session.userId = user.id;
-    req.session.username = user.username;
-    req.session.save(() => {
-      res.json({ ok: true, username: user.username, isLoggedIn: true });
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: 'Failed to regenerate session' });
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      req.session.save(() => {
+        res.json({ ok: true, username: user.username, isLoggedIn: true });
+      });
     });
   }));
 
@@ -82,7 +85,7 @@ module.exports = function ({ apiRateLimiter, authRateLimiter, requireAuth, logEr
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
 
-    const hash = await bcrypt.hash(newPassword, 10);
+    const hash = await bcrypt.hash(newPassword, 12);
     req.repos.users.updatePassword(req.session.userId, hash);
 
     res.json({ ok: true, message: 'Password changed successfully' });

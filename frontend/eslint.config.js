@@ -1,3 +1,5 @@
+import pluginSecurity from 'eslint-plugin-security';
+import pluginSonarjs from 'eslint-plugin-sonarjs';
 import eslint from '@eslint/js'
 import tsParser from '@typescript-eslint/parser'
 import { defineConfig } from 'eslint/config'
@@ -28,6 +30,8 @@ export default defineConfig(
     ],
   },
   importX.flatConfigs.recommended,
+  pluginSecurity.configs.recommended,
+  pluginSonarjs.configs.recommended,
   {
     ...importX.flatConfigs.typescript,
     rules: {

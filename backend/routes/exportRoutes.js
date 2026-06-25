@@ -4,10 +4,10 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/export/:type', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/export/:type', requireAuth, apiRateLimiter, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     const { type } = req.params;
@@ -111,7 +111,10 @@ module.exports = function ({ apiRateLimiter, logError }) {
         ...data.map((row) =>
           headers
             .map((h) => {
-              const val = row[h] == null ? '' : String(row[h]);
+              let val = row[h] == null ? '' : String(row[h]);
+              if (/^[=+\-@\t\r]/.test(val)) {
+                val = "'" + val;
+              }
               return val.includes(',') || val.includes('"') || val.includes('\n')
                 ? `"${val.replace(/"/g, '""')}"`
                 : val;
@@ -125,7 +128,7 @@ module.exports = function ({ apiRateLimiter, logError }) {
     }
 
   }));
-  router.get('/api/export', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/export', requireAuth, apiRateLimiter, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
 
@@ -236,7 +239,7 @@ module.exports = function ({ apiRateLimiter, logError }) {
   }));
 
   // Import data from JSON (serverless mode support)
-  router.post('/api/import', apiRateLimiter, asyncHandler((req, res) => {
+  router.post('/api/import', requireAuth, apiRateLimiter, asyncHandler((req, res) => {
     const data = req.body;
     if (!data || typeof data !== 'object') {
       return res.status(400).json({ error: 'Invalid data format' });
@@ -469,7 +472,7 @@ module.exports = function ({ apiRateLimiter, logError }) {
   // ========================
   // IMPORT PREVIEW
   // ========================
-  router.post('/api/import/preview', apiRateLimiter, asyncHandler((req, res) => {
+  router.post('/api/import/preview', requireAuth, apiRateLimiter, asyncHandler((req, res) => {
     const data = req.body;
     if (!data || typeof data !== 'object') {
       return res.status(400).json({ error: 'Invalid data format' });
@@ -550,7 +553,7 @@ module.exports = function ({ apiRateLimiter, logError }) {
   }));
 
   // Clear all data (dangerous!)
-  router.delete('/api/clear-all', apiRateLimiter, asyncHandler((req, res) => {
+  router.delete('/api/clear-all', requireAuth, apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     req.repos.loans.run(
       'DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)',

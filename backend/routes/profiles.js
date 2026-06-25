@@ -2,8 +2,7 @@ const express = require('express');
 const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
-
-module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles }) {
+module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }) {
   const router = express.Router();
 
   function updateProfileHandler(req, res) {
@@ -26,7 +25,7 @@ module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles }) 
 
   }
 
-  router.get('/api/profiles', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/profiles', requireAuth, apiRateLimiter, asyncHandler((req, res) => {
     let profiles;
     if (req.session.userId) {
       profiles = req.repos.profiles.listByUserId(req.session.userId);
@@ -155,11 +154,17 @@ module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles }) 
       return res.status(400).json({ error: 'Current and new password are required' });
     }
     const bcrypt = require('bcrypt');
+    if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (!/[A-Z]/.test(newPassword)) return res.status(400).json({ error: 'Password must contain an uppercase letter' });
+    if (!/[a-z]/.test(newPassword)) return res.status(400).json({ error: 'Password must contain a lowercase letter' });
+    if (!/[0-9]/.test(newPassword)) return res.status(400).json({ error: 'Password must contain a number' });
+    if (!/[^A-Za-z0-9]/.test(newPassword)) return res.status(400).json({ error: 'Password must contain a special character' });
+
     const user = req.repos.users.getById(req.session.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     const valid = bcrypt.compareSync(currentPassword, user.password_hash);
     if (!valid) return res.status(400).json({ error: 'Current password is incorrect' });
-    const hash = bcrypt.hashSync(newPassword, 10);
+    const hash = bcrypt.hashSync(newPassword, 12);
     req.repos.users.updatePassword(req.session.userId, hash);
     res.json({ ok: true, message: 'Password changed successfully' });
 
