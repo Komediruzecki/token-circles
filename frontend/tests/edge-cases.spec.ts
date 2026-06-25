@@ -144,7 +144,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle special characters in input', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
 
-    const addBtn = page.getByRole('button', { name: /Add Account/i })
+    const addBtn = page.getByTestId('add-account-btn')
     if (await addBtn.isVisible()) {
       await addBtn.click()
       await page.waitForTimeout(300)
@@ -163,7 +163,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle negative numbers', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
 
-    const addBtn = page.getByRole('button', { name: /Add Account/i })
+    const addBtn = page.getByTestId('add-account-btn')
     if (await addBtn.isVisible()) {
       await addBtn.click()
       await page.waitForTimeout(300)
@@ -204,7 +204,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle modal overlay clicks', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
 
-    const addBtn = page.getByRole('button', { name: /Add Account/i })
+    const addBtn = page.getByTestId('add-account-btn')
     if (await addBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await addBtn.click()
       await page.waitForTimeout(500)
@@ -231,7 +231,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle modal ESC key close', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
 
-    const addBtn = page.getByRole('button', { name: /Add Account/i })
+    const addBtn = page.getByTestId('add-account-btn')
     if (await addBtn.isVisible()) {
       await addBtn.click()
       await page.waitForTimeout(300)
@@ -261,7 +261,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle form reset', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
 
-    const addBtn = page.getByRole('button', { name: /Add Account/i })
+    const addBtn = page.getByTestId('add-account-btn')
     if (await addBtn.isVisible()) {
       await addBtn.click()
       await page.waitForTimeout(300)

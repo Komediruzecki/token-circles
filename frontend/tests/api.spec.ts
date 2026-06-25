@@ -1,8 +1,12 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('API Endpoint Verification', () => {
-  test.beforeEach(async () => {
-    // Use request context to test API endpoints directly
+  test.beforeEach(async ({ request }) => {
+    // Authenticate the request context for all API tests
+    await request.post('http://localhost:3847/api/auth/login', {
+      data: { username: 'person', password: 'something-like-this' },
+      headers: { 'x-skip-ratelimit': 'true' },
+    })
   })
 
   test('verify accounts API endpoint', async ({ request }) => {
