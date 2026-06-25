@@ -4,7 +4,7 @@ const { getCategoryIcon, toCamelCase } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ db, apiRateLimiter, logError, requireAuth }) {
+module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
   router.get('/api/categories', apiRateLimiter, asyncHandler((req, res) => {

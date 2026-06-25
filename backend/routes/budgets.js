@@ -4,7 +4,7 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter }) {
   const router = express.Router();
 
   router.get('/api/budgets', apiRateLimiter, asyncHandler((req, res) => {
