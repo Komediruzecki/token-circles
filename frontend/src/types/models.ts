@@ -83,7 +83,7 @@ export interface Category {
   tax_deductible: boolean
   created_at: string
   profile_id: ProfileId
-  parent_name?: string
+  parent_name?: string | null
 }
 
 export interface CategoryMapping {
