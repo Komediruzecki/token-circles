@@ -223,7 +223,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
 
   }));
 
-  router.get('/api/transactions/summary', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/transactions/summary', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     const { startDate, endDate, category_ids, type, search } = req.query;

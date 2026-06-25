@@ -3,11 +3,11 @@ const { calcMonthlyPayment } = require('../models/loanCalculator');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
   // ── Loan Payment Calculator ──────────────────────────────────────────
-  router.get('/api/calculators/loans', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/calculators/loans', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const principal = parseFloat(req.query.principal);
     const rate = parseFloat(req.query.rate);
     const term = parseFloat(req.query.term);

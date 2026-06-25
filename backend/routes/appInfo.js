@@ -6,7 +6,7 @@ const APP_REPO = 'https://github.com/Komediruzecki/finance-manager';
 module.exports = function () {
   const router = express.Router();
 
-  router.get('/api/app-info', (req, res) => {
+  router.get('/api/app-info', requireAuth, (req, res) => {
     res.json({
       version: APP_VERSION,
       repository: APP_REPO,

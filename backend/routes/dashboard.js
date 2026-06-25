@@ -3,10 +3,10 @@ const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/dashboard', apiRateLimiter, async (req, res) => {
+  router.get('/api/dashboard', apiRateLimiter, requireAuth, async (req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
 

@@ -31,10 +31,10 @@ function isBillPaidForCurrentPeriod(bill, now) {
   return false;
 }
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/bills', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/bills', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const rows = req.repos.bills.all(
       `

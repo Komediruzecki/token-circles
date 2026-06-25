@@ -2,13 +2,13 @@ const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
   // ========================
   // STATS
   // ========================
-  router.get('/api/stats/monthly', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/stats/monthly', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const { months = 24 } = req.query;
     const endDate = new Date();

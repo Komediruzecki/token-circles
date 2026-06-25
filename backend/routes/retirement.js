@@ -3,14 +3,14 @@ const { toCamelCase, calculateRetirementProjection } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
   // ========================
   // RETIREMENT GOALS CRUD
   // ========================
 
-  router.get('/api/retirement-goals', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/retirement-goals', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     const rows = req.repos.retirementGoals.all(

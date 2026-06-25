@@ -3,10 +3,10 @@ const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter }) {
+module.exports = function ({ apiRateLimiter , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/settings', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/settings', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const rows = req.repos.settings.getAll(pid);
     const settings = {};

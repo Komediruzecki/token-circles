@@ -6,7 +6,7 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { getCategoryIcon } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheetService }) {
+module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheetService , requireAuth }) {
   const router = express.Router();
 
   function parseDateString(dateStr) {

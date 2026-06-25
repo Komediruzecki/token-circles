@@ -448,26 +448,26 @@ const routeDeps = {
 app.use(require('./routes/appInfo')());
 app.use(require('./routes/auth')(routeDeps));
 app.use(require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }));
-app.use(require('./routes/settings')({ apiRateLimiter }));
-app.use(require('./routes/loans')({ apiRateLimiter, logError }));
-app.use(require('./routes/recurring')({ apiRateLimiter, logError }));
-app.use(require('./routes/counterparties')({ apiRateLimiter, logError }));
-app.use(require('./routes/housing')({ apiRateLimiter, logError }));
-app.use(require('./routes/retirement')({ apiRateLimiter, logError }));
-app.use(require('./routes/receipts')({ apiRateLimiter, logError, uploadReceipt }));
-app.use(require('./routes/storageMode')({ apiRateLimiter }));
+app.use(require('./routes/settings')({ apiRateLimiter , requireAuth}));
+app.use(require('./routes/loans')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/recurring')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/counterparties')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/housing')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/retirement')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/receipts')({ apiRateLimiter, logError, uploadReceipt , requireAuth}));
+app.use(require('./routes/storageMode')({ apiRateLimiter , requireAuth}));
 app.use(require('./routes/accounts')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/bills')({ apiRateLimiter, logError }));
-app.use(require('./routes/savingsGoals')({ apiRateLimiter }));
-app.use(require('./routes/tags')({ apiRateLimiter, logError }));
+app.use(require('./routes/bills')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/savingsGoals')({ apiRateLimiter , requireAuth}));
+app.use(require('./routes/tags')({ apiRateLimiter, logError , requireAuth}));
 app.use(require('./routes/transactions')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/calculators')({ apiRateLimiter, logError }));
+app.use(require('./routes/calculators')({ apiRateLimiter, logError , requireAuth}));
 app.use(require('./routes/tax')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/analytics')({ apiRateLimiter, logError }));
+app.use(require('./routes/analytics')({ apiRateLimiter, logError , requireAuth}));
 app.use(require('./routes/notifications')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/categories')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/budgets')({ apiRateLimiter }));
-app.use(require('./routes/dashboard')({ apiRateLimiter, logError }));
+app.use(require('./routes/budgets')({ apiRateLimiter , requireAuth}));
+app.use(require('./routes/dashboard')({ apiRateLimiter, logError , requireAuth}));
 app.use(require('./routes/exportRoutes')({ apiRateLimiter, logError, requireAuth }));
 app.use(
   require('./routes/importRoutes')({
@@ -475,9 +475,10 @@ app.use(
     logError,
     uploadImport,
     spreadsheetService,
+    requireAuth,
   })
 );
-app.use(require('./routes/portfolio')({ apiRateLimiter, logError, yahooFinanceService }));
+app.use(require('./routes/portfolio')({ apiRateLimiter, logError, yahooFinanceService , requireAuth}));
 app.use(
   require('./routes/reports')({
     apiRateLimiter,
