@@ -450,6 +450,20 @@ const routeDeps = {
   uploadReceipt,
   uploadImport,
 };
+// ── Global authentication gate ───────────────────────────────────────────────────
+// Single choke point for everything mounted below: every /api route requires a
+// valid session, except a small allowlist of public endpoints and the test-only
+// helpers. This guarantees no data route can be left unauthenticated by omission.
+// (Public endpoints registered above this line — /api/health, /api/docs — are
+// unaffected; individual routes may still apply requireAuth redundantly.)
+const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/2fa/setup']);
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
+  if (req.path.startsWith('/api/test/')) return next(); // test-only helpers (NODE_ENV=test)
+  return requireAuth(req, res, next);
+});
+
 // ── Mount extracted route modules ────────────────────────────────────────────────
 app.use(require('./routes/appInfo')(routeDeps));
 app.use(require('./routes/auth')(routeDeps));

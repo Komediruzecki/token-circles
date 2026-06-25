@@ -7,7 +7,7 @@ const { asyncHandler } = require('../lib/errors');
 module.exports = function ({ apiRateLimiter, logError, yahooFinanceService, requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/portfolio/holdings', apiRateLimiter, requireAuth, async (req, res) => {
+  router.get('/api/portfolio/holdings', apiRateLimiter, requireAuth, asyncHandler(async (req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     const holdings = req.repos.portfolio.all(
@@ -37,10 +37,10 @@ module.exports = function ({ apiRateLimiter, logError, yahooFinanceService, requ
     });
 
     res.json(enriched);
-  });
+  }));
 
   // Get portfolio summary (totals, allocation)
-  router.get('/api/portfolio/summary', apiRateLimiter, async (req, res) => {
+  router.get('/api/portfolio/summary', apiRateLimiter, requireAuth, asyncHandler(async (req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     const holdings = req.repos.portfolio.all(
@@ -117,7 +117,7 @@ module.exports = function ({ apiRateLimiter, logError, yahooFinanceService, requ
       holdings: enrichedHoldings,
       allocation,
     });
-  });
+  }));
 
   // Add a new holding
   router.post(

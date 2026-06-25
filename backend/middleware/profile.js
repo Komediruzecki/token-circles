@@ -6,7 +6,16 @@
 // Helper: get profile ID from request (header first, then query param, then 1)
 function getProfileId(req) {
   const id = parseInt(req.headers['x-profile-id'] || req.query.profile_id || 1);
-  if (req.session && req.session.userId && req.repos && req.repos.profiles) {
+  // Fail closed: require a session and verify the profile belongs to the
+  // authenticated user. Previously the ownership check was skipped entirely when
+  // no session was present, which let unauthenticated callers read/modify any
+  // profile simply by passing its id.
+  if (!req.session || !req.session.userId) {
+    const err = new Error('Unauthorized');
+    err.statusCode = 401;
+    throw err;
+  }
+  if (req.repos && req.repos.profiles) {
     const profile = req.repos.profiles.getById(id);
     if (!profile || profile.user_id !== req.session.userId) {
       const err = new Error('Access denied to this profile');
@@ -43,7 +52,14 @@ function getProfileIds(req) {
     ids = [parseInt(req.headers['x-profile-id'] || req.query.profile_id || 1)];
   }
   
-  if (req.session && req.session.userId && req.repos && req.repos.profiles) {
+  // Fail closed: require a session and verify every requested profile belongs to
+  // the authenticated user (see getProfileId for rationale).
+  if (!req.session || !req.session.userId) {
+    const err = new Error('Unauthorized');
+    err.statusCode = 401;
+    throw err;
+  }
+  if (req.repos && req.repos.profiles) {
     for (const id of ids) {
       const profile = req.repos.profiles.getById(id);
       if (!profile || profile.user_id !== req.session.userId) {
