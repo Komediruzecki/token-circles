@@ -37,7 +37,12 @@ jobs:
           mkdir -p db assets
           NODE_ENV=test node backend/index.js &
           sleep 5
-          curl -X POST http://127.0.0.1:3847/api/profiles/reseed-demo -H "X-Skip-RateLimit: true" -H "X-Profile-ID: 1" || true
+          # All /api routes now require an authenticated session, so log in first
+          # and reuse the cookie jar when seeding demo data.
+          curl -c /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/auth/login \
+            -H "Content-Type: application/json" -H "X-Skip-RateLimit: true" \
+            -d '{"username":"person","password":"something-like-this"}' || true
+          curl -b /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/profiles/reseed-demo -H "X-Skip-RateLimit: true" -H "X-Profile-ID: 1" || true
 
       - name: Build frontend
         working-directory: ./frontend
