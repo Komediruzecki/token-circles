@@ -28,8 +28,16 @@ fi
 
 if [ -n "$lint_files" ]; then
   echo "pre-commit: eslint --fix"
-  # Don't abort the commit on unfixable lint - pre-push enforces it before CI.
-  printf '%s\n' "$lint_files" | xargs npx eslint --fix || true
+  
+  frontend_files="$(printf '%s\n' "$lint_files" | grep '^frontend/' | sed 's/^frontend\///' || true)"
+  if [ -n "$frontend_files" ]; then
+    (cd frontend && printf '%s\n' "$frontend_files" | xargs npx eslint --fix || true)
+  fi
+
+  backend_files="$(printf '%s\n' "$lint_files" | grep '^backend/' | sed 's/^backend\///' || true)"
+  if [ -n "$backend_files" ]; then
+    (cd backend && printf '%s\n' "$backend_files" | xargs npx eslint --fix || true)
+  fi
 fi
 
 # Re-stage only the files we just touched (-r: skip git add when none matched,
