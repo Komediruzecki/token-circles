@@ -27,6 +27,7 @@ describe('Cross-Profile Isolation E2E', () => {
     if (login.headers['set-cookie']) {
       agent.jar.setCookie(login.headers['set-cookie'][0], BASE_URL);
     }
+    await agent.post('/api/test/seed-profile-999').set('X-Skip-RateLimit', 'true').send();
   });
 
   describe('Data Isolation - Transactions', () => {

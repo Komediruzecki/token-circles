@@ -264,5 +264,92 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
 
   }));
 
+  router.get('/api/bills/calendar', apiRateLimiter, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const now = new Date();
+    
+    const yearParam = req.query.year ? parseInt(req.query.year, 10) : now.getFullYear();
+    const monthParam = req.query.month ? parseInt(req.query.month, 10) : now.getMonth() + 1;
+
+    if (isNaN(yearParam) || yearParam < 1900) {
+      return res.status(400).json({ error: 'Invalid year' });
+    }
+    if (isNaN(monthParam) || monthParam < 1 || monthParam > 12) {
+      return res.status(400).json({ error: 'Invalid month' });
+    }
+
+    const year = yearParam;
+    const month = monthParam;
+    const monthLabel = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+    const firstDow = new Date(year, month - 1, 1).getDay();
+    const lastDay = new Date(year, month, 0).getDate();
+
+    const days = {};
+    for (let d = 1; d <= lastDay; d++) {
+      days[String(d)] = [];
+    }
+
+    const bills = req.repos.bills.list(pid).filter(b => b.is_active === 1);
+    
+    let totalAmount = 0;
+    let paidAmount = 0;
+    let billCount = 0;
+
+    bills.forEach(b => {
+      // Determine occurrence in the given month. For simplicity we use due_date's day or day_of_month
+      let day = null;
+      let billDateStr = null;
+      
+      if (b.due_date) {
+        const dDate = new Date(b.due_date);
+        day = dDate.getDate();
+        billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      } else if (b.day_of_month) {
+        day = b.day_of_month;
+        billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      } else {
+        day = 1; // Fallback
+        billDateStr = `${year}-${String(month).padStart(2, '0')}-01`;
+      }
+
+      if (day >= 1 && day <= lastDay) {
+        const isPaid = isBillPaidForCurrentPeriod(b, now);
+        
+        // Calculate is_overdue for the specific bill occurrence in this month
+        const nextDue = new Date(billDateStr);
+        const daysUntil = Math.ceil((nextDue - now) / (1000 * 60 * 60 * 24));
+        const is_overdue = daysUntil < 0 && !isPaid;
+
+        days[String(day)].push({
+          id: b.id,
+          name: b.name,
+          amount: b.amount,
+          frequency: b.frequency,
+          date: billDateStr,
+          paid: isPaid,
+          type: b.type || 'bill',
+          is_overdue
+        });
+
+        totalAmount += b.amount;
+        if (isPaid) paidAmount += b.amount;
+        billCount++;
+      }
+    });
+
+    res.json({
+      year,
+      month,
+      monthLabel,
+      firstDow,
+      days,
+      summary: {
+        totalAmount,
+        paidAmount,
+        billCount
+      }
+    });
+  }));
+
   return router;
 };

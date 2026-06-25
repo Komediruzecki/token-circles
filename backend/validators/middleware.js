@@ -18,7 +18,7 @@ function validate(schema, source = 'body') {
     const result = schema.safeParse(req[source]);
 
     if (!result.success) {
-      const errors = result.error.errors.map((e) => ({
+      const errors = result.error.issues.map((e) => ({
         field: e.path.join('.'),
         message: e.message,
       }));
@@ -46,7 +46,7 @@ function validateBoth(bodySchema, querySchema) {
     if (bodySchema) {
       const bodyResult = bodySchema.safeParse(req.body);
       if (!bodyResult.success) {
-        const errors = bodyResult.error.errors.map((e) => ({
+        const errors = bodyResult.error.issues.map((e) => ({
           field: e.path.join('.'),
           message: e.message,
         }));
@@ -62,7 +62,7 @@ function validateBoth(bodySchema, querySchema) {
     if (querySchema) {
       const queryResult = querySchema.safeParse(req.query);
       if (!queryResult.success) {
-        const errors = queryResult.error.errors.map((e) => ({
+        const errors = queryResult.error.issues.map((e) => ({
           field: e.path.join('.'),
           message: e.message,
         }));

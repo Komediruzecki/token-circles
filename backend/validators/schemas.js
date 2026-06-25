@@ -8,7 +8,7 @@ const { z } = require('zod');
 // ---- SHARED HELPERS ----
 
 const currencyEnum = z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']);
-const transactionTypeEnum = z.enum(['income', 'expense', 'transfer']);
+const transactionTypeEnum = z.enum(['income', 'expense', 'transfer', 'deduction']);
 const accountTypeEnum = z.enum(['giro', 'savings', 'ib', 'cash']);
 const budgetPeriodEnum = z.enum(['monthly', 'weekly', 'yearly']);
 const frequencyEnum = z.enum(['daily', 'weekly', 'monthly', 'yearly']);
@@ -24,12 +24,15 @@ const validId = z.number().int().positive().finite();
 
 const transactionCreateSchema = z.object({
   description: nonEmptyString.max(500),
-  amount: positiveFloat,
-  date: isoDateString,
+  amount: z.number().finite().refine(val => {
+    const parts = Math.abs(val).toString().split('.');
+    return parts.length === 1 || parts[1].length <= 2;
+  }, { message: "Amount must have at most 2 decimal places" }),
+  date: isoDateString.optional(),
   type: transactionTypeEnum,
-  category_id: validId.nullable(),
-  account_id: validId.nullable(),
-  transfer_account_id: validId.nullable(),
+  category_id: validId.nullable().optional(),
+  account_id: validId.nullable().optional(),
+  transfer_account_id: validId.nullable().optional(),
   currency: currencyEnum.optional().default('USD'),
   amount_local: positiveFloat.nullable().optional(),
   exchange_rate: positiveFloat.optional().default(1),
@@ -46,7 +49,10 @@ const transactionCreateSchema = z.object({
 
 const transactionUpdateSchema = z.object({
   description: nonEmptyString.max(500).optional(),
-  amount: positiveFloat.optional(),
+  amount: z.number().finite().refine(val => {
+    const parts = Math.abs(val).toString().split('.');
+    return parts.length === 1 || parts[1].length <= 2;
+  }, { message: "Amount must have at most 2 decimal places" }).optional(),
   date: isoDateString.optional(),
   type: transactionTypeEnum.optional(),
   category_id: validId.nullable().optional(),
@@ -92,7 +98,7 @@ const transactionQuerySchema = z.object({
   search: trimmedString.max(200).optional(),
   reconciled: z
     .string()
-    .regex(/^(true|false|0|1)$/i)
+    .regex(/^(true|false|0|1|all)$/i)
     .optional(),
   tag_ids: trimmedString.optional(),
   startDate: isoDateString.optional(),
@@ -127,7 +133,7 @@ const changePasswordSchema = z.object({
     .min(12, 'Password must be at least 12 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/\d/, 'Password must contain at least one number')
     .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
 });
 

@@ -445,7 +445,7 @@ const routeDeps = {
   uploadImport,
 };
 // ── Mount extracted route modules ────────────────────────────────────────────────
-app.use(require('./routes/appInfo')());
+app.use(require('./routes/appInfo')(routeDeps));
 app.use(require('./routes/auth')(routeDeps));
 app.use(require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }));
 app.use(require('./routes/settings')({ apiRateLimiter , requireAuth}));
@@ -539,7 +539,25 @@ if (process.env.NODE_ENV === 'test') {
       res.status(500).json({ error: err.message });
     }
   });
+
+  app.post('/api/test/seed-profile-999', (req, res) => {
+    try {
+      db.prepare('INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, ?, ?)').run(999, 'Test Profile 999', 1);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
+
+// Global error handler
+app.use((err, req, res, next) => {
+  const status = err.statusCode || err.status || 500;
+  res.status(status).json({
+    error: err.message || 'Internal Server Error',
+    ...(err.details && { details: err.details })
+  });
+});
 
 // Serve index.html for client-side routes (SPA navigation) only
 // Static files (JS, CSS) are served by the middleware above

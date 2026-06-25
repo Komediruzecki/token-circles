@@ -413,12 +413,15 @@ afterAll(async () => {
       const req = http.request({
         hostname: 'localhost', port: 3847, path: '/api/test/reset-password',
         method: 'POST',
+        timeout: 1000,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': String(Buffer.byteLength(body)),
           'X-Skip-RateLimit': 'true'
         }
       }, () => resolve());
+      req.on('timeout', () => { req.destroy(); resolve(); });
+      req.on('error', () => resolve());
       req.write(body);
       req.end();
     });

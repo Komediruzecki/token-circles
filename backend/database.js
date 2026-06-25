@@ -15,7 +15,7 @@ db.pragma('foreign_keys = ON');
 
 // Initialize database schema
 const fs = require('fs');
-const schemaPath = path.join(__dirname, 'db', 'schema.sql');
+const schemaPath = path.join(__dirname, 'schema.sql');
 if (fs.existsSync(schemaPath)) {
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
