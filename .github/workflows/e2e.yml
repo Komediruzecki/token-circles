@@ -35,6 +35,8 @@ jobs:
           mkdir -p db assets
           NODE_ENV=test node backend/index.js &
           sleep 5
+          # Seed the test database with demo data
+          curl -X POST http://localhost:3847/api/profiles/reseed-demo -H "X-Skip-RateLimit: true" -H "X-Profile-ID: 1" || true
 
       - name: Build frontend
         working-directory: ./frontend
