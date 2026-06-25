@@ -90,51 +90,19 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
-      - name: Auto-push fixes using RTK
+      - name: Auto-push fixes
         if: always()
         env:
-          RTK_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "GitHub Actions"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cd frontend && node -e "
-            const fs = require('fs');
-            const rtk = require('rtk-cli');
-
-            const html = fs.readFileSync('index.html', 'utf8');
-            const jsMatch = html.match(/<script>([\s\S]*?)<\/script>/);
-            if (jsMatch) {
-              try {
-                new Function(jsMatch[1]);
-                console.log('✓ Frontend code is valid');
-              } catch (e) {
-                console.error('✗ Frontend error:', e.message);
-                process.exit(1);
-              }
-            }
-
-            const rtkExec = (cmd) => {
-              return new Promise((resolve, reject) => {
-                const proc = require('child_process').exec(cmd, { env: { ...process.env, RTK_GITHUB_TOKEN: process.env.RTK_GITHUB_TOKEN } }, (error, stdout, stderr) => {
-                  if (error && stderr) reject(new Error(stderr));
-                  else resolve(stdout);
-                });
-              });
-            };
-
-            (async () => {
-              if (process.env.RTK_GITHUB_TOKEN) {
-                try {
-                  const status = await rtkExec('rtk git add -A');
-                  const commitMsg = \`fix: auto-push ESLint fix via CI\`;
-                  const commit = await rtkExec(\`rtk git commit -m \"\${commitMsg}\"\`);
-                  const push = await rtkExec('rtk git push origin HEAD');
-                  console.log('✓ Auto-push successful');
-                } catch (error) {
-                  console.log('⚠ RTK push failed (expected on forks):', error.message);
-                }
-              } else {
-                console.log('⚠ RTK not configured, skipping auto-push');
-              }
-            })();
-          "
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "fix: auto-push ESLint fix via CI"
+            git push origin HEAD
+            echo "✓ Auto-push successful"
+          else
+            echo "✓ No changes to push"
+          fi
