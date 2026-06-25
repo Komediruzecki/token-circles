@@ -6,7 +6,7 @@ const { getProfileId } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
+module.exports = function ({ apiRateLimiter, uploadReceipt, logError , requireAuth }) {
   const router = express.Router();
 
   // ── Upload helper ────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ module.exports = function ({ apiRateLimiter, uploadReceipt, logError }) {
   // ── Routes ───────────────────────────────────────────────────────────
 
   // GET /api/receipts — list all receipts for profile
-  router.get('/api/receipts', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/receipts', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const receipts = req.repos.receipts.list(pid);
     res.json(receipts.map((r) => toCamelCase(r)));

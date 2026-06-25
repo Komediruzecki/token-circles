@@ -2,10 +2,10 @@ const express = require('express');
 const { getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/counterparties', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/counterparties', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
 

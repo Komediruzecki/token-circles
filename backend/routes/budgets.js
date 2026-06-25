@@ -4,10 +4,10 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter }) {
+module.exports = function ({ apiRateLimiter , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/budgets', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/budgets', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pids = getProfileIds(req);
     const rows = req.repos.budgets.listByProfiles(pids);
     res.json(rows);

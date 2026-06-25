@@ -4,10 +4,10 @@ const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError, yahooFinanceService }) {
+module.exports = function ({ apiRateLimiter, logError, yahooFinanceService , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/portfolio/holdings', apiRateLimiter, async (req, res) => {
+  router.get('/api/portfolio/holdings', apiRateLimiter, requireAuth, async (req, res) => {
     const pids = getProfileIds(req);
     const inClause = pids.map(() => '?').join(',');
     const holdings = req.repos.portfolio.all(

@@ -60,7 +60,7 @@ module.exports = function ({
     return sanitized.trim();
   }
 
-  router.get('/api/reports/monthly-pdf', apiRateLimiter, async (req, res) => {
+  router.get('/api/reports/monthly-pdf', apiRateLimiter, requireAuth, async (req, res) => {
     const { year, month } = req.query;
     if (!year || !month) {
       return res.status(400).json({ error: 'year and month are required' });

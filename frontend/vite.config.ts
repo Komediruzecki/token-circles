@@ -121,7 +121,9 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/finance-manager\.clodhost\.com\/.*/i,
+            urlPattern: ({ url }) => {
+              return url.origin === self.location.origin && !url.pathname.startsWith('/api/');
+            },
             handler: 'NetworkFirst',
             options: {
               cacheName: 'finance-manager-v3',

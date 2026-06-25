@@ -33,7 +33,6 @@ export default [
       'no-proto': 'warn',
       'no-empty': 'off',
       'no-prototype-builtins': 'off',
-      'no-useless-escape': 'off',
     },
     ignores: ['**/node_modules/**', '**/test/**', 'jest.setup.js'],
   },

@@ -4,10 +4,10 @@ const { getProfileId } = require('../middleware/profile');
 const loanCalc = require('../models/loanCalculator');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/loans', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/loans', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const rows = req.repos.loans.all(
       `

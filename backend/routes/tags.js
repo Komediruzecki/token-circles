@@ -19,10 +19,10 @@ const TAG_COLORS = [
   '#a855f7',
 ];
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/tags', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/tags', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const rows = req.repos.tags.list(pid);
     res.json(rows);

@@ -7,7 +7,7 @@ const { asyncHandler } = require('../lib/errors');
 module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/categories', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/categories', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const { type, income, expense } = req.query;
 

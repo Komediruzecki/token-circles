@@ -2,10 +2,10 @@ const express = require('express');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
-module.exports = function ({ apiRateLimiter, logError }) {
+module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
   const router = express.Router();
 
-  router.get('/api/housing', apiRateLimiter, asyncHandler((req, res) => {
+  router.get('/api/housing', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
 
     // Custom ordering by due_date ASC (repo defaults to created_at DESC)

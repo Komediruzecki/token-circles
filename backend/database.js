@@ -34,8 +34,11 @@ if (userCount.c === 0) {
   );
 }
 
-// Seed the three example profiles if they don't exist
-seedThreeTierProfiles();
+// Seed a single default profile if no profiles exist
+const profileCount = db.prepare('SELECT COUNT(*) as c FROM profiles').get();
+if (profileCount.c === 0) {
+  db.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)').run('Personal Profile', 1);
+}
 
 function seedThreeTierProfiles() {
   const profiles = [
