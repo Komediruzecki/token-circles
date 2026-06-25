@@ -74,19 +74,5 @@
     "vite-plugin-pwa": "^1.2.0",
     "vite-plugin-solid": "^2.11.12",
     "vitest": "^4.0.18"
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "@parcel/watcher",
-      "unrs-resolver"
-    ],
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ],
-    "overrides": {
-      "less": "link:./.pnpm-noop",
-      "sass": "link:./.pnpm-noop",
-      "stylus": "link:./.pnpm-noop"
-    }
   }
 }

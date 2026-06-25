@@ -19,9 +19,10 @@
     "lint": "eslint --ext js .",
     "lint:fix": "eslint --fix --ext js .",
     "format": "prettier --write .",
-    "test": "NODE_ENV=test jest",
+    "test": "NODE_ENV=test jest --runInBand",
     "test:unit": "jest --config jest.unit.config.js",
-    "test:coverage": "jest --config jest.unit.config.js --coverage"
+    "test:coverage": "jest --config jest.unit.config.js --coverage",
+    "test:e2e": "jest ../test/e2e/backend-api --runInBand"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

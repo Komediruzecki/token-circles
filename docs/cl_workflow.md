@@ -50,6 +50,7 @@ Example: `git checkout -b feat/issue-151-service-worker-fix`
 ### Step 3: Understand the Requirements
 
 Read:
+
 1. The GitHub issue description
 2. Any relevant existing code
 3. Test files for expected behavior
@@ -57,6 +58,7 @@ Read:
 ### Step 4: Implement Changes
 
 **General Rules:**
+
 - Use Conventional Commits: `feat:`, `fix:`, `refactor:`, `chore:`, etc.
 - Never push to `main` — always create a PR
 - Read files before editing them
@@ -64,9 +66,10 @@ Read:
 - Keep changes minimal and focused on the issue
 
 **Code Quality:**
+
 - Follow existing code style
-- Run tests before committing: `npm test`
-- Check for linting errors: `npm run lint` (if configured)
+- Run tests before committing: `pnpm run test`
+- Check for linting errors: `pnpm run lint` (if configured)
 
 ### Step 5: Commit and Push
 
@@ -120,8 +123,8 @@ gh issue close NUMBER --comment "See PR #PR_NUMBER for implementation"
 ### Running Tests
 
 ```bash
-npm test              # Run all tests
-npm test -- --watch  # Watch mode for development
+pnpm run test              # Run all tests
+pnpm run test -- --watch  # Watch mode for development
 ```
 
 ### Database Management
@@ -141,7 +144,7 @@ sqlite3 db/finance-manager.db "PRAGMA integrity_check;"
 - **Framework**: SolidJS 1.8.15 with TypeScript
 - **Build Tool**: Vite 6.4.2
 - **Output**: `frontend/dist/` (served to public)
-- **Build Command**: `cd frontend && npm run build`
+- **Build Command**: `pnpm run build`
 
 ### Backend
 
@@ -155,6 +158,7 @@ sqlite3 db/finance-manager.db "PRAGMA integrity_check;"
 ### Service Worker Issues
 
 If the service worker isn't working properly after a build:
+
 1. Check `frontend/dist/assets/sw.js` exists
 2. Verify cache names include the new build
 3. Test with `chrome://serviceworker-internals`
@@ -162,6 +166,7 @@ If the service worker isn't working properly after a build:
 ### Database Locking
 
 If you get "database is locked" errors:
+
 1. Stop the backend: `systemctl stop finance-manager`
 2. Check for pending transactions
 3. Start the backend: `systemctl start finance-manager`
@@ -169,5 +174,6 @@ If you get "database is locked" errors:
 ### Build Failures
 
 If Vite build fails:
+
 1. Delete `frontend/node_modules/.vite` to clear cache
-2. Rebuild: `cd frontend && rm -rf dist && npm run build`
+2. Rebuild: `pnpm -C frontend run build`

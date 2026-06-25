@@ -17,7 +17,7 @@ git clone https://github.com/Komediruzecki/finance-manager.git
 cd finance-manager
 
 # 2. Build the frontend (required before Docker build)
-cd frontend && npm install && npm run build && cd ..
+pnpm install && pnpm run build
 
 # 3. Create your environment file
 cp .env .env.local
@@ -63,18 +63,18 @@ SMTP_PASS=your-smtp-password
 SMTP_FROM=noreply@yourdomain.com
 ```
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SESSION_SECRET` | **Yes** | — | Random string for session encryption. Server exits without it in production. Generate with `openssl rand -hex 32`. |
-| `ALLOWED_ORIGINS` | No | `http://localhost:3847` | Comma-separated CORS origins. Set to your domain(s) with `https://` in production. |
-| `APP_PORT` | No | `3847` | Host port mapped to the container. |
-| `NODE_ENV` | No | `production` | Set to `production` for security hardening (Helmet, strict CORS, generic errors). |
-| `PORT` | No | `3847` | Internal container port. Do not change. |
-| `SMTP_HOST` | No | — | SMTP server for email notifications. |
-| `SMTP_PORT` | No | `587` | SMTP port. |
-| `SMTP_USER` | No | — | SMTP authentication username. |
-| `SMTP_PASS` | No | — | SMTP authentication password. |
-| `SMTP_FROM` | No | `noreply@localhost` | From address for outgoing emails. |
+| Variable          | Required | Default                 | Description                                                                                                        |
+| ----------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SESSION_SECRET`  | **Yes**  | —                       | Random string for session encryption. Server exits without it in production. Generate with `openssl rand -hex 32`. |
+| `ALLOWED_ORIGINS` | No       | `http://localhost:3847` | Comma-separated CORS origins. Set to your domain(s) with `https://` in production.                                 |
+| `APP_PORT`        | No       | `3847`                  | Host port mapped to the container.                                                                                 |
+| `NODE_ENV`        | No       | `production`            | Set to `production` for security hardening (Helmet, strict CORS, generic errors).                                  |
+| `PORT`            | No       | `3847`                  | Internal container port. Do not change.                                                                            |
+| `SMTP_HOST`       | No       | —                       | SMTP server for email notifications.                                                                               |
+| `SMTP_PORT`       | No       | `587`                   | SMTP port.                                                                                                         |
+| `SMTP_USER`       | No       | —                       | SMTP authentication username.                                                                                      |
+| `SMTP_PASS`       | No       | —                       | SMTP authentication password.                                                                                      |
+| `SMTP_FROM`       | No       | `noreply@localhost`     | From address for outgoing emails.                                                                                  |
 
 ## Reverse Proxy (nginx)
 
@@ -227,7 +227,7 @@ docker compose up -d
 git pull origin main
 
 # Rebuild frontend
-cd frontend && npm install && npm run build && cd ..
+pnpm install && pnpm run build
 
 # Rebuild and restart the container
 docker compose up -d --build
@@ -243,7 +243,7 @@ Always back up before upgrading:
 
 # Pull and rebuild
 git pull origin main
-cd frontend && npm install && npm run build && cd ..
+pnpm install && pnpm run build
 docker compose up -d --build
 
 # Check health
@@ -259,7 +259,7 @@ If an upgrade causes issues:
 git checkout <previous-tag-or-commit>
 
 # Rebuild from that version
-cd frontend && npm install && npm run build && cd ..
+pnpm install && pnpm run build
 docker compose up -d --build
 ```
 
@@ -269,10 +269,10 @@ If the database was modified by a migration, restore from your pre-upgrade backu
 
 The Docker Compose setup uses two named volumes:
 
-| Volume | Mount | Contents |
-|--------|-------|----------|
-| `fm-db-data` | `/app/db` | SQLite database (`finance.db`) and session store (`sessions.db`) |
-| `fm-assets-data` | `/app/assets` | Uploaded files and receipts |
+| Volume           | Mount         | Contents                                                         |
+| ---------------- | ------------- | ---------------------------------------------------------------- |
+| `fm-db-data`     | `/app/db`     | SQLite database (`finance.db`) and session store (`sessions.db`) |
+| `fm-assets-data` | `/app/assets` | Uploaded files and receipts                                      |
 
 These volumes survive container restarts and rebuilds. Only `docker compose down -v` deletes them.
 

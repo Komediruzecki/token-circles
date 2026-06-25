@@ -18,26 +18,20 @@ set -e
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
 [ -z "$staged" ] && exit 0
 
+# Prettier handles these; ESLint only the JS/TS family. (No svg — Prettier has
+# no SVG parser and errors when handed an explicit .svg path.)
 fmt_files="$(printf '%s\n' "$staged" | grep -Ei '\.(ts|tsx|js|jsx|cjs|mjs|css|json|jsonc|md|html)$' || true)"
 lint_files="$(printf '%s\n' "$staged" | grep -Ei '\.(ts|tsx|js|jsx|cjs|mjs)$' || true)"
 
 if [ -n "$fmt_files" ]; then
   echo "pre-commit: prettier --write"
-  printf '%s\n' "$fmt_files" | xargs npx prettier --write --log-level warn || true
+  printf '%s\n' "$fmt_files" | xargs pnpm exec prettier --write --log-level warn
 fi
 
 if [ -n "$lint_files" ]; then
   echo "pre-commit: eslint --fix"
-  
-  frontend_files="$(printf '%s\n' "$lint_files" | grep '^frontend/' | sed 's/^frontend\///' || true)"
-  if [ -n "$frontend_files" ]; then
-    (cd frontend && printf '%s\n' "$frontend_files" | xargs npx eslint --fix || true)
-  fi
-
-  backend_files="$(printf '%s\n' "$lint_files" | grep '^backend/' | sed 's/^backend\///' || true)"
-  if [ -n "$backend_files" ]; then
-    (cd backend && printf '%s\n' "$backend_files" | xargs npx eslint --fix || true)
-  fi
+  # Don't abort the commit on unfixable lint - pre-push enforces it before CI.
+  printf '%s\n' "$lint_files" | xargs pnpm exec eslint --fix || true
 fi
 
 # Re-stage only the files we just touched (-r: skip git add when none matched,

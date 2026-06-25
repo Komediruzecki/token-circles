@@ -13,22 +13,34 @@
     "url": "https://github.com/Komediruzecki/finance-manager/issues"
   },
   "homepage": "https://github.com/Komediruzecki/finance-manager#readme",
+  "packageManager": "pnpm@10.0.0",
   "workspaces": [
     "frontend",
     "backend"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
-    "dev": "cd frontend && npm run dev",
-    "start": "cd backend && npm run start",
-    "build": "cd frontend && npm run build",
-    "lint": "cd frontend && npm run lint",
-    "lint:backend": "cd backend && npm run lint",
-    "typecheck": "cd frontend && npm run typecheck",
-    "format": "cd frontend && npm run format",
-    "test": "cd frontend && npm run test",
-    "test:backend": "cd backend && npm run test"
+    "dev": "pnpm -C frontend run dev",
+    "start": "pnpm -C backend run start",
+    "build": "pnpm -C frontend run build",
+    "lint": "pnpm -C frontend run lint",
+    "lint:backend": "pnpm -C backend run lint",
+    "typecheck": "pnpm -C frontend run typecheck",
+    "format": "pnpm -C frontend run format",
+    "test": "pnpm -C frontend run test",
+    "test:backend": "pnpm -C backend run test"
   },
-  "devDependencies": {},
-  "dependencies": {}
+  "devDependencies": {
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "better-sqlite3",
+      "bcrypt",
+      "puppeteer",
+      "sqlite3"
+    ]
+  }
 }

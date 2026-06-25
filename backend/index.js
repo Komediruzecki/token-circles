@@ -186,8 +186,9 @@ const authRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
-    // Skip rate limiting entirely in test mode
-    if (process.env.NODE_ENV === 'test') return next();
+    // Skip rate limiting entirely in test mode, unless explicitly testing rate limits
+    if (process.env.NODE_ENV === 'test' && req.headers['x-test-rate-limit'] !== 'true')
+      return next();
 
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -277,10 +278,14 @@ app.get('/api/health', (req, res) => {
 });
 
 // API documentation
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
-  customSiteTitle: 'Finance Manager API Docs',
-  customCss: '.swagger-ui .topbar { display: none }',
-}));
+app.use(
+  '/api/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customSiteTitle: 'Finance Manager API Docs',
+    customCss: '.swagger-ui .topbar { display: none }',
+  })
+);
 app.get('/api/docs.json', (req, res) => res.json(swaggerDocument));
 
 // ==================== LOGS API ====================
@@ -448,27 +453,29 @@ const routeDeps = {
 // ── Mount extracted route modules ────────────────────────────────────────────────
 app.use(require('./routes/appInfo')(routeDeps));
 app.use(require('./routes/auth')(routeDeps));
-app.use(require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }));
-app.use(require('./routes/settings')({ apiRateLimiter , requireAuth}));
-app.use(require('./routes/loans')({ apiRateLimiter, logError , requireAuth}));
-app.use(require('./routes/recurring')({ apiRateLimiter, logError , requireAuth}));
-app.use(require('./routes/counterparties')({ apiRateLimiter, logError , requireAuth}));
-app.use(require('./routes/housing')({ apiRateLimiter, logError , requireAuth}));
-app.use(require('./routes/retirement')({ apiRateLimiter, logError , requireAuth}));
-app.use(require('./routes/receipts')({ apiRateLimiter, logError, uploadReceipt , requireAuth}));
-app.use(require('./routes/storageMode')({ apiRateLimiter , requireAuth}));
+app.use(
+  require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth })
+);
+app.use(require('./routes/settings')({ apiRateLimiter, requireAuth }));
+app.use(require('./routes/loans')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/recurring')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/counterparties')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/housing')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/retirement')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/receipts')({ apiRateLimiter, logError, uploadReceipt, requireAuth }));
+app.use(require('./routes/storageMode')({ apiRateLimiter, requireAuth }));
 app.use(require('./routes/accounts')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/bills')({ apiRateLimiter, logError , requireAuth}));
-app.use(require('./routes/savingsGoals')({ apiRateLimiter , requireAuth}));
-app.use(require('./routes/tags')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/bills')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/savingsGoals')({ apiRateLimiter, requireAuth }));
+app.use(require('./routes/tags')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/transactions')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/calculators')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/calculators')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/tax')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/analytics')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/analytics')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/notifications')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/categories')({ apiRateLimiter, logError, requireAuth }));
-app.use(require('./routes/budgets')({ apiRateLimiter , requireAuth}));
-app.use(require('./routes/dashboard')({ apiRateLimiter, logError , requireAuth}));
+app.use(require('./routes/budgets')({ apiRateLimiter, requireAuth }));
+app.use(require('./routes/dashboard')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/exportRoutes')({ apiRateLimiter, logError, requireAuth }));
 app.use(
   require('./routes/importRoutes')({
@@ -479,7 +486,9 @@ app.use(
     requireAuth,
   })
 );
-app.use(require('./routes/portfolio')({ apiRateLimiter, logError, yahooFinanceService , requireAuth}));
+app.use(
+  require('./routes/portfolio')({ apiRateLimiter, logError, yahooFinanceService, requireAuth })
+);
 app.use(
   require('./routes/reports')({
     apiRateLimiter,
@@ -543,7 +552,11 @@ if (process.env.NODE_ENV === 'test') {
 
   app.post('/api/test/seed-profile-999', (req, res) => {
     try {
-      db.prepare('INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, ?, ?)').run(999, 'Test Profile 999', 1);
+      db.prepare('INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, ?, ?)').run(
+        999,
+        'Test Profile 999',
+        1
+      );
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -556,7 +569,7 @@ app.use((err, req, res, next) => {
   const status = err.statusCode || err.status || 500;
   res.status(status).json({
     error: err.message || 'Internal Server Error',
-    ...(err.details && { details: err.details })
+    ...(err.details && { details: err.details }),
   });
 });
 

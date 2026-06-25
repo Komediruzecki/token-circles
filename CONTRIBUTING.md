@@ -7,7 +7,7 @@ Thank you for your interest in contributing!
 ### Prerequisites
 
 - Node.js 20+
-- npm 10+
+- pnpm 10+
 - SQLite 3
 
 ### Setup
@@ -15,7 +15,7 @@ Thank you for your interest in contributing!
 ```bash
 git clone https://github.com/Komediruzecki/finance-manager.git
 cd finance-manager
-npm install
+pnpm install
 ```
 
 ### Development
@@ -30,7 +30,7 @@ This is a monorepo with two main workspaces:
 cd backend && node index.js
 
 # Start frontend dev server (port 5173)
-cd frontend && npm run dev
+pnpm run dev
 ```
 
 ## Workflow
@@ -58,19 +58,19 @@ cd frontend && npm run dev
 ## Testing
 
 ```bash
-npm test              # Run all tests
-npm test -- --watch  # Watch mode
+pnpm run test        # Run all tests
+pnpm run test -- --watch  # Watch mode
 npx jest <path>      # Run specific test file
 ```
 
 Tests require the backend server running on port 3847 with `NODE_ENV=test`.
 The test database (`db/test.db`) is reset automatically between test files.
-Run `npm test` once to initialize the test database before running individual tests.
+Run `pnpm run test` once to initialize the test database before running individual tests.
 
 ## Code Style
 
 - TypeScript for frontend code
-- ESLint + Prettier configured — run `npm run lint` before committing
+- ESLint + Prettier configured — run `pnpm run lint` before committing
 - Follow existing patterns in the codebase
 
 ## Pull Request Guidelines

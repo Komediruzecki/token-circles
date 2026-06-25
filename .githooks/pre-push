@@ -1,6 +1,11 @@
 #!/bin/sh
 # Pre-push gate - runs the static checks CI runs (typecheck + lint) so a push
-# can't fail CI only after it reaches GitHub.
+# can't fail CI only after it reaches GitHub (issue #30: keep local and CI in
+# lockstep). Tests and build stay in CI to keep pushes fast.
+#
+# No format check here: CI (.github/workflows/node.js.yml) doesn't run Prettier,
+# and the pre-commit hook already formats staged files — so a fmt check would be
+# redundant work that can't fail CI anyway.
 #
 # Installed automatically via the root package.json "prepare" script
 # (git config core.hooksPath .githooks). Bypass in a pinch with: git push --no-verify
@@ -23,7 +28,8 @@ if [ -z "$has_work" ]; then
   exit 0
 fi
 
-# Skip when this exact commit already passed on a clean tree
+# Skip when this exact commit already passed on a clean tree — e.g. pushing the
+# same HEAD to both origin and upstream runs identical checks twice otherwise.
 head_sha="$(git rev-parse HEAD)"
 stamp="$(git rev-parse --git-dir)/prepush-passed"
 if [ "$(cat "$stamp" 2>/dev/null)" = "$head_sha" ] &&
@@ -33,14 +39,11 @@ if [ "$(cat "$stamp" 2>/dev/null)" = "$head_sha" ] &&
   exit 0
 fi
 
-echo "pre-push: typecheck frontend"
-npm run typecheck
+echo "pre-push: typecheck"
+pnpm typecheck
 
-echo "pre-push: lint frontend"
-npm run lint
-
-echo "pre-push: lint backend"
-npm run lint:backend
+echo "pre-push: lint"
+pnpm lint
 
 printf '%s' "$head_sha" >"$stamp"
 echo "pre-push: all checks passed"

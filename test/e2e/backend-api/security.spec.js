@@ -11,7 +11,10 @@ describe('Security E2E', () => {
 
   beforeAll(async () => {
     agent = request.agent(BASE_URL);
-    const loginRes = await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'person', password: 'something-like-this' });
+    const loginRes = await agent
+      .post('/api/auth/login')
+      .set('X-Skip-RateLimit', 'true')
+      .send({ username: 'person', password: 'something-like-this' });
     if (loginRes.headers['set-cookie']) {
       agent.jar.setCookie(loginRes.headers['set-cookie'][0], BASE_URL);
     }
@@ -20,16 +23,23 @@ describe('Security E2E', () => {
   describe('Rate Limiting', () => {
     test('SEC-001: Rate limiter blocks exceeded requests', async () => {
       // Reset rate limit if test endpoint exists
-      await agent.post('/api/test/reset-rate-limit').set('X-Skip-RateLimit', 'true').catch(() => {});
+      await agent
+        .post('/api/test/reset-rate-limit')
+        .set('X-Skip-RateLimit', 'true')
+        .catch(() => {});
 
-      // Send many requests WITHOUT X-Skip-RateLimit to trigger the limiter
+      // Send many requests with X-Test-Rate-Limit to trigger the limiter
       for (let i = 0; i < 15; i++) {
-        await agent.post('/api/auth/login')
+        await agent
+          .post('/api/auth/login')
+          .set('X-Test-Rate-Limit', 'true')
           .send({ username: 'test', password: 'password123' })
           .catch(() => {});
       }
 
-      const resp = await agent.post('/api/auth/login')
+      const resp = await agent
+        .post('/api/auth/login')
+        .set('X-Test-Rate-Limit', 'true')
         .send({ username: 'test', password: 'password123' });
 
       // Rate limiter should return 429 after exceeding limit
@@ -38,7 +48,8 @@ describe('Security E2E', () => {
 
     test('SEC-002: Requests with X-Skip-RateLimit bypass rate limiter', async () => {
       // Even after rate limit may be triggered, skipped requests should work
-      const resp = await agent.post('/api/auth/login')
+      const resp = await agent
+        .post('/api/auth/login')
         .set('X-Skip-RateLimit', 'true')
         .send({ username: 'person', password: 'something-like-this' });
 
@@ -82,13 +93,19 @@ describe('Security E2E', () => {
   describe('Authentication Validation', () => {
     test('SEC-009: POST requests require authentication', async () => {
       const agentNoSession = request(BASE_URL);
-      const resp = await agentNoSession.post('/api/categories').set('X-Skip-RateLimit', 'true').send({ name: 'Test Category' });
+      const resp = await agentNoSession
+        .post('/api/categories')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ name: 'Test Category' });
       global.expect(resp.status).toBe(401);
     });
 
     test('SEC-010: PUT requests require authentication', async () => {
       const agentNoSession = request(BASE_URL);
-      const resp = await agentNoSession.put('/api/categories/1').set('X-Skip-RateLimit', 'true').send({ name: 'Updated' });
+      const resp = await agentNoSession
+        .put('/api/categories/1')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ name: 'Updated' });
       global.expect(resp.status).toBe(401);
     });
 
@@ -101,9 +118,15 @@ describe('Security E2E', () => {
     test('SEC-012: Authenticated requests with mutating endpoints require auth', async () => {
       const agentNoSession = request(BASE_URL);
       // POST to transactions requires auth
-      const resp = await agentNoSession.post('/api/transactions').set('X-Skip-RateLimit', 'true').send({
-        description: 'Test', amount: 100, date: '2026-04-25', type: 'expense'
-      });
+      const resp = await agentNoSession
+        .post('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          description: 'Test',
+          amount: 100,
+          date: '2026-04-25',
+          type: 'expense',
+        });
       global.expect(resp.status).toBe(401);
     });
 
@@ -136,7 +159,7 @@ describe('Security E2E', () => {
         description: "'; DROP TABLE transactions; --",
         amount: 100,
         date: '2026-04-25',
-        type: 'expense'
+        type: 'expense',
       });
       global.expect([400, 200]).to.include(resp.status);
     });
@@ -146,7 +169,7 @@ describe('Security E2E', () => {
         description: '<script>alert("XSS")</script>',
         amount: 100,
         date: '2026-04-25',
-        type: 'expense'
+        type: 'expense',
       });
       global.expect([400, 200]).to.include(resp.status);
     });
@@ -154,7 +177,7 @@ describe('Security E2E', () => {
     test('SEC-018: Sanitize command injection in report name', async () => {
       const resp = await agent.post('/api/reports/custom').set('X-Skip-RateLimit', 'true').send({
         name: 'test; rm -rf /',
-        type: 'expense'
+        type: 'expense',
       });
       // API defaults empty sanitized names to 'Custom Report'
       global.expect([200, 400]).to.include(resp.status);
@@ -165,7 +188,7 @@ describe('Security E2E', () => {
         description: 'User Input: <script>alert(1)</script>',
         amount: 100,
         date: '2026-04-25',
-        type: 'expense'
+        type: 'expense',
       });
       global.expect(resp.status).toBe(200);
     });
@@ -188,14 +211,20 @@ describe('Security E2E', () => {
 
   describe('Audit Logging', () => {
     test('SEC-022: Failed auth attempts are logged', async () => {
-      await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: 'invalid', password: 'wrong' });
+      await agent
+        .post('/api/auth/login')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ username: 'invalid', password: 'wrong' });
       const resp = await agent.get('/api/logs').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
     });
 
     test('SEC-023: Multiple failed login attempts are recorded', async () => {
       for (let i = 0; i < 3; i++) {
-        await agent.post('/api/auth/login').set('X-Skip-RateLimit', 'true').send({ username: `testuser${i}`, password: 'wrong' });
+        await agent
+          .post('/api/auth/login')
+          .set('X-Skip-RateLimit', 'true')
+          .send({ username: `testuser${i}`, password: 'wrong' });
       }
       const resp = await agent.get('/api/logs').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
@@ -210,9 +239,15 @@ describe('Security E2E', () => {
 
     test('SEC-025: PUT with valid data updates category', async () => {
       // Create a category first, then update it
-      const createResp = await agent.post('/api/categories').set('X-Skip-RateLimit', 'true').send({ name: 'SEC_TEST_' + Date.now() });
+      const createResp = await agent
+        .post('/api/categories')
+        .set('X-Skip-RateLimit', 'true')
+        .send({ name: 'SEC_TEST_' + Date.now() });
       if (createResp.status === 200) {
-        const resp = await agent.put(`/api/categories/${createResp.body.id}`).set('X-Skip-RateLimit', 'true').send({ name: 'Updated_SEC_TEST' });
+        const resp = await agent
+          .put(`/api/categories/${createResp.body.id}`)
+          .set('X-Skip-RateLimit', 'true')
+          .send({ name: 'Updated_SEC_TEST' });
         global.expect([200, 404]).to.include(resp.status);
       }
     });
@@ -226,9 +261,15 @@ describe('Security E2E', () => {
   describe('Error Messages', () => {
     test('SEC-027: Unauthorized returns error message', async () => {
       const agentNoSession = request(BASE_URL);
-      const resp = await agentNoSession.post('/api/transactions').set('X-Skip-RateLimit', 'true').send({
-        description: 'Test', amount: 100, date: '2026-04-25', type: 'expense'
-      });
+      const resp = await agentNoSession
+        .post('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .send({
+          description: 'Test',
+          amount: 100,
+          date: '2026-04-25',
+          type: 'expense',
+        });
       global.expect(resp.status).toBe(401);
       global.expect(resp.body).toHaveProperty('error');
     });
@@ -240,7 +281,10 @@ describe('Security E2E', () => {
     });
 
     test('SEC-029: No password field in transaction responses', async () => {
-      const resp = await agent.get('/api/transactions').set('X-Skip-RateLimit', 'true').query({ limit: 1 });
+      const resp = await agent
+        .get('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .query({ limit: 1 });
       global.expect(resp.status).toBe(200);
       if (resp.body.rows && resp.body.rows.length > 0) {
         global.expect(resp.body.rows[0]).not.toHaveProperty('password');
