@@ -52,13 +52,21 @@ class TagsRepository extends BaseRepository {
     );
   }
 
-  setTransactionTags(transactionId, tagIds) {
+  setTransactionTags(transactionId, tagIds, profileId) {
     this.run('DELETE FROM transaction_tags WHERE transaction_id = ?', transactionId);
+    if (!Array.isArray(tagIds) || tagIds.length === 0) return;
+    // Only attach tags owned by this profile — prevents attaching another tenant's tag id.
+    const placeholders = tagIds.map(() => '?').join(',');
+    const owned = this.all(
+      `SELECT id FROM tags WHERE profile_id = ? AND id IN (${placeholders})`,
+      profileId,
+      ...tagIds
+    );
     const insertStmt = this.db.prepare(
       'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
     );
-    for (const tagId of tagIds) {
-      insertStmt.run(transactionId, tagId);
+    for (const row of owned) {
+      insertStmt.run(transactionId, row.id);
     }
   }
 

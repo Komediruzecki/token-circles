@@ -580,15 +580,6 @@ if (process.env.NODE_ENV === 'test') {
   });
 }
 
-// Global error handler
-app.use((err, req, res, next) => {
-  const status = err.statusCode || err.status || 500;
-  res.status(status).json({
-    error: err.message || 'Internal Server Error',
-    ...(err.details && { details: err.details }),
-  });
-});
-
 // Serve index.html for client-side routes (SPA navigation) only
 // Static files (JS, CSS) are served by the middleware above
 app.use((req, res, next) => {

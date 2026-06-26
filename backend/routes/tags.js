@@ -97,7 +97,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     const tx = req.repos.transactions.getById(req.params.id, pid);
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-    req.repos.tags.setTransactionTags(req.params.id, tagIds);
+    req.repos.tags.setTransactionTags(req.params.id, tagIds, pid);
     res.json(toCamelCase({ ok: true }));
   }));
 
@@ -111,7 +111,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     const tx = req.repos.transactions.getById(req.params.id, pid);
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
-    req.repos.tags.setTransactionTags(req.params.id, tagIds);
+    req.repos.tags.setTransactionTags(req.params.id, tagIds, pid);
     res.json(toCamelCase({ ok: true }));
   }));
 

@@ -430,10 +430,11 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
 
     tx.tags = req.repos.tags.getTagsForTransaction(id, pid);
 
-    const response = toCamelCase(tx);
-    response.category = response.categoryName || null;
-    delete response.categoryName;
-    res.json(response);
+    // Expose the joined category_name also as `category` (the name) — the single-transaction
+    // contract the API tests + consumers expect. The old toCamelCase remap silently nulled
+    // this once toCamelCase became a no-op; populate it directly from the snake_case alias.
+    tx.category = tx.category_name || null;
+    res.json(tx);
 
   }));
 

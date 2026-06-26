@@ -82,7 +82,8 @@ class CategoriesRepository extends BaseRepository {
       'UPDATE category_mappings SET category_id = ?, confidence = ?, use_count = ? WHERE id = ?',
       categoryId,
       confidence,
-      useCount
+      useCount,
+      id
     );
   }
 
