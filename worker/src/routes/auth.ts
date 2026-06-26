@@ -1,5 +1,5 @@
-import { Hono } from 'hono'
-import type { AppEnv } from '../index'
+import { Hono } from 'hono';
+import type { AppEnv } from '../index';
 import {
   requireAuth,
   verifyGoogleIdToken,
@@ -9,48 +9,54 @@ import {
   resolveGoogleUser,
   issueSessionCookie,
   clearedSessionCookie,
-} from '../auth'
+  hashPassword,
+  verifyPassword,
+} from '../auth';
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 // Google Sign-In (server-side code flow) + session endpoints. The token is set as
 // an httpOnly cookie, so the browser never handles it directly.
-export const authRoutes = new Hono<AppEnv>()
+export const authRoutes = new Hono<AppEnv>();
 
 // 1) Kick off login: redirect to Google with a signed state carrying returnTo.
 authRoutes.get('/api/auth/google/start', async (c) => {
-  const { GOOGLE_CLIENT_ID, JWT_SECRET } = c.env
-  if (!GOOGLE_CLIENT_ID || !JWT_SECRET) return c.json({ error: 'Google login not configured' }, 500)
+  const { GOOGLE_CLIENT_ID, JWT_SECRET } = c.env;
+  if (!GOOGLE_CLIENT_ID || !JWT_SECRET)
+    return c.json({ error: 'Google login not configured' }, 500);
 
-  const url = new URL(c.req.url)
-  const returnTo = url.searchParams.get('returnTo') || c.env.CORS_ORIGIN || url.origin
-  if (!isAllowedReturnTo(returnTo, c.env)) return c.json({ error: 'Invalid returnTo' }, 400)
+  const url = new URL(c.req.url);
+  const returnTo = url.searchParams.get('returnTo') || c.env.CORS_ORIGIN || url.origin;
+  if (!isAllowedReturnTo(returnTo, c.env)) return c.json({ error: 'Invalid returnTo' }, 400);
 
-  const state = await signState({ returnTo, ts: Date.now() }, JWT_SECRET)
-  const redirectUri = `${url.origin}/api/auth/google/callback`
-  const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth')
-  auth.searchParams.set('client_id', GOOGLE_CLIENT_ID)
-  auth.searchParams.set('redirect_uri', redirectUri)
-  auth.searchParams.set('response_type', 'code')
-  auth.searchParams.set('scope', 'openid email profile')
-  auth.searchParams.set('state', state)
-  auth.searchParams.set('prompt', 'select_account')
-  return c.redirect(auth.toString(), 302)
-})
+  const state = await signState({ returnTo, ts: Date.now() }, JWT_SECRET);
+  const redirectUri = `${url.origin}/api/auth/google/callback`;
+  const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  auth.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+  auth.searchParams.set('redirect_uri', redirectUri);
+  auth.searchParams.set('response_type', 'code');
+  auth.searchParams.set('scope', 'openid email profile');
+  auth.searchParams.set('state', state);
+  auth.searchParams.set('prompt', 'select_account');
+  return c.redirect(auth.toString(), 302);
+});
 
 // 2) Google redirect target: exchange code, verify, set session cookie, go home.
 authRoutes.get('/api/auth/google/callback', async (c) => {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET } = c.env
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET } = c.env;
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !JWT_SECRET) {
-    return c.json({ error: 'Google login not configured' }, 500)
+    return c.json({ error: 'Google login not configured' }, 500);
   }
-  const url = new URL(c.req.url)
-  const code = url.searchParams.get('code')
-  const rawState = url.searchParams.get('state')
-  if (!code || !rawState) return c.json({ error: 'Missing code or state' }, 400)
+  const url = new URL(c.req.url);
+  const code = url.searchParams.get('code');
+  const rawState = url.searchParams.get('state');
+  if (!code || !rawState) return c.json({ error: 'Missing code or state' }, 400);
 
-  const state = await verifyState(rawState, JWT_SECRET)
-  if (!state || !isAllowedReturnTo(state.returnTo, c.env)) return c.json({ error: 'Invalid state' }, 400)
+  const state = await verifyState(rawState, JWT_SECRET);
+  if (!state || !isAllowedReturnTo(state.returnTo, c.env))
+    return c.json({ error: 'Invalid state' }, 400);
 
-  const redirectUri = `${url.origin}/api/auth/google/callback`
+  const redirectUri = `${url.origin}/api/auth/google/callback`;
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -61,38 +67,83 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
-  })
-  if (!tokenRes.ok) return c.json({ error: 'Token exchange failed' }, 401)
-  const tok = (await tokenRes.json()) as { id_token?: string }
-  if (!tok.id_token) return c.json({ error: 'No id_token returned' }, 401)
+  });
+  if (!tokenRes.ok) return c.json({ error: 'Token exchange failed' }, 401);
+  const tok = (await tokenRes.json()) as { id_token?: string };
+  if (!tok.id_token) return c.json({ error: 'No id_token returned' }, 401);
 
-  const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID)
-  if (!claims) return c.json({ error: 'Invalid id_token' }, 401)
+  const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID);
+  if (!claims) return c.json({ error: 'Invalid id_token' }, 401);
 
-  const userId = await resolveGoogleUser(c.env.DB, claims)
-  const sessionCookie = await issueSessionCookie(userId, 'google', c.env)
+  const userId = await resolveGoogleUser(c.env.DB, claims);
+  const sessionCookie = await issueSessionCookie(userId, 'google', c.env);
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
   return new Response(null, {
     status: 302,
     headers: { Location: state.returnTo, 'Set-Cookie': sessionCookie },
-  })
-})
+  });
+});
+
+// Email + password registration. Creates a 'password' user + default profile, then signs in.
+authRoutes.post('/api/auth/register', async (c) => {
+  if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
+  const body = (await c.req.json().catch(() => ({}))) as { email?: string; password?: string };
+  const email = (body.email ?? '').trim().toLowerCase();
+  const password = body.password ?? '';
+  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
+  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first();
+  if (existing) return c.json({ error: 'An account with that email already exists' }, 409);
+  const passwordHash = await hashPassword(password);
+  const res = await c.env.DB.prepare(
+    "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+  )
+    .bind(email, passwordHash)
+    .run();
+  const userId = res.meta.last_row_id as number;
+  await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
+    .bind('Personal Profile', userId)
+    .run();
+  c.header('Set-Cookie', await issueSessionCookie(userId, 'password', c.env));
+  return c.json({ id: userId, email });
+});
+
+// Email + password login.
+authRoutes.post('/api/auth/login', async (c) => {
+  if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
+  const body = (await c.req.json().catch(() => ({}))) as { email?: string; password?: string };
+  const email = (body.email ?? '').trim().toLowerCase();
+  const password = body.password ?? '';
+  if (!email || !password) return c.json({ error: 'Email and password are required' }, 400);
+  const user = await c.env.DB.prepare('SELECT id, password_hash FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number; password_hash: string | null }>();
+  if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+    return c.json({ error: 'Invalid email or password' }, 401);
+  }
+  c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env));
+  return c.json({ id: user.id, email });
+});
 
 // Current user.
 authRoutes.get('/api/auth/me', requireAuth, async (c) => {
-  const userId = c.get('userId')
+  const userId = c.get('userId');
   const user = await c.env.DB.prepare(
     'SELECT id, username, email, auth_provider FROM users WHERE id = ?'
   )
     .bind(userId)
-    .first()
-  return c.json(user)
-})
+    .first();
+  return c.json(user);
+});
 
 // Logout everywhere: bump token_version (revokes all issued JWTs) and clear the cookie.
 authRoutes.post('/api/auth/logout', requireAuth, async (c) => {
-  const userId = c.get('userId')
-  await c.env.DB.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').bind(userId).run()
-  c.header('Set-Cookie', clearedSessionCookie(c.env))
-  return c.json({ ok: true })
-})
+  const userId = c.get('userId');
+  await c.env.DB.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?')
+    .bind(userId)
+    .run();
+  c.header('Set-Cookie', clearedSessionCookie(c.env));
+  return c.json({ ok: true });
+});
