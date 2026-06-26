@@ -1,0 +1,84 @@
+name: Deploy Frontend
+
+# Frontend vite app -> Cloudflare Worker (static assets, SPA).
+#   push main          -> dev   (dev.tokencircles.com, built with --mode dev / .env.dev)
+#   tag  v*            -> prod  (app.tokencircles.com)
+#   workflow_dispatch  -> choose dev | prod
+#
+# IMPORTANT: disable Cloudflare "Workers Builds" for this project. The prod deploy here
+# targets the same `finance-manager` worker that Workers Builds auto-deploys, so leaving
+# both on would double-deploy / race on a tag. (Dev uses `finance-manager-dev`, no clash.)
+# Requires repo secrets: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-frontend:
+    name: Build & Deploy Frontend
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_ENABLED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ENV="prod"
+          else
+            ENV="dev"
+          fi
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Deploying frontend to: $ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (${{ steps.env.outputs.env }})
+        run: |
+          if [ "${{ steps.env.outputs.env }}" = "prod" ]; then
+            pnpm -C frontend run build
+          else
+            pnpm -C frontend run build:dev
+          fi
+
+      - name: Verify build output
+        run: test -f frontend/dist/index.html
+
+      - name: Deploy (${{ steps.env.outputs.env }})
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: deploy --env ${{ steps.env.outputs.env }}
+          packageManager: pnpm

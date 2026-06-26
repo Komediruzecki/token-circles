@@ -1,0 +1,96 @@
+name: Deploy API Worker
+
+# API worker (Hono + D1 + R2) in worker/ — NOT part of the pnpm workspace, so it installs
+# on its own with --ignore-workspace against worker/pnpm-lock.yaml.
+#   push main          -> dev   (api.dev.tokencircles.com)
+#   tag  v*            -> prod  (api.tokencircles.com)
+#   workflow_dispatch  -> choose dev | prod
+#
+# Applies D1 migrations before each deploy (wrangler records applied ones in d1_migrations,
+# so re-runs only apply new files). One-time per env, NOT done here:
+#   pnpm run d1:create:{dev,prod}   (paste the printed database_id into worker/wrangler.jsonc)
+#   pnpm run r2:create:{dev,prod}
+#   pnpm run secret:{dev,prod}      (JWT_SECRET + GOOGLE_CLIENT_SECRET)
+# Requires repo secrets: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-worker:
+    name: Deploy API Worker
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_ENABLED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ENV="prod"
+          else
+            ENV="dev"
+          fi
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          if [ "$ENV" = "prod" ]; then
+            echo "db=finance-manager" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=finance-manager-dev" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Deploying API worker to: $ENV"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install worker deps (outside the pnpm workspace)
+        working-directory: worker
+        run: pnpm install --frozen-lockfile --ignore-workspace
+
+      - name: Typecheck
+        working-directory: worker
+        run: pnpm run typecheck
+
+      - name: Apply D1 migrations (${{ steps.env.outputs.env }})
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: d1 migrations apply ${{ steps.env.outputs.db }} --remote --env ${{ steps.env.outputs.env }}
+          packageManager: pnpm
+
+      - name: Deploy worker (${{ steps.env.outputs.env }})
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --env ${{ steps.env.outputs.env }}
+          packageManager: pnpm
