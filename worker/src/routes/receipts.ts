@@ -1,7 +1,9 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
+import { requirePremium, RECEIPT_ALLOWED_TYPES, RECEIPT_MAX_BYTES, RECEIPT_MAX_PER_PROFILE } from '../plan'
 import { HttpError } from '../http'
 import * as db from '../db'
 
@@ -39,22 +41,76 @@ receiptsRoutes.get('/api/receipts', requireAuth, async (c) => {
   return c.json(rows)
 })
 
-// ── POST /api/receipts/upload — original upload path (binary; NOT ported) ─────
-// TODO: needs an R2 bucket binding for receipt file storage
-receiptsRoutes.post('/api/receipts/upload', requireAuth, async (c) => {
-  return c.json({ error: 'Not ported yet' }, 501)
-})
+// ── Upload (PREMIUM) — store the file in R2, save metadata in D1 ───────────────
+// Receipt file storage is gated to paid plans (plan.ts) so free accounts don't
+// accumulate binary data. Enforces type, per-file size and per-profile count limits,
+// and stores the object under the profile id.
+async function handleUpload(c: Context<AppEnv>): Promise<Response> {
+  await requirePremium(c)
+  if (!c.env.RECEIPTS) throw new HttpError(501, 'Receipt storage is not configured (R2 bucket missing)')
+  const pid = await getProfileId(c)
 
-// ── POST /api/receipts — test-expected upload path (binary; NOT ported) ───────
-// TODO: needs an R2 bucket binding for receipt file storage
-receiptsRoutes.post('/api/receipts', requireAuth, async (c) => {
-  return c.json({ error: 'Not ported yet' }, 501)
-})
+  const body = await c.req.parseBody()
+  const file = body['receipt'] ?? body['file']
+  if (!(file instanceof File)) throw new HttpError(400, 'No receipt file uploaded')
+  if (!RECEIPT_ALLOWED_TYPES.includes(file.type)) {
+    throw new HttpError(400, `Unsupported file type: ${file.type || 'unknown'}`)
+  }
+  if (file.size > RECEIPT_MAX_BYTES) {
+    throw new HttpError(413, `File too large (max ${Math.round(RECEIPT_MAX_BYTES / 1024 / 1024)}MB)`)
+  }
+  const countRow = await db.first<{ c: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) AS c FROM receipts WHERE profile_id = ?',
+    pid
+  )
+  if ((countRow?.c ?? 0) >= RECEIPT_MAX_PER_PROFILE) {
+    throw new HttpError(403, `Receipt limit reached (${RECEIPT_MAX_PER_PROFILE} per profile)`)
+  }
 
-// ── GET /api/receipts/file/:filename — serve raw bytes (binary; NOT ported) ───
-// TODO: needs an R2 bucket binding for receipt file storage
+  const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'
+  const key = `${pid}/${crypto.randomUUID()}.${ext}`
+  await c.env.RECEIPTS.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
+
+  const txRaw = body['transaction_id']
+  const transactionId = typeof txRaw === 'string' && txRaw ? Number(txRaw) : null
+  const res = await db.insert(c.env.DB, 'receipts', {
+    transaction_id: transactionId,
+    filename: key,
+    original_name: file.name,
+    file_type: file.type,
+    file_size: file.size,
+    storage_path: key,
+    profile_id: pid,
+  })
+  const receipt = await db.first(c.env.DB, 'SELECT * FROM receipts WHERE id = ?', res.meta.last_row_id)
+  return c.json(receipt, 201)
+}
+receiptsRoutes.post('/api/receipts/upload', requireAuth, handleUpload)
+receiptsRoutes.post('/api/receipts', requireAuth, handleUpload)
+
+// ── GET /api/receipts/file/:filename — stream the file from R2 ─────────────────
+// Scoped to the caller's profile (the Express version served any filename with no
+// ownership check — fixed here), then streamed straight from R2.
 receiptsRoutes.get('/api/receipts/file/:filename', requireAuth, async (c) => {
-  return c.json({ error: 'Not ported yet' }, 501)
+  if (!c.env.RECEIPTS) throw new HttpError(501, 'Receipt storage is not configured (R2 bucket missing)')
+  const pid = await getProfileId(c)
+  const receipt = await db.first<ReceiptRow>(
+    c.env.DB,
+    'SELECT * FROM receipts WHERE filename = ? AND profile_id = ?',
+    c.req.param('filename'),
+    pid
+  )
+  if (!receipt) throw new HttpError(404, 'Receipt not found')
+  const obj = await c.env.RECEIPTS.get(receipt.storage_path)
+  if (!obj) throw new HttpError(404, 'File not found')
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': receipt.file_type || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${receipt.original_name}"`,
+      'Cache-Control': 'private, max-age=3600',
+    },
+  })
 })
 
 // ── GET /api/receipts/transaction/:transactionId ──────────────────────────────
@@ -88,11 +144,7 @@ receiptsRoutes.get('/api/receipts/:id', requireAuth, async (c) => {
   return c.json(receipt)
 })
 
-// ── DELETE /api/receipts/:id ──────────────────────────────────────────────────
-// receiptsRepo.getByIdAndProfile + deleteByIdAndProfile. The Express version also
-// unlinks the file from disk; on Workers there's no fs, so the (future) R2 object
-// cleanup is a TODO — the metadata row delete is ported faithfully.
-// TODO: needs an R2 bucket binding to also delete the stored receipt object.
+// ── DELETE /api/receipts/:id — remove the R2 object and the metadata row ──────
 receiptsRoutes.delete('/api/receipts/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
@@ -103,6 +155,9 @@ receiptsRoutes.delete('/api/receipts/:id', requireAuth, async (c) => {
     pid
   )
   if (!receipt) throw new HttpError(404, 'Receipt not found')
+  if (c.env.RECEIPTS && receipt.storage_path) {
+    await c.env.RECEIPTS.delete(receipt.storage_path).catch(() => {})
+  }
   await db.del(c.env.DB, 'receipts', 'id = ? AND profile_id = ?', id, pid)
   return c.json({ message: 'Receipt deleted successfully' })
 })

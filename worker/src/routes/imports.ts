@@ -1,9 +1,32 @@
 import { Hono } from 'hono'
+import * as XLSX from 'xlsx'
 import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileId, getProfileIds } from '../profile'
 import { HttpError } from '../http'
 import * as db from '../db'
+
+// Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
+function parseCsv(text: string): { headers: string[]; rows: string[][] } {
+  const all: string[][] = []
+  for (const line of text.trim().split('\n')) {
+    const cols: string[] = []
+    let cur = ''
+    let inQuotes = false
+    for (const ch of line) {
+      if (ch === '"') inQuotes = !inQuotes
+      else if (ch === ',' && !inQuotes) {
+        cols.push(cur.trim().replace(/^"|"$/g, ''))
+        cur = ''
+      } else cur += ch
+    }
+    cols.push(cur.trim().replace(/^"|"$/g, ''))
+    all.push(cols)
+  }
+  const headers = all[0] || []
+  const rows = all.slice(1).filter((row) => row.some((cell) => cell))
+  return { headers, rows }
+}
 
 // Port of backend/routes/importRoutes.js.
 //
@@ -116,16 +139,47 @@ const INCOME_KEYWORDS = [
   'reimbursement',
 ]
 
-// ── POST /api/import/upload — xlsx/csv FILE upload (NOT ported) ────────────────
-// TODO: needs a Workers-compatible spreadsheet parser + R2/upload handling
+// ── POST /api/import/upload — parse an xlsx/csv FILE and return a preview ──────
+// SheetJS parses the workbook in-memory (Workers-safe); CSV is parsed in pure JS.
+// Stateless: pass an optional `sheetName` field to read a specific tab. The response
+// lists all sheetNames so the client can re-call /upload to switch sheets (this
+// replaces the old stateful upload->fileId->file-sheet flow). The parsed rows then
+// go to POST /api/import/execute.
 importRoutes.post('/api/import/upload', requireAuth, async (c) => {
-  return c.json({ error: 'Not ported yet' }, 501)
+  const body = await c.req.parseBody()
+  const file = body['file'] ?? body['import']
+  if (!(file instanceof File)) throw new HttpError(400, 'No file uploaded')
+  const requested = typeof body['sheetName'] === 'string' ? (body['sheetName'] as string) : undefined
+  const buf = new Uint8Array(await file.arrayBuffer())
+
+  if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
+    const { headers, rows } = parseCsv(new TextDecoder().decode(buf))
+    return c.json({ headers, rows, selectedSheet: 'CSV', sheetNames: ['CSV'] })
+  }
+
+  const wb = XLSX.read(buf, { type: 'array' })
+  const sheetNames = wb.SheetNames
+  const selected = requested && sheetNames.includes(requested) ? requested : sheetNames[0]
+  if (!selected) throw new HttpError(400, 'Spreadsheet has no sheets')
+  const matrix = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[selected]!, {
+    header: 1,
+    blankrows: false,
+    defval: '',
+  })
+  const headers = (matrix[0] as any[] | undefined)?.map((h) => String(h ?? '')) ?? []
+  const rows = matrix.slice(1).filter((r) => Array.isArray(r) && r.some((cell) => cell !== '' && cell != null))
+  return c.json({ headers, rows, selectedSheet: selected, sheetNames })
 })
 
-// ── POST /api/import/file-sheet — re-read uploaded workbook (NOT ported) ──────
-// TODO: needs a Workers-compatible spreadsheet parser + R2/upload handling
+// ── POST /api/import/file-sheet — obsolete on Workers ─────────────────────────
+// The old flow kept the parsed workbook server-side keyed by fileId (in-memory),
+// which isn't possible on stateless Workers. Re-call /api/import/upload with a
+// `sheetName` field instead (the file is re-parsed in-memory).
 importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
-  return c.json({ error: 'Not ported yet' }, 501)
+  return c.json(
+    { error: 'Re-upload via /api/import/upload with a sheetName field (stateless Worker flow).' },
+    410
+  )
 })
 
 // ── POST /api/import/googlesheet — fetch + parse a published sheet as CSV ──────

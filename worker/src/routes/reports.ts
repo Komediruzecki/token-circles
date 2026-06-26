@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileId, getProfileIds } from '../profile'
+import { buildReportPdf } from '../pdf'
 import * as db from '../db'
 
 // Port of backend/routes/reports.js. The JSON/data endpoints (tax-summary,
@@ -65,12 +66,74 @@ function sanitizeInput(input: unknown): string {
   return sanitized.trim()
 }
 
-// ── Monthly PDF ──────────────────────────────────────────────────────
-// Renders an export HTML page to PDF via Puppeteer (pdfRenderService) with a
-// PDFKit text fallback (pdfService). Neither runs on Workers.
+// Number formatting + a PDF Response wrapper, shared by the PDF endpoints below.
+const money = (n: number) =>
+  (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function pdfResponse(bytes: Uint8Array, filename: string): Response {
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  })
+}
+
+// ── Monthly report (PDF) ─────────────────────────────────────────────
+// Worker-native PDF via pdf-lib (no Puppeteer/PDFKit). `month` = YYYY-MM (default current).
 reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
-  // TODO: PDF/xlsx generation needs a Workers-compatible approach
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pid = await getProfileId(c)
+  const month = c.req.query('month') || new Date().toISOString().slice(0, 7)
+  const start = `${month}-01`
+  const [y, m] = month.split('-').map(Number)
+  const end = new Date(y, m, 0).toISOString().slice(0, 10)
+
+  const income =
+    (
+      await db.first<{ t: number }>(
+        c.env.DB,
+        `SELECT COALESCE(SUM(amount),0) t FROM transactions WHERE profile_id = ? AND type='income' AND date >= ? AND date <= ?`,
+        pid,
+        start,
+        end
+      )
+    )?.t || 0
+  const expenses =
+    (
+      await db.first<{ t: number }>(
+        c.env.DB,
+        `SELECT COALESCE(SUM(amount),0) t FROM transactions WHERE profile_id = ? AND type='expense' AND date >= ? AND date <= ?`,
+        pid,
+        start,
+        end
+      )
+    )?.t || 0
+  const byCat = await db.all<{ name: string; total: number }>(
+    c.env.DB,
+    `SELECT COALESCE(c.name,'Uncategorized') name, SUM(t.amount) total FROM transactions t
+       LEFT JOIN categories c ON t.category_id = c.id
+       WHERE t.profile_id = ? AND t.type='expense' AND t.date >= ? AND t.date <= ?
+       GROUP BY c.id ORDER BY total DESC`,
+    pid,
+    start,
+    end
+  )
+
+  const pdf = await buildReportPdf({
+    title: 'Monthly Report',
+    subtitle: month,
+    sections: [
+      {
+        heading: 'Summary',
+        rows: [
+          ['Income', money(income)],
+          ['Expenses', money(expenses)],
+          ['Net', money(income - expenses)],
+        ],
+      },
+      { heading: 'Expenses by category', rows: byCat.map((r) => [r.name, money(r.total)]) },
+    ],
+  })
+  return pdfResponse(pdf, `monthly-${month}.pdf`)
 })
 
 // ── Year-End Tax Summary (JSON) ──────────────────────────────────────
@@ -135,8 +198,44 @@ reportsRoutes.get('/api/reports/tax-summary', requireAuth, async (c) => {
 
 // ── Year-End Tax Summary (PDF) ───────────────────────────────────────
 reportsRoutes.get('/api/reports/tax-summary-pdf', requireAuth, async (c) => {
-  // TODO: PDF/xlsx generation needs a Workers-compatible approach
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pids = await getProfileIds(c)
+  const inClause = pids.map(() => '?').join(',')
+  const year = c.req.query('year')
+  if (!year) return c.json({ error: 'year is required' }, 400)
+  const rows = await db.all<{ amount: number; category_name: string; tax_deductible: number }>(
+    c.env.DB,
+    `SELECT t.amount, c.name as category_name, c.tax_deductible FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'`,
+    ...pids,
+    `${year}-01-01`,
+    `${year}-12-31`
+  )
+  const byCat = (rs: typeof rows) => {
+    const m: Record<string, number> = {}
+    for (const r of rs) m[r.category_name] = (m[r.category_name] || 0) + r.amount
+    return Object.entries(m).sort((a, b) => b[1] - a[1])
+  }
+  const ded = rows.filter((r) => r.tax_deductible)
+  const non = rows.filter((r) => !r.tax_deductible)
+  const pdf = await buildReportPdf({
+    title: 'Year-End Tax Summary',
+    subtitle: `Tax year ${year}`,
+    sections: [
+      {
+        heading: 'Summary',
+        rows: [
+          ['Tax-deductible expenses', money(ded.reduce((s, r) => s + r.amount, 0))],
+          ['Non-deductible expenses', money(non.reduce((s, r) => s + r.amount, 0))],
+          ['Total expenses', money(rows.reduce((s, r) => s + r.amount, 0))],
+          ['Transactions', String(rows.length)],
+        ],
+      },
+      { heading: 'Tax-deductible by category', rows: byCat(ded).map(([n, t]) => [n, money(t)]) },
+      { heading: 'Non-deductible by category', rows: byCat(non).map(([n, t]) => [n, money(t)]) },
+    ],
+  })
+  return pdfResponse(pdf, `tax-summary-${year}.pdf`)
 })
 
 // ── Year-End P&L Summary (JSON) ──────────────────────────────────────
@@ -198,8 +297,47 @@ reportsRoutes.get('/api/reports/pl-summary', requireAuth, async (c) => {
 
 // ── Year-End P&L Summary (PDF) ───────────────────────────────────────
 reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, async (c) => {
-  // TODO: PDF/xlsx generation needs a Workers-compatible approach
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pids = await getProfileIds(c)
+  const inClause = pids.map(() => '?').join(',')
+  const year = c.req.query('year')
+  if (!year) return c.json({ error: 'year is required' }, 400)
+  const rows = await db.all<{ amount: number; type: string; category_name: string }>(
+    c.env.DB,
+    `SELECT t.amount, t.type, c.name as category_name FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?`,
+    ...pids,
+    `${year}-01-01`,
+    `${year}-12-31`
+  )
+  const cat = (type: string) => {
+    const m: Record<string, number> = {}
+    for (const r of rows) if (r.type === type) m[r.category_name] = (m[r.category_name] || 0) + r.amount
+    return Object.entries(m).sort((a, b) => b[1] - a[1])
+  }
+  const incomeTotal = rows.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0)
+  const expenseTotal = rows.filter((r) => r.type === 'expense').reduce((s, r) => s + r.amount, 0)
+  const pdf = await buildReportPdf({
+    title: 'Year-End P&L Summary',
+    subtitle: `Year ${year}`,
+    sections: [
+      { heading: 'Income by category', rows: cat('income').map(([n, t]) => [n, money(t)]) },
+      { heading: 'Expenses by category', rows: cat('expense').map(([n, t]) => [n, money(t)]) },
+      {
+        heading: 'Totals',
+        rows: [
+          ['Total income', money(incomeTotal)],
+          ['Total expenses', money(expenseTotal)],
+          ['Net savings', money(incomeTotal - expenseTotal)],
+          [
+            'Savings rate',
+            incomeTotal > 0 ? `${(((incomeTotal - expenseTotal) / incomeTotal) * 100).toFixed(1)}%` : '0%',
+          ],
+        ],
+      },
+    ],
+  })
+  return pdfResponse(pdf, `pl-summary-${year}.pdf`)
 })
 
 // ── Custom Report (create) ───────────────────────────────────────────
@@ -223,10 +361,73 @@ reportsRoutes.post('/api/reports/custom', requireAuth, async (c) => {
 })
 
 // ── Annual Financial Report (PDF) ────────────────────────────────────
-// Puppeteer-rendered charts embedded in a PDF, with a PDFKit text fallback.
 reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
-  // TODO: PDF/xlsx generation needs a Workers-compatible approach
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pids = await getProfileIds(c)
+  const inClause = pids.map(() => '?').join(',')
+  const year = c.req.query('year') || String(new Date().getFullYear())
+  const start = `${year}-01-01`
+  const end = `${year}-12-31`
+  const sum = async (type: string) =>
+    (
+      await db.first<{ t: number }>(
+        c.env.DB,
+        `SELECT COALESCE(SUM(amount),0) t FROM transactions WHERE profile_id IN (${inClause}) AND type=? AND date >= ? AND date <= ?`,
+        ...pids,
+        type,
+        start,
+        end
+      )
+    )?.t || 0
+  const income = await sum('income')
+  const expenses = await sum('expense')
+
+  const monthlyRows = await db.all<{ ym: string; type: string; total: number }>(
+    c.env.DB,
+    `SELECT substr(date,1,7) ym, type, SUM(amount) total FROM transactions
+       WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income','expense')
+       GROUP BY ym, type ORDER BY ym`,
+    ...pids,
+    start,
+    end
+  )
+  const months: Record<string, { income: number; expense: number }> = {}
+  for (const r of monthlyRows) {
+    months[r.ym] = months[r.ym] || { income: 0, expense: 0 }
+    if (r.type === 'income') months[r.ym].income = r.total
+    else months[r.ym].expense = r.total
+  }
+  const byCat = await db.all<{ name: string; total: number }>(
+    c.env.DB,
+    `SELECT COALESCE(c.name,'Uncategorized') name, SUM(t.amount) total FROM transactions t
+       LEFT JOIN categories c ON t.category_id = c.id
+       WHERE t.profile_id IN (${inClause}) AND t.type='expense' AND t.date >= ? AND t.date <= ?
+       GROUP BY c.id ORDER BY total DESC LIMIT 15`,
+    ...pids,
+    start,
+    end
+  )
+
+  const pdf = await buildReportPdf({
+    title: 'Annual Financial Report',
+    subtitle: `Year ${year}`,
+    sections: [
+      {
+        heading: 'Summary',
+        rows: [
+          ['Total income', money(income)],
+          ['Total expenses', money(expenses)],
+          ['Net savings', money(income - expenses)],
+          ['Savings rate', income > 0 ? `${(((income - expenses) / income) * 100).toFixed(1)}%` : '0%'],
+        ],
+      },
+      {
+        heading: 'Net by month',
+        rows: Object.entries(months).map(([ym, v]) => [ym, money(v.income - v.expense)]),
+      },
+      { heading: 'Top expense categories', rows: byCat.map((r) => [r.name, money(r.total)]) },
+    ],
+  })
+  return pdfResponse(pdf, `annual-${year}.pdf`)
 })
 
 // ── Overview Report ──────────────────────────────────────────────────
