@@ -1,7 +1,6 @@
 'use strict';
 const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
-const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
 module.exports = function ({ apiRateLimiter, logError, yahooFinanceService, requireAuth }) {

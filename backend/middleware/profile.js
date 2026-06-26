@@ -3,6 +3,8 @@
  * Provides getProfileId, getProfileIds, profileWhere, profileInClause, profileParams
  */
 
+const { AppError, UnauthorizedError } = require('../lib/errors');
+
 // Helper: get profile ID from request (header first, then query param, then 1)
 function getProfileId(req) {
   const id = parseInt(req.headers['x-profile-id'] || req.query.profile_id || 1);
@@ -11,16 +13,12 @@ function getProfileId(req) {
   // no session was present, which let unauthenticated callers read/modify any
   // profile simply by passing its id.
   if (!req.session || !req.session.userId) {
-    const err = new Error('Unauthorized');
-    err.statusCode = 401;
-    throw err;
+    throw new UnauthorizedError('Unauthorized');
   }
   if (req.repos && req.repos.profiles) {
     const profile = req.repos.profiles.getById(id);
     if (!profile || profile.user_id !== req.session.userId) {
-      const err = new Error('Access denied to this profile');
-      err.statusCode = 403;
-      throw err;
+      throw new AppError('Access denied to this profile', 403);
     }
   }
   return id;
@@ -55,17 +53,13 @@ function getProfileIds(req) {
   // Fail closed: require a session and verify every requested profile belongs to
   // the authenticated user (see getProfileId for rationale).
   if (!req.session || !req.session.userId) {
-    const err = new Error('Unauthorized');
-    err.statusCode = 401;
-    throw err;
+    throw new UnauthorizedError('Unauthorized');
   }
   if (req.repos && req.repos.profiles) {
     for (const id of ids) {
       const profile = req.repos.profiles.getById(id);
       if (!profile || profile.user_id !== req.session.userId) {
-        const err = new Error('Access denied to profile ' + id);
-        err.statusCode = 403;
-        throw err;
+        throw new AppError('Access denied to profile ' + id, 403);
       }
     }
   }

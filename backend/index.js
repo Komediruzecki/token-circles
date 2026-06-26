@@ -459,8 +459,10 @@ const routeDeps = {
 const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/2fa/setup']);
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
-  if (PUBLIC_API_PATHS.has(req.path)) return next();
-  if (req.path.startsWith('/api/test/')) return next(); // test-only helpers (NODE_ENV=test)
+  // Normalize a trailing slash so e.g. /api/auth/login/ is still treated as public.
+  const path = req.path.length > 1 ? req.path.replace(/\/+$/, '') : req.path;
+  if (PUBLIC_API_PATHS.has(path)) return next();
+  if (path.startsWith('/api/test/')) return next(); // test-only helpers (NODE_ENV=test)
   return requireAuth(req, res, next);
 });
 
