@@ -14,7 +14,8 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
 
   router.post('/api/accounts', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
-    const { name, type, currency, balance, notes, starting_balance, starting_date } = req.body;
+    const { name, bank_name, type, currency, balance, notes, starting_balance, starting_date } =
+      req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
     const validTypes = ['giro', 'ib', 'savings', 'cash'];
     const accountType = validTypes.includes(type) ? type : 'giro';
@@ -23,6 +24,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     const startDate = starting_date || null;
     const result = req.repos.accounts.create({
       name: name.trim(),
+      bank_name: bank_name || '',
       type: accountType,
       currency: currency || 'USD',
       balance: startBalance,
@@ -46,7 +48,8 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   router.put('/api/accounts/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const body = req.body || {};
-    const { name, type, currency, balance, notes, starting_balance, starting_date } = body;
+    const { name, bank_name, type, currency, balance, notes, starting_balance, starting_date } =
+      body;
     const existing = req.repos.accounts.getById(req.params.id, pid);
     if (!existing) return res.status(404).json({ error: 'Account not found' });
     const validTypes = ['giro', 'ib', 'savings', 'cash'];
@@ -55,6 +58,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     const balanceVal = parseFloat(balance);
     const data = {
       name: typeof name === 'string' ? name.trim() : existing.name,
+      bank_name: bank_name !== undefined ? bank_name : (existing.bank_name ?? ''),
       type: accountType,
       currency: currency || 'USD',
       balance: isNaN(balanceVal) ? existing.balance : balanceVal,
