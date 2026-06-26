@@ -183,15 +183,23 @@ export class ApiClient {
   }
 
   /**
-   * Check if user is logged in
+   * Check if a session cookie is valid (worker: GET /api/auth/me).
    */
   async checkLogin(): Promise<boolean> {
     try {
-      await this.request('/auth/check', undefined)
+      await this.request('/auth/me', undefined)
       return true
     } catch {
       return false
     }
+  }
+
+  /**
+   * Begin Google sign-in. Full-page redirect to the worker, which bounces to Google and
+   * returns to `returnTo` with the httpOnly session cookie set. Server/self-hosted mode only.
+   */
+  loginWithGoogle(returnTo: string = window.location.origin): void {
+    window.location.href = `${API_BASE}/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`
   }
 
   /**

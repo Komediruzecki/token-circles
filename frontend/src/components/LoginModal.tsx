@@ -1,37 +1,15 @@
-import { createSignal } from 'solid-js'
 import { api } from '../core/api'
 import styles from './LoginModal.module.css'
 
 export interface LoginModalProps {
   onClose: () => void
+  // Kept for existing call sites; the Google flow is a full-page redirect, so it never
+  // fires (the app re-checks the session on reload instead).
   onSuccess: () => void
 }
 
 export default function LoginModal(props: LoginModalProps) {
-  const [username, setUsername] = createSignal('')
-  const [password, setPassword] = createSignal('')
-  const [error, setError] = createSignal('')
-  const [loading, setLoading] = createSignal(false)
-
-  const handleSubmit = async () => {
-    const u = username().trim()
-    const p = password()
-    if (!u || !p) return
-
-    setLoading(true)
-    setError('')
-    try {
-      await api.login(u, p)
-      props.onSuccess()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') handleSubmit()
     if (e.key === 'Escape') props.onClose()
   }
 
@@ -44,39 +22,21 @@ export default function LoginModal(props: LoginModalProps) {
     >
       <div class={styles.modal} onKeyDown={handleKeyDown}>
         <h3 class={styles.title}>Sign In</h3>
-        <div class={styles.field}>
-          <label class={styles.label}>Username</label>
-          <input
-            type="text"
-            class={styles.input}
-            placeholder="Enter your username"
-            value={username()}
-            onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
-            autofocus
-          />
-        </div>
-        <div class={styles.field}>
-          <label class={styles.label}>Password</label>
-          <input
-            type="password"
-            class={styles.input}
-            placeholder="Enter your password"
-            value={password()}
-            onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
-          />
-        </div>
-        {error() && <div class={styles.error}>{error()}</div>}
+        <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
+          Sign in with your Google account to sync your data across devices.
+        </p>
         <div class={styles.actions}>
           <button class={styles.btnCancel} onClick={props.onClose} type="button">
             Cancel
           </button>
           <button
             class={styles.btnSubmit}
-            onClick={handleSubmit}
-            disabled={loading() || !username().trim() || !password()}
+            onClick={() => {
+              api.loginWithGoogle()
+            }}
             type="button"
           >
-            {loading() ? 'Signing in...' : 'Sign In'}
+            Continue with Google
           </button>
         </div>
       </div>
