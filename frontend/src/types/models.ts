@@ -12,8 +12,10 @@ export type LoanId = number
 export type GoalId = number
 export type BillId = number
 
-export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY'
-export type TransactionType = 'income' | 'expense' | 'transfer'
+// Common codes kept for autocomplete; the column is free-form TEXT (imports /
+// restores can hold any code), so any string is accepted.
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY' | (string & {})
+export type TransactionType = 'income' | 'expense' | 'transfer' | 'deduction'
 export type BudgetPeriod = 'monthly' | 'weekly' | 'yearly'
 export type AccountType = 'giro' | 'savings' | 'ib' | 'cash'
 

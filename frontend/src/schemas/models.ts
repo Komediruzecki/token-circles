@@ -24,7 +24,7 @@ export const AccountSchema = z.object({
   name: z.string(),
   bank_name: z.string().optional().nullable(),
   type: z.enum(['giro', 'savings', 'ib', 'cash']),
-  currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']),
+  currency: z.string(),
   balance: z.number(),
   notes: z.string().optional().nullable(),
   profile_id: z.number(),
@@ -40,10 +40,13 @@ export const TransactionSchema = z.object({
   beneficiary: z.string(),
   payor: z.string(),
   category_id: z.number().nullable(),
-  currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']),
+  currency: z.string(),
   amount_local: z.number().nullable(),
   exchange_rate: z.number(),
-  type: z.enum(['income', 'expense', 'transfer']),
+  // Backend also supports 'deduction' (see backend validators); accept it so the
+  // transactions list doesn't hard-fail zod parsing on such rows. Currency is a
+  // free-form TEXT column (imports/restores can hold any code), hence z.string().
+  type: z.enum(['income', 'expense', 'transfer', 'deduction']),
   notes: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
