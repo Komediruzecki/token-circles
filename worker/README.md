@@ -41,12 +41,15 @@ Every module in `src/routes/` follows one pattern (requireAuth → `getProfileId
   recurring (+ upcoming/populate), savings-goals, loans (+ rates/prepayments/amortization),
   portfolio (+ live Yahoo prices), housing, retirement-goals (+ projection), counterparties,
   settings, dashboard, analytics, calculators, and the report DATA/JSON endpoints.
-- **Still `501 + // TODO`** — only what needs Workers infra not set up yet:
-  - report **PDF** export (PDFKit/Puppeteer are Node-only),
-  - receipt **file upload/serving** (needs an **R2** bucket binding),
-  - **spreadsheet-file** import (xlsx parser; the JSON/CSV-text import path *is* ported).
-- **Caveat:** it typechecks and bundles, but hasn't been run against a live D1 yet —
-  smoke-test the SQL once you stand up the database (below).
+- **PDF reports** via `pdf-lib` (pure JS): monthly, tax-summary, pl-summary, annual.
+- **Receipt files** in **R2** (`[[r2_buckets]]`): upload is a **premium** feature (gated
+  by `users.plan`; free accounts get 402) with type/size + per-profile count limits;
+  serving is owner-scoped. **Spreadsheet import** via SheetJS (xlsx + csv).
+- Remaining gaps are edge-only: the Google-Sheets **xlsx fallback** (CSV export covers the
+  common case) and the old stateful `/import/file-sheet` (replaced by re-uploading with a
+  `sheetName` field).
+- **Caveat:** it typechecks and bundles, but hasn't been run against a live D1/R2 yet —
+  smoke-test once you stand up the database + bucket (below).
 
 ## Go-live steps (run later, in order)
 ```bash
@@ -61,6 +64,7 @@ pnpm run d1:migrate:local          # apply schema to the local dev D1
 pnpm run dev                       # http://localhost:8787/api/health -> {"ok":true}
 
 pnpm run d1:migrate:remote         # apply schema to the real D1
+npx wrangler r2 bucket create finance-manager-receipts   # for premium receipt files
 
 # Auth secrets (create the Google OAuth client first — see "Auth" below):
 npx wrangler secret put JWT_SECRET             # any long random string
@@ -86,8 +90,11 @@ later, alongside the wrangler/D1 setup.
 ## Open items
 - **Domain** — not purchased yet (name ideas in `~/.dotfiles/personal/finance/name-ideas.md`).
   All domain/route/CORS spots are `PLACEHOLDER_DOMAIN`.
-- **R2 + PDF/xlsx** — wire an R2 bucket for receipts, and pick a Workers-compatible PDF and
-  spreadsheet approach, to finish the remaining `501` endpoints.
+- **Premium billing** — receipt upload is gated to `users.plan = 'premium'`, but there's no
+  billing/upgrade flow yet; set a user premium manually for now
+  (`UPDATE users SET plan='premium' WHERE id=?`). PDF reports + spreadsheet import are free.
+- **R2 bucket** — create `finance-manager-receipts` (above) and keep its name in
+  `wrangler.toml`; receipt endpoints return 501 until the bucket is bound.
 - **Data migration** — to move existing rows into D1:
   `sqlite3 finance.db .dump > dump.sql`, strip pragmas/transactions, then
   `npx wrangler d1 execute finance-manager --remote --file dump.sql`.
