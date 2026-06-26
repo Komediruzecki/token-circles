@@ -22,6 +22,12 @@ database_name = "finance-manager"     # TODO: match your chosen name
 database_id = "PLACEHOLDER_D1_DATABASE_ID"   # TODO: fill in after d1:create
 migrations_dir = "migrations"
 
+# ── R2 bucket for receipt files (premium feature) ─────────────────────────────
+# Create it once:  npx wrangler r2 bucket create finance-manager-receipts
+[[r2_buckets]]
+binding = "RECEIPTS"
+bucket_name = "finance-manager-receipts"   # TODO: create the bucket before deploy
+
 # ── Non-secret vars ───────────────────────────────────────────────────────────
 [vars]
 APP_ENV = "production"

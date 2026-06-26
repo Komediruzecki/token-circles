@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   auth_provider TEXT NOT NULL DEFAULT 'password',
   provider_id TEXT,
   token_version INTEGER NOT NULL DEFAULT 1,
+  plan TEXT NOT NULL DEFAULT 'free',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider
