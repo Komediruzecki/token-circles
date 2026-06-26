@@ -16,6 +16,12 @@ import { housingRoutes } from './routes/housing'
 import { retirementGoalsRoutes } from './routes/retirement-goals'
 import { counterpartiesRoutes } from './routes/counterparties'
 import { settingsRoutes } from './routes/settings'
+import { dashboardRoutes } from './routes/dashboard'
+import { analyticsRoutes } from './routes/analytics'
+import { calculatorsRoutes } from './routes/calculators'
+import { reportsRoutes } from './routes/reports'
+import { receiptsRoutes } from './routes/receipts'
+import { importRoutes } from './routes/imports'
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -45,9 +51,9 @@ app.get('/api/health', (c) => c.json({ ok: true, env: c.env.APP_ENV ?? 'unknown'
 app.route('/', authRoutes)
 
 // ── Data route modules (each applies requireAuth + profile scoping) ───────────
-// Ported from backend/routes/*.js. CRUD is complete; some heavy analytical/external
-// endpoints return 501 with a // TODO (see the modules). Still to port: dashboard,
-// analytics, reports, calculators, retirement projection, imports, receipts files.
+// Ported from backend/routes/*.js. The remaining 501 stubs (see the modules) only
+// cover things that need Workers infra not set up yet: PDF/xlsx generation, receipt
+// file storage (needs an R2 bucket), and spreadsheet-file imports.
 app.route('/', profilesRoutes)
 app.route('/', accountsRoutes)
 app.route('/', transactionsRoutes)
@@ -63,6 +69,12 @@ app.route('/', housingRoutes)
 app.route('/', retirementGoalsRoutes)
 app.route('/', counterpartiesRoutes)
 app.route('/', settingsRoutes)
+app.route('/', dashboardRoutes)
+app.route('/', analyticsRoutes)
+app.route('/', calculatorsRoutes)
+app.route('/', reportsRoutes)
+app.route('/', receiptsRoutes)
+app.route('/', importRoutes)
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 

@@ -167,8 +167,70 @@ portfolioRoutes.delete('/api/portfolio/holdings/:id', requireAuth, async (c) => 
   return c.json({ ok: true })
 })
 
-// Live quote lookup hits Yahoo Finance (external) — not reachable here.
+// Fetch current prices for a list of tickers. Port of
+// backend/routes/portfolio.js POST /api/portfolio/prices, which calls
+// yahooFinanceService.fetchQuotes (yahoo-finance2 .quote()).
+//
+// NOTE: yahoo-finance2's .quote() hits Yahoo's public quote endpoint
+// (https://query1.finance.yahoo.com/v7/finance/quote?symbols=...). We replicate
+// that here with fetch(). The upstream JSON shape is
+//   { quoteResponse: { result: [ { symbol, regularMarketPrice, ... } ], error } }
+// and each result object uses the same field names the Express route read
+// (regularMarketPrice / regularMarketChange / regularMarketChangePercent /
+// regularMarketDayHigh / regularMarketDayLow / shortName / longName). The v7
+// endpoint may require a crumb/cookie in some regions and can rate-limit; on any
+// failure we fall back to an empty quote list (matching fetchQuotes' catch -> []),
+// so the response is {} rather than an error. The v6 host is tried as a fallback.
+async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
+  if (!symbols || symbols.length === 0) return []
+  const qs = encodeURIComponent(symbols.join(','))
+  const urls = [
+    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${qs}`,
+    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${qs}`,
+  ]
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          // Yahoo rejects requests without a browser-like UA.
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          Accept: 'application/json',
+        },
+      })
+      if (!resp.ok) continue
+      const data = (await resp.json()) as any
+      const result = data?.quoteResponse?.result
+      if (Array.isArray(result)) return result
+    } catch (err) {
+      // Try the next host, else fall through to [].
+    }
+  }
+  return []
+}
+
 portfolioRoutes.post('/api/portfolio/prices', requireAuth, async (c) => {
-  // TODO: port yahooFinanceService.fetchQuotes (external Yahoo Finance call)
-  return c.json({ error: 'Not ported yet' }, 501)
+  const b = (await c.req.json()) as Record<string, any>
+  const tickers: any[] | undefined = b.tickers
+  if (!tickers || !Array.isArray(tickers) || tickers.length === 0) {
+    throw new HttpError(400, 'tickers array is required')
+  }
+
+  const quotes = await fetchYahooQuotes(tickers.map((t) => String(t).toUpperCase()))
+
+  const prices: Record<string, any> = {}
+  for (const q of quotes) {
+    if (q && q.symbol && q.regularMarketPrice) {
+      prices[q.symbol] = {
+        price: q.regularMarketPrice,
+        change: q.regularMarketChange || 0,
+        changePercent: q.regularMarketChangePercent || 0,
+        dayHigh: q.regularMarketDayHigh,
+        dayLow: q.regularMarketDayLow,
+        name: q.shortName || q.longName || q.symbol,
+      }
+    }
+  }
+
+  return c.json(prices)
 })

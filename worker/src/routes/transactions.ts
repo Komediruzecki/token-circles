@@ -245,28 +245,191 @@ transactionsRoutes.get('/api/transactions/summary', requireAuth, async (c) => {
   })
 })
 
-// ── PUT /api/transactions/bulk — STUB (heavier; not ported yet) ───────────────
+// ── PUT /api/transactions/bulk — bulk update/delete across many ids ───────────
 // Registered before /api/transactions/:id so it isn't shadowed.
 transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
-  // TODO: port bulk update/delete (allowed-field updates + account balance reversal).
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pids = await getProfileIds(c)
+  const inClause = pids.map(() => '?').join(',')
+  const b = (await c.req.json()) as Record<string, any>
+  // Support both 'ids' and 'transactionIds' field names.
+  const ids: unknown[] = b.ids || b.transactionIds || []
+  const action: string = b.action || b._method || 'update'
+  const data: Record<string, any> = b.data || b
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw new HttpError(400, 'No transaction IDs provided')
+  }
+  if (ids.length > 1000) {
+    throw new HttpError(400, 'Cannot update more than 1000 transactions at once')
+  }
+
+  const placeholders = ids.map(() => '?').join(',')
+  const authParams = [...pids, ...ids]
+
+  if (typeof action === 'string' && action.toLowerCase() === 'delete') {
+    // Reverse account balance effects before bulk delete.
+    const txRows = await db.all<TxRow>(
+      c.env.DB,
+      `SELECT id, account_id, transfer_account_id, type, amount FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+      ...authParams
+    )
+    for (const tx of txRows) {
+      if (!tx.account_id) continue
+      if (tx.type === 'transfer' && tx.transfer_account_id) {
+        await db.run(
+          c.env.DB,
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+          tx.amount,
+          tx.account_id,
+          ...pids
+        )
+        await db.run(
+          c.env.DB,
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
+          tx.amount,
+          tx.transfer_account_id,
+          ...pids
+        )
+      } else if (tx.type === 'income') {
+        await db.run(
+          c.env.DB,
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
+          tx.amount,
+          tx.account_id,
+          ...pids
+        )
+      } else if (tx.type === 'expense') {
+        await db.run(
+          c.env.DB,
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+          tx.amount,
+          tx.account_id,
+          ...pids
+        )
+      }
+    }
+    const result = await db.run(
+      c.env.DB,
+      `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+      ...authParams
+    )
+    return c.json({ ok: true, deleted: result.meta.changes })
+  }
+
+  if (typeof action === 'string' && action.toLowerCase() === 'update') {
+    if (!data || typeof data !== 'object') {
+      throw new HttpError(400, 'No update data provided')
+    }
+
+    const allowedFields = [
+      'category_id',
+      'type',
+      'description',
+      'beneficiary',
+      'payor',
+      'notes',
+      'reconciled',
+    ]
+    const updates: string[] = []
+    const updateParams: unknown[] = []
+
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(data, field)) {
+        if (field === 'category_id') {
+          updates.push('category_id = ?')
+          updateParams.push(
+            data.category_id === null || data.category_id === '' ? null : parseInt(data.category_id, 10)
+          )
+        } else if (field === 'reconciled') {
+          // Convert boolean to integer for SQLite.
+          updates.push('reconciled = ?')
+          updateParams.push(data.reconciled ? 1 : 0)
+        } else if (field === 'type') {
+          if (!['income', 'expense', 'transfer'].includes(data.type)) {
+            throw new HttpError(400, 'Invalid type. Must be income, expense, or transfer')
+          }
+          updates.push('type = ?')
+          updateParams.push(data.type)
+        } else {
+          updates.push(`${field} = ?`)
+          updateParams.push(data[field] || '')
+        }
+      }
+    }
+
+    if (updates.length === 0) {
+      throw new HttpError(400, 'No valid fields to update')
+    }
+
+    updates.push("updated_at = datetime('now')")
+    updateParams.push(...pids, ...ids)
+
+    const result = await db.run(
+      c.env.DB,
+      `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+      ...updateParams
+    )
+    return c.json({ ok: true, updated: result.meta.changes })
+  }
+
+  throw new HttpError(400, "Invalid action. Must be 'delete' or 'update'")
 })
 
-// ── Reconciliation STUBS (heavier; not ported yet) ────────────────────────────
+// ── Reconciliation routes ─────────────────────────────────────────────────────
 // Registered before /api/transactions/:id so they aren't shadowed.
+
+// POST /api/transactions/reconcile/bulk — bulk reconcile by date range.
 transactionsRoutes.post('/api/transactions/reconcile/bulk', requireAuth, async (c) => {
-  // TODO: port bulk reconcile by date range.
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pid = await getProfileId(c)
+  const b = (await c.req.json()) as Record<string, any>
+  const { startDate, endDate } = b
+  if (!startDate || !endDate) throw new HttpError(400, 'startDate and endDate are required')
+
+  const result = await db.run(
+    c.env.DB,
+    `UPDATE transactions SET reconciled = 1, reconciled_at = datetime('now')
+     WHERE profile_id = ? AND date >= ? AND date <= ? AND reconciled = 0`,
+    pid,
+    startDate,
+    endDate
+  )
+  return c.json({ message: `${result.meta.changes} transactions reconciled`, count: result.meta.changes })
 })
 
+// GET /api/transactions/reconcile/summary — reconciliation status summary.
 transactionsRoutes.get('/api/transactions/reconcile/summary', requireAuth, async (c) => {
-  // TODO: port reconciliation status summary.
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pids = await getProfileIds(c)
+  const inClause = pids.map(() => '?').join(',')
+  const summary = await db.first(
+    c.env.DB,
+    `SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN reconciled = 1 THEN 1 ELSE 0 END) as reconciled_count,
+      SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN 1 ELSE 0 END) as unreconciled_count,
+      SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN amount ELSE 0 END) as unreconciled_total
+     FROM transactions WHERE profile_id IN (${inClause})`,
+    ...pids
+  )
+  return c.json(summary)
 })
 
+// PUT /api/transactions/reconcile-batch — batch mark reconciled by id list.
 transactionsRoutes.put('/api/transactions/reconcile-batch', requireAuth, async (c) => {
-  // TODO: port batch reconcile by id list.
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pid = await getProfileId(c)
+  const b = (await c.req.json()) as Record<string, any>
+  const transaction_ids: unknown[] = b.transaction_ids
+  if (!Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+    throw new HttpError(400, 'transaction_ids array is required')
+  }
+  const placeholders = transaction_ids.map(() => '?').join(',')
+  const result = await db.run(
+    c.env.DB,
+    `UPDATE transactions SET reconciled = 1, reconciled_at = datetime('now')
+     WHERE id IN (${placeholders}) AND profile_id = ?`,
+    ...transaction_ids,
+    pid
+  )
+  return c.json({ message: `${result.meta.changes} transactions reconciled`, updated: result.meta.changes })
 })
 
 // ── POST /api/transactions — create ───────────────────────────────────────────
@@ -798,8 +961,30 @@ transactionsRoutes.delete('/api/transactions', requireAuth, async (c) => {
   return c.json({ ok: true, message: 'All transactions deleted' })
 })
 
-// ── PATCH /api/transactions/:id/reconcile — STUB (heavier; not ported yet) ────
+// ── PATCH /api/transactions/:id/reconcile — toggle reconciled + reconciled_at ─
 transactionsRoutes.patch('/api/transactions/:id/reconcile', requireAuth, async (c) => {
-  // TODO: port single-transaction reconcile toggle.
-  return c.json({ error: 'Not ported yet' }, 501)
+  const pid = await getProfileId(c)
+  const id = c.req.param('id')
+  const existing = await db.first<{ id: number; reconciled: number | null }>(
+    c.env.DB,
+    'SELECT id, reconciled FROM transactions WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  if (!existing) throw new HttpError(404, 'Transaction not found')
+
+  const newStatus = existing.reconciled ? 0 : 1
+  await db.run(
+    c.env.DB,
+    "UPDATE transactions SET reconciled = ?, reconciled_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END WHERE id = ? AND profile_id = ?",
+    newStatus,
+    newStatus,
+    id,
+    pid
+  )
+  return c.json({
+    id: parseInt(id, 10),
+    reconciled: newStatus,
+    reconciled_at: newStatus ? new Date().toISOString() : null,
+  })
 })

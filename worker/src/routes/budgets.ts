@@ -6,9 +6,14 @@ import { HttpError } from '../http'
 import * as db from '../db'
 
 // Port of backend/routes/budgets.js + backend/repositories/budgetsRepo.js.
-// The core budget CRUD is ported fully. The analytical endpoints (summary,
-// history, improvements, alerts, forecast, zero-based, allocate, from-expenses,
-// duplicate) do multi-table aggregation and are stubbed 501 — see TODOs below.
+// Both the CRUD routes and the analytical/zero-based/forecast endpoints are
+// ported. The analytical endpoints join budgets to transactions by category and
+// month-window and recompute the same aggregates the Express handlers produced.
+//
+// Route ordering note: Hono's default SmartRouter resolves by registration order,
+// so a request to /api/budgets/summary would match /api/budgets/:id if :id were
+// registered first. All static-segment routes are therefore registered BEFORE the
+// /:id routes (mirroring how routes/transactions.ts orders /summary before /:id).
 export const budgetsRoutes = new Hono<AppEnv>()
 
 // budgetsRepo.listByProfiles — aggregating read across owned profiles.
@@ -41,6 +46,817 @@ budgetsRoutes.post('/api/budgets', requireAuth, async (c) => {
   })
   return c.json({ id: res.meta.last_row_id, ...b, profile_id: pid })
 })
+
+// ── Analytical / zero-based / forecast endpoints ──────────────────────────────
+// Registered before /api/budgets/:id so their static segments aren't shadowed.
+
+interface BudgetRow {
+  id: number
+  category_id: number
+  amount: number
+  period: string
+  start_date: string
+  end_date: string | null
+  rollover_enabled: number
+  rollover_amount: number
+  rollover_used: number
+  category_name?: string | null
+  category_color?: string | null
+  category_icon?: string | null
+  [key: string]: unknown
+}
+
+// GET /api/budgets/summary — base budget vs spend plus auto-rollover from prior month.
+budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const year = c.req.query('year')
+  const month = c.req.query('month')
+  const y = year ? Number(year) : new Date().getFullYear()
+  const m = month ? Number(month) : new Date().getMonth() + 1
+  const startDate = `${y}-${String(m).padStart(2, '0')}-01`
+  const nextM = m === 12 ? 1 : m + 1
+  const nextY = m === 12 ? y + 1 : y
+  const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`
+
+  // budgetsRepo.listActive
+  const budgets = await db.all<BudgetRow>(
+    c.env.DB,
+    `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+     FROM budgets b
+     JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+     WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
+    pid,
+    startDate
+  )
+
+  const spent = await db.all<{ category_id: number; total: number }>(
+    c.env.DB,
+    `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+    pid,
+    startDate,
+    endDate
+  )
+  const spentMap: Record<number, number> = {}
+  for (const s of spent) spentMap[s.category_id] = s.total
+
+  // Automatic rollover from the previous month.
+  const prevY = m === 1 ? y - 1 : y
+  const prevM = m === 1 ? 12 : m - 1
+  const prevStart = `${prevY}-${String(prevM).padStart(2, '0')}-01`
+  const prevEnd = `${y}-${String(m).padStart(2, '0')}-01`
+
+  const prevBudgets = await db.all<{
+    category_id: number
+    budget_amount: number
+    rollover_enabled: number
+    rollover_amount: number
+    rollover_used: number
+  }>(
+    c.env.DB,
+    `SELECT b.category_id, b.amount as budget_amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
+       FROM budgets b
+       WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?`,
+    pid,
+    prevStart,
+    prevEnd
+  )
+
+  const prevSpent = await db.all<{ category_id: number; total: number }>(
+    c.env.DB,
+    `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+    pid,
+    prevStart,
+    prevEnd
+  )
+  const prevSpentMap: Record<number, number> = {}
+  for (const s of prevSpent) prevSpentMap[s.category_id] = s.total
+
+  const prevUnusedMap: Record<number, { unused: number; rollover_enabled: number }> = {}
+  for (const pb of prevBudgets) {
+    const unused = Math.max(0, pb.budget_amount - (prevSpentMap[pb.category_id] || 0))
+    prevUnusedMap[pb.category_id] = { unused, rollover_enabled: pb.rollover_enabled }
+  }
+
+  const summary = budgets.map((b) => {
+    const spentAmt = spentMap[b.category_id] || 0
+    const baseRemaining = b.amount - spentAmt
+
+    let rollover_contribution = 0
+    let auto_rollover = 0
+
+    if (b.rollover_enabled) {
+      const prevInfo = prevUnusedMap[b.category_id]
+      if (prevInfo && prevInfo.rollover_enabled) {
+        auto_rollover = prevInfo.unused
+      }
+      rollover_contribution = (b.rollover_amount || 0) + auto_rollover - (b.rollover_used || 0)
+    }
+
+    const effective_budget = b.amount + Math.max(0, rollover_contribution)
+    const effective_remaining = effective_budget - spentAmt
+
+    return {
+      ...b,
+      spent: spentAmt,
+      remaining: baseRemaining,
+      effective_budget,
+      effective_remaining,
+      rollover_contribution: Math.max(0, rollover_contribution),
+      auto_rollover,
+      percentage: b.amount > 0 ? Math.min(100, (spentAmt / b.amount) * 100) : 0,
+    }
+  })
+
+  return c.json(summary)
+})
+
+// GET /api/budgets/history — per-month budget vs spent for one category.
+budgetsRoutes.get('/api/budgets/history', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const categoryId = c.req.query('category_id')
+  const months = c.req.query('months') ?? 6
+
+  const history = await db.all(
+    c.env.DB,
+    `SELECT b.start_date as month, b.amount as budget_amount,
+            COALESCE(SUM(COALESCE(t.amount_local, t.amount)), 0) as spent
+       FROM budgets b
+       LEFT JOIN transactions t ON t.category_id = b.category_id
+         AND t.profile_id = b.profile_id
+         AND t.date >= b.start_date
+         AND t.date < date(b.start_date, '+1 month')
+         AND t.type = 'expense'
+       WHERE b.profile_id = ? AND b.category_id = ?
+       GROUP BY b.start_date
+       ORDER BY b.start_date DESC
+       LIMIT ?`,
+    pid,
+    parseInt(String(categoryId)),
+    parseInt(String(months))
+  )
+
+  return c.json(history)
+})
+
+// GET /api/budgets/improvements — month-over-month adherence (window fns) + donut data.
+budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const months = c.req.query('months') ?? 6
+  const numMonths = parseInt(String(months))
+
+  const history = await db.all<{ month: string; category_budgets?: string; [k: string]: unknown }>(
+    c.env.DB,
+    `WITH monthly_data AS (
+        SELECT
+          strftime('%Y-%m', b.start_date) as month,
+          b.amount as budget_amount,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+        FROM budgets b
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+          AND t.profile_id = b.profile_id
+          AND t.date >= b.start_date
+          AND t.date < date(b.start_date, '+1 month')
+        WHERE b.profile_id = ?
+        GROUP BY b.start_date
+      ),
+      aggregated AS (
+        SELECT
+          month,
+          SUM(budget_amount) as total_budget,
+          SUM(spent) as total_spent,
+          CASE WHEN SUM(budget_amount) > 0 THEN (SUM(spent) / SUM(budget_amount) * 100) ELSE 0 END as adherence_pct
+        FROM monthly_data
+        GROUP BY month
+        ORDER BY month DESC
+      )
+      SELECT
+        month,
+        total_budget,
+        total_spent,
+        adherence_pct,
+        LAG(adherence_pct) OVER (ORDER BY month) as prev_adherence,
+        CASE WHEN LAG(adherence_pct) OVER (ORDER BY month) IS NOT NULL
+             THEN adherence_pct - LAG(adherence_pct) OVER (ORDER BY month)
+             ELSE NULL END as change_pct
+      FROM aggregated
+      ORDER BY month DESC
+      LIMIT ?`,
+    pid,
+    numMonths
+  )
+
+  // Category breakdown for the latest month (donut chart).
+  let categoryBudgets: unknown[] = []
+  if (history.length > 0) {
+    const latestMonth = history[0].month
+    categoryBudgets = await db.all(
+      c.env.DB,
+      `SELECT c.name, c.color, b.amount as budget_amount
+         FROM budgets b
+         JOIN categories c ON c.id = b.category_id
+         WHERE b.profile_id = ? AND strftime('%Y-%m', b.start_date) = ?
+         ORDER BY b.amount DESC`,
+      pid,
+      latestMonth
+    )
+  }
+
+  if (history.length > 0) {
+    history[0].category_budgets = JSON.stringify(categoryBudgets)
+  }
+
+  return c.json(history)
+})
+
+// GET /api/budgets/alerts — categories at/over a spend threshold (camelCase keys, literal).
+budgetsRoutes.get('/api/budgets/alerts', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const threshold = c.req.query('threshold') ?? 80
+  const year = c.req.query('year')
+  const month = c.req.query('month')
+  const alertThreshold = parseFloat(String(threshold))
+
+  let startDate: string
+  let endDate: string
+  if (year && month) {
+    const y = parseInt(year)
+    const m = parseInt(month)
+    startDate = `${y}-${String(m).padStart(2, '0')}-01`
+    const nextM = m === 12 ? 1 : m + 1
+    const nextY = m === 12 ? y + 1 : y
+    endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`
+  } else {
+    const now = new Date()
+    startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2
+    const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()
+    endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`
+  }
+
+  // budgetsRepo.listActive
+  const budgets = await db.all<BudgetRow>(
+    c.env.DB,
+    `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+     FROM budgets b
+     JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+     WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
+    pid,
+    startDate
+  )
+
+  const spent = await db.all<{ category_id: number; total: number }>(
+    c.env.DB,
+    `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+    pid,
+    startDate,
+    endDate
+  )
+
+  const spentMap: Record<number, number> = {}
+  for (const s of spent) spentMap[s.category_id] = Math.abs(s.total)
+
+  const alerts = budgets
+    .map((b) => {
+      const s = spentMap[b.category_id] || 0
+      const pct = b.amount > 0 ? (s / b.amount) * 100 : 0
+      const remaining = b.amount - s
+      return {
+        categoryId: b.category_id,
+        categoryName: b.category_name,
+        categoryColor: b.category_color,
+        categoryIcon: b.category_icon,
+        budgetAmount: b.amount,
+        spent: s,
+        remaining,
+        percentage: Math.round(pct),
+        status: pct > 100 ? 'over' : pct >= alertThreshold ? 'warning' : 'ok',
+      }
+    })
+    .filter((b) => b.percentage >= alertThreshold)
+    .sort((a, b) => b.percentage - a.percentage)
+
+  return c.json({ alerts, threshold: alertThreshold, startDate, endDate })
+})
+
+// GET /api/budgets/zero-based/summary — allocations vs spend vs income for a month.
+// Registered before /api/budgets/zero-based so the longer static path resolves first.
+budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const month = c.req.query('month') || new Date().toISOString().slice(0, 7)
+  const startOfMonth = `${month}-01`
+  const nextMonth = new Date(new Date(month + '-01').setMonth(new Date(month + '-01').getMonth() + 1))
+  const endOfMonth = nextMonth.toISOString().slice(0, 10)
+
+  const budgets = await db.all<BudgetRow>(
+    c.env.DB,
+    `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
+       FROM budgets b
+       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
+       WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ? AND b.period = 'monthly'`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+
+  const spent = await db.all<{ category_id: number; total: number }>(
+    c.env.DB,
+    `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+  const spentMap: Record<number, number> = {}
+  for (const s of spent) spentMap[s.category_id] = Math.abs(s.total)
+
+  const incomeRow = await db.first<{ total: number | null }>(
+    c.env.DB,
+    `SELECT SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+  const income = incomeRow?.total || 0
+
+  const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0)
+  const totalSpent = Object.values(spentMap).reduce((sum, val) => sum + val, 0)
+  const remaining = totalBudget - totalSpent
+  const zero_based_remaining = income - totalBudget
+
+  const summary: Array<Record<string, unknown> & { percent_used: number; remaining: number; alerts: string[] }> =
+    budgets.map((b) => ({
+      budget_id: b.id,
+      category_id: b.category_id,
+      category_name: b.category_name,
+      category_color: b.category_color,
+      category_icon: b.category_icon,
+      allocated: b.amount,
+      spent: spentMap[b.category_id] || 0,
+      remaining: b.amount - (spentMap[b.category_id] || 0),
+      percent_used: b.amount > 0 ? ((spentMap[b.category_id] || 0) / b.amount) * 100 : 0,
+      status: (spentMap[b.category_id] || 0) > b.amount ? 'over' : 'ok',
+      is_fully_allocated: b.amount > 0 && (spentMap[b.category_id] || 0) <= b.amount,
+      rollover_enabled: b.rollover_enabled ?? false,
+      alerts: [],
+    }))
+
+  if (zero_based_remaining > 0) {
+    summary.push({
+      category_id: 0,
+      category_name: 'Unallocated / Future',
+      category_color: '#9ca3af',
+      category_icon: 'wallet',
+      allocated: 0,
+      spent: 0,
+      remaining: zero_based_remaining,
+      percent_used: 0,
+      status: 'ok',
+      is_fully_allocated: true,
+      alerts: ['You have unallocated income. Consider adding a savings allocation or increase existing budgets.'],
+      is_unallocated: true,
+    })
+  }
+
+  summary.forEach((item) => {
+    if (item.percent_used >= 90) {
+      item.alerts.push(`Approaching limit: ${Math.round(item.percent_used)}% used`)
+    }
+    if (item.percent_used > 100) {
+      item.alerts.push(`Over budget by $${item.remaining.toFixed(2)}`)
+    }
+  })
+
+  return c.json({
+    allocations: summary,
+    total_budget: totalBudget,
+    total_spent: totalSpent,
+    remaining,
+    zero_based_remaining,
+    income,
+    period: month,
+    can_allocate: zero_based_remaining > 0,
+    unassigned_budget: zero_based_remaining,
+    already_budgeted: totalBudget,
+  })
+})
+
+// GET /api/budgets/zero-based — allocation form (categories + budgets + spend + income).
+budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const month = c.req.query('month') || new Date().toISOString().slice(0, 7)
+  const startOfMonth = `${month}-01`
+  const nextMonth = new Date(new Date(month + '-01').setMonth(new Date(month + '-01').getMonth() + 1))
+  const endOfMonth = nextMonth.toISOString().slice(0, 10)
+
+  const categories = await db.all<{ id: number; name: string; color: string; icon: string }>(
+    c.env.DB,
+    `SELECT id, name, color, icon FROM categories WHERE profile_id = ? AND type = 'expense' ORDER BY name`,
+    pid
+  )
+
+  const budgets = await db.all<BudgetRow>(
+    c.env.DB,
+    `SELECT * FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ? AND period = 'monthly'`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+  const budgetMap: Record<number, BudgetRow> = {}
+  budgets.forEach((b) => (budgetMap[b.category_id] = b))
+
+  const spent = await db.all<{ category_id: number; total: number }>(
+    c.env.DB,
+    `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       GROUP BY category_id`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+  const spentMap: Record<number, number> = {}
+  spent.forEach((s) => (spentMap[s.category_id] = Math.abs(s.total)))
+
+  const incomeRow = await db.first<{ total: number | null }>(
+    c.env.DB,
+    `SELECT SUM(COALESCE(amount_local, amount)) as total
+       FROM transactions
+       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+  const remaining = incomeRow?.total || 0
+
+  const alreadyBudgetedRow = await db.first<{ total: number | null }>(
+    c.env.DB,
+    `SELECT SUM(amount) as total FROM budgets
+       WHERE profile_id = ? AND start_date >= ? AND start_date < ?`,
+    pid,
+    startOfMonth,
+    endOfMonth
+  )
+  const alreadyBudgeted = alreadyBudgetedRow?.total ?? 0
+
+  const unassignedBudget = Math.max(0, remaining - alreadyBudgeted)
+
+  const allocations = categories.map((cat) => {
+    const budget = budgetMap[cat.id]
+    const spentAmt = spentMap[cat.id] || 0
+    const remainingBudget = budget ? budget.amount - spentAmt : 0
+    const percentUsed = budget && budget.amount > 0 ? (spentAmt / budget.amount) * 100 : 0
+
+    return {
+      budget_id: budget?.id ?? null,
+      category_id: cat.id,
+      category_name: cat.name,
+      category_color: cat.color,
+      category_icon: cat.icon,
+      amount: budget?.amount || 0,
+      spent: spentAmt,
+      remaining_budget: remainingBudget,
+      percent_used: Math.min(100, Math.round(percentUsed)),
+      is_budgeted: !!budget,
+      can_allocate: unassignedBudget > 0,
+      rollover_enabled: budget?.rollover_enabled ?? false,
+    }
+  })
+
+  return c.json({
+    categories,
+    allocations,
+    remaining_income: remaining,
+    alreadyBudgeted,
+    unassigned_budget: unassignedBudget,
+    period: month,
+    can_allocate: unassignedBudget > 0,
+  })
+})
+
+// GET /api/budgets/forecast — historical averages + 6-month projection with inflation.
+budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const month = c.req.query('month') || new Date().toISOString().slice(0, 7)
+
+  const budgets = await db.all<BudgetRow>(
+    c.env.DB,
+    `SELECT b.*, c.name as category_name, c.color as category_color
+       FROM budgets b
+       JOIN categories c ON c.id = b.category_id
+       WHERE b.profile_id = ? AND b.start_date <= ?
+       ORDER BY b.start_date DESC`,
+    pid,
+    month
+  )
+
+  if (budgets.length === 0) {
+    return c.json({
+      period: month,
+      history: [],
+      forecast: [],
+      total_budget: 0,
+      avg_adherence: 0,
+    })
+  }
+
+  // Historical spending by category (all available history; matches Express, which
+  // builds the query then never binds the unused startHistory cutoff).
+  const historicalData = await db.all<{ month: string; category_id: number; period: string; spent: number }>(
+    c.env.DB,
+    `SELECT
+        strftime('%Y-%m', date) as month,
+        b.category_id,
+        b.period,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+      FROM budgets b
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND t.profile_id = b.profile_id
+        AND t.date >= b.start_date
+        AND t.date < date(b.start_date, '+1 month')
+        AND t.type = 'expense'
+      WHERE b.profile_id = ?
+      GROUP BY month, b.category_id, b.period`,
+    pid
+  )
+
+  const categoryAverages: Record<number, { total: number; count: number; avgAmount: number }> = {}
+  for (const row of historicalData) {
+    if (!categoryAverages[row.category_id]) {
+      categoryAverages[row.category_id] = { total: 0, count: 0, avgAmount: 0 }
+    }
+    if (row.spent > 0) {
+      categoryAverages[row.category_id].total += row.spent
+      categoryAverages[row.category_id].count += 1
+    }
+  }
+  for (const cid in categoryAverages) {
+    if (categoryAverages[cid].count > 0) {
+      categoryAverages[cid].avgAmount = categoryAverages[cid].total / categoryAverages[cid].count
+    }
+  }
+
+  // Forecast for the next 6 months.
+  const forecastMonths: Array<{ month: string; label: string }> = []
+  const now = new Date()
+  for (let i = 1; i <= 6; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    forecastMonths.push({
+      month: date.toISOString().slice(0, 7),
+      label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+    })
+  }
+
+  const forecastData = forecastMonths.map((fm) => {
+    const fmMonthStr = fm.month + '-01'
+
+    const currentBudget = budgets.find((b) => b.start_date === fmMonthStr) || budgets[budgets.length - 1]
+
+    const avgSpending = categoryAverages[currentBudget.category_id]
+      ? categoryAverages[currentBudget.category_id].avgAmount
+      : currentBudget.amount * 0.5
+
+    const monthsDiff = new Date(fm.month + '-01').getMonth() - new Date().getMonth()
+    const inflationFactor = Math.pow(1.03, Math.max(0, monthsDiff))
+
+    const predictedSpent = avgSpending * inflationFactor
+    const adherence =
+      currentBudget.amount > 0 ? Math.min(100, (predictedSpent / currentBudget.amount) * 100) : 0
+    const status = adherence > 100 ? 'over' : adherence >= 80 ? 'warning' : 'ok'
+    const forecastRemaining = Math.max(0, currentBudget.amount - predictedSpent)
+
+    return {
+      month: fm.month,
+      label: fm.label,
+      budget_amount: currentBudget.amount,
+      predicted_spent: predictedSpent,
+      adherence,
+      status,
+      forecast_remaining: forecastRemaining,
+    }
+  })
+
+  const historyData = await db.all<{ month: string; total_budget: number | null; total_spent: number | null }>(
+    c.env.DB,
+    `SELECT
+        strftime('%Y-%m', start_date) as month,
+        SUM(b.amount) as total_budget,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
+      FROM budgets b
+      LEFT JOIN transactions t ON t.category_id = b.category_id
+        AND t.profile_id = b.profile_id
+        AND t.date >= b.start_date
+        AND t.date < date(b.start_date, '+1 month')
+      WHERE b.profile_id = ? AND strftime('%Y-%m', start_date) <= ?
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT ?`,
+    pid,
+    now.toISOString().slice(0, 7),
+    6
+  )
+
+  const history = historyData.map((h) => ({
+    month: h.month,
+    label: new Date(h.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+    total_budget: h.total_budget || 0,
+    total_spent: h.total_spent || 0,
+    adherence: (h.total_budget || 0) > 0 ? Math.min(100, ((h.total_spent || 0) / (h.total_budget || 0)) * 100) : 0,
+  }))
+
+  const avgAdherence = history.length > 0 ? history.reduce((sum, h) => sum + h.adherence, 0) / history.length : 0
+
+  return c.json({
+    period: month,
+    history,
+    forecast: forecastData,
+    total_budget: budgets.reduce((sum, b) => sum + b.amount, 0),
+    avg_adherence: Math.round(avgAdherence),
+  })
+})
+
+// POST /api/budgets/allocate — create a monthly budget for a category after existence check.
+budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const b = (await c.req.json()) as Record<string, any>
+  const { category_id, amount, period } = b
+
+  if (!category_id || amount == null) {
+    throw new HttpError(400, 'Category ID and amount are required')
+  }
+
+  const budgetPeriod = period || 'monthly'
+
+  const month = c.req.query('month') || new Date().toISOString().slice(0, 7)
+  const start_date = `${month}-01`
+
+  // budgetsRepo.getByCategoryForMonth
+  const existing = await db.first(
+    c.env.DB,
+    'SELECT * FROM budgets WHERE category_id = ? AND profile_id = ? AND start_date = ? AND period = ?',
+    category_id,
+    pid,
+    start_date,
+    budgetPeriod
+  )
+
+  if (existing) {
+    throw new HttpError(400, `Budget already exists for ${month}. Use PUT /api/budgets/:id to update it.`)
+  }
+
+  const info = await db.insert(c.env.DB, 'budgets', {
+    category_id,
+    amount,
+    period: budgetPeriod,
+    start_date,
+    profile_id: pid,
+  })
+
+  return c.json({
+    id: info.meta.last_row_id,
+    category_id,
+    amount,
+    period: budgetPeriod,
+    start_date,
+    profile_id: pid,
+    message: 'Budget allocated successfully',
+  })
+})
+
+// POST /api/budgets/from-expenses — replace current-month budgets from last month's expenses.
+budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const body = (await c.req.json()) as Record<string, any>
+  const { year, month } = body
+
+  let prevYear = year || new Date().getFullYear()
+  let prevMonth = (month || new Date().getMonth() + 1) - 1
+  if (prevMonth === 0) {
+    prevMonth = 12
+    prevYear--
+  }
+
+  const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
+  const prevEnd = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`
+
+  const expenses = await db.all<{ category_id: number; name: string; total: number }>(
+    c.env.DB,
+    `SELECT t.category_id, c.name, SUM(COALESCE(t.amount_local, t.amount)) as total
+       FROM transactions t
+       JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
+       WHERE t.profile_id = ? AND t.date >= ? AND t.date < ? AND t.type = 'expense' AND t.category_id IS NOT NULL
+       GROUP BY t.category_id`,
+    pid,
+    prevStart,
+    prevEnd
+  )
+
+  if (expenses.length === 0) {
+    return c.json({ ok: false, message: 'No expenses found for previous month' })
+  }
+
+  const currYear = year || new Date().getFullYear()
+  const currMonth = month || new Date().getMonth() + 1
+  const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`
+
+  // budgetsRepo.deleteByDateRange — clear existing budgets for the current month.
+  await db.run(
+    c.env.DB,
+    'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
+    pid,
+    currStart,
+    `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`
+  )
+
+  // budgetsRepo.bulkCreateMonthly — D1 has no sync transaction here, so loop inserts.
+  for (const item of expenses) {
+    await db.run(
+      c.env.DB,
+      'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)',
+      item.category_id,
+      item.total,
+      'monthly',
+      currStart,
+      pid
+    )
+  }
+
+  return c.json({ ok: true, count: expenses.length })
+})
+
+// POST /api/budgets/duplicate-last — copy the previous month's budgets into the current month.
+budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const body = (await c.req.json()) as Record<string, any>
+  const { year, month } = body
+
+  let prevYear = year || new Date().getFullYear()
+  let prevMonth = (month || new Date().getMonth() + 1) - 1
+  if (prevMonth === 0) {
+    prevMonth = 12
+    prevYear--
+  }
+
+  const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
+
+  const prevBudgetsCheck = await db.all(
+    c.env.DB,
+    `SELECT category_id, amount, period
+       FROM budgets
+       WHERE profile_id = ? AND start_date >= ? AND start_date < ?`,
+    pid,
+    prevStart,
+    `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`
+  )
+
+  if (prevBudgetsCheck.length === 0) {
+    return c.json({ ok: false, message: 'No budgets found for previous month' })
+  }
+
+  const currYear = year || new Date().getFullYear()
+  const currMonth = month || new Date().getMonth() + 1
+
+  // budgetsRepo.duplicateLast — recomputes its own previous month via a LIKE match,
+  // then INSERT OR REPLACE into the current-month start_date.
+  const dlPrevMonth = currMonth === 1 ? 12 : currMonth - 1
+  const dlPrevYear = currMonth === 1 ? currYear - 1 : currYear
+  const dlPrevBudgets = await db.all<BudgetRow>(
+    c.env.DB,
+    'SELECT * FROM budgets WHERE profile_id = ? AND start_date LIKE ?',
+    pid,
+    `${dlPrevYear}-${String(dlPrevMonth).padStart(2, '0')}%`
+  )
+  const startDate = `${currYear}-${String(currMonth).padStart(2, '0')}-01`
+  let count = 0
+  for (const b of dlPrevBudgets) {
+    await db.run(
+      c.env.DB,
+      'INSERT OR REPLACE INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, ?, ?, ?)',
+      pid,
+      b.category_id,
+      b.amount,
+      b.period,
+      startDate
+    )
+    count++
+  }
+
+  return c.json({ ok: true, count })
+})
+
+// ── Parametric /:id routes — registered last so static segments above win ─────
 
 budgetsRoutes.put('/api/budgets/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c)
@@ -104,25 +920,3 @@ budgetsRoutes.put('/api/budgets/:id/rollover', requireAuth, async (c) => {
   const budget = await db.first(c.env.DB, 'SELECT * FROM budgets WHERE id = ? AND profile_id = ?', id, pid)
   return c.json({ ok: true, budget })
 })
-
-// ── Heavy analytical endpoints — multi-table aggregation, not ported yet ──────
-// TODO: port budgets summary (joins budgets+transactions, computes auto-rollover).
-budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port budgets history (per-category budget vs spent over N months).
-budgetsRoutes.get('/api/budgets/history', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port budgets improvements (month-over-month adherence with window fns).
-budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port budgets alerts (budget vs spend threshold alerts).
-budgetsRoutes.get('/api/budgets/alerts', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port budgets forecast (historical averages + inflation projection).
-budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port zero-based allocation form (categories + budgets + spend + income).
-budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port zero-based summary (allocations vs spend vs income).
-budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port allocate (creates a monthly budget after existence check).
-budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port from-expenses (bulk-create budgets from prior-month expenses).
-budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
-// TODO: port duplicate-last (copy previous month's budgets into the current month).
-budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => c.json({ error: 'Not ported yet' }, 501))
