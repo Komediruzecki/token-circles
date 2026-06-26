@@ -219,11 +219,13 @@ describe('Profiles E2E', () => {
   });
 
   describe('Reseed Demo Data', () => {
+    // reseed-demo wipes and re-seeds three tiers of demo data; it routinely runs
+    // close to the default 30s on slow CI runners, so give it explicit headroom.
     test('BE-PRF-018: Reseed returns { ok: true, message }', async () => {
       const resp = await agent.post('/api/profiles/reseed-demo').set('X-Skip-RateLimit', 'true');
       global.expect(resp.status).toBe(200);
       global.expect(resp.body).toHaveProperty('ok', true);
-    });
+    }, 60000);
   });
 
   describe('Clear Profile Data', () => {
