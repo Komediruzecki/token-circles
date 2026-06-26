@@ -2,6 +2,20 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { authRoutes } from './routes/auth'
 import { profilesRoutes } from './routes/profiles'
+import { accountsRoutes } from './routes/accounts'
+import { transactionsRoutes } from './routes/transactions'
+import { categoriesRoutes } from './routes/categories'
+import { tagsRoutes } from './routes/tags'
+import { budgetsRoutes } from './routes/budgets'
+import { billsRoutes } from './routes/bills'
+import { recurringRoutes } from './routes/recurring'
+import { savingsGoalsRoutes } from './routes/savings-goals'
+import { loansRoutes } from './routes/loans'
+import { portfolioRoutes } from './routes/portfolio'
+import { housingRoutes } from './routes/housing'
+import { retirementGoalsRoutes } from './routes/retirement-goals'
+import { counterpartiesRoutes } from './routes/counterparties'
+import { settingsRoutes } from './routes/settings'
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -30,10 +44,25 @@ app.get('/api/health', (c) => c.json({ ok: true, env: c.env.APP_ENV ?? 'unknown'
 // Auth: Google Sign-In + session endpoints. start/callback are public; me/logout self-gate.
 app.route('/', authRoutes)
 
-// ── Data route modules (each applies requireAuth) ─────────────────────────────
-// One sample is wired up to prove the pattern; port the rest of backend/routes/*.js here.
+// ── Data route modules (each applies requireAuth + profile scoping) ───────────
+// Ported from backend/routes/*.js. CRUD is complete; some heavy analytical/external
+// endpoints return 501 with a // TODO (see the modules). Still to port: dashboard,
+// analytics, reports, calculators, retirement projection, imports, receipts files.
 app.route('/', profilesRoutes)
-// TODO: app.route('/', transactionsRoutes), accountsRoutes, categoriesRoutes, ...
+app.route('/', accountsRoutes)
+app.route('/', transactionsRoutes)
+app.route('/', categoriesRoutes)
+app.route('/', tagsRoutes)
+app.route('/', budgetsRoutes)
+app.route('/', billsRoutes)
+app.route('/', recurringRoutes)
+app.route('/', savingsGoalsRoutes)
+app.route('/', loansRoutes)
+app.route('/', portfolioRoutes)
+app.route('/', housingRoutes)
+app.route('/', retirementGoalsRoutes)
+app.route('/', counterpartiesRoutes)
+app.route('/', settingsRoutes)
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 

@@ -58,3 +58,24 @@ export async function insert(
   const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`
   return run(db, sql, ...Object.values(data))
 }
+
+/** UPDATE helper — `where` is a required SQL fragment with ? placeholders. */
+export async function update(
+  db: D1Database,
+  table: string,
+  data: Record<string, unknown>,
+  where: string,
+  ...params: unknown[]
+): Promise<D1Result> {
+  assertIdent(table)
+  const cols = Object.keys(data)
+  cols.forEach(assertIdent)
+  const sets = cols.map((k) => `${k} = ?`).join(', ')
+  return run(db, `UPDATE ${table} SET ${sets} WHERE ${where}`, ...Object.values(data), ...params)
+}
+
+/** DELETE helper — `where` is required. */
+export async function del(db: D1Database, table: string, where: string, ...params: unknown[]): Promise<D1Result> {
+  assertIdent(table)
+  return run(db, `DELETE FROM ${table} WHERE ${where}`, ...params)
+}

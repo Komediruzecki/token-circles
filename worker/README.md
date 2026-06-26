@@ -30,6 +30,22 @@ worker/
   .dev.vars.example        local secrets template
 ```
 
+## Ported routes (status)
+Modules in `src/routes/` follow `savings-goals.ts` (requireAuth → `getProfileId`/
+`getProfileIds` → async D1) and are mounted in `index.ts`. Profile scoping uses the
+`X-Profile-Id` header, verified to belong to the JWT user.
+
+- **Full CRUD ported:** auth (Google), profiles, accounts (+ balance history),
+  transactions (list/filter/summary/CRUD), categories (+ mappings), tags (+ transaction
+  tagging), budgets, bills (+ upcoming/summary/calendar/mark-paid), recurring
+  (+ upcoming/populate), savings-goals, loans (+ rates/prepayments), portfolio, housing,
+  retirement-goals, counterparties, settings.
+- **Stubbed (501 + `// TODO`):** budget aggregations (summary/history/alerts/forecast/
+  zero-based/allocate), category auto-map/apply-mappings, transaction bulk + reconcile
+  endpoints, loan amortization, portfolio live prices (Yahoo), retirement projection.
+- **Not ported yet (whole modules):** dashboard, analytics, reports/PDF, calculators,
+  imports (CSV), receipts file serving — computation/IO-heavy; port as needed.
+
 ## Go-live steps (run later, in order)
 ```bash
 cd worker

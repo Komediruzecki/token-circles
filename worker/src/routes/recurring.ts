@@ -1,0 +1,258 @@
+import { Hono } from 'hono'
+import type { AppEnv } from '../index'
+import { requireAuth } from '../auth'
+import { getProfileId } from '../profile'
+import { HttpError } from '../http'
+import * as db from '../db'
+
+// Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
+// Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
+// kept identical (snake_case) to the Express backend.
+export const recurringRoutes = new Hono<AppEnv>()
+
+interface RecurringRow {
+  id: number
+  description: string
+  amount: number
+  type: string
+  category_id: number | null
+  frequency: string
+  day_of_month: number | null
+  next_date: string | null
+  notes: string | null
+  active: number
+  category_name?: string | null
+  category_color?: string | null
+  category_type?: string | null
+}
+
+recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const rows = await db.all<RecurringRow>(
+    c.env.DB,
+    `
+      SELECT r.*, c.name as category_name, c.color as category_color, c.type as category_type
+      FROM recurring_transactions r
+      LEFT JOIN categories c ON r.category_id = c.id
+      WHERE r.profile_id = ? AND r.active = 1
+      ORDER BY r.next_date ASC
+    `,
+    pid
+  )
+  return c.json(rows)
+})
+
+// IMPORTANT: /upcoming must come before /:id to avoid :id capturing "upcoming".
+recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const now = new Date()
+  const endDate = new Date()
+  endDate.setDate(endDate.getDate() + 30)
+
+  const recurring = await db.all<RecurringRow>(
+    c.env.DB,
+    `
+      SELECT r.id, r.description, r.amount, r.type, r.frequency, r.day_of_month, r.next_date,
+             c.name as category_name, c.color as category_color
+      FROM recurring_transactions r
+      LEFT JOIN categories c ON r.category_id = c.id
+      WHERE r.profile_id = ? AND r.active = 1
+    `,
+    pid
+  )
+
+  interface UpcomingItem {
+    id: number
+    description: string
+    amount: number
+    type: string
+    frequency: string
+    day_of_month: number | null
+    next_date: string
+    category_name?: string | null
+    category_color?: string | null
+  }
+
+  const upcoming: UpcomingItem[] = []
+  for (const r of recurring) {
+    let cursor = new Date(r.next_date || now.toISOString().split('T')[0])
+    if (cursor < now) {
+      cursor = new Date(now.toISOString().split('T')[0])
+    }
+    const maxDate = new Date(endDate.toISOString().split('T')[0])
+
+    while (cursor <= maxDate) {
+      upcoming.push({
+        id: r.id,
+        description: r.description,
+        amount: r.amount,
+        type: r.type,
+        frequency: r.frequency,
+        day_of_month: r.day_of_month,
+        next_date: cursor.toISOString().split('T')[0],
+        category_name: r.category_name,
+        category_color: r.category_color,
+      })
+
+      if (r.frequency === 'daily') {
+        cursor.setDate(cursor.getDate() + 1)
+      } else if (r.frequency === 'weekly') {
+        cursor.setDate(cursor.getDate() + 7)
+      } else if (r.frequency === 'monthly') {
+        cursor.setMonth(cursor.getMonth() + 1)
+        const day = r.day_of_month || cursor.getDate()
+        cursor.setDate(Math.min(day, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()))
+      } else if (r.frequency === 'yearly') {
+        cursor.setFullYear(cursor.getFullYear() + 1)
+      } else {
+        break
+      }
+    }
+  }
+
+  upcoming.sort((a, b) => a.next_date.localeCompare(b.next_date))
+
+  interface CategoryBucket {
+    name: string
+    color?: string | null
+    total: number
+    items: UpcomingItem[]
+  }
+  const byCategory: Record<string, CategoryBucket> = {}
+  let totalMonthly = 0
+  for (const item of upcoming) {
+    const catKey = item.category_name || 'Uncategorized'
+    if (!byCategory[catKey]) {
+      byCategory[catKey] = { name: catKey, color: item.category_color, total: 0, items: [] }
+    }
+    byCategory[catKey]!.total += item.amount
+    byCategory[catKey]!.items.push(item)
+    totalMonthly += item.amount
+  }
+
+  const currencyRow = await db.first<{ value: string }>(
+    c.env.DB,
+    'SELECT value FROM settings WHERE key = ? AND profile_id = ?',
+    'local_currency',
+    pid
+  )
+  const currency = currencyRow ? currencyRow.value : 'EUR'
+
+  return c.json({
+    transactions: upcoming.slice(0, 20),
+    byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
+    totalMonthly,
+    currency,
+  })
+})
+
+recurringRoutes.get('/api/recurring/:id', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const r = await db.first<RecurringRow>(
+    c.env.DB,
+    'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
+    c.req.param('id'),
+    pid
+  )
+  if (!r) throw new HttpError(404, 'Not found')
+  return c.json(r)
+})
+
+recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const b = (await c.req.json()) as Record<string, any>
+  const { description, amount, type, category_id, frequency, day_of_month, next_date, notes } = b
+  const res = await db.insert(c.env.DB, 'recurring_transactions', {
+    profile_id: pid,
+    description: description || '',
+    amount,
+    type: type || 'expense',
+    category_id: category_id || null,
+    frequency: frequency || 'monthly',
+    day_of_month: day_of_month || null,
+    next_date: next_date || null,
+    notes: notes || '',
+  })
+  return c.json({ id: res.meta.last_row_id })
+})
+
+recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const id = c.req.param('id')
+  const existing = await db.first<RecurringRow>(
+    c.env.DB,
+    'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  if (!existing) throw new HttpError(404, 'Not found')
+  const b = (await c.req.json()) as Record<string, any>
+  const { description, amount, type, category_id, frequency, day_of_month, next_date, notes, active } = b
+  await db.update(
+    c.env.DB,
+    'recurring_transactions',
+    {
+      description: description ?? '',
+      amount: amount ?? 0,
+      type: type ?? 'expense',
+      category_id: category_id ?? null,
+      frequency: frequency ?? 'monthly',
+      day_of_month: day_of_month ?? null,
+      next_date: next_date ?? null,
+      notes: notes ?? '',
+      active: active ?? 1,
+    },
+    'id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  return c.json({ ok: true })
+})
+
+recurringRoutes.delete('/api/recurring/:id', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  await db.del(c.env.DB, 'recurring_transactions', 'id = ? AND profile_id = ?', c.req.param('id'), pid)
+  return c.json({ ok: true })
+})
+
+// "Process due": materializes a transaction from the recurring rule and advances next_date.
+recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const id = c.req.param('id')
+  const r = await db.first<RecurringRow>(
+    c.env.DB,
+    'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  if (!r) throw new HttpError(404, 'Not found')
+
+  const date = r.next_date || new Date().toISOString().split('T')[0]
+  const tx = await db.run(
+    c.env.DB,
+    `INSERT INTO transactions (profile_id, description, amount, type, category_id, date, notes, beneficiary, payor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    pid,
+    r.description,
+    r.amount,
+    r.type,
+    r.category_id,
+    date,
+    r.notes || '',
+    '',
+    ''
+  )
+
+  let next = new Date(date)
+  if (r.frequency === 'monthly') next.setMonth(next.getMonth() + 1)
+  else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7)
+  else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1)
+  const nextStr = next.toISOString().split('T')[0]
+  await db.update(c.env.DB, 'recurring_transactions', { next_date: nextStr }, 'id = ? AND profile_id = ?', id, pid)
+
+  return c.json({
+    ok: true,
+    transactionId: tx.meta.last_row_id,
+    next_date: nextStr,
+  })
+})
