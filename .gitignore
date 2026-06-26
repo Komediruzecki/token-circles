@@ -3,6 +3,10 @@ db/*.db
 db/*.db-shm
 db/*.db-wal
 db/sessions.db
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+*.sqlite
 
 # Uploaded files (track structure only)
 !/assets/.gitkeep
