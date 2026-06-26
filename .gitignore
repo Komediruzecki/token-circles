@@ -68,3 +68,12 @@ public/frontend
 
 assets/local/
 .audit_telemetry/
+
+# Local scratch folders (per-developer; matches any `local/` dir at any depth)
+local/
+
+# One-off debug/seed scripts (kept in place — relative require/db paths tie them here)
+/test-bills.js
+/test-seed.js
+/backend/test-seed.js
+/backend/test-seed2.js
