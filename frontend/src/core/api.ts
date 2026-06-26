@@ -269,7 +269,7 @@ export class ApiClient {
       `/transactions?${queryParams.toString()}`,
       z.union([
         z.array(Schemas.TransactionSchema),
-        z.object({ rows: z.array(Schemas.TransactionSchema) }).passthrough(),
+        z.object({ rows: z.array(Schemas.TransactionSchema) }).loose(),
       ])
     )
     return Array.isArray(res) ? res : res.rows || []

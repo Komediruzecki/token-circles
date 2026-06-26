@@ -138,6 +138,11 @@ export default defineConfig(
       'sonarjs/super-linear-regex': 'off',
       'sonarjs/no-duplicated-branches': 'off',
       'sonarjs/use-type-alias': 'off',
+      // Style-only sonarjs rules with high false-positive counts on this Solid
+      // codebase (props are readonly by convention); disabled so the frontend lint
+      // check can be enforced in CI rather than perpetually failing.
+      'sonarjs/prefer-read-only-props': 'off',
+      'sonarjs/prefer-regexp-exec': 'off',
 
       'padding-line-between-statements': [
         'error',
