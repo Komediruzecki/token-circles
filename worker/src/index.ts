@@ -33,6 +33,7 @@ export interface Env {
   APP_ORIGINS?: string // comma-separated extra allowed returnTo origins
   COOKIE_DOMAIN?: string // e.g. ".yourdomain.com" to share the session cookie with the app
   APP_ENV?: string // 'development' drops the Secure cookie flag for local http dev
+  RECEIPTS?: R2Bucket // R2 bucket for premium receipt files (optional until the bucket exists)
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
