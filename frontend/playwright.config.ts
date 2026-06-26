@@ -33,5 +33,8 @@ export default defineConfig({
     timeout: 120000,
     stdout: 'pipe',
     stderr: 'pipe',
+    // The e2e backend runs on :3847 (started + seeded in CI). Pin the vite dev proxy there,
+    // regardless of the local-dev default (the Cloudflare worker on :8787).
+    env: { API_PROXY_TARGET: 'http://127.0.0.1:3847' },
   },
 })
