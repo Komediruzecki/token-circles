@@ -27,7 +27,11 @@
     "typecheck": "pnpm -C frontend run typecheck",
     "format": "pnpm -C frontend run format",
     "test": "pnpm -C frontend run test",
-    "test:backend": "pnpm -C backend run test"
+    "test:backend": "pnpm -C backend run test",
+    "worker:dev": "pnpm -C worker run dev",
+    "worker:deploy": "pnpm -C worker run deploy",
+    "d1:create": "pnpm -C worker run d1:create",
+    "d1:migrate": "pnpm -C worker run d1:migrate:remote"
   },
   "devDependencies": {
     "eslint": "^10.5.0",
