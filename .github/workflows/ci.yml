@@ -56,7 +56,9 @@ jobs:
             sleep 0.5
           done
 
-          # Run backend tests
+          # Run both suites and report both (set +e so a backend failure doesn't abort the
+          # step before the frontend tests run; the explicit exit below still gates).
+          set +e
           pnpm run test:backend
           BACKEND_TEST_EXIT=$?
 

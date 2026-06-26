@@ -39,10 +39,15 @@ jobs:
           sleep 5
           # All /api routes now require an authenticated session, so log in first
           # and reuse the cookie jar when seeding demo data.
-          curl -c /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/auth/login \
+          # Fail fast if login or seeding fails — otherwise the smoke tests run against an
+          # empty DB and surface as confusing "element not visible" errors. --retry covers
+          # a slow server boot (replacing the fragile fixed sleep + `|| true`).
+          curl -fsS --retry 10 --retry-delay 1 --retry-connrefused \
+            -c /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/auth/login \
             -H "Content-Type: application/json" -H "X-Skip-RateLimit: true" \
-            -d '{"username":"person","password":"something-like-this"}' || true
-          curl -b /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/profiles/reseed-demo -H "X-Skip-RateLimit: true" -H "X-Profile-ID: 1" || true
+            -d '{"username":"person","password":"something-like-this"}'
+          curl -fsS -b /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/profiles/reseed-demo \
+            -H "X-Skip-RateLimit: true" -H "X-Profile-ID: 1"
 
       - name: Build frontend
         working-directory: ./frontend
