@@ -23,8 +23,16 @@ async function getLocalRouter(): Promise<(url: string, init?: RequestInit) => Pr
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const mode: StorageMode = getStorageMode()
 
-  // Self-hosted: use real fetch
+  // Self-hosted: real fetch. Resolve bare `/api/*` paths against VITE_API_URL — in deployed
+  // server builds the API lives on a sibling subdomain (api.<domain>), not the SPA's own
+  // origin. Default credentials to 'include' so the session cookie rides along cross-origin.
   if (mode === 'self-hosted') {
+    if (url.startsWith('/api')) {
+      return fetch(`${import.meta.env.VITE_API_URL ?? ''}${url}`, {
+        credentials: 'include',
+        ...init,
+      })
+    }
     return fetch(url, init)
   }
 
