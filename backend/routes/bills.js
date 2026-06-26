@@ -1,7 +1,7 @@
 const express = require('express');
 const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
-const { asyncHandler } = require('../lib/errors');
+const { asyncHandler, NotFoundError } = require('../lib/errors');
 
 function isBillPaidForCurrentPeriod(bill, now) {
   if (!bill.last_paid_date) return false;
@@ -289,7 +289,13 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
       days[String(d)] = [];
     }
 
-    const bills = req.repos.bills.list(pid).filter(b => b.is_active === 1);
+    const bills = req.repos.bills.all(
+      `SELECT b.*, c.name as category_name, c.color as category_color
+       FROM bills b
+       LEFT JOIN categories c ON b.category_id = c.id
+       WHERE b.profile_id = ? AND b.is_active = 1`,
+      pid
+    );
     
     let totalAmount = 0;
     let paidAmount = 0;
@@ -325,6 +331,9 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
           name: b.name,
           amount: b.amount,
           frequency: b.frequency,
+          category_id: b.category_id,
+          category_name: b.category_name,
+          category_color: b.category_color,
           date: billDateStr,
           paid: isPaid,
           type: b.type || 'bill',
@@ -349,6 +358,14 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
         billCount
       }
     });
+  }));
+
+  // Registered after the specific /api/bills/* GET routes so it doesn't shadow them.
+  router.get('/api/bills/:id', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+    const pid = getProfileId(req);
+    const bill = req.repos.bills.getById(req.params.id, pid);
+    if (!bill) throw new NotFoundError('Bill not found');
+    res.json(bill);
   }));
 
   return router;
