@@ -30,6 +30,15 @@ class BaseRepository {
     }
   }
 
+  /** Reject any column/identifier that isn't a bare alphanumeric_underscore name. */
+  _validateColumns(columns) {
+    for (const col of columns) {
+      if (!/^[a-zA-Z0-9_]+$/.test(col)) {
+        throw new Error(`Invalid column name: ${col}`);
+      }
+    }
+  }
+
   /** Return the count of rows matching the query */
   count(table, where = '', ...params) {
     this._validateTable(table);
@@ -42,6 +51,7 @@ class BaseRepository {
   insert(table, data) {
     this._validateTable(table);
     const keys = Object.keys(data);
+    this._validateColumns(keys);
     const placeholders = keys.map(() => '?').join(', ');
     const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
     return this.run(sql, ...Object.values(data));
@@ -51,9 +61,9 @@ class BaseRepository {
   update(table, data, where, ...params) {
     this._validateTable(table);
     if (!where) throw new Error('update requires a WHERE clause');
-    const sets = Object.keys(data)
-      .map((k) => `${k} = ?`)
-      .join(', ');
+    const cols = Object.keys(data);
+    this._validateColumns(cols);
+    const sets = cols.map((k) => `${k} = ?`).join(', ');
     const sql = `UPDATE ${table} SET ${sets} WHERE ${where}`;
     return this.run(sql, ...Object.values(data), ...params);
   }
@@ -61,6 +71,7 @@ class BaseRepository {
   /** Return { [groupValue]: count } map */
   countsByProfile(table, profileCol = 'profile_id') {
     this._validateTable(table);
+    this._validateColumns([profileCol]);
     const rows = this.all(
       `SELECT ${profileCol}, COUNT(*) as c FROM ${table} GROUP BY ${profileCol}`
     );
