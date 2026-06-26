@@ -6,4 +6,19 @@
     "directory": "./dist",
     "not_found_handling": "single-page-application",
   },
+  // Two deploy environments (assets + compatibility_date above are inherited by both).
+  //   pnpm run deploy:dev   -> finance-manager-dev  on dev.<domain>   (built with --mode dev)
+  //   pnpm run deploy:prod  -> finance-manager       on app.<domain>
+  // Routes need a domain — uncomment + set once you own one. Until then `wrangler deploy`
+  // (no --env) and the connected Workers Builds keep deploying the top-level worker.
+  "env": {
+    "dev": {
+      "name": "finance-manager-dev",
+      // "routes": [{ "pattern": "dev.PLACEHOLDER_DOMAIN", "custom_domain": true }],
+    },
+    "prod": {
+      "name": "finance-manager",
+      // "routes": [{ "pattern": "app.PLACEHOLDER_DOMAIN", "custom_domain": true }],
+    },
+  },
 }

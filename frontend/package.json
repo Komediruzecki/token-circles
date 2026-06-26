@@ -16,6 +16,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:dev": "vite build --mode dev",
+    "deploy:dev": "pnpm run build:dev && npx wrangler deploy --env dev",
+    "deploy:prod": "pnpm run build && npx wrangler deploy --env prod",
     "tsc": "npx tsc",
     "typecheck": "tsc --noEmit",
     "vite": "npx vite",

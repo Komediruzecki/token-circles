@@ -122,7 +122,7 @@ export default defineConfig({
           },
           {
             urlPattern: ({ url }) => {
-              return url.origin === self.location.origin && !url.pathname.startsWith('/api/');
+              return url.origin === self.location.origin && !url.pathname.startsWith('/api/')
             },
             handler: 'NetworkFirst',
             options: {
@@ -175,8 +175,11 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 3800,
     proxy: {
+      // Local dev: same-origin /api proxied to the Cloudflare worker (`pnpm -C worker run dev`,
+      // wrangler's default port 8787). Same-origin keeps the SameSite=Lax session cookie working
+      // with no CORS. Repoint to 3847 if you run the legacy Node/SQLite backend instead.
       '/api': {
-        target: 'http://127.0.0.1:3847',
+        target: 'http://127.0.0.1:8787',
         changeOrigin: true,
       },
     },

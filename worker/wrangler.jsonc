@@ -1,0 +1,79 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Finance Manager API worker (Hono + D1 + R2). Two deploy environments — `dev`
+  // (dev.<domain>) and `prod` (app.<domain>) — plus local dev off the top-level bindings.
+  // Everything marked PLACEHOLDER must be filled before the matching deploy; local dev
+  // works with the placeholders as-is.
+  "name": "finance-manager-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // The Cloudflare account that owns the Worker + D1 + R2. From `wrangler whoami`,
+  // or export CLOUDFLARE_ACCOUNT_ID instead of setting it here.
+  // "account_id": "PLACEHOLDER_ACCOUNT_ID",
+
+  // ── Top-level bindings = what `pnpm run dev` (LOCAL dev) uses ──────────────────
+  // `wrangler dev` runs against a LOCAL D1 + R2 (state under .wrangler/, keyed by the
+  // binding NAME), so the placeholder database_id is fine locally. Apply the schema once
+  // with `pnpm run d1:migrate:local`. The env.dev / env.prod blocks override these for
+  // the real deployments.
+  "d1_databases": [{ "binding": "DB", "database_name": "finance-manager", "database_id": "local" }],
+  "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts" }],
+  "vars": {
+    "APP_ENV": "development",
+    "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
+    "CORS_ORIGIN": "http://localhost:3800",
+  },
+
+  "env": {
+    // ── DEV  →  api.dev.<domain>  (deploy: pnpm run deploy:dev) ──────────────────
+    "dev": {
+      "name": "finance-manager-api-dev",
+      // API on its own subdomain so the session cookie is same-site with the app
+      // (SameSite=Lax + COOKIE_DOMAIN). Uncomment + set once you own the domain.
+      // "routes": [{ "pattern": "api.dev.PLACEHOLDER_DOMAIN", "custom_domain": true }],
+      "vars": {
+        "APP_ENV": "dev",
+        "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
+        "CORS_ORIGIN": "https://dev.PLACEHOLDER_DOMAIN",
+        "APP_ORIGINS": "https://dev.PLACEHOLDER_DOMAIN",
+        "COOKIE_DOMAIN": ".dev.PLACEHOLDER_DOMAIN",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "finance-manager-dev",
+          "database_id": "PLACEHOLDER_DEV_D1_DATABASE_ID",
+        },
+      ],
+      "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts-dev" }],
+    },
+
+    // ── PROD  →  api.<domain>  (deploy: pnpm run deploy:prod) ────────────────────
+    "prod": {
+      "name": "finance-manager-api",
+      // "routes": [{ "pattern": "api.PLACEHOLDER_DOMAIN", "custom_domain": true }],
+      "vars": {
+        "APP_ENV": "production",
+        "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
+        "CORS_ORIGIN": "https://app.PLACEHOLDER_DOMAIN",
+        "APP_ORIGINS": "https://app.PLACEHOLDER_DOMAIN",
+        "COOKIE_DOMAIN": ".PLACEHOLDER_DOMAIN",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "finance-manager",
+          "database_id": "PLACEHOLDER_PROD_D1_DATABASE_ID",
+        },
+      ],
+      "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts" }],
+    },
+  },
+
+  // Secrets (NEVER in vars/here): JWT_SECRET, GOOGLE_CLIENT_SECRET.
+  // Set per env:  pnpm run secret:dev   /   pnpm run secret:prod
+  // Locally they live in .dev.vars (see .dev.vars.example).
+}

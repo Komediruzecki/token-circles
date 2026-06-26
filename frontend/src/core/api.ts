@@ -9,8 +9,10 @@ import { logger } from './logger.js'
 import type * as ApiTypes from '../types/api.js'
 import type * as Models from '../types/models.js'
 
-// API base URL
-const API_BASE = '/api'
+// API base URL. Empty/unset (local dev + client-only builds) => same-origin '/api', which the
+// vite proxy forwards to the local worker. Set VITE_API_URL (e.g. https://api.dev.<domain>) for
+// deployed server-mode builds where the API lives on a sibling subdomain.
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`
 
 // Local storage keys
 const CURRENT_PROFILE_ID_KEY = 'currentProfileId'

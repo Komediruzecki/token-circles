@@ -25,6 +25,7 @@ interface ImportMetaEnv {
   readonly VITE_DEFAULT_STORAGE?: string
   readonly VITE_SITE_DOMAIN?: string
   readonly VITE_API_BASE_URL?: string
+  readonly VITE_API_URL?: string
   readonly VITE_CORS_ORIGINS?: string
 }
 

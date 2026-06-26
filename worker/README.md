@@ -9,16 +9,18 @@ The frontend already deploys to Cloudflare ("Workers Builds"), so the API become
 sibling Worker (e.g. `api.<your-domain>`) and the whole stack lives on one platform.
 
 ## Why D1
-The app is already SQLite, and D1 *is* SQLite — so the schema transfers almost verbatim
+
+The app is already SQLite, and D1 _is_ SQLite — so the schema transfers almost verbatim
 (`migrations/0001_init.sql`, with the `users` table adapted for the Worker's auth). The
 real work was swapping the runtime: `better-sqlite3` (sync, native) → D1's async
 `prepare().bind().all()/first()/run()`, and Express → [Hono](https://hono.dev).
 
 ## Layout
+
 ```
 worker/
-  wrangler.toml             Worker + D1 config (PLACEHOLDERs: account_id, database_id, domain)
-  package.json              hono + wrangler deps and the d1:* / dev / deploy scripts
+  wrangler.jsonc            Worker config: top-level bindings = local dev; env.dev / env.prod deploys
+  package.json              hono + wrangler deps and the d1:* / dev / deploy:{dev,prod} scripts
   migrations/0001_init.sql  D1 schema
   src/index.ts              Hono entry: CORS, /api/health, mounts every route module, error handler
   src/http.ts               HttpError (mapped to JSON by app.onError)
@@ -30,6 +32,7 @@ worker/
 ```
 
 ## Ported routes (status)
+
 Every module in `src/routes/` follows one pattern (requireAuth → `getProfileId`/
 `getProfileIds` → async D1) and is mounted in `index.ts`. Data is scoped by the
 `X-Profile-Id` header, verified to belong to the authenticated user.
@@ -48,33 +51,60 @@ Every module in `src/routes/` follows one pattern (requireAuth → `getProfileId
 - Remaining gaps are edge-only: the Google-Sheets **xlsx fallback** (CSV export covers the
   common case) and the old stateful `/import/file-sheet` (replaced by re-uploading with a
   `sheetName` field).
-- **Caveat:** it typechecks and bundles, but hasn't been run against a live D1/R2 yet —
-  smoke-test once you stand up the database + bucket (below).
+- **Status:** typechecks, bundles, and **boots locally** — `pnpm run dev` serves the full
+  Hono app off a local D1 + R2 (`/api/health` → `{"ok":true}`, protected routes 401 without a
+  session). Not yet run against a **remote** D1/R2 — smoke-test after the first deploy.
 
-## Go-live steps (run later, in order)
+## Local dev (worker + frontend interplay)
+
+Two processes, both same-origin via the vite proxy — so the `SameSite=Lax` session cookie
+works with no CORS and no domain:
+
 ```bash
 cd worker
-pnpm install --ignore-workspace   # worker is NOT in the pnpm workspace
-npx wrangler login
-
-npx wrangler d1 create finance-manager     # prints a database_id
-# -> paste database_id into wrangler.toml, set account_id (or CLOUDFLARE_ACCOUNT_ID)
-
-pnpm run d1:migrate:local          # apply schema to the local dev D1
-pnpm run dev                       # http://localhost:8787/api/health -> {"ok":true}
-
-pnpm run d1:migrate:remote         # apply schema to the real D1
-npx wrangler r2 bucket create finance-manager-receipts   # for premium receipt files
-
-# Auth secrets (create the Google OAuth client first — see "Auth" below):
-npx wrangler secret put JWT_SECRET             # any long random string
-npx wrangler secret put GOOGLE_CLIENT_SECRET   # from Google Cloud Console
-pnpm run deploy
+pnpm install --ignore-workspace    # worker is NOT in the pnpm workspace
+cp .dev.vars.example .dev.vars     # fill JWT_SECRET + Google client id/secret (for sign-in)
+pnpm run d1:migrate:local          # create + migrate the LOCAL D1 (.wrangler/state)
+pnpm run dev                       # worker on http://127.0.0.1:8787 (local D1 + R2)
 ```
-Once you own a domain: set `CORS_ORIGIN` + the `[[routes]]` custom domain in
-`wrangler.toml`, redeploy, and point the frontend's API base URL at it.
+
+In a second terminal:
+
+```bash
+pnpm -C frontend run dev           # vite on http://127.0.0.1:3800, proxies /api -> :8787
+```
+
+Open http://127.0.0.1:3800 and switch **Settings → storage to "self-hosted"** (or put
+`VITE_DEFAULT_STORAGE=sqlite` in `frontend/.env.local`) to drive the app off the worker
+instead of client-only IndexedDB. Google sign-in works locally once the OAuth client lists
+`http://localhost:8787/api/auth/google/callback` as an authorized redirect URI (see Auth).
+
+## Deploy (dev → prod)
+
+`wrangler.jsonc` defines two environments — `env.dev` (`finance-manager-api-dev`,
+`api.dev.<domain>`) and `env.prod` (`finance-manager-api`, `api.<domain>`) — each with its own
+D1 database, R2 bucket, vars and route. Run once per environment (shown for `dev`; repeat the
+`:prod` variants for production):
+
+```bash
+cd worker
+npx wrangler login
+pnpm run d1:create:dev     # prints a database_id -> paste into env.dev.d1_databases.database_id
+pnpm run r2:create:dev     # premium receipt storage bucket
+pnpm run d1:migrate:dev    # apply the schema to the remote dev D1
+pnpm run secret:dev        # JWT_SECRET + GOOGLE_CLIENT_SECRET for the dev worker
+# set env.dev.vars.GOOGLE_CLIENT_ID; once you own a domain also set CORS_ORIGIN / APP_ORIGINS /
+# COOKIE_DOMAIN and uncomment the api.dev.<domain> route, then:
+pnpm run deploy:dev
+```
+
+The frontend deploys the same way (`pnpm -C frontend run deploy:dev` / `deploy:prod`); the dev
+build (`--mode dev` → `frontend/.env.dev`) points `VITE_API_URL` at `api.dev.<domain>`, sharing
+the session cookie cross-subdomain via `COOKIE_DOMAIN`. Full account/domain/D1 runbook:
+`~/.dotfiles/personal/finance/cloudflare-d1-setup.md`.
 
 ## Auth
+
 Implemented (adapted from mercurypitch's zero-dependency WebCrypto module): stateless
 **JWT (HS256)** in an **httpOnly, Secure, SameSite=Lax cookie** + **Google Sign-In**
 (server-side code flow with a signed-state CSRF guard and a returnTo allowlist), in
@@ -88,13 +118,15 @@ just the `requireAuth` wrapper), so it's designed to lift into a shared cross-ap
 later, alongside the wrangler/D1 setup.
 
 ## Open items
+
 - **Domain** — not purchased yet (name ideas in `~/.dotfiles/personal/finance/name-ideas.md`).
-  All domain/route/CORS spots are `PLACEHOLDER_DOMAIN`.
+  All domain/route/CORS spots in `wrangler.jsonc` are `PLACEHOLDER_DOMAIN` (and
+  `frontend/.env.dev` / `frontend/wrangler.jsonc` for the dev frontend).
 - **Premium billing** — receipt upload is gated to `users.plan = 'premium'`, but there's no
   billing/upgrade flow yet; set a user premium manually for now
   (`UPDATE users SET plan='premium' WHERE id=?`). PDF reports + spreadsheet import are free.
-- **R2 bucket** — create `finance-manager-receipts` (above) and keep its name in
-  `wrangler.toml`; receipt endpoints return 501 until the bucket is bound.
+- **R2 bucket** — create the per-env buckets (`pnpm run r2:create:dev` / `:prod`) and keep
+  their names in `wrangler.jsonc`; receipt endpoints return 501 until the bucket is bound.
 - **Data migration** — to move existing rows into D1:
   `sqlite3 finance.db .dump > dump.sql`, strip pragmas/transactions, then
   `npx wrangler d1 execute finance-manager --remote --file dump.sql`.
