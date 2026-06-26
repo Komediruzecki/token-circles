@@ -24,8 +24,9 @@ worker/
   migrations/0001_init.sql D1 schema (generated from backend/schema.sql)
   src/index.ts             Hono entry: CORS, /api/health, mounts route modules, error handler
   src/db.ts                async D1 helpers (all/first/run/insert) — analog of baseRepo.js
-  src/auth.ts              auth middleware PLACEHOLDER (JWT vs D1-session — pick one)
-  src/routes/profiles.ts   one sample ported route, to show the Express→Hono+D1 pattern
+  src/auth.ts              JWT (HS256) + Google Sign-In + httpOnly cookie session (implemented)
+  src/routes/auth.ts       /api/auth/google/start, /callback, /me, /logout
+  src/routes/profiles.ts   one sample ported data route (Express→Hono+D1 pattern)
   .dev.vars.example        local secrets template
 ```
 
@@ -42,8 +43,11 @@ pnpm run d1:migrate:local        # apply schema to the local dev D1
 pnpm run dev                     # http://localhost:8787/api/health  -> {"ok":true}
 
 pnpm run d1:migrate:remote       # apply schema to the real D1
+
+# Auth secrets (create the Google OAuth client first — see "Auth" below):
+wrangler secret put JWT_SECRET             # any long random string
+wrangler secret put GOOGLE_CLIENT_SECRET   # from Google Cloud Console
 pnpm run deploy                  # publish the Worker
-# Add SESSION_SECRET:  wrangler secret put SESSION_SECRET
 ```
 Once you own a domain: set `CORS_ORIGIN` + the `[[routes]]` custom domain in
 `wrangler.toml`, redeploy, and point the frontend's API base URL at it.
@@ -51,8 +55,19 @@ Once you own a domain: set `CORS_ORIGIN` + the `[[routes]]` custom domain in
 ## Decisions still open (left as placeholders on purpose)
 - **Domain** — not purchased yet (see candidates below). All domain/route/CORS spots
   are `PLACEHOLDER_DOMAIN`.
-- **Auth** — `express-session` + SQLite store doesn't run on Workers. Choose **JWT**
-  (simplest, stateless) or **D1-backed sessions** (closest to today). See `src/auth.ts`.
+- **Auth** — IMPLEMENTED (adapted from mercurypitch's zero-dependency WebCrypto module):
+  stateless **JWT (HS256)** in an **httpOnly, Secure, SameSite=Lax cookie** + **Google
+  Sign-In** (server-side code flow with a signed-state CSRF guard and a returnTo
+  allowlist), in `src/auth.ts` + `src/routes/auth.ts`. Routes: `/api/auth/google/start`,
+  `/api/auth/google/callback`, `/api/auth/me`, `/api/auth/logout`. Logout bumps
+  `users.token_version` to revoke all issued tokens. **Remaining setup:** create a Google
+  OAuth client and set `JWT_SECRET` + `GOOGLE_CLIENT_SECRET` (steps in
+  `~/.dotfiles/personal/finance/google-oauth-setup.md`). Password login uses PBKDF2
+  helpers; existing **bcrypt** hashes need a re-hash-on-next-login migration (bcrypt can't
+  run on Workers).
+- **Shared library (later)** — `src/auth.ts` depends only on WebCrypto + a `D1Database`
+  handle (the Hono-specific part is just the `requireAuth` wrapper), so it's designed to
+  lift into a shared cross-app auth lib alongside the wrangler/D1 setup.
 - **Password hashing** — `bcrypt` is native and won't run on Workers; port login to
   Web Crypto **PBKDF2** or `@noble/hashes` **scrypt**, and re-hash on next login.
 - **Route porting** — only `profiles` is ported as a sample; the other

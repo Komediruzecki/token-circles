@@ -1,15 +1,25 @@
 -- Finance Manager — D1 initial schema (migration 0001).
--- Generated from backend/schema.sql; keep in sync when that file changes.
+-- Derived from backend/schema.sql (keep the data tables in sync when it changes).
+-- The `users` table is ADAPTED for the Worker's JWT + Google auth and so diverges
+-- from the Express backend's users table on purpose.
 -- D1 is SQLite, so this DDL transfers verbatim (applied via `wrangler d1 migrations apply`).
 
--- Users
+-- Users — Worker auth model: username/password are nullable (Google users have
+-- neither); provider_id holds the Google `sub`; token_version is a JWT revocation
+-- counter bumped on logout / "sign out everywhere".
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  email TEXT DEFAULT '',
+  username TEXT UNIQUE,
+  password_hash TEXT,
+  email TEXT UNIQUE,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  auth_provider TEXT NOT NULL DEFAULT 'password',
+  provider_id TEXT,
+  token_version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider
+  ON users(auth_provider, provider_id) WHERE provider_id IS NOT NULL;
 
 -- Profiles
 CREATE TABLE IF NOT EXISTS profiles (

@@ -1,4 +1,7 @@
-# Copy to `.dev.vars` for local `wrangler dev` (which is gitignored). Set real values.
+# Copy to `.dev.vars` for local `wrangler dev` (gitignored). Set real values.
 # Production secrets are set with `wrangler secret put NAME` instead.
-SESSION_SECRET="dev-only-change-me"
+APP_ENV="development"            # drops the Secure cookie flag so http://localhost works
+JWT_SECRET="dev-only-change-me"  # HMAC key for session JWTs + OAuth state
+GOOGLE_CLIENT_ID="PLACEHOLDER.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="dev-google-client-secret"
 CORS_ORIGIN="http://localhost:3800"

@@ -25,11 +25,17 @@ migrations_dir = "migrations"
 # ── Non-secret vars ───────────────────────────────────────────────────────────
 [vars]
 APP_ENV = "production"
+# Google OAuth client id (public; also checked as the id_token audience). Create it
+# in Google Cloud Console — see README.md "Auth" and your ~/.dotfiles/personal/finance docs.
+GOOGLE_CLIENT_ID = "PLACEHOLDER.apps.googleusercontent.com"   # TODO
 # CORS_ORIGIN = "https://app.PLACEHOLDER_DOMAIN"   # TODO: set once you own the domain
+# APP_ORIGINS = "https://app.PLACEHOLDER_DOMAIN"   # extra allowed post-login returnTo origins
+# COOKIE_DOMAIN = ".PLACEHOLDER_DOMAIN"            # share the session cookie with the app subdomain
 
-# ── Secrets (NEVER commit) ────────────────────────────────────────────────────
-# Set with:  wrangler secret put SESSION_SECRET
-# See src/auth.ts for which secret(s) the chosen auth strategy needs.
+# ── Secrets (NEVER commit; set with `wrangler secret put NAME`) ───────────────
+#   JWT_SECRET            HMAC key that signs session JWTs and the OAuth state
+#   GOOGLE_CLIENT_SECRET  Google OAuth client secret (for the code exchange)
+# Locally these live in .dev.vars (see .dev.vars.example).
 
 # ── Custom domain / routes (uncomment once you own a domain) ──────────────────
 # [[routes]]
