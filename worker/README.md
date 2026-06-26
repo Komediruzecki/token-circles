@@ -103,6 +103,21 @@ build (`--mode dev` → `frontend/.env.dev`) points `VITE_API_URL` at `api.dev.<
 the session cookie cross-subdomain via `COOKIE_DOMAIN`. Full account/domain/D1 runbook:
 `~/.dotfiles/personal/finance/cloudflare-d1-setup.md`.
 
+### CI deploys (GitHub Actions)
+
+`.github/workflows/deploy-worker.yml` (this worker) and `deploy-frontend.yml` (the app) mirror
+the mercurypitch/chaos-master setup: **push to `main` → dev**, **tag `v*` → prod**, plus manual
+`workflow_dispatch` (pick dev/prod). The worker job runs `d1 migrations apply` before deploying.
+Prerequisites:
+
+- Repo secrets **`CLOUDFLARE_API_TOKEN`** + **`CLOUDFLARE_ACCOUNT_ID`** (deploy steps skip if the
+  token is absent). The token needs Workers Scripts / D1 / R2 / Workers Routes / SSL edit (the
+  "Edit Cloudflare Workers" template + SSL); add Zone DNS:Edit if custom-domain attach fails.
+- The one-time `d1:create` / `r2:create` / `secret:` setup above must be done per env, and the
+  printed `database_id` pasted into `wrangler.jsonc`, before the first CI deploy.
+- **Disable Cloudflare "Workers Builds"** for the frontend — its auto-deploy targets the same
+  `finance-manager` worker as the prod job and would race on a tag.
+
 ## Auth
 
 Implemented (adapted from mercurypitch's zero-dependency WebCrypto module): stateless
