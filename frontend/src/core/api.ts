@@ -113,7 +113,7 @@ export class ApiClient {
       const response = await apiFetch(url, requestOptions)
 
       if (!response.ok) {
-        if (response.status === 401 && method !== 'GET') {
+        if (response.status === 401 && method !== 'GET' && !endpoint.startsWith('/auth/')) {
           window.dispatchEvent(new Event('auth:required'))
         }
         const errorData = await response.json().catch(() => ({
@@ -121,8 +121,8 @@ export class ApiClient {
         }))
         const errorMsg = (errorData.error || errorData.message) ?? `HTTP ${response.status}`
 
-        // Auth check 401s are expected when not logged in — don't log as errors
-        const isAuthEndpoint = endpoint === '/auth/me'
+        // Auth endpoint 4xx (not-logged-in, bad password, email taken) are expected — don't log
+        const isAuthEndpoint = endpoint.startsWith('/auth/')
         if (!isAuthEndpoint || response.status !== 401) {
           // Debug: trace POST /transactions failures
           if (endpoint === '/transactions' && method === 'POST') {
@@ -161,7 +161,7 @@ export class ApiClient {
       return rawData
     } catch (error) {
       // Don't re-log errors from auth endpoints — already handled above or expected
-      const isAuthEndpoint = endpoint === '/auth/me'
+      const isAuthEndpoint = endpoint.startsWith('/auth/')
       if (!isAuthEndpoint) {
         const message = error instanceof Error ? error.message : 'Network error'
         logger.error('API Request Failed', { endpoint, method, message }, 'ApiClient')
@@ -186,10 +186,27 @@ export class ApiClient {
 
   /**
    * Begin Google sign-in. Full-page redirect to the worker, which bounces to Google and
-   * returns to `returnTo` with the httpOnly session cookie set. Server/self-hosted mode only.
+   * returns to the worker's configured app origin (CORS_ORIGIN) with the session cookie set.
+   * We deliberately don't pass returnTo: the worker's allowlist is the source of truth, so this
+   * works no matter which host/origin the browser is on (fixes mobile). Server mode only.
    */
-  loginWithGoogle(returnTo: string = window.location.origin): void {
-    window.location.href = `${API_BASE}/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`
+  loginWithGoogle(): void {
+    window.location.href = `${API_BASE}/auth/google/start`
+  }
+
+  /**
+   * Register an email/password account (worker: POST /api/auth/register). Sets the session
+   * cookie on success; the caller should reload so the app re-checks /auth/me.
+   */
+  async register(email: string, password: string): Promise<void> {
+    await this.request('/auth/register', undefined, { method: 'POST', body: { email, password } })
+  }
+
+  /**
+   * Email/password login (worker: POST /api/auth/login). Sets the session cookie on success.
+   */
+  async loginWithPassword(email: string, password: string): Promise<void> {
+    await this.request('/auth/login', undefined, { method: 'POST', body: { email, password } })
   }
 
   /**
