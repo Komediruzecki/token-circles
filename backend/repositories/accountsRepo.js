@@ -28,12 +28,11 @@ class AccountsRepository extends BaseRepository {
     return super.delete('accounts', 'profile_id = ?', profileId);
   }
 
-  addBalanceEntry(accountId, balance, recordedAt, notes = '') {
+  addBalanceEntry(accountId, balance, recordedAt) {
     return this.insert('account_balance_history', {
       account_id: accountId,
       balance,
       recorded_at: recordedAt,
-      notes,
     });
   }
 
