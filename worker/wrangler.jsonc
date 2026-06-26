@@ -37,7 +37,7 @@
       "routes": [{ "pattern": "api.dev.tokencircles.com", "custom_domain": true }],
       "vars": {
         "APP_ENV": "dev",
-        "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
+        "GOOGLE_CLIENT_ID": "961447002903-p2gkcujs85svbuf4tpmvu1cj4ge1ivh3.apps.googleusercontent.com",
         "CORS_ORIGIN": "https://dev.tokencircles.com",
         "APP_ORIGINS": "https://dev.tokencircles.com",
         "COOKIE_DOMAIN": ".dev.tokencircles.com",
@@ -46,7 +46,7 @@
         {
           "binding": "DB",
           "database_name": "finance-manager-dev",
-          "database_id": "PLACEHOLDER_DEV_D1_DATABASE_ID",
+          "database_id": "7a785adc-c378-43fa-b812-171319b81f22",
         },
       ],
       "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts-dev" }],
