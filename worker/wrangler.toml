@@ -1,0 +1,40 @@
+# Cloudflare Worker config for the Finance Manager API (Workers + D1).
+# This is a PREPARATION scaffold — everything marked PLACEHOLDER/TODO must be set
+# before the first real deploy. Nothing here is wired into the live app yet.
+
+name = "finance-manager-api"          # TODO: rename to match your chosen brand
+main = "src/index.ts"
+compatibility_date = "2026-06-26"
+compatibility_flags = ["nodejs_compat"]
+
+# The Cloudflare account that owns this Worker + D1 database.
+# Get it from `wrangler whoami` (or the dashboard URL). You can also export
+# CLOUDFLARE_ACCOUNT_ID instead of hard-coding it here.
+# account_id = "PLACEHOLDER_ACCOUNT_ID"
+
+# ── D1 database binding ───────────────────────────────────────────────────────
+# 1) create it once:        pnpm run d1:create      (-> prints a database_id)
+# 2) paste the id below
+# 3) apply migrations:       pnpm run d1:migrate:remote
+[[d1_databases]]
+binding = "DB"                        # exposed to the Worker as env.DB
+database_name = "finance-manager"     # TODO: match your chosen name
+database_id = "PLACEHOLDER_D1_DATABASE_ID"   # TODO: fill in after d1:create
+migrations_dir = "migrations"
+
+# ── Non-secret vars ───────────────────────────────────────────────────────────
+[vars]
+APP_ENV = "production"
+# CORS_ORIGIN = "https://app.PLACEHOLDER_DOMAIN"   # TODO: set once you own the domain
+
+# ── Secrets (NEVER commit) ────────────────────────────────────────────────────
+# Set with:  wrangler secret put SESSION_SECRET
+# See src/auth.ts for which secret(s) the chosen auth strategy needs.
+
+# ── Custom domain / routes (uncomment once you own a domain) ──────────────────
+# [[routes]]
+# pattern = "api.PLACEHOLDER_DOMAIN/*"
+# custom_domain = true
+
+[observability]
+enabled = true
