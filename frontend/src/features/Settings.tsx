@@ -208,6 +208,35 @@ export default function Settings() {
   const [migrating, setMigrating] = createSignal(false)
   const [showChangelog, setShowChangelog] = createSignal(false)
 
+  // ── Billing (server mode only; the worker exposes /api/billing/*) ──
+  const [billing, setBilling] = createSignal<{
+    plan: string
+    status: string | null
+    renews_at: string | null
+    configured: boolean
+  } | null>(null)
+  const [billingBusy, setBillingBusy] = createSignal(false)
+  const loadBilling = async () => {
+    try {
+      const res = await apiFetch('/api/billing/status', { credentials: 'include' })
+      setBilling(res.ok ? await res.json() : null)
+    } catch {
+      setBilling(null)
+    }
+  }
+  const redirectToStripe = async (path: string, failMsg: string) => {
+    setBillingBusy(true)
+    try {
+      const res = await apiFetch(path, { method: 'POST', credentials: 'include' })
+      const data = await res.json()
+      if (res.ok && data.url) window.location.href = data.url
+      else throw new Error(data.error || failMsg)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : failMsg, 'error')
+      setBillingBusy(false)
+    }
+  }
+
   // Load saved settings
   onMount(() => {
     const savedCurrency = localStorage.getItem('localCurrency')
@@ -229,6 +258,16 @@ export default function Settings() {
     }
 
     void loadHouseholdProfiles()
+
+    if (storageMode() === 'self-hosted') void loadBilling()
+    const billingParam = new URLSearchParams(window.location.search).get('billing')
+    if (billingParam === 'success' || billingParam === 'cancel') {
+      toast(
+        billingParam === 'success' ? 'Subscription activated.' : 'Checkout canceled.',
+        billingParam === 'success' ? 'success' : 'info'
+      )
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+    }
   })
 
   // Sync local currency changes
@@ -508,6 +547,47 @@ export default function Settings() {
       <div class={styles.pageContent}>
         <div class={styles.settingsGrid}>
           <div class={styles.settingsCol}>
+            <Show when={storageMode() === 'self-hosted' && billing()}>
+              <div class={styles.card}>
+                <div class={styles.settingsSection}>
+                  <div class={styles.settingsSectionTitle}>Plan &amp; Billing</div>
+                  <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
+                    Current plan:{' '}
+                    <strong style="color: var(--text);">
+                      {billing()!.plan === 'premium' ? 'Premium' : 'Free'}
+                    </strong>
+                    {billing()!.status ? ` (${billing()!.status})` : ''}
+                  </p>
+                  <Show when={!billing()!.configured}>
+                    <p style="color: var(--text-secondary); font-size: 13px;">
+                      Billing isn't configured on the server yet.
+                    </p>
+                  </Show>
+                  <Show when={billing()!.configured && billing()!.plan !== 'premium'}>
+                    <button
+                      class={styles.btnPrimary}
+                      onclick={() =>
+                        redirectToStripe('/api/billing/checkout', 'Could not start checkout')
+                      }
+                      disabled={billingBusy()}
+                    >
+                      {billingBusy() ? 'Redirecting…' : 'Upgrade to Premium'}
+                    </button>
+                  </Show>
+                  <Show when={billing()!.configured && billing()!.plan === 'premium'}>
+                    <button
+                      class={styles.btnSecondary}
+                      onclick={() =>
+                        redirectToStripe('/api/billing/portal', 'Could not open billing portal')
+                      }
+                      disabled={billingBusy()}
+                    >
+                      {billingBusy() ? 'Redirecting…' : 'Manage billing'}
+                    </button>
+                  </Show>
+                </div>
+              </div>
+            </Show>
             <div class={styles.card}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Database Storage</div>
