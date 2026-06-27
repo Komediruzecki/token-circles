@@ -8,18 +8,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+
 - Transactions page crash caused by `createMemo` TDZ reference in SolidJS
 - Missing `swagger-ui-express` and `mime-types` backend dependencies
 
 ### Changed
+
 - Improved public repo readiness: CODE_OF_CONDUCT, CONTRIBUTING, issue/PR templates
 - Cleaned docs/ directory structure with organized specs, postmortems, and archive
 - Replaced internal todo.md with public ROADMAP.md
 - Added `.env.example` with documented environment variables
 
+## [5.1.0] — 2026-06-27
+
+### Added
+
+- Account deletion: permanently delete your account and all of its data from Settings → Billing (confirm by typing your account email). Dev = hard delete; production soft-delete to follow.
+- Optional Cloudflare Turnstile bot protection on the register / login / forgot-password forms (enable by setting `VITE_TURNSTILE_SITE_KEY` and the worker secret `TURNSTILE_SECRET`).
+
+### Security
+
+- Per-account login throttle (on top of the per-IP limit) and constant-time password verification, so login no longer reveals whether an email is registered.
+- Profile-limit and rate-limit enforcement made atomic, so concurrent requests cannot slip past a limit.
+
+### Fixed
+
+- The periodic spending-report email could be sent multiple times per month (cron day-of-month/day-of-week OR semantics) — now sent once per period, with per-period idempotency.
+
+## [5.0.0] — 2026-06-27
+
+### Added
+
+- Cloud sync via a Cloudflare Workers backend (D1 + R2) — sign in to sync across devices.
+- Accounts: Google sign-in, email/password register + login, a no-account demo, and forgot-password reset by email.
+- Pricing & plans (Free / Basic / Advanced / Ultimate) with a 4-tier comparison in Settings → Billing, plus Stripe billing (checkout, portal, status, webhook).
+- Email reminders — budget alerts and a periodic spending report (Resend) — with per-profile toggles and one-click unsubscribe.
+- Contact-support form (sign-in, reset, and Settings) with an auto-acknowledgement and a TC-XXXX reference id.
+- Tabbed Settings: General / Exports / Billing.
+
+### Changed
+
+- Per-plan limits enforced (profiles, receipt storage, monthly reminder quota); advanced reports (tax & P&L) gated to Basic and up.
+- Email now sends from a repliable address (hello@) instead of no-reply.
+
+### Security
+
+- Pre-merge review hardening: receipt-upload IDOR and cross-profile savings-goal recompute fixed; user-supplied IN-lists chunked to stay under D1's bound-variable limit; rate limiter made atomic; the support auto-acknowledgement no longer reflects arbitrary attacker-supplied content to unverified recipients.
+
+### Fixed
+
+- Profile creation failing with a response-validation error (missing `created_at`).
+- "Access denied" for old/profile-less accounts (a default profile is now created automatically); password-reset no longer leaves a half-logged-in state.
+- Large transaction pages timing out (N+1 tag query) and import of thousands of rows failing (D1 bound-variable limit); several invalid CSS transforms that silently dropped animations.
+
 ## [4.0.0] — 2026-05-11
 
 ### Added
+
 - Portfolio tracker with real-time Yahoo Finance price lookup and allocation pie chart
 - Counterparties page showing who-owes-who from beneficiary/payor transaction data
 - Account balance auto-update when transactions are created/updated/deleted
@@ -31,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Google Sheets import improvements: auto-populated account inputs, cash account type
 
 ### Changed
+
 - Account types aligned with backend: giro/savings/ib/cash (was checking/savings/credit/investment)
 - Import now resolves account_id from Means of Payment (FROM) instead of Category (TO)
 - Transaction FROM/TO column shows MoP → Category with transfer amounts without `-` prefix
@@ -39,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dropdown UX: category/tag dropdowns auto-close when clicking outside
 
 ### Fixed
+
 - Critical import bug: account_id was resolved from Category (TO) instead of Means of Payment (FROM)
 - Post-import balance recalculation handling all transfer directions (FROM only, TO only, both)
 - Bulk DELETE sets account balance to starting_balance instead of 0
@@ -51,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.0.0] — 2026-04-01
 
 ### Added
+
 - Serverless mode with full IndexedDB storage adapter
 - Multi-profile support with demo data (low/mid/high income) spanning 2000-2026
 - Zero-based budgeting with allocation and rollover
@@ -67,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chart export as images
 
 ### Changed
+
 - Migrated from vanilla JS to SolidJS + TypeScript + Vite
 - CSS Modules instead of global CSS
 - Hash-based routing with query parameter support
@@ -74,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] — 2026-03-15
 
 ### Added
+
 - Savings goals with progress tracking and contributions
 - Loan calculator with amortization tables, prepayments, and variable rates
 - Bills tracker with recurring payment scheduling
@@ -89,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] — 2026-03-01
 
 ### Added
+
 - Initial release: vanilla JS SPA with Express/SQLite backend
 - Transaction management (CRUD, filtering, search, pagination)
 - Category management with colors and icons

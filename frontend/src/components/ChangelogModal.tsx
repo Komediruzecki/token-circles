@@ -12,6 +12,32 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '5.1.0',
+    date: '2026-06-27',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Delete your account and all of its data from Settings → Billing — confirm by typing your account email',
+          'Optional bot protection (Cloudflare Turnstile) on the sign-in, sign-up, and forgot-password forms',
+        ],
+      },
+      {
+        title: 'Security',
+        items: [
+          'Sign-in hardened against automated guessing: a per-account attempt throttle and constant-time password checks that no longer reveal whether an email is registered',
+          'Profile-limit and rate-limit checks are now atomic, so concurrent requests cannot slip past a limit',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'The periodic spending-report email could be sent several times in a month — it is now sent once per period',
+        ],
+      },
+    ],
+  },
+  {
     version: '5.0.0',
     date: '2026-06-27',
     sections: [
