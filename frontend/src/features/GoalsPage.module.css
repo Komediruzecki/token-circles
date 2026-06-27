@@ -287,11 +287,11 @@
 @keyframes slide-in {
   from {
     opacity: 0;
-    transform: translate-y(-20px);
+    transform: translateY(-20px);
   }
   to {
     opacity: 1;
-    transform: translate-y(0);
+    transform: translateY(0);
   }
 }
 
