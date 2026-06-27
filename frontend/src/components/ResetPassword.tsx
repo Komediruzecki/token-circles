@@ -49,8 +49,8 @@ export default function ResetPassword() {
     try {
       await api.resetPassword(token, password())
       setStatus('done')
-      // A reset only makes sense for a server account — make sure we land in server mode,
-      // signed in by the cookie the worker just set.
+      // A reset only makes sense for a server account — land in server mode at the sign-in
+      // screen. The worker no longer auto-logs-in, so the user signs in with the new password.
       setStorageMode('self-hosted')
       setTimeout(() => {
         window.location.hash = ''
@@ -129,7 +129,7 @@ export default function ResetPassword() {
 
         <Show when={status() === 'done'}>
           <p style={{ color: 'var(--text-secondary)', 'font-size': '14px' }}>
-            Password updated. Signing you in…
+            Password updated. Redirecting to sign in…
           </p>
         </Show>
 

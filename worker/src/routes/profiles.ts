@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
-import { getProfileId } from '../profile';
+import { getProfileId, ensureProfile } from '../profile';
 import { HttpError } from '../http';
 import { getUserPlan } from '../plan';
 import { planLimit } from '../plans';
@@ -76,6 +76,7 @@ async function seedDefaultCategories(DB: D1Database, pid: number): Promise<void>
 // GET — the user's profiles with per-profile counts (Settings household view reads the counts).
 profilesRoutes.get('/api/profiles', requireAuth, async (c) => {
   const userId = c.get('userId');
+  await ensureProfile(c); // never return an empty list — old/profile-less accounts get a default
   const rows = await db.all(
     c.env.DB,
     `SELECT p.id, p.name, p.user_id, p.created_at,

@@ -244,8 +244,9 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   await c.env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
     .bind(row.user_id)
     .run();
-  // Issue a fresh session (carries the bumped token_version) so reset = signed in.
-  c.header('Set-Cookie', await issueSessionCookie(row.user_id, 'password', c.env));
+  // Do NOT auto-login: send the user back to the sign-in screen to log in with the new
+  // password (avoids a half-authenticated state). The token_version bump above already
+  // revoked any existing sessions.
   return c.json({ ok: true });
 });
 

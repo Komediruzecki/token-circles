@@ -1,16 +1,60 @@
+import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
 import styles from './LoginModal.module.css'
 
 export interface LoginModalProps {
   onClose: () => void
-  // Kept for existing call sites; the Google flow is a full-page redirect, so it never
-  // fires (the app re-checks the session on reload instead).
+  // Kept for existing call sites; the password/Google flows reload the page, so the app
+  // re-checks the session on reload rather than relying on this callback.
   onSuccess: () => void
 }
 
 export default function LoginModal(props: LoginModalProps) {
+  const [mode, setMode] = createSignal<'login' | 'register'>('login')
+  const [email, setEmail] = createSignal('')
+  const [password, setPassword] = createSignal('')
+  const [error, setError] = createSignal('')
+  const [loading, setLoading] = createSignal(false)
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') props.onClose()
+  }
+
+  const submit = async (e: Event) => {
+    e.preventDefault()
+    setError('')
+    const em = email().trim()
+    const pw = password()
+    if (!em || !pw) {
+      setError('Email and password are required')
+      return
+    }
+    if (mode() === 'register' && pw.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    setLoading(true)
+    try {
+      if (mode() === 'register') await api.register(em, pw)
+      else await api.loginWithPassword(em, pw)
+      // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
+      window.location.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+      setLoading(false)
+    }
+  }
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    'margin-bottom': '10px',
+    'border-radius': '8px',
+    border: '1px solid var(--border, rgba(255,255,255,0.12))',
+    background: 'var(--bg, #0b0e14)',
+    color: 'var(--text, #e6e8eb)',
+    'font-size': '14px',
+    'box-sizing': 'border-box' as const,
   }
 
   return (
@@ -21,10 +65,84 @@ export default function LoginModal(props: LoginModalProps) {
       }}
     >
       <div class={styles.modal} onKeyDown={handleKeyDown}>
-        <h3 class={styles.title}>Sign In</h3>
+        <h3 class={styles.title}>{mode() === 'register' ? 'Create account' : 'Sign In'}</h3>
         <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
-          Sign in with your Google account to sync your data across devices.
+          Sign in to sync your data across devices.
         </p>
+
+        <form onSubmit={submit}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email()}
+            onInput={(e) => setEmail(e.currentTarget.value)}
+            autocomplete="email"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password()}
+            onInput={(e) => setPassword(e.currentTarget.value)}
+            autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
+            style={inputStyle}
+          />
+          <Show when={error()}>
+            <div
+              style={{ color: 'var(--danger, #ef4444)', 'font-size': '13px', margin: '2px 0 10px' }}
+            >
+              {error()}
+            </div>
+          </Show>
+          <button
+            class={styles.btnSubmit}
+            type="submit"
+            disabled={loading()}
+            style={{ width: '100%', 'justify-content': 'center' }}
+          >
+            {loading() ? 'Please wait…' : mode() === 'register' ? 'Create account' : 'Sign in'}
+          </button>
+        </form>
+
+        <p
+          style={{
+            margin: '12px 0 0',
+            'font-size': '13px',
+            color: 'var(--text-secondary)',
+            'text-align': 'center',
+          }}
+        >
+          {mode() === 'login' ? "Don't have an account? " : 'Already have an account? '}
+          <a
+            onClick={() => {
+              setMode(mode() === 'login' ? 'register' : 'login')
+              setError('')
+            }}
+            style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+          >
+            {mode() === 'login' ? 'Create one' : 'Sign in'}
+          </a>
+        </p>
+
+        <div
+          style={{
+            display: 'flex',
+            'align-items': 'center',
+            gap: '8px',
+            margin: '16px 0',
+            color: 'var(--text-secondary)',
+            'font-size': '12px',
+          }}
+        >
+          <div
+            style={{ flex: 1, height: '1px', background: 'var(--border, rgba(255,255,255,0.12))' }}
+          />
+          or
+          <div
+            style={{ flex: 1, height: '1px', background: 'var(--border, rgba(255,255,255,0.12))' }}
+          />
+        </div>
+
         <div class={styles.actions}>
           <button class={styles.btnCancel} onClick={props.onClose} type="button">
             Cancel
