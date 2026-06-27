@@ -27,6 +27,7 @@
  * Application configuration and preferences with storage switching
  */
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import AccountDeletion from '../components/AccountDeletion'
 import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
@@ -679,6 +680,13 @@ export default function Settings() {
                       redirectToStripe('/api/billing/portal', 'Could not open billing portal')
                     }
                   />
+                </div>
+              </div>
+            </Show>
+            <Show when={activeTab() === 'billing' && storageMode() === 'self-hosted'}>
+              <div class={styles.card}>
+                <div class={styles.settingsSection}>
+                  <AccountDeletion />
                 </div>
               </div>
             </Show>

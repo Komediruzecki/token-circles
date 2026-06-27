@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { authRoutes } from './routes/auth';
 import { profilesRoutes } from './routes/profiles';
+import { accountRoutes } from './routes/account';
 import { accountsRoutes } from './routes/accounts';
 import { transactionsRoutes } from './routes/transactions';
 import { categoriesRoutes } from './routes/categories';
@@ -75,6 +76,7 @@ app.route('/', authRoutes);
 // cover things that need Workers infra not set up yet: PDF/xlsx generation, receipt
 // file storage (needs an R2 bucket), and spreadsheet-file imports.
 app.route('/', profilesRoutes);
+app.route('/', accountRoutes);
 app.route('/', accountsRoutes);
 app.route('/', transactionsRoutes);
 app.route('/', categoriesRoutes);
