@@ -144,7 +144,8 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   });
 });
 
-// Email + password registration. Creates a 'password' user + default profile, then signs in.
+// Email + password registration. Anti-enumeration (CR-9): identical neutral response whether or not
+// the email already exists, and no session is set — the user signs in afterward.
 authRoutes.post('/api/auth/register', async (c) => {
   const rl = await enforce(c, `register:${clientIp(c)}`, 5, 3600);
   if (rl) return rl;

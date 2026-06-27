@@ -27,12 +27,14 @@ const CHANGELOG: ChangelogEntry[] = [
         items: [
           'Sign-in hardened against automated guessing: a per-account attempt throttle and constant-time password checks that no longer reveal whether an email is registered',
           'Profile-limit and rate-limit checks are now atomic, so concurrent requests cannot slip past a limit',
+          'Creating an account no longer reveals whether the email is already registered — you receive an email and then sign in',
         ],
       },
       {
         title: 'Fixed',
         items: [
           'The periodic spending-report email could be sent several times in a month — it is now sent once per period',
+          'Re-running an interrupted import no longer creates duplicate transactions',
         ],
       },
     ],
