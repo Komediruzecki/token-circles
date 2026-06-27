@@ -30,8 +30,7 @@ export const ErrorBoundary: Component<Props> = (props) => {
     }
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const err =
-        event.reason instanceof Error ? event.reason : new Error(String(event.reason))
+      const err = event.reason instanceof Error ? event.reason : new Error(String(event.reason))
       if (isBenignError(err.message)) return
       addToLog(`[${new Date().toISOString()}] Unhandled: ${err.message}`)
       if (!fatalError()) {
@@ -48,7 +47,9 @@ export const ErrorBoundary: Component<Props> = (props) => {
     })
   })
 
-  const handleReload = () => { window.location.reload() }
+  const handleReload = () => {
+    window.location.reload()
+  }
   const handleClearLocalStorage = () => {
     localStorage.clear()
     window.location.reload()
@@ -167,7 +168,13 @@ function CrashModal(props: {
           )}
         </div>
 
-        <p style={{ 'font-size': '0.85rem', color: 'var(--text-secondary, #6b7280)', 'margin-bottom': '1rem' }}>
+        <p
+          style={{
+            'font-size': '0.85rem',
+            color: 'var(--text-secondary, #6b7280)',
+            'margin-bottom': '1rem',
+          }}
+        >
           Version: {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'}
           {' — '}
           <a

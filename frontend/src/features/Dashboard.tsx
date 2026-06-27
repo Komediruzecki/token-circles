@@ -246,7 +246,9 @@ export default function Dashboard() {
           <div class={styles.widgetCard}>
             <div class={styles.widgetHeader}>
               <div class={styles.widgetTitle}>Budget Alerts</div>
-              <a href="#budgets" class={styles.widgetLink}>View All</a>
+              <a href="#budgets" class={styles.widgetLink}>
+                View All
+              </a>
             </div>
             <BudgetAlertsCard />
           </div>
@@ -256,13 +258,14 @@ export default function Dashboard() {
           <div class={styles.widgetCard}>
             <div class={styles.widgetHeader}>
               <div class={styles.widgetTitle}>Savings Rate</div>
-              <a href="#budgets" class={styles.widgetLink}>Details</a>
+              <a href="#budgets" class={styles.widgetLink}>
+                Details
+              </a>
             </div>
             <SavingsRateCard
               savingsRate={
                 metrics()!.totalIncome > 0
-                  ? ((metrics()!.totalIncome - metrics()!.totalExpenses) /
-                      metrics()!.totalIncome) *
+                  ? ((metrics()!.totalIncome - metrics()!.totalExpenses) / metrics()!.totalIncome) *
                     100
                   : 0
               }
@@ -291,8 +294,16 @@ export default function Dashboard() {
                         {
                           data: metrics()!.expenseByCategory.map((item: any) => item.total),
                           backgroundColor: [
-                            '#dc2626', '#f97316', '#eab308', '#22c55e', '#06b6d4',
-                            '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6',
+                            '#dc2626',
+                            '#f97316',
+                            '#eab308',
+                            '#22c55e',
+                            '#06b6d4',
+                            '#3b82f6',
+                            '#8b5cf6',
+                            '#ec4899',
+                            '#6b7280',
+                            '#14b8a6',
                           ],
                         },
                       ],
@@ -328,20 +339,26 @@ export default function Dashboard() {
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Recent Transactions</div>
-                <a href="#transactions" class={styles.btnLink}>View All →</a>
+                <a href="#transactions" class={styles.btnLink}>
+                  View All →
+                </a>
               </div>
               <div class={styles.transactionList}>
                 <For each={metrics()!.recentTransactions.slice(0, 5)}>
                   {(tx) => (
                     <div class={styles.transactionItem}>
-                      <div class={styles.transactionIcon} style={{ background: getIconColor(tx.type) }}>
+                      <div
+                        class={styles.transactionIcon}
+                        style={{ background: getIconColor(tx.type) }}
+                      >
                         {getIcon(tx.type)}
                       </div>
                       <div class={styles.transactionDetails}>
                         <div class={styles.transactionName}>{tx.description}</div>
                         <div class={styles.transactionMeta}>
                           {formatDate(tx.date)} •{' '}
-                          {tx.category_name || (tx.category_id ? `#${tx.category_id}` : 'No category')}
+                          {tx.category_name ||
+                            (tx.category_id ? `#${tx.category_id}` : 'No category')}
                         </div>
                       </div>
                       <div
@@ -363,15 +380,24 @@ export default function Dashboard() {
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Upcoming Bills</div>
-                <a href="#bills" class={styles.btnLink}>View All →</a>
+                <a href="#bills" class={styles.btnLink}>
+                  View All →
+                </a>
               </div>
               <div class={styles.transactionList}>
                 <For each={metrics()!.upcomingBills.slice(0, 5)}>
                   {(bill: any) => (
                     <div class={styles.transactionItem}>
-                      <div class={styles.transactionIcon} style={{ background: getIconColor('expense') }}>
+                      <div
+                        class={styles.transactionIcon}
+                        style={{ background: getIconColor('expense') }}
+                      >
                         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
                         </svg>
                       </div>
                       <div class={styles.transactionDetails}>
@@ -494,14 +520,22 @@ export default function Dashboard() {
           </div>
           <button class={styles.btnSecondary} onClick={showSettings}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
               <circle cx="12" cy="12" r="3" />
             </svg>
             Dashboard Views
           </button>
           <button class={styles.btnPrimary} onClick={() => loadDashboard()}>
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
             </svg>
             Refresh
           </button>
@@ -522,8 +556,20 @@ export default function Dashboard() {
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momBalanceDelta != null && (
                   <div class={styles.metricDelta}>
-                    <span class={metrics()!.momBalanceDelta! > 0 ? styles.positive : metrics()!.momBalanceDelta! < 0 ? styles.negative : styles.neutral}>
-                      {metrics()!.momBalanceDelta! > 0 ? '↑' : metrics()!.momBalanceDelta! < 0 ? '↓' : '→'}
+                    <span
+                      class={
+                        metrics()!.momBalanceDelta! > 0
+                          ? styles.positive
+                          : metrics()!.momBalanceDelta! < 0
+                            ? styles.negative
+                            : styles.neutral
+                      }
+                    >
+                      {metrics()!.momBalanceDelta! > 0
+                        ? '↑'
+                        : metrics()!.momBalanceDelta! < 0
+                          ? '↓'
+                          : '→'}
                       {Math.abs(metrics()!.momBalanceDelta!).toFixed(2)}
                     </span>
                     <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -532,13 +578,27 @@ export default function Dashboard() {
               </div>
               <div class={`${styles.metricCard} ${styles.income}`}>
                 <div class={styles.metricLabel}>Income</div>
-                <div class={`${styles.metricValue} ${styles.positive}`}>{formatCurrency(metrics()!.totalIncome)}</div>
+                <div class={`${styles.metricValue} ${styles.positive}`}>
+                  {formatCurrency(metrics()!.totalIncome)}
+                </div>
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momIncomeDelta != null && (
                   <div class={styles.metricDelta}>
-                    <span class={metrics()!.momIncomeDelta! > 0 ? styles.positive : metrics()!.momIncomeDelta! < 0 ? styles.negative : styles.neutral}>
-                      {metrics()!.momIncomeDelta! > 0 ? '↑' : metrics()!.momIncomeDelta! < 0 ? '↓' : '→'}
+                    <span
+                      class={
+                        metrics()!.momIncomeDelta! > 0
+                          ? styles.positive
+                          : metrics()!.momIncomeDelta! < 0
+                            ? styles.negative
+                            : styles.neutral
+                      }
+                    >
+                      {metrics()!.momIncomeDelta! > 0
+                        ? '↑'
+                        : metrics()!.momIncomeDelta! < 0
+                          ? '↓'
+                          : '→'}
                       {Math.abs(metrics()!.momIncomeDelta!).toFixed(2)}
                     </span>
                     <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -547,13 +607,27 @@ export default function Dashboard() {
               </div>
               <div class={`${styles.metricCard} ${styles.expense}`}>
                 <div class={styles.metricLabel}>Expenses</div>
-                <div class={`${styles.metricValue} ${styles.expense}`}>{formatCurrency(metrics()!.totalExpenses)}</div>
+                <div class={`${styles.metricValue} ${styles.expense}`}>
+                  {formatCurrency(metrics()!.totalExpenses)}
+                </div>
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momExpenseDelta != null && (
                   <div class={styles.metricDelta}>
-                    <span class={metrics()!.momExpenseDelta! > 0 ? styles.positive : metrics()!.momExpenseDelta! < 0 ? styles.negative : styles.neutral}>
-                      {metrics()!.momExpenseDelta! > 0 ? '↑' : metrics()!.momExpenseDelta! < 0 ? '↓' : '→'}
+                    <span
+                      class={
+                        metrics()!.momExpenseDelta! > 0
+                          ? styles.positive
+                          : metrics()!.momExpenseDelta! < 0
+                            ? styles.negative
+                            : styles.neutral
+                      }
+                    >
+                      {metrics()!.momExpenseDelta! > 0
+                        ? '↑'
+                        : metrics()!.momExpenseDelta! < 0
+                          ? '↓'
+                          : '→'}
                       {Math.abs(metrics()!.momExpenseDelta!).toFixed(2)}
                     </span>
                     <span class={styles.metricDeltaLabel}>vs last month</span>
@@ -562,7 +636,9 @@ export default function Dashboard() {
               </div>
               <div class={`${styles.metricCard} ${styles.balance}`}>
                 <div class={styles.metricLabel}>Balance</div>
-                <div class={`${styles.metricValue} ${metrics()!.totalIncome - metrics()!.totalExpenses >= 0 ? styles.positive : styles.expense}`}>
+                <div
+                  class={`${styles.metricValue} ${metrics()!.totalIncome - metrics()!.totalExpenses >= 0 ? styles.positive : styles.expense}`}
+                >
                   {formatCurrency(metrics()!.totalIncome - metrics()!.totalExpenses)}
                 </div>
                 <div class={styles.metricSubtext}>Monthly net</div>
@@ -652,7 +728,9 @@ export default function Dashboard() {
           <For each={widgetOrder()}>
             {(widgetId) => (
               <>
-                {isWidgetVisible(widgetId) && widgetId !== 'metrics' ? renderWidget(widgetId) : null}
+                {isWidgetVisible(widgetId) && widgetId !== 'metrics'
+                  ? renderWidget(widgetId)
+                  : null}
               </>
             )}
           </For>
@@ -660,12 +738,21 @@ export default function Dashboard() {
           {/* Widget Settings Modal */}
           <Show when={showSettingsModal()}>
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
-              <div class={`${styles.modal} ${styles.modalMd}`} onClick={(e) => { e.stopPropagation() }}>
+              <div
+                class={`${styles.modal} ${styles.modalMd}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                }}
+              >
                 <div class={styles.modalHeader}>
                   <div class={styles.modalTitle}>Dashboard Views</div>
                   <button class={styles.modalClose} onClick={() => setShowSettingsModal(false)}>
                     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -687,13 +774,23 @@ function getIcon(type: string) {
   if (type === 'income') {
     return (
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M7 11l5-5m0 0l5 5m-5-5v12"
+        />
       </svg>
     )
   }
   return (
     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        d="M17 13l-5 5m0 0l-5-5m5 5V6"
+      />
     </svg>
   )
 }
