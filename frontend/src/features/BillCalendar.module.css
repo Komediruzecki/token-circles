@@ -22,7 +22,9 @@
   background: var(--card-bg);
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .navBtn:hover {
   background: var(--bg-secondary, #f1f5f9);

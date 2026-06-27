@@ -37,7 +37,6 @@ interface CalendarBill {
   is_overdue: boolean
 }
 
-
 interface CalendarData {
   year: number
   month: number
@@ -50,7 +49,6 @@ interface CalendarData {
     billCount: number
   }
 }
-
 
 interface BillCalendarProps {
   onRefresh?: () => void
@@ -68,16 +66,13 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
   const [markingPaid, setMarkingPaid] = createSignal(new Set<number>())
   const [popoverStyle, setPopoverStyle] = createSignal<Record<string, string>>({})
 
-  const [calendarData, { refetch: refetchCalendar }] =
-    createResource(
-      () => ({ year: currentYear(), month: currentMonth(), v: state.profileVersion }),
-      async ({ year, month }) => {
-        const data = await apiGet<CalendarData>(
-          `/api/bills/calendar?year=${year}&month=${month}`
-        )
-        return data
-      }
-    )
+  const [calendarData, { refetch: refetchCalendar }] = createResource(
+    () => ({ year: currentYear(), month: currentMonth(), v: state.profileVersion }),
+    async ({ year, month }) => {
+      const data = await apiGet<CalendarData>(`/api/bills/calendar?year=${year}&month=${month}`)
+      return data
+    }
+  )
 
   const loading = () => calendarData.loading && !calendarData()
 
@@ -126,7 +121,6 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
 
   const hasOverdue = (bills: CalendarBill[]) => bills.some((b) => b.is_overdue)
 
-
   const selectDay = (day: number, bills: CalendarBill[], event?: MouseEvent) => {
     setSelectedDay(day)
     setSelectedBills(bills)
@@ -140,8 +134,7 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       let left = rect.left + rect.width / 2 - popoverWidth / 2
       // Clamp to viewport
       if (left < 10) left = 10
-      if (left + popoverWidth > window.innerWidth - 10)
-        left = window.innerWidth - popoverWidth - 10
+      if (left + popoverWidth > window.innerWidth - 10) left = window.innerWidth - popoverWidth - 10
 
       // Position below the cell if room, otherwise above
       const top = rect.bottom + 8
@@ -204,7 +197,14 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       {/* Month header */}
       <div class={styles.monthHeader}>
         <button class={styles.navBtn} onClick={prevMonth} title="Previous month">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
             <path d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -215,7 +215,14 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
           </button>
         </div>
         <button class={styles.navBtn} onClick={nextMonth} title="Next month">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
             <path d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -230,7 +237,9 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
           </div>
           <div class={styles.calSummaryItem}>
             <span class={styles.calSummaryLabel}>Total</span>
-            <span class={styles.calSummaryValue}>{formatCurrency(calendarData()!.summary.totalAmount)}</span>
+            <span class={styles.calSummaryValue}>
+              {formatCurrency(calendarData()!.summary.totalAmount)}
+            </span>
           </div>
           <div class={styles.calSummaryItem}>
             <span class={styles.calSummaryLabel}>Paid</span>
@@ -250,9 +259,7 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       <Show when={calendarData()}>
         <div class={styles.calendarGrid}>
           {/* Day headers */}
-          <For each={WEEKDAYS}>
-            {(day) => <div class={styles.dayHeader}>{day}</div>}
-          </For>
+          <For each={WEEKDAYS}>{(day) => <div class={styles.dayHeader}>{day}</div>}</For>
 
           {/* Empty cells before first day of month */}
           {Array.from({ length: calendarData()!.firstDow }, (_, _i) => (
@@ -270,7 +277,9 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
                   } ${selectedDay() === day ? styles.daySelected : ''} ${
                     bills.length > 0 ? styles.hasBills : ''
                   }`}
-                  onClick={(e) => { if (bills.length > 0) selectDay(day, bills, e) }}
+                  onClick={(e) => {
+                    if (bills.length > 0) selectDay(day, bills, e)
+                  }}
                   role={bills.length > 0 ? 'button' : undefined}
                   tabIndex={bills.length > 0 ? 0 : undefined}
                   onKeyDown={(e) => {
@@ -292,7 +301,9 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
                             }`}
                             style={
                               bill.category_color
-                                ? { 'background-color': bill.paid ? undefined : bill.category_color }
+                                ? {
+                                    'background-color': bill.paid ? undefined : bill.category_color,
+                                  }
                                 : undefined
                             }
                             title={bill.name}
@@ -333,7 +344,11 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
               {(bill) => (
                 <div
                   class={`${styles.popoverBill} ${
-                    bill.is_overdue ? styles.popoverBillOverdue : bill.paid ? styles.popoverBillPaid : ''
+                    bill.is_overdue
+                      ? styles.popoverBillOverdue
+                      : bill.paid
+                        ? styles.popoverBillPaid
+                        : ''
                   }`}
                 >
                   <div class={styles.popoverBillLeft}>
