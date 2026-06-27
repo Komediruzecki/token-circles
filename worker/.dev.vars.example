@@ -5,3 +5,6 @@ JWT_SECRET="dev-only-change-me"  # HMAC key for session JWTs + OAuth state
 GOOGLE_CLIENT_ID="PLACEHOLDER.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET="dev-google-client-secret"
 CORS_ORIGIN="http://localhost:3800"
+# Optional — Cloudflare Turnstile secret. Unset = captcha gate disabled. Set this AND the frontend
+# VITE_TURNSTILE_SITE_KEY to enforce the captcha on the register/login/forgot endpoints.
+# TURNSTILE_SECRET="dev-turnstile-secret"

@@ -197,23 +197,32 @@ export class ApiClient {
    * Register an email/password account (worker: POST /api/auth/register). Sets the session
    * cookie on success; the caller should reload so the app re-checks /auth/me.
    */
-  async register(email: string, password: string): Promise<void> {
-    await this.request('/auth/register', undefined, { method: 'POST', body: { email, password } })
+  async register(email: string, password: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/register', undefined, {
+      method: 'POST',
+      body: { email, password, turnstileToken },
+    })
   }
 
   /**
    * Email/password login (worker: POST /api/auth/login). Sets the session cookie on success.
    */
-  async loginWithPassword(email: string, password: string): Promise<void> {
-    await this.request('/auth/login', undefined, { method: 'POST', body: { email, password } })
+  async loginWithPassword(email: string, password: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/login', undefined, {
+      method: 'POST',
+      body: { email, password, turnstileToken },
+    })
   }
 
   /**
    * Request a password-reset email (worker: POST /api/auth/forgot-password). Always resolves
    * (the worker never reveals whether the address has an account).
    */
-  async forgotPassword(email: string): Promise<void> {
-    await this.request('/auth/forgot-password', undefined, { method: 'POST', body: { email } })
+  async forgotPassword(email: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/forgot-password', undefined, {
+      method: 'POST',
+      body: { email, turnstileToken },
+    })
   }
 
   /** Check whether a reset token is still valid (worker: GET /api/auth/reset-password?token=). */

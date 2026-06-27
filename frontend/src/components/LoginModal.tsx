@@ -1,6 +1,7 @@
 import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
 import styles from './LoginModal.module.css'
+import Turnstile, { resetTurnstile, turnstileEnabled } from './Turnstile'
 
 export interface LoginModalProps {
   onClose: () => void
@@ -15,6 +16,7 @@ export default function LoginModal(props: LoginModalProps) {
   const [password, setPassword] = createSignal('')
   const [error, setError] = createSignal('')
   const [loading, setLoading] = createSignal(false)
+  const [turnstileToken, setTurnstileToken] = createSignal('')
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') props.onClose()
@@ -35,13 +37,15 @@ export default function LoginModal(props: LoginModalProps) {
     }
     setLoading(true)
     try {
-      if (mode() === 'register') await api.register(em, pw)
-      else await api.loginWithPassword(em, pw)
+      if (mode() === 'register') await api.register(em, pw, turnstileToken())
+      else await api.loginWithPassword(em, pw, turnstileToken())
       // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
+      resetTurnstile()
+      setTurnstileToken('')
     }
   }
 
@@ -94,10 +98,11 @@ export default function LoginModal(props: LoginModalProps) {
               {error()}
             </div>
           </Show>
+          <Turnstile onToken={setTurnstileToken} />
           <button
             class={styles.btnSubmit}
             type="submit"
-            disabled={loading()}
+            disabled={loading() || (turnstileEnabled && !turnstileToken())}
             style={{ width: '100%', 'justify-content': 'center' }}
           >
             {loading() ? 'Please wait…' : mode() === 'register' ? 'Create account' : 'Sign in'}
