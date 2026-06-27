@@ -123,9 +123,18 @@ profilesRoutes.post('/api/profiles', requireAuth, async (c) => {
     name,
     userId
   );
+  const id = res.meta.last_row_id as number;
+  // Return the full profile shape the client validates against — it requires `created_at`.
+  const created = await db.first<{ created_at: string }>(
+    c.env.DB,
+    'SELECT created_at FROM profiles WHERE id = ?',
+    id
+  );
   return c.json({
-    id: res.meta.last_row_id as number,
+    id,
     name,
+    user_id: userId,
+    created_at: created?.created_at ?? new Date().toISOString(),
     transaction_count: 0,
     account_count: 0,
     budget_count: 0,

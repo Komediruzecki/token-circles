@@ -12,6 +12,41 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '5.0.0',
+    date: '2026-06-27',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Cloud sync via a Cloudflare Workers backend (D1 + R2) — sign in to sync across devices',
+          'Accounts: Google sign-in, email/password register + login, a no-account demo, and forgot-password reset by email',
+          'Pricing & plans: Free / Basic / Advanced / Ultimate with a 4-tier comparison in Settings → Billing (monthly/annual toggle)',
+          'Stripe billing (checkout, manage, status, webhook) behind the plan tiers',
+          'Email reminders: budget alerts + a periodic spending report (Resend), with per-profile toggles and one-click unsubscribe',
+          'Contact support form (sign-in, reset, and Settings) with an auto-acknowledgement and a TC-XXXX reference id',
+          'Tabbed Settings: General / Exports / Billing',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Email now sends from a repliable address (hello@) instead of no-reply',
+          'Per-plan limits enforced: profiles, receipt storage, and a monthly reminder quota; advanced reports (tax & P&L) gated to Basic and up',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Profile creation failing with a response-validation error (missing created_at)',
+          'Old/profile-less accounts hitting "Access denied" — a default profile is now created automatically',
+          'A stale active-profile id no longer breaks the whole app; the password-reset flow no longer leaves you half-logged-in',
+          'Rate limiting on auth + email endpoints; far quieter console on expected auth failures',
+          'Compound-interest page server error, and several invalid CSS transforms that silently dropped animations',
+        ],
+      },
+    ],
+  },
+  {
     version: '4.0.0',
     date: '2026-05-11',
     sections: [

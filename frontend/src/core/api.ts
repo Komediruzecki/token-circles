@@ -121,25 +121,19 @@ export class ApiClient {
         }))
         const errorMsg = (errorData.error || errorData.message) ?? `HTTP ${response.status}`
 
-        // Auth endpoint 4xx (not-logged-in, bad password, email taken) are expected — don't log
-        const isAuthEndpoint = endpoint.startsWith('/auth/')
-        if (!isAuthEndpoint || response.status !== 401) {
-          // Debug: trace POST /transactions failures
-          if (endpoint === '/transactions' && method === 'POST') {
-            console.error(
-              '[apiClient] POST /transactions failed',
-              { status: response.status, errorMsg, body: options.body },
-              'Stack:',
-              new Error().stack
-            )
-          }
+        // Auth/authz failures (401/403) and auth-endpoint 4xx are expected — don't spam the console.
+        const expected =
+          response.status === 401 || response.status === 403 || endpoint.startsWith('/auth/')
+        if (!expected) {
           logger.error(
             'API Error',
             { status: response.status, endpoint, message: errorMsg },
             'ApiClient'
           )
         }
-        throw new Error(errorMsg)
+        const err = new Error(errorMsg) as Error & { __handled?: boolean }
+        err.__handled = true
+        throw err
       }
 
       const contentType = response.headers.get('content-type')
@@ -154,15 +148,20 @@ export class ApiClient {
           return schema.parse(rawData)
         } catch (error) {
           console.error(`[ApiClient] Validation failed for ${endpoint}`, error, rawData)
-          throw new Error(`API Response Validation failed for ${endpoint}`)
+          const err = new Error(`API Response Validation failed for ${endpoint}`) as Error & {
+            __handled?: boolean
+          }
+          err.__handled = true
+          throw err
         }
       }
 
       return rawData
     } catch (error) {
-      // Don't re-log errors from auth endpoints — already handled above or expected
-      const isAuthEndpoint = endpoint.startsWith('/auth/')
-      if (!isAuthEndpoint) {
+      // Only log genuine network/unexpected errors here; HTTP + validation errors are already
+      // logged (or intentionally suppressed) above and marked __handled, so we don't double-log.
+      const handled = (error as { __handled?: boolean } | null)?.__handled
+      if (!handled && !endpoint.startsWith('/auth/')) {
         const message = error instanceof Error ? error.message : 'Network error'
         logger.error('API Request Failed', { endpoint, method, message }, 'ApiClient')
       }
