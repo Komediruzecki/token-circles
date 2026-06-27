@@ -42,6 +42,16 @@
         "APP_ORIGINS": "https://dev.tokencircles.com",
         "COOKIE_DOMAIN": ".dev.tokencircles.com",
         "EMAIL_FROM": "Token Circles <hello@tokencircles.com>",
+        // Stripe per-tier Price ids (use TEST-mode `price_...` for dev). Uncomment + fill to enable
+        // each tier's Upgrade button; a tier with no price shows "Coming soon". These are vars (not
+        // secret). STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET are SECRETS — set with `wrangler secret
+        // put`, NOT here. Full steps: dotfiles/personal/finance/billing-setup.md.
+        // "STRIPE_PRICE_BASIC_MONTHLY": "price_...",
+        // "STRIPE_PRICE_BASIC_ANNUAL": "price_...",
+        // "STRIPE_PRICE_ADVANCED_MONTHLY": "price_...",
+        // "STRIPE_PRICE_ADVANCED_ANNUAL": "price_...",
+        // "STRIPE_PRICE_ULTIMATE_MONTHLY": "price_...",
+        // "STRIPE_PRICE_ULTIMATE_ANNUAL": "price_...",
       },
       "d1_databases": [
         {

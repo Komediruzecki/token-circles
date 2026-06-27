@@ -338,6 +338,7 @@ export default function Settings() {
     }
     const billingParam = new URLSearchParams(window.location.search).get('billing')
     if (billingParam === 'success' || billingParam === 'cancel') {
+      setActiveTab('billing')
       toast(
         billingParam === 'success' ? 'Subscription activated.' : 'Checkout canceled.',
         billingParam === 'success' ? 'success' : 'info'

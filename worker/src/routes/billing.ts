@@ -14,6 +14,11 @@ export const billingRoutes = new Hono<AppEnv>();
 
 const encoder = new TextEncoder();
 
+// Pin the Stripe API version for our outbound calls so response shapes are deterministic. Set the
+// webhook endpoint to the SAME version in the Stripe dashboard so event payloads match (the webhook
+// reads current_period_end off the subscription item, which is where recent versions put it).
+const STRIPE_API_VERSION = '2024-06-20';
+
 // Form-encoded POST to the Stripe REST API.
 async function stripePost(
   env: AppEnv['Bindings'],
@@ -25,6 +30,7 @@ async function stripePost(
     headers: {
       Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': STRIPE_API_VERSION,
     },
     body: new URLSearchParams(params).toString(),
   });
@@ -93,8 +99,8 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
     client_reference_id: String(userId),
     'metadata[plan]': plan,
     'subscription_data[metadata][plan]': plan, // so subscription.updated/deleted know the tier
-    success_url: `${origin}/?billing=success`,
-    cancel_url: `${origin}/?billing=cancel`,
+    success_url: `${origin}/?billing=success#settings`,
+    cancel_url: `${origin}/?billing=cancel#settings`,
   };
   if (u?.stripe_customer_id) params.customer = u.stripe_customer_id;
   else if (u?.email) params.customer_email = u.email;
@@ -115,7 +121,7 @@ billingRoutes.post('/api/billing/portal', requireAuth, async (c) => {
   const origin = c.env.CORS_ORIGIN ?? new URL(c.req.url).origin;
   const portal = await stripePost(c.env, 'billing_portal/sessions', {
     customer: u.stripe_customer_id,
-    return_url: `${origin}/`,
+    return_url: `${origin}/#settings`,
   });
   return c.json({ url: portal.url });
 });
@@ -148,62 +154,105 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
     return c.json({ error: 'signature verification failed' }, 400);
   }
 
-  let event: { type?: string; data?: { object?: Record<string, unknown> } };
+  let event: {
+    id?: string;
+    type?: string;
+    created?: number;
+    data?: { object?: Record<string, unknown> };
+  };
   try {
     event = JSON.parse(body);
   } catch {
     return c.json({ error: 'bad json' }, 400);
   }
   const obj = (event.data?.object ?? {}) as Record<string, unknown>;
+  const eventId = typeof event.id === 'string' ? event.id : null;
+  const eventCreated = typeof event.created === 'number' ? event.created : 0;
 
-  const setPlanByCustomer = (
+  // Idempotency: record the event id once. If it's already there, Stripe re-delivered an event we
+  // already applied — ack with 200 and do nothing, so a retry can't double-apply.
+  if (eventId) {
+    const ins = await db.run(
+      c.env.DB,
+      'INSERT INTO stripe_events (id, type, created) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING',
+      eventId,
+      event.type ?? '',
+      eventCreated
+    );
+    if (!ins.meta.changes) return c.json({ received: true, duplicate: true });
+  }
+
+  // Entitlement: keep the paid plan while active/trialing, and through `past_due` (Stripe is still
+  // retrying payment — a dunning grace window). Anything else (canceled, unpaid, incomplete_expired)
+  // drops to free. The displayed subscription_status still reflects the real Stripe status.
+  const isEntitled = (status: string) =>
+    status === 'active' || status === 'trialing' || status === 'past_due';
+
+  // Apply subscription state by customer, but ONLY if this event isn't older than the last one we
+  // applied for that customer (ordering guard: `created >= stripe_event_at`), which also advances
+  // the watermark — so a late/stale subscription.updated can't resurrect a canceled plan.
+  const applySubscription = (
     customerId: string,
     plan: string,
     status: string,
-    renews?: number | null
+    renews: number | null
   ) =>
     db.run(
       c.env.DB,
-      'UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ? WHERE stripe_customer_id = ?',
+      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, stripe_event_at = ?
+         WHERE stripe_customer_id = ? AND ? >= stripe_event_at`,
       plan,
       status,
       renews ? new Date(renews * 1000).toISOString() : null,
-      customerId
+      eventCreated,
+      customerId,
+      eventCreated
     );
 
   switch (event.type) {
     case 'checkout.session.completed': {
+      // Links the Stripe customer to our user and activates the chosen tier. Keyed by our user id
+      // (client_reference_id) so it runs regardless of ordering — it establishes the customer link
+      // every later subscription event needs. Only advances the watermark (never rolls it back).
       const userId = obj.client_reference_id;
       const plan = paidPlan((obj.metadata as { plan?: string } | undefined)?.plan) ?? 'premium';
       if (userId) {
         await db.run(
           c.env.DB,
-          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ? WHERE id = ?',
+          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ?, stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
           String(obj.customer),
           plan,
           'active',
+          eventCreated,
           Number(userId)
         );
       }
       break;
     }
+    case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const status = String(obj.status);
-      const active = status === 'active' || status === 'trialing';
       const metaPlan = paidPlan((obj.metadata as { plan?: string } | undefined)?.plan);
-      const priceIdInSub = (obj.items as { data?: Array<{ price?: { id?: string } }> } | undefined)
-        ?.data?.[0]?.price?.id;
-      const subPlan = priceIdInSub ? planForPrice(c.env, priceIdInSub) : null;
-      await setPlanByCustomer(
+      const item = (
+        obj.items as
+          | { data?: Array<{ price?: { id?: string }; current_period_end?: number }> }
+          | undefined
+      )?.data?.[0];
+      const subPlan = item?.price?.id ? planForPrice(c.env, item.price.id) : null;
+      // current_period_end moved onto the subscription item in recent API versions; fall back to the
+      // legacy top-level field for older webhook versions.
+      const renews =
+        item?.current_period_end ?? (obj.current_period_end as number | undefined) ?? null;
+      await applySubscription(
         String(obj.customer),
-        active ? (metaPlan ?? subPlan ?? 'premium') : 'free',
+        isEntitled(status) ? (metaPlan ?? subPlan ?? 'premium') : 'free',
         status,
-        (obj.current_period_end as number | undefined) ?? null
+        renews
       );
       break;
     }
     case 'customer.subscription.deleted':
-      await setPlanByCustomer(String(obj.customer), 'free', 'canceled', null);
+      await applySubscription(String(obj.customer), 'free', 'canceled', null);
       break;
   }
   return c.json({ received: true });

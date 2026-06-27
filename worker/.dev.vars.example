@@ -8,3 +8,15 @@ CORS_ORIGIN="http://localhost:3800"
 # Optional — Cloudflare Turnstile secret. Unset = captcha gate disabled. Set this AND the frontend
 # VITE_TURNSTILE_SITE_KEY to enforce the captcha on the register/login/forgot endpoints.
 # TURNSTILE_SECRET="dev-turnstile-secret"
+
+# Optional — Stripe billing (use TEST-mode values locally). Unset → /api/billing/* returns 501.
+# Secrets:
+# STRIPE_SECRET_KEY="sk_test_..."
+# STRIPE_WEBHOOK_SECRET="whsec_..."   # from `stripe listen` or a test webhook endpoint
+# Per-tier Price ids (vars, not secret — fine to keep here for local dev):
+# STRIPE_PRICE_BASIC_MONTHLY="price_..."
+# STRIPE_PRICE_BASIC_ANNUAL="price_..."
+# STRIPE_PRICE_ADVANCED_MONTHLY="price_..."
+# STRIPE_PRICE_ADVANCED_ANNUAL="price_..."
+# STRIPE_PRICE_ULTIMATE_MONTHLY="price_..."
+# STRIPE_PRICE_ULTIMATE_ANNUAL="price_..."
