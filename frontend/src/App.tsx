@@ -21,6 +21,7 @@ import LoginScreen from './components/LoginScreen'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import QuickAddModal from './components/QuickAddModal'
+import ResetPassword from './components/ResetPassword'
 import Spotlight from './components/Spotlight'
 import ToastContainer from './components/ToastContainer'
 import TourSelectionModal from './components/TourSelectionModal'
@@ -59,6 +60,9 @@ export function App() {
   // Server (self-hosted) mode requires a real session; client-only (serverless/demo) mode
   // never gates. Mode is fixed per load (a Settings change reloads the page).
   const serverMode = getStorageMode() === 'self-hosted'
+  // Password-reset magic link (#reset-password?token=…). Rendered before the auth gate so it
+  // works regardless of storage mode or session.
+  const isResetRoute = window.location.hash.slice(1).split('?')[0] === 'reset-password'
   const activePage = () => state.page
   const setActivePage = (p: PageName) => {
     setPage(p)
@@ -272,6 +276,13 @@ export function App() {
       document.documentElement.setAttribute('data-theme', 'light')
     } else {
       document.documentElement.setAttribute('data-theme', 'dark')
+    }
+
+    // Password-reset link: <ResetPassword/> takes over the view; skip the profile/category
+    // bootstrap below (irrelevant here and would 401 in server mode without a session).
+    if (isResetRoute) {
+      _setIsLoading(false)
+      return
     }
 
     // Click-outside handler for profile dropdown
@@ -504,255 +515,288 @@ export function App() {
   ]
 
   return (
-    <Show
-      when={!_isLoading()}
-      fallback={
-        <div
-          class={layoutStyles.pageLoader}
-          style={{
-            height: '100vh',
-            display: 'flex',
-            'align-items': 'center',
-            'justify-content': 'center',
-          }}
-        >
-          Loading...
-        </div>
-      }
-    >
-      <Show when={!serverMode || isAuthenticated()} fallback={<LoginScreen />}>
-        <Suspense fallback={<div>Loading...</div>}>
+    <Show when={!isResetRoute} fallback={<ResetPassword />}>
+      <Show
+        when={!_isLoading()}
+        fallback={
           <div
-            class={layoutStyles.sidebar}
-            classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}
+            class={layoutStyles.pageLoader}
+            style={{
+              height: '100vh',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+            }}
           >
-            <div class={layoutStyles.sidebarLogo}>
-              <h1>
-                Finance<span>.</span>
-              </h1>
-              <p>Personal Finance Tracker</p>
-            </div>
-            <div class={profileStyles.profileSelector}>
-              <div class={profileStyles.profileDropdown}>
-                <button
-                  class={profileStyles.profileDropdownBtn}
-                  onClick={toggleDropdown}
-                  style={{
-                    display: 'flex',
-                    'align-items': 'center',
-                    'justify-content': 'space-between',
-                    width: '100%',
-                  }}
-                >
-                  <div
-                    style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'min-width': 0 }}
+            Loading...
+          </div>
+        }
+      >
+        <Show when={!serverMode || isAuthenticated()} fallback={<LoginScreen />}>
+          <Suspense fallback={<div>Loading...</div>}>
+            <div
+              class={layoutStyles.sidebar}
+              classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}
+            >
+              <div class={layoutStyles.sidebarLogo}>
+                <h1>
+                  Finance<span>.</span>
+                </h1>
+                <p>Personal Finance Tracker</p>
+              </div>
+              <div class={profileStyles.profileSelector}>
+                <div class={profileStyles.profileDropdown}>
+                  <button
+                    class={profileStyles.profileDropdownBtn}
+                    onClick={toggleDropdown}
+                    style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      'justify-content': 'space-between',
+                      width: '100%',
+                    }}
                   >
                     <div
                       style={{
-                        width: '24px',
-                        height: '24px',
-                        'border-radius': '50%',
-                        background: 'var(--primary)',
-                        color: 'white',
                         display: 'flex',
                         'align-items': 'center',
-                        'justify-content': 'center',
-                        'font-size': '12px',
-                        'font-weight': 'bold',
-                        'flex-shrink': 0,
+                        gap: '8px',
+                        'min-width': 0,
                       }}
                     >
-                      {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
+                      <div
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          'border-radius': '50%',
+                          background: 'var(--primary)',
+                          color: 'white',
+                          display: 'flex',
+                          'align-items': 'center',
+                          'justify-content': 'center',
+                          'font-size': '12px',
+                          'font-weight': 'bold',
+                          'flex-shrink': 0,
+                        }}
+                      >
+                        {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
+                      </div>
+                      <span
+                        class={profileStyles.profileName}
+                        style={{
+                          'font-weight': 600,
+                          overflow: 'hidden',
+                          'text-overflow': 'ellipsis',
+                          'white-space': 'nowrap',
+                        }}
+                      >
+                        {selectedProfileIds().length > 1
+                          ? profiles()
+                              .filter((p) => selectedProfileIds().includes(p.id))
+                              .map((p) => p.name)
+                              .join(' & ')
+                          : currentProfile()?.name || 'Not Logged In'}
+                      </span>
                     </div>
-                    <span
-                      class={profileStyles.profileName}
+                    <svg
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
                       style={{
-                        'font-weight': 600,
+                        width: '16px',
+                        height: '16px',
+                        transition: 'transform 0.2s',
+                        transform: showDropdown() ? 'rotate(180deg)' : 'none',
+                      }}
+                    >
+                      <path d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <div
+                    class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
+                  >
+                    <div class={profileStyles.profileDropdownHeader}>
+                      {uniqueProfiles().length === 0
+                        ? 'No profiles'
+                        : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
+                    </div>
+                    {uniqueProfiles().length > 0 ? (
+                      <For each={uniqueProfiles()}>
+                        {(profile) => (
+                          <div
+                            data-profile-id={profile.id}
+                            class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedProfileIds().includes(profile.id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                              }}
+                              onchange={() => {
+                                toggleProfileSelection(profile.id)
+                              }}
+                              style={{
+                                width: '16px',
+                                height: '16px',
+                                'margin-right': '10px',
+                                cursor: 'pointer',
+                                'accent-color': 'var(--primary)',
+                                'flex-shrink': 0,
+                              }}
+                            />
+                            <span
+                              style={{ flex: 1, cursor: 'pointer' }}
+                              onClick={() => {
+                                selectProfile(profile.id)
+                              }}
+                              title="Set as primary profile"
+                            >
+                              {profile.name}
+                            </span>
+                            {currentProfile()?.id === profile.id && (
+                              <span
+                                style={{
+                                  'font-size': '10px',
+                                  color: 'var(--primary)',
+                                  opacity: 0.7,
+                                }}
+                              >
+                                primary
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </For>
+                    ) : (
+                      <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
+                        Sign In
+                      </div>
+                    )}
+
+                    <div
+                      class={profileStyles.profileDropdownItem}
+                      onClick={() => {
+                        setIsProfileModalOpen(true)
+                      }}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        style={{ 'margin-right': '8px' }}
+                      >
+                        <path d="M12 4v16m8-8H4" />
+                      </svg>
+                      Create Profile
+                    </div>
+
+                    {isAuthenticated() && currentProfile() ? (
+                      <>
+                        <div class={profileStyles.profileDropdownDivider}></div>
+                        <div
+                          class={profileStyles.profileDropdownItem}
+                          onClick={handleLogin}
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            style={{ 'margin-right': '8px' }}
+                          >
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                          Manage Account
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div class={profileStyles.profileDropdownDivider}></div>
+                        <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            style={{ 'margin-right': '8px' }}
+                          >
+                            <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
+                          </svg>
+                          Sign In
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div style={{ padding: '0 16px', 'margin-bottom': '12px' }}>
+                {isAuthenticated() && currentProfile() ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      gap: '8px',
+                      padding: '6px 0',
+                    }}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      style={{ 'flex-shrink': 0 }}
+                    >
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <span
+                      style={{
+                        flex: 1,
+                        'font-size': '13px',
+                        'font-weight': 500,
                         overflow: 'hidden',
                         'text-overflow': 'ellipsis',
                         'white-space': 'nowrap',
                       }}
                     >
-                      {selectedProfileIds().length > 1
-                        ? profiles()
-                            .filter((p) => selectedProfileIds().includes(p.id))
-                            .map((p) => p.name)
-                            .join(' & ')
-                        : currentProfile()?.name || 'Not Logged In'}
+                      {currentProfile()?.name}
                     </span>
-                  </div>
-                  <svg
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    style={{
-                      width: '16px',
-                      height: '16px',
-                      transition: 'transform 0.2s',
-                      transform: showDropdown() ? 'rotate(180deg)' : 'none',
-                    }}
-                  >
-                    <path d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <div
-                  class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
-                >
-                  <div class={profileStyles.profileDropdownHeader}>
-                    {uniqueProfiles().length === 0
-                      ? 'No profiles'
-                      : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
-                  </div>
-                  {uniqueProfiles().length > 0 ? (
-                    <For each={uniqueProfiles()}>
-                      {(profile) => (
-                        <div
-                          data-profile-id={profile.id}
-                          class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedProfileIds().includes(profile.id)}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                            }}
-                            onchange={() => {
-                              toggleProfileSelection(profile.id)
-                            }}
-                            style={{
-                              width: '16px',
-                              height: '16px',
-                              'margin-right': '10px',
-                              cursor: 'pointer',
-                              'accent-color': 'var(--primary)',
-                              'flex-shrink': 0,
-                            }}
-                          />
-                          <span
-                            style={{ flex: 1, cursor: 'pointer' }}
-                            onClick={() => {
-                              selectProfile(profile.id)
-                            }}
-                            title="Set as primary profile"
-                          >
-                            {profile.name}
-                          </span>
-                          {currentProfile()?.id === profile.id && (
-                            <span
-                              style={{ 'font-size': '10px', color: 'var(--primary)', opacity: 0.7 }}
-                            >
-                              primary
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </For>
-                  ) : (
-                    <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
-                      Sign In
-                    </div>
-                  )}
-
-                  <div
-                    class={profileStyles.profileDropdownItem}
-                    onClick={() => {
-                      setIsProfileModalOpen(true)
-                    }}
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      style={{ 'margin-right': '8px' }}
+                    <button
+                      class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
+                      onClick={handleLogout}
+                      title="Logout"
+                      style={{ padding: '4px 6px', 'flex-shrink': 0 }}
                     >
-                      <path d="M12 4v16m8-8H4" />
-                    </svg>
-                    Create Profile
-                  </div>
-
-                  {isAuthenticated() && currentProfile() ? (
-                    <>
-                      <div class={profileStyles.profileDropdownDivider}></div>
-                      <div
-                        class={profileStyles.profileDropdownItem}
-                        onClick={handleLogin}
-                        style={{ color: 'var(--text-secondary)' }}
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          style={{ 'margin-right': '8px' }}
-                        >
-                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                        Manage Account
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div class={profileStyles.profileDropdownDivider}></div>
-                      <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          style={{ 'margin-right': '8px' }}
-                        >
-                          <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
-                        </svg>
-                        Sign In
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div style={{ padding: '0 16px', 'margin-bottom': '12px' }}>
-              {isAuthenticated() && currentProfile() ? (
-                <div
-                  style={{ display: 'flex', 'align-items': 'center', gap: '8px', padding: '6px 0' }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    style={{ 'flex-shrink': 0 }}
-                  >
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  <span
-                    style={{
-                      flex: 1,
-                      'font-size': '13px',
-                      'font-weight': 500,
-                      overflow: 'hidden',
-                      'text-overflow': 'ellipsis',
-                      'white-space': 'nowrap',
-                    }}
-                  >
-                    {currentProfile()?.name}
-                  </span>
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
-                    onClick={handleLogout}
-                    title="Logout"
-                    style={{ padding: '4px 6px', 'flex-shrink': 0 }}
+                    class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
+                    style={{ width: '100%' }}
+                    onClick={handleLogin}
                   >
                     <svg
                       width="16"
@@ -762,176 +806,159 @@ export function App() {
                       stroke-width="2"
                       viewBox="0 0 24 24"
                     >
-                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                      <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
                     </svg>
+                    Login
                   </button>
-                </div>
-              ) : (
+                )}
+              </div>
+              <nav class={layoutStyles.sidebarNav}>
+                {navItems.map((item) => (
+                  <a
+                    href={`#${item.name}`}
+                    class={
+                      activePage() === item.name
+                        ? layoutStyles.sidebarNavActive
+                        : layoutStyles.sidebarNavLink
+                    }
+                    onClick={(e) => {
+                      e.preventDefault()
+                      setActivePage(item.name)
+                      setSidebarCollapsed(true)
+                      window.location.hash = item.name
+                    }}
+                  >
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      {item.icon}
+                    </svg>
+                    <span>{item.label}</span>
+                  </a>
+                ))}
                 <button
-                  class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
-                  style={{ width: '100%' }}
-                  onClick={handleLogin}
+                  class={layoutStyles.sidebarNavLink}
+                  style={{
+                    'margin-top': '8px',
+                    'border-top': '1px solid rgba(255,255,255,0.08)',
+                    'padding-top': '16px',
+                  }}
+                  onClick={() => {
+                    setShowTourSelection(true)
+                    setSidebarCollapsed(true)
+                  }}
                 >
                   <svg
-                    width="16"
-                    height="16"
+                    width="18"
+                    height="18"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
                     viewBox="0 0 24 24"
                   >
-                    <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </svg>
-                  Login
+                  <span>What's New</span>
                 </button>
-              )}
+              </nav>
             </div>
-            <nav class={layoutStyles.sidebarNav}>
-              {navItems.map((item) => (
-                <a
-                  href={`#${item.name}`}
-                  class={
-                    activePage() === item.name
-                      ? layoutStyles.sidebarNavActive
-                      : layoutStyles.sidebarNavLink
-                  }
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setActivePage(item.name)
-                    setSidebarCollapsed(true)
-                    window.location.hash = item.name
-                  }}
-                >
-                  <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    {item.icon}
-                  </svg>
-                  <span>{item.label}</span>
-                </a>
-              ))}
-              <button
-                class={layoutStyles.sidebarNavLink}
-                style={{
-                  'margin-top': '8px',
-                  'border-top': '1px solid rgba(255,255,255,0.08)',
-                  'padding-top': '16px',
-                }}
+
+            <Show when={!sidebarCollapsed()}>
+              <div
+                class={layoutStyles['sidebar-overlay']}
                 onClick={() => {
-                  setShowTourSelection(true)
                   setSidebarCollapsed(true)
                 }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-                <span>What's New</span>
-              </button>
-            </nav>
-          </div>
+              />
+            </Show>
 
-          <Show when={!sidebarCollapsed()}>
-            <div
-              class={layoutStyles['sidebar-overlay']}
+            <button
+              class={layoutStyles['mobile-toggle']}
               onClick={() => {
-                setSidebarCollapsed(true)
+                setSidebarCollapsedStore(!state.sidebarCollapsed)
               }}
-            />
-          </Show>
-
-          <button
-            class={layoutStyles['mobile-toggle']}
-            onClick={() => {
-              setSidebarCollapsedStore(!state.sidebarCollapsed)
-            }}
-            aria-label="Toggle sidebar"
-          >
-            <svg
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              viewBox="0 0 24 24"
+              aria-label="Toggle sidebar"
             >
-              <path d={sidebarCollapsed() ? 'M4 6h16M4 12h16M4 18h16' : 'M6 18L18 6M6 6l12 12'} />
-            </svg>
-          </button>
+              <svg
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path d={sidebarCollapsed() ? 'M4 6h16M4 12h16M4 18h16' : 'M6 18L18 6M6 6l12 12'} />
+              </svg>
+            </button>
 
-          <main class={layoutStyles.main}>
-            {Object.entries(allPages).map(([name, page]) => (
-              <Show when={activePage() === name && !_isLoading()}>
-                <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>
-                  <ErrorBoundary
-                    fallback={(err) => (
-                      <div class={layoutStyles.pageError}>
-                        <h3>Page Error</h3>
-                        <p>{err.toString()}</p>
-                        <button
-                          onClick={() => {
-                            window.location.reload()
-                          }}
-                        >
-                          Reload
-                        </button>
-                      </div>
-                    )}
-                  >
-                    <Dynamic component={page} data-testid={`page-${name}`} />
-                  </ErrorBoundary>
-                </Suspense>
-              </Show>
-            ))}
-          </main>
+            <main class={layoutStyles.main}>
+              {Object.entries(allPages).map(([name, page]) => (
+                <Show when={activePage() === name && !_isLoading()}>
+                  <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>
+                    <ErrorBoundary
+                      fallback={(err) => (
+                        <div class={layoutStyles.pageError}>
+                          <h3>Page Error</h3>
+                          <p>{err.toString()}</p>
+                          <button
+                            onClick={() => {
+                              window.location.reload()
+                            }}
+                          >
+                            Reload
+                          </button>
+                        </div>
+                      )}
+                    >
+                      <Dynamic component={page} data-testid={`page-${name}`} />
+                    </ErrorBoundary>
+                  </Suspense>
+                </Show>
+              ))}
+            </main>
 
-          <Show when={isLoginModalOpen()}>
-            <LoginModal
+            <Show when={isLoginModalOpen()}>
+              <LoginModal
+                onClose={() => {
+                  setIsLoginModalOpen(false)
+                }}
+                onSuccess={handleLoginSuccess}
+              />
+            </Show>
+
+            <Show when={isProfileModalOpen()}>
+              <ProfileModal
+                onClose={() => {
+                  setIsProfileModalOpen(false)
+                }}
+                onSuccess={() => {
+                  setIsProfileModalOpen(false)
+                  loadProfiles(true)
+                }}
+              />
+            </Show>
+
+            <QuickAddModal
+              isOpen={isQuickAddOpen}
               onClose={() => {
-                setIsLoginModalOpen(false)
+                setIsQuickAddOpen(false)
               }}
-              onSuccess={handleLoginSuccess}
-            />
-          </Show>
-
-          <Show when={isProfileModalOpen()}>
-            <ProfileModal
-              onClose={() => {
-                setIsProfileModalOpen(false)
-              }}
-              onSuccess={() => {
-                setIsProfileModalOpen(false)
-                loadProfiles(true)
+              categories={() => quickAddCategories()}
+              onSave={(_transaction) => {
+                toast('Transaction added', 'success')
               }}
             />
-          </Show>
 
-          <QuickAddModal
-            isOpen={isQuickAddOpen}
-            onClose={() => {
-              setIsQuickAddOpen(false)
-            }}
-            categories={() => quickAddCategories()}
-            onSave={(_transaction) => {
-              toast('Transaction added', 'success')
-            }}
-          />
+            <Show when={spotlightActive()}>
+              <Spotlight />
+            </Show>
 
-          <Show when={spotlightActive()}>
-            <Spotlight />
-          </Show>
+            <Show when={showTourSelection()}>
+              <TourSelectionModal />
+            </Show>
 
-          <Show when={showTourSelection()}>
-            <TourSelectionModal />
-          </Show>
-
-          <ToastContainer />
-          <ConfirmDialog />
-        </Suspense>
+            <ToastContainer />
+            <ConfirmDialog />
+          </Suspense>
+        </Show>
       </Show>
     </Show>
   )

@@ -210,6 +210,34 @@ export class ApiClient {
   }
 
   /**
+   * Request a password-reset email (worker: POST /api/auth/forgot-password). Always resolves
+   * (the worker never reveals whether the address has an account).
+   */
+  async forgotPassword(email: string): Promise<void> {
+    await this.request('/auth/forgot-password', undefined, { method: 'POST', body: { email } })
+  }
+
+  /** Check whether a reset token is still valid (worker: GET /api/auth/reset-password?token=). */
+  async validateResetToken(token: string): Promise<boolean> {
+    const r = await this.request<{ valid?: boolean }>(
+      `/auth/reset-password?token=${encodeURIComponent(token)}`,
+      undefined
+    )
+    return !!r?.valid
+  }
+
+  /**
+   * Set a new password from a reset token (worker: POST /api/auth/reset-password). On success the
+   * worker sets the session cookie, so the caller can reload straight into the app.
+   */
+  async resetPassword(token: string, password: string): Promise<void> {
+    await this.request('/auth/reset-password', undefined, {
+      method: 'POST',
+      body: { token, password },
+    })
+  }
+
+  /**
    * Logout
    */
   async logout(): Promise<void> {

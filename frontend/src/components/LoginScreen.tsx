@@ -9,16 +9,40 @@ import layoutStyles from './Layout.module.css'
  * into client-only mode. Client-only mode itself never renders this.
  */
 export default function LoginScreen() {
-  const [mode, setMode] = createSignal<'login' | 'register'>('login')
+  const [mode, setMode] = createSignal<'login' | 'register' | 'forgot'>('login')
   const [email, setEmail] = createSignal('')
   const [password, setPassword] = createSignal('')
   const [error, setError] = createSignal('')
+  const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
 
   const submit = async (e: Event) => {
     e.preventDefault()
     setError('')
+    setNotice('')
     const em = email().trim()
+
+    // Forgot-password: ask the worker to email a reset link. The response never reveals whether
+    // the account exists, so we always show the same neutral confirmation.
+    if (mode() === 'forgot') {
+      if (!em) {
+        setError('Email is required')
+        return
+      }
+      setLoading(true)
+      try {
+        await api.forgotPassword(em)
+        setNotice(
+          'If an account exists for that email, a reset link is on its way. Check your inbox.'
+        )
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Something went wrong')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     const pw = password()
     if (!em || !pw) {
       setError('Email and password are required')
@@ -87,7 +111,11 @@ export default function LoginScreen() {
           Finance<span style={{ color: 'var(--primary)' }}>.</span>
         </h1>
         <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
-          {mode() === 'register' ? 'Create your account.' : 'Sign in to access your finances.'}
+          {mode() === 'register'
+            ? 'Create your account.'
+            : mode() === 'forgot'
+              ? 'Reset your password.'
+              : 'Sign in to access your finances.'}
         </p>
 
         <form onSubmit={submit}>
@@ -99,19 +127,42 @@ export default function LoginScreen() {
             autocomplete="email"
             style={inputStyle}
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password()}
-            onInput={(e) => setPassword(e.currentTarget.value)}
-            autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
-            style={inputStyle}
-          />
+          <Show when={mode() !== 'forgot'}>
+            <input
+              type="password"
+              placeholder="Password"
+              value={password()}
+              onInput={(e) => setPassword(e.currentTarget.value)}
+              autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
+              style={inputStyle}
+            />
+          </Show>
+          <Show when={mode() === 'login'}>
+            <div style={{ 'text-align': 'right', margin: '-4px 0 10px' }}>
+              <a
+                onClick={() => {
+                  setMode('forgot')
+                  setError('')
+                  setNotice('')
+                }}
+                style={{ cursor: 'pointer', color: 'var(--text-secondary)', 'font-size': '13px' }}
+              >
+                Forgot password?
+              </a>
+            </div>
+          </Show>
           <Show when={error()}>
             <div
               style={{ color: 'var(--danger, #ef4444)', 'font-size': '13px', margin: '2px 0 10px' }}
             >
               {error()}
+            </div>
+          </Show>
+          <Show when={notice()}>
+            <div
+              style={{ color: 'var(--text-secondary)', 'font-size': '13px', margin: '2px 0 10px' }}
+            >
+              {notice()}
             </div>
           </Show>
           <button
@@ -120,67 +171,99 @@ export default function LoginScreen() {
             style={{ width: '100%', 'justify-content': 'center' }}
             disabled={loading()}
           >
-            {loading() ? 'Please wait…' : mode() === 'register' ? 'Create account' : 'Sign in'}
+            {loading()
+              ? 'Please wait…'
+              : mode() === 'register'
+                ? 'Create account'
+                : mode() === 'forgot'
+                  ? 'Send reset link'
+                  : 'Sign in'}
           </button>
         </form>
 
         <p style={{ margin: '12px 0 0', 'font-size': '13px', color: 'var(--text-secondary)' }}>
-          {mode() === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <a
-            onClick={() => {
-              setMode(mode() === 'login' ? 'register' : 'login')
-              setError('')
-            }}
-            style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+          <Show
+            when={mode() !== 'forgot'}
+            fallback={
+              <a
+                onClick={() => {
+                  setMode('login')
+                  setError('')
+                  setNotice('')
+                }}
+                style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+              >
+                Back to sign in
+              </a>
+            }
           >
-            {mode() === 'login' ? 'Create one' : 'Sign in'}
-          </a>
+            {mode() === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            <a
+              onClick={() => {
+                setMode(mode() === 'login' ? 'register' : 'login')
+                setError('')
+              }}
+              style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+            >
+              {mode() === 'login' ? 'Create one' : 'Sign in'}
+            </a>
+          </Show>
         </p>
 
-        <div
-          style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '8px',
-            margin: '18px 0',
-            color: 'var(--text-secondary)',
-            'font-size': '12px',
-          }}
-        >
+        <Show when={mode() !== 'forgot'}>
           <div
-            style={{ flex: 1, height: '1px', background: 'var(--border, rgba(255,255,255,0.12))' }}
-          />
-          or
-          <div
-            style={{ flex: 1, height: '1px', background: 'var(--border, rgba(255,255,255,0.12))' }}
-          />
-        </div>
+            style={{
+              display: 'flex',
+              'align-items': 'center',
+              gap: '8px',
+              margin: '18px 0',
+              color: 'var(--text-secondary)',
+              'font-size': '12px',
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                height: '1px',
+                background: 'var(--border, rgba(255,255,255,0.12))',
+              }}
+            />
+            or
+            <div
+              style={{
+                flex: 1,
+                height: '1px',
+                background: 'var(--border, rgba(255,255,255,0.12))',
+              }}
+            />
+          </div>
 
-        <button
-          class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
-          style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
-          onClick={() => {
-            api.loginWithGoogle()
-          }}
-          type="button"
-        >
-          Continue with Google
-        </button>
-        <button
-          onClick={tryDemo}
-          type="button"
-          style={{
-            width: '100%',
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            'font-size': '13px',
-            'text-decoration': 'underline',
-          }}
-        >
-          Try the demo — no account needed
-        </button>
+          <button
+            class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+            style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
+            onClick={() => {
+              api.loginWithGoogle()
+            }}
+            type="button"
+          >
+            Continue with Google
+          </button>
+          <button
+            onClick={tryDemo}
+            type="button"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              'font-size': '13px',
+              'text-decoration': 'underline',
+            }}
+          >
+            Try the demo — no account needed
+          </button>
+        </Show>
       </div>
     </div>
   )
