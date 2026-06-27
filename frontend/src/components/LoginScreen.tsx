@@ -59,8 +59,19 @@ export default function LoginScreen() {
     }
     setLoading(true)
     try {
-      if (mode() === 'register') await api.register(em, pw, turnstileToken())
-      else await api.loginWithPassword(em, pw, turnstileToken())
+      if (mode() === 'register') {
+        await api.register(em, pw, turnstileToken())
+        // Registration no longer signs you in (and never reveals whether the email already exists):
+        // switch to sign-in and point the user to their email.
+        setMode('login')
+        setPassword('')
+        setNotice('Check your email to finish setting up, then sign in below.')
+        setLoading(false)
+        resetTurnstile()
+        setTurnstileToken('')
+        return
+      }
+      await api.loginWithPassword(em, pw, turnstileToken())
       // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
       window.location.reload()
     } catch (err) {

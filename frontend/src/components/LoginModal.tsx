@@ -1,5 +1,5 @@
 import { createSignal, Show } from 'solid-js'
-import { api } from '../core/api'
+import { api, toast } from '../core/api'
 import styles from './LoginModal.module.css'
 import Turnstile, { resetTurnstile, turnstileEnabled } from './Turnstile'
 
@@ -37,8 +37,19 @@ export default function LoginModal(props: LoginModalProps) {
     }
     setLoading(true)
     try {
-      if (mode() === 'register') await api.register(em, pw, turnstileToken())
-      else await api.loginWithPassword(em, pw, turnstileToken())
+      if (mode() === 'register') {
+        await api.register(em, pw, turnstileToken())
+        // Registration no longer signs you in (and never reveals whether the email already exists):
+        // switch to sign-in and point the user to their email.
+        toast('Check your email to finish setting up, then sign in.', 'success')
+        setMode('login')
+        setPassword('')
+        setLoading(false)
+        resetTurnstile()
+        setTurnstileToken('')
+        return
+      }
+      await api.loginWithPassword(em, pw, turnstileToken())
       // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
       window.location.reload()
     } catch (err) {

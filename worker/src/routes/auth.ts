@@ -50,6 +50,31 @@ function resetEmailHtml(link: string, ttlHours: number): string {
   </body></html>`;
 }
 
+// Sent to a brand-new account after registration. Registration no longer reveals whether an email
+// already exists (anti-enumeration), so the signal of "your account is ready" goes to the inbox.
+function welcomeEmailHtml(base: string): string {
+  const cta = base
+    ? `<p style="margin:24px 0"><a href="${base}" style="background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Sign in</a></p>`
+    : '';
+  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
+    <h2 style="margin:0 0 12px">Welcome to Token Circles</h2>
+    <p>Your account is ready. Sign in to start managing your finances.</p>
+    ${cta}
+    <p style="color:#6b7280;font-size:12px;margin-top:24px">If you didn't create this account, you can safely ignore this email.</p>
+  </body></html>`;
+}
+
+// Sent when someone tries to register with an email that ALREADY has an account. This tells the real
+// owner (not the prober) that the address is in use, so registration can stay enumeration-neutral.
+function accountExistsEmailHtml(base: string): string {
+  const where = base ? ` at ${base}` : '';
+  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
+    <h2 style="margin:0 0 12px">You already have an account</h2>
+    <p>Someone just tried to create a Token Circles account with this email address, but one already exists.</p>
+    <p>If that was you, simply sign in${where} — or reset your password if you've forgotten it. If it wasn't you, no action is needed; your account is unchanged.</p>
+  </body></html>`;
+}
+
 // Google Sign-In (server-side code flow) + session endpoints. The token is set as
 // an httpOnly cookie, so the browser never handles it directly.
 export const authRoutes = new Hono<AppEnv>();
@@ -135,22 +160,38 @@ authRoutes.post('/api/auth/register', async (c) => {
   const password = body.password ?? '';
   if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
   if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  // Anti-enumeration (CR-9): never reveal whether the email already exists. Always run the password
+  // hash (so timing doesn't betray the branch), then EITHER create a new account OR notify the
+  // existing owner by email — returning the SAME neutral response with NO session either way. The
+  // user signs in afterward, so a new vs existing email is indistinguishable to the caller.
+  const passwordHash = await hashPassword(password);
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
     .bind(email)
-    .first();
-  if (existing) return c.json({ error: 'An account with that email already exists' }, 409);
-  const passwordHash = await hashPassword(password);
-  const res = await c.env.DB.prepare(
-    "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
-  )
-    .bind(email, passwordHash)
-    .run();
-  const userId = res.meta.last_row_id as number;
-  await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
-    .bind('Personal Profile', userId)
-    .run();
-  c.header('Set-Cookie', await issueSessionCookie(userId, 'password', c.env));
-  return c.json({ id: userId, email });
+    .first<{ id: number }>();
+  if (existing) {
+    await sendMail(
+      c.env,
+      email,
+      'You already have a Token Circles account',
+      accountExistsEmailHtml(base)
+    ).catch(() => {});
+  } else {
+    const res = await c.env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+    )
+      .bind(email, passwordHash)
+      .run();
+    const userId = res.meta.last_row_id as number;
+    await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
+      .bind('Personal Profile', userId)
+      .run();
+    await sendMail(c.env, email, 'Welcome to Token Circles', welcomeEmailHtml(base)).catch(
+      () => {}
+    );
+  }
+  // Identical response regardless of existence; no session cookie is set (the user signs in next).
+  return c.json({ ok: true });
 });
 
 // Email + password login.
