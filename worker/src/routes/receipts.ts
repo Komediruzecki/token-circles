@@ -5,9 +5,9 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import {
   requirePremium,
+  receiptCountLimit,
   RECEIPT_ALLOWED_TYPES,
   RECEIPT_MAX_BYTES,
-  RECEIPT_MAX_PER_PROFILE,
 } from '../plan';
 import { HttpError } from '../http';
 import * as db from '../db';
@@ -73,8 +73,9 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
     'SELECT COUNT(*) AS c FROM receipts WHERE profile_id = ?',
     pid
   );
-  if ((countRow?.c ?? 0) >= RECEIPT_MAX_PER_PROFILE) {
-    throw new HttpError(403, `Receipt limit reached (${RECEIPT_MAX_PER_PROFILE} per profile)`);
+  const limit = await receiptCountLimit(c);
+  if (limit !== null && (countRow?.c ?? 0) >= limit) {
+    throw new HttpError(403, `Receipt limit reached (${limit} per profile)`);
   }
 
   const txRaw = body['transaction_id'];

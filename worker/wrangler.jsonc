@@ -41,6 +41,7 @@
         "CORS_ORIGIN": "https://dev.tokencircles.com",
         "APP_ORIGINS": "https://dev.tokencircles.com",
         "COOKIE_DOMAIN": ".dev.tokencircles.com",
+        "EMAIL_FROM": "Token Circles <noreply@tokencircles.com>",
       },
       "d1_databases": [
         {
@@ -50,6 +51,10 @@
         },
       ],
       "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts-dev" }],
+      "triggers": {
+        // Budget alerts Mon 09:00 UTC; spending report ~biweekly Thu 10:00 UTC.
+        "crons": ["0 9 * * 1", "0 10 1-7,15-21 * 4"],
+      },
     },
 
     // ── PROD  →  api.<domain>  (deploy: pnpm run deploy:prod) ────────────────────

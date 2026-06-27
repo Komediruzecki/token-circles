@@ -24,6 +24,8 @@ import { receiptsRoutes } from './routes/receipts';
 import { importRoutes } from './routes/imports';
 import { exportRoutes } from './routes/exports';
 import { billingRoutes } from './routes/billing';
+import { notificationsRoutes } from './routes/notifications';
+import { runScheduledReminders } from './reminders';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -39,6 +41,8 @@ export interface Env {
   STRIPE_SECRET_KEY?: string; // secret — Stripe API key (sk_…); unset → billing endpoints 501
   STRIPE_WEBHOOK_SECRET?: string; // secret — Stripe webhook signing secret (whsec_…)
   STRIPE_PRICE_ID?: string; // var — recurring Price id (price_…) for the premium plan
+  RESEND_API_KEY?: string; // secret — Resend API key for reminder emails (unset → emails skip)
+  EMAIL_FROM?: string; // var — From address, e.g. "Token Circles <noreply@tokencircles.com>"
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
@@ -83,6 +87,7 @@ app.route('/', receiptsRoutes);
 app.route('/', importRoutes);
 app.route('/', exportRoutes);
 app.route('/', billingRoutes);
+app.route('/', notificationsRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
@@ -92,4 +97,11 @@ app.onError((err, c) => {
   return c.json({ error: err.message || 'Internal Server Error' }, status as 500);
 });
 
-export default app;
+// Object export: the Worker serves HTTP (app.fetch) AND runs cron reminders (scheduled).
+// Cron schedules live in wrangler.jsonc → env.<env>.triggers.crons.
+export default {
+  fetch: app.fetch,
+  scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
+    ctx.waitUntil(runScheduledReminders(event.cron, env));
+  },
+};
