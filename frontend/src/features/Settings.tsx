@@ -646,6 +646,10 @@ export default function Settings() {
                       {billingBusy() ? 'Redirecting…' : 'Manage billing'}
                     </button>
                   </Show>
+                  <p style="margin-top:12px; color: var(--text-secondary); font-size: 12px; line-height:1.5;">
+                    Plans, prices and limits may change at any time during beta. Ultimate
+                    &ldquo;unlimited&rdquo; usage is subject to fair-use limits.
+                  </p>
                 </div>
               </div>
             </Show>
