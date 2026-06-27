@@ -80,7 +80,7 @@ export interface Category {
   name: string
   color: string
   icon: string
-  type: TransactionType
+  type: TransactionType | 'account'
   parent_id: CategoryId | null
   tax_deductible: boolean
   created_at: string

@@ -11,7 +11,9 @@ export const CategorySchema = z.object({
   name: z.string(),
   color: z.string(),
   icon: z.string(),
-  type: z.enum(['income', 'expense', 'transfer']),
+  // 'account' is used by the importer for Means-of-Payment / transfer-target rows; accept it so
+  // the whole /categories list never fails validation on a single odd type.
+  type: z.enum(['income', 'expense', 'transfer', 'account']),
   parent_id: z.number().nullable(),
   tax_deductible: z.boolean().or(z.number().transform((n) => !!n)),
   created_at: z.string(),

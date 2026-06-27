@@ -1,31 +1,31 @@
-import { Hono } from 'hono'
-import * as XLSX from 'xlsx'
-import type { AppEnv } from '../index'
-import { requireAuth } from '../auth'
-import { getProfileId, getProfileIds } from '../profile'
-import { HttpError } from '../http'
-import * as db from '../db'
+import { Hono } from 'hono';
+import * as XLSX from 'xlsx';
+import type { AppEnv } from '../index';
+import { requireAuth } from '../auth';
+import { getProfileId, getProfileIds } from '../profile';
+import { HttpError } from '../http';
+import * as db from '../db';
 
 // Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
 function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const all: string[][] = []
+  const all: string[][] = [];
   for (const line of text.trim().split('\n')) {
-    const cols: string[] = []
-    let cur = ''
-    let inQuotes = false
+    const cols: string[] = [];
+    let cur = '';
+    let inQuotes = false;
     for (const ch of line) {
-      if (ch === '"') inQuotes = !inQuotes
+      if (ch === '"') inQuotes = !inQuotes;
       else if (ch === ',' && !inQuotes) {
-        cols.push(cur.trim().replace(/^"|"$/g, ''))
-        cur = ''
-      } else cur += ch
+        cols.push(cur.trim().replace(/^"|"$/g, ''));
+        cur = '';
+      } else cur += ch;
     }
-    cols.push(cur.trim().replace(/^"|"$/g, ''))
-    all.push(cols)
+    cols.push(cur.trim().replace(/^"|"$/g, ''));
+    all.push(cols);
   }
-  const headers = all[0] || []
-  const rows = all.slice(1).filter((row) => row.some((cell) => cell))
-  return { headers, rows }
+  const headers = all[0] || [];
+  const rows = all.slice(1).filter((row) => row.some((cell) => cell));
+  return { headers, rows };
 }
 
 // Port of backend/routes/importRoutes.js.
@@ -41,12 +41,12 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
 //   - POST /api/import/file-sheet  — re-read a previously uploaded workbook by fileId.
 //   - the XLSX fallback branch of /googlesheet (when CSV export isn't available) also
 //     depends on the spreadsheet parser, so it surfaces a 501-style error there.
-export const importRoutes = new Hono<AppEnv>()
+export const importRoutes = new Hono<AppEnv>();
 
 // ── getCategoryIcon — ported verbatim from backend/utils.js ───────────────────
 // Maps a category name to an icon key when /execute auto-creates a category.
 function getCategoryIcon(name: string): string {
-  const lower = name.toLowerCase()
+  const lower = name.toLowerCase();
   const patterns: Array<[RegExp, string]> = [
     [/car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i, 'car'],
     [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, 'coffee'],
@@ -78,66 +78,90 @@ function getCategoryIcon(name: string): string {
     [/income|salary|wage|paycheck|payroll|earn|revenue|reimbursement/i, 'dollar-sign'],
     [/misc|other|general|uncategor|unknown|various|catch.?all/i, 'more-horizontal'],
     [/bill/i, 'file-text'],
-  ]
+  ];
   for (const [pattern, icon] of patterns) {
-    if (pattern.test(lower)) return icon
+    if (pattern.test(lower)) return icon;
   }
-  return 'tag'
+  return 'tag';
 }
 
 // ── parseDateString — ported from importRoutes.parseDateString ────────────────
 // The numeric Excel-serial branch is dropped: it relied on spreadsheetService and
 // only fires for binary-spreadsheet imports, which aren't supported on Workers.
 function parseDateString(dateStr: unknown): string {
-  const today = () => new Date().toISOString().split('T')[0]
-  if (dateStr === null || dateStr === undefined || dateStr === '') return today()
-  const s = String(dateStr).trim()
-  const euMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+  const today = () => new Date().toISOString().split('T')[0];
+  if (dateStr === null || dateStr === undefined || dateStr === '') return today();
+  const s = String(dateStr).trim();
+  const euMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (euMatch) {
-    const [, d, m, y] = euMatch
+    const [, d, m, y] = euMatch;
     return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10))
       .toISOString()
-      .split('T')[0]
+      .split('T')[0];
   }
-  const date = new Date(s)
-  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0]
-  return today()
+  const date = new Date(s);
+  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+  return today();
 }
 
 // Pull a value from a row using any of the casing variants the Express code checks.
 function pick(row: Record<string, any>, mapping: Record<string, any>, key: string): any {
-  const variants = [
-    key,
-    key.charAt(0).toUpperCase() + key.slice(1),
-    key.toUpperCase(),
-  ]
+  const variants = [key, key.charAt(0).toUpperCase() + key.slice(1), key.toUpperCase()];
   // Also support the CamelCase forms used for compound mapping keys.
   const camelMap: Record<string, string[]> = {
     amount_local: ['AmountLocal'],
     means_of_payment: ['MeansOfPayment', 'MEANS_OF_PAYMENT'],
     exchange_rate: ['ExchangeRate'],
-  }
-  if (camelMap[key]) variants.push(...camelMap[key])
+  };
+  if (camelMap[key]) variants.push(...camelMap[key]);
   for (const v of variants) {
-    const colIdx = mapping[v]
-    if (colIdx === undefined) continue
-    const cell = row[colIdx]
-    if (cell !== undefined) return cell
+    const colIdx = mapping[v];
+    if (colIdx === undefined) continue;
+    const cell = row[colIdx];
+    if (cell !== undefined) return cell;
   }
-  return undefined
+  return undefined;
 }
 
 const NEW_CATEGORY_COLORS = [
-  '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e',
-  '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6',
-  '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#64748b', '#78716c',
-]
+  '#ef4444',
+  '#f97316',
+  '#f59e0b',
+  '#eab308',
+  '#84cc16',
+  '#22c55e',
+  '#14b8a6',
+  '#06b6d4',
+  '#0ea5e9',
+  '#3b82f6',
+  '#6366f1',
+  '#8b5cf6',
+  '#a855f7',
+  '#d946ef',
+  '#ec4899',
+  '#f43f5e',
+  '#64748b',
+  '#78716c',
+];
 
 const INCOME_KEYWORDS = [
-  'salary', 'income', 'wages', 'wage', 'payroll', 'revenue', 'dividend', 'refund',
-  'bonus', 'paycheck', 'pay cheque', 'interest', 'credit', 'received', 'royalt',
+  'salary',
+  'income',
+  'wages',
+  'wage',
+  'payroll',
+  'revenue',
+  'dividend',
+  'refund',
+  'bonus',
+  'paycheck',
+  'pay cheque',
+  'interest',
+  'credit',
+  'received',
+  'royalt',
   'reimbursement',
-]
+];
 
 // ── POST /api/import/upload — parse an xlsx/csv FILE and return a preview ──────
 // SheetJS parses the workbook in-memory (Workers-safe); CSV is parsed in pure JS.
@@ -146,30 +170,33 @@ const INCOME_KEYWORDS = [
 // replaces the old stateful upload->fileId->file-sheet flow). The parsed rows then
 // go to POST /api/import/execute.
 importRoutes.post('/api/import/upload', requireAuth, async (c) => {
-  const body = await c.req.parseBody()
-  const file = body['file'] ?? body['import']
-  if (!(file instanceof File)) throw new HttpError(400, 'No file uploaded')
-  const requested = typeof body['sheetName'] === 'string' ? (body['sheetName'] as string) : undefined
-  const buf = new Uint8Array(await file.arrayBuffer())
+  const body = await c.req.parseBody();
+  const file = body['file'] ?? body['import'];
+  if (!(file instanceof File)) throw new HttpError(400, 'No file uploaded');
+  const requested =
+    typeof body['sheetName'] === 'string' ? (body['sheetName'] as string) : undefined;
+  const buf = new Uint8Array(await file.arrayBuffer());
 
   if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
-    const { headers, rows } = parseCsv(new TextDecoder().decode(buf))
-    return c.json({ headers, rows, selectedSheet: 'CSV', sheetNames: ['CSV'] })
+    const { headers, rows } = parseCsv(new TextDecoder().decode(buf));
+    return c.json({ headers, rows, selectedSheet: 'CSV', sheetNames: ['CSV'] });
   }
 
-  const wb = XLSX.read(buf, { type: 'array' })
-  const sheetNames = wb.SheetNames
-  const selected = requested && sheetNames.includes(requested) ? requested : sheetNames[0]
-  if (!selected) throw new HttpError(400, 'Spreadsheet has no sheets')
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheetNames = wb.SheetNames;
+  const selected = requested && sheetNames.includes(requested) ? requested : sheetNames[0];
+  if (!selected) throw new HttpError(400, 'Spreadsheet has no sheets');
   const matrix = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[selected]!, {
     header: 1,
     blankrows: false,
     defval: '',
-  })
-  const headers = (matrix[0] as any[] | undefined)?.map((h) => String(h ?? '')) ?? []
-  const rows = matrix.slice(1).filter((r) => Array.isArray(r) && r.some((cell) => cell !== '' && cell != null))
-  return c.json({ headers, rows, selectedSheet: selected, sheetNames })
-})
+  });
+  const headers = (matrix[0] as any[] | undefined)?.map((h) => String(h ?? '')) ?? [];
+  const rows = matrix
+    .slice(1)
+    .filter((r) => Array.isArray(r) && r.some((cell) => cell !== '' && cell != null));
+  return c.json({ headers, rows, selectedSheet: selected, sheetNames });
+});
 
 // ── POST /api/import/file-sheet — obsolete on Workers ─────────────────────────
 // The old flow kept the parsed workbook server-side keyed by fileId (in-memory),
@@ -179,72 +206,75 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
   return c.json(
     { error: 'Re-upload via /api/import/upload with a sheetName field (stateless Worker flow).' },
     410
-  )
-})
+  );
+});
 
 // ── POST /api/import/googlesheet — fetch + parse a published sheet as CSV ──────
 // Pure-JS CSV path is ported (handles quoted fields). The XLSX fallback (used when
 // the sheet can't be exported as CSV, or to enumerate multiple tab names) needs the
 // spreadsheet parser and is reported as a 501-style error.
 importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
-  const b = (await c.req.json()) as Record<string, any>
-  const { url, sheetName } = b
-  if (!url) throw new HttpError(400, 'URL is required')
+  const b = (await c.req.json()) as Record<string, any>;
+  const { url, sheetName } = b;
+  if (!url) throw new HttpError(400, 'URL is required');
 
-  const idMatch = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/)
-  if (!idMatch) throw new HttpError(400, 'Invalid Google Sheets URL or ID')
-  const sheetId = idMatch[1]
-  const gidMatch = String(url).match(/[?&#]gid=([0-9]+)/)
-  const gid = gidMatch ? gidMatch[1] : null
+  const idMatch = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!idMatch) throw new HttpError(400, 'Invalid Google Sheets URL or ID');
+  const sheetId = idMatch[1];
+  const gidMatch = String(url).match(/[?&#]gid=([0-9]+)/);
+  const gid = gidMatch ? gidMatch[1] : null;
 
   // CSV export (respects a specific tab via gid). Pure JS — Workers-safe.
-  async function tryCsvExport(): Promise<{
-    headers: string[]
-    rows: string[][]
-    sheetName: string
-  } | { error: string }> {
+  async function tryCsvExport(): Promise<
+    | {
+        headers: string[];
+        rows: string[][];
+        sheetName: string;
+      }
+    | { error: string }
+  > {
     try {
       const csvUrl = gid
         ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
-        : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
-      const r = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-      if (!r.ok) throw new Error('HTTP ' + r.status)
-      const text = await r.text()
+        : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+      const r = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const text = await r.text();
       if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-        throw new Error('Sheet is not publicly accessible (got HTML instead of CSV)')
+        throw new Error('Sheet is not publicly accessible (got HTML instead of CSV)');
       }
-      const rows: string[][] = []
-      const lines = text.trim().split('\n')
+      const rows: string[][] = [];
+      const lines = text.trim().split('\n');
       for (const line of lines) {
-        const cols: string[] = []
-        let cur = ''
-        let inQuotes = false
+        const cols: string[] = [];
+        let cur = '';
+        let inQuotes = false;
         for (const ch of line) {
-          if (ch === '"') inQuotes = !inQuotes
+          if (ch === '"') inQuotes = !inQuotes;
           else if (ch === ',' && !inQuotes) {
-            cols.push(cur.trim().replace(/^"|"$/g, ''))
-            cur = ''
-          } else cur += ch
+            cols.push(cur.trim().replace(/^"|"$/g, ''));
+            cur = '';
+          } else cur += ch;
         }
-        cols.push(cur.trim().replace(/^"|"$/g, ''))
-        rows.push(cols)
+        cols.push(cur.trim().replace(/^"|"$/g, ''));
+        rows.push(cols);
       }
-      const headers = rows[0] || []
-      const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell))
-      return { headers, rows: dataRows, sheetName: sheetName || 'Sheet1' }
+      const headers = rows[0] || [];
+      const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell));
+      return { headers, rows: dataRows, sheetName: sheetName || 'Sheet1' };
     } catch (err) {
-      return { error: (err as Error).message }
+      return { error: (err as Error).message };
     }
   }
 
-  const csvResult = await tryCsvExport()
+  const csvResult = await tryCsvExport();
   if (!('error' in csvResult) && csvResult.headers.length > 0) {
     return c.json({
       headers: csvResult.headers,
       rows: csvResult.rows,
       selectedSheet: csvResult.sheetName,
       sheetNames: [csvResult.sheetName],
-    })
+    });
   }
 
   // CSV export failed / returned nothing. The Express fallback parses the XLSX
@@ -259,117 +289,144 @@ importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
         'The XLSX fallback is not available on this deployment yet.',
     },
     501
-  )
-})
+  );
+});
 
 // ── POST /api/import/execute — insert transactions from a parsed JSON `rows` ──
 // Faithful port of the Express handler: creates accounts for category names typed
 // as 'account', creates missing categories, inserts each transaction scoped to the
 // active profile, then recomputes affected account balances. All pure DB work.
 importRoutes.post('/api/import/execute', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const pids = await getProfileIds(c)
-  const inClause = pids.map(() => '?').join(',')
-  const b = (await c.req.json()) as Record<string, any>
-  const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } = b
-  if (!rows || !mapping) throw new HttpError(400, 'Missing data')
+  const pid = await getProfileId(c);
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
+  const b = (await c.req.json()) as Record<string, any>;
+  const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } = b;
+  if (!rows || !mapping) throw new HttpError(400, 'Missing data');
 
-  const today = () => new Date().toISOString().split('T')[0]
+  const DB = c.env.DB;
+  const today = () => new Date().toISOString().split('T')[0];
 
   // name(lowercased) -> accountId, seeded with the profile(s)' existing accounts.
-  const accountIdMap = new Map<string, number>()
-  const existingAccounts = await db.all<{ id: number; name: string }>(
-    c.env.DB,
-    `SELECT id, name FROM accounts WHERE profile_id IN (${inClause})`,
-    ...pids
-  )
-  for (const acc of existingAccounts) accountIdMap.set(acc.name.toLowerCase(), acc.id)
+  const accountIdMap = new Map<string, number>();
+  const loadAccounts = async () => {
+    const accs = await db.all<{ id: number; name: string }>(
+      DB,
+      `SELECT id, name FROM accounts WHERE profile_id IN (${inClause})`,
+      ...pids
+    );
+    for (const a of accs) accountIdMap.set(a.name.toLowerCase(), a.id);
+  };
+  await loadAccounts();
 
-  // Create accounts for category names the user flagged as 'account' type.
+  // Batch-create accounts for the category names the user flagged as 'account' type (+ history).
+  let accountsCreated = 0;
   if (categoryTypes) {
-    for (const [catName, catType] of Object.entries(categoryTypes as Record<string, string>)) {
-      if (catType !== 'account') continue
-      if (accountIdMap.has(String(catName).trim().toLowerCase())) continue
-      const accType = (accountTypes && accountTypes[catName]) || 'giro'
-      const balance = parseFloat((accountBalances && accountBalances[catName]) || '0') || 0
-      const balanceDate = (accountBalanceDates && accountBalanceDates[catName]) || today()
-      const result = await db.run(
-        c.env.DB,
-        'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        catName,
-        accType,
-        'USD',
-        balance,
-        '',
-        pid,
-        balance,
-        balanceDate
+    const toCreate = Object.entries(categoryTypes as Record<string, string>)
+      .filter(
+        ([name, t]) => t === 'account' && !accountIdMap.has(String(name).trim().toLowerCase())
       )
-      const accountId = result.meta.last_row_id as number
-      accountIdMap.set(String(catName).toLowerCase(), accountId)
-      await db.run(
-        c.env.DB,
-        'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)',
-        accountId,
-        balance,
-        balanceDate
-      )
+      .map(([name]) => ({
+        name,
+        accType: (accountTypes && accountTypes[name]) || 'giro',
+        balance: parseFloat((accountBalances && accountBalances[name]) || '0') || 0,
+        balanceDate: (accountBalanceDates && accountBalanceDates[name]) || today(),
+      }));
+    if (toCreate.length) {
+      await DB.batch(
+        toCreate.map((a) =>
+          DB.prepare(
+            'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(a.name, a.accType, 'USD', a.balance, '', pid, a.balance, a.balanceDate)
+        )
+      );
+      await loadAccounts(); // pick up the new ids
+      accountsCreated = toCreate.length;
+      const hist = toCreate
+        .map((a) => {
+          const id = accountIdMap.get(a.name.trim().toLowerCase());
+          return id
+            ? DB.prepare(
+                'INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, ?, ?)'
+              ).bind(id, a.balance, a.balanceDate)
+            : null;
+        })
+        .filter((s): s is D1PreparedStatement => s !== null);
+      if (hist.length) await DB.batch(hist);
     }
   }
 
-  let colorIndex = 0
-  let imported = 0
+  // Existing categories -> map, then batch-create the DISTINCT new, non-account names.
+  const categoryMap = new Map<string, number>();
+  const loadCategories = async () => {
+    const cats = await db.all<{ id: number; name: string }>(
+      DB,
+      'SELECT id, name FROM categories WHERE profile_id = ?',
+      pid
+    );
+    for (const cat of cats) categoryMap.set(cat.name.toLowerCase(), cat.id);
+  };
+  await loadCategories();
 
-  // Resolve-or-create the category for a row; returns its id (or null).
-  async function resolveCategoryId(row: Record<string, any>): Promise<number | null> {
-    const catName = pick(row, mapping, 'category')
-    if (!catName || !String(catName).trim()) return null
-    const existing = await db.first<{ id: number; color: string }>(
-      c.env.DB,
-      'SELECT id, color FROM categories WHERE LOWER(name) = LOWER(?) AND profile_id = ? LIMIT 1',
-      String(catName).trim(),
-      pid
-    )
-    if (existing) return existing.id
-    const color = NEW_CATEGORY_COLORS[colorIndex % NEW_CATEGORY_COLORS.length]
-    colorIndex++
-    const icon = getCategoryIcon(String(catName).trim())
-    const catType =
-      (categoryTypes && categoryTypes[catName]) ||
-      (INCOME_KEYWORDS.some((kw) => String(catName).toLowerCase().includes(kw)) ? 'income' : 'expense')
-    const r = await db.run(
-      c.env.DB,
-      'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)',
-      String(catName).trim(),
-      catType,
-      color,
-      icon,
-      pid
-    )
-    return r.meta.last_row_id as number
+  let colorIndex = 0;
+  const newCats: string[] = [];
+  const seenNew = new Set<string>();
+  for (const row of rows as Array<Record<string, any>>) {
+    const raw = pick(row, mapping, 'category');
+    if (!raw || !String(raw).trim()) continue;
+    const name = String(raw).trim();
+    const lower = name.toLowerCase();
+    // Skip names that already exist, are already queued, or are an account (Means-of-Payment /
+    // transfer target) — those must NOT become 'account'-typed categories.
+    if (categoryMap.has(lower) || seenNew.has(lower) || accountIdMap.has(lower)) continue;
+    seenNew.add(lower);
+    newCats.push(name);
+  }
+  if (newCats.length) {
+    await DB.batch(
+      newCats.map((name) => {
+        const color = NEW_CATEGORY_COLORS[colorIndex % NEW_CATEGORY_COLORS.length];
+        colorIndex++;
+        const catType =
+          (categoryTypes && categoryTypes[name]) ||
+          (INCOME_KEYWORDS.some((kw) => name.toLowerCase().includes(kw)) ? 'income' : 'expense');
+        return DB.prepare(
+          'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
+        ).bind(name, catType, color, getCategoryIcon(name), pid);
+      })
+    );
+    await loadCategories();
   }
 
-  // D1 has no synchronous multi-statement transaction wrapper like better-sqlite3's
-  // db.transaction(); insert rows sequentially (same ordering/semantics).
+  // Build all transaction inserts, then flush in chunks — one D1 round-trip per chunk instead of
+  // one per row (the old per-row loop was the hang for large imports).
+  const TX_SQL = `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
+        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const txStmts: D1PreparedStatement[] = [];
+
   for (const row of rows as Array<Record<string, any>>) {
-    const categoryId = await resolveCategoryId(row)
+    const catRaw = pick(row, mapping, 'category');
+    const catName = catRaw ? String(catRaw).trim() : '';
+    const catLower = catName.toLowerCase();
+    const categoryId = catLower && categoryMap.has(catLower) ? categoryMap.get(catLower)! : null;
 
-    const amountRaw = parseFloat(pick(row, mapping, 'amount')) || 0
-    const amount = Math.abs(amountRaw)
-    const dateRaw = pick(row, mapping, 'date') ?? today()
-    const currency = pick(row, mapping, 'currency') || 'USD'
-
-    const catName = pick(row, mapping, 'category')
-    const catType = catName ? (categoryTypes && categoryTypes[String(catName).trim()]) : null
+    const amountRaw = parseFloat(pick(row, mapping, 'amount')) || 0;
+    const amount = Math.abs(amountRaw);
+    const dateRaw = pick(row, mapping, 'date') ?? today();
+    const currency = pick(row, mapping, 'currency') || 'USD';
+    const catType = catName ? categoryTypes && categoryTypes[catName] : null;
 
     // Determine transaction type (mirrors the Express precedence exactly).
-    let validatedType: string
+    let validatedType: string;
     if (mapping.type !== undefined) {
-      const rawType = String(pick(row, mapping, 'type') || '').trim().toLowerCase()
+      const rawType = String(pick(row, mapping, 'type') || '')
+        .trim()
+        .toLowerCase();
       if (['income', 'expense', 'transfer'].includes(rawType)) {
-        validatedType = rawType
+        validatedType = rawType;
       } else if (catType && (catType === 'income' || catType === 'expense')) {
-        validatedType = catType
+        validatedType = catType;
       } else {
         validatedType =
           amountRaw < 0 ||
@@ -382,86 +439,98 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
                 rawType.includes('credit') ||
                 rawType.includes('received')
               ? 'income'
-              : 'expense'
+              : 'expense';
       }
     } else if (catType && (catType === 'income' || catType === 'expense')) {
-      validatedType = catType
+      validatedType = catType;
     } else {
-      validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense'
+      validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
     }
 
     // account_id from Means of Payment (FROM), transfer_account_id from Category (TO).
-    const mopName = pick(row, mapping, 'means_of_payment') || ''
+    const mopName = pick(row, mapping, 'means_of_payment') || '';
     const accountId = mopName
       ? accountIdMap.get(String(mopName).trim().toLowerCase()) || null
-      : null
-    const transferAccountId = catName
-      ? accountIdMap.get(String(catName).trim().toLowerCase()) || null
-      : null
+      : null;
+    const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
 
-    await db.run(
-      c.env.DB,
-      `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      pick(row, mapping, 'description') || '',
-      amount,
-      parseDateString(dateRaw),
-      pick(row, mapping, 'beneficiary') || '',
-      pick(row, mapping, 'payor') || '',
-      categoryId,
-      currency,
-      parseFloat(pick(row, mapping, 'amount_local') ?? amount) || amount,
-      mopName,
-      parseFloat(pick(row, mapping, 'exchange_rate') ?? 1.0) || 1.0,
-      validatedType,
-      pick(row, mapping, 'notes') || '',
-      pid,
-      accountId,
-      transferAccountId
-    )
-    imported++
+    txStmts.push(
+      DB.prepare(TX_SQL).bind(
+        pick(row, mapping, 'description') || '',
+        amount,
+        parseDateString(dateRaw),
+        pick(row, mapping, 'beneficiary') || '',
+        pick(row, mapping, 'payor') || '',
+        categoryId,
+        currency,
+        parseFloat(pick(row, mapping, 'amount_local') ?? amount) || amount,
+        mopName,
+        parseFloat(pick(row, mapping, 'exchange_rate') ?? 1.0) || 1.0,
+        validatedType,
+        pick(row, mapping, 'notes') || '',
+        pid,
+        accountId,
+        transferAccountId
+      )
+    );
   }
 
-  // Recompute each touched account's balance from its linked transactions.
-  for (const [, accountId] of accountIdMap) {
-    const account = await db.first<{ starting_balance: number | null }>(
-      c.env.DB,
-      'SELECT starting_balance FROM accounts WHERE id = ?',
-      accountId
-    )
-    const startBalance = account ? account.starting_balance || 0 : 0
-    const moneyOut = await db.first<{ total: number }>(
-      c.env.DB,
-      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type IN ('expense', 'transfer')",
-      accountId
-    )
-    const moneyInDirect = await db.first<{ total: number }>(
-      c.env.DB,
-      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE account_id = ? AND type = 'income'",
-      accountId
-    )
-    const moneyInTransfer = await db.first<{ total: number }>(
-      c.env.DB,
-      "SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE transfer_account_id = ? AND type IN ('income', 'transfer')",
-      accountId
-    )
-    const computedBalance =
-      startBalance -
-      (moneyOut?.total || 0) +
-      (moneyInDirect?.total || 0) +
-      (moneyInTransfer?.total || 0)
-    await db.run(
-      c.env.DB,
-      'UPDATE accounts SET balance = ? WHERE id = ?',
-      Math.round(computedBalance * 100) / 100,
-      accountId
-    )
+  const CHUNK = 100;
+  for (let i = 0; i < txStmts.length; i += CHUNK) {
+    await DB.batch(txStmts.slice(i, i + CHUNK));
+  }
+  const imported = txStmts.length;
+
+  // Recompute balances for ALL the profile's accounts (preserves the original's self-healing pass),
+  // but via aggregated GROUP BY queries + one batched UPDATE instead of 5 queries per account.
+  const recomputeIds = [...new Set(accountIdMap.values())];
+  if (recomputeIds.length) {
+    const ids = recomputeIds;
+    const ph = ids.map(() => '?').join(',');
+    const [starts, out, inDirect, inTransfer] = await Promise.all([
+      db.all<{ id: number; starting_balance: number | null }>(
+        DB,
+        `SELECT id, starting_balance FROM accounts WHERE id IN (${ph})`,
+        ...ids
+      ),
+      db.all<{ account_id: number; total: number }>(
+        DB,
+        `SELECT account_id, COALESCE(SUM(amount),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type IN ('expense','transfer') GROUP BY account_id`,
+        ...ids
+      ),
+      db.all<{ account_id: number; total: number }>(
+        DB,
+        `SELECT account_id, COALESCE(SUM(amount),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type = 'income' GROUP BY account_id`,
+        ...ids
+      ),
+      db.all<{ transfer_account_id: number; total: number }>(
+        DB,
+        `SELECT transfer_account_id, COALESCE(SUM(amount),0) AS total FROM transactions WHERE transfer_account_id IN (${ph}) AND type IN ('income','transfer') GROUP BY transfer_account_id`,
+        ...ids
+      ),
+    ]);
+    const startMap = new Map(starts.map((s) => [s.id, s.starting_balance || 0]));
+    const outMap = new Map(out.map((r) => [r.account_id, r.total]));
+    const inDirMap = new Map(inDirect.map((r) => [r.account_id, r.total]));
+    const inTransMap = new Map(inTransfer.map((r) => [r.transfer_account_id, r.total]));
+    const updates = ids.map((id) =>
+      DB.prepare('UPDATE accounts SET balance = ? WHERE id = ?').bind(
+        Math.round(
+          ((startMap.get(id) || 0) -
+            (outMap.get(id) || 0) +
+            (inDirMap.get(id) || 0) +
+            (inTransMap.get(id) || 0)) *
+            100
+        ) / 100,
+        id
+      )
+    );
+    if (updates.length) await DB.batch(updates);
   }
 
   return c.json({
     imported,
-    accounts_created: accountIdMap.size,
+    accounts_created: accountsCreated,
     message: `Successfully imported ${imported} transactions`,
-  })
-})
+  });
+});
