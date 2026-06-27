@@ -23,6 +23,7 @@ import { reportsRoutes } from './routes/reports';
 import { receiptsRoutes } from './routes/receipts';
 import { importRoutes } from './routes/imports';
 import { exportRoutes } from './routes/exports';
+import { billingRoutes } from './routes/billing';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -35,6 +36,9 @@ export interface Env {
   COOKIE_DOMAIN?: string; // e.g. ".yourdomain.com" to share the session cookie with the app
   APP_ENV?: string; // 'development' drops the Secure cookie flag for local http dev
   RECEIPTS?: R2Bucket; // R2 bucket for premium receipt files (optional until the bucket exists)
+  STRIPE_SECRET_KEY?: string; // secret — Stripe API key (sk_…); unset → billing endpoints 501
+  STRIPE_WEBHOOK_SECRET?: string; // secret — Stripe webhook signing secret (whsec_…)
+  STRIPE_PRICE_ID?: string; // var — recurring Price id (price_…) for the premium plan
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
@@ -78,6 +82,7 @@ app.route('/', reportsRoutes);
 app.route('/', receiptsRoutes);
 app.route('/', importRoutes);
 app.route('/', exportRoutes);
+app.route('/', billingRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
