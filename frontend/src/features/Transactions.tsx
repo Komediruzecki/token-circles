@@ -403,10 +403,14 @@ export default function Transactions() {
 
   // Page-level totals (defined after paginatedTransactions to avoid TDZ — createMemo runs eagerly)
   const pageIncome = createMemo(() =>
-    paginatedTransactions().filter((t) => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0)
+    paginatedTransactions()
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + Math.abs(t.amount), 0)
   )
   const pageExpenses = createMemo(() =>
-    paginatedTransactions().filter((t) => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0)
+    paginatedTransactions()
+      .filter((t) => t.type === 'expense')
+      .reduce((s, t) => s + Math.abs(t.amount), 0)
   )
   const pageTotal = createMemo(() =>
     paginatedTransactions().reduce((s, t) => s + Math.abs(t.amount), 0)
@@ -518,7 +522,7 @@ export default function Transactions() {
   }
 
   onMount(async () => {
-    refreshTransactions()
+    // (transactions load via the profileVersion effect above — no redundant fetch here)
     try {
       const cats = await api.getCategories()
       if (Array.isArray(cats)) {
