@@ -31,6 +31,7 @@ html,
 :host {
   line-height: 1.5; /* 1 */
   -webkit-text-size-adjust: 100%; /* 2 */
+  text-size-adjust: 100%; /* 2 — standard property (silences Firefox "declaration dropped") */
   tab-size: 4; /* 3 */
   -webkit-tap-highlight-color: transparent; /* 7 */
 }
