@@ -26,6 +26,7 @@ import { exportRoutes } from './routes/exports';
 import { billingRoutes } from './routes/billing';
 import { notificationsRoutes } from './routes/notifications';
 import { runScheduledReminders } from './reminders';
+import { sweepRateLimits } from './ratelimit';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -102,6 +103,6 @@ app.onError((err, c) => {
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
-    ctx.waitUntil(runScheduledReminders(event.cron, env));
+    ctx.waitUntil(Promise.all([runScheduledReminders(event.cron, env), sweepRateLimits(env)]));
   },
 };

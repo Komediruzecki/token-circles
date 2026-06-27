@@ -13,6 +13,7 @@ import {
   verifyPassword,
 } from '../auth';
 import { sendMail } from '../email';
+import { enforce, clientIp } from '../ratelimit';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -114,6 +115,8 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
 
 // Email + password registration. Creates a 'password' user + default profile, then signs in.
 authRoutes.post('/api/auth/register', async (c) => {
+  const rl = await enforce(c, `register:${clientIp(c)}`, 5, 3600);
+  if (rl) return rl;
   if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
   const body = (await c.req.json().catch(() => ({}))) as { email?: string; password?: string };
   const email = (body.email ?? '').trim().toLowerCase();
@@ -140,6 +143,8 @@ authRoutes.post('/api/auth/register', async (c) => {
 
 // Email + password login.
 authRoutes.post('/api/auth/login', async (c) => {
+  const rl = await enforce(c, `login:${clientIp(c)}`, 10, 900);
+  if (rl) return rl;
   if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
   const body = (await c.req.json().catch(() => ({}))) as { email?: string; password?: string };
   const email = (body.email ?? '').trim().toLowerCase();
@@ -158,9 +163,14 @@ authRoutes.post('/api/auth/login', async (c) => {
 // Forgot password: email a magic reset link. Always returns 200 with no hint about whether
 // the account exists (anti-enumeration). Only one active token per user at a time.
 authRoutes.post('/api/auth/forgot-password', async (c) => {
+  const ipRl = await enforce(c, `forgot-ip:${clientIp(c)}`, 5, 900);
+  if (ipRl) return ipRl;
   const body = (await c.req.json().catch(() => ({}))) as { email?: string };
   const email = (body.email ?? '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
+  // Per-email cap (on top of per-IP) so one address can't be bombed from rotating IPs.
+  const emailRl = await enforce(c, `forgot-email:${email}`, 3, 3600);
+  if (emailRl) return emailRl;
 
   const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
     .bind(email)
@@ -204,6 +214,8 @@ authRoutes.get('/api/auth/reset-password', async (c) => {
 
 // Consume the token, set the new password, revoke other sessions, and sign the user in.
 authRoutes.post('/api/auth/reset-password', async (c) => {
+  const rl = await enforce(c, `reset:${clientIp(c)}`, 10, 900);
+  if (rl) return rl;
   if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
   const body = (await c.req.json().catch(() => ({}))) as { token?: string; password?: string };
   const token = (body.token ?? '').trim();

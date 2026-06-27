@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
+import { requireAdvancedReports } from '../plan';
 import { getProfileId, getProfileIds } from '../profile';
 import { buildReportPdf } from '../pdf';
 import * as db from '../db';
@@ -137,7 +138,7 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
 });
 
 // ── Year-End Tax Summary (JSON) ──────────────────────────────────────
-reportsRoutes.get('/api/reports/tax-summary', requireAuth, async (c) => {
+reportsRoutes.get('/api/reports/tax-summary', requireAuth, requireAdvancedReports, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');
@@ -197,49 +198,54 @@ reportsRoutes.get('/api/reports/tax-summary', requireAuth, async (c) => {
 });
 
 // ── Year-End Tax Summary (PDF) ───────────────────────────────────────
-reportsRoutes.get('/api/reports/tax-summary-pdf', requireAuth, async (c) => {
-  const pids = await getProfileIds(c);
-  const inClause = pids.map(() => '?').join(',');
-  const year = c.req.query('year');
-  if (!year) return c.json({ error: 'year is required' }, 400);
-  const rows = await db.all<{ amount: number; category_name: string; tax_deductible: number }>(
-    c.env.DB,
-    `SELECT t.amount, c.name as category_name, c.tax_deductible FROM transactions t
+reportsRoutes.get(
+  '/api/reports/tax-summary-pdf',
+  requireAuth,
+  requireAdvancedReports,
+  async (c) => {
+    const pids = await getProfileIds(c);
+    const inClause = pids.map(() => '?').join(',');
+    const year = c.req.query('year');
+    if (!year) return c.json({ error: 'year is required' }, 400);
+    const rows = await db.all<{ amount: number; category_name: string; tax_deductible: number }>(
+      c.env.DB,
+      `SELECT t.amount, c.name as category_name, c.tax_deductible FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'`,
-    ...pids,
-    `${year}-01-01`,
-    `${year}-12-31`
-  );
-  const byCat = (rs: typeof rows) => {
-    const m: Record<string, number> = {};
-    for (const r of rs) m[r.category_name] = (m[r.category_name] || 0) + r.amount;
-    return Object.entries(m).sort((a, b) => b[1] - a[1]);
-  };
-  const ded = rows.filter((r) => r.tax_deductible);
-  const non = rows.filter((r) => !r.tax_deductible);
-  const pdf = await buildReportPdf({
-    title: 'Year-End Tax Summary',
-    subtitle: `Tax year ${year}`,
-    sections: [
-      {
-        heading: 'Summary',
-        rows: [
-          ['Tax-deductible expenses', money(ded.reduce((s, r) => s + r.amount, 0))],
-          ['Non-deductible expenses', money(non.reduce((s, r) => s + r.amount, 0))],
-          ['Total expenses', money(rows.reduce((s, r) => s + r.amount, 0))],
-          ['Transactions', String(rows.length)],
-        ],
-      },
-      { heading: 'Tax-deductible by category', rows: byCat(ded).map(([n, t]) => [n, money(t)]) },
-      { heading: 'Non-deductible by category', rows: byCat(non).map(([n, t]) => [n, money(t)]) },
-    ],
-  });
-  return pdfResponse(pdf, `tax-summary-${year}.pdf`);
-});
+      ...pids,
+      `${year}-01-01`,
+      `${year}-12-31`
+    );
+    const byCat = (rs: typeof rows) => {
+      const m: Record<string, number> = {};
+      for (const r of rs) m[r.category_name] = (m[r.category_name] || 0) + r.amount;
+      return Object.entries(m).sort((a, b) => b[1] - a[1]);
+    };
+    const ded = rows.filter((r) => r.tax_deductible);
+    const non = rows.filter((r) => !r.tax_deductible);
+    const pdf = await buildReportPdf({
+      title: 'Year-End Tax Summary',
+      subtitle: `Tax year ${year}`,
+      sections: [
+        {
+          heading: 'Summary',
+          rows: [
+            ['Tax-deductible expenses', money(ded.reduce((s, r) => s + r.amount, 0))],
+            ['Non-deductible expenses', money(non.reduce((s, r) => s + r.amount, 0))],
+            ['Total expenses', money(rows.reduce((s, r) => s + r.amount, 0))],
+            ['Transactions', String(rows.length)],
+          ],
+        },
+        { heading: 'Tax-deductible by category', rows: byCat(ded).map(([n, t]) => [n, money(t)]) },
+        { heading: 'Non-deductible by category', rows: byCat(non).map(([n, t]) => [n, money(t)]) },
+      ],
+    });
+    return pdfResponse(pdf, `tax-summary-${year}.pdf`);
+  }
+);
 
 // ── Year-End P&L Summary (JSON) ──────────────────────────────────────
-reportsRoutes.get('/api/reports/pl-summary', requireAuth, async (c) => {
+reportsRoutes.get('/api/reports/pl-summary', requireAuth, requireAdvancedReports, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');
@@ -298,7 +304,7 @@ reportsRoutes.get('/api/reports/pl-summary', requireAuth, async (c) => {
 });
 
 // ── Year-End P&L Summary (PDF) ───────────────────────────────────────
-reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, async (c) => {
+reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, requireAdvancedReports, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');

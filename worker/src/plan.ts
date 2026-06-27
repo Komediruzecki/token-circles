@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv } from './index';
 import { HttpError } from './http';
 import { planHasFeature, planLimit } from './plans';
@@ -43,3 +43,13 @@ export async function requirePremium(c: Context<AppEnv>): Promise<void> {
 export async function receiptCountLimit(c: Context<AppEnv>): Promise<number | null> {
   return planLimit(await getUserPlan(c), 'receiptsPerProfile');
 }
+
+/** Middleware: 402 unless the user's plan includes advanced reporting (tax & P&L). */
+export const requireAdvancedReports: MiddlewareHandler<AppEnv> = async (c, next) => {
+  await requireFeature(
+    c,
+    'advancedReports',
+    'Advanced reporting (tax & P&L) is a paid feature. Upgrade to Basic or higher to unlock it.'
+  );
+  await next();
+};

@@ -4,6 +4,8 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
+import { getUserPlan } from '../plan';
+import { planLimit } from '../plans';
 import * as db from '../db';
 
 // Profile management — full port of backend/routes/profiles.js. Profiles belong to the
@@ -99,6 +101,21 @@ profilesRoutes.post('/api/profiles', requireAuth, async (c) => {
     name
   );
   if (dup) throw new HttpError(400, 'A profile with this name already exists');
+  // Per-plan profile cap (plans.ts; null = unlimited).
+  const limit = planLimit(await getUserPlan(c), 'profiles');
+  if (limit !== null) {
+    const count = await db.first<{ n: number }>(
+      c.env.DB,
+      'SELECT COUNT(*) AS n FROM profiles WHERE user_id = ?',
+      userId
+    );
+    if ((count?.n ?? 0) >= limit) {
+      throw new HttpError(
+        403,
+        `Your plan allows up to ${limit} profile${limit === 1 ? '' : 's'}. Upgrade for more.`
+      );
+    }
+  }
   const res = await db.run(
     c.env.DB,
     'INSERT INTO profiles (name, user_id) VALUES (?, ?)',

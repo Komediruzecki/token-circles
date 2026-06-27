@@ -267,6 +267,31 @@ function eligible(u: UserRow): boolean {
   return !!u.email && !u.notifications_unsubscribed && planHasFeature(u.plan, 'emailReminders');
 }
 
+// Monthly outbound-email quota (plans.ts remindersPerMonth; null = unlimited), tracked per
+// user/month in reminder_sends. Check before sending, record on success.
+async function withinQuota(env: Env, u: UserRow): Promise<boolean> {
+  const limit = planLimit(u.plan, 'remindersPerMonth');
+  if (limit === null) return true; // unlimited
+  if (limit <= 0) return false;
+  const ym = new Date().toISOString().slice(0, 7);
+  const row = await db.first<{ count: number }>(
+    env.DB,
+    'SELECT count FROM reminder_sends WHERE user_id = ? AND year_month = ?',
+    u.id,
+    ym
+  );
+  return (row?.count ?? 0) < limit;
+}
+async function recordSend(env: Env, userId: number): Promise<void> {
+  const ym = new Date().toISOString().slice(0, 7);
+  await db.run(
+    env.DB,
+    'INSERT INTO reminder_sends (user_id, year_month, count) VALUES (?, ?, 1) ON CONFLICT(user_id, year_month) DO UPDATE SET count = count + 1',
+    userId,
+    ym
+  );
+}
+
 export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boolean> {
   if (!eligible(u)) return false;
   const pids = await profileIdsForUser(env, u.id);
@@ -282,7 +307,9 @@ export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boo
     .filter((a) => (seen.has(a.categoryName) ? false : seen.add(a.categoryName) && true));
   const html = budgetAlertHtml(deduped, await ensureUnsubToken(env, u), env);
   if (!html) return false;
+  if (!(await withinQuota(env, u))) return false;
   await sendMail(env, u.email, `Budget alert — ${BRAND}`, html);
+  await recordSend(env, u.id);
   return true;
 }
 
@@ -298,7 +325,9 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
     const report = await getSpendingReport(env, pid);
     const html = spendingReportHtml(report, token, env);
     if (html) {
+      if (!(await withinQuota(env, u))) return false;
       await sendMail(env, u.email, `Your spending report — ${BRAND}`, html);
+      await recordSend(env, u.id);
       return true;
     }
   }
@@ -329,7 +358,6 @@ export async function runScheduledReminders(cron: string, env: Env): Promise<voi
   }
 }
 
-// Quota note: each plan's `remindersPerMonth` (plans.ts) bounds outbound reminders. The cron
-// path sends at most a few per user/month, well under every tier, so we gate on the feature
-// flag; wire a monthly counter here if high-frequency notifications are added later.
+// Each plan's `remindersPerMonth` (plans.ts) bounds outbound reminders; withinQuota/recordSend
+// enforce it via the reminder_sends counter (null = unlimited). Free is 0 → never sends.
 export const REMINDER_LIMIT = (plan: string | null) => planLimit(plan, 'remindersPerMonth');

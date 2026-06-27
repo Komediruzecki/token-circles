@@ -7,6 +7,7 @@ import * as db from '../db';
 import { sendMail } from '../email';
 import { sendBudgetAlertsForUser, sendSpendingReportForUser } from '../reminders';
 import type { UserRow } from '../reminders';
+import { enforce } from '../ratelimit';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
 // (email_notifications, email_budget_alerts, email_spending_report) on the active profile;
@@ -69,6 +70,8 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
 
 // POST — send a test email to the user's own address.
 notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c) => {
+  const rl = await enforce(c, `testmail:${c.get('userId')}`, 3, 3600);
+  if (rl) return rl;
   const user = await db.first<{ email: string | null }>(
     c.env.DB,
     'SELECT email FROM users WHERE id = ?',
@@ -86,6 +89,8 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
 
 // POST — manually run a reminder for yourself (smoke-test without waiting for cron).
 notificationsRoutes.post('/api/notifications/trigger', requireAuth, async (c) => {
+  const rl = await enforce(c, `trigger:${c.get('userId')}`, 5, 3600);
+  if (rl) return rl;
   const u = await db.first<UserRow>(
     c.env.DB,
     'SELECT id, email, plan, notifications_unsubscribed, unsubscribe_token FROM users WHERE id = ?',

@@ -38,12 +38,11 @@ export const PLANS: Record<PlanId, PlanDef> = {
     name: 'Free',
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
-    // Local-first: no cloud sync, no receipt storage. Core budgeting + PDF exports (monthly/
-    // annual financial reports) stay fully usable client-side. A small allowance of reminder
-    // emails is included; enforcing the 10/mo cap — and the minimal server-side sync those
-    // reminders require — is a TODO (see pricing-plans.md).
-    limits: { receiptsPerProfile: 0, remindersPerMonth: 10, profiles: 2 },
-    features: { cloudSync: false, emailReminders: true, receipts: false, advancedReports: false },
+    // Local-first: no cloud sync, no receipt storage, no managed email. Everything runs on the
+    // user's device (client-only, no account needed) or their own self-hosted worker —
+    // Obsidian-style. Email reminders need data on our server, so they are a paid feature (0 here).
+    limits: { receiptsPerProfile: 0, remindersPerMonth: 0, profiles: 2 },
+    features: { cloudSync: false, emailReminders: false, receipts: false, advancedReports: false },
   },
   basic: {
     id: 'basic',
