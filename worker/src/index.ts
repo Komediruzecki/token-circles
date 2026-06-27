@@ -26,6 +26,7 @@ import { exportRoutes } from './routes/exports';
 import { billingRoutes } from './routes/billing';
 import { notificationsRoutes } from './routes/notifications';
 import { supportRoutes } from './routes/support';
+import { plansRoutes } from './routes/plans';
 import { runScheduledReminders } from './reminders';
 import { sweepRateLimits } from './ratelimit';
 
@@ -92,6 +93,7 @@ app.route('/', exportRoutes);
 app.route('/', billingRoutes);
 app.route('/', notificationsRoutes);
 app.route('/', supportRoutes);
+app.route('/', plansRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
