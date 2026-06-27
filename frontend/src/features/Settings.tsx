@@ -207,6 +207,11 @@ export default function Settings() {
   const [migrateDataEnabled, setMigrateDataEnabled] = createSignal(false)
   const [migrating, setMigrating] = createSignal(false)
   const [showChangelog, setShowChangelog] = createSignal(false)
+  // Settings tabs: General (settings) / Exports (data + household) / Billing (plan).
+  type SettingsTab = 'general' | 'exports' | 'billing'
+  const [activeTab, setActiveTab] = createSignal<SettingsTab>('general')
+  // Display value for a card belonging to tab `t` (undefined = visible, 'none' = hidden).
+  const tabSel = (t: SettingsTab): string | undefined => (activeTab() === t ? undefined : 'none')
 
   // ── Billing (server mode only; the worker exposes /api/billing/*) ──
   const [billing, setBilling] = createSignal<{
@@ -606,9 +611,40 @@ export default function Settings() {
         <h1>Settings</h1>
       </div>
       <div class={styles.pageContent}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '4px',
+            'border-bottom': '1px solid var(--border)',
+            'margin-bottom': '20px',
+          }}
+        >
+          {(['general', 'exports', 'billing'] as const)
+            .filter((t) => t !== 'billing' || storageMode() === 'self-hosted')
+            .map((t) => (
+              <button
+                type="button"
+                onclick={() => setActiveTab(t)}
+                style={{
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  'border-bottom':
+                    activeTab() === t ? '2px solid var(--primary)' : '2px solid transparent',
+                  color: activeTab() === t ? 'var(--text)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  'font-size': '14px',
+                  'font-weight': activeTab() === t ? 600 : 400,
+                  'margin-bottom': '-1px',
+                }}
+              >
+                {t === 'general' ? 'General' : t === 'exports' ? 'Exports' : 'Billing'}
+              </button>
+            ))}
+        </div>
         <div class={styles.settingsGrid}>
           <div class={styles.settingsCol}>
-            <Show when={storageMode() === 'self-hosted' && billing()}>
+            <Show when={activeTab() === 'billing' && storageMode() === 'self-hosted' && billing()}>
               <div class={styles.card}>
                 <div class={styles.settingsSection}>
                   <div class={styles.settingsSectionTitle}>Plan &amp; Billing</div>
@@ -653,7 +689,7 @@ export default function Settings() {
                 </div>
               </div>
             </Show>
-            <Show when={storageMode() === 'self-hosted' && notif()}>
+            <Show when={activeTab() === 'general' && storageMode() === 'self-hosted' && notif()}>
               <div class={styles.card}>
                 <div class={styles.settingsSection}>
                   <div class={styles.settingsSectionTitle}>Email Reminders</div>
@@ -727,7 +763,7 @@ export default function Settings() {
                 </div>
               </div>
             </Show>
-            <div class={styles.card}>
+            <div class={styles.card} style={{ display: tabSel('general') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Database Storage</div>
                 <div class={styles.formGroup}>
@@ -819,7 +855,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <div class={styles.card} style="margin-top: 24px;">
+            <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('exports') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Household View</div>
                 <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
@@ -1002,7 +1038,7 @@ export default function Settings() {
               </div>
             </div>
 
-            <div class={styles.card} style="margin-top: 24px;">
+            <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('exports') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Data Management</div>
                 <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
@@ -1046,7 +1082,7 @@ export default function Settings() {
               <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
             </div>
 
-            <div class={styles.card} style="margin-top: 24px;">
+            <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('general') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Developer Tools</div>
                 <div class={styles.formGroup} style="margin-top: 16px;">
@@ -1067,7 +1103,7 @@ export default function Settings() {
             </div>
 
             <Show when={showLogs()}>
-              <div class={styles.card} style="margin-top: 24px;">
+              <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('general') }}>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                   <div class={styles.settingsSectionTitle} style="margin-bottom: 0;">
                     Application Logs
@@ -1088,13 +1124,13 @@ export default function Settings() {
           </div>
 
           <div class={styles.settingsCol}>
-            <div class={styles.card}>
+            <div class={styles.card} style={{ display: tabSel('general') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Reports</div>
                 <Reports />
               </div>
             </div>
-            <div class={styles.card}>
+            <div class={styles.card} style={{ display: tabSel('general') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>General</div>
                 <div class={styles.formGroup}>
@@ -1129,7 +1165,7 @@ export default function Settings() {
                 </div>
               </div>
             </div>
-            <div class={styles.card}>
+            <div class={styles.card} style={{ display: tabSel('general') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Appearance</div>
                 <div class={styles.formGroup}>
@@ -1150,7 +1186,7 @@ export default function Settings() {
                 </div>
               </div>
             </div>
-            <div class={styles.card}>
+            <div class={styles.card} style={{ display: tabSel('exports') }}>
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Chart Export</div>
                 <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
@@ -1185,7 +1221,7 @@ export default function Settings() {
             </div>
           </div>
 
-          <div class={styles.card} style="margin-top: 24px;">
+          <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('general') }}>
             <div class={styles.settingsSection}>
               <div class={styles.settingsSectionTitle}>About</div>
               <div class={styles.formGroup} style="margin-top: 16px;">
