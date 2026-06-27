@@ -5,6 +5,7 @@
  */
 
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import { toast } from '../core/api'
 import { logger } from '../core/logger'
 import ConfirmButton from './ConfirmButton'
 import css from './LogViewer.module.css'
@@ -43,18 +44,34 @@ export function LogViewer() {
     refreshLogs()
   }
 
-  const exportLogs = () => {
-    const logData = logs()
-      .map((log) => `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`)
+  // Include component + details so exported/copied logs are actually useful — the bare message
+  // alone (e.g. "API Error") hides the endpoint/status that's in details.
+  const formatLogs = () =>
+    logs()
+      .map((log) => {
+        const comp = log.component ? ` [${log.component}]` : ''
+        const details = log.details ? ` ${JSON.stringify(log.details)}` : ''
+        return `[${log.timestamp}] [${log.level.toUpperCase()}]${comp} ${log.message}${details}`
+      })
       .join('\n')
 
-    const blob = new Blob([logData], { type: 'text/plain' })
+  const exportLogs = () => {
+    const blob = new Blob([formatLogs()], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `app-logs-${new Date().toISOString().split('T')[0]}.txt`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const copyLogs = async () => {
+    try {
+      await window.navigator.clipboard.writeText(formatLogs())
+      toast('Logs copied to clipboard', 'success')
+    } catch {
+      toast('Could not copy logs (clipboard blocked)', 'error')
+    }
   }
 
   const getFilteredLogs = () => {
@@ -135,6 +152,20 @@ export function LogViewer() {
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             Export
+          </button>
+          <button class={css.btn} onclick={() => void copyLogs()}>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            Copy
           </button>
           <ConfirmButton
             class={css.btn}

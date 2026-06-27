@@ -231,17 +231,11 @@ export function initLogging(): void {
   if (isInitialized) return
   isInitialized = true
 
-  // Load existing logs
-  const existingLogs = getLogsFromStorage()
-  logBuffer = existingLogs
-
-  // Log initialization
+  // Do NOT preload stored logs into logBuffer: flushLogs() merges the buffer WITH the stored logs,
+  // so seeding the buffer from storage duplicated every log on each page load (the buffer is only
+  // meant to hold NEW, un-flushed entries).
   log('info', 'Logging system initialized')
-
-  // Flush any pending logs to localStorage
-  if (logBuffer.length > 0) {
-    flushLogs()
-  }
+  flushLogs()
 }
 
 /**
