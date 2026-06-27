@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { sendMail } from '../email';
-import { enforce, clientIp } from '../ratelimit';
+import { enforce, clientIp, rateLimit } from '../ratelimit';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -57,21 +57,27 @@ supportRoutes.post('/api/support/contact', async (c) => {
     { replyTo: email }
   );
 
-  // Best-effort acknowledgement back to the user, with their reference id. No reply-to override →
-  // replies go to the From (hello@), keeping SUPPORT_EMAIL private. Covered by the 5/h/IP rate limit.
-  const ackHtml = `<p>Thanks for reaching out to Token Circles. We've received your message and will get back to you as soon as we can.</p>
+  // Best-effort acknowledgement back to the user. Sent ONLY if the support relay actually went
+  // through, and it deliberately does NOT echo the user-supplied message back: `email` is
+  // unverified, so reflecting attacker-chosen text would turn this into a branded, DKIM-signed
+  // phishing/spam relay to arbitrary recipients. A generic confirmation + ticket id carries no
+  // attacker-controlled payload. Per-email rate-limited too, so one target address can't be mailed
+  // repeatedly from rotating IPs. No reply-to override → replies go to From (hello@), keeping
+  // SUPPORT_EMAIL private.
+  const ackRl = await rateLimit(c.env, `support-email:${email.toLowerCase()}`, 3, 3600);
+  if (r.sent && ackRl.ok) {
+    const ackHtml = `<p>Thanks for reaching out to Token Circles. We've received your message and will get back to you as soon as we can.</p>
     <p>Your reference number is <strong>${ticketId}</strong> — please mention it if you follow up.</p>
-    <p style="color:#6b7280;font-size:13px">For your records, here's what you sent:</p>
-    <blockquote style="border-left:3px solid #e5e7eb;margin:8px 0;padding:4px 12px;color:#374151;white-space:pre-wrap">${escapeHtml(message)}</blockquote>
     <p style="color:#6b7280;font-size:12px">If you didn't contact us, you can safely ignore this email.</p>`;
-  await sendMail(
-    c.env,
-    email,
-    `We received your message (${ticketId}) — Token Circles`,
-    ackHtml
-  ).catch(() => {
-    /* ack is best-effort; the support message already went through */
-  });
+    await sendMail(
+      c.env,
+      email,
+      `We received your message (${ticketId}) — Token Circles`,
+      ackHtml
+    ).catch(() => {
+      /* ack is best-effort; the support message already went through */
+    });
+  }
 
   return c.json({ ok: true, delivered: r.sent, ticketId });
 });

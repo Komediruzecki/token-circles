@@ -13,27 +13,36 @@ export async function rateLimit(
   windowSec: number
 ): Promise<{ ok: boolean; retryAfter: number }> {
   const now = Date.now();
-  const row = await db.first<{ count: number; reset_at: number }>(
+  const resetAt = now + windowSec * 1000;
+  // Single atomic statement: insert a fresh bucket, OR (on conflict) reset an expired window /
+  // increment a live one — but the DO UPDATE only fires while the window is expired or still under
+  // the cap. When the row is live and at/over the cap the WHERE makes it a no-op (0 rows changed),
+  // which is our "denied" signal. This collapses the old SELECT-then-UPDATE into one write, so a
+  // concurrent burst can no longer all read the same sub-limit count and overshoot the cap.
+  const res = await db.run(
     env.DB,
-    'SELECT count, reset_at FROM rate_limits WHERE bucket = ?',
+    `INSERT INTO rate_limits (bucket, count, reset_at) VALUES (?, 1, ?)
+     ON CONFLICT(bucket) DO UPDATE SET
+       count = CASE WHEN reset_at <= ? THEN 1 ELSE count + 1 END,
+       reset_at = CASE WHEN reset_at <= ? THEN ? ELSE reset_at END
+     WHERE reset_at <= ? OR count < ?`,
+    bucket,
+    resetAt,
+    now,
+    now,
+    resetAt,
+    now,
+    limit
+  );
+  if ((res.meta.changes ?? 0) > 0) return { ok: true, retryAfter: 0 };
+  // Denied: the live bucket is at/over the cap. Read reset_at only here for the Retry-After hint.
+  const row = await db.first<{ reset_at: number }>(
+    env.DB,
+    'SELECT reset_at FROM rate_limits WHERE bucket = ?',
     bucket
   );
-  if (!row || row.reset_at <= now) {
-    const resetAt = now + windowSec * 1000;
-    await db.run(
-      env.DB,
-      'INSERT INTO rate_limits (bucket, count, reset_at) VALUES (?, 1, ?) ON CONFLICT(bucket) DO UPDATE SET count = 1, reset_at = ?',
-      bucket,
-      resetAt,
-      resetAt
-    );
-    return { ok: true, retryAfter: 0 };
-  }
-  if (row.count >= limit) {
-    return { ok: false, retryAfter: Math.ceil((row.reset_at - now) / 1000) };
-  }
-  await db.run(env.DB, 'UPDATE rate_limits SET count = count + 1 WHERE bucket = ?', bucket);
-  return { ok: true, retryAfter: 0 };
+  const retryAfter = row ? Math.ceil((row.reset_at - now) / 1000) : windowSec;
+  return { ok: false, retryAfter: Math.max(retryAfter, 1) };
 }
 
 // Best-effort cleanup of expired buckets. Called from the scheduled (cron) handler.

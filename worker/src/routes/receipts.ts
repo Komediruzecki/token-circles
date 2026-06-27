@@ -81,6 +81,19 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
   const txRaw = body['transaction_id'];
   const transactionId = typeof txRaw === 'string' && txRaw ? Number(txRaw) : null;
 
+  // The transaction must belong to the active profile. Without this check a caller could attach a
+  // receipt to ANOTHER profile's transaction id, and since receipts.transaction_id is globally
+  // UNIQUE that also blocks the real owner from ever attaching one (collision DoS).
+  if (transactionId !== null) {
+    const ownsTx = await db.first<{ id: number }>(
+      c.env.DB,
+      'SELECT id FROM transactions WHERE id = ? AND profile_id = ?',
+      transactionId,
+      pid
+    );
+    if (!ownsTx) throw new HttpError(404, 'Transaction not found');
+  }
+
   // receipts.transaction_id is UNIQUE — re-uploading for the same transaction replaces the
   // previous receipt (drop its row + R2 object first) rather than hitting a UNIQUE 500.
   if (transactionId !== null) {

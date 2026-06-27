@@ -50,23 +50,40 @@ async function getTagsForTransaction(
 
 // Mirrors the Express recalcGoalsByCategory/recalcGoalProgress helpers: any savings
 // goal linked to `categoryId` has its current_amount set to SUM(ABS(amount)) of all
-// transactions in that category.
-async function recalcGoalsByCategory(d1: D1Database, categoryId: number | null): Promise<void> {
-  if (!categoryId) return;
+// transactions in that category. SCOPED to the active profile(s): without the profile
+// predicate a forged/foreign category_id would let one user's write recompute (and corrupt)
+// another user's goal against their transactions.
+async function recalcGoalsByCategory(
+  d1: D1Database,
+  categoryId: number | null,
+  pids: number[]
+): Promise<void> {
+  if (!categoryId || pids.length === 0) return;
+  const inClause = pids.map(() => '?').join(',');
   const goals = await db.all<{ id: number; category_id: number | null }>(
     d1,
-    'SELECT id, category_id FROM savings_goals WHERE category_id = ?',
-    categoryId
+    `SELECT id, category_id FROM savings_goals WHERE category_id = ? AND profile_id IN (${inClause})`,
+    categoryId,
+    ...pids
   );
   for (const g of goals) {
     if (!g.category_id) continue;
     const total = await db.first<{ total: number }>(
       d1,
-      'SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id = ?',
-      g.category_id
+      `SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id = ? AND profile_id IN (${inClause})`,
+      g.category_id,
+      ...pids
     );
     await db.update(d1, 'savings_goals', { current_amount: total?.total ?? 0 }, 'id = ?', g.id);
   }
+}
+
+// D1 caps bound variables at ~100 per statement. Split an id list into chunks small enough that
+// `chunk.length + extra` placeholders stay under that ceiling (extra = profile-id + SET binds).
+function chunkIds<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 // ── GET /api/transactions — main list with filters + categories LEFT JOIN ─────
@@ -102,7 +119,8 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
     const ids = categoryIdsQ
       .split(',')
       .map((id) => parseInt(id, 10))
-      .filter((id) => !isNaN(id));
+      .filter((id) => !isNaN(id))
+      .slice(0, 80); // cap to stay under D1's ~100 bound-variable limit on the IN-list
     if (ids.length > 0) {
       where.push(`t.category_id IN (${ids.map(() => '?').join(',')})`);
       params.push(...ids);
@@ -243,7 +261,8 @@ transactionsRoutes.get('/api/transactions/summary', requireAuth, async (c) => {
     const ids = categoryIdsQ
       .split(',')
       .map((id) => parseInt(id, 10))
-      .filter((id) => !isNaN(id));
+      .filter((id) => !isNaN(id))
+      .slice(0, 80); // cap to stay under D1's ~100 bound-variable limit on the IN-list
     if (ids.length > 0) {
       sql += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
       params.push(...ids);
@@ -294,57 +313,83 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     throw new HttpError(400, 'Cannot update more than 1000 transactions at once');
   }
 
-  const placeholders = ids.map(() => '?').join(',');
-  const authParams = [...pids, ...ids];
+  // D1 allows ~100 bound variables per statement; chunk the id list (reserving room for the
+  // profile-id binds and, on UPDATE, the SET binds) so large selections don't trip
+  // "too many SQL variables".
+  const idChunks = chunkIds(ids, Math.max(1, 90 - pids.length));
 
   if (typeof action === 'string' && action.toLowerCase() === 'delete') {
-    // Reverse account balance effects before bulk delete.
-    const txRows = await db.all<TxRow>(
-      c.env.DB,
-      `SELECT id, account_id, transfer_account_id, type, amount FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
-      ...authParams
-    );
-    for (const tx of txRows) {
-      if (!tx.account_id) continue;
-      if (tx.type === 'transfer' && tx.transfer_account_id) {
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-          tx.amount,
-          tx.account_id,
-          ...pids
-        );
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-          tx.amount,
-          tx.transfer_account_id,
-          ...pids
-        );
-      } else if (tx.type === 'income') {
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-          tx.amount,
-          tx.account_id,
-          ...pids
-        );
-      } else if (tx.type === 'expense') {
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-          tx.amount,
-          tx.account_id,
-          ...pids
-        );
+    let deleted = 0;
+    const affectedCategories = new Set<number>();
+    for (const chunk of idChunks) {
+      const placeholders = chunk.map(() => '?').join(',');
+      // Reverse account balance effects before deleting. Mirrors the single-DELETE handler so
+      // transfer/income rows stored with account_id NULL (money credited only to
+      // transfer_account_id) are reversed too — the old `if (!tx.account_id) continue` skipped them.
+      const txRows = await db.all<TxRow>(
+        c.env.DB,
+        `SELECT id, category_id, account_id, transfer_account_id, type, amount
+           FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+        ...pids,
+        ...chunk
+      );
+      for (const tx of txRows) {
+        if (tx.category_id) affectedCategories.add(tx.category_id);
+        if (tx.account_id) {
+          if (tx.type === 'transfer' && tx.transfer_account_id) {
+            await db.run(
+              c.env.DB,
+              `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+              tx.amount,
+              tx.account_id,
+              ...pids
+            );
+            await db.run(
+              c.env.DB,
+              `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
+              tx.amount,
+              tx.transfer_account_id,
+              ...pids
+            );
+          } else if (tx.type === 'transfer') {
+            await db.run(
+              c.env.DB,
+              `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+              tx.amount,
+              tx.account_id,
+              ...pids
+            );
+          } else if (tx.type === 'income' || tx.type === 'expense') {
+            const delta = tx.type === 'income' ? -tx.amount : tx.amount;
+            await db.run(
+              c.env.DB,
+              `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+              delta,
+              tx.account_id,
+              ...pids
+            );
+          }
+        } else if (tx.transfer_account_id && tx.type === 'transfer') {
+          await db.run(
+            c.env.DB,
+            `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
+            tx.amount,
+            tx.transfer_account_id,
+            ...pids
+          );
+        }
       }
+      const result = await db.run(
+        c.env.DB,
+        `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+        ...pids,
+        ...chunk
+      );
+      deleted += result.meta.changes ?? 0;
     }
-    const result = await db.run(
-      c.env.DB,
-      `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
-      ...authParams
-    );
-    return c.json({ ok: true, deleted: result.meta.changes });
+    // Keep linked savings-goal progress in sync (the single-DELETE path does this too).
+    for (const cat of affectedCategories) await recalcGoalsByCategory(c.env.DB, cat, pids);
+    return c.json({ ok: true, deleted });
   }
 
   if (typeof action === 'string' && action.toLowerCase() === 'update') {
@@ -362,13 +407,13 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
       'reconciled',
     ];
     const updates: string[] = [];
-    const updateParams: unknown[] = [];
+    const setParams: unknown[] = [];
 
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(data, field)) {
         if (field === 'category_id') {
           updates.push('category_id = ?');
-          updateParams.push(
+          setParams.push(
             data.category_id === null || data.category_id === ''
               ? null
               : parseInt(data.category_id, 10)
@@ -376,16 +421,16 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
         } else if (field === 'reconciled') {
           // Convert boolean to integer for SQLite.
           updates.push('reconciled = ?');
-          updateParams.push(data.reconciled ? 1 : 0);
+          setParams.push(data.reconciled ? 1 : 0);
         } else if (field === 'type') {
           if (!['income', 'expense', 'transfer'].includes(data.type)) {
             throw new HttpError(400, 'Invalid type. Must be income, expense, or transfer');
           }
           updates.push('type = ?');
-          updateParams.push(data.type);
+          setParams.push(data.type);
         } else {
           updates.push(`${field} = ?`);
-          updateParams.push(data[field] || '');
+          setParams.push(data[field] || '');
         }
       }
     }
@@ -395,14 +440,20 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     }
 
     updates.push("updated_at = datetime('now')");
-    updateParams.push(...pids, ...ids);
 
-    const result = await db.run(
-      c.env.DB,
-      `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
-      ...updateParams
-    );
-    return c.json({ ok: true, updated: result.meta.changes });
+    let updated = 0;
+    for (const chunk of idChunks) {
+      const placeholders = chunk.map(() => '?').join(',');
+      const result = await db.run(
+        c.env.DB,
+        `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+        ...setParams,
+        ...pids,
+        ...chunk
+      );
+      updated += result.meta.changes ?? 0;
+    }
+    return c.json({ ok: true, updated });
   }
 
   throw new HttpError(400, "Invalid action. Must be 'delete' or 'update'");
@@ -608,7 +659,7 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   }
 
   // Recalculate linked goal progress.
-  if (category_id) await recalcGoalsByCategory(c.env.DB, category_id);
+  if (category_id) await recalcGoalsByCategory(c.env.DB, category_id, pids);
 
   return c.json(created);
 });
@@ -918,7 +969,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   }
 
   // Recalculate linked goal progress.
-  if (category_id !== undefined) await recalcGoalsByCategory(c.env.DB, category_id || null);
+  if (category_id !== undefined) await recalcGoalsByCategory(c.env.DB, category_id || null, pids);
 
   return c.json({ ok: true });
 });
@@ -993,7 +1044,7 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
     );
   }
 
-  if (tx && tx.category_id) await recalcGoalsByCategory(c.env.DB, tx.category_id);
+  if (tx && tx.category_id) await recalcGoalsByCategory(c.env.DB, tx.category_id, pids);
 
   return c.json({ ok: true });
 });
