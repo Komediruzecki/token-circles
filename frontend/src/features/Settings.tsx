@@ -237,6 +237,64 @@ export default function Settings() {
     }
   }
 
+  // ── Email reminders (server mode only; the worker exposes /api/notifications/*) ──
+  const [notif, setNotif] = createSignal<{
+    email: string
+    emailNotifications: boolean
+    budgetAlerts: boolean
+    spendingReport: boolean
+  } | null>(null)
+  const [notifBusy, setNotifBusy] = createSignal(false)
+  const loadNotifications = async () => {
+    try {
+      const res = await apiFetch('/api/notifications/settings', { credentials: 'include' })
+      setNotif(res.ok ? await res.json() : null)
+    } catch {
+      setNotif(null)
+    }
+  }
+  const saveNotifications = async () => {
+    const n = notif()
+    if (!n) return
+    setNotifBusy(true)
+    try {
+      const res = await apiFetch('/api/notifications/settings', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(n),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save')
+      toast('Notification settings saved.', 'success')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not save', 'error')
+    } finally {
+      setNotifBusy(false)
+    }
+  }
+  const sendTestEmail = async () => {
+    setNotifBusy(true)
+    try {
+      const res = await apiFetch('/api/notifications/test-email', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not send')
+      toast(
+        data.skipped
+          ? 'Email is not configured on the server yet (no-op in dev).'
+          : 'Test email sent — check your inbox.',
+        data.skipped ? 'info' : 'success'
+      )
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not send', 'error')
+    } finally {
+      setNotifBusy(false)
+    }
+  }
+
   // Load saved settings
   onMount(() => {
     const savedCurrency = localStorage.getItem('localCurrency')
@@ -259,7 +317,10 @@ export default function Settings() {
 
     void loadHouseholdProfiles()
 
-    if (storageMode() === 'self-hosted') void loadBilling()
+    if (storageMode() === 'self-hosted') {
+      void loadBilling()
+      void loadNotifications()
+    }
     const billingParam = new URLSearchParams(window.location.search).get('billing')
     if (billingParam === 'success' || billingParam === 'cancel') {
       toast(
@@ -585,6 +646,80 @@ export default function Settings() {
                       {billingBusy() ? 'Redirecting…' : 'Manage billing'}
                     </button>
                   </Show>
+                </div>
+              </div>
+            </Show>
+            <Show when={storageMode() === 'self-hosted' && notif()}>
+              <div class={styles.card}>
+                <div class={styles.settingsSection}>
+                  <div class={styles.settingsSectionTitle}>Email Reminders</div>
+                  <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
+                    Budget alerts and a periodic spending report, sent to your email. Requires a
+                    paid plan.
+                  </p>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>Email address</label>
+                    <input
+                      class={styles.formControl}
+                      type="email"
+                      value={notif()!.email}
+                      onInput={(e) => setNotif({ ...notif()!, email: e.currentTarget.value })}
+                      placeholder="you@example.com"
+                      style="max-width: 320px;"
+                    />
+                  </div>
+                  <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
+                    <input
+                      type="checkbox"
+                      checked={notif()!.emailNotifications}
+                      onChange={(e) =>
+                        setNotif({ ...notif()!, emailNotifications: e.currentTarget.checked })
+                      }
+                    />
+                    <span>Enable email notifications</span>
+                  </label>
+                  <label
+                    style={`display:flex; align-items:center; gap:8px; margin:8px 0 8px 20px; cursor:pointer; opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={notif()!.budgetAlerts}
+                      disabled={!notif()!.emailNotifications}
+                      onChange={(e) =>
+                        setNotif({ ...notif()!, budgetAlerts: e.currentTarget.checked })
+                      }
+                    />
+                    <span>Budget alerts (weekly)</span>
+                  </label>
+                  <label
+                    style={`display:flex; align-items:center; gap:8px; margin:8px 0 8px 20px; cursor:pointer; opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={notif()!.spendingReport}
+                      disabled={!notif()!.emailNotifications}
+                      onChange={(e) =>
+                        setNotif({ ...notif()!, spendingReport: e.currentTarget.checked })
+                      }
+                    />
+                    <span>Spending report (biweekly)</span>
+                  </label>
+                  <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button
+                      class={styles.btnPrimary}
+                      onclick={() => void saveNotifications()}
+                      disabled={notifBusy()}
+                    >
+                      {notifBusy() ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      class={styles.btnSecondary}
+                      onclick={() => void sendTestEmail()}
+                      disabled={notifBusy()}
+                    >
+                      Send test email
+                    </button>
+                  </div>
                 </div>
               </div>
             </Show>
