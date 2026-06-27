@@ -117,7 +117,7 @@ profilesRoutes.post('/api/profiles', requireAuth, async (c) => {
 // PUT + PATCH — rename (shared handler).
 const renameProfile = async (c: Context<AppEnv>) => {
   const userId = c.get('userId');
-  const pid = parseInt(c.req.param('id'), 10);
+  const pid = parseInt(c.req.param('id') ?? '', 10);
   await assertOwned(c, pid);
   const b = (await c.req.json().catch(() => ({}))) as { name?: string };
   if (b.name !== undefined) {
@@ -144,7 +144,7 @@ profilesRoutes.patch('/api/profiles/:id', requireAuth, renameProfile);
 // DELETE — remove a profile and all its data (never the user's last profile).
 profilesRoutes.delete('/api/profiles/:id', requireAuth, async (c) => {
   const userId = c.get('userId');
-  const pid = parseInt(c.req.param('id'), 10);
+  const pid = parseInt(c.req.param('id') ?? '', 10);
   await assertOwned(c, pid);
   const count = await db.first<{ n: number }>(
     c.env.DB,
