@@ -35,6 +35,9 @@ export async function profilesList(): Promise<Response> {
       }
       return {
         ...p,
+        // Backfill created_at for profiles saved before the field existed — otherwise the
+        // client's ProfileSchema (which requires created_at) rejects the whole list.
+        created_at: (p as { created_at?: string }).created_at || new Date().toISOString(),
         transaction_count: txCount,
         account_count: acctCount,
         budget_count: budgetCount,
