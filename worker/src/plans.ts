@@ -20,7 +20,7 @@ export interface PlanFeatures {
   cloudSync: boolean; // data synced to the account (server) vs local-only
   emailReminders: boolean; // budget alerts + spending reports by email
   receipts: boolean; // receipt file storage (R2)
-  advancedReports: boolean; // tax / P&L / forecast / extended analytics exports
+  advancedReports: boolean; // tax summary + P&L reports (plain monthly/annual PDF stays free)
 }
 
 export interface PlanDef {
@@ -38,36 +38,43 @@ export const PLANS: Record<PlanId, PlanDef> = {
     name: 'Free',
     monthlyPriceUsd: 0,
     annualPriceUsd: 0,
-    // Local-only (no cloud sync) → the worker holds no data for free users, so receipts and
-    // server-side reminders are inherently paid. Core budgeting stays fully usable client-side.
-    limits: { receiptsPerProfile: 0, remindersPerMonth: 0, profiles: 1 },
-    features: { cloudSync: false, emailReminders: false, receipts: false, advancedReports: false },
+    // Local-first: no cloud sync, no receipt storage. Core budgeting + PDF exports (monthly/
+    // annual financial reports) stay fully usable client-side. A small allowance of reminder
+    // emails is included; enforcing the 10/mo cap — and the minimal server-side sync those
+    // reminders require — is a TODO (see pricing-plans.md).
+    limits: { receiptsPerProfile: 0, remindersPerMonth: 10, profiles: 2 },
+    features: { cloudSync: false, emailReminders: true, receipts: false, advancedReports: false },
   },
   basic: {
     id: 'basic',
     name: 'Basic',
-    monthlyPriceUsd: 4.99,
-    annualPriceUsd: 39,
-    limits: { receiptsPerProfile: 500, remindersPerMonth: 2000, profiles: 1 },
-    features: { cloudSync: true, emailReminders: true, receipts: true, advancedReports: false },
+    monthlyPriceUsd: 3,
+    annualPriceUsd: 30, // annual ≈ 2 months free
+    limits: { receiptsPerProfile: 500, remindersPerMonth: 2000, profiles: 5 },
+    features: { cloudSync: true, emailReminders: true, receipts: true, advancedReports: true },
   },
   advanced: {
     id: 'advanced',
     name: 'Advanced',
-    monthlyPriceUsd: 8.99,
-    annualPriceUsd: 69,
-    limits: { receiptsPerProfile: 5000, remindersPerMonth: 20000, profiles: 3 },
+    monthlyPriceUsd: 6,
+    annualPriceUsd: 60, // annual ≈ 2 months free
+    limits: { receiptsPerProfile: 5000, remindersPerMonth: 20000, profiles: 10 },
     features: { cloudSync: true, emailReminders: true, receipts: true, advancedReports: true },
   },
   ultimate: {
     id: 'ultimate',
     name: 'Ultimate',
-    monthlyPriceUsd: 13.99,
-    annualPriceUsd: 109,
+    monthlyPriceUsd: 10,
+    annualPriceUsd: 100, // annual ≈ 2 months free
+    // "Unlimited" (null) limits are subject to FAIR_USE_NOTICE.
     limits: { receiptsPerProfile: null, remindersPerMonth: null, profiles: null },
     features: { cloudSync: true, emailReminders: true, receipts: true, advancedReports: true },
   },
 };
+
+// User-facing notices, surfaced in the billing/plan UI. Edit the text here.
+export const BETA_NOTICE = 'Plans, prices and limits may change at any time during beta.';
+export const FAIR_USE_NOTICE = 'Ultimate "unlimited" usage is subject to fair-use limits.';
 
 // The current Stripe webhook stores users.plan = 'premium' (single price). Until per-tier
 // Stripe Prices are wired, map that legacy value to a concrete tier here.
