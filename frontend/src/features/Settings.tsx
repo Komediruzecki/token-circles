@@ -30,6 +30,7 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
+import SupportContact from '../components/SupportContact'
 import { toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
@@ -1234,6 +1235,9 @@ export default function Settings() {
                 <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
                   v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
                 </p>
+                <div style="margin-top: 12px;">
+                  <SupportContact />
+                </div>
               </div>
             </div>
           </div>

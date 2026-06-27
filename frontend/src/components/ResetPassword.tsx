@@ -2,6 +2,7 @@ import { createSignal, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
+import SupportContact from './SupportContact'
 
 /**
  * Full-page "set a new password" screen, reached from the magic link in a reset email
@@ -191,6 +192,10 @@ export default function ResetPassword() {
             Back to sign in
           </button>
         </Show>
+
+        <div style={{ 'margin-top': '18px', 'text-align': 'center' }}>
+          <SupportContact label="Didn't get the email? Contact support" />
+        </div>
       </div>
     </div>
   )
