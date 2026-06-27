@@ -3,6 +3,7 @@ import { api } from '../core/api'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
 import SupportContact from './SupportContact'
+import Turnstile, { resetTurnstile, turnstileEnabled } from './Turnstile'
 
 /**
  * Full-page sign-in gate, shown in server (self-hosted) mode when there's no valid session.
@@ -16,6 +17,7 @@ export default function LoginScreen() {
   const [error, setError] = createSignal('')
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
+  const [turnstileToken, setTurnstileToken] = createSignal('')
 
   const submit = async (e: Event) => {
     e.preventDefault()
@@ -32,7 +34,7 @@ export default function LoginScreen() {
       }
       setLoading(true)
       try {
-        await api.forgotPassword(em)
+        await api.forgotPassword(em, turnstileToken())
         setNotice(
           'If an account exists for that email, a reset link is on its way. Check your inbox.'
         )
@@ -40,6 +42,8 @@ export default function LoginScreen() {
         setError(err instanceof Error ? err.message : 'Something went wrong')
       } finally {
         setLoading(false)
+        resetTurnstile()
+        setTurnstileToken('')
       }
       return
     }
@@ -55,13 +59,15 @@ export default function LoginScreen() {
     }
     setLoading(true)
     try {
-      if (mode() === 'register') await api.register(em, pw)
-      else await api.loginWithPassword(em, pw)
+      if (mode() === 'register') await api.register(em, pw, turnstileToken())
+      else await api.loginWithPassword(em, pw, turnstileToken())
       // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
+      resetTurnstile()
+      setTurnstileToken('')
     }
   }
 
@@ -166,11 +172,12 @@ export default function LoginScreen() {
               {notice()}
             </div>
           </Show>
+          <Turnstile onToken={setTurnstileToken} />
           <button
             type="submit"
             class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
             style={{ width: '100%', 'justify-content': 'center' }}
-            disabled={loading()}
+            disabled={loading() || (turnstileEnabled && !turnstileToken())}
           >
             {loading()
               ? 'Please wait…'

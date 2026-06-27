@@ -54,6 +54,7 @@ export interface Env {
   RESEND_API_KEY?: string; // secret — Resend API key for reminder emails (unset → emails skip)
   EMAIL_FROM?: string; // var — From address, e.g. "Token Circles <hello@tokencircles.com>" (repliable, not no-reply)
   SUPPORT_EMAIL?: string; // secret — private inbox the contact form relays to (unset → disabled)
+  TURNSTILE_SECRET?: string; // secret — Cloudflare Turnstile secret; unset → captcha gate disabled
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
