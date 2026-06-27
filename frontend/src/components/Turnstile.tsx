@@ -20,6 +20,7 @@ declare global {
 }
 
 let scriptPromise: Promise<void> | null = null
+
 function loadScript(): Promise<void> {
   if (scriptPromise) return scriptPromise
   scriptPromise = new Promise((resolve, reject) => {
@@ -27,8 +28,12 @@ function loadScript(): Promise<void> {
     s.src = SCRIPT_SRC
     s.async = true
     s.defer = true
-    s.onload = () => resolve()
-    s.onerror = () => reject(new Error('Failed to load Turnstile'))
+    s.onload = () => {
+      resolve()
+    }
+    s.onerror = () => {
+      reject(new Error('Failed to load Turnstile'))
+    }
     document.head.appendChild(s)
   })
   return scriptPromise
@@ -54,12 +59,20 @@ export default function Turnstile(props: { onToken: (token: string) => void }) {
         if (!window.turnstile || !el) return
         widgetId = window.turnstile.render(el, {
           sitekey: SITE_KEY,
-          callback: (token: string) => props.onToken(token),
-          'error-callback': () => props.onToken(''),
-          'expired-callback': () => props.onToken(''),
+          callback: (token: string) => {
+            props.onToken(token)
+          },
+          'error-callback': () => {
+            props.onToken('')
+          },
+          'expired-callback': () => {
+            props.onToken('')
+          },
         })
       })
-      .catch(() => props.onToken(''))
+      .catch(() => {
+        props.onToken('')
+      })
   })
 
   onCleanup(() => {
