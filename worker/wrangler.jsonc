@@ -52,8 +52,11 @@
       ],
       "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts-dev" }],
       "triggers": {
-        // Budget alerts Mon 09:00 UTC; spending report ~biweekly Thu 10:00 UTC.
-        "crons": ["0 9 * * 1", "0 10 1-7,15-21 * 4"],
+        // Budget alerts Mon 09:00 UTC; spending report twice monthly (1st + 15th) 10:00 UTC.
+        // NB: cron day-of-month and day-of-week are OR'd, so the old "1-7,15-21 * 4" fired on every
+        // day in those ranges AND every Thursday. Day-of-week is now "*" and the report is idempotent
+        // per half-month period (reminder_dedup), so a re-fire can't double-send.
+        "crons": ["0 9 * * 1", "0 10 1,15 * *"],
       },
     },
 

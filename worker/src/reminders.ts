@@ -292,6 +292,25 @@ async function recordSend(env: Env, userId: number): Promise<void> {
   );
 }
 
+// Atomically claim a one-time send slot for (user, key). Returns true only on the FIRST claim;
+// a re-fired cron (or an over-matching schedule) gets false and skips the send, so the same
+// report is never emailed twice for the same period. See migration 0007 (reminder_dedup).
+async function claimReminderSlot(env: Env, userId: number, key: string): Promise<boolean> {
+  const res = await db.run(
+    env.DB,
+    'INSERT INTO reminder_dedup (user_id, dedup_key) VALUES (?, ?) ON CONFLICT(user_id, dedup_key) DO NOTHING',
+    userId,
+    key
+  );
+  return (res.meta.changes ?? 0) > 0;
+}
+
+// Half-month period key for the spending report (fires on the 1st and 15th → H1 / H2).
+function reportPeriodKey(): string {
+  const now = new Date();
+  return `report:${now.toISOString().slice(0, 7)}-H${now.getUTCDate() < 15 ? 1 : 2}`;
+}
+
 export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boolean> {
   if (!eligible(u)) return false;
   const pids = await profileIdsForUser(env, u.id);
@@ -308,6 +327,9 @@ export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boo
   const html = budgetAlertHtml(deduped, await ensureUnsubToken(env, u), env);
   if (!html) return false;
   if (!(await withinQuota(env, u))) return false;
+  // Idempotent per calendar day so a same-day cron re-fire can't double-send.
+  if (!(await claimReminderSlot(env, u.id, `budget:${new Date().toISOString().slice(0, 10)}`)))
+    return false;
   await sendMail(env, u.email, `Budget alert — ${BRAND}`, html);
   await recordSend(env, u.id);
   return true;
@@ -321,11 +343,14 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
   if (!(await notifEnabled(env, pids[0], 'email_spending_report'))) return false;
 
   const token = await ensureUnsubToken(env, u);
+  const periodKey = reportPeriodKey();
   for (const pid of pids) {
     const report = await getSpendingReport(env, pid);
     const html = spendingReportHtml(report, token, env);
     if (html) {
       if (!(await withinQuota(env, u))) return false;
+      // Idempotent per half-month period so a re-fired cron can't email the same report twice.
+      if (!(await claimReminderSlot(env, u.id, periodKey))) return false;
       await sendMail(env, u.email, `Your spending report — ${BRAND}`, html);
       await recordSend(env, u.id);
       return true;
@@ -347,7 +372,7 @@ async function usersWithEmail(env: Env): Promise<UserRow[]> {
 export async function runScheduledReminders(cron: string, env: Env): Promise<void> {
   const users = await usersWithEmail(env);
   const isBudget = cron === '0 9 * * 1';
-  const isReport = cron === '0 10 1-7,15-21 * 4';
+  const isReport = cron === '0 10 1,15 * *';
   for (const u of users) {
     try {
       if (isBudget) await sendBudgetAlertsForUser(env, u);

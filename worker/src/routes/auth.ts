@@ -17,6 +17,11 @@ import { enforce, clientIp } from '../ratelimit';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+// A fixed, valid-format PBKDF2 hash (same 100k cost as a real one) that no password matches. Login
+// verifies against this when the account or its hash is absent, so the response time is the same
+// whether or not the email is registered — closing the user-enumeration timing oracle.
+const DUMMY_PASSWORD_HASH = `pbkdf2$100000$${'A'.repeat(22)}$${'A'.repeat(43)}`;
+
 // How long a password-reset magic link stays valid. Tune freely (a few hours is the
 // safe default; raise toward 24–72h if you want links to survive longer email delays).
 const RESET_TOKEN_TTL_HOURS = 2;
@@ -150,10 +155,18 @@ authRoutes.post('/api/auth/login', async (c) => {
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
   if (!email || !password) return c.json({ error: 'Email and password are required' }, 400);
+  // Per-account throttle (on top of per-IP) so a single account can't be brute-forced from rotating
+  // IPs. Mirrors the layered approach used in forgot-password.
+  const emailRl = await enforce(c, `login-email:${email}`, 10, 900);
+  if (emailRl) return emailRl;
   const user = await c.env.DB.prepare('SELECT id, password_hash FROM users WHERE email = ?')
     .bind(email)
     .first<{ id: number; password_hash: string | null }>();
-  if (!user || !user.password_hash || !(await verifyPassword(password, user.password_hash))) {
+  // Always run a verification — against a dummy hash when the account/hash is missing — so login
+  // takes the same time regardless of whether the email exists (anti-enumeration). Then branch on
+  // the real outcome.
+  const passwordOk = await verifyPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
+  if (!user || !user.password_hash || !passwordOk) {
     return c.json({ error: 'Invalid email or password' }, 401);
   }
   c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env));

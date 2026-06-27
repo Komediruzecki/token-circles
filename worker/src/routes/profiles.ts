@@ -102,27 +102,28 @@ profilesRoutes.post('/api/profiles', requireAuth, async (c) => {
     name
   );
   if (dup) throw new HttpError(400, 'A profile with this name already exists');
-  // Per-plan profile cap (plans.ts; null = unlimited).
+  // Per-plan profile cap (plans.ts; null = unlimited). Enforced with a conditional INSERT so two
+  // concurrent creates can't both slip past a separate COUNT-then-INSERT check (TOCTOU): the row is
+  // only inserted while the user is under the limit, and 0 rows changed means the cap was hit.
   const limit = planLimit(await getUserPlan(c), 'profiles');
-  if (limit !== null) {
-    const count = await db.first<{ n: number }>(
-      c.env.DB,
-      'SELECT COUNT(*) AS n FROM profiles WHERE user_id = ?',
-      userId
+  const res =
+    limit === null
+      ? await db.run(c.env.DB, 'INSERT INTO profiles (name, user_id) VALUES (?, ?)', name, userId)
+      : await db.run(
+          c.env.DB,
+          `INSERT INTO profiles (name, user_id)
+             SELECT ?, ? WHERE (SELECT COUNT(*) FROM profiles WHERE user_id = ?) < ?`,
+          name,
+          userId,
+          userId,
+          limit
+        );
+  if (limit !== null && !res.meta.changes) {
+    throw new HttpError(
+      403,
+      `Your plan allows up to ${limit} profile${limit === 1 ? '' : 's'}. Upgrade for more.`
     );
-    if ((count?.n ?? 0) >= limit) {
-      throw new HttpError(
-        403,
-        `Your plan allows up to ${limit} profile${limit === 1 ? '' : 's'}. Upgrade for more.`
-      );
-    }
   }
-  const res = await db.run(
-    c.env.DB,
-    'INSERT INTO profiles (name, user_id) VALUES (?, ?)',
-    name,
-    userId
-  );
   const id = res.meta.last_row_id as number;
   // Return the full profile shape the client validates against — it requires `created_at`.
   const created = await db.first<{ created_at: string }>(
