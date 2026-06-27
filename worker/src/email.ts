@@ -6,7 +6,8 @@ export async function sendMail(
   env: Env,
   to: string,
   subject: string,
-  html: string
+  html: string,
+  opts?: { replyTo?: string }
 ): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
   if (!to) return { sent: false, skipped: true };
   if (!env.RESEND_API_KEY) {
@@ -24,6 +25,7 @@ export async function sendMail(
       to,
       subject,
       html,
+      ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}),
     }),
   });
   if (!res.ok) {

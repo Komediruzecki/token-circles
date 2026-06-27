@@ -2,6 +2,7 @@ import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
+import SupportContact from './SupportContact'
 
 /**
  * Full-page sign-in gate, shown in server (self-hosted) mode when there's no valid session.
@@ -264,6 +265,10 @@ export default function LoginScreen() {
             Try the demo — no account needed
           </button>
         </Show>
+
+        <div style={{ 'margin-top': '16px', 'text-align': 'center' }}>
+          <SupportContact />
+        </div>
       </div>
     </div>
   )

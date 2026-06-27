@@ -25,6 +25,7 @@ import { importRoutes } from './routes/imports';
 import { exportRoutes } from './routes/exports';
 import { billingRoutes } from './routes/billing';
 import { notificationsRoutes } from './routes/notifications';
+import { supportRoutes } from './routes/support';
 import { runScheduledReminders } from './reminders';
 import { sweepRateLimits } from './ratelimit';
 
@@ -44,6 +45,7 @@ export interface Env {
   STRIPE_PRICE_ID?: string; // var — recurring Price id (price_…) for the premium plan
   RESEND_API_KEY?: string; // secret — Resend API key for reminder emails (unset → emails skip)
   EMAIL_FROM?: string; // var — From address, e.g. "Token Circles <noreply@tokencircles.com>"
+  SUPPORT_EMAIL?: string; // secret — private inbox the contact form relays to (unset → disabled)
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
@@ -89,6 +91,7 @@ app.route('/', importRoutes);
 app.route('/', exportRoutes);
 app.route('/', billingRoutes);
 app.route('/', notificationsRoutes);
+app.route('/', supportRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
