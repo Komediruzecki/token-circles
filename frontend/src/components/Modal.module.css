@@ -32,12 +32,12 @@
   max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
-  transform: translate-y(20px);
+  transform: translateY(20px);
   transition: transform 0.2s;
 }
 
 .modal.visible {
-  transform: translate-y(0);
+  transform: translateY(0);
 }
 
 .modal-small {
