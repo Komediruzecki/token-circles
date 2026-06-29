@@ -268,7 +268,9 @@ export default function Settings() {
       text: `You're on the ${name} plan${b.renews_at ? ` — renews ${fmtBillingDate(b.renews_at)}` : ''}.`,
     }
   }
-  const [billingBusy, setBillingBusy] = createSignal(false)
+  // Which billing CTA is mid-redirect ('manage' or a plan id) — so only that button shows
+  // "Redirecting…", not all of them. Reset on pageshow (onMount) when returning from Stripe.
+  const [billingBusyKey, setBillingBusyKey] = createSignal<string | null>(null)
   const loadBilling = async () => {
     try {
       const res = await apiFetch('/api/billing/status', { credentials: 'include' })
@@ -277,8 +279,8 @@ export default function Settings() {
       setBilling(null)
     }
   }
-  const redirectToStripe = async (path: string, failMsg: string, body?: unknown) => {
-    setBillingBusy(true)
+  const redirectToStripe = async (path: string, failMsg: string, key: string, body?: unknown) => {
+    setBillingBusyKey(key)
     try {
       const res = await apiFetch(path, {
         method: 'POST',
@@ -292,7 +294,7 @@ export default function Settings() {
       else throw new Error(data.error || failMsg)
     } catch (e) {
       toast(e instanceof Error ? e.message : failMsg, 'error')
-      setBillingBusy(false)
+      setBillingBusyKey(null)
     }
   }
 
@@ -389,6 +391,12 @@ export default function Settings() {
       )
       window.history.replaceState({}, '', window.location.pathname + window.location.hash)
     }
+
+    // Returning from Stripe (browser-back / bfcache restore) can leave a CTA stuck on "Redirecting…";
+    // clear the redirect state whenever this page is shown again.
+    const clearBillingBusy = () => setBillingBusyKey(null)
+    window.addEventListener('pageshow', clearBillingBusy)
+    onCleanup(() => { window.removeEventListener('pageshow', clearBillingBusy); })
   })
 
   // Sync local currency changes
@@ -712,15 +720,19 @@ export default function Settings() {
                     currentPlan={() => billing()?.plan ?? 'free'}
                     configured={() => billing()?.configured ?? false}
                     availablePlans={() => billing()?.availablePlans ?? []}
-                    busy={billingBusy}
+                    busyKey={billingBusyKey}
                     onUpgrade={(plan, interval) =>
-                      redirectToStripe('/api/billing/checkout', 'Could not start checkout', {
+                      redirectToStripe('/api/billing/checkout', 'Could not start checkout', plan, {
                         plan,
                         interval,
                       })
                     }
                     onManage={() =>
-                      redirectToStripe('/api/billing/portal', 'Could not open billing portal')
+                      redirectToStripe(
+                        '/api/billing/portal',
+                        'Could not open billing portal',
+                        'manage'
+                      )
                     }
                   />
                 </div>

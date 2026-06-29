@@ -63,7 +63,9 @@ export default function BillingPlans(props: {
   currentPlan: () => string
   configured: () => boolean
   availablePlans: () => string[]
-  busy: () => boolean
+  // The CTA currently mid-redirect ('manage' or a plan id), or null. Only that button shows
+  // "Redirecting…"; the rest just disable to prevent a double-click.
+  busyKey: () => string | null
   onUpgrade: (planId: string, interval: 'monthly' | 'annual') => void
   onManage: () => void
 }) {
@@ -245,10 +247,10 @@ export default function BillingPlans(props: {
                       <button
                         type="button"
                         onClick={props.onManage}
-                        disabled={props.busy()}
+                        disabled={props.busyKey() !== null}
                         style={ctaStyle(false)}
                       >
-                        Manage billing
+                        {props.busyKey() === 'manage' ? 'Redirecting…' : 'Manage billing'}
                       </button>
                     </Show>
                   </Show>
@@ -259,13 +261,13 @@ export default function BillingPlans(props: {
                         props.onUpgrade(p.id, interval())
                       }}
                       disabled={
-                        props.busy() ||
+                        props.busyKey() !== null ||
                         !props.configured() ||
                         !props.availablePlans().includes(p.id)
                       }
                       style={ctaStyle(recommended)}
                     >
-                      {props.busy()
+                      {props.busyKey() === p.id
                         ? 'Redirecting…'
                         : props.configured() && props.availablePlans().includes(p.id)
                           ? 'Upgrade'
