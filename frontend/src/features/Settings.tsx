@@ -42,6 +42,12 @@ import { loadChartExportSettings, saveChartExportSettings } from '../utils/chart
 import styles from './SettingsPage.module.css'
 import type { ChartExportSettings } from '../utils/chartExportSettings'
 
+// Account self-deletion is dev-only for now: visible on the dev domain + local builds, hidden on the
+// production build (the worker also 501s DELETE /api/account in production). On prod, users delete
+// profiles/data in the Exports tab or contact support. Set VITE_ENABLE_ACCOUNT_DELETION=true to force-on.
+const ACCOUNT_DELETION_ENABLED =
+  import.meta.env.MODE !== 'production' || import.meta.env.VITE_ENABLE_ACCOUNT_DELETION === 'true'
+
 function Reports() {
   const [reportYear, setReportYear] = createSignal(new Date().getFullYear())
   const [reportMonth, setReportMonth] = createSignal(new Date().getMonth() + 1)
@@ -720,7 +726,13 @@ export default function Settings() {
                 </div>
               </div>
             </Show>
-            <Show when={activeTab() === 'billing' && storageMode() === 'self-hosted'}>
+            <Show
+              when={
+                activeTab() === 'billing' &&
+                storageMode() === 'self-hosted' &&
+                ACCOUNT_DELETION_ENABLED
+              }
+            >
               <div class={styles.card}>
                 <div class={styles.settingsSection}>
                   <AccountDeletion />
