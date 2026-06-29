@@ -19,11 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced internal todo.md with public ROADMAP.md
 - Added `.env.example` with documented environment variables
 
+## [5.1.1] — 2026-06-30
+
+### Security
+
+- Sign-up is now rate-limited per email address (not just per IP), curbing unsolicited account creation and email spam.
+
+### Fixed
+
+- A reminder email that fails to send is now retried on the next cron run instead of being skipped for that period (the dedup slot is rolled back on a failed send).
+
 ## [5.1.0] — 2026-06-27
 
 ### Added
 
-- Account deletion: permanently delete your account and all of its data from Settings → Billing (confirm by typing your account email). Dev = hard delete; production soft-delete to follow.
+- Account deletion: permanently delete your account and all of its data from Settings → Billing (confirm by typing your account email). Dev = hard delete; production soft-delete to follow; shown on the dev build only for now.
 - Optional Cloudflare Turnstile bot protection on the register / login / forgot-password forms (enable by setting `VITE_TURNSTILE_SITE_KEY` and the worker secret `TURNSTILE_SECRET`).
 
 ### Security
@@ -37,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The periodic spending-report email could be sent multiple times per month (cron day-of-month/day-of-week OR semantics) — now sent once per period, with per-period idempotency.
 - Re-running a failed or interrupted import no longer creates duplicate transactions (idempotent via a stable per-import id; migration `0008`).
+- The billing page could label a paid plan as "Free"; it now shows your real tier and, when a plan is canceled, the date access ends.
 
 ## [5.0.0] — 2026-06-27
 
