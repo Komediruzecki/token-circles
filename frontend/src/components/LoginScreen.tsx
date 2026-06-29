@@ -286,6 +286,16 @@ export default function LoginScreen() {
 
         <div style={{ 'margin-top': '16px', 'text-align': 'center' }}>
           <SupportContact />
+          <div
+            style={{
+              'margin-top': '10px',
+              color: 'var(--text-secondary)',
+              'font-size': '11px',
+              opacity: 0.7,
+            }}
+          >
+            v{__APP_VERSION__}
+          </div>
         </div>
       </div>
     </div>
