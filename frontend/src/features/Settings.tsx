@@ -221,9 +221,47 @@ export default function Settings() {
     plan: string
     status: string | null
     renews_at: string | null
+    cancel_at_period_end?: boolean
     configured: boolean
     availablePlans?: string[]
   } | null>(null)
+  // Real tier name (the per-tier webhook stores 'basic'/'advanced'/'ultimate'; 'premium' is legacy).
+  const planLabel = (p: string | undefined): string => {
+    if (p === 'basic') return 'Basic'
+    if (p === 'advanced' || p === 'premium') return 'Advanced'
+    if (p === 'ultimate') return 'Ultimate'
+    return 'Free'
+  }
+  const fmtBillingDate = (iso: string | null | undefined): string =>
+    iso
+      ? new Date(iso).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      : ''
+  // One-line plan status for the billing card. Canceled-but-not-yet-expired and past-due get their
+  // own colour/message; otherwise show the tier (and renewal date for an active paid plan).
+  const billingStatusLine = (): { color: string; text: string } => {
+    const b = billing()
+    if (!b || b.plan === 'free')
+      return { color: 'var(--text-secondary)', text: "You're on the Free plan." }
+    const name = planLabel(b.plan)
+    if (b.cancel_at_period_end)
+      return {
+        color: 'var(--warning, #f59e0b)',
+        text: `Your ${name} plan is canceled — you keep access until ${fmtBillingDate(b.renews_at)}, then move to Free.`,
+      }
+    if (b.status === 'past_due')
+      return {
+        color: 'var(--danger, #ef4444)',
+        text: `Your ${name} plan payment is past due — update your card to keep access.`,
+      }
+    return {
+      color: 'var(--text-secondary)',
+      text: `You're on the ${name} plan${b.renews_at ? ` — renews ${fmtBillingDate(b.renews_at)}` : ''}.`,
+    }
+  }
   const [billingBusy, setBillingBusy] = createSignal(false)
   const loadBilling = async () => {
     try {
@@ -659,12 +697,10 @@ export default function Settings() {
               <div class={styles.card}>
                 <div class={styles.settingsSection}>
                   <div class={styles.settingsSectionTitle}>Plan &amp; Billing</div>
-                  <p style="margin: 4px 0 16px; color: var(--text-secondary); font-size: 13px;">
-                    You're on the{' '}
-                    <strong style="color: var(--text);">
-                      {billing()?.plan === 'premium' ? 'Advanced' : 'Free'}
-                    </strong>{' '}
-                    plan{billing()?.status ? ` (${billing()!.status})` : ''}.
+                  <p
+                    style={`margin: 4px 0 16px; font-size: 13px; color: ${billingStatusLine().color};`}
+                  >
+                    {billingStatusLine().text}
                   </p>
                   <BillingPlans
                     currentPlan={() => billing()?.plan ?? 'free'}

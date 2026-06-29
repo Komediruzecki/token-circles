@@ -133,11 +133,18 @@ billingRoutes.get('/api/billing/status', requireAuth, async (c) => {
     plan: string;
     subscription_status: string | null;
     plan_renews_at: string | null;
-  }>(c.env.DB, 'SELECT plan, subscription_status, plan_renews_at FROM users WHERE id = ?', userId);
+    cancel_at_period_end: number | null;
+  }>(
+    c.env.DB,
+    'SELECT plan, subscription_status, plan_renews_at, cancel_at_period_end FROM users WHERE id = ?',
+    userId
+  );
   return c.json({
     plan: u?.plan ?? 'free',
     status: u?.subscription_status ?? null,
     renews_at: u?.plan_renews_at ?? null,
+    // True when the user canceled but still has access until renews_at (the period end).
+    cancel_at_period_end: !!u?.cancel_at_period_end,
     configured: !!c.env.STRIPE_SECRET_KEY,
     availablePlans: availablePlans(c.env), // which paid tiers have a Price configured
   });
@@ -195,15 +202,17 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
     customerId: string,
     plan: string,
     status: string,
-    renews: number | null
+    renews: number | null,
+    cancelAtPeriodEnd: number
   ) =>
     db.run(
       c.env.DB,
-      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, stripe_event_at = ?
+      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, cancel_at_period_end = ?, stripe_event_at = ?
          WHERE stripe_customer_id = ? AND ? >= stripe_event_at`,
       plan,
       status,
       renews ? new Date(renews * 1000).toISOString() : null,
+      cancelAtPeriodEnd,
       eventCreated,
       customerId,
       eventCreated
@@ -219,7 +228,7 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       if (userId) {
         await db.run(
           c.env.DB,
-          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ?, stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
+          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ?, cancel_at_period_end = 0, stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
           String(obj.customer),
           plan,
           'active',
@@ -243,16 +252,19 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       // legacy top-level field for older webhook versions.
       const renews =
         item?.current_period_end ?? (obj.current_period_end as number | undefined) ?? null;
+      // cancel_at_period_end = the user canceled but keeps access until the period end.
+      const cancelAtPeriodEnd = obj.cancel_at_period_end ? 1 : 0;
       await applySubscription(
         String(obj.customer),
         isEntitled(status) ? (metaPlan ?? subPlan ?? 'premium') : 'free',
         status,
-        renews
+        renews,
+        cancelAtPeriodEnd
       );
       break;
     }
     case 'customer.subscription.deleted':
-      await applySubscription(String(obj.customer), 'free', 'canceled', null);
+      await applySubscription(String(obj.customer), 'free', 'canceled', null, 0);
       break;
   }
   return c.json({ received: true });
