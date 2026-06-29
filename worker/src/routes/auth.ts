@@ -161,6 +161,10 @@ authRoutes.post('/api/auth/register', async (c) => {
   const password = body.password ?? '';
   if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
   if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  // Per-email cap (on top of the per-IP cap) so one address can't be email-bombed / junk-registered
+  // from rotating IPs. Mirrors forgot-password; the response stays neutral (429 for existing + new).
+  const emailRl = await enforce(c, `register-email:${email}`, 3, 3600);
+  if (emailRl) return emailRl;
   // Anti-enumeration (CR-9): never reveal whether the email already exists. Always run the password
   // hash (so timing doesn't betray the branch), then EITHER create a new account OR notify the
   // existing owner by email — returning the SAME neutral response with NO session either way. The

@@ -12,13 +12,31 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '5.1.1',
+    date: '2026-06-30',
+    sections: [
+      {
+        title: 'Security',
+        items: [
+          'Sign-up is now rate-limited per email address (not just per IP), curbing unsolicited account creation and email spam',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'A reminder email that fails to send is now retried on the next run instead of being skipped for that period',
+        ],
+      },
+    ],
+  },
+  {
     version: '5.1.0',
     date: '2026-06-27',
     sections: [
       {
         title: 'Added',
         items: [
-          'Delete your account and all of its data from Settings → Billing — confirm by typing your account email',
+          'Delete your account and all of its data from Settings → Billing — confirm by typing your account email (available on the dev build for now)',
           'Optional bot protection (Cloudflare Turnstile) on the sign-in, sign-up, and forgot-password forms',
         ],
       },
@@ -35,6 +53,7 @@ const CHANGELOG: ChangelogEntry[] = [
         items: [
           'The periodic spending-report email could be sent several times in a month — it is now sent once per period',
           'Re-running an interrupted import no longer creates duplicate transactions',
+          'The billing page could label a paid plan as "Free"; it now shows your real tier, plus the date access ends when a plan is canceled',
         ],
       },
     ],

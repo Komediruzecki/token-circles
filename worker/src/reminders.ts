@@ -311,6 +311,38 @@ function reportPeriodKey(): string {
   return `report:${now.toISOString().slice(0, 7)}-H${now.getUTCDate() < 15 ? 1 : 2}`;
 }
 
+// Roll back a previously-claimed dedup slot (used when the send fails, so a transient error doesn't
+// suppress that period's email until the next period).
+async function releaseReminderSlot(env: Env, userId: number, key: string): Promise<void> {
+  await db.run(
+    env.DB,
+    'DELETE FROM reminder_dedup WHERE user_id = ? AND dedup_key = ?',
+    userId,
+    key
+  );
+}
+
+// Send an already-claimed reminder. Returns true only if it actually went out; on any failure (a
+// Resend error or a thrown network error) it releases the dedup slot so the next cron fire retries
+// instead of permanently skipping this period. Claim-before-send still prevents double-sends.
+async function sendClaimed(
+  env: Env,
+  userId: number,
+  dedupKey: string,
+  to: string,
+  subject: string,
+  html: string
+): Promise<boolean> {
+  let sent = false;
+  try {
+    sent = (await sendMail(env, to, subject, html)).sent;
+  } catch {
+    sent = false;
+  }
+  if (!sent) await releaseReminderSlot(env, userId, dedupKey);
+  return sent;
+}
+
 export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boolean> {
   if (!eligible(u)) return false;
   const pids = await profileIdsForUser(env, u.id);
@@ -327,10 +359,12 @@ export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boo
   const html = budgetAlertHtml(deduped, await ensureUnsubToken(env, u), env);
   if (!html) return false;
   if (!(await withinQuota(env, u))) return false;
-  // Idempotent per calendar day so a same-day cron re-fire can't double-send.
-  if (!(await claimReminderSlot(env, u.id, `budget:${new Date().toISOString().slice(0, 10)}`)))
+  // Idempotent per calendar day so a same-day cron re-fire can't double-send. sendClaimed rolls the
+  // claim back if the send fails, so a transient error doesn't suppress today's alert.
+  const dedupKey = `budget:${new Date().toISOString().slice(0, 10)}`;
+  if (!(await claimReminderSlot(env, u.id, dedupKey))) return false;
+  if (!(await sendClaimed(env, u.id, dedupKey, u.email, `Budget alert — ${BRAND}`, html)))
     return false;
-  await sendMail(env, u.email, `Budget alert — ${BRAND}`, html);
   await recordSend(env, u.id);
   return true;
 }
@@ -351,7 +385,10 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
       if (!(await withinQuota(env, u))) return false;
       // Idempotent per half-month period so a re-fired cron can't email the same report twice.
       if (!(await claimReminderSlot(env, u.id, periodKey))) return false;
-      await sendMail(env, u.email, `Your spending report — ${BRAND}`, html);
+      if (
+        !(await sendClaimed(env, u.id, periodKey, u.email, `Your spending report — ${BRAND}`, html))
+      )
+        return false;
       await recordSend(env, u.id);
       return true;
     }
