@@ -42,16 +42,14 @@
         "APP_ORIGINS": "https://dev.tokencircles.com",
         "COOKIE_DOMAIN": ".dev.tokencircles.com",
         "EMAIL_FROM": "Token Circles <hello@tokencircles.com>",
-        // Stripe per-tier Price ids (use TEST-mode `price_...` for dev). Uncomment + fill to enable
-        // each tier's Upgrade button; a tier with no price shows "Coming soon". These are vars (not
-        // secret). STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET are SECRETS — set with `wrangler secret
-        // put`, NOT here. Full steps: dotfiles/personal/finance/billing-setup.md.
-        // "STRIPE_PRICE_BASIC_MONTHLY": "price_...",
-        // "STRIPE_PRICE_BASIC_ANNUAL": "price_...",
-        // "STRIPE_PRICE_ADVANCED_MONTHLY": "price_...",
-        // "STRIPE_PRICE_ADVANCED_ANNUAL": "price_...",
-        // "STRIPE_PRICE_ULTIMATE_MONTHLY": "price_...",
-        // "STRIPE_PRICE_ULTIMATE_ANNUAL": "price_...",
+        // Stripe per-tier Price ids (TEST mode for dev) — vars, NOT secret. STRIPE_SECRET_KEY +
+        // STRIPE_WEBHOOK_SECRET are SECRETS (wrangler secret put). Steps: dotfiles billing-setup.md.
+        "STRIPE_PRICE_BASIC_MONTHLY": "price_1Tnn1kRczc8qAc4q8GsNyKQp",
+        "STRIPE_PRICE_BASIC_ANNUAL": "price_1TnnKVRczc8qAc4qEaqRAIwL",
+        "STRIPE_PRICE_ADVANCED_MONTHLY": "price_1Tnn9yRczc8qAc4qOjczMNxF",
+        "STRIPE_PRICE_ADVANCED_ANNUAL": "price_1TnnLCRczc8qAc4q0ISY361o",
+        "STRIPE_PRICE_ULTIMATE_MONTHLY": "price_1TnnB3Rczc8qAc4qN9rzHYIq",
+        "STRIPE_PRICE_ULTIMATE_ANNUAL": "price_1TnnI1Rczc8qAc4qzqUzzODg",
       },
       "d1_databases": [
         {
