@@ -13,7 +13,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   width: 90%;
-  max-width: 640px;
+  max-width: 600px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -36,6 +36,7 @@
 }
 
 .closeBtn {
+  display: inline-flex;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -50,13 +51,15 @@
 }
 
 .body {
-  padding: 20px;
+  padding: 18px 20px 20px;
   overflow-y: auto;
   flex: 1;
 }
 
+/* ---- Version entry ---- */
+
 .entry {
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
 .entry:last-child {
@@ -65,48 +68,148 @@
 
 .versionHeader {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
 
+.entry[data-latest] .versionHeader {
+  border-bottom-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.versionLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .version {
   font-size: 16px;
   font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.latest {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
   color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 .date {
   font-size: 12px;
   color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
+
+/* ---- Section ---- */
 
 .section {
-  margin-bottom: 12px;
+  margin-top: 12px;
 }
 
-.section:last-child {
-  margin-bottom: 0;
+.section:first-of-type {
+  margin-top: 0;
 }
 
 .sectionTitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
-.itemList {
+.sectionDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+/* Per-section accent colours (readable on both light + dark themes) */
+.sectionTitle[data-kind='added'] {
+  color: #2ea043;
+}
+.sectionTitle[data-kind='changed'] {
+  color: #388bfd;
+}
+.sectionTitle[data-kind='fixed'] {
+  color: #d29922;
+}
+.sectionTitle[data-kind='removed'] {
+  color: #f85149;
+}
+.sectionTitle[data-kind='deprecated'] {
+  color: #db6d28;
+}
+.sectionTitle[data-kind='security'] {
+  color: #a371f7;
+}
+.sectionTitle[data-kind='other'] {
+  color: var(--text-secondary);
+}
+
+/* ---- Items ---- */
+
+.list {
+  list-style: none;
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .item {
+  position: relative;
+  padding-left: 16px;
   font-size: 13px;
+  line-height: 1.55;
   color: var(--text-secondary);
-  line-height: 1.6;
+}
+
+.item::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.62em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.item strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.code {
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  font-size: 0.85em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--primary);
+  white-space: nowrap;
 }
 
 @media (max-width: 480px) {
@@ -117,5 +220,9 @@
 
   .body {
     padding: 14px;
+  }
+
+  .code {
+    white-space: normal;
   }
 }
