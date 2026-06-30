@@ -23,7 +23,7 @@
   "dependencies": {
     "hono": "^4.6.0",
     "pdf-lib": "^1.17.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",

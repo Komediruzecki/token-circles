@@ -12,6 +12,18 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '5.1.2',
+    date: '2026-06-30',
+    sections: [
+      {
+        title: 'Security',
+        items: [
+          'Updated the spreadsheet engine (SheetJS) to a patched build — fixes known prototype-pollution and ReDoS issues when importing Excel files',
+        ],
+      },
+    ],
+  },
+  {
     version: '5.1.1',
     date: '2026-06-30',
     sections: [

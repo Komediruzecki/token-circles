@@ -1,6 +1,6 @@
 {
   "name": "finance-manager-frontend",
-  "version": "5.1.1",
+  "version": "5.1.2",
   "type": "module",
   "description": "Finance Manager Frontend - SolidJS + TypeScript",
   "author": "Komediruzecki",
@@ -46,7 +46,7 @@
     "idb": "^8.0.3",
     "jspdf": "^4.2.1",
     "solid-js": "^1.9.12",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
   "devDependencies": {

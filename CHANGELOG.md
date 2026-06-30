@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced internal todo.md with public ROADMAP.md
 - Added `.env.example` with documented environment variables
 
+## [5.1.2] — 2026-06-30
+
+### Security
+
+- Updated SheetJS (`xlsx`) to the patched 0.20.3 build in both the worker and the frontend, fixing the known prototype-pollution and ReDoS advisories in spreadsheet (Excel) import.
+
+### Changed
+
+- Rewrote the README for the current Cloudflare Worker + D1/R2 architecture (local-first / self-host / managed-cloud), replacing the outdated Express/SQLite description.
+
 ## [5.1.1] — 2026-06-30
 
 ### Security
