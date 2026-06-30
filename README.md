@@ -1,7 +1,7 @@
 # Token Circles — open-source personal finance manager
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-5.1.1-blue" alt="Version 5.1.1">
+  <img src="https://img.shields.io/github/package-json/v/Komediruzecki/finance-manager?filename=frontend%2Fpackage.json&label=version&color=blue" alt="Version">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License MIT">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome">
 </p>
