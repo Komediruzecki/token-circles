@@ -1,231 +1,108 @@
 /**
- * ChangelogModal — displays the CHANGELOG.md contents
+ * ChangelogModal — renders the project CHANGELOG.md (Keep a Changelog format).
+ *
+ * The repo-root CHANGELOG.md is the single source of truth (also rendered on
+ * GitHub). We import it via Vite's `?raw` loader and parse the
+ * `## [version] — date` / `### Section` / `- item` structure once at module
+ * load — no hardcoded duplicate to keep in sync.
  */
-import { For } from 'solid-js'
+import { For, Show } from 'solid-js'
+import rawChangelog from '../../../CHANGELOG.md?raw'
 import styles from './ChangelogModal.module.css'
+import type { JSX } from 'solid-js'
+
+interface ChangelogSection {
+  title: string
+  items: string[]
+}
 
 interface ChangelogEntry {
   version: string
   date: string
-  sections: { title: string; items: string[] }[]
+  sections: ChangelogSection[]
 }
 
-const CHANGELOG: ChangelogEntry[] = [
-  {
-    version: '5.1.2',
-    date: '2026-06-30',
-    sections: [
-      {
-        title: 'Security',
-        items: [
-          'Updated the spreadsheet engine (SheetJS) to a patched build — fixes known prototype-pollution and ReDoS issues when importing Excel files',
-        ],
-      },
-    ],
-  },
-  {
-    version: '5.1.1',
-    date: '2026-06-30',
-    sections: [
-      {
-        title: 'Security',
-        items: [
-          'Sign-up is now rate-limited per email address (not just per IP), curbing unsolicited account creation and email spam',
-        ],
-      },
-      {
-        title: 'Fixed',
-        items: [
-          'A reminder email that fails to send is now retried on the next run instead of being skipped for that period',
-        ],
-      },
-    ],
-  },
-  {
-    version: '5.1.0',
-    date: '2026-06-27',
-    sections: [
-      {
-        title: 'Added',
-        items: [
-          'Delete your account and all of its data from Settings → Billing — confirm by typing your account email (available on the dev build for now)',
-          'Optional bot protection (Cloudflare Turnstile) on the sign-in, sign-up, and forgot-password forms',
-        ],
-      },
-      {
-        title: 'Security',
-        items: [
-          'Sign-in hardened against automated guessing: a per-account attempt throttle and constant-time password checks that no longer reveal whether an email is registered',
-          'Profile-limit and rate-limit checks are now atomic, so concurrent requests cannot slip past a limit',
-          'Creating an account no longer reveals whether the email is already registered — you receive an email and then sign in',
-        ],
-      },
-      {
-        title: 'Fixed',
-        items: [
-          'The periodic spending-report email could be sent several times in a month — it is now sent once per period',
-          'Re-running an interrupted import no longer creates duplicate transactions',
-          'The billing page could label a paid plan as "Free"; it now shows your real tier, plus the date access ends when a plan is canceled',
-        ],
-      },
-    ],
-  },
-  {
-    version: '5.0.0',
-    date: '2026-06-27',
-    sections: [
-      {
-        title: 'Added',
-        items: [
-          'Cloud sync via a Cloudflare Workers backend (D1 + R2) — sign in to sync across devices',
-          'Accounts: Google sign-in, email/password register + login, a no-account demo, and forgot-password reset by email',
-          'Pricing & plans: Free / Basic / Advanced / Ultimate with a 4-tier comparison in Settings → Billing (monthly/annual toggle)',
-          'Stripe billing (checkout, manage, status, webhook) behind the plan tiers',
-          'Email reminders: budget alerts + a periodic spending report (Resend), with per-profile toggles and one-click unsubscribe',
-          'Contact support form (sign-in, reset, and Settings) with an auto-acknowledgement and a TC-XXXX reference id',
-          'Tabbed Settings: General / Exports / Billing',
-        ],
-      },
-      {
-        title: 'Changed',
-        items: [
-          'Email now sends from a repliable address (hello@) instead of no-reply',
-          'Per-plan limits enforced: profiles, receipt storage, and a monthly reminder quota; advanced reports (tax & P&L) gated to Basic and up',
-        ],
-      },
-      {
-        title: 'Fixed',
-        items: [
-          'Profile creation failing with a response-validation error (missing created_at)',
-          'Old/profile-less accounts hitting "Access denied" — a default profile is now created automatically',
-          'A stale active-profile id no longer breaks the whole app; the password-reset flow no longer leaves you half-logged-in',
-          'Rate limiting on auth + email endpoints; far quieter console on expected auth failures',
-          'Compound-interest page server error, and several invalid CSS transforms that silently dropped animations',
-        ],
-      },
-    ],
-  },
-  {
-    version: '4.0.0',
-    date: '2026-05-11',
-    sections: [
-      {
-        title: 'Added',
-        items: [
-          'Portfolio tracker with real-time Yahoo Finance price lookup and allocation pie chart',
-          'Counterparties page showing who-owes-who from beneficiary/payor transaction data',
-          'Account balance auto-update when transactions are created/updated/deleted',
-          'Starting balance and starting date fields for accounts with dynamic balance computation',
-          'Transfer handling between accounts (FROM/TO with balance adjustments on both sides)',
-          'Bulk action bar: Change Category and Change Type modals for multi-transaction editing',
-          'Auto-categorization modal for bulk-mapping uncategorized transactions',
-          'Nuke scripts: nuke-demo.sh (demo profiles only) and nuke-all.sh (all data)',
-          'Google Sheets import improvements: auto-populated account inputs, cash account type',
-        ],
-      },
-      {
-        title: 'Changed',
-        items: [
-          'Account types aligned with backend: giro/savings/ib/cash',
-          'Import now resolves account_id from Means of Payment (FROM) instead of Category (TO)',
-          'Transaction FROM/TO column shows MoP → Category with transfer amounts without prefix',
-          'Analytics labels changed from "Monthly" to "Period" to reflect actual data range',
-          'Navigation labels simplified: "Loan Calculator" → "Loans", "Housing Calc" → "Housing"',
-          'Dropdown UX: category/tag dropdowns auto-close when clicking outside',
-        ],
-      },
-      {
-        title: 'Fixed',
-        items: [
-          'Critical import bug: account_id was resolved from Category instead of Means of Payment',
-          'Post-import balance recalculation handling all transfer directions',
-          'Bulk DELETE sets account balance to starting_balance instead of 0',
-          'Import: existing accounts now pre-populated for MoP resolution',
-          'Portfolio seed data: tier string passed directly instead of undefined config.tier',
-          'Yahoo Finance v3 ESM import: use new YahooFinance() pattern',
-          'Mobile overflow on all pages: overflow-x containment, responsive breakpoints',
-          'SolidJS anti-patterns: onMount instead of createEffect+isMounted, ChartWrapper reactivity',
-        ],
-      },
-    ],
-  },
-  {
-    version: '3.0.0',
-    date: '2026-04-01',
-    sections: [
-      {
-        title: 'Added',
-        items: [
-          'Serverless mode with full IndexedDB storage adapter',
-          'Multi-profile support with demo data (low/mid/high income) spanning 2000-2026',
-          'Zero-based budgeting with allocation and rollover',
-          'Daily heatmap visualization (D3.js) for spending patterns',
-          'Sankey flow diagram for income/expense flow visualization',
-          'PDF report generation: monthly spending, annual summary, P&L, tax summary',
-          'Reconciliation workflow with bulk toggle and reconciliation summary',
-          'Transaction tags with filtering and color coding',
-          'Receipt upload and attachment to transactions',
-          'Recurring transactions with auto-populate scheduling',
-          'Quick Add modal (Ctrl+Shift+T) for rapid transaction entry',
-          'Dark/light theme with CSS variables and persistence',
-          'PWA support with service worker for offline access',
-          'Chart export as images',
-        ],
-      },
-      {
-        title: 'Changed',
-        items: [
-          'Migrated from vanilla JS to SolidJS + TypeScript + Vite',
-          'CSS Modules instead of global CSS',
-          'Hash-based routing with query parameter support',
-        ],
-      },
-    ],
-  },
-  {
-    version: '2.0.0',
-    date: '2026-03-15',
-    sections: [
-      {
-        title: 'Added',
-        items: [
-          'Savings goals with progress tracking and contributions',
-          'Loan calculator with amortization tables, prepayments, and variable rates',
-          'Bills tracker with recurring payment scheduling',
-          'Housing cost calculator',
-          'Retirement calculator with projections',
-          'Compound interest calculator',
-          'Emergency fund calculator',
-          'Rent vs Buy comparison calculator',
-          'Budget rollover support',
-          'Category auto-mapping from transaction descriptions',
-          'Google Sheets CSV/XLSX import with column mapping and preview',
-        ],
-      },
-    ],
-  },
-  {
-    version: '1.0.0',
-    date: '2026-03-01',
-    sections: [
-      {
-        title: 'Added',
-        items: [
-          'Initial release: vanilla JS SPA with Express/SQLite backend',
-          'Transaction management (CRUD, filtering, search, pagination)',
-          'Category management with colors and icons',
-          'Account tracking with balances',
-          'Dashboard with income/expense charts and metrics',
-          'Basic budgeting per category',
-          'Analytics with category breakdowns',
-          'User authentication (bcrypt + sessions)',
-          'Settings management',
-          'Data export/import (JSON)',
-        ],
-      },
-    ],
-  },
-]
+// `## [5.1.2] — 2026-06-30`, `## [v1.0.0] - 2026-03-01`, or `## [Unreleased]`.
+const VERSION_RE = /^##\s+\[([^\]]+)\]\s*(.*)$/
+const SECTION_RE = /^###\s+(.+)$/
+const ITEM_RE = /^[-*]\s+(.+)$/
+// Strips the leading date separator (em-dash, en-dash, or hyphen) + spaces.
+const DATE_LEAD_RE = /^[—–-]\s*/
+
+function parseChangelog(md: string): ChangelogEntry[] {
+  const entries: ChangelogEntry[] = []
+  let entry: ChangelogEntry | null = null
+  let section: ChangelogSection | null = null
+
+  for (const line of md.split('\n')) {
+    const versionMatch = line.match(VERSION_RE)
+    if (versionMatch) {
+      entry = {
+        version: versionMatch[1].replace(/^v/, '').trim(),
+        date: versionMatch[2].replace(DATE_LEAD_RE, '').trim(),
+        sections: [],
+      }
+      entries.push(entry)
+      section = null
+      continue
+    }
+    if (!entry) continue
+
+    const sectionMatch = line.match(SECTION_RE)
+    if (sectionMatch) {
+      section = { title: sectionMatch[1].trim(), items: [] }
+      entry.sections.push(section)
+      continue
+    }
+
+    const itemMatch = line.match(ITEM_RE)
+    if (itemMatch && section) {
+      section.items.push(itemMatch[1].trim())
+    }
+  }
+
+  // The modal shows shipped releases only. "[Unreleased]" stays in the file
+  // (Keep a Changelog convention) but is hidden here.
+  return entries.filter((e) => e.version.toLowerCase() !== 'unreleased')
+}
+
+const CHANGELOG = parseChangelog(rawChangelog)
+
+// Keep a Changelog section -> accent kind (drives the colored dot + label color).
+const SECTION_KIND: Record<string, string> = {
+  added: 'added',
+  changed: 'changed',
+  fixed: 'fixed',
+  removed: 'removed',
+  deprecated: 'deprecated',
+  security: 'security',
+}
+
+function kindOf(title: string): string {
+  return SECTION_KIND[title.toLowerCase()] ?? 'other'
+}
+
+// Inline Markdown: `code`, **bold**, _italic_.
+const INLINE_RE = /(`[^`]+`|\*\*[^*]+\*\*|_[^_]+_)/
+
+function renderInline(text: string): JSX.Element {
+  return (
+    <For each={text.split(INLINE_RE)}>
+      {(part) => {
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <code class={styles.code}>{part.slice(1, -1)}</code>
+        }
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong>{part.slice(2, -2)}</strong>
+        }
+        if (part.startsWith('_') && part.endsWith('_')) {
+          return <em>{part.slice(1, -1)}</em>
+        }
+        return <>{part}</>
+      }}
+    </For>
+  )
+}
 
 export default function ChangelogModal(props: { onClose: () => void }) {
   return (
@@ -238,7 +115,7 @@ export default function ChangelogModal(props: { onClose: () => void }) {
       >
         <div class={styles.header}>
           <h2>Changelog</h2>
-          <button class={styles.closeBtn} onClick={props.onClose}>
+          <button class={styles.closeBtn} onClick={props.onClose} aria-label="Close changelog">
             <svg
               width="20"
               height="20"
@@ -253,19 +130,29 @@ export default function ChangelogModal(props: { onClose: () => void }) {
         </div>
         <div class={styles.body}>
           <For each={CHANGELOG}>
-            {(entry) => (
-              <div class={styles.entry}>
+            {(entry, i) => (
+              <div class={styles.entry} data-latest={i() === 0 ? '' : undefined}>
                 <div class={styles.versionHeader}>
-                  <span class={styles.version}>{entry.version}</span>
-                  <span class={styles.date}>{entry.date}</span>
+                  <div class={styles.versionLeft}>
+                    <span class={styles.version}>v{entry.version}</span>
+                    <Show when={i() === 0}>
+                      <span class={styles.latest}>Latest</span>
+                    </Show>
+                  </div>
+                  <Show when={entry.date}>
+                    <span class={styles.date}>{entry.date}</span>
+                  </Show>
                 </div>
                 <For each={entry.sections}>
                   {(section) => (
                     <div class={styles.section}>
-                      <h4 class={styles.sectionTitle}>{section.title}</h4>
-                      <ul class={styles.itemList}>
+                      <h4 class={styles.sectionTitle} data-kind={kindOf(section.title)}>
+                        <span class={styles.sectionDot} />
+                        {section.title}
+                      </h4>
+                      <ul class={styles.list}>
                         <For each={section.items}>
-                          {(item) => <li class={styles.item}>{item}</li>}
+                          {(item) => <li class={styles.item}>{renderInline(item)}</li>}
                         </For>
                       </ul>
                     </div>
