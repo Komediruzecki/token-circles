@@ -82,3 +82,6 @@ jobs:
           workingDirectory: frontend
           command: deploy --env ${{ steps.env.outputs.env }}
           packageManager: pnpm
+          # wrangler-action@v3 installs an old default wrangler that errors "Missing entry-point"
+          # on this assets-only Worker (no `main`). Pin a current 4.x that supports it.
+          wranglerVersion: '4.106.0'
