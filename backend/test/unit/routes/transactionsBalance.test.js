@@ -207,4 +207,41 @@ describe('transactions router — account balance integrity', () => {
     expect(txCount(db)).toBe(before);
     expect(balanceOf(db, 1)).toBe(1000);
   });
+
+  // --- bulk-delete parity: transfers stored with a NULL account_id were skipped ---
+  test('bulk delete reverses a transfer credited only to a destination account', async () => {
+    const created = await post(app, {
+      description: 'Incoming transfer',
+      amount: 250,
+      type: 'transfer',
+      transfer_account_id: 2,
+    });
+    expect(created.status).toBe(200);
+    expect(balanceOf(db, 2)).toBe(750); // +250 credited to the destination on create
+    const res = await request(app)
+      .put('/api/transactions/bulk')
+      .set('X-Profile-Id', '1')
+      .send({ ids: [created.body.id], action: 'delete' });
+    expect(res.status).toBe(200);
+    expect(balanceOf(db, 2)).toBe(500); // credit reversed on bulk delete
+    expect(txCount(db)).toBe(0);
+  });
+
+  test('bulk delete reverses a transfer with only a source account', async () => {
+    const created = await post(app, {
+      description: 'Outgoing transfer',
+      amount: 200,
+      type: 'transfer',
+      account_id: 1,
+    });
+    expect(created.status).toBe(200);
+    expect(balanceOf(db, 1)).toBe(800); // -200 from the source on create
+    const res = await request(app)
+      .put('/api/transactions/bulk')
+      .set('X-Profile-Id', '1')
+      .send({ ids: [created.body.id], action: 'delete' });
+    expect(res.status).toBe(200);
+    expect(balanceOf(db, 1)).toBe(1000); // source restored on bulk delete
+    expect(txCount(db)).toBe(0);
+  });
 });

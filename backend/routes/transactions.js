@@ -503,32 +503,47 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         // Balance reversals and the delete must commit as a single unit.
         const result = req.repos.transactions.db.transaction(() => {
           for (const tx of txRows) {
-            if (!tx.account_id) continue;
-            if (tx.type === 'transfer' && tx.transfer_account_id) {
-              req.repos.accounts.run(
-                `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-                tx.amount,
-                tx.account_id,
-                pids
-              );
+            // Reverse each row's balance effect. Mirrors the single-DELETE handler and the Worker:
+            // a transfer stored with only a transfer_account_id (account_id NULL) credited the
+            // destination on create, so it must be reversed too. The old `if (!tx.account_id)
+            // continue` skipped those, permanently inflating the destination balance on bulk delete.
+            if (tx.account_id) {
+              if (tx.type === 'transfer' && tx.transfer_account_id) {
+                req.repos.accounts.run(
+                  `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+                  tx.amount,
+                  tx.account_id,
+                  pids
+                );
+                req.repos.accounts.run(
+                  `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
+                  tx.amount,
+                  tx.transfer_account_id,
+                  pids
+                );
+              } else if (tx.type === 'transfer') {
+                // Transfer with only a FROM account: it subtracted from the source — add it back.
+                req.repos.accounts.run(
+                  `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+                  tx.amount,
+                  tx.account_id,
+                  pids
+                );
+              } else if (tx.type === 'income' || tx.type === 'expense') {
+                const delta = tx.type === 'income' ? -tx.amount : tx.amount;
+                req.repos.accounts.run(
+                  `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
+                  delta,
+                  tx.account_id,
+                  pids
+                );
+              }
+            } else if (tx.transfer_account_id && tx.type === 'transfer') {
+              // Transfer credited only to a destination account: remove that credit.
               req.repos.accounts.run(
                 `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
                 tx.amount,
                 tx.transfer_account_id,
-                pids
-              );
-            } else if (tx.type === 'income') {
-              req.repos.accounts.run(
-                `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-                tx.amount,
-                tx.account_id,
-                pids
-              );
-            } else if (tx.type === 'expense') {
-              req.repos.accounts.run(
-                `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-                tx.amount,
-                tx.account_id,
                 pids
               );
             }
