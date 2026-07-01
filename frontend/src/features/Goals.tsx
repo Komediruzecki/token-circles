@@ -293,9 +293,12 @@ export default function Goals() {
     <div class={`page page-goals page-enter ${styles.goalsPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="goals-header">Savings Goals</h1>
+          <h1 data-test-id="goals-header" data-tour="goals-header">
+            Savings Goals
+          </h1>
           <button
             data-test-id="add-goal-btn"
+            data-tour="goals-add"
             class={styles.btnPrimary}
             onclick={() => setShowAddModal(true)}
           >
@@ -310,72 +313,54 @@ export default function Goals() {
         </p>
       </div>
 
-      {loading() ? (
-        <div class={styles.emptyState}>Loading goals...</div>
-      ) : goals().length === 0 ? (
-        <div class={styles.emptyState}>
-          <p>No goals yet</p>
-          <p>Create your first savings goal to start tracking.</p>
-          <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
-            Create Goal
-          </button>
-        </div>
-      ) : (
-        <div data-test-id="goals-grid" class={styles.goalsGrid}>
-          <For each={goals()}>
-            {(goal) => {
-              const progress = getProgress(goal)
-              return (
-                <div data-test-id="goal-card" class={styles.goalCard}>
-                  <div class={styles.goalHeader}>
-                    <div data-test-id="goal-icon" class={styles.goalIcon}>
-                      <svg
-                        width="18"
-                        height="18"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4a6 6 0 100 12 6 6 0 000-12zm0 3a3 3 0 100 6 3 3 0 000-6z" />
-                      </svg>
-                    </div>
-                    <div class={styles.goalInfo}>
-                      <h3 data-test-id="goal-name" class={styles.goalName}>
-                        {goal.name}
-                      </h3>
-                      <p data-test-id="goal-date" class={styles.goalDate}>
-                        {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
-                        {goal.category_name && (
-                          <span class={styles.goalCategory}> • {goal.category_name}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div data-test-id="goal-actions" class={styles.goalActions}>
-                      <button
-                        data-test-id="goal-edit-btn"
-                        class={styles.btnSm}
-                        onclick={() => {
-                          editGoal(goal)
-                        }}
-                      >
+      <div data-tour="goals-list">
+        {loading() ? (
+          <div class={styles.emptyState}>Loading goals...</div>
+        ) : goals().length === 0 ? (
+          <div class={styles.emptyState}>
+            <p>No goals yet</p>
+            <p>Create your first savings goal to start tracking.</p>
+            <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
+              Create Goal
+            </button>
+          </div>
+        ) : (
+          <div data-test-id="goals-grid" class={styles.goalsGrid}>
+            <For each={goals()}>
+              {(goal) => {
+                const progress = getProgress(goal)
+                return (
+                  <div data-test-id="goal-card" class={styles.goalCard}>
+                    <div class={styles.goalHeader}>
+                      <div data-test-id="goal-icon" class={styles.goalIcon}>
                         <svg
-                          width="16"
-                          height="16"
+                          width="18"
+                          height="18"
                           fill="none"
                           stroke="currentColor"
+                          stroke-width="2"
                           viewBox="0 0 24 24"
                         >
-                          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4a6 6 0 100 12 6 6 0 000-12zm0 3a3 3 0 100 6 3 3 0 000-6z" />
                         </svg>
-                      </button>
-                      {!goal.category_id && contributingGoalId() !== goal.id && (
+                      </div>
+                      <div class={styles.goalInfo}>
+                        <h3 data-test-id="goal-name" class={styles.goalName}>
+                          {goal.name}
+                        </h3>
+                        <p data-test-id="goal-date" class={styles.goalDate}>
+                          {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
+                          {goal.category_name && (
+                            <span class={styles.goalCategory}> • {goal.category_name}</span>
+                          )}
+                        </p>
+                      </div>
+                      <div data-test-id="goal-actions" class={styles.goalActions}>
                         <button
-                          data-test-id="goal-contribute-btn"
+                          data-test-id="goal-edit-btn"
                           class={styles.btnSm}
-                          title="Add contribution"
                           onclick={() => {
-                            startContribute(goal.id)
+                            editGoal(goal)
                           }}
                         >
                           <svg
@@ -383,80 +368,100 @@ export default function Goals() {
                             height="16"
                             fill="none"
                             stroke="currentColor"
-                            stroke-width="2"
                             viewBox="0 0 24 24"
                           >
-                            <path d="M12 5v14M5 12h14" />
+                            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                      )}
-                      <ConfirmButton
-                        class={styles.btnSm}
-                        onConfirm={() => deleteGoal(goal.id)}
-                        label={
-                          <svg
-                            width="16"
-                            height="16"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                        {!goal.category_id && contributingGoalId() !== goal.id && (
+                          <button
+                            data-test-id="goal-contribute-btn"
+                            class={styles.btnSm}
+                            title="Add contribution"
+                            onclick={() => {
+                              startContribute(goal.id)
+                            }}
                           >
-                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        }
-                      />
+                            <svg
+                              width="16"
+                              height="16"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M12 5v14M5 12h14" />
+                            </svg>
+                          </button>
+                        )}
+                        <ConfirmButton
+                          class={styles.btnSm}
+                          onConfirm={() => deleteGoal(goal.id)}
+                          label={
+                            <svg
+                              width="16"
+                              height="16"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          }
+                        />
+                      </div>
+                    </div>
+                    {contributingGoalId() === goal.id && (
+                      <div class={styles.contributeForm}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          class={styles.formControl}
+                          placeholder="Amount..."
+                          value={contributeAmount()}
+                          oninput={(e) => setContributeAmount(e.target.value)}
+                          onkeydown={(e) => {
+                            if (e.key === 'Enter') submitContribute(goal.id)
+                            if (e.key === 'Escape') cancelContribute()
+                          }}
+                          autofocus
+                        />
+                        <button
+                          class={`${styles.btnPrimary} ${styles.btnSm}`}
+                          onclick={() => submitContribute(goal.id)}
+                        >
+                          Add
+                        </button>
+                        <button
+                          class={`${styles.btnSecondary} ${styles.btnSm}`}
+                          onclick={cancelContribute}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                    <div class={styles.goalProgress}>
+                      <div data-test-id="goal-progress-bar" class={styles.progressBar}>
+                        <div class={styles.progressFill} style={{ width: `${progress}%` }} />
+                      </div>
+                      <div class={styles.progressStats}>
+                        <span data-test-id="goal-progress-percent" class={styles.progressPercent}>
+                          {progress}%
+                        </span>
+                        <span data-test-id="goal-progress-current" class={styles.progressCurrent}>
+                          {formatCurrency(goal.current_amount)} of{' '}
+                          {formatCurrency(goal.target_amount)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  {contributingGoalId() === goal.id && (
-                    <div class={styles.contributeForm}>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        class={styles.formControl}
-                        placeholder="Amount..."
-                        value={contributeAmount()}
-                        oninput={(e) => setContributeAmount(e.target.value)}
-                        onkeydown={(e) => {
-                          if (e.key === 'Enter') submitContribute(goal.id)
-                          if (e.key === 'Escape') cancelContribute()
-                        }}
-                        autofocus
-                      />
-                      <button
-                        class={`${styles.btnPrimary} ${styles.btnSm}`}
-                        onclick={() => submitContribute(goal.id)}
-                      >
-                        Add
-                      </button>
-                      <button
-                        class={`${styles.btnSecondary} ${styles.btnSm}`}
-                        onclick={cancelContribute}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                  <div class={styles.goalProgress}>
-                    <div data-test-id="goal-progress-bar" class={styles.progressBar}>
-                      <div class={styles.progressFill} style={{ width: `${progress}%` }} />
-                    </div>
-                    <div class={styles.progressStats}>
-                      <span data-test-id="goal-progress-percent" class={styles.progressPercent}>
-                        {progress}%
-                      </span>
-                      <span data-test-id="goal-progress-current" class={styles.progressCurrent}>
-                        {formatCurrency(goal.current_amount)} of{' '}
-                        {formatCurrency(goal.target_amount)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )
-            }}
-          </For>
-        </div>
-      )}
+                )
+              }}
+            </For>
+          </div>
+        )}
+      </div>
 
       {/* Goals Progress Chart */}
       {goals().length > 0 && (

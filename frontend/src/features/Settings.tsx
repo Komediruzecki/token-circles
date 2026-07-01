@@ -396,7 +396,9 @@ export default function Settings() {
     // clear the redirect state whenever this page is shown again.
     const clearBillingBusy = () => setBillingBusyKey(null)
     window.addEventListener('pageshow', clearBillingBusy)
-    onCleanup(() => { window.removeEventListener('pageshow', clearBillingBusy); })
+    onCleanup(() => {
+      window.removeEventListener('pageshow', clearBillingBusy)
+    })
   })
 
   // Sync local currency changes
@@ -671,7 +673,7 @@ export default function Settings() {
   return (
     <div class={`page page-settings page-enter ${styles.settingsPage}`}>
       <div class={styles.pageHeader}>
-        <h1>Settings</h1>
+        <h1 data-tour="settings-header">Settings</h1>
       </div>
       <div class={styles.pageContent}>
         <div
@@ -681,6 +683,7 @@ export default function Settings() {
             'border-bottom': '1px solid var(--border)',
             'margin-bottom': '20px',
           }}
+          data-tour="settings-tabs"
         >
           {(['general', 'exports', 'billing'] as const)
             .filter((t) => t !== 'billing' || storageMode() === 'self-hosted')
@@ -825,7 +828,11 @@ export default function Settings() {
                 </div>
               </div>
             </Show>
-            <div class={styles.card} style={{ display: tabSel('general') }}>
+            <div
+              class={styles.card}
+              style={{ display: tabSel('general') }}
+              data-tour="settings-storage"
+            >
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Database Storage</div>
                 <div class={styles.formGroup}>
@@ -1192,7 +1199,11 @@ export default function Settings() {
                 <Reports />
               </div>
             </div>
-            <div class={styles.card} style={{ display: tabSel('general') }}>
+            <div
+              class={styles.card}
+              style={{ display: tabSel('general') }}
+              data-tour="settings-currency"
+            >
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>General</div>
                 <div class={styles.formGroup}>
@@ -1227,7 +1238,11 @@ export default function Settings() {
                 </div>
               </div>
             </div>
-            <div class={styles.card} style={{ display: tabSel('general') }}>
+            <div
+              class={styles.card}
+              style={{ display: tabSel('general') }}
+              data-tour="settings-theme"
+            >
               <div class={styles.settingsSection}>
                 <div class={styles.settingsSectionTitle}>Appearance</div>
                 <div class={styles.formGroup}>

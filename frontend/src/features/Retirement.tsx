@@ -297,9 +297,12 @@ export default function Retirement() {
     <div class={`page page-retirement page-enter ${styles.retirementPage}`}>
       <div class={styles.pageHeader} data-test-id="retirement-page-header">
         <div class={styles.headerTop}>
-          <h1 data-test-id="retirement-header">Retirement Planning</h1>
+          <h1 data-test-id="retirement-header" data-tour="retirement-header">
+            Retirement Planning
+          </h1>
           <button
             data-test-id="add-retirement-goal-btn"
+            data-tour="retirement-add"
             class={styles.btnPrimary}
             onClick={() => setShowAddModal(true)}
           >
@@ -454,7 +457,11 @@ export default function Retirement() {
         </div>
 
         {/* Goals Section */}
-        <div data-test-id="retirement-goals" class={styles.retirementGoals}>
+        <div
+          data-test-id="retirement-goals"
+          class={styles.retirementGoals}
+          data-tour="retirement-goals"
+        >
           <h2 class={styles.sectionTitle}>Retirement Goals</h2>
           {loading() ? (
             <div data-test-id="loading-state" class={styles.emptyState}>

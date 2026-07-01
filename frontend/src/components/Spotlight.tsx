@@ -93,6 +93,7 @@ export default function Spotlight() {
   const [tooltip, setTooltip] = createSignal({ top: 0, left: 0, placement: 'bottom' })
   const [tooltipReady, setTooltipReady] = createSignal(false)
   const [targetMissing, setTargetMissing] = createSignal(false)
+  const [viewport, setViewport] = createSignal({ w: window.innerWidth, h: window.innerHeight })
 
   let tooltipRef: HTMLDivElement | undefined
 
@@ -103,23 +104,32 @@ export default function Spotlight() {
   const isFirst = createMemo(() => stepIdx() === 0)
   const isLast = createMemo(() => stepIdx() === steps().length - 1)
 
-  const waitForTarget = (selector: string, maxRetries = 20): Promise<HTMLElement | null> => {
+  // Wait for the target to appear. After a step change we may be navigating to a
+  // different (lazy-loaded) page, so watch the DOM with a MutationObserver and give it a
+  // generous timeout instead of a fixed poll count that can expire before the chunk mounts.
+  const waitForTarget = (selector: string, timeout = 6000): Promise<HTMLElement | null> => {
     return new Promise((resolve) => {
-      let attempts = 0
-      const check = () => {
-        const el = document.querySelector(selector) as HTMLElement
-        if (el) {
-          resolve(el)
-          return
-        }
-        attempts++
-        if (attempts >= maxRetries) {
-          resolve(null)
-          return
-        }
-        setTimeout(check, 100)
+      const existing = document.querySelector<HTMLElement>(selector)
+      if (existing) {
+        resolve(existing)
+        return
       }
-      check()
+      let settled = false
+      const finish = (el: HTMLElement | null) => {
+        if (settled) return
+        settled = true
+        observer.disconnect()
+        clearTimeout(timer)
+        resolve(el)
+      }
+      const observer = new MutationObserver(() => {
+        const el = document.querySelector<HTMLElement>(selector)
+        if (el) finish(el)
+      })
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true })
+      const timer = setTimeout(() => {
+        finish(null)
+      }, timeout)
     })
   }
 
@@ -175,43 +185,46 @@ export default function Spotlight() {
     }
   }
 
-  // Effect: when step changes, wait for target then update positions
+  const showTargetMissing = () => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    setHighlight({ top: 0, left: 0, width: 0, height: 0, rx: 8, visible: false })
+    setTooltip({ top: vh / 2 - 100, left: vw / 2 - TOOLTIP_WIDTH / 2, placement: 'center' })
+    setTargetMissing(true)
+    setTooltipReady(true)
+  }
+
+  // Effect: when the step changes, wait for its target (we may be mid-navigation to
+  // another page) then position the highlight. A per-run token drops stale resolutions
+  // so a slow lookup from a previous step can't clobber the current one.
   createEffect(() => {
     const step = currentStep()
     if (!step || !spotlightActive()) return
 
     const selector = step.targetSelector
+    const runStep = stepIdx()
     setTargetMissing(false)
     setTooltipReady(false)
 
     if (!selector) {
       setTimeout(() => {
-        updatePositions()
+        if (stepIdx() === runStep) updatePositions()
       }, 50)
       return
     }
 
     // Try immediate match first (already on correct page)
-    const immediate = document.querySelector(selector) as HTMLElement
+    const immediate = document.querySelector(selector) as HTMLElement | null
     if (immediate) {
       updatePositions()
       return
     }
 
-    // Poll for element (page might be loading)
+    // Wait for the element (navigation + lazy chunk + data render may still be in flight)
     waitForTarget(selector).then((el) => {
+      if (stepIdx() !== runStep || !spotlightActive()) return // step advanced while waiting
       if (!el) {
-        setTargetMissing(true)
-        // Show tooltip centered with "coming soon" message
-        const vw = window.innerWidth
-        const vh = window.innerHeight
-        setHighlight({ top: 0, left: 0, width: 0, height: 0, rx: 8, visible: false })
-        setTooltip({
-          top: vh / 2 - 100,
-          left: vw / 2 - TOOLTIP_WIDTH / 2,
-          placement: 'center',
-        })
-        setTooltipReady(true)
+        showTargetMissing()
         return
       }
       updatePositions()
@@ -223,6 +236,7 @@ export default function Spotlight() {
     if (!spotlightActive()) return
 
     const onResize = () => {
+      setViewport({ w: window.innerWidth, h: window.innerHeight })
       updatePositions()
     }
     window.addEventListener('resize', onResize)
@@ -269,7 +283,7 @@ export default function Spotlight() {
   return (
     <div class={styles.overlay}>
       {/* Backdrop with cutout highlight */}
-      <svg class={styles.backdropSvg} viewBox={`0 0 ${window.innerWidth} ${window.innerHeight}`}>
+      <svg class={styles.backdropSvg} viewBox={`0 0 ${viewport().w} ${viewport().h}`}>
         <defs>
           <mask id="spotlight-mask">
             <rect width="100%" height="100%" fill="white" />

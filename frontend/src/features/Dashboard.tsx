@@ -473,7 +473,7 @@ export default function Dashboard() {
 
   return (
     <div data-test-id="dashboard-container">
-      <div class={styles.pageHeader} data-test-id="dashboard-header">
+      <div class={styles.pageHeader} data-test-id="dashboard-header" data-tour="dashboard-header">
         <div class={styles.pageTitle}>
           <h2>Dashboard</h2>
           <p>Your financial overview</p>
@@ -518,7 +518,7 @@ export default function Dashboard() {
               }
             }}
           />
-          <div class={styles.periodPills}>
+          <div class={styles.periodPills} data-tour="dashboard-period">
             <PeriodPills value={pillPeriod()} onChange={handlePillChange} />
           </div>
           <button class={styles.btnSecondary} onClick={showSettings}>
@@ -551,7 +551,11 @@ export default function Dashboard() {
         <>
           {/* Metrics Grid — always visible */}
           <Show when={isWidgetVisible('metrics')}>
-            <div class={styles.metricsGrid} data-test-id="dashboard-metrics">
+            <div
+              class={styles.metricsGrid}
+              data-test-id="dashboard-metrics"
+              data-tour="dashboard-metrics"
+            >
               <div class={`${styles.metricCard} ${styles.networth}`}>
                 <div class={styles.metricLabel}>Net Worth</div>
                 <div class={styles.metricValue}>{money(metrics()!.balance)}</div>
@@ -650,7 +654,12 @@ export default function Dashboard() {
           </Show>
 
           {/* Charts Section — always visible */}
-          <div class={styles.chartsGrid} role="region" aria-label="charts overview">
+          <div
+            class={styles.chartsGrid}
+            role="region"
+            aria-label="charts overview"
+            data-tour="dashboard-charts"
+          >
             <div class={styles.card}>
               <div class={styles.cardHeader}>
                 <div class={styles.cardTitle}>Net Worth Over Time</div>

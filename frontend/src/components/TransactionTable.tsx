@@ -31,7 +31,7 @@ export default function TransactionTable(props: TransactionTableProps) {
   }
 
   return (
-    <div class={styles.transactionTable}>
+    <div class={styles.transactionTable} data-tour="transactions-table">
       <table>
         <thead>
           <tr>

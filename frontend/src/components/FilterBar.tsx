@@ -187,7 +187,7 @@ export default function FilterBar(props: FilterBarProps) {
   }
 
   return (
-    <div class={styles.filterBar} data-test-id="filter-bar">
+    <div class={styles.filterBar} data-test-id="filter-bar" data-tour="transactions-filters">
       <div class={styles.filterRow}>
         {/* Category dropdown */}
         <div class={styles.filterDropdown}>

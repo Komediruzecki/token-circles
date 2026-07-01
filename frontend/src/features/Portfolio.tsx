@@ -153,10 +153,13 @@ export default function Portfolio() {
     <div class={`${styles.portfolioPage} page page-portfolio page-enter`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="portfolio-header">Portfolio</h1>
+          <h1 data-test-id="portfolio-header" data-tour="portfolio-header">
+            Portfolio
+          </h1>
           <div class={styles.headerActions}>
             <button
               data-test-id="refresh-prices-btn"
+              data-tour="portfolio-refresh"
               class={`${styles.btn} ${styles.btnSecondary}`}
               onClick={refreshPrices}
               disabled={priceLoading()}
@@ -217,170 +220,174 @@ export default function Portfolio() {
         </div>
       </Show>
 
-      {loading() ? (
-        <div class={styles.emptyState}>Loading portfolio...</div>
-      ) : holdings().length === 0 ? (
-        <div class={styles.emptyState}>
-          <p>No holdings yet</p>
-          <p>Add your first stock or ETF to start tracking your portfolio.</p>
-          <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={openAddModal}>
-            Add Holding
-          </button>
-        </div>
-      ) : (
-        <div class={styles.contentGrid}>
-          {/* Holdings Table */}
-          <div class={styles.tableSection}>
-            <h2 class={styles.sectionTitle}>Holdings</h2>
-            <div class={styles.tableWrapper}>
-              <table class={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Ticker</th>
-                    <th class={styles.right}>Shares</th>
-                    <th class={styles.right}>Cost/Share</th>
-                    <th class={styles.right}>Price</th>
-                    <th class={styles.right}>Market Value</th>
-                    <th class={styles.right}>Gain/Loss</th>
-                    <th class={styles.right}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={holdings()}>
-                    {(h) => (
-                      <tr>
-                        <td>
-                          <span class={styles.ticker}>{h.ticker}</span>
-                        </td>
-                        <td class={styles.right}>{h.shares}</td>
-                        <td class={styles.right}>{formatAmount(h.purchase_price)}</td>
-                        <td class={styles.right}>
-                          {formatAmount(h.currentPrice || h.purchase_price)}
-                        </td>
-                        <td class={styles.right}>{formatAmount(h.marketValue || 0)}</td>
-                        <td
-                          class={`${styles.right} ${(h.gain || 0) >= 0 ? styles.positive : styles.negative}`}
-                        >
-                          {formatAmount(h.gain || 0)}
-                          <div class={styles.gainPercent}>{formatPercent(h.gainPercent || 0)}</div>
-                        </td>
-                        <td class={styles.right}>
-                          <div class={styles.actions}>
-                            <button
-                              class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                              onClick={() => {
-                                openEditModal(h)
-                              }}
-                              title="Edit"
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                viewBox="0 0 24 24"
+      <div data-tour="portfolio-holdings">
+        {loading() ? (
+          <div class={styles.emptyState}>Loading portfolio...</div>
+        ) : holdings().length === 0 ? (
+          <div class={styles.emptyState}>
+            <p>No holdings yet</p>
+            <p>Add your first stock or ETF to start tracking your portfolio.</p>
+            <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={openAddModal}>
+              Add Holding
+            </button>
+          </div>
+        ) : (
+          <div class={styles.contentGrid}>
+            {/* Holdings Table */}
+            <div class={styles.tableSection}>
+              <h2 class={styles.sectionTitle}>Holdings</h2>
+              <div class={styles.tableWrapper}>
+                <table class={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Ticker</th>
+                      <th class={styles.right}>Shares</th>
+                      <th class={styles.right}>Cost/Share</th>
+                      <th class={styles.right}>Price</th>
+                      <th class={styles.right}>Market Value</th>
+                      <th class={styles.right}>Gain/Loss</th>
+                      <th class={styles.right}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={holdings()}>
+                      {(h) => (
+                        <tr>
+                          <td>
+                            <span class={styles.ticker}>{h.ticker}</span>
+                          </td>
+                          <td class={styles.right}>{h.shares}</td>
+                          <td class={styles.right}>{formatAmount(h.purchase_price)}</td>
+                          <td class={styles.right}>
+                            {formatAmount(h.currentPrice || h.purchase_price)}
+                          </td>
+                          <td class={styles.right}>{formatAmount(h.marketValue || 0)}</td>
+                          <td
+                            class={`${styles.right} ${(h.gain || 0) >= 0 ? styles.positive : styles.negative}`}
+                          >
+                            {formatAmount(h.gain || 0)}
+                            <div class={styles.gainPercent}>
+                              {formatPercent(h.gainPercent || 0)}
+                            </div>
+                          </td>
+                          <td class={styles.right}>
+                            <div class={styles.actions}>
+                              <button
+                                class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                                onClick={() => {
+                                  openEditModal(h)
+                                }}
+                                title="Edit"
                               >
-                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
-                            <button
-                              class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                              onClick={() => {
-                                if (confirm(`Delete ${h.ticker} holding?`)) deleteHolding(h.id)
-                              }}
-                              title="Delete"
-                            >
-                              <svg
-                                width="14"
-                                height="14"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                viewBox="0 0 24 24"
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                              </button>
+                              <button
+                                class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                                onClick={() => {
+                                  if (confirm(`Delete ${h.ticker} holding?`)) deleteHolding(h.id)
+                                }}
+                                title="Delete"
                               >
-                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Allocation Sidebar */}
+            <div class={styles.sidebar}>
+              <h2 class={styles.sectionTitle}>Allocation</h2>
+              <Show when={summary()}>
+                <div class={styles.pieContainer}>
+                  <svg viewBox="0 0 200 200" class={styles.pieChart}>
+                    {(() => {
+                      const alloc = summary()!.allocation
+                      if (alloc.length === 0) return null
+                      const total = alloc.reduce((s, a) => s + a.value, 0) || 1
+                      let cumulativeAngle = 0
+                      return alloc.map((a, i) => {
+                        const angle = (a.value / total) * 360
+                        const startAngle = cumulativeAngle
+                        cumulativeAngle += angle
+                        const endAngle = cumulativeAngle
+
+                        const startRad = ((startAngle - 90) * Math.PI) / 180
+                        const endRad = ((endAngle - 90) * Math.PI) / 180
+
+                        const r = 80
+                        const cx = 100
+                        const cy = 100
+
+                        const x1 = cx + r * Math.cos(startRad)
+                        const y1 = cy + r * Math.sin(startRad)
+                        const x2 = cx + r * Math.cos(endRad)
+                        const y2 = cy + r * Math.sin(endRad)
+
+                        const largeArc = angle > 180 ? 1 : 0
+
+                        const pathD = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+
+                        return (
+                          <path
+                            d={pathD}
+                            fill={getAllocationColor(i)}
+                            stroke="var(--card-bg)"
+                            stroke-width="2"
+                          />
+                        )
+                      })
+                    })()}
+                    <circle cx="100" cy="100" r="45" fill="var(--card-bg)" />
+                  </svg>
+                  <div class={styles.pieTotal}>
+                    <div class={styles.pieTotalValue}>{formatAmount(summary()!.totalValue)}</div>
+                  </div>
+                </div>
+                <div class={styles.legend}>
+                  <For each={summary()!.allocation}>
+                    {(a, i) => (
+                      <div class={styles.legendItem}>
+                        <span
+                          class={styles.legendDot}
+                          style={{ background: getAllocationColor(i()) }}
+                        />
+                        <span class={styles.legendTicker}>{a.ticker}</span>
+                        <span class={styles.legendPct}>{a.percentage.toFixed(1)}%</span>
+                        <span class={styles.legendValue}>{formatAmount(a.value)}</span>
+                      </div>
                     )}
                   </For>
-                </tbody>
-              </table>
+                </div>
+              </Show>
             </div>
           </div>
-
-          {/* Allocation Sidebar */}
-          <div class={styles.sidebar}>
-            <h2 class={styles.sectionTitle}>Allocation</h2>
-            <Show when={summary()}>
-              <div class={styles.pieContainer}>
-                <svg viewBox="0 0 200 200" class={styles.pieChart}>
-                  {(() => {
-                    const alloc = summary()!.allocation
-                    if (alloc.length === 0) return null
-                    const total = alloc.reduce((s, a) => s + a.value, 0) || 1
-                    let cumulativeAngle = 0
-                    return alloc.map((a, i) => {
-                      const angle = (a.value / total) * 360
-                      const startAngle = cumulativeAngle
-                      cumulativeAngle += angle
-                      const endAngle = cumulativeAngle
-
-                      const startRad = ((startAngle - 90) * Math.PI) / 180
-                      const endRad = ((endAngle - 90) * Math.PI) / 180
-
-                      const r = 80
-                      const cx = 100
-                      const cy = 100
-
-                      const x1 = cx + r * Math.cos(startRad)
-                      const y1 = cy + r * Math.sin(startRad)
-                      const x2 = cx + r * Math.cos(endRad)
-                      const y2 = cy + r * Math.sin(endRad)
-
-                      const largeArc = angle > 180 ? 1 : 0
-
-                      const pathD = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
-
-                      return (
-                        <path
-                          d={pathD}
-                          fill={getAllocationColor(i)}
-                          stroke="var(--card-bg)"
-                          stroke-width="2"
-                        />
-                      )
-                    })
-                  })()}
-                  <circle cx="100" cy="100" r="45" fill="var(--card-bg)" />
-                </svg>
-                <div class={styles.pieTotal}>
-                  <div class={styles.pieTotalValue}>{formatAmount(summary()!.totalValue)}</div>
-                </div>
-              </div>
-              <div class={styles.legend}>
-                <For each={summary()!.allocation}>
-                  {(a, i) => (
-                    <div class={styles.legendItem}>
-                      <span
-                        class={styles.legendDot}
-                        style={{ background: getAllocationColor(i()) }}
-                      />
-                      <span class={styles.legendTicker}>{a.ticker}</span>
-                      <span class={styles.legendPct}>{a.percentage.toFixed(1)}%</span>
-                      <span class={styles.legendValue}>{formatAmount(a.value)}</span>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Add/Edit Modal */}
       <Show when={showAddModal()}>

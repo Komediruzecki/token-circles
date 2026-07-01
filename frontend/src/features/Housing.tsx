@@ -221,7 +221,9 @@ export default function HousingForm() {
     <div class={`page page-housing page-enter ${styles.housingPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="housing-header">Housing</h1>
+          <h1 data-test-id="housing-header" data-tour="calc-housing">
+            Housing
+          </h1>
           <button
             data-test-id="add-housing-btn"
             class={styles.btnPrimary}

@@ -123,7 +123,7 @@ export default function CompoundInterestCalculator() {
   return (
     <div class={sharedStyles.page}>
       <div class={sharedStyles.pageHeader}>
-        <h1>Compound Interest Projector</h1>
+        <h1 data-tour="calc-compound">Compound Interest Projector</h1>
         <p>Project investment growth over time</p>
       </div>
 

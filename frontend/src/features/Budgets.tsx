@@ -497,8 +497,10 @@ export default function Budgets() {
     <div class={`page page-budgets page-enter ${styles.budgetsPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="budgets-header">Budgets</h1>
-          <div data-test-id="month-selector" class={styles.monthSelector}>
+          <h1 data-test-id="budgets-header" data-tour="budgets-header">
+            Budgets
+          </h1>
+          <div data-test-id="month-selector" class={styles.monthSelector} data-tour="budgets-month">
             <button
               data-test-id="month-prev-btn"
               class={styles.btnGhost}
@@ -606,7 +608,7 @@ export default function Budgets() {
       </div>
 
       {/* Budget Summary Cards */}
-      <div data-test-id="budget-summary" class={styles.budgetSummary}>
+      <div data-test-id="budget-summary" class={styles.budgetSummary} data-tour="budgets-summary">
         <div class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Income</div>
           <div class={styles.summaryValue}>{formatCurrency(summary()?.income ?? 0)}</div>
@@ -885,7 +887,11 @@ export default function Budgets() {
       {error() && <div class={styles.toastError}>{error()}</div>}
 
       {/* Allocation Table */}
-      <div data-test-id="budget-allocations" class={styles.budgetAllocations}>
+      <div
+        data-test-id="budget-allocations"
+        class={styles.budgetAllocations}
+        data-tour="budgets-allocations"
+      >
         <div data-test-id="table-header" class={styles.tableHeader}>
           <h2>Category Allocations</h2>
           <div class={styles.actions}>

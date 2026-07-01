@@ -565,7 +565,7 @@ export default function Import() {
   const dataEntryStep = () => (
     <div class={styles.uploadArea}>
       {/* Import method tabs */}
-      <div class={styles.tabBar}>
+      <div class={styles.tabBar} data-tour="import-methods">
         <button
           class={`${styles.tab} ${activeImportTab() === 'google-sheets' ? styles.active : ''}`}
           onClick={() => setActiveImportTab('google-sheets')}
@@ -1515,7 +1515,7 @@ export default function Import() {
   return (
     <div class={`${styles.container} ${styles.pageImport}`}>
       <div class={styles.pageHeader}>
-        <h1>Import Transactions</h1>
+        <h1 data-tour="import-header">Import Transactions</h1>
         <p>Import transactions from CSV, Excel, or Google Sheets</p>
       </div>
 

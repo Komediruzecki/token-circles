@@ -239,9 +239,12 @@ export default function Accounts() {
     <div class={`${styles.accountsPage} page page-accounts page-enter`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="accounts-header">Accounts</h1>
+          <h1 data-test-id="accounts-header" data-tour="accounts-header">
+            Accounts
+          </h1>
           <button
             data-test-id="add-account-btn"
+            data-tour="accounts-add"
             class={`${styles.btn} ${styles.btnPrimary}`}
             onClick={() => setShowAddModal(true)}
           >
@@ -257,7 +260,11 @@ export default function Accounts() {
       </div>
 
       {/* Summary Cards */}
-      <div data-test-id="accounts-summary" class={styles.accountsSummary}>
+      <div
+        data-test-id="accounts-summary"
+        class={styles.accountsSummary}
+        data-tour="accounts-summary"
+      >
         <div data-test-id="summary-total-balance" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Total Balance</div>
           <div data-test-id="summary-balance-value" class={styles.summaryValue}>
@@ -290,114 +297,118 @@ export default function Accounts() {
         </div>
       </div>
 
-      {loading() ? (
-        <div class={styles.emptyState}>Loading accounts...</div>
-      ) : accounts().length === 0 ? (
-        <div class={styles.emptyState}>
-          <p>No accounts yet</p>
-          <p>Add your first account to start tracking your finances.</p>
-          <button
-            class={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={() => setShowAddModal(true)}
-          >
-            Add Account
-          </button>
-        </div>
-      ) : (
-        <For each={accountsByProfile()}>
-          {(group) => (
-            <>
-              {multiProfile() && (
-                <h2 class={styles.profileGroupHeader}>
-                  <span class={styles.profileGroupDot}></span>
-                  {group.profileName}
-                  <span class={styles.profileGroupCount}>{group.accounts.length} accounts</span>
-                </h2>
-              )}
-              <div data-test-id="accounts-grid" class={styles.accountsGrid}>
-                <For each={group.accounts}>
-                  {(account) => (
-                    <div data-test-id="account-card" class={styles.accountCard}>
-                      <div class={styles.accountHeader}>
-                        <div data-test-id="account-icon" class={styles.accountIcon}>
-                          {getTypeIcon(account.type)}
-                        </div>
-                        <div class={styles.accountInfo}>
-                          <h3 data-test-id="account-name" class={styles.accountName}>
-                            {account.name}
-                          </h3>
-                          <p data-test-id="account-bank" class={styles.accountBank}>
-                            {account.bank_name || 'No bank listed'}
-                          </p>
-                        </div>
-                        <div class={styles.accountActions}>
-                          <Badge status={getAccountBadgeStatus(account.type)}>{account.type}</Badge>
-                          <ConfirmButton
-                            class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                            onConfirm={() => deleteAccount(account.id)}
-                            confirmLabel="Delete? This will remove all related transactions."
-                            label={
-                              <svg
-                                width="16"
-                                height="16"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div data-test-id="current-balance-card" class={styles.accountBalance}>
-                        <div class={styles.balanceLabel}>Current Balance</div>
-                        <div data-test-id="account-balance" class={styles.balanceAmount}>
-                          {formatAmount(account.balance)}
-                        </div>
-                      </div>
-                      <div data-test-id="activity-section" class={styles.accountActivity}>
-                        <div class={styles.activityHeader}>
-                          <span class={styles.activityLabel}>Recent Activity</span>
-                          <a
-                            href={`#transactions?category=${encodeURIComponent(account.name)}`}
-                            class={styles.btnLink}
-                          >
-                            View All →
-                          </a>
-                        </div>
-                        <div data-test-id="activity-list" class={styles.activityList}>
-                          <For each={getAccountTransactions(account.id).slice(0, 3)}>
-                            {(tx: any) => (
-                              <div data-test-id="activity-item" class={styles.activityItem}>
-                                <div data-test-id="activity-desc" class={styles.activityContent}>
-                                  <div data-test-id="activity-desc" class={styles.activityDesc}>
-                                    {tx.description}
-                                  </div>
-                                  <div data-test-id="activity-date" class={styles.activityDate}>
-                                    {new Date(tx.date).toLocaleDateString()}
-                                  </div>
-                                </div>
-                                <div
-                                  data-test-id="activity-amount"
-                                  class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+      <div data-tour="accounts-list">
+        {loading() ? (
+          <div class={styles.emptyState}>Loading accounts...</div>
+        ) : accounts().length === 0 ? (
+          <div class={styles.emptyState}>
+            <p>No accounts yet</p>
+            <p>Add your first account to start tracking your finances.</p>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={() => setShowAddModal(true)}
+            >
+              Add Account
+            </button>
+          </div>
+        ) : (
+          <For each={accountsByProfile()}>
+            {(group) => (
+              <>
+                {multiProfile() && (
+                  <h2 class={styles.profileGroupHeader}>
+                    <span class={styles.profileGroupDot}></span>
+                    {group.profileName}
+                    <span class={styles.profileGroupCount}>{group.accounts.length} accounts</span>
+                  </h2>
+                )}
+                <div data-test-id="accounts-grid" class={styles.accountsGrid}>
+                  <For each={group.accounts}>
+                    {(account) => (
+                      <div data-test-id="account-card" class={styles.accountCard}>
+                        <div class={styles.accountHeader}>
+                          <div data-test-id="account-icon" class={styles.accountIcon}>
+                            {getTypeIcon(account.type)}
+                          </div>
+                          <div class={styles.accountInfo}>
+                            <h3 data-test-id="account-name" class={styles.accountName}>
+                              {account.name}
+                            </h3>
+                            <p data-test-id="account-bank" class={styles.accountBank}>
+                              {account.bank_name || 'No bank listed'}
+                            </p>
+                          </div>
+                          <div class={styles.accountActions}>
+                            <Badge status={getAccountBadgeStatus(account.type)}>
+                              {account.type}
+                            </Badge>
+                            <ConfirmButton
+                              class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                              onConfirm={() => deleteAccount(account.id)}
+                              confirmLabel="Delete? This will remove all related transactions."
+                              label={
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
                                 >
-                                  {tx.type === 'expense' ? '-' : '+'}
-                                  {formatAmount(tx.amount)}
+                                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div data-test-id="current-balance-card" class={styles.accountBalance}>
+                          <div class={styles.balanceLabel}>Current Balance</div>
+                          <div data-test-id="account-balance" class={styles.balanceAmount}>
+                            {formatAmount(account.balance)}
+                          </div>
+                        </div>
+                        <div data-test-id="activity-section" class={styles.accountActivity}>
+                          <div class={styles.activityHeader}>
+                            <span class={styles.activityLabel}>Recent Activity</span>
+                            <a
+                              href={`#transactions?category=${encodeURIComponent(account.name)}`}
+                              class={styles.btnLink}
+                            >
+                              View All →
+                            </a>
+                          </div>
+                          <div data-test-id="activity-list" class={styles.activityList}>
+                            <For each={getAccountTransactions(account.id).slice(0, 3)}>
+                              {(tx: any) => (
+                                <div data-test-id="activity-item" class={styles.activityItem}>
+                                  <div data-test-id="activity-desc" class={styles.activityContent}>
+                                    <div data-test-id="activity-desc" class={styles.activityDesc}>
+                                      {tx.description}
+                                    </div>
+                                    <div data-test-id="activity-date" class={styles.activityDate}>
+                                      {new Date(tx.date).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                  <div
+                                    data-test-id="activity-amount"
+                                    class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
+                                  >
+                                    {tx.type === 'expense' ? '-' : '+'}
+                                    {formatAmount(tx.amount)}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </For>
+                              )}
+                            </For>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </>
-          )}
-        </For>
-      )}
+                    )}
+                  </For>
+                </div>
+              </>
+            )}
+          </For>
+        )}
+      </div>
 
       {/* Add Account Modal */}
       {showAddModal() && (

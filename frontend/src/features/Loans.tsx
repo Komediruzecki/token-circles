@@ -340,9 +340,12 @@ export default function Loans() {
     <div class={`page page-loans page-enter ${styles.loansPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="loans-header">Loans</h1>
+          <h1 data-test-id="loans-header" data-tour="loans-header">
+            Loans
+          </h1>
           <button
             data-test-id="add-loan-btn"
+            data-tour="loans-add"
             class={styles.btnPrimary}
             onclick={() => setShowAddModal(true)}
           >
@@ -379,108 +382,60 @@ export default function Loans() {
         </div>
       </div>
 
-      {loading() ? (
-        <div data-test-id="loading-state" class={styles.emptyState}>
-          Loading loans...
-        </div>
-      ) : loans().length === 0 ? (
-        <div class={styles.emptyState}>
-          <p>No loans yet</p>
-          <p>Add your first loan to start tracking your debt.</p>
-          <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
-            Add Loan
-          </button>
-        </div>
-      ) : (
-        <div class={styles.loansGrid}>
-          <For each={loans()}>
-            {(loan) => {
-              const remaining = calculateRemaining(loan)
-              const monthly =
-                loan.monthly_payment ||
-                calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
-              const progress = getProgress(loan)
+      <div data-tour="loans-list">
+        {loading() ? (
+          <div data-test-id="loading-state" class={styles.emptyState}>
+            Loading loans...
+          </div>
+        ) : loans().length === 0 ? (
+          <div class={styles.emptyState}>
+            <p>No loans yet</p>
+            <p>Add your first loan to start tracking your debt.</p>
+            <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
+              Add Loan
+            </button>
+          </div>
+        ) : (
+          <div class={styles.loansGrid}>
+            <For each={loans()}>
+              {(loan) => {
+                const remaining = calculateRemaining(loan)
+                const monthly =
+                  loan.monthly_payment ||
+                  calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
+                const progress = getProgress(loan)
 
-              return (
-                <div class={styles.loanCard}>
-                  <div class={styles.loanHeader}>
-                    <div class={styles.loanIcon}>
-                      <svg
-                        width="18"
-                        height="18"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                    </div>
-                    <div class={styles.loanInfo}>
-                      <h3 class={styles.loanName}>{loan.name}</h3>
-                      <Badge status={getLoanBadgeStatus(loan.status)}>
-                        {getStatusLabel(loan.status)}
-                      </Badge>
-                    </div>
-                    <div class={styles.loanActions}>
-                      <button
-                        class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                        title="Prepayments"
-                        onclick={() => {
-                          setPrepaymentsLoanId(loan.id)
-                          loadPrepayments(loan.id)
-                          setShowPrepayments(true)
-                        }}
-                      >
+                return (
+                  <div class={styles.loanCard}>
+                    <div class={styles.loanHeader}>
+                      <div class={styles.loanIcon}>
                         <svg
-                          width="16"
-                          height="16"
+                          width="18"
+                          height="18"
                           fill="none"
                           stroke="currentColor"
+                          stroke-width="2"
                           viewBox="0 0 24 24"
                         >
-                          <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                         </svg>
-                      </button>
-                      <button
-                        class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                        title="View Amortization"
-                        onclick={() => {
-                          setAmortizationLoan(loan)
-                          setAmortizationRecalculateKey((k) => k + 1)
-                          setShowAmortization(true)
-                        }}
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                      </div>
+                      <div class={styles.loanInfo}>
+                        <h3 class={styles.loanName}>{loan.name}</h3>
+                        <Badge status={getLoanBadgeStatus(loan.status)}>
+                          {getStatusLabel(loan.status)}
+                        </Badge>
+                      </div>
+                      <div class={styles.loanActions}>
+                        <button
+                          class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                          title="Prepayments"
+                          onclick={() => {
+                            setPrepaymentsLoanId(loan.id)
+                            loadPrepayments(loan.id)
+                            setShowPrepayments(true)
+                          }}
                         >
-                          <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </button>
-                      <button
-                        class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                        onclick={() => {
-                          editLoan(loan)
-                        }}
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <ConfirmButton
-                        class={`${styles.btnSm} ${styles.btnGhost}`}
-                        onConfirm={() => deleteLoan(loan.id)}
-                        label={
                           <svg
                             width="16"
                             height="16"
@@ -488,53 +443,103 @@ export default function Loans() {
                             stroke="currentColor"
                             viewBox="0 0 24 24"
                           >
-                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                        }
-                      />
+                        </button>
+                        <button
+                          class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                          title="View Amortization"
+                          onclick={() => {
+                            setAmortizationLoan(loan)
+                            setAmortizationRecalculateKey((k) => k + 1)
+                            setShowAmortization(true)
+                          }}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </button>
+                        <button
+                          class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                          onclick={() => {
+                            editLoan(loan)
+                          }}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <ConfirmButton
+                          class={`${styles.btnSm} ${styles.btnGhost}`}
+                          onConfirm={() => deleteLoan(loan.id)}
+                          label={
+                            <svg
+                              width="16"
+                              height="16"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div class={styles.loanBalance}>
+                      <div class={styles.balanceLabel}>Remaining Balance</div>
+                      <div class={styles.balanceAmount}>{formatAmount(remaining)}</div>
+                    </div>
+                    <div class={styles.loanDetails}>
+                      <div class={styles.detailRow}>
+                        <span class={styles.detailLabel}>Principal</span>
+                        <span class={styles.detailValue}>{formatAmount(loan.principal)}</span>
+                      </div>
+                      <div class={styles.detailRow}>
+                        <span class={styles.detailLabel}>Interest Rate</span>
+                        <span class={styles.detailValue}>{loan.interest_rate}%</span>
+                      </div>
+                      <div class={styles.detailRow}>
+                        <span class={styles.detailLabel}>Monthly Payment</span>
+                        <span class={styles.detailValue}>{formatAmount(monthly)}</span>
+                      </div>
+                      <div class={styles.detailRow}>
+                        <span class={styles.detailLabel}>Next Payment</span>
+                        <span class={styles.detailValue}>
+                          {loan.next_payment_date ? formatDate(loan.next_payment_date) : 'Not set'}
+                        </span>
+                      </div>
+                    </div>
+                    <div class={styles.loanProgress}>
+                      <div class={styles.progressBar}>
+                        <div class={styles.progressFill} style={{ width: `${progress}%` }} />
+                      </div>
+                      <div class={styles.progressStats}>
+                        <span class={styles.progressPercent}>{progress}% paid</span>
+                        <span class={styles.progressCurrent}>
+                          {formatAmount(loan.total_paid)} paid
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div class={styles.loanBalance}>
-                    <div class={styles.balanceLabel}>Remaining Balance</div>
-                    <div class={styles.balanceAmount}>{formatAmount(remaining)}</div>
-                  </div>
-                  <div class={styles.loanDetails}>
-                    <div class={styles.detailRow}>
-                      <span class={styles.detailLabel}>Principal</span>
-                      <span class={styles.detailValue}>{formatAmount(loan.principal)}</span>
-                    </div>
-                    <div class={styles.detailRow}>
-                      <span class={styles.detailLabel}>Interest Rate</span>
-                      <span class={styles.detailValue}>{loan.interest_rate}%</span>
-                    </div>
-                    <div class={styles.detailRow}>
-                      <span class={styles.detailLabel}>Monthly Payment</span>
-                      <span class={styles.detailValue}>{formatAmount(monthly)}</span>
-                    </div>
-                    <div class={styles.detailRow}>
-                      <span class={styles.detailLabel}>Next Payment</span>
-                      <span class={styles.detailValue}>
-                        {loan.next_payment_date ? formatDate(loan.next_payment_date) : 'Not set'}
-                      </span>
-                    </div>
-                  </div>
-                  <div class={styles.loanProgress}>
-                    <div class={styles.progressBar}>
-                      <div class={styles.progressFill} style={{ width: `${progress}%` }} />
-                    </div>
-                    <div class={styles.progressStats}>
-                      <span class={styles.progressPercent}>{progress}% paid</span>
-                      <span class={styles.progressCurrent}>
-                        {formatAmount(loan.total_paid)} paid
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )
-            }}
-          </For>
-        </div>
-      )}
+                )
+              }}
+            </For>
+          </div>
+        )}
+      </div>
 
       {/* Loan Charts */}
       {loans().length > 0 && (

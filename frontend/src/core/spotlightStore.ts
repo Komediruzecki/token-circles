@@ -1,5 +1,12 @@
 /**
  * Spotlight Store — Per-page guided tours with localStorage tracking
+ *
+ * Targeting contract: every step points at a dedicated `data-tour="<key>"` attribute
+ * (NOT a CSS class, tag, placeholder, or `data-test-id`). The anchor element must be
+ * ALWAYS rendered on its `requiredPage` — including empty states — so the highlight
+ * never lands on a missing element. `frontend/src/core/spotlightStore.test.ts` enforces
+ * both rules (valid `requiredPage`, `[data-tour="..."]` selector, and that every key
+ * actually exists in the component source).
  */
 import { createSignal } from 'solid-js'
 
@@ -8,7 +15,6 @@ export interface SpotlightStep {
   targetSelector: string
   description: string
   placement?: 'top' | 'bottom' | 'left' | 'right'
-  section?: string
   requiredPage?: string
 }
 
@@ -21,6 +27,23 @@ export interface SpotlightTour {
 
 const TOURS_KEY = 'finance_spotlight_tours'
 
+/** Build a step whose target is the `data-tour="<key>"` anchor on `page`. */
+function step(
+  key: string,
+  page: string,
+  title: string,
+  description: string,
+  placement: SpotlightStep['placement'] = 'bottom'
+): SpotlightStep {
+  return {
+    title,
+    description,
+    placement,
+    requiredPage: page,
+    targetSelector: `[data-tour="${key}"]`,
+  }
+}
+
 // ── Tour definitions ─────────────────────────────────────────────────────────
 
 export const SPOTLIGHT_TOURS: SpotlightTour[] = [
@@ -30,42 +53,31 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Dashboard',
     page: 'dashboard',
     steps: [
-      {
-        title: 'Dashboard Overview',
-        targetSelector: '[data-test-id="dashboard-header"]',
-        description:
-          'Your financial command center. See income, expenses, and net balance at a glance.',
-        placement: 'bottom',
-        section: 'dashboard',
-        requiredPage: 'dashboard',
-      },
-      {
-        title: 'Summary Metrics',
-        targetSelector: '[data-test-id="dashboard-metrics"]',
-        description:
-          'Net worth, income, expenses, and month-over-month deltas in the four metric cards.',
-        placement: 'bottom',
-        section: 'dashboard',
-        requiredPage: 'dashboard',
-      },
-      {
-        title: 'Charts Section',
-        targetSelector: 'canvas',
-        description:
-          'Income vs expense trend charts, net worth timeline, and category breakdowns. Hover for details.',
-        placement: 'top',
-        section: 'dashboard',
-        requiredPage: 'dashboard',
-      },
-      {
-        title: 'Period Navigation',
-        targetSelector: '[data-test-id="dashboard-header"] button',
-        description:
-          'Use the period pills (1M/3M/6M/1Y/ALL) and arrows to switch timeframes. Charts update automatically.',
-        placement: 'bottom',
-        section: 'dashboard',
-        requiredPage: 'dashboard',
-      },
+      step(
+        'dashboard-header',
+        'dashboard',
+        'Dashboard',
+        'Your financial command center — income, expenses, and net balance at a glance.'
+      ),
+      step(
+        'dashboard-period',
+        'dashboard',
+        'Time period',
+        'Switch timeframe with the period pills (1M/3M/6M/1Y/ALL) and arrows. Charts update instantly.'
+      ),
+      step(
+        'dashboard-metrics',
+        'dashboard',
+        'Summary metrics',
+        'Net worth, income, expenses, and the month-over-month change in the metric cards.'
+      ),
+      step(
+        'dashboard-charts',
+        'dashboard',
+        'Charts',
+        'Income vs expense trends, the net-worth timeline, and category breakdowns. Hover for details.',
+        'top'
+      ),
     ],
   },
 
@@ -75,50 +87,31 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Transactions',
     page: 'transactions',
     steps: [
-      {
-        title: 'Transactions Page',
-        targetSelector: '[data-test-id="transactions-header"]',
-        description: 'View, add, edit, and delete all your financial transactions in one place.',
-        placement: 'bottom',
-        section: 'transactions',
-        requiredPage: 'transactions',
-      },
-      {
-        title: 'Add Transaction',
-        targetSelector: '[data-test-id="add-transaction-btn"]',
-        description:
-          'Click to open the quick-add form. Use Ctrl+Shift+T from anywhere for rapid entry.',
-        placement: 'bottom',
-        section: 'transactions',
-        requiredPage: 'transactions',
-      },
-      {
-        title: 'Smart Filters',
-        targetSelector: '[data-test-id="filter-bar"]',
-        description:
-          'Filter by category, tags, type, and date range. Search descriptions, beneficiaries, or payors.',
-        placement: 'bottom',
-        section: 'transactions',
-        requiredPage: 'transactions',
-      },
-      {
-        title: 'Transaction Table',
-        targetSelector: '[data-test-id="data-table"]',
-        description:
-          'FROM → TO flow column, sortable headers, inline category badges and tags. Checkboxes enable bulk actions.',
-        placement: 'top',
-        section: 'transactions',
-        requiredPage: 'transactions',
-      },
-      {
-        title: 'Bulk Actions',
-        targetSelector: '.page-transactions',
-        description:
-          'Select transactions with checkboxes. The bulk bar appears — delete, recategorize, or change type for all selected.',
-        placement: 'bottom',
-        section: 'transactions',
-        requiredPage: 'transactions',
-      },
+      step(
+        'transactions-header',
+        'transactions',
+        'Transactions',
+        'View, add, edit, and delete every transaction in one place.'
+      ),
+      step(
+        'transactions-add',
+        'transactions',
+        'Add a transaction',
+        'Open the quick-add form here — or press Ctrl+Shift+T from anywhere.'
+      ),
+      step(
+        'transactions-filters',
+        'transactions',
+        'Smart filters',
+        'Filter by category, tags, type, and date range, or search descriptions, beneficiaries, and payors.'
+      ),
+      step(
+        'transactions-table',
+        'transactions',
+        'Transaction table',
+        'FROM → TO flow, sortable columns, inline category badges and tags. Tick the checkboxes to reveal bulk actions.',
+        'top'
+      ),
     ],
   },
 
@@ -128,41 +121,31 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Accounts',
     page: 'accounts',
     steps: [
-      {
-        title: 'Accounts Page',
-        targetSelector: '[data-test-id="accounts-header"]',
-        description: 'Manage all your bank, savings, investment, and cash accounts in one view.',
-        placement: 'bottom',
-        section: 'accounts',
-        requiredPage: 'accounts',
-      },
-      {
-        title: 'Account Balances',
-        targetSelector: '[data-test-id="accounts-summary"]',
-        description:
-          'Total balance across all accounts, plus income and expense summaries for the current month.',
-        placement: 'bottom',
-        section: 'accounts',
-        requiredPage: 'accounts',
-      },
-      {
-        title: 'Account Cards',
-        targetSelector: '[data-test-id="accounts-grid"]',
-        description:
-          'Each account shows type badge, current balance, and recent activity. Click "View All" to filter transactions.',
-        placement: 'top',
-        section: 'accounts',
-        requiredPage: 'accounts',
-      },
-      {
-        title: 'Add Account',
-        targetSelector: '[data-test-id="add-account-btn"]',
-        description:
-          'Create checking, savings, investment/brokerage, or cash accounts with starting balance and date.',
-        placement: 'bottom',
-        section: 'accounts',
-        requiredPage: 'accounts',
-      },
+      step(
+        'accounts-header',
+        'accounts',
+        'Accounts',
+        'Manage your bank, savings, investment, and cash accounts in one view.'
+      ),
+      step(
+        'accounts-summary',
+        'accounts',
+        'Balances',
+        "Total balance across all accounts, plus this month's income and expenses."
+      ),
+      step(
+        'accounts-list',
+        'accounts',
+        'Your accounts',
+        'Each card shows the type, current balance, and recent activity. This is where accounts appear once you add them.',
+        'top'
+      ),
+      step(
+        'accounts-add',
+        'accounts',
+        'Add an account',
+        'Create giro, savings, investment, or cash accounts with a starting balance and date.'
+      ),
     ],
   },
 
@@ -172,41 +155,25 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Portfolio',
     page: 'portfolio',
     steps: [
-      {
-        title: 'Portfolio Tracker',
-        targetSelector: '[data-test-id="portfolio-header"]',
-        description:
-          'Track your stock and ETF investments with real-time prices from Yahoo Finance.',
-        placement: 'bottom',
-        section: 'portfolio',
-        requiredPage: 'portfolio',
-      },
-      {
-        title: 'Portfolio Summary',
-        targetSelector: '[data-test-id="portfolio-summary"]',
-        description: 'Total portfolio value, cost basis, and gain/loss percentage at a glance.',
-        placement: 'bottom',
-        section: 'portfolio',
-        requiredPage: 'portfolio',
-      },
-      {
-        title: 'Holdings Table',
-        targetSelector: '.page-portfolio table',
-        description:
-          'Ticker, shares, cost per share, current price, market value, and individual gain/loss for each holding.',
-        placement: 'top',
-        section: 'portfolio',
-        requiredPage: 'portfolio',
-      },
-      {
-        title: 'Refresh Prices',
-        targetSelector: '[data-test-id="refresh-prices-btn"]',
-        description:
-          'Fetch the latest prices from Yahoo Finance. Holdings update with live gain/loss calculations.',
-        placement: 'bottom',
-        section: 'portfolio',
-        requiredPage: 'portfolio',
-      },
+      step(
+        'portfolio-header',
+        'portfolio',
+        'Portfolio',
+        'Track your stock and ETF holdings with live prices from Yahoo Finance.'
+      ),
+      step(
+        'portfolio-holdings',
+        'portfolio',
+        'Holdings',
+        'Ticker, shares, cost basis, current price, market value, and gain/loss for each holding.',
+        'top'
+      ),
+      step(
+        'portfolio-refresh',
+        'portfolio',
+        'Refresh prices',
+        'Pull the latest prices from Yahoo Finance; gain/loss recalculates live.'
+      ),
     ],
   },
 
@@ -216,42 +183,31 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Budgets',
     page: 'budgets',
     steps: [
-      {
-        title: 'Budgets Page',
-        targetSelector: '[data-test-id="budgets-header"]',
-        description:
-          'Plan your spending with monthly category budgets. Track budgeted vs actual spending.',
-        placement: 'bottom',
-        section: 'budgets',
-        requiredPage: 'budgets',
-      },
-      {
-        title: 'Budget Summary',
-        targetSelector: '[data-test-id="budget-summary"]',
-        description:
-          'Total budgeted, spent, and remaining across all categories with percentage indicators.',
-        placement: 'bottom',
-        section: 'budgets',
-        requiredPage: 'budgets',
-      },
-      {
-        title: 'Category Allocations',
-        targetSelector: '[data-test-id="budget-allocations"]',
-        description:
-          'Each category shows a progress bar. Green = on track, yellow = warning, red = over budget.',
-        placement: 'top',
-        section: 'budgets',
-        requiredPage: 'budgets',
-      },
-      {
-        title: 'Month Selector',
-        targetSelector: '[data-test-id="month-selector"]',
-        description:
-          'Navigate between months to view and set budgets. Use "Duplicate Last" to quickly copy last month\'s budgets.',
-        placement: 'bottom',
-        section: 'budgets',
-        requiredPage: 'budgets',
-      },
+      step(
+        'budgets-header',
+        'budgets',
+        'Budgets',
+        'Zero-based budgeting — plan monthly category budgets and track budgeted vs actual spending.'
+      ),
+      step(
+        'budgets-month',
+        'budgets',
+        'Month',
+        "Move between months; use Duplicate Last to copy the previous month's budgets."
+      ),
+      step(
+        'budgets-summary',
+        'budgets',
+        'Summary',
+        'Income, allocated, spent, and remaining across all categories.'
+      ),
+      step(
+        'budgets-allocations',
+        'budgets',
+        'Category allocations',
+        'Per-category progress bars — green on track, amber warning, red over budget.',
+        'top'
+      ),
     ],
   },
 
@@ -261,33 +217,25 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Savings Goals',
     page: 'goals',
     steps: [
-      {
-        title: 'Savings Goals',
-        targetSelector: '[data-test-id="goals-header"]',
-        description:
-          'Set financial targets with deadlines and track your progress toward each goal.',
-        placement: 'bottom',
-        section: 'goals',
-        requiredPage: 'goals',
-      },
-      {
-        title: 'Goals Grid',
-        targetSelector: '[data-test-id="goals-grid"]',
-        description:
-          'Each goal card shows name, target amount, current progress bar, and deadline date.',
-        placement: 'top',
-        section: 'goals',
-        requiredPage: 'goals',
-      },
-      {
-        title: 'Add Goal',
-        targetSelector: '[data-test-id="add-goal-btn"]',
-        description:
-          'Create a new savings goal with a target amount, optional deadline, and starting balance.',
-        placement: 'bottom',
-        section: 'goals',
-        requiredPage: 'goals',
-      },
+      step(
+        'goals-header',
+        'goals',
+        'Savings goals',
+        'Set financial targets with deadlines and track progress toward each one.'
+      ),
+      step(
+        'goals-add',
+        'goals',
+        'Add a goal',
+        'Create a savings goal with a target amount, an optional deadline, and a starting balance.'
+      ),
+      step(
+        'goals-list',
+        'goals',
+        'Your goals',
+        'Each card shows the name, target, progress bar, and deadline. This is where goals appear once you add them.',
+        'top'
+      ),
     ],
   },
 
@@ -297,33 +245,25 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Loans',
     page: 'loans',
     steps: [
-      {
-        title: 'Loans Page',
-        targetSelector: '[data-test-id="loans-header"]',
-        description:
-          'Track loans with amortization schedules, prepayments, and variable rate periods.',
-        placement: 'bottom',
-        section: 'loans',
-        requiredPage: 'loans',
-      },
-      {
-        title: 'Loan Cards',
-        targetSelector: '.page-loans',
-        description:
-          'Each loan shows principal, interest rate, term, and monthly payment. Click for detailed amortization.',
-        placement: 'bottom',
-        section: 'loans',
-        requiredPage: 'loans',
-      },
-      {
-        title: 'Add Loan',
-        targetSelector: '[data-test-id="add-loan-btn"]',
-        description:
-          'Create a new loan with principal amount, interest rate, term in months, and start date.',
-        placement: 'bottom',
-        section: 'loans',
-        requiredPage: 'loans',
-      },
+      step(
+        'loans-header',
+        'loans',
+        'Loans',
+        'Track loans with amortization schedules, prepayments, and variable-rate periods.'
+      ),
+      step(
+        'loans-add',
+        'loans',
+        'Add a loan',
+        'Enter the principal, interest rate, term in months, and start date.'
+      ),
+      step(
+        'loans-list',
+        'loans',
+        'Your loans',
+        'Each card shows the principal, rate, term, and monthly payment. Click one for the full amortization.',
+        'top'
+      ),
     ],
   },
 
@@ -333,40 +273,24 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Bills',
     page: 'bills',
     steps: [
-      {
-        title: 'Bills Page',
-        targetSelector: '[data-test-id="bills-header"]',
-        description:
-          'Track recurring bills with due dates, payment status, and upcoming schedules.',
-        placement: 'bottom',
-        section: 'bills',
-        requiredPage: 'bills',
-      },
-      {
-        title: 'Upcoming Bills',
-        targetSelector: '[data-test-id="bills-upcoming-section"]',
-        description: 'Bills due this month with amounts and due dates. Mark as paid when complete.',
-        placement: 'top',
-        section: 'bills',
-        requiredPage: 'bills',
-      },
-      {
-        title: 'All Bills',
-        targetSelector: '[data-test-id="bills-all-section"]',
-        description:
-          'Complete list of all recurring bills. Each card shows name, amount, frequency, and next due date.',
-        placement: 'top',
-        section: 'bills',
-        requiredPage: 'bills',
-      },
-      {
-        title: 'Add Bill',
-        targetSelector: '[data-test-id="add-bill-btn"]',
-        description: 'Create a new recurring bill with amount, frequency, due date, and category.',
-        placement: 'bottom',
-        section: 'bills',
-        requiredPage: 'bills',
-      },
+      step(
+        'bills-header',
+        'bills',
+        'Bills',
+        'Track recurring bills and subscriptions with due dates and payment status.'
+      ),
+      step(
+        'bills-add',
+        'bills',
+        'Add a bill',
+        'Create a recurring bill or subscription with an amount, frequency, due date, and category.'
+      ),
+      step(
+        'bills-tabs',
+        'bills',
+        'Bills, subscriptions & calendar',
+        'Switch between regular bills, a subscriptions overview with monthly totals, and a due-date calendar.'
+      ),
     ],
   },
 
@@ -376,32 +300,25 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Categories',
     page: 'categories',
     steps: [
-      {
-        title: 'Categories Page',
-        targetSelector: '[data-test-id="categories-header"]',
-        description:
-          'Manage income and expense categories with colors, icons, and tax-deductible flags.',
-        placement: 'bottom',
-        section: 'categories',
-        requiredPage: 'categories',
-      },
-      {
-        title: 'Add Category',
-        targetSelector: '[data-test-id="add-category-btn"]',
-        description: 'Create a new category with name, color, icon, and type (income or expense).',
-        placement: 'bottom',
-        section: 'categories',
-        requiredPage: 'categories',
-      },
-      {
-        title: 'Category List',
-        targetSelector: '[data-test-id="categories-subtitle"]',
-        description:
-          'Each category shows color dot, icon, name, type badge, and tax status. Use tabs to filter by type.',
-        placement: 'bottom',
-        section: 'categories',
-        requiredPage: 'categories',
-      },
+      step(
+        'categories-header',
+        'categories',
+        'Categories',
+        'Manage income and expense categories with colors, icons, and tax-deductible flags.'
+      ),
+      step(
+        'categories-add',
+        'categories',
+        'Add a category',
+        'Create a category with a name, color, icon, and type (income or expense).'
+      ),
+      step(
+        'categories-list',
+        'categories',
+        'Your categories',
+        'Each entry shows the color, icon, name, type, and tax status. This is where categories appear once you add them.',
+        'top'
+      ),
     ],
   },
 
@@ -411,33 +328,18 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Import Data',
     page: 'import',
     steps: [
-      {
-        title: 'Import Page',
-        targetSelector: '.page-import h1',
-        description:
-          'Import transactions from Google Sheets or CSV/XLSX files with smart column mapping.',
-        placement: 'bottom',
-        section: 'import',
-        requiredPage: 'import',
-      },
-      {
-        title: 'File Upload',
-        targetSelector: '#import-dropzone',
-        description:
-          'Drag and drop or click to upload a CSV, XLSX, or XLS file. Download the sample template for expected format.',
-        placement: 'bottom',
-        section: 'import',
-        requiredPage: 'import',
-      },
-      {
-        title: 'Google Sheets Import',
-        targetSelector: 'input[placeholder="Paste Google Sheets URL"]',
-        description:
-          'Paste a Google Sheets link and click Fetch to pull data directly from your spreadsheet.',
-        placement: 'bottom',
-        section: 'import',
-        requiredPage: 'import',
-      },
+      step(
+        'import-header',
+        'import',
+        'Import data',
+        'Bring in transactions from Google Sheets, a CSV/XLSX file, or pasted CSV.'
+      ),
+      step(
+        'import-methods',
+        'import',
+        'Import methods',
+        'Pick a source — a Google Sheets URL, a file upload, or pasted CSV — then map columns and preview before importing.'
+      ),
     ],
   },
 
@@ -447,32 +349,19 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Counterparties',
     page: 'counterparties',
     steps: [
-      {
-        title: 'Counterparties Page',
-        targetSelector: '.page-counterparties h2',
-        description:
-          'See who owes who — aggregated from beneficiary and payor fields across all transactions.',
-        placement: 'bottom',
-        section: 'counterparties',
-        requiredPage: 'counterparties',
-      },
-      {
-        title: 'Summary Cards',
-        targetSelector: '.page-counterparties',
-        description: 'We Owe (red), Owed to Us (green), and Net Position at a glance.',
-        placement: 'bottom',
-        section: 'counterparties',
-        requiredPage: 'counterparties',
-      },
-      {
-        title: 'Counterparty Table',
-        targetSelector: '.page-counterparties table',
-        description:
-          'Sortable table showing each counterparty name, amounts received and paid, net balance, and transaction count.',
-        placement: 'top',
-        section: 'counterparties',
-        requiredPage: 'counterparties',
-      },
+      step(
+        'counterparties-header',
+        'counterparties',
+        'Counterparties',
+        'See who owes who — aggregated from the beneficiary and payor fields across your transactions.'
+      ),
+      step(
+        'counterparties-content',
+        'counterparties',
+        'Balances & table',
+        'We Owe, Owed to Us, and Net Position, with a sortable per-counterparty table below. Populates as you record beneficiaries and payors.',
+        'top'
+      ),
     ],
   },
 
@@ -482,42 +371,33 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Analytics',
     page: 'analytics',
     steps: [
-      {
-        title: 'Analytics Page',
-        targetSelector: '.page-analytics h1',
-        description:
-          'Deep dive into your spending patterns with charts, heatmaps, and flow diagrams.',
-        placement: 'bottom',
-        section: 'analytics',
-        requiredPage: 'analytics',
-      },
-      {
-        title: 'Category Trends',
-        targetSelector: '.page-analytics canvas',
-        description:
-          'Bar charts showing income and expense trends by category over time. Switch between income and expense views.',
-        placement: 'top',
-        section: 'analytics',
-        requiredPage: 'analytics',
-      },
-      {
-        title: 'Daily Heatmap',
-        targetSelector: '.page-analytics',
-        description:
-          'Calendar heatmap showing daily spending intensity. Darker cells = higher spending. Click a day to drill down.',
-        placement: 'bottom',
-        section: 'analytics',
-        requiredPage: 'analytics',
-      },
-      {
-        title: 'Sankey Diagram',
-        targetSelector: '.page-analytics',
-        description:
-          'Visual flow diagram showing how money moves from income sources to expense categories.',
-        placement: 'bottom',
-        section: 'analytics',
-        requiredPage: 'analytics',
-      },
+      step(
+        'analytics-header',
+        'analytics',
+        'Analytics',
+        'Deep-dive your spending with charts, a calendar heatmap, and a flow diagram.'
+      ),
+      step(
+        'analytics-trends',
+        'analytics',
+        'Category trends',
+        'Income and expense trends by category over time. Switch between income and expense views.',
+        'top'
+      ),
+      step(
+        'analytics-heatmap',
+        'analytics',
+        'Spending heatmap',
+        'Daily spending intensity on a calendar — darker cells mean higher spending.',
+        'top'
+      ),
+      step(
+        'analytics-sankey',
+        'analytics',
+        'Budget flow diagram',
+        'A Sankey diagram of how money flows from income into categories. Set budgets to populate it.',
+        'top'
+      ),
     ],
   },
 
@@ -527,85 +407,58 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Retirement',
     page: 'retirement',
     steps: [
-      {
-        title: 'Retirement Page',
-        targetSelector: '[data-test-id="retirement-header"]',
-        description: 'Project your retirement savings and track progress toward retirement goals.',
-        placement: 'bottom',
-        section: 'retirement',
-        requiredPage: 'retirement',
-      },
-      {
-        title: 'Retirement Goals',
-        targetSelector: '[data-test-id="retirement-goals-grid"]',
-        description:
-          'Each card shows a retirement goal with target amount, current savings, and progress percentage.',
-        placement: 'top',
-        section: 'retirement',
-        requiredPage: 'retirement',
-      },
-      {
-        title: 'Projection Details',
-        targetSelector: '[data-test-id="retirement-projection-details"]',
-        description:
-          'Monthly contribution, expected return rate, and projected retirement savings at target age.',
-        placement: 'top',
-        section: 'retirement',
-        requiredPage: 'retirement',
-      },
-      {
-        title: 'Add Goal',
-        targetSelector: '[data-test-id="add-retirement-goal-btn"]',
-        description:
-          'Create a new retirement goal with current age, target age, monthly contribution, and expected return.',
-        placement: 'bottom',
-        section: 'retirement',
-        requiredPage: 'retirement',
-      },
+      step(
+        'retirement-header',
+        'retirement',
+        'Retirement',
+        'Project your retirement savings and track progress toward your target.'
+      ),
+      step(
+        'retirement-add',
+        'retirement',
+        'Add a goal',
+        'Set your current age, target age, monthly contribution, and expected return.'
+      ),
+      step(
+        'retirement-goals',
+        'retirement',
+        'Your retirement goals',
+        'Each card shows the target, current savings, and progress. This is where goals appear once you add them.',
+        'top'
+      ),
     ],
   },
 
-  // ── Calculators (combined) ──
+  // ── Calculators (combined, one step per calculator page) ──
   {
     id: 'calculators',
     label: 'Calculators',
     page: 'compound',
     steps: [
-      {
-        title: 'Compound Interest',
-        targetSelector: '.page-compound h1',
-        description:
-          'Model investment growth with compound interest. Adjust principal, monthly contribution, rate, and years.',
-        placement: 'bottom',
-        section: 'calculators',
-        requiredPage: 'compound',
-      },
-      {
-        title: 'Emergency Fund',
-        targetSelector: '.page-emergency h1',
-        description:
-          'Calculate how much you need for an emergency fund based on your monthly expenses.',
-        placement: 'bottom',
-        section: 'calculators',
-        requiredPage: 'emergency',
-      },
-      {
-        title: 'Rent vs Buy',
-        targetSelector: '.page-rentBuy h1',
-        description: 'Compare renting versus buying a home with detailed financial projections.',
-        placement: 'bottom',
-        section: 'calculators',
-        requiredPage: 'rentBuy',
-      },
-      {
-        title: 'Housing Calculator',
-        targetSelector: '.page-housing h1',
-        description:
-          'Determine affordable housing costs based on your income, expenses, and savings goals.',
-        placement: 'bottom',
-        section: 'calculators',
-        requiredPage: 'housing',
-      },
+      step(
+        'calc-compound',
+        'compound',
+        'Compound interest',
+        'Model investment growth — adjust principal, monthly contribution, rate, and years.'
+      ),
+      step(
+        'calc-emergency',
+        'emergency',
+        'Emergency fund',
+        'Size an emergency fund based on your monthly expenses.'
+      ),
+      step(
+        'calc-rentbuy',
+        'rentBuy',
+        'Rent vs buy',
+        'Compare renting against buying a home with detailed financial projections.'
+      ),
+      step(
+        'calc-housing',
+        'housing',
+        'Housing',
+        'Find affordable housing costs from your income, expenses, and savings goals.'
+      ),
     ],
   },
 
@@ -615,42 +468,31 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     label: 'Settings',
     page: 'settings',
     steps: [
-      {
-        title: 'Settings Page',
-        targetSelector: '.page-settings h1',
-        description:
-          'Configure application preferences, theme, currency, storage mode, and data management.',
-        placement: 'bottom',
-        section: 'settings',
-        requiredPage: 'settings',
-      },
-      {
-        title: 'Theme & Currency',
-        targetSelector: '.page-settings',
-        description:
-          'Toggle dark/light mode and set your preferred currency for display throughout the app.',
-        placement: 'bottom',
-        section: 'settings',
-        requiredPage: 'settings',
-      },
-      {
-        title: 'Data Export',
-        targetSelector: '.page-settings',
-        description:
-          'Export your data as CSV or download PDF reports (monthly, annual, P&L, tax summary).',
-        placement: 'bottom',
-        section: 'settings',
-        requiredPage: 'settings',
-      },
-      {
-        title: 'Storage Mode',
-        targetSelector: '.page-settings',
-        description:
-          'Switch between self-hosted (SQLite) and serverless (IndexedDB) modes. Migrate data when switching.',
-        placement: 'bottom',
-        section: 'settings',
-        requiredPage: 'settings',
-      },
+      step(
+        'settings-header',
+        'settings',
+        'Settings',
+        'Preferences, theme, currency, storage mode, exports, and billing.'
+      ),
+      step(
+        'settings-tabs',
+        'settings',
+        'Settings tabs',
+        'General is shown here; Exports holds CSV and PDF reports; Billing appears when you run in self-hosted mode.'
+      ),
+      step(
+        'settings-currency',
+        'settings',
+        'Currency',
+        'Set the display currency used throughout the app.'
+      ),
+      step('settings-theme', 'settings', 'Theme', 'Toggle between light and dark mode.'),
+      step(
+        'settings-storage',
+        'settings',
+        'Storage mode',
+        'Switch between self-hosted (SQLite) and serverless (browser) storage.'
+      ),
     ],
   },
 ]

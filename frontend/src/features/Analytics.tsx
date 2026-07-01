@@ -415,7 +415,7 @@ export default function Analytics() {
   return (
     <div class={`page page-analytics page-enter ${styles.analyticsPage}`}>
       <div class={styles.pageHeader}>
-        <h1>Analytics</h1>
+        <h1 data-tour="analytics-header">Analytics</h1>
         <p class={styles.pageSubtitle}>Visualize your financial data and track trends</p>
       </div>
 
@@ -676,7 +676,7 @@ export default function Analytics() {
                   data for comparison
                 </div>
               )}
-              <div class={styles.chartContainer}>
+              <div class={styles.chartContainer} data-tour="analytics-trends">
                 {stackedData().datasets.length === 0 ? (
                   <div class={styles.emptyState}>No category trend data available</div>
                 ) : (
@@ -1013,7 +1013,11 @@ export default function Analytics() {
                   </select>
                 </div>
               </div>
-              <div class={styles.chartContainer} ref={setHeatmapContainer}>
+              <div
+                class={styles.chartContainer}
+                ref={setHeatmapContainer}
+                data-tour="analytics-heatmap"
+              >
                 {heatmapData().size === 0 ? (
                   <div class={styles.emptyState}>No data available for this year</div>
                 ) : (
@@ -1147,7 +1151,11 @@ export default function Analytics() {
                   </select>
                 </div>
               </div>
-              <div class={styles.chartContainer} ref={setSankeyContainer}>
+              <div
+                class={styles.chartContainer}
+                ref={setSankeyContainer}
+                data-tour="analytics-sankey"
+              >
                 {sankeyData().nodes.length === 0 ? (
                   <div class={styles.emptyState}>
                     No budget data for this month. Set budgets to see the flow diagram.

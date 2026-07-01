@@ -332,9 +332,12 @@ export default function Bills() {
     <div class={`${styles.billsPage} page page-bills page-enter`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="bills-header">Bills</h1>
+          <h1 data-test-id="bills-header" data-tour="bills-header">
+            Bills
+          </h1>
           <button
             data-test-id="add-bill-btn"
+            data-tour="bills-add"
             class={styles.btnPrimary}
             onClick={() => {
               setEditingId(null)
@@ -361,7 +364,7 @@ export default function Bills() {
       </div>
 
       {/* Tab navigation */}
-      <div class={styles.tabs}>
+      <div class={styles.tabs} data-tour="bills-tabs">
         <button
           class={`${styles.tabBtn} ${billTab() === 'all' ? styles.tabActive : ''}`}
           onClick={() => setBillTab('all')}

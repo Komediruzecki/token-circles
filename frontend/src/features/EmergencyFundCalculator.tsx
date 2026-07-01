@@ -61,7 +61,7 @@ export default function EmergencyFundCalculator() {
   return (
     <div class={sharedStyles.page}>
       <div class={sharedStyles.pageHeader}>
-        <h1>Emergency Fund Tracker</h1>
+        <h1 data-tour="calc-emergency">Emergency Fund Tracker</h1>
         <p>Calculate coverage based on monthly expenses</p>
       </div>
 

@@ -563,12 +563,15 @@ export default function Transactions() {
   return (
     <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
       <div class={styles.pageHeader}>
-        <h1 data-test-id="transactions-header">Transactions</h1>
+        <h1 data-test-id="transactions-header" data-tour="transactions-header">
+          Transactions
+        </h1>
         <div class={styles.tableActions}>
           <button
             class={`${styles.btnPrimary} ${styles.btnSm}`}
             onClick={openTransactionModal}
             data-test-id="add-transaction-btn"
+            data-tour="transactions-add"
           >
             <svg
               width="16"
