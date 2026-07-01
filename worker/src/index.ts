@@ -62,9 +62,10 @@ export type AppEnv = { Bindings: Env; Variables: { userId: number } };
 
 const app = new Hono<AppEnv>();
 
-// CORS — origin comes from the env var so it's domain-agnostic until you have one.
-// credentials:true is required so the browser sends the session cookie cross-origin.
-app.use('*', (c, next) => cors({ origin: c.env.CORS_ORIGIN ?? '*', credentials: true })(c, next));
+// CORS — origin comes from the env var. credentials:true is required so the browser sends the
+// session cookie cross-origin; with credentials, `*` is invalid anyway, so fail CLOSED (allow
+// nothing cross-origin) rather than reflect `*` when CORS_ORIGIN is unset/misconfigured.
+app.use('*', (c, next) => cors({ origin: c.env.CORS_ORIGIN ?? '', credentials: true })(c, next));
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 app.get('/api/health', (c) => c.json({ ok: true, env: c.env.APP_ENV ?? 'unknown' }));

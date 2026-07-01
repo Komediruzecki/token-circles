@@ -14,11 +14,25 @@ import * as db from '../db';
 // return 501. See each handler's TODO.
 export const reportsRoutes = new Hono<AppEnv>();
 
-// In-memory store for "custom reports", matching the Express Map(). NOTE: on
-// Workers this lives only for the lifetime of a single isolate and is not shared
-// across isolates/requests — same volatile semantics the Express version had
-// per-process, but more aggressively ephemeral. A durable store would need D1/KV.
-const customReports = new Map<number, Record<string, any>>();
+// Custom reports are persisted in D1 (custom_reports table), scoped by user_id — see the CRUD
+// handlers below. They previously lived in a per-isolate in-memory Map with no ownership check.
+interface CustomReportRow {
+  id: number;
+  name: string;
+  type: string;
+  config: string;
+  created_at: string;
+  updated_at: string;
+}
+const customReportView = (row: CustomReportRow) => ({
+  id: row.id,
+  reportId: row.id,
+  name: row.name,
+  type: row.type,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  ...(row.config ? JSON.parse(row.config) : {}),
+});
 
 // Ported verbatim from backend/routes/reports.js — strips command-injection,
 // XSS and dangerous-SQL patterns from a user-supplied report name.
@@ -354,21 +368,35 @@ reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, requireAdvancedRep
 // ── Custom Report (create) ───────────────────────────────────────────
 // Accepts a custom report name — sanitized to prevent command injection.
 reportsRoutes.post('/api/reports/custom', requireAuth, async (c) => {
+  const userId = c.get('userId');
   const b = (await c.req.json()) as Record<string, any>;
   const sanitizedName = sanitizeInput(b.name || 'Custom Report');
   if (!sanitizedName || sanitizedName.trim().length < 1) {
     return c.json({ error: 'Invalid report name' }, 400);
   }
-  const id = Date.now();
-  const report = {
+  const type = b.type || 'custom';
+  const config = { ...b };
+  delete config.name;
+  delete config.type;
+  delete config.id;
+  delete config.reportId;
+  const result = await db.run(
+    c.env.DB,
+    'INSERT INTO custom_reports (user_id, name, type, config) VALUES (?, ?, ?, ?)',
+    userId,
+    sanitizedName,
+    type,
+    JSON.stringify(config)
+  );
+  const id = result.meta.last_row_id as number;
+  return c.json({
     id,
     reportId: id,
     name: sanitizedName,
-    type: b.type || 'custom',
+    type,
     createdAt: new Date().toISOString(),
-  };
-  customReports.set(id, report);
-  return c.json(report);
+    ...config,
+  });
 });
 
 // ── Annual Financial Report (PDF) ────────────────────────────────────
@@ -525,25 +553,63 @@ reportsRoutes.get('/api/reports/overview', requireAuth, async (c) => {
 // ── Custom Report CRUD ───────────────────────────────────────────────
 reportsRoutes.get('/api/reports/custom/:id', requireAuth, async (c) => {
   const id = parseInt(c.req.param('id'));
-  const report = customReports.get(id);
-  if (!report) return c.json({ error: 'Report not found' }, 404);
-  return c.json(report);
+  const row = await db.first<CustomReportRow>(
+    c.env.DB,
+    'SELECT id, name, type, config, created_at, updated_at FROM custom_reports WHERE id = ? AND user_id = ?',
+    id,
+    c.get('userId')
+  );
+  if (!row) return c.json({ error: 'Report not found' }, 404);
+  return c.json(customReportView(row));
 });
 
 reportsRoutes.put('/api/reports/custom/:id', requireAuth, async (c) => {
   const id = parseInt(c.req.param('id'));
-  const report = customReports.get(id);
-  if (!report) return c.json({ error: 'Report not found' }, 404);
+  const userId = c.get('userId');
+  const row = await db.first<CustomReportRow>(
+    c.env.DB,
+    'SELECT id, name, type, config, created_at, updated_at FROM custom_reports WHERE id = ? AND user_id = ?',
+    id,
+    userId
+  );
+  if (!row) return c.json({ error: 'Report not found' }, 404);
   const b = (await c.req.json()) as Record<string, any>;
-  const updated = { ...report, ...b, id, updatedAt: new Date().toISOString() };
-  customReports.set(id, updated);
-  return c.json(updated);
+  const name = b.name !== undefined ? sanitizeInput(b.name) : row.name;
+  const type = b.type !== undefined ? b.type : row.type;
+  const config = { ...(row.config ? JSON.parse(row.config) : {}), ...b };
+  delete config.name;
+  delete config.type;
+  delete config.id;
+  delete config.reportId;
+  await db.run(
+    c.env.DB,
+    "UPDATE custom_reports SET name = ?, type = ?, config = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+    name,
+    type,
+    JSON.stringify(config),
+    id,
+    userId
+  );
+  return c.json({
+    id,
+    reportId: id,
+    name,
+    type,
+    createdAt: row.created_at,
+    updatedAt: new Date().toISOString(),
+    ...config,
+  });
 });
 
 reportsRoutes.delete('/api/reports/custom/:id', requireAuth, async (c) => {
   const id = parseInt(c.req.param('id'));
-  if (!customReports.has(id)) return c.json({ error: 'Report not found' }, 404);
-  customReports.delete(id);
+  const result = await db.run(
+    c.env.DB,
+    'DELETE FROM custom_reports WHERE id = ? AND user_id = ?',
+    id,
+    c.get('userId')
+  );
+  if (!result.meta.changes) return c.json({ error: 'Report not found' }, 404);
   return c.json({ ok: true });
 });
 
@@ -590,19 +656,25 @@ reportsRoutes.get('/api/reports/compare', requireAuth, async (c) => {
 
 // ── Saved Reports ────────────────────────────────────────────────────
 reportsRoutes.get('/api/reports/saved', requireAuth, async (c) => {
-  return c.json({ reports: [] });
+  const rows = await db.all<CustomReportRow>(
+    c.env.DB,
+    'SELECT id, name, type, config, created_at, updated_at FROM custom_reports WHERE user_id = ? ORDER BY created_at DESC',
+    c.get('userId')
+  );
+  return c.json({ reports: rows.map(customReportView) });
 });
 
 reportsRoutes.post('/api/reports/save', requireAuth, async (c) => {
   const b = (await c.req.json()) as Record<string, any>;
   if (!b.name) return c.json({ error: 'Report name is required' }, 400);
-  const id = Date.now();
-  customReports.set(id, {
-    id,
-    name: b.name,
-    type: b.type || 'custom',
-    params: b.params || {},
-    createdAt: new Date().toISOString(),
-  });
-  return c.json({ id, name: b.name, ok: true });
+  const type = b.type || 'custom';
+  const result = await db.run(
+    c.env.DB,
+    'INSERT INTO custom_reports (user_id, name, type, config) VALUES (?, ?, ?, ?)',
+    c.get('userId'),
+    b.name,
+    type,
+    JSON.stringify({ params: b.params || {} })
+  );
+  return c.json({ id: result.meta.last_row_id as number, name: b.name, ok: true });
 });

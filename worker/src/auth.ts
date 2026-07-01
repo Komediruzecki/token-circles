@@ -181,6 +181,8 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
 export interface GoogleClaims {
   aud: string
   sub: string
+  iss?: string
+  exp?: string
   email?: string
   email_verified?: string
   name?: string
@@ -197,6 +199,10 @@ export async function verifyGoogleIdToken(idToken: string, clientId: string): Pr
   if (!res.ok) return null
   const claims = (await res.json()) as GoogleClaims
   if (claims.aud !== clientId) return null // critical: this token was minted for us
+  // Defense in depth — tokeninfo already validates the token, but pin the issuer and expiry too.
+  if (claims.iss !== 'accounts.google.com' && claims.iss !== 'https://accounts.google.com')
+    return null
+  if (claims.exp && Number(claims.exp) < Math.floor(Date.now() / 1000)) return null
   return claims
 }
 
