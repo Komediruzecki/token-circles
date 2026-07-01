@@ -89,6 +89,9 @@ jobs:
           workingDirectory: worker
           command: d1 export ${{ steps.env.outputs.db }} --remote --env ${{ steps.env.outputs.env }} --output d1-backup.sql
           packageManager: pnpm
+          # wrangler-action@v3 installs an old default wrangler that can't run `d1 migrations
+          # apply` against this config or deploy an assets-only Worker. Pin a current 4.x.
+          wranglerVersion: '4.106.0'
 
       - name: Upload D1 backup artifact
         if: env.DEPLOY_ENABLED == 'true'
@@ -107,6 +110,9 @@ jobs:
           workingDirectory: worker
           command: d1 migrations apply ${{ steps.env.outputs.db }} --remote --env ${{ steps.env.outputs.env }}
           packageManager: pnpm
+          # wrangler-action@v3 installs an old default wrangler that can't run `d1 migrations
+          # apply` against this config or deploy an assets-only Worker. Pin a current 4.x.
+          wranglerVersion: '4.106.0'
 
       - name: Deploy worker (${{ steps.env.outputs.env }})
         if: env.DEPLOY_ENABLED == 'true'
@@ -117,3 +123,6 @@ jobs:
           workingDirectory: worker
           command: deploy --env ${{ steps.env.outputs.env }}
           packageManager: pnpm
+          # wrangler-action@v3 installs an old default wrangler that can't run `d1 migrations
+          # apply` against this config or deploy an assets-only Worker. Pin a current 4.x.
+          wranglerVersion: '4.106.0'
