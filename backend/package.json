@@ -40,7 +40,7 @@
     "pdfkit": "^0.15.0",
     "puppeteer": "^24.41.0",
     "swagger-ui-express": "^5.0.1",
-    "xlsx": "^0.18.5",
+    "xlsx": "file:../vendor/xlsx-0.20.3.tgz",
     "yahoo-finance2": "^3.14.0",
     "zod": "^4.4.3"
   },
