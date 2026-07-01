@@ -29,8 +29,10 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   if (mode === 'self-hosted') {
     if (url.startsWith('/api')) {
       return fetch(`${import.meta.env.VITE_API_URL ?? ''}${url}`, {
-        credentials: 'include',
         ...init,
+        // Pin credentials last so a caller's own `init.credentials` can't override it
+        // and silently drop the cross-origin session cookie.
+        credentials: 'include',
       })
     }
     return fetch(url, init)

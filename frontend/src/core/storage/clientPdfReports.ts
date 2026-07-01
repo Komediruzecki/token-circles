@@ -2,6 +2,7 @@
  * Client-side PDF Report Generation
  * Uses jsPDF + Chart.js offscreen canvas (via Web Worker) to generate reports.
  */
+import { getLocalCurrency } from '../../core/api'
 import { getDB } from './idb'
 import type { ChartData } from 'chart.js'
 import type { jsPDF } from 'jspdf'
@@ -14,8 +15,14 @@ function getProfileId(): number {
   return stored ? parseInt(stored, 10) : 1
 }
 
-function fmt(n: number): string {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// Format a signed amount as the user's selected currency. Using Intl currency
+// formatting picks the correct symbol and the currency's own fraction digits
+// (e.g. JPY has 0, not a forced 2). Negatives render with a leading ASCII '-'.
+function money(n: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: getLocalCurrency(),
+  }).format(n)
 }
 
 const MONTHS = [
@@ -239,10 +246,16 @@ function addSectionTable(
       const align: 'left' | 'right' = ci === 0 ? 'left' : 'right'
       const padding = align === 'left' ? 8 : -8
       let tc: [number, number, number] = [dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59]
-      if (cell.startsWith('€') && ci > 0 && !cell.includes('-')) {
-        tc = dark ? [16, 185, 129] : [5, 150, 105]
-      } else if (cell.startsWith('-€')) {
+      // Color money cells green (positive) / red (negative). A money cell is a value
+      // column that isn't the '-' placeholder, a bare count, or a percentage — this
+      // keeps the same columns colored as before while being currency-symbol agnostic
+      // (Intl output for non-EUR currencies no longer starts with '€').
+      const isMoney =
+        ci > 0 && cell !== '-' && !cell.endsWith('%') && !/^\d+$/.test(cell) && /\d/.test(cell)
+      if (isMoney && cell.trimStart().startsWith('-')) {
         tc = dark ? [248, 113, 113] : [220, 38, 38]
+      } else if (isMoney) {
+        tc = dark ? [16, 185, 129] : [5, 150, 105]
       }
       doc.setTextColor(tc[0], tc[1], tc[2])
       doc.text(cell, rx + (align === 'left' ? padding : colWidths[ci] + padding), y + 7, { align })
@@ -345,11 +358,11 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   let posY = addSummaryBox(
     doc,
     [
-      { label: 'Total Income', value: `€${fmt(totalIncome)}`, color: [5, 150, 105] },
-      { label: 'Total Expenses', value: `€${fmt(totalExpense)}`, color: [220, 38, 38] },
+      { label: 'Total Income', value: money(totalIncome), color: [5, 150, 105] },
+      { label: 'Total Expenses', value: money(totalExpense), color: [220, 38, 38] },
       {
         label: 'Net Savings',
-        value: `${net >= 0 ? '€' : '-€'}${fmt(Math.abs(net))}`,
+        value: money(net),
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
     ],
@@ -407,9 +420,9 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
         const net = v.income - v.expense
         return [
           name,
-          v.income > 0 ? `€${fmt(v.income)}` : '-',
-          v.expense > 0 ? `€${fmt(v.expense)}` : '-',
-          net >= 0 ? `€${fmt(net)}` : `-€${fmt(Math.abs(net))}`,
+          v.income > 0 ? money(v.income) : '-',
+          v.expense > 0 ? money(v.expense) : '-',
+          money(net),
         ]
       }),
       posY + 4,
@@ -581,11 +594,11 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
   let posY = addSummaryBox(
     doc,
     [
-      { label: 'Total Income', value: `€${fmt(totalIncome)}`, color: [5, 150, 105] },
-      { label: 'Total Expenses', value: `€${fmt(totalExpense)}`, color: [220, 38, 38] },
+      { label: 'Total Income', value: money(totalIncome), color: [5, 150, 105] },
+      { label: 'Total Expenses', value: money(totalExpense), color: [220, 38, 38] },
       {
         label: 'Net Savings',
-        value: `${net >= 0 ? '€' : '-€'}${fmt(Math.abs(net))}`,
+        value: money(net),
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
       {
@@ -655,13 +668,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     monthly.map((m, i) => {
       const n = m.income - m.expense
       const running = monthly.slice(0, i + 1).reduce((s, x) => s + x.income - x.expense, 0)
-      return [
-        MONTHS[i],
-        `€${fmt(m.income)}`,
-        `€${fmt(m.expense)}`,
-        n >= 0 ? `€${fmt(n)}` : `-€${fmt(Math.abs(n))}`,
-        running >= 0 ? `€${fmt(running)}` : `-€${fmt(Math.abs(running))}`,
-      ]
+      return [MONTHS[i], money(m.income), money(m.expense), money(n), money(running)]
     }),
     posY,
     dark
@@ -732,15 +739,15 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
   let posY = addSummaryBox(
     doc,
     [
-      { label: 'Tax-Deductible', value: `€${fmt(taxTotal)} (${taxPct}%)`, color: [5, 150, 105] },
+      { label: 'Tax-Deductible', value: `${money(taxTotal)} (${taxPct}%)`, color: [5, 150, 105] },
       {
         label: 'Non-Deductible',
-        value: `€${fmt(nonTotal)}`,
+        value: money(nonTotal),
         color: (dark ? [148, 163, 184] : [100, 116, 139]) as [number, number, number],
       },
       {
         label: 'Total Expenses',
-        value: `€${fmt(totalExp)}`,
+        value: money(totalExp),
         color: (dark ? [226, 232, 240] : [30, 41, 59]) as [number, number, number],
       },
     ],
@@ -756,7 +763,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
       'Tax-Deductible Expenses',
       ['Category', 'Transactions', 'Amount'],
       [160, 70, 90],
-      taxDeductible.map((r) => [r.catName, String(r.count), `€${fmt(r.total)}`]),
+      taxDeductible.map((r) => [r.catName, String(r.count), money(r.total)]),
       posY,
       dark,
       [5, 150, 105]
@@ -774,7 +781,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
       'Non-Deductible Expenses',
       ['Category', 'Transactions', 'Amount'],
       [160, 70, 90],
-      nonDeductible.map((r) => [r.catName, String(r.count), `€${fmt(r.total)}`]),
+      nonDeductible.map((r) => [r.catName, String(r.count), money(r.total)]),
       posY + 6,
       dark,
       [220, 38, 38]
@@ -871,11 +878,11 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
   let posY = addSummaryBox(
     doc,
     [
-      { label: 'Total Income', value: `€${fmt(totalIncome)}`, color: [5, 150, 105] },
-      { label: 'Total Expenses', value: `€${fmt(totalExpense)}`, color: [220, 38, 38] },
+      { label: 'Total Income', value: money(totalIncome), color: [5, 150, 105] },
+      { label: 'Total Expenses', value: money(totalExpense), color: [220, 38, 38] },
       {
         label: 'Net Savings',
-        value: `${net >= 0 ? '€' : '-€'}${fmt(Math.abs(net))}`,
+        value: money(net),
         color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
       },
     ],
@@ -897,16 +904,11 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
       ['Category', 'Txns', 'Amount', '% of Total'],
       [150, 55, 95, 65],
       [
-        ...incomeRows.map((r) => [
-          r.name,
-          String(r.count),
-          `€${fmt(r.total)}`,
-          `${r.pct.toFixed(1)}%`,
-        ]),
+        ...incomeRows.map((r) => [r.name, String(r.count), money(r.total), `${r.pct.toFixed(1)}%`]),
         [
           'TOTAL',
           String(incomeRows.reduce((s, r) => s + r.count, 0)),
-          `€${fmt(totalIncome)}`,
+          money(totalIncome),
           '100.0%',
         ],
       ],
@@ -931,13 +933,13 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
         ...expenseRows.map((r) => [
           r.name,
           String(r.count),
-          `€${fmt(r.total)}`,
+          money(r.total),
           `${r.pct.toFixed(1)}%`,
         ]),
         [
           'TOTAL',
           String(expenseRows.reduce((s, r) => s + r.count, 0)),
-          `€${fmt(totalExpense)}`,
+          money(totalExpense),
           '100.0%',
         ],
       ],
@@ -953,7 +955,7 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
   doc.setFontSize(8)
   doc.setTextColor(fc)
   doc.text(
-    `Total: ${txnCount} transactions | Net Savings: ${net >= 0 ? '€' : '-€'}${fmt(Math.abs(net))} (${savingsRate.toFixed(1)}% savings rate)`,
+    `Total: ${txnCount} transactions | Net Savings: ${money(net)} (${savingsRate.toFixed(1)}% savings rate)`,
     pageW / 2,
     doc.internal.pageSize.getHeight() - 15,
     { align: 'center' }

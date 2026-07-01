@@ -1,6 +1,5 @@
 import { validateBody } from '../validation'
 import * as h from './localHandlers'
-import type { StorageMode } from './storageFactory'
 
 // ── Route types ──────────────────────────────────────────────────────────────
 
@@ -920,8 +919,4 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
   }
 
   return notFound(`/api${path}`)
-}
-
-export function setStorageMode(_mode: StorageMode): void {
-  // Will be wired in LS15 (data migration)
 }

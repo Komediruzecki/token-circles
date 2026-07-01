@@ -3,7 +3,7 @@
  * Shows current savings rate for the period with goal tracking
  */
 import { createSignal } from 'solid-js'
-import { formatCurrency } from '../../core/api'
+import { formatCurrency, getLocalCurrency } from '../../core/api'
 import styles from './SavingsRateCard.module.css'
 
 export interface SavingsRateCardProps {
@@ -43,7 +43,7 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
           <span
             class={`${styles.rateValue} ${props.monthlySavings >= 0 ? styles.rateGood : styles.rateBad}`}
           >
-            {formatCurrency(props.monthlySavings)}
+            {formatCurrency(props.monthlySavings, getLocalCurrency())}
           </span>
         </div>
 
