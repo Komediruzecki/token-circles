@@ -3,7 +3,7 @@
  * Shows insights about recurring transactions
  */
 import { createMemo, createSignal, For, onMount } from 'solid-js'
-import { api } from '../../core/api'
+import { api, getLocalCurrency } from '../../core/api'
 import styles from './RecurringInsightsCard.module.css'
 
 interface RecurringItem {
@@ -40,7 +40,9 @@ export default function RecurringInsightsCard() {
   )
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: getLocalCurrency() }).format(
+      amount
+    )
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })

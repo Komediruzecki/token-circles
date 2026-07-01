@@ -3,9 +3,12 @@
  * Shows budget alerts for the current period — fetches from API
  */
 import { createResource, For } from 'solid-js'
-import { apiGet, formatCurrency } from '../../core/api'
+import { apiGet, formatCurrency, getLocalCurrency } from '../../core/api'
 import { useAppState } from '../../core/appStore'
 import styles from './BudgetAlertsCard.module.css'
+
+// Format money in the user's selected currency (not the EUR default of formatCurrency).
+const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
 
 interface BudgetAlert {
   categoryName: string
@@ -70,15 +73,14 @@ export default function BudgetAlertsCard() {
               <div class={styles.alertContent}>
                 <div class={styles.alertTitle}>{alert.categoryName}</div>
                 <div class={styles.alertDescription}>
-                  {formatCurrency(alert.spent)} of {formatCurrency(alert.budgetAmount)} (
-                  {alert.percentage}
+                  {money(alert.spent)} of {money(alert.budgetAmount)} ({alert.percentage}
                   %)
                 </div>
               </div>
               <span class={`${styles.alertAmount} ${alert.status === 'over' ? styles.over : ''}`}>
                 {alert.remaining < 0
-                  ? `-${formatCurrency(Math.abs(alert.remaining))}`
-                  : formatCurrency(alert.remaining)}
+                  ? `-${money(Math.abs(alert.remaining))}`
+                  : money(alert.remaining)}
               </span>
             </div>
           )}

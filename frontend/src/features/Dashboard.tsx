@@ -11,10 +11,13 @@ import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard
 import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
 import { DashboardSettings } from '../components/DashboardSettings'
 import { PeriodPills } from '../components/PeriodPills'
-import { api, formatCurrency, formatDate, toast } from '../core/api'
+import { api, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import styles from './DashboardPage.module.css'
 import type * as Models from '../types/models'
+
+// Format money in the user's selected currency (not the EUR default of formatCurrency).
+const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
 
 const DEFAULT_WIDGET_ORDER = [
   'metrics',
@@ -365,7 +368,7 @@ export default function Dashboard() {
                         class={`${styles.transactionAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
                       >
                         {tx.type === 'expense' ? '-' : '+'}
-                        {formatCurrency(tx.amount)}
+                        {money(tx.amount)}
                       </div>
                     </div>
                   )}
@@ -407,7 +410,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div class={`${styles.transactionAmount} ${styles.expense}`}>
-                        {formatCurrency(bill.amount)}
+                        {money(bill.amount)}
                       </div>
                     </div>
                   )}
@@ -551,7 +554,7 @@ export default function Dashboard() {
             <div class={styles.metricsGrid} data-test-id="dashboard-metrics">
               <div class={`${styles.metricCard} ${styles.networth}`}>
                 <div class={styles.metricLabel}>Net Worth</div>
-                <div class={styles.metricValue}>{formatCurrency(metrics()!.balance)}</div>
+                <div class={styles.metricValue}>{money(metrics()!.balance)}</div>
                 <div class={styles.metricSubtext}>Total account balances</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momBalanceDelta != null && (
@@ -579,7 +582,7 @@ export default function Dashboard() {
               <div class={`${styles.metricCard} ${styles.income}`}>
                 <div class={styles.metricLabel}>Income</div>
                 <div class={`${styles.metricValue} ${styles.positive}`}>
-                  {formatCurrency(metrics()!.totalIncome)}
+                  {money(metrics()!.totalIncome)}
                 </div>
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
@@ -608,7 +611,7 @@ export default function Dashboard() {
               <div class={`${styles.metricCard} ${styles.expense}`}>
                 <div class={styles.metricLabel}>Expenses</div>
                 <div class={`${styles.metricValue} ${styles.expense}`}>
-                  {formatCurrency(metrics()!.totalExpenses)}
+                  {money(metrics()!.totalExpenses)}
                 </div>
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
@@ -639,7 +642,7 @@ export default function Dashboard() {
                 <div
                   class={`${styles.metricValue} ${metrics()!.totalIncome - metrics()!.totalExpenses >= 0 ? styles.positive : styles.expense}`}
                 >
-                  {formatCurrency(metrics()!.totalIncome - metrics()!.totalExpenses)}
+                  {money(metrics()!.totalIncome - metrics()!.totalExpenses)}
                 </div>
                 <div class={styles.metricSubtext}>Monthly net</div>
               </div>
