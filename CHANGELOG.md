@@ -7,13 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] — 2026-07-01
+
+### Security
+
+- Fixed an insecure direct object reference (IDOR) in custom reports. They were held in a shared in-memory map keyed by a guessable id with no ownership check, so one signed-in user could read, edit, or delete another user's report. Custom and saved reports are now persisted in D1 and scoped per user.
+- Completed the SheetJS (`xlsx`) 0.20.3 security patch on the backend importer (the frontend and worker were patched in 5.1.2), closing the prototype-pollution and ReDoS advisories on server-side Excel parsing.
+- CORS now fails closed when the allowed origin is unconfigured, instead of reflecting `*` with credentials.
+- Google Sign-In now verifies the token issuer and expiry in addition to the audience.
+- Dropped `script-src 'unsafe-inline'` from the served production Content-Security-Policy (it is kept only for local Vite HMR in development).
+
 ### Fixed
 
-- Transactions page crash caused by `createMemo` TDZ reference in SolidJS
-- Missing `swagger-ui-express` and `mime-types` backend dependencies
+- Account balances are now updated atomically with the transaction that changes them, on both the self-host backend and the worker. A failure mid-update can no longer leave a transaction recorded with its balance change half-applied.
+- Fixed a crash when more than one profile was selected for a transaction operation (a multi-profile query bound its parameters incorrectly).
+- Bulk-deleting a transfer credited only to a destination account now reverses that credit (it was previously skipped, permanently inflating the account).
+- Profile names are now unique per user rather than globally, so two users can each have a default "Personal Profile".
+- The cross-origin session cookie could be dropped when an API caller passed its own `credentials` option; it is now always sent.
+- Money now renders in the user's selected currency across the client PDF reports and dashboard cards (including zero-decimal currencies such as JPY), instead of a hardcoded symbol.
+- Transactions page crash caused by a `createMemo` TDZ reference in SolidJS.
+- Missing `swagger-ui-express` and `mime-types` backend dependencies.
+
+### Performance
+
+- Import duplicate detection is now O(N+M) instead of O(N·M), and import execution batches all inserts and account-balance updates into a single atomic transaction.
+- Budget forecast/history and monthly statistics are computed in a single pass instead of rescanning the transaction list per row.
+- The transactions list attaches tags with one batched query instead of one query per row.
+- Added indexes on `transactions.account_id` and `transfer_account_id` for account-scoped queries.
 
 ### Changed
 
+- Fixed the API worker deployment (the CI install used `--frozen-lockfile` against an intentionally unpinned worker), added a pre-migration D1 backup step, made the self-host Docker image buildable again, and added the OWASP baseline security headers to the Apache vhost.
 - Relicensed the project from MIT to the GNU Affero General Public License v3.0 (AGPL-3.0).
 - Vendored the SheetJS (`xlsx`) tarball into `vendor/` and reference it via a `file:` dependency, so installs no longer depend on the SheetJS CDN being reachable.
 - The in-app changelog now renders the repository `CHANGELOG.md` directly (single source of truth) instead of a separate hardcoded copy.

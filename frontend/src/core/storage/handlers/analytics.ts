@@ -387,19 +387,31 @@ export async function statsMonthly(query: URLSearchParams): Promise<Response> {
     const months = parseInt(query.get('months') || '24')
     const profileTxns = await adapter.listTransactions()
 
+    // Bucket income/expense by YYYY-MM in ONE pass instead of doing three full
+    // filter/reduce passes per requested month. Buckets are keyed by
+    // date.slice(0, 7), which matches the original date.startsWith('YYYY-MM')
+    // check exactly for YYYY-MM-DD dates, and amounts accumulate in transaction
+    // order — so the per-month totals are byte-for-byte identical to before.
+    const buckets = new Map<string, { income: number; expense: number }>()
+    for (const t of profileTxns) {
+      if (t.type !== 'income' && t.type !== 'expense') continue
+      const mo = t.date.slice(0, 7)
+      let b = buckets.get(mo)
+      if (!b) {
+        b = { income: 0, expense: 0 }
+        buckets.set(mo, b)
+      }
+      if (t.type === 'income') b.income += getAmount(t as unknown as Record<string, unknown>)
+      else b.expense += getAmount(t as unknown as Record<string, unknown>)
+    }
+
     const now = new Date()
     const result: Array<{ month: string; income: number; expense: number }> = []
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const monthTxns = profileTxns.filter((t) => t.date.startsWith(monthStr))
-      const income = monthTxns
-        .filter((t) => t.type === 'income')
-        .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-      const expense = monthTxns
-        .filter((t) => t.type === 'expense')
-        .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
-      result.push({ month: monthStr, income, expense })
+      const b = buckets.get(monthStr)
+      result.push({ month: monthStr, income: b ? b.income : 0, expense: b ? b.expense : 0 })
     }
     return json(result)
   } catch (err) {

@@ -1,7 +1,7 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
-import { getDB } from '../idb'
+import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
 
@@ -116,7 +116,30 @@ async function detectDuplicates(
   const db = await getDB()
   const profileId = await adapter.getCurrentProfileId()
   const existing = await db.getAllFromIndex('transactions', 'by_profile', profileId)
+
+  // Bucket existing transactions by (date, normalized-description) ONCE so the
+  // per-row check is a small local scan instead of a full O(M) find per row.
+  // The matching key mirrors the original find() exactly: date and normalized
+  // description must be equal, and amounts must be within 0.01 (a penny). The
+  // amount tolerance is not an equivalence relation, so it stays a real
+  // comparison — but it only ever needs to run against existing rows that
+  // already share the same (date, description), which is what this map groups.
+  // The two key parts are joined with a NUL byte so the (date, description) pair
+  // round-trips unambiguously and can never collide across different pairs (a
+  // NUL never appears in a date or a description), keeping this exactly as
+  // strict as the original tuple comparison.
+  const keyOf = (date: string, desc: string) => `${date}\x00${desc}`
+  const existingByKey = new Map<string, number[]>()
+  for (const t of existing) {
+    const k = keyOf(t.date as string, (t.description as string).toLowerCase().trim())
+    const amt = Number(t.amount)
+    const bucket = existingByKey.get(k)
+    if (bucket) bucket.push(amt)
+    else existingByKey.set(k, [amt])
+  }
+
   const duplicates: number[] = []
+  const clean: Record<string, unknown>[] = []
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
@@ -124,16 +147,12 @@ async function detectDuplicates(
     const desc = toStr(row.description).toLowerCase().trim()
     const amount = parseFloat(toStr(row.amount) || '0')
 
-    const match = existing.find(
-      (t) =>
-        t.date === date &&
-        t.description.toLowerCase().trim() === desc &&
-        Math.abs(Number(t.amount) - amount) < 0.01
-    )
-    if (match) duplicates.push(i)
+    const bucket = existingByKey.get(keyOf(date, desc))
+    const isDup = bucket ? bucket.some((amt) => Math.abs(amt - amount) < 0.01) : false
+    if (isDup) duplicates.push(i)
+    else clean.push(row)
   }
 
-  const clean = rows.filter((_, i) => !duplicates.includes(i))
   return { duplicates, clean }
 }
 
@@ -536,6 +555,11 @@ export async function importExecute(body: unknown): Promise<Response> {
 
     const imported: number[] = []
     const skipped: { index: number; reason: string }[] = []
+    // Collected transaction objects to insert in a single batched IndexedDB
+    // transaction (see below). One-by-one inserts with an awaited read-modify-
+    // write balance update per row are O(N) sequential round-trips; batching
+    // makes it O(N) inserts + O(A) account updates in one atomic transaction.
+    const toInsert: Record<string, unknown>[] = []
 
     for (let i = 0; i < clean.length; i++) {
       const row = clean[i]
@@ -670,11 +694,70 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
 
       if (!dryRun) {
-        const id = await adapter.createTransaction(transaction as any)
-        imported.push(id as number)
+        // Defer the actual insert + balance update to a single batched
+        // transaction after the loop (below). Category auto-creation above still
+        // happens inline so category IDs are assigned in the same order as before.
+        toInsert.push(transaction as Record<string, unknown>)
       } else {
         imported.push(-1)
       }
+    }
+
+    if (!dryRun && toInsert.length > 0) {
+      // Insert every row and apply all account-balance adjustments inside ONE
+      // atomic IndexedDB transaction. Balances are applied per-delta in exact
+      // row order against a lazily-seeded in-memory cache, reproducing the exact
+      // sequential float accumulation of the previous per-row read-modify-write
+      // (starting balance b0, then b0+d1, +d2, ...), and each touched account is
+      // written back exactly once. Transaction IDs are still auto-incremented in
+      // insertion order, so imported_ids is identical to the unbatched version.
+      const tx = db.transaction(['transactions', 'accounts'], 'readwrite')
+      const txStore = tx.objectStore('transactions')
+      const acctStore = tx.objectStore('accounts')
+
+      for (const record of toInsert) {
+        const id = (await txStore.add(record)) as number
+        imported.push(id)
+      }
+
+      // Lazily read each touched account's current balance, then replay deltas.
+      const balances = new Map<number, number>()
+      const missing = new Set<number>()
+      for (const record of toInsert) {
+        for (const adj of computeBalanceDeltas(
+          record as {
+            account_id?: number | null
+            transfer_account_id?: number | null
+            type: string
+            amount: number
+          }
+        )) {
+          if (missing.has(adj.accountId)) continue
+          let bal = balances.get(adj.accountId)
+          if (bal === undefined) {
+            const acct = await acctStore.get(adj.accountId)
+            if (!acct) {
+              // Account not found — mirror _adjustAccountBalance's `if (acct)`
+              // guard, which silently skips the adjustment.
+              missing.add(adj.accountId)
+              continue
+            }
+            bal = (acct.balance as number) ?? 0
+          }
+          balances.set(adj.accountId, bal + adj.delta)
+        }
+      }
+
+      // Write each touched account's final balance once.
+      for (const [accountId, balance] of balances) {
+        const acct = await acctStore.get(accountId)
+        if (acct) {
+          acct.balance = balance
+          await acctStore.put(acct)
+        }
+      }
+
+      await tx.done
     }
 
     return json({

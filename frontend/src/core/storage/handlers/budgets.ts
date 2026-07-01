@@ -159,14 +159,31 @@ export async function budgetsHistory(query: URLSearchParams): Promise<Response> 
       (t: Record<string, unknown>) => t.type === 'expense' && t.category_id === categoryId
     )
 
+    // Bucket this category's expenses by YYYY-MM in ONE pass so each budget row
+    // is a map lookup rather than a full rescan. A budget window is
+    // [start_date, endOfNextMonth(start_date)); for a 1st-of-month start_date
+    // that equals the calendar month start_date.slice(0, 7), making the lookup
+    // byte-for-byte equal to the original filter+reduce. Non-1st start_dates
+    // fall back to the exact windowed reduce so results never change.
+    const spentByMonth = new Map<string, number>()
+    for (const t of txns) {
+      const mo = (t.date as string).slice(0, 7)
+      spentByMonth.set(mo, (spentByMonth.get(mo) ?? 0) + getAmount(t))
+    }
+
     const history = budgets.slice(0, months).map((b: Record<string, unknown>) => {
       const start = b.start_date as string
-      const end = endOfNextMonth(start)
-      const spent = txns
-        .filter(
-          (t: Record<string, unknown>) => (t.date as string) >= start && (t.date as string) < end
-        )
-        .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+      let spent: number
+      if (start.slice(8, 10) === '01') {
+        spent = spentByMonth.get(start.slice(0, 7)) ?? 0
+      } else {
+        const end = endOfNextMonth(start)
+        spent = txns
+          .filter(
+            (t: Record<string, unknown>) => (t.date as string) >= start && (t.date as string) < end
+          )
+          .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+      }
       return { month: start, budget_amount: b.amount, spent }
     })
 
@@ -828,22 +845,43 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       unknown
     >[]
 
+    // Precompute expense totals bucketed by (category_id, YYYY-MM) in ONE pass
+    // over the transactions, instead of rescanning the full list per budget.
+    // A budget's spend window is [start_date, endOfNextMonth(start_date)); when
+    // start_date is the 1st of its month that window is exactly the calendar
+    // month start_date.slice(0, 7), so the bucket lookup is byte-for-byte equal
+    // to the original filter+reduce. For any budget whose start_date is not the
+    // 1st (windows can then straddle two months), fall back to the exact
+    // per-window reduce so results never change.
+    const spentByCatMonth = new Map<string, number>()
+    for (const t of txns) {
+      if (t.type !== 'expense') continue
+      const cid = t.category_id as number | null
+      const k = `${cid} ${(t.date as string).slice(0, 7)}`
+      spentByCatMonth.set(k, (spentByCatMonth.get(k) ?? 0) + getAmount(t))
+    }
+
     const catAvgs: Record<number, { total: number; count: number; avgAmount: number }> = {}
     for (const b of budgets) {
       const cid = b.category_id as number
       if (!catAvgs[cid]) catAvgs[cid] = { total: 0, count: 0, avgAmount: 0 }
 
       const bStart = b.start_date as string
-      const bEnd = endOfNextMonth(bStart)
-      const spent = txns
-        .filter(
-          (t: Record<string, unknown>) =>
-            t.type === 'expense' &&
-            t.category_id === cid &&
-            (t.date as string) >= bStart &&
-            (t.date as string) < bEnd
-        )
-        .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+      let spent: number
+      if (bStart.slice(8, 10) === '01') {
+        spent = spentByCatMonth.get(`${cid} ${bStart.slice(0, 7)}`) ?? 0
+      } else {
+        const bEnd = endOfNextMonth(bStart)
+        spent = txns
+          .filter(
+            (t: Record<string, unknown>) =>
+              t.type === 'expense' &&
+              t.category_id === cid &&
+              (t.date as string) >= bStart &&
+              (t.date as string) < bEnd
+          )
+          .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+      }
       if (spent > 0) {
         catAvgs[cid].total += spent
         catAvgs[cid].count += 1
