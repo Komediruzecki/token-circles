@@ -69,11 +69,34 @@ jobs:
 
       - name: Install worker deps (outside the pnpm workspace)
         working-directory: worker
-        run: pnpm install --frozen-lockfile --ignore-workspace
+        # worker/.gitignore deliberately does not pin a lockfile ("deps installed fresh"),
+        # so --frozen-lockfile always failed here with ERR_PNPM_NO_LOCKFILE. Install fresh.
+        run: pnpm install --no-frozen-lockfile --ignore-workspace
 
       - name: Typecheck
         working-directory: worker
         run: pnpm run typecheck
+
+      # Migrations can be destructive (e.g. 0002 recreates the profiles table). Snapshot the
+      # remote D1 to a SQL dump and keep it as an artifact before applying, so a bad migration
+      # is recoverable.
+      - name: Back up remote D1 before migrations (${{ steps.env.outputs.env }})
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: d1 export ${{ steps.env.outputs.db }} --remote --env ${{ steps.env.outputs.env }} --output d1-backup.sql
+          packageManager: pnpm
+
+      - name: Upload D1 backup artifact
+        if: env.DEPLOY_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ steps.env.outputs.env }}-${{ github.sha }}
+          path: worker/d1-backup.sql
+          retention-days: 30
 
       - name: Apply D1 migrations (${{ steps.env.outputs.env }})
         if: env.DEPLOY_ENABLED == 'true'
