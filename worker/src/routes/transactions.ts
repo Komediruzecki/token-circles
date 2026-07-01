@@ -333,59 +333,50 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
         ...pids,
         ...chunk
       );
+      const stmts: D1PreparedStatement[] = [];
       for (const tx of txRows) {
         if (tx.category_id) affectedCategories.add(tx.category_id);
         if (tx.account_id) {
           if (tx.type === 'transfer' && tx.transfer_account_id) {
-            await db.run(
-              c.env.DB,
-              `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-              tx.amount,
-              tx.account_id,
-              ...pids
-            );
-            await db.run(
-              c.env.DB,
-              `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-              tx.amount,
-              tx.transfer_account_id,
-              ...pids
+            stmts.push(
+              c.env.DB.prepare(
+                `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+              ).bind(tx.amount, tx.account_id, ...pids),
+              c.env.DB.prepare(
+                `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+              ).bind(tx.amount, tx.transfer_account_id, ...pids)
             );
           } else if (tx.type === 'transfer') {
-            await db.run(
-              c.env.DB,
-              `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-              tx.amount,
-              tx.account_id,
-              ...pids
+            stmts.push(
+              c.env.DB.prepare(
+                `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+              ).bind(tx.amount, tx.account_id, ...pids)
             );
           } else if (tx.type === 'income' || tx.type === 'expense') {
             const delta = tx.type === 'income' ? -tx.amount : tx.amount;
-            await db.run(
-              c.env.DB,
-              `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-              delta,
-              tx.account_id,
-              ...pids
+            stmts.push(
+              c.env.DB.prepare(
+                `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+              ).bind(delta, tx.account_id, ...pids)
             );
           }
         } else if (tx.transfer_account_id && tx.type === 'transfer') {
-          await db.run(
-            c.env.DB,
-            `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-            tx.amount,
-            tx.transfer_account_id,
-            ...pids
+          stmts.push(
+            c.env.DB.prepare(
+              `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+            ).bind(tx.amount, tx.transfer_account_id, ...pids)
           );
         }
       }
-      const result = await db.run(
-        c.env.DB,
-        `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
-        ...pids,
-        ...chunk
+      // Reversals and the delete for this chunk commit atomically; the DELETE is pushed last so its
+      // changes count is the final result in the batch.
+      stmts.push(
+        c.env.DB.prepare(
+          `DELETE FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
+        ).bind(...pids, ...chunk)
       );
-      deleted += result.meta.changes ?? 0;
+      const results = await c.env.DB.batch(stmts);
+      deleted += results[results.length - 1].meta.changes ?? 0;
     }
     // Keep linked savings-goal progress in sync (the single-DELETE path does this too).
     for (const cat of affectedCategories) await recalcGoalsByCategory(c.env.DB, cat, pids);
@@ -583,64 +574,53 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     }
   }
 
-  const info = await db.insert(c.env.DB, 'transactions', {
-    description,
-    amount,
-    date: resolvedDate,
-    beneficiary: beneficiary || '',
-    payor: payor || '',
-    category_id: category_id || null,
-    currency: currency || 'USD',
-    amount_local: amount_local ?? amount,
-    means_of_payment: means_of_payment || '',
-    exchange_rate: exchange_rate || 1.0,
-    type: type || 'expense',
-    notes: notes || '',
-    profile_id: pid,
-    account_id: resolvedAccountId,
-    transfer_account_id: resolvedTransferAccountId,
-  });
-
-  // Return the created transaction with all fields including timestamps.
-  const created = await db.first<TxRow>(
-    c.env.DB,
-    'SELECT * FROM transactions WHERE id = ? AND profile_id = ?',
-    info.meta.last_row_id,
-    pid
-  );
+  // Persist the row and its balance side effects atomically. The INSERT is first in the batch so
+  // its generated id can be read back from the batch result.
+  const stmts: D1PreparedStatement[] = [
+    c.env.DB.prepare(
+      `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id, currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      description,
+      amount,
+      resolvedDate,
+      beneficiary || '',
+      payor || '',
+      category_id || null,
+      currency || 'USD',
+      amount_local ?? amount,
+      means_of_payment || '',
+      exchange_rate || 1.0,
+      type || 'expense',
+      notes || '',
+      pid,
+      resolvedAccountId,
+      resolvedTransferAccountId
+    ),
+  ];
 
   // Auto-update linked account balances.
   if (resolvedAccountId && type === 'transfer' && resolvedTransferAccountId) {
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-      amount,
-      resolvedAccountId,
-      ...pids
-    );
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-      amount,
-      resolvedTransferAccountId,
-      ...pids
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(amount, resolvedAccountId, ...pids),
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(amount, resolvedTransferAccountId, ...pids)
     );
   } else if (resolvedAccountId && type === 'transfer') {
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-      amount,
-      resolvedAccountId,
-      ...pids
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(amount, resolvedAccountId, ...pids)
     );
   } else if (resolvedAccountId && (type === 'income' || type === 'expense')) {
     const delta = type === 'income' ? amount : -amount;
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-      delta,
-      resolvedAccountId,
-      ...pids
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(delta, resolvedAccountId, ...pids)
     );
   }
   // If account_id is null but transfer_account_id is set, money flows TO that account.
@@ -649,14 +629,22 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     resolvedTransferAccountId &&
     (type === 'income' || type === 'transfer')
   ) {
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-      amount,
-      resolvedTransferAccountId,
-      ...pids
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(amount, resolvedTransferAccountId, ...pids)
     );
   }
+
+  const [insertResult] = await c.env.DB.batch(stmts);
+
+  // Return the created transaction with all fields including timestamps.
+  const created = await db.first<TxRow>(
+    c.env.DB,
+    'SELECT * FROM transactions WHERE id = ? AND profile_id = ?',
+    insertResult.meta.last_row_id,
+    pid
+  );
 
   // Recalculate linked goal progress.
   if (category_id) await recalcGoalsByCategory(c.env.DB, category_id, pids);
@@ -807,166 +795,99 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
 
   if (!hasUpdate) throw new HttpError(400, 'No valid fields provided for update');
 
-  // Reverse old transaction effect on old account(s).
-  if (oldTx && oldTx.account_id) {
-    if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        oldTx.amount,
-        oldTx.account_id,
-        ...pids
-      );
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-        oldTx.amount,
-        oldTx.transfer_account_id,
-        ...pids
-      );
-    } else if (oldTx.type === 'transfer') {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        oldTx.amount,
-        oldTx.account_id,
-        ...pids
-      );
-    } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
-      const oldDelta = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        oldDelta,
-        oldTx.account_id,
-        ...pids
-      );
-    }
-  }
-  // Reverse old transfer TO effect (money added to transfer_account_id).
-  if (oldTx && oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-      oldTx.amount,
-      oldTx.transfer_account_id,
-      ...pids
-    );
-  }
+  // The pre-fetched oldTx shares the UPDATE's WHERE clause, so a missing row means 404 — check it
+  // up front so the reverse / row-update / re-apply run as one atomic batch. Previously these were
+  // separate awaited writes with a hand-rolled "undo on 0 changes" compensation; a failure or
+  // eviction between them permanently drifted account balances.
+  if (!oldTx) throw new HttpError(404, 'Not found');
 
   updates.push("updated_at = datetime('now')");
   params.push(id, pid);
 
-  const result = await db.run(
-    c.env.DB,
-    `UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND profile_id = ?`,
-    ...params
-  );
+  const stmts: D1PreparedStatement[] = [];
 
-  if (result.meta.changes === 0) {
-    // Re-apply old effect (rollback the reversal) since no update happened.
-    if (oldTx && oldTx.account_id) {
-      if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-          oldTx.amount,
-          oldTx.account_id,
-          ...pids
-        );
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-          oldTx.amount,
-          oldTx.transfer_account_id,
-          ...pids
-        );
-      } else if (oldTx.type === 'transfer') {
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-          oldTx.amount,
-          oldTx.account_id,
-          ...pids
-        );
-      } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
-        const oldDelta = oldTx.type === 'income' ? oldTx.amount : -oldTx.amount;
-        await db.run(
-          c.env.DB,
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-          oldDelta,
-          oldTx.account_id,
-          ...pids
-        );
-      }
-    }
-    if (oldTx && oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        oldTx.amount,
-        oldTx.transfer_account_id,
-        ...pids
+  // Reverse old transaction effect on old account(s).
+  if (oldTx.account_id) {
+    if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(oldTx.amount, oldTx.account_id, ...pids),
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(oldTx.amount, oldTx.transfer_account_id, ...pids)
+      );
+    } else if (oldTx.type === 'transfer') {
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(oldTx.amount, oldTx.account_id, ...pids)
+      );
+    } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
+      const oldDelta = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(oldDelta, oldTx.account_id, ...pids)
       );
     }
-    throw new HttpError(404, 'Not found');
+  }
+  // Reverse old transfer TO effect (money added to transfer_account_id).
+  if (oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(oldTx.amount, oldTx.transfer_account_id, ...pids)
+    );
   }
 
+  // Update the transaction row itself.
+  stmts.push(
+    c.env.DB.prepare(
+      `UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND profile_id = ?`
+    ).bind(...params)
+  );
+
   // Apply new transaction effect on account(s).
-  const newAccountId =
-    account_id !== undefined ? account_id || null : oldTx ? oldTx.account_id : null;
+  const newAccountId = account_id !== undefined ? account_id || null : oldTx.account_id;
   const newTransferAccountId =
-    transfer_account_id !== undefined
-      ? transfer_account_id || null
-      : oldTx
-        ? oldTx.transfer_account_id
-        : null;
-  const newType = type !== undefined ? type : oldTx ? oldTx.type : 'expense';
-  const newAmount = amount !== undefined ? amount : oldTx ? oldTx.amount : 0;
+    transfer_account_id !== undefined ? transfer_account_id || null : oldTx.transfer_account_id;
+  const newType = type !== undefined ? type : oldTx.type;
+  const newAmount = amount !== undefined ? amount : oldTx.amount;
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-        newAmount,
-        newAccountId,
-        ...pids
-      );
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        newAmount,
-        newTransferAccountId,
-        ...pids
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(newAmount, newAccountId, ...pids),
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(newAmount, newTransferAccountId, ...pids)
       );
     } else if (newType === 'transfer') {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-        newAmount,
-        newAccountId,
-        ...pids
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(newAmount, newAccountId, ...pids)
       );
     } else if (newType === 'income' || newType === 'expense') {
       const newDelta = newType === 'income' ? newAmount : -newAmount;
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        newDelta,
-        newAccountId,
-        ...pids
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(newDelta, newAccountId, ...pids)
       );
     }
   }
   if (!newAccountId && newTransferAccountId && newType === 'transfer') {
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-      newAmount,
-      newTransferAccountId,
-      ...pids
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(newAmount, newTransferAccountId, ...pids)
     );
   }
+
+  await c.env.DB.batch(stmts);
 
   // Recalculate linked goal progress.
   if (category_id !== undefined) await recalcGoalsByCategory(c.env.DB, category_id || null, pids);
@@ -989,62 +910,51 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
     pid
   );
 
-  const result = await db.run(
-    c.env.DB,
-    'DELETE FROM transactions WHERE id = ? AND profile_id = ?',
-    id,
-    pid
-  );
-  if (result.meta.changes === 0) throw new HttpError(404, 'Not found');
+  // The pre-fetched row shares the DELETE's WHERE clause, so a missing row means 404 — check it
+  // up front so the balance reversal and the delete can commit as one atomic batch.
+  if (!tx) throw new HttpError(404, 'Not found');
 
+  const stmts: D1PreparedStatement[] = [
+    c.env.DB.prepare('DELETE FROM transactions WHERE id = ? AND profile_id = ?').bind(id, pid),
+  ];
   // Reverse transaction effect on linked account(s).
-  if (tx && tx.account_id) {
+  if (tx.account_id) {
     if (tx.type === 'transfer' && tx.transfer_account_id) {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        tx.amount,
-        tx.account_id,
-        ...pids
-      );
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-        tx.amount,
-        tx.transfer_account_id,
-        ...pids
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(tx.amount, tx.account_id, ...pids),
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(tx.amount, tx.transfer_account_id, ...pids)
       );
     } else if (tx.type === 'transfer') {
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        tx.amount,
-        tx.account_id,
-        ...pids
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(tx.amount, tx.account_id, ...pids)
       );
     } else if (tx.type === 'income' || tx.type === 'expense') {
       const delta = tx.type === 'income' ? -tx.amount : tx.amount;
-      await db.run(
-        c.env.DB,
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`,
-        delta,
-        tx.account_id,
-        ...pids
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+        ).bind(delta, tx.account_id, ...pids)
       );
     }
   }
   // Reverse transfer TO effect (remove money added to transfer_account_id).
-  if (tx && tx.transfer_account_id && tx.type === 'transfer' && !tx.account_id) {
-    await db.run(
-      c.env.DB,
-      `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`,
-      tx.amount,
-      tx.transfer_account_id,
-      ...pids
+  if (tx.transfer_account_id && tx.type === 'transfer' && !tx.account_id) {
+    stmts.push(
+      c.env.DB.prepare(
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
+      ).bind(tx.amount, tx.transfer_account_id, ...pids)
     );
   }
 
-  if (tx && tx.category_id) await recalcGoalsByCategory(c.env.DB, tx.category_id, pids);
+  await c.env.DB.batch(stmts);
+
+  if (tx.category_id) await recalcGoalsByCategory(c.env.DB, tx.category_id, pids);
 
   return c.json({ ok: true });
 });
@@ -1055,13 +965,14 @@ transactionsRoutes.delete('/api/transactions', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
 
-  await db.run(c.env.DB, 'DELETE FROM transactions WHERE profile_id = ?', pid);
-  // Reset all account balances to starting_balance since all transactions are deleted.
-  await db.run(
-    c.env.DB,
-    `UPDATE accounts SET balance = COALESCE(starting_balance, 0) WHERE profile_id IN (${inClause})`,
-    ...pids
-  );
+  // Delete all rows and reset balances atomically.
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM transactions WHERE profile_id = ?').bind(pid),
+    // Reset all account balances to starting_balance since all transactions are deleted.
+    c.env.DB.prepare(
+      `UPDATE accounts SET balance = COALESCE(starting_balance, 0) WHERE profile_id IN (${inClause})`
+    ).bind(...pids),
+  ]);
   return c.json({ ok: true, message: 'All transactions deleted' });
 });
 
