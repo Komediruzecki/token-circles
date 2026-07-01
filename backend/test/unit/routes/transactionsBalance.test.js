@@ -244,4 +244,23 @@ describe('transactions router — account balance integrity', () => {
     expect(balanceOf(db, 1)).toBe(1000); // source restored on bulk delete
     expect(txCount(db)).toBe(0);
   });
+
+  // --- list endpoint attaches tags in one batched query (was N+1) ---
+  test('GET list attaches tags to each row', async () => {
+    const created = await post(app, {
+      description: 'Tagged',
+      amount: 10,
+      type: 'expense',
+      account_id: 1,
+    });
+    const txId = created.body.id;
+    db.prepare(
+      "INSERT INTO tags (id, name, color, profile_id) VALUES (1, 'Vacation', '#abcdef', 1)"
+    ).run();
+    db.prepare('INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, 1)').run(txId);
+    const res = await request(app).get('/api/transactions').set('X-Profile-Id', '1');
+    expect(res.status).toBe(200);
+    const row = res.body.rows.find((r) => r.id === txId);
+    expect(row.tags).toEqual([{ id: 1, name: 'Vacation', color: '#abcdef' }]);
+  });
 });

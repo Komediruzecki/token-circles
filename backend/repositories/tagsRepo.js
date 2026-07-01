@@ -52,6 +52,31 @@ class TagsRepository extends BaseRepository {
     );
   }
 
+  // Batch form of getTagsForTransaction: one query for a whole page of transactions instead of
+  // one per row (the list endpoint attached tags in an N+1 loop). Returns a
+  // Map<transaction_id, tag[]>, scoped to the given profile(s) to match the per-row call.
+  getTagsForTransactions(transactionIds, profileIds) {
+    const byTx = new Map();
+    if (!Array.isArray(transactionIds) || transactionIds.length === 0) return byTx;
+    const txPlaceholders = transactionIds.map(() => '?').join(',');
+    const profPlaceholders = profileIds.map(() => '?').join(',');
+    const rows = this.all(
+      `SELECT tt.transaction_id, t.id, t.name, t.color
+       FROM tags t
+       JOIN transaction_tags tt ON t.id = tt.tag_id
+       WHERE t.profile_id IN (${profPlaceholders}) AND tt.transaction_id IN (${txPlaceholders})
+       ORDER BY t.name`,
+      ...profileIds,
+      ...transactionIds
+    );
+    for (const r of rows) {
+      const list = byTx.get(r.transaction_id) || [];
+      list.push({ id: r.id, name: r.name, color: r.color });
+      byTx.set(r.transaction_id, list);
+    }
+    return byTx;
+  }
+
   setTransactionTags(transactionId, tagIds, profileId) {
     this.run('DELETE FROM transaction_tags WHERE transaction_id = ?', transactionId);
     if (!Array.isArray(tagIds) || tagIds.length === 0) return;
@@ -80,16 +105,28 @@ class TagsRepository extends BaseRepository {
     `;
     const params = [profileId, tagId];
 
-    if (filters.startDate) { sql += ' AND t.date >= ?'; params.push(filters.startDate); }
-    if (filters.endDate) { sql += ' AND t.date <= ?'; params.push(filters.endDate); }
+    if (filters.startDate) {
+      sql += ' AND t.date >= ?';
+      params.push(filters.startDate);
+    }
+    if (filters.endDate) {
+      sql += ' AND t.date <= ?';
+      params.push(filters.endDate);
+    }
     if (filters.category_ids) {
-      const ids = filters.category_ids.split(',').map(Number).filter((n) => !isNaN(n));
+      const ids = filters.category_ids
+        .split(',')
+        .map(Number)
+        .filter((n) => !isNaN(n));
       if (ids.length > 0) {
         sql += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
         params.push(...ids);
       }
     }
-    if (filters.type) { sql += ' AND t.type = ?'; params.push(filters.type); }
+    if (filters.type) {
+      sql += ' AND t.type = ?';
+      params.push(filters.type);
+    }
 
     sql += ' ORDER BY t.date DESC, t.id DESC';
     if (filters.limit) {

@@ -163,9 +163,13 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
       }
       const rows = req.repos.transactions.all(sql, ...params);
 
-      // Attach tags to each transaction
+      // Attach tags in one query (was N+1: a tag lookup per row — up to `limit` extra queries).
+      const tagsByTx = req.repos.tags.getTagsForTransactions(
+        rows.map((row) => row.id),
+        pids
+      );
       for (const row of rows) {
-        row.tags = req.repos.tags.getTagsForTransaction(row.id, row.profile_id);
+        row.tags = tagsByTx.get(row.id) || [];
       }
 
       // Count total

@@ -10,9 +10,14 @@ CREATE TABLE IF NOT EXISTS users (
 -- Profiles
 CREATE TABLE IF NOT EXISTS profiles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   user_id INTEGER REFERENCES users(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Profile names are unique PER USER, not globally (matches Worker migration 0002). A global
+  -- UNIQUE(name) made a second user's default 'Personal Profile' collide. NOTE: only applies to
+  -- freshly-created databases (CREATE TABLE IF NOT EXISTS) — existing self-host DBs need a manual
+  -- table rebuild to adopt this.
+  UNIQUE(user_id, name)
 );
 
 -- Categories
