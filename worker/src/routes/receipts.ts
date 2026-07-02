@@ -104,7 +104,9 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
       pid
     );
     if (prev) {
-      await c.env.RECEIPTS.delete(prev.storage_path).catch(() => {});
+      await c.env.RECEIPTS.delete(prev.storage_path).catch((e: unknown) => {
+        console.error('R2 delete of replaced receipt failed:', e);
+      });
       await db.del(c.env.DB, 'receipts', 'id = ?', prev.id);
     }
   }
@@ -129,7 +131,9 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
     });
   } catch (e) {
     // Don't orphan the R2 object if the metadata insert fails.
-    await c.env.RECEIPTS.delete(key).catch(() => {});
+    await c.env.RECEIPTS.delete(key).catch((delErr: unknown) => {
+      console.error('R2 cleanup delete after receipt insert failure failed:', delErr);
+    });
     throw e;
   }
   const receipt = await db.first(
@@ -210,7 +214,9 @@ receiptsRoutes.delete('/api/receipts/:id', requireAuth, async (c) => {
   );
   if (!receipt) throw new HttpError(404, 'Receipt not found');
   if (c.env.RECEIPTS && receipt.storage_path) {
-    await c.env.RECEIPTS.delete(receipt.storage_path).catch(() => {});
+    await c.env.RECEIPTS.delete(receipt.storage_path).catch((e: unknown) => {
+      console.error('R2 delete of receipt failed:', e);
+    });
   }
   await db.del(c.env.DB, 'receipts', 'id = ? AND profile_id = ?', id, pid);
   return c.json({ message: 'Receipt deleted successfully' });

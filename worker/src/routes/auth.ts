@@ -180,7 +180,9 @@ authRoutes.post('/api/auth/register', async (c) => {
       email,
       'You already have a Token Circles account',
       accountExistsEmailHtml(base)
-    ).catch(() => {});
+    ).catch((e: unknown) => {
+      console.error('account-exists notice email failed to send:', e);
+    });
   } else {
     const res = await c.env.DB.prepare(
       "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"

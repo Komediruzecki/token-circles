@@ -94,7 +94,9 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
     const keys = receipts.map((r) => r.storage_path).filter(Boolean);
     const bucket = c.env.RECEIPTS;
     for (let i = 0; i < keys.length; i += 1000) {
-      await bucket.delete(keys.slice(i, i + 1000)).catch(() => {});
+      await bucket.delete(keys.slice(i, i + 1000)).catch((e: unknown) => {
+        console.error('R2 receipt batch delete during account deletion failed:', e);
+      });
     }
   }
 
