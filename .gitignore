@@ -23,6 +23,13 @@ coverage/
 frontend/assets/
 frontend/index-old.html
 
+# Generated PWA service worker artifacts (vite-plugin-pwa / workbox) — emitted into dist/ at build
+sw.js
+sw.js.map
+workbox-*.js
+registerSW.js
+dev-dist/
+
 # Local planning (public roadmap is ROADMAP.md)
 todo.md
 

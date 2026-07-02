@@ -139,7 +139,7 @@ docker inspect finance-manager --format '{{range .Mounts}}{{.Source}} -> {{.Dest
 ```bash
 # Copy from the volume to host
 docker run --rm \
-  -v finance-manager_clodhost-com_fm-db-data:/data \
+  -v finance-manager_fm-db-data:/data \
   -v $(pwd)/db-backup:/backup \
   alpine cp /data/finance.db /backup/finance.db.$(date +%Y%m%d%H%M%S)
 
