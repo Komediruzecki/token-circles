@@ -26,7 +26,8 @@
   "dependencies": {
     "hono": "^4.6.0",
     "pdf-lib": "^1.17.1",
-    "xlsx": "file:../vendor/xlsx-0.20.3.tgz"
+    "xlsx": "file:../vendor/xlsx-0.20.3.tgz",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.17.0",

@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
+import { validateTransactionCreate, validateTransactionUpdate } from '../validation';
 import * as db from '../db';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
@@ -519,6 +520,7 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const b = (await c.req.json()) as Record<string, any>;
+  validateTransactionCreate(b);
   const {
     description,
     amount,
@@ -685,6 +687,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   const inClause = pids.map(() => '?').join(',');
   const id = c.req.param('id');
   const b = (await c.req.json()) as Record<string, any>;
+  validateTransactionUpdate(b);
   const {
     description,
     amount,
