@@ -74,72 +74,56 @@ function Reports() {
       })
   })
 
-  const getProfileHeaders = (): Record<string, string> => {
-    const currentProfileId = localStorage.getItem('currentProfileId')
-    const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
-    const headers: Record<string, string> = {}
-    if (currentProfileId) {
-      headers['X-Profile-Id'] = currentProfileId
+  // Rich PDFs (charts) are always composed client-side with jsPDF + Chart.js —
+  // the worker cannot render canvas, so its /api/reports/*-pdf endpoints are
+  // text-only. In self-hosted mode the generators fetch their DATA from the API.
+  const reportIsDark = (): boolean => {
+    const exportSettings = loadChartExportSettings()
+    if (exportSettings.background === 'dark') return true
+    if (exportSettings.background === 'theme') {
+      return document.documentElement.getAttribute('data-theme') === 'dark'
     }
-    if (selectedProfileIds.length > 1) {
-      headers['X-Profile-Ids'] = JSON.stringify(selectedProfileIds)
-    }
-    return headers
+    return false
   }
 
-  const downloadReport = async (endpoint: string, filename: string) => {
+  const downloadReport = async (make: () => Promise<Blob>, filename: string) => {
     setReportLoading(filename)
     try {
-      const headers = getProfileHeaders()
-      // Also append profile_ids to URL as query param fallback
-      const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
-      let url = endpoint
-      if (selectedProfileIds.length > 1) {
-        const sep = endpoint.includes('?') ? '&' : '?'
-        url = `${endpoint}${sep}profile_ids=${selectedProfileIds.join(',')}`
-      }
-      // Append theme from chart export settings
-      const exportSettings = loadChartExportSettings()
-      if (exportSettings.background === 'dark') {
-        url = `${url}${url.includes('?') ? '&' : '?'}theme=dark`
-      } else if (exportSettings.background === 'theme') {
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-        url = `${url}${url.includes('?') ? '&' : '?'}theme=${isDark ? 'dark' : 'light'}`
-      }
-      const res = await apiFetch(url, { credentials: 'include', headers })
-      if (!res.ok) throw new Error('Report generation failed')
-      const blob = await res.blob()
+      const blob = await make()
       const downloadUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = downloadUrl
       a.download = filename
       a.click()
       URL.revokeObjectURL(downloadUrl)
-    } catch {
+    } catch (err) {
+      console.error('Report generation failed:', err)
       toast('Failed to generate report', 'error')
     } finally {
       setReportLoading(null)
     }
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const y = reportYear()
+    const dark = reportIsDark()
+    const pdf = await import('../core/storage/clientPdfReports')
 
     if (reportType() === 'monthly') {
       const m = reportMonth()
       if (m === 0) {
         // "All Months" selected — generate annual report instead
-        downloadReport(`/api/reports/annual-pdf?year=${y}`, `annual-report-${y}.pdf`)
+        void downloadReport(() => pdf.generateAnnualPdf(y, dark), `annual-report-${y}.pdf`)
         return
       }
       const mStr = String(m).padStart(2, '0')
-      downloadReport(`/api/reports/monthly-pdf?year=${y}&month=${mStr}`, `report-${y}-${mStr}.pdf`)
+      void downloadReport(() => pdf.generateMonthlyPdf(`${y}-${mStr}`, dark), `report-${y}-${mStr}.pdf`)
     } else if (reportType() === 'annual') {
-      downloadReport(`/api/reports/annual-pdf?year=${y}`, `annual-report-${y}.pdf`)
+      void downloadReport(() => pdf.generateAnnualPdf(y, dark), `annual-report-${y}.pdf`)
     } else if (reportType() === 'tax') {
-      downloadReport(`/api/reports/tax-summary-pdf?year=${y}`, `tax-summary-${y}.pdf`)
+      void downloadReport(() => pdf.generateTaxSummaryPdf(y, dark), `tax-summary-${y}.pdf`)
     } else {
-      downloadReport(`/api/reports/pl-summary-pdf?year=${y}`, `pl-summary-${y}.pdf`)
+      void downloadReport(() => pdf.generatePlSummaryPdf(y, dark), `pl-summary-${y}.pdf`)
     }
   }
 

@@ -24,10 +24,12 @@ function sanitizeColor(color: unknown): string {
 }
 
 function footer(label: string, unsubToken: string | null, env: Env): string {
-  const base = env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || '';
+  // The unsubscribe endpoint lives on the API worker, NOT the SPA host — a link to
+  // the app origin lands on the static-asset fallback and never unsubscribes anyone.
+  const apiBase = env.API_PUBLIC_ORIGIN || env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || '';
   const unsub =
-    unsubToken && base
-      ? ` · <a href="${base}/api/notifications/unsubscribe?token=${unsubToken}" style="color:#6b7280">unsubscribe</a>`
+    unsubToken && apiBase
+      ? ` · <a href="${apiBase}/api/notifications/unsubscribe?token=${unsubToken}" style="color:#6b7280">unsubscribe</a>`
       : '';
   return `<p style="color:#6b7280;margin-top:24px;font-size:12px">${escapeHtml(BRAND)} — ${escapeHtml(label)}${unsub}</p>`;
 }

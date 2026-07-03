@@ -126,8 +126,20 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
     setSelectedDay(day)
     setSelectedBills(bills)
 
-    // Position the popover near the click
-    if (event) {
+    // Position the popover near the click. On phones, anchor it as a bottom
+    // sheet instead — cell-relative placement runs off-screen on the lower
+    // calendar rows and small viewports.
+    if (window.innerWidth <= 520) {
+      setPopoverStyle({
+        position: 'fixed',
+        left: '10px',
+        right: '10px',
+        bottom: '10px',
+        'max-width': 'none',
+        'max-height': '60vh',
+        'overflow-y': 'auto',
+      })
+    } else if (event) {
       const target = event.currentTarget as HTMLElement
       const rect = target.getBoundingClientRect()
       // Center the popover horizontally, position above/below based on viewport
@@ -137,13 +149,19 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       if (left < 10) left = 10
       if (left + popoverWidth > window.innerWidth - 10) left = window.innerWidth - popoverWidth - 10
 
-      // Position below the cell if room, otherwise above
-      const top = rect.bottom + 8
+      // Below the cell when there is room, otherwise clamp so it stays on screen
+      const estimatedHeight = 320
+      let top = rect.bottom + 8
+      if (top + estimatedHeight > window.innerHeight - 10) {
+        top = Math.max(10, window.innerHeight - estimatedHeight - 10)
+      }
       setPopoverStyle({
         position: 'fixed',
         left: `${left}px`,
         top: `${top}px`,
         'max-width': `${popoverWidth}px`,
+        'max-height': '70vh',
+        'overflow-y': 'auto',
       })
     }
   }
