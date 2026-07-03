@@ -57,4 +57,25 @@ describe('composeReminderPreview', () => {
   it('returns null for an unknown user', async () => {
     expect(await composeReminderPreview(env, 9999, 'spending')).toBeNull();
   });
+
+  it('anchors to the latest month WITH data when current month is empty', async () => {
+    // Replace today's transaction with one from months ago — like previewing against
+    // imported history. The old behavior computed the empty current month and returned
+    // null ("no data") / an all-0% alert.
+    await env.DB.prepare('DELETE FROM transactions').run();
+    await env.DB.prepare(
+      "INSERT INTO transactions (profile_id, description, amount, type, date, category_id) VALUES (500, 'Old groceries', 90, 'expense', '2026-03-14', 7)"
+    ).run();
+
+    const spending = await composeReminderPreview(env, 50, 'spending');
+    expect(spending).not.toBeNull();
+    expect(spending!.subject).toContain('March 2026');
+    expect(spending!.html).toContain('Food');
+
+    const budget = await composeReminderPreview(env, 50, 'budget');
+    expect(budget).not.toBeNull();
+    expect(budget!.subject).toContain('March 2026');
+    // The alert must reflect the anchored month's spending, not the empty current month.
+    expect(budget!.html).not.toContain('>0%<');
+  });
 });

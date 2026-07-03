@@ -14,7 +14,11 @@ function toCsv(rows: Record<string, unknown>[]): string {
   const headers = Object.keys(rows[0]);
   const escape = (v: unknown): string => {
     let val = v == null ? '' : String(v);
-    if (/^[=+\-@\t\r]/.test(val)) val = "'" + val;
+    // Formula-injection guard for spreadsheet apps. Plain numbers (incl. negatives) are
+    // data, not formulas — quoting them turned every negative balance into text like
+    // "'-2392.21" and corrupted numeric columns.
+    const isPlainNumber = typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(val);
+    if (!isPlainNumber && /^[=+\-@\t\r]/.test(val)) val = "'" + val;
     return /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
   };
   return [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join(

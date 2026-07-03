@@ -80,9 +80,10 @@ interface BudgetAlert {
 async function getBudgetAlerts(
   env: Env,
   profileId: number,
-  threshold = 80
+  threshold = 80,
+  asOf?: Date
 ): Promise<BudgetAlert[]> {
-  const now = new Date();
+  const now = asOf ?? new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
   const budgets = await db.all<{
@@ -166,8 +167,8 @@ function budgetAlertHtml(
 }
 
 // ── Spending report ──────────────────────────────────────────────────────────
-async function getSpendingReport(env: Env, profileId: number) {
-  const now = new Date();
+async function getSpendingReport(env: Env, profileId: number, asOf?: Date) {
+  const now = asOf ?? new Date();
   const endDate = now.toISOString().split('T')[0];
   const lastDayOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
   const day = Math.min(now.getDate(), lastDayOfPrevMonth);
@@ -418,23 +419,47 @@ export async function composeReminderPreview(
   if (pids.length === 0) return null;
   const token = await ensureUnsubToken(env, u);
 
+  // Anchor the preview to the user's LATEST transaction date (clamped to today). The
+  // scheduled sends always use "now", but previews are usually fired against imported
+  // history — computing the current calendar month would yield an empty report / an
+  // all-0% alert when the data ends months earlier.
+  const inClause = pids.map(() => '?').join(',');
+  const latest = await db.first<{ d: string | null }>(
+    env.DB,
+    `SELECT MAX(date) AS d FROM transactions WHERE profile_id IN (${inClause})`,
+    ...pids
+  );
+  const now = new Date();
+  let asOf = now;
+  if (latest?.d) {
+    const latestDate = new Date(latest.d);
+    if (!isNaN(latestDate.getTime()) && latestDate < now) asOf = latestDate;
+  }
+  const periodLabel = asOf.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
   if (type === 'spending') {
     for (const pid of pids) {
-      const report = await getSpendingReport(env, pid);
+      const report = await getSpendingReport(env, pid, asOf);
       const html = spendingReportHtml(report, token, env);
-      if (html) return { subject: `[Test] Your spending report — ${BRAND}`, html };
+      if (html) {
+        return { subject: `[Test] Your spending report (${periodLabel}) — ${BRAND}`, html };
+      }
     }
     return null;
   }
 
   const all: BudgetAlert[] = [];
-  for (const pid of pids) all.push(...(await getBudgetAlerts(env, pid, 0)));
+  for (const pid of pids) all.push(...(await getBudgetAlerts(env, pid, 0, asOf)));
   const seen = new Set<string>();
   const deduped = all
     .sort((a, b) => b.percentage - a.percentage)
     .filter((a) => (seen.has(a.categoryName) ? false : seen.add(a.categoryName) && true));
   const html = budgetAlertHtml(deduped, token, env);
-  return html ? { subject: `[Test] Budget alert — ${BRAND}`, html } : null;
+  return html ? { subject: `[Test] Budget alert (${periodLabel}) — ${BRAND}`, html } : null;
 }
 
 // ── Cron dispatch (scheduled handler) ────────────────────────────────────────
