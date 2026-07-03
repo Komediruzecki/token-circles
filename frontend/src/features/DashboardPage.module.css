@@ -444,6 +444,29 @@
   margin: 0;
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-reset-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.header-reset-btn:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
 .modal-close {
   background: transparent;
   border: none;

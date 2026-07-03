@@ -97,6 +97,8 @@ export default function Dashboard() {
   const [dataMaxYear, setDataMaxYear] = createSignal<number | undefined>(undefined)
   const [dataYears, setDataYears] = createSignal<number[] | undefined>(undefined)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
+  // DashboardSettings registers its reset action here so the modal header can host the button.
+  const [resetViews, setResetViews] = createSignal<(() => void) | null>(null)
 
   const prefs = loadWidgetPrefs()
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(prefs.visible)
@@ -862,29 +864,40 @@ export default function Dashboard() {
               >
                 <div class={styles.modalHeader}>
                   <div class={styles.modalTitle}>Dashboard Views</div>
-                  <button
-                    class={styles.modalClose}
-                    onClick={() => setShowSettingsModal(false)}
-                    aria-label="Close"
-                  >
-                    <svg
-                      width="20"
-                      height="20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
+                  <div class={styles.modalHeaderActions}>
+                    <button
+                      class={styles.headerResetBtn}
+                      onClick={() => resetViews()?.()}
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
+                      Reset Default
+                    </button>
+                    <button
+                      class={styles.modalClose}
+                      onClick={() => setShowSettingsModal(false)}
+                      aria-label="Close"
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div class={styles.modalBody}>
-                  <DashboardSettings onSave={handleSettingsSave} />
+                  <DashboardSettings
+                    onSave={handleSettingsSave}
+                    registerReset={(fn) => setResetViews(() => fn)}
+                  />
                 </div>
               </div>
             </div>

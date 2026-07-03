@@ -30,6 +30,9 @@ const DEFAULT_WIDGET_ORDER = [
 
 export interface DashboardSettingsProps {
   onSave?: () => void
+  // Lets the host modal render the "Reset Default" button in its header instead
+  // of this component duplicating the title row.
+  registerReset?: (reset: () => void) => void
 }
 
 export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
@@ -170,6 +173,9 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
 
   // Load saved preferences
   onMount(() => {
+    // Expose reset to the host modal header (see registerReset prop). In onMount so
+    // resetSettings (declared below) is initialized before we hand it up.
+    props.registerReset?.(resetSettings)
     const saved = localStorage.getItem('dashboard_widgets')
     if (saved !== null) {
       try {
@@ -267,12 +273,6 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
 
   return (
     <div class={styles.dashboardSettings}>
-      <div class={styles.settingsHeader}>
-        <h3>Dashboard Views</h3>
-        <button class={`${styles.btnSm} ${styles.btnSecondary}`} onClick={resetSettings}>
-          Reset Default
-        </button>
-      </div>
       <p class={styles.dragHint}>Drag rows to reorder widgets on your dashboard</p>
       <div class={styles.settingsList}>
         <For each={orderedWidgets()}>
