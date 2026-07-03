@@ -135,8 +135,10 @@ const apiRateLimiter = (() => {
   }, WINDOW_MS);
 
   return (req, res, next) => {
-    // Skip rate limiting entirely in test mode
-    if (process.env.NODE_ENV === 'test') return next();
+    // Skip rate limiting entirely in test mode, unless explicitly testing rate limits
+    // (same opt-in header the auth limiter honors — the E2E header test relies on it)
+    if (process.env.NODE_ENV === 'test' && req.headers['x-test-rate-limit'] !== 'true')
+      return next();
 
     // Always set rate limit headers so tests that check them pass
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';

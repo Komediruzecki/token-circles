@@ -67,12 +67,13 @@ test.describe('API Endpoint Verification', () => {
     expect(response.status()).toBe(200)
 
     const data = await response.json()
+    // The API contract is snake_case (what the frontend consumes)
     expect(data).toHaveProperty('count')
-    expect(data).toHaveProperty('totalAmount')
-    expect(data).toHaveProperty('totalExpense')
-    expect(data).toHaveProperty('totalIncome')
-    expect(data).toHaveProperty('totalExpenses')
-    expect(data).toHaveProperty('netBalance')
+    expect(data).toHaveProperty('total_amount')
+    expect(data).toHaveProperty('total_expense')
+    expect(data).toHaveProperty('total_income')
+    expect(data).toHaveProperty('total_expenses')
+    expect(data).toHaveProperty('net_balance')
   })
 
   test('verify transactions API pagination', async ({ request }) => {
