@@ -757,6 +757,87 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
   }
 }
 
+// ── Budget backfill-from-spending ─────────────────────────────────────────────
+// For every month in the range, set each category's monthly budget to that month's
+// actual spending. Fills historical months so charts aren't empty after an import.
+// Overwrites budgets in the range. from_month/to_month are 'YYYY-MM'; omit for full range.
+export async function budgetsBackfillFromSpending(body: unknown): Promise<Response> {
+  try {
+    const db = await getDB()
+    const pid = await adapter.getCurrentProfileId()
+    const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+    const monthRe = /^\d{4}-\d{2}$/
+    let fromMonth =
+      typeof b.from_month === 'string' && monthRe.test(b.from_month) ? b.from_month : null
+    let toMonth = typeof b.to_month === 'string' && monthRe.test(b.to_month) ? b.to_month : null
+
+    const allTxns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+      (t: Record<string, unknown>) => t.type === 'expense' && t.category_id !== null
+    )
+    if (allTxns.length === 0) return json({ ok: false, message: 'No expenses to backfill' })
+
+    if (!fromMonth || !toMonth) {
+      let minM = '9999-99'
+      let maxM = '0000-00'
+      for (const t of allTxns) {
+        const ym = (t.date as string).slice(0, 7)
+        if (ym < minM) minM = ym
+        if (ym > maxM) maxM = ym
+      }
+      fromMonth = fromMonth || minM
+      toMonth = toMonth || maxM
+    }
+
+    // Per (month, category) spending within the range.
+    const totals: Record<string, Record<number, number>> = {}
+    for (const t of allTxns) {
+      const ym = (t.date as string).slice(0, 7)
+      if (ym < fromMonth || ym > toMonth) continue
+      const cid = t.category_id as number
+      totals[ym] = totals[ym] || {}
+      totals[ym][cid] = (totals[ym][cid] || 0) + getAmount(t)
+    }
+
+    const monthsList = Object.keys(totals)
+    if (monthsList.length === 0) {
+      return json({ ok: false, message: 'No expenses in the selected range' })
+    }
+
+    const fromStart = `${fromMonth}-01`
+    const [ty, tm] = toMonth.split('-').map(Number)
+    const toEnd =
+      tm === 12 ? `${ty + 1}-01-01` : `${ty}-${String(tm + 1).padStart(2, '0')}-01`
+
+    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+      (bb: Record<string, unknown>) =>
+        (bb.start_date as string) >= fromStart && (bb.start_date as string) < toEnd
+    )
+
+    const tx = db.transaction('budgets', 'readwrite')
+    for (const bb of existing) await tx.store.delete(bb.id as number)
+    let count = 0
+    for (const ym of monthsList) {
+      for (const [catId, total] of Object.entries(totals[ym])) {
+        await tx.store.add({
+          category_id: parseInt(catId),
+          amount: total,
+          period: 'monthly',
+          start_date: `${ym}-01`,
+          profile_id: pid,
+          rollover_enabled: false,
+          rollover_amount: 0,
+        })
+        count++
+      }
+    }
+    await tx.done
+
+    return json({ ok: true, count, months: monthsList.length })
+  } catch (err) {
+    return json({ error: (err as Error).message }, 500)
+  }
+}
+
 // ── Budget duplicate-last ────────────────────────────────────────────────────
 
 export async function budgetsDuplicateLast(body: unknown): Promise<Response> {

@@ -225,6 +225,7 @@ export {
   budgetsAlerts,
   budgetsAllocate,
   budgetsCreate,
+  budgetsBackfillFromSpending,
   budgetsDelete,
   budgetsDuplicateLast,
   budgetsForecast,
