@@ -2,11 +2,36 @@
  * dashboard-page css module
  */
 
+/* Two-row header: title (left) + view actions (right) on row 1; every period control
+   (month navigator + segmented quick-select) together on row 2. Nothing competes with
+   the title row for space, so it holds up at any width. */
 .page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.header-top-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.header-period-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .page-title h2 {
@@ -22,13 +47,6 @@
   margin: 2px 0 0 0;
 }
 
-.page-header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
 .periodPills {
   display: flex;
   align-items: center;
@@ -40,15 +58,11 @@
 
 @media (max-width: 768px) {
   .page-header {
-    flex-direction: column;
-    align-items: flex-start;
     gap: 12px;
   }
 
-  .page-header-actions {
-    flex-wrap: wrap;
+  .header-period-row {
     gap: 8px;
-    width: 100%;
   }
 }
 
