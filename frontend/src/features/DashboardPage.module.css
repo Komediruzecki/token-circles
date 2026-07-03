@@ -208,6 +208,8 @@
   padding: 16px;
   min-height: 200px;
   overflow: hidden;
+  /* Same stacking rhythm as .card — without it, widgets glue to whatever follows. */
+  margin-bottom: 16px;
 }
 
 .widgetHeader {
