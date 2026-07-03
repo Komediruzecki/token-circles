@@ -796,6 +796,76 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
   return c.json({ ok: true, count: expenses.length })
 })
 
+// POST /api/budgets/backfill-from-spending — for every month in the range, set each
+// category's monthly budget to that month's actual spending. Fills historical months so
+// budget-vs-spent charts aren't empty after an import. Overwrites existing budgets in the
+// range (deliberate "set to spent" action). from_month/to_month are 'YYYY-MM'; omit to
+// cover the full data range.
+budgetsRoutes.post('/api/budgets/backfill-from-spending', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, any>
+  const monthRe = /^\d{4}-\d{2}$/
+  let fromMonth: string | null = monthRe.test(body.from_month) ? body.from_month : null
+  let toMonth: string | null = monthRe.test(body.to_month) ? body.to_month : null
+
+  if (!fromMonth || !toMonth) {
+    const range = await db.first<{ minm: string | null; maxm: string | null }>(
+      c.env.DB,
+      `SELECT substr(MIN(date),1,7) minm, substr(MAX(date),1,7) maxm
+         FROM transactions WHERE profile_id = ? AND type = 'expense'`,
+      pid
+    )
+    if (!range?.minm || !range?.maxm) {
+      return c.json({ ok: false, message: 'No expenses to backfill' })
+    }
+    fromMonth = fromMonth || range.minm
+    toMonth = toMonth || range.maxm
+  }
+
+  const fromStart = `${fromMonth}-01`
+  const [ty, tm] = toMonth.split('-').map(Number)
+  // Exclusive end = first day of the month AFTER to_month.
+  const toEnd = tm === 12 ? `${ty + 1}-01-01` : `${ty}-${String(tm + 1).padStart(2, '0')}-01`
+
+  const rows = await db.all<{ ym: string; category_id: number; total: number }>(
+    c.env.DB,
+    `SELECT substr(t.date,1,7) ym, t.category_id, SUM(COALESCE(t.amount_local, t.amount)) total
+       FROM transactions t
+       WHERE t.profile_id = ? AND t.type = 'expense' AND t.category_id IS NOT NULL
+         AND t.date >= ? AND t.date < ?
+       GROUP BY ym, t.category_id`,
+    pid,
+    fromStart,
+    toEnd
+  )
+
+  if (rows.length === 0) {
+    return c.json({ ok: false, message: 'No expenses in the selected range' })
+  }
+
+  // Clear budgets in the range, then re-create one per (month, category-with-spending).
+  await db.run(
+    c.env.DB,
+    'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
+    pid,
+    fromStart,
+    toEnd
+  )
+
+  const months = new Set<string>()
+  const stmts = rows.map((r) => {
+    months.add(r.ym)
+    return c.env.DB.prepare(
+      'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
+    ).bind(r.category_id, r.total, 'monthly', `${r.ym}-01`, pid)
+  })
+  for (let i = 0; i < stmts.length; i += 50) {
+    await c.env.DB.batch(stmts.slice(i, i + 50))
+  }
+
+  return c.json({ ok: true, count: rows.length, months: months.size })
+})
+
 // POST /api/budgets/duplicate-last — copy the previous month's budgets into the current month.
 budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
   const pid = await getProfileId(c)

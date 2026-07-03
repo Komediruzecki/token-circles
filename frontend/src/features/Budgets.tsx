@@ -39,6 +39,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import { api, getLocalCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { showConfirm } from '../core/confirmStore'
 import { theme } from '../core/theme'
 import styles from './BudgetsPage.module.css'
 import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
@@ -208,6 +209,15 @@ export default function Budgets() {
   const currentMonthNum = () => parseInt(month().split('-')[1])
   const currentYearNum = () => parseInt(month().split('-')[0])
 
+  // Label for the month the "from last month" actions actually read from (the month
+  // before the one being viewed), e.g. "June 2026" — so the buttons aren't ambiguous
+  // when viewing older data.
+  const prevMonthLabel = () => {
+    const d = new Date(`${month()}-01T00:00:00`)
+    d.setMonth(d.getMonth() - 1)
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }
+
   const setMonthNum = (m: number) => {
     const y = currentYearNum()
     setMonth(`${y}-${String(m).padStart(2, '0')}`)
@@ -249,7 +259,7 @@ export default function Budgets() {
         }
       )
       if (result.ok) {
-        showToast(`Duplicated ${result.count} budgets from last month`, 'success')
+        showToast(`Copied ${result.count} budgets from ${prevMonthLabel()}`, 'success')
         await refetchBudget()
       } else {
         showToast(result.message || 'Nothing to duplicate', 'info')
@@ -271,13 +281,40 @@ export default function Budgets() {
         }
       )
       if (result.ok) {
-        showToast(`Set ${result.count} budgets from last month's expenses`, 'success')
+        showToast(`Set ${result.count} budgets from ${prevMonthLabel()} expenses`, 'success')
         await refetchBudget()
       } else {
         showToast(result.message || 'No expenses found', 'info')
       }
     } catch (_err) {
       showToast('Failed to set budgets from expenses', 'error')
+    }
+  }
+
+  // Backfill every historical month's budgets from that month's actual spending.
+  const backfillFromSpending = async () => {
+    const okToRun = await showConfirm(
+      'Set each past month’s budget to what you actually spent that month? This fills historical months so the charts are complete, and overwrites any budgets you already set in that range.'
+    )
+    if (!okToRun) return
+    try {
+      const result = await apiPost<{
+        ok: boolean
+        count?: number
+        months?: number
+        message?: string
+      }>('/api/budgets/backfill-from-spending', {})
+      if (result.ok) {
+        showToast(
+          `Backfilled ${result.count} budgets across ${result.months} month${result.months === 1 ? '' : 's'}`,
+          'success'
+        )
+        await refetchBudget()
+      } else {
+        showToast(result.message || 'Nothing to backfill', 'info')
+      }
+    } catch {
+      showToast('Failed to backfill budgets', 'error')
     }
   }
 
@@ -895,7 +932,11 @@ export default function Budgets() {
         <div data-test-id="table-header" class={styles.tableHeader}>
           <h2>Category Allocations</h2>
           <div class={styles.actions}>
-            <button class={styles.btnOutline} onClick={duplicateLastMonth}>
+            <button
+              class={styles.btnOutline}
+              onClick={duplicateLastMonth}
+              title={`Copy the budget amounts from ${prevMonthLabel()} into the month you're viewing`}
+            >
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -904,9 +945,13 @@ export default function Budgets() {
                   d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
                 />
               </svg>
-              Duplicate Last Month
+              Copy {prevMonthLabel()} Budgets
             </button>
-            <button class={styles.btnOutline} onClick={setFromExpenses}>
+            <button
+              class={styles.btnOutline}
+              onClick={setFromExpenses}
+              title={`Set this month's budgets to what you actually spent in ${prevMonthLabel()}`}
+            >
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -915,17 +960,35 @@ export default function Budgets() {
                   d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
                 />
               </svg>
-              From Expenses
+              From {prevMonthLabel()} Expenses
+            </button>
+            <button
+              class={styles.btnOutline}
+              onClick={backfillFromSpending}
+              title="Set every past month's budgets to that month's actual spending — fills historical months so the charts are complete"
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16m0 5v-5h5"
+                />
+              </svg>
+              Backfill from Spending
             </button>
             <button
               class={styles.btnPrimary}
               onClick={() => {
-                const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
-                if (firstUnallocated) {
-                  openAllocateModal(firstUnallocated)
+                // Default to the first unbudgeted category; the modal has a picker so the
+                // user can change it (or pick any category when all are budgeted).
+                const target =
+                  allocations().find((a) => !a.is_budgeted && a.can_allocate) ?? allocations()[0]
+                if (target) {
+                  openAllocateModal(target)
                 }
               }}
-              disabled={!summary()?.can_allocate}
+              disabled={allocations().length === 0}
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -951,9 +1014,10 @@ export default function Budgets() {
             <button
               class={styles.btnPrimary}
               onClick={() => {
-                const firstUnallocated = allocations().find((a) => !a.is_budgeted && a.can_allocate)
-                if (firstUnallocated) {
-                  openAllocateModal(firstUnallocated)
+                const target =
+                  allocations().find((a) => !a.is_budgeted && a.can_allocate) ?? allocations()[0]
+                if (target) {
+                  openAllocateModal(target)
                 }
               }}
             >
@@ -1287,9 +1351,25 @@ export default function Budgets() {
               </button>
             </div>
             <div class={styles.modalBody}>
-              <p class={styles.modalText}>
-                Allocate budget to <strong>{selectedCategory()!.category_name}</strong>
-              </p>
+              <label class={styles.formLabel}>Category</label>
+              <select
+                class={styles.formInput}
+                value={selectedCategory()?.category_id ?? ''}
+                onChange={(e) => {
+                  const cid = parseInt(e.currentTarget.value, 10)
+                  const cat = allocations().find((a) => a.category_id === cid)
+                  if (cat) setSelectedCategory(cat)
+                }}
+              >
+                <For each={allocations()}>
+                  {(a) => (
+                    <option value={a.category_id}>
+                      {a.category_name}
+                      {a.is_budgeted ? ` (currently ${formatCurrency(a.allocated)})` : ''}
+                    </option>
+                  )}
+                </For>
+              </select>
               <label class={styles.formLabel}>Amount</label>
               <input
                 type="number"

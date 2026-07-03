@@ -36,6 +36,7 @@
  */
 
 import { createSignal, For, onMount, Show } from 'solid-js'
+import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import { classifyCategory } from '../core/categoryClassifier'
 import styles from './Import.module.css'
@@ -128,6 +129,8 @@ export default function Import() {
 
   // Step state
   const [activeStep, setActiveStep] = createSignal<Step>('upload')
+  // Opt-in: after import, set each historical month's budgets to its spending
+  const [setBudgetsFromSpending, setSetBudgetsFromSpending] = createSignal(false)
 
   // Import session log (what past imports created; written after each successful import)
   const [importLogs, setImportLogs] = createSignal<ImportLogEntry[]>([])
@@ -595,6 +598,24 @@ export default function Import() {
       })
         .then(() => loadImportLogs())
         .catch((e: unknown) => { console.error('Failed to record import log:', e); })
+
+      // Opt-in: set each historical month's budgets to that month's spending so the
+      // budget-vs-spent charts aren't empty for imported history.
+      if (setBudgetsFromSpending() && (data.imported ?? 0) > 0) {
+        try {
+          const bf = await apiFetch('/api/budgets/backfill-from-spending', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...profileHeaders() },
+            body: JSON.stringify({}),
+          })
+          const bfData = await bf.json()
+          if (bfData?.ok) {
+            toast(`Set budgets for ${bfData.months} month${bfData.months === 1 ? '' : 's'} from spending`, 'success')
+          }
+        } catch (e) {
+          console.error('Failed to backfill budgets after import:', e)
+        }
+      }
 
       // Reset after delay
       setTimeout(() => {
@@ -1460,6 +1481,28 @@ export default function Import() {
               </div>
             )}
           </div>
+          <label
+            style={{
+              display: 'flex',
+              'align-items': 'flex-start',
+              gap: '8px',
+              margin: '4px 0 14px',
+              'font-size': '13px',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={setBudgetsFromSpending()}
+              onChange={(e) => setSetBudgetsFromSpending(e.currentTarget.checked)}
+              style={{ 'margin-top': '2px' }}
+            />
+            <span>
+              Set each month's budget to what was spent that month (fills the budget charts
+              for imported history; overwrites existing budgets).
+            </span>
+          </label>
           <div class={styles.importButtons}>
             <button
               class={`${styles.btn} ${styles.btnPrimary}`}

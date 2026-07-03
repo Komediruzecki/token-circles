@@ -373,6 +373,11 @@ const routes: RouteDef[] = [
     handler: dispatch({ POST: (ctx) => h.budgetsFromExpenses(ctx.body) }),
   },
   {
+    pattern: /^\/budgets\/backfill-from-spending$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.budgetsBackfillFromSpending(ctx.body) }),
+  },
+  {
     pattern: /^\/budgets\/(\d+)\/rollover$/,
     methods: ['PUT'],
     handler: dispatch({ PUT: (ctx) => h.budgetsRollover(ctx.params, ctx.body) }),
