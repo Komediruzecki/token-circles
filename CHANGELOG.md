@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Richer demo data: each example profile now carries a realistic set of subscriptions that scales with income (a lean pair on the low-income profile up to a dozen — streaming, cloud storage, gaming, developer tools — on the high-income one), all using real brand names so the Bills → Subscriptions view shows proper brand icons.
+
 ### Fixed
+
+- Profile switching no longer makes a profile vanish from the selector. Switching the active profile could corrupt the in-memory profile list (the previously selected entry was overwritten with the new profile and then deduplicated away), a long-standing annoyance that hit on nearly every switch; the store now replaces instead of merging and never aliases list entries.
+- Demo mode is now resilient to blocked browser storage (strict private browsing / "block all cookies"): the storage-mode setting falls back to an in-session value instead of silently flipping the deployed app into server mode, which made demo sessions fire unauthenticated API calls.
 
 - Demo (no-account) mode on the hosted app now truly runs offline in the browser. Deployed builds address the API by absolute URL, and the serverless interceptor only recognized relative `/api/*` paths — so every call in demo mode bypassed the local IndexedDB, hit the real API without a session (constant 401s), and the local database never initialized. The interceptor now recognizes the deployed URL shape as well; after entering the demo, the app makes zero network calls to the API.
 

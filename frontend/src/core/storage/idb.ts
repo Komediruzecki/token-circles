@@ -776,6 +776,39 @@ const DEMO_ACCOUNTS = [
   { name: 'Savings Account', type: 'savings', currency: 'EUR' },
 ]
 
+// Extra subscriptions per income tier, on top of each tier's base bills (low already has a
+// phone plan; mid Netflix/Spotify/internet; high Netflix/Spotify/Google One/internet).
+// Names deliberately match subscriptionBrands keywords so the Bills → Subscriptions view
+// shows real brand icons. Low = lean, Mid = typical household, High = subscription-heavy.
+export const DEMO_SUBSCRIPTIONS: Record<
+  'low' | 'mid' | 'high',
+  { name: string; amount: number; dueDay: number; notes: string; frequency?: string }[]
+> = {
+  low: [
+    { name: 'Netflix', amount: 7.99, dueDay: 14, notes: 'Basic with ads' },
+    { name: 'Spotify', amount: 5.99, dueDay: 21, notes: 'Student plan' },
+  ],
+  mid: [
+    { name: 'YouTube Premium', amount: 12.99, dueDay: 8, notes: 'Ad-free and background play' },
+    { name: 'Disney+', amount: 9.99, dueDay: 16, notes: 'Standard plan' },
+    { name: 'iCloud+', amount: 2.99, dueDay: 22, notes: '200GB storage' },
+    { name: 'Amazon Prime', amount: 8.99, dueDay: 27, notes: 'Monthly membership' },
+  ],
+  high: [
+    { name: 'YouTube Premium', amount: 12.99, dueDay: 8, notes: 'Ad-free and background play' },
+    { name: 'Disney+', amount: 13.99, dueDay: 16, notes: 'Premium, no ads' },
+    { name: 'HBO Max', amount: 16.99, dueDay: 3, notes: '4K plan' },
+    // Monthly (not the annual plan): the Subscriptions summary shows every amount as
+    // "/mo" and does not normalize yearly plans — an annual price would read misleading.
+    { name: 'Amazon Prime', amount: 8.99, dueDay: 11, notes: 'Prime membership' },
+    { name: 'iCloud+', amount: 9.99, dueDay: 22, notes: '2TB family storage' },
+    { name: 'Xbox Game Pass', amount: 14.99, dueDay: 6, notes: 'Ultimate tier' },
+    { name: 'GitHub', amount: 10, dueDay: 9, notes: 'Copilot Pro' },
+    { name: 'Dropbox', amount: 11.99, dueDay: 24, notes: 'Plus 2TB' },
+    { name: 'Discord', amount: 9.99, dueDay: 19, notes: 'Nitro' },
+  ],
+}
+
 // Monthly expense templates — fractions of total monthly spending
 const MONTHLY_EXPENSES = [
   { name: 'Housing', description: 'Monthly rent', pct: 0.37 },
@@ -1149,12 +1182,12 @@ export async function seedDemoProfiles(): Promise<void> {
             type: 'subscription',
           },
           {
-            name: 'Cloud Storage',
+            name: 'Google One',
             amount: 9.99,
             dueDay: 25,
             recurring: 1,
             frequency: 'monthly',
-            notes: '2TB plan',
+            notes: '2TB cloud storage',
             category: 'Subscriptions',
             type: 'subscription',
           },
@@ -1250,7 +1283,24 @@ export async function seedDemoProfiles(): Promise<void> {
             },
           ]
 
-    for (const bill of bills) {
+    // Merge in the tier's extra subscriptions (brand names -> icons in the Subscriptions view)
+    const tier = profile.name.includes('High')
+      ? 'high'
+      : profile.name.includes('Mid')
+        ? 'mid'
+        : 'low'
+    const tierSubscriptions = DEMO_SUBSCRIPTIONS[tier].map((s) => ({
+      name: s.name,
+      amount: s.amount,
+      dueDay: s.dueDay,
+      recurring: 1,
+      frequency: s.frequency ?? 'monthly',
+      notes: s.notes,
+      category: 'Subscriptions',
+      type: 'subscription',
+    }))
+
+    for (const bill of [...bills, ...tierSubscriptions]) {
       const dueDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(bill.dueDay).padStart(2, '0')}`
       await db.add('bills', {
         name: bill.name,

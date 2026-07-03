@@ -89,7 +89,15 @@ export function getCurrentProfile() {
 }
 
 export function setCurrentProfile(profile: Profile | null) {
-  setState('currentProfile', profile)
+  // Solid's setState shallow-MERGES an object value into the existing object at the path.
+  // Callers historically passed `profiles()[i]` here, so state.currentProfile ALIASED an
+  // entry of state.profiles — and the next merge wrote the new profile's fields straight
+  // into that array entry, turning it into a duplicate the dropdown then dedup-dropped
+  // (the long-standing "profile disappears after switching" bug). Null out first to force
+  // REPLACE semantics, and store our own shallow copy so no store path ever aliases a
+  // caller-owned (or store-owned) object.
+  setState('currentProfile', null)
+  if (profile) setState('currentProfile', { ...profile })
 }
 
 // ── Modals ──

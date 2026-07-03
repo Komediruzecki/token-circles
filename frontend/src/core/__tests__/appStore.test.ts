@@ -90,6 +90,43 @@ describe('appStore - currentProfile', () => {
     setCurrentProfile(null)
     expect(getCurrentProfile()).toBeNull()
   })
+
+  // Regression: the long-standing "a profile disappears from the dropdown after switching".
+  // Root cause: currentProfile was set to the SAME object instance living in the profiles
+  // array (aliasing), and Solid's setState shallow-MERGES object values — so the next
+  // setCurrentProfile merged the new profile's fields into the old aliased object, i.e.
+  // straight into profiles[i], turning it into a duplicate that the UI's dedup then dropped.
+  it('switching current profile never mutates the profiles list (aliasing regression)', () => {
+    setProfiles([
+      { id: 1, name: 'Example Low Income', created_at: '2023-01-01T00:00:00Z' },
+      { id: 2, name: 'Example Mid Income', created_at: '2023-01-01T00:00:00Z' },
+      { id: 3, name: 'Example High Income', created_at: '2023-01-01T00:00:00Z' },
+    ])
+    // Like App.loadProfiles(autoSelect): current profile taken from the store's own array.
+    setCurrentProfile(getProfiles()[1])
+    // Like App.selectProfile: switch to another profile (caller even shallow-copies).
+    setCurrentProfile({ ...getProfiles()[2] })
+
+    expect(getProfiles().map((p) => p.name)).toEqual([
+      'Example Low Income',
+      'Example Mid Income',
+      'Example High Income',
+    ])
+    expect(new Set(getProfiles().map((p) => p.id)).size).toBe(3)
+    expect(getCurrentProfile()?.name).toBe('Example High Income')
+  })
+
+  it('switching back and forth repeatedly keeps the list intact', () => {
+    setProfiles([
+      { id: 1, name: 'A', created_at: 'x' },
+      { id: 2, name: 'B', created_at: 'x' },
+    ])
+    for (let i = 0; i < 6; i++) {
+      setCurrentProfile(getProfiles()[i % 2])
+    }
+    expect(getProfiles().map((p) => p.name)).toEqual(['A', 'B'])
+    expect(getCurrentProfile()?.name).toBe('B')
+  })
 })
 
 describe('appStore - profileVersion', () => {

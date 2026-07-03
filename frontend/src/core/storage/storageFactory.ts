@@ -43,18 +43,30 @@ function detectStorageMode(): StorageMode {
   }
 }
 
+// In-memory fallback for contexts where localStorage is blocked (strict private
+// browsing / "block all cookies"). Without it, a blocked getItem/setItem throw made the
+// deployed build silently fall back to server mode mid-session — demo mode then fired
+// real API calls (401s / network errors) instead of using the local database.
+let memoryMode: StorageMode | null = null
+
 /**
  * Get the current storage mode
  */
 export function getStorageMode(): StorageMode {
   // User preference from localStorage always takes priority
-  const stored = localStorage.getItem('finance_storage_mode')
+  let stored: string | null = null
+  try {
+    stored = localStorage.getItem('finance_storage_mode')
+  } catch {
+    stored = memoryMode
+  }
   if (stored !== null && stored !== '') {
     const mode = stored as StorageMode
     if (mode === 'serverless' || mode === 'self-hosted') {
       return mode
     }
   }
+  if (memoryMode) return memoryMode
 
   // If env default is set, use it as fallback instead of pathname detection
   const envDefault = import.meta.env.VITE_DEFAULT_STORAGE as string | undefined
@@ -68,7 +80,13 @@ export function getStorageMode(): StorageMode {
  * Set the storage mode
  */
 export function setStorageMode(mode: StorageMode): void {
-  localStorage.setItem('finance_storage_mode', mode)
+  memoryMode = mode
+  try {
+    localStorage.setItem('finance_storage_mode', mode)
+  } catch {
+    // Storage blocked — the in-memory fallback above keeps this session consistent
+    // (it won't survive a reload, but neither would any other persisted state).
+  }
   currentAdapter = null // Reset adapter on mode change
 }
 
