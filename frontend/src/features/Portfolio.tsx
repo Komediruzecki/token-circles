@@ -3,11 +3,29 @@
  * Tracks stock/ETF holdings with real-time prices and gain/loss
  */
 
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
-import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../core/api'
+import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import {
+  apiDelete,
+  apiGet,
+  apiPost,
+  apiPut,
+  formatCurrency,
+  getLocalCurrency,
+  showToast,
+} from '../core/api'
 import { useAppState } from '../core/appStore'
+import { convertToBase } from '../core/currency'
 import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
+
+interface LiveQuote {
+  price: number
+  previousClose?: number
+  change?: number
+  changePercent?: number
+  currency?: string | null
+  name?: string
+}
 
 export default function Portfolio() {
   const state = useAppState()
@@ -24,6 +42,29 @@ export default function Portfolio() {
     notes: '',
   })
   const [priceLoading, setPriceLoading] = createSignal(false)
+  // Live quotes keyed by UPPERCASE ticker, from the last "Refresh Prices" (session-only).
+  const [prices, setPrices] = createSignal<Record<string, LiveQuote>>({})
+
+  // Holdings enriched with the live quote (converted to the base currency) so gains are
+  // real. Falls back to purchase price when no quote was fetched for a ticker.
+  const displayHoldings = createMemo(() =>
+    holdings().map((h) => {
+      const q = prices()[h.ticker?.toUpperCase()]
+      if (!q || typeof q.price !== 'number' || q.price <= 0) return h
+      const base = getLocalCurrency()
+      const livePrice = q.currency ? (convertToBase(q.price, q.currency, base) ?? q.price) : q.price
+      const marketValue = livePrice * h.shares
+      const costBasis = h.purchase_price * h.shares
+      const gain = marketValue - costBasis
+      return {
+        ...h,
+        currentPrice: livePrice,
+        marketValue,
+        gain,
+        gainPercent: costBasis ? (gain / costBasis) * 100 : 0,
+      }
+    })
+  )
 
   const loadData = async () => {
     setLoading(true)
@@ -112,17 +153,39 @@ export default function Portfolio() {
   const refreshPrices = async () => {
     setPriceLoading(true)
     try {
-      const currentHoldings = holdings()
-      const tickers = currentHoldings.map((h) => h.ticker)
+      const tickers = holdings().map((h) => h.ticker)
       if (tickers.length > 0) {
-        await apiPost('/api/portfolio/prices', { tickers })
+        const res = await apiPost<Record<string, LiveQuote>>('/api/portfolio/prices', { tickers })
+        const map = res && typeof res === 'object' ? res : {}
+        // Normalize keys to uppercase so lookups match regardless of case.
+        const upper: Record<string, LiveQuote> = {}
+        for (const [k, v] of Object.entries(map)) upper[k.toUpperCase()] = v
+        setPrices(upper)
+        const n = Object.keys(upper).length
+        if (n > 0) {
+          showToast(`Updated ${n} price${n === 1 ? '' : 's'}`, 'success')
+        } else {
+          showToast('No live prices available right now', 'info')
+        }
       }
-      await loadData()
     } catch (err) {
       console.error('Failed to refresh prices', err)
+      showToast('Failed to refresh prices', 'error')
     } finally {
       setPriceLoading(false)
     }
+  }
+
+  // Accept both '.' and ',' as the decimal separator and keep only one. A native
+  // <input type="number"> rejects '.' (and clears on ',') in comma-decimal locales,
+  // which made the price/shares fields impossible to fill; these are type="text".
+  const sanitizeDecimal = (s: string): string => {
+    let out = s.replace(/,/g, '.').replace(/[^0-9.]/g, '')
+    const first = out.indexOf('.')
+    if (first !== -1) {
+      out = out.slice(0, first + 1) + out.slice(first + 1).replace(/\./g, '')
+    }
+    return out
   }
 
   const formatAmount = (amount: number): string => {
@@ -250,7 +313,7 @@ export default function Portfolio() {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={holdings()}>
+                    <For each={displayHoldings()}>
                       {(h) => (
                         <tr>
                           <td>
@@ -428,24 +491,31 @@ export default function Portfolio() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Shares</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputmode="decimal"
                   class={styles.formControl}
                   placeholder="Number of shares"
                   value={formData().shares}
-                  onInput={(e) => setFormData({ ...formData(), shares: e.target.value })}
+                  onInput={(e) =>
+                    setFormData({ ...formData(), shares: sanitizeDecimal(e.currentTarget.value) })
+                  }
                   required
                 />
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Purchase Price (per share)</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputmode="decimal"
                   class={styles.formControl}
                   placeholder="0.00"
                   value={formData().purchasePrice}
-                  onInput={(e) => setFormData({ ...formData(), purchasePrice: e.target.value })}
+                  onInput={(e) =>
+                    setFormData({
+                      ...formData(),
+                      purchasePrice: sanitizeDecimal(e.currentTarget.value),
+                    })
+                  }
                   required
                 />
               </div>

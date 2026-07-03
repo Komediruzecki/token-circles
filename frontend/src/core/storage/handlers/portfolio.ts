@@ -173,11 +173,9 @@ export async function portfolioPrices(body: unknown): Promise<Response> {
     if (!tickers || !Array.isArray(tickers) || tickers.length === 0) {
       return json({ error: 'tickers array is required' }, 400)
     }
-    const prices: Record<string, unknown> = {}
-    for (const t of tickers) {
-      prices[t] = { price: 0, change: 0, changePercent: 0, name: t }
-    }
-    return json(prices)
+    // Serverless/demo mode can't reach an external quote API from the browser (CORS),
+    // so return no live prices. The UI then keeps showing purchase price (no fake 0s).
+    return json({})
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

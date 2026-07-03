@@ -391,6 +391,12 @@
   text-align: right;
 }
 
+/* Right-align the headers of numeric columns so they line up with their values.
+ * Scoped to beat ".data-table th { text-align: left }". */
+.data-table th.num-header {
+  text-align: right;
+}
+
 .percent-col {
   min-width: 120px;
 }

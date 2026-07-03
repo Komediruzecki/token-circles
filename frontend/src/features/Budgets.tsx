@@ -1030,9 +1030,9 @@ export default function Budgets() {
               <thead>
                 <tr>
                   <th>Category</th>
-                  <th>Amount</th>
-                  <th>Spent</th>
-                  <th>Remaining</th>
+                  <th class={styles.numHeader}>Amount</th>
+                  <th class={styles.numHeader}>Spent</th>
+                  <th class={styles.numHeader}>Remaining</th>
                   <th>% Used</th>
                   <th>Status</th>
                   <th>Rollover</th>

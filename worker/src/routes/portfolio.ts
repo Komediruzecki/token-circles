@@ -167,46 +167,68 @@ portfolioRoutes.delete('/api/portfolio/holdings/:id', requireAuth, async (c) => 
   return c.json({ ok: true })
 })
 
-// Fetch current prices for a list of tickers. Port of
-// backend/routes/portfolio.js POST /api/portfolio/prices, which calls
-// yahooFinanceService.fetchQuotes (yahoo-finance2 .quote()).
-//
-// NOTE: yahoo-finance2's .quote() hits Yahoo's public quote endpoint
-// (https://query1.finance.yahoo.com/v7/finance/quote?symbols=...). We replicate
-// that here with fetch(). The upstream JSON shape is
-//   { quoteResponse: { result: [ { symbol, regularMarketPrice, ... } ], error } }
-// and each result object uses the same field names the Express route read
-// (regularMarketPrice / regularMarketChange / regularMarketChangePercent /
-// regularMarketDayHigh / regularMarketDayLow / shortName / longName). The v7
-// endpoint may require a crumb/cookie in some regions and can rate-limit; on any
-// failure we fall back to an empty quote list (matching fetchQuotes' catch -> []),
-// so the response is {} rather than an error. The v6 host is tried as a fallback.
-async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
-  if (!symbols || symbols.length === 0) return []
-  const qs = encodeURIComponent(symbols.join(','))
-  const urls = [
-    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${qs}`,
-    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${qs}`,
-  ]
-  for (const url of urls) {
+interface YahooQuote {
+  symbol: string
+  regularMarketPrice: number
+  regularMarketPreviousClose: number
+  regularMarketChange: number
+  regularMarketChangePercent: number
+  currency: string | null
+  shortName: string
+}
+
+// Fetch a single symbol's current price from Yahoo's v8 chart endpoint. The old v7
+// quote endpoint (query1.../v7/finance/quote) now returns 401 "Unauthorized" without a
+// crumb+cookie, so prices never loaded. The v8 chart endpoint is still public and needs
+// no auth; meta carries regularMarketPrice, chartPreviousClose and the quote currency.
+async function fetchYahooQuote(symbol: string): Promise<YahooQuote | null> {
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']
+  for (const host of hosts) {
     try {
-      const resp = await fetch(url, {
-        headers: {
-          // Yahoo rejects requests without a browser-like UA.
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          Accept: 'application/json',
-        },
-      })
+      const resp = await fetch(
+        `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
+        {
+          headers: {
+            // Yahoo rejects requests without a browser-like UA.
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+            Accept: 'application/json',
+          },
+        }
+      )
       if (!resp.ok) continue
       const data = (await resp.json()) as any
-      const result = data?.quoteResponse?.result
-      if (Array.isArray(result)) return result
-    } catch (err) {
-      // Try the next host, else fall through to [].
+      const meta = data?.chart?.result?.[0]?.meta
+      const price = meta?.regularMarketPrice
+      if (typeof price !== 'number') continue
+      const prev =
+        typeof meta.chartPreviousClose === 'number'
+          ? meta.chartPreviousClose
+          : typeof meta.previousClose === 'number'
+            ? meta.previousClose
+            : price
+      const change = price - prev
+      return {
+        symbol: meta.symbol || symbol,
+        regularMarketPrice: price,
+        regularMarketPreviousClose: prev,
+        regularMarketChange: change,
+        regularMarketChangePercent: prev ? (change / prev) * 100 : 0,
+        currency: meta.currency ?? null,
+        shortName: meta.shortName || meta.longName || symbol,
+      }
+    } catch {
+      // Try the next host, else return null for this symbol.
     }
   }
-  return []
+  return null
+}
+
+// Fetch prices for many symbols in parallel (the v8 endpoint is one-symbol-per-request).
+async function fetchYahooQuotes(symbols: string[]): Promise<YahooQuote[]> {
+  if (!symbols || symbols.length === 0) return []
+  const results = await Promise.all(symbols.map((s) => fetchYahooQuote(s)))
+  return results.filter((q): q is YahooQuote => q !== null)
 }
 
 portfolioRoutes.post('/api/portfolio/prices', requireAuth, async (c) => {
@@ -223,11 +245,13 @@ portfolioRoutes.post('/api/portfolio/prices', requireAuth, async (c) => {
     if (q && q.symbol && q.regularMarketPrice) {
       prices[q.symbol] = {
         price: q.regularMarketPrice,
+        previousClose: q.regularMarketPreviousClose,
         change: q.regularMarketChange || 0,
         changePercent: q.regularMarketChangePercent || 0,
-        dayHigh: q.regularMarketDayHigh,
-        dayLow: q.regularMarketDayLow,
-        name: q.shortName || q.longName || q.symbol,
+        // Currency the quote is denominated in (e.g. USD) — lets the client convert
+        // to the user's base currency before computing gain.
+        currency: q.currency,
+        name: q.shortName,
       }
     }
   }
