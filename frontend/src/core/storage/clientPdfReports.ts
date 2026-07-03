@@ -15,6 +15,51 @@ function getProfileId(): number {
   return stored ? parseInt(stored, 10) : 1
 }
 
+/**
+ * Load the raw rows a report needs. Serverless mode reads IndexedDB directly;
+ * self-hosted mode fetches from the HTTP API — the worker cannot run Chart.js/
+ * canvas, so the rich (charted) PDFs are always composed client-side and only
+ * the DATA comes from the server. Dynamic imports avoid a static module cycle
+ * (apiFetch → localApiRouter → handlers/reports → this file).
+ */
+async function loadReportSource(
+  dateFrom: string,
+  dateTo: string
+): Promise<{ txns: Transaction[]; cats: Category[] }> {
+  const { getStorageMode } = await import('./storageFactory')
+  if (getStorageMode() === 'self-hosted') {
+    const { apiFetch } = await import('../apiFetch')
+    const headers: Record<string, string> = {}
+    const pid = localStorage.getItem('currentProfileId')
+    if (pid) headers['X-Profile-Id'] = pid
+    try {
+      const sel = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]') as unknown
+      if (Array.isArray(sel) && sel.length > 1) headers['X-Profile-Ids'] = JSON.stringify(sel)
+    } catch {
+      // single-profile header only
+    }
+    const [txRes, catRes] = await Promise.all([
+      apiFetch(`/api/transactions?startDate=${dateFrom}&endDate=${dateTo}&limit=100000`, {
+        credentials: 'include',
+        headers,
+      }),
+      apiFetch('/api/categories', { credentials: 'include', headers }),
+    ])
+    if (!txRes.ok || !catRes.ok) throw new Error('Failed to load report data from the server')
+    const txBody = (await txRes.json()) as { rows?: Transaction[] } | Transaction[]
+    const txns = Array.isArray(txBody) ? txBody : (txBody.rows ?? [])
+    const cats = (await catRes.json()) as Category[]
+    return { txns, cats }
+  }
+
+  const db = await getDB()
+  const pid = getProfileId()
+  const txns = ((await db.getAllFromIndex('transactions', 'by_profile', pid)) as Transaction[])
+    .filter((t) => t.date >= dateFrom && t.date <= dateTo)
+  const cats = (await db.getAllFromIndex('categories', 'by_profile', pid)) as Category[]
+  return { txns, cats }
+}
+
 // Format a signed amount as the user's selected currency. Using Intl currency
 // formatting picks the correct symbol and the currency's own fraction digits
 // (e.g. JPY has 0, not a forced 2). Negatives render with a leading ASCII '-'.
@@ -270,15 +315,9 @@ function addSectionTable(
 // ── Monthly PDF ─────────────────────────────────────────────────────────────
 
 export async function generateMonthlyPdf(month: string, dark: boolean): Promise<Blob> {
-  const db = await getDB()
-  const pid = getProfileId()
   const [y, m] = month.split('-').map(Number)
-
-  const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: Transaction) =>
-      t.date >= `${month}-01` && t.date < `${y}-${String(m + 1).padStart(2, '0')}-01`
-  )
-  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+  // "-31" upper bound is safe for lexicographic YYYY-MM-DD compare in every month
+  const { txns, cats } = await loadReportSource(`${month}-01`, `${month}-31`)
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   const incomeByCat: Record<string, { name: string; color: string; total: number }> = {}
@@ -447,13 +486,7 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
 // ── Annual PDF ──────────────────────────────────────────────────────────────
 
 export async function generateAnnualPdf(year: number, dark: boolean): Promise<Blob> {
-  const db = await getDB()
-  const pid = getProfileId()
-
-  const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: Transaction) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
-  )
-  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+  const { txns, cats } = await loadReportSource(`${year}-01-01`, `${year}-12-31`)
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   // Category breakdown
@@ -690,13 +723,9 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
 // ── Tax Summary PDF ─────────────────────────────────────────────────────────
 
 export async function generateTaxSummaryPdf(year: number, dark: boolean): Promise<Blob> {
-  const db = await getDB()
-  const pid = getProfileId()
-  const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: Transaction) =>
-      t.type === 'expense' && t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
-  )
-  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+  const source = await loadReportSource(`${year}-01-01`, `${year}-12-31`)
+  const txns = source.txns.filter((t) => t.type === 'expense')
+  const cats = source.cats
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   const taxMap: Record<string, { count: number; total: number }> = {}
@@ -814,12 +843,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
 // ── P&L Summary PDF ─────────────────────────────────────────────────────────
 
 export async function generatePlSummaryPdf(year: number, dark: boolean): Promise<Blob> {
-  const db = await getDB()
-  const pid = getProfileId()
-  const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
-    (t: Transaction) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`
-  )
-  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+  const { txns, cats } = await loadReportSource(`${year}-01-01`, `${year}-12-31`)
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   const incomeMap: Record<string, { count: number; total: number }> = {}

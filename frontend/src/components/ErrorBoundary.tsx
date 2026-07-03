@@ -10,6 +10,28 @@ function isBenignError(msg: string): boolean {
   return /ResizeObserver loop/i.test(msg)
 }
 
+/**
+ * Errors from scripts we did not ship must never take over the screen.
+ * Cross-origin scripts (Cloudflare's injected /cdn-cgi/ challenge, browser
+ * extensions, in-app browser shims) surface as an opaque "Script error."
+ * with no Error object, or carry a filename on a foreign host. Treating those
+ * as fatal made the app "crash" on iOS whenever Bot Fight Mode's script
+ * hiccuped — e.g. right after tapping a calendar day.
+ */
+function isThirdPartyError(event: ErrorEvent): boolean {
+  const msg = event.message || ''
+  if (!event.error && /^Script error\.?$/i.test(msg.trim())) return true
+  if (event.filename) {
+    if (/cdn-cgi|challenge-platform/.test(event.filename)) return true
+    if (
+      !event.filename.startsWith('/') &&
+      !event.filename.includes(window.location.host)
+    )
+      return true
+  }
+  return false
+}
+
 export const ErrorBoundary: Component<Props> = (props) => {
   const [fatalError, setFatalError] = createSignal<Error | null>(null)
   const [errorLog, setErrorLog] = createSignal<string[]>([])
@@ -24,6 +46,9 @@ export const ErrorBoundary: Component<Props> = (props) => {
       if (isBenignError(msg)) return
       const err = event.error || new Error(msg)
       addToLog(`[${new Date().toISOString()}] ${err.message || String(err)}`)
+      // Third-party/opaque errors are logged (visible in any later crash modal)
+      // but never escalate to the full-screen fatal takeover.
+      if (isThirdPartyError(event)) return
       if (!fatalError()) {
         setFatalError(err)
       }

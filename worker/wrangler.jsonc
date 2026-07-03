@@ -25,6 +25,8 @@
     "APP_ENV": "development",
     "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
     "CORS_ORIGIN": "http://localhost:3800",
+    // Public origin of THIS worker (email links must point here, not at the SPA host)
+    "API_PUBLIC_ORIGIN": "http://localhost:8787",
   },
 
   "env": {
@@ -40,6 +42,7 @@
         "GOOGLE_CLIENT_ID": "961447002903-p2gkcujs85svbuf4tpmvu1cj4ge1ivh3.apps.googleusercontent.com",
         "CORS_ORIGIN": "https://dev.tokencircles.com",
         "APP_ORIGINS": "https://dev.tokencircles.com",
+        "API_PUBLIC_ORIGIN": "https://api.dev.tokencircles.com",
         "COOKIE_DOMAIN": ".dev.tokencircles.com",
         "EMAIL_FROM": "Token Circles <hello@tokencircles.com>",
         // Stripe per-tier Price ids (TEST mode for dev) — vars, NOT secret. STRIPE_SECRET_KEY +
@@ -78,6 +81,7 @@
         "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
         "CORS_ORIGIN": "https://app.tokencircles.com",
         "APP_ORIGINS": "https://app.tokencircles.com",
+        "API_PUBLIC_ORIGIN": "https://api.tokencircles.com",
         "COOKIE_DOMAIN": ".tokencircles.com",
       },
       "d1_databases": [

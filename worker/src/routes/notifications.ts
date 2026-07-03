@@ -131,14 +131,38 @@ notificationsRoutes.post('/api/notifications/trigger', requireAuth, async (c) =>
 
 // GET — public one-click unsubscribe (clicked from an email footer; no auth).
 notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
+  const appUrl = c.env.CORS_ORIGIN || '';
+  const page = (title: string, body: string, status: 200 | 400 = 200) =>
+    c.html(
+      `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} — Token Circles</title></head>
+<body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0b1020;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px">
+<div style="max-width:420px;width:100%;background:#131a2e;border:1px solid #26304d;border-radius:12px;padding:32px;text-align:center">
+<div style="font-weight:700;font-size:18px;margin-bottom:16px">Token Circles</div>
+<h1 style="font-size:20px;margin:0 0 12px">${title}</h1>
+<p style="color:#94a3b8;font-size:14px;line-height:1.6;margin:0 0 20px">${body}</p>
+${appUrl ? `<a href="${appUrl}" style="display:inline-block;background:#4f6ef7;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Back to the app</a>` : ''}
+</div></body></html>`,
+      status
+    );
+
   const token = c.req.query('token');
-  if (!token) return c.text('Invalid unsubscribe link.', 400);
-  await db.run(
+  if (!token) return page('Invalid link', 'This unsubscribe link is missing its token.', 400);
+  const res = await db.run(
     c.env.DB,
     'UPDATE users SET notifications_unsubscribed = 1 WHERE unsubscribe_token = ?',
     token
   );
-  return c.html(
-    '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center"><h2>Unsubscribed</h2><p>You will no longer receive Token Circles reminder emails.</p></body></html>'
+  if (!res.meta.changes) {
+    return page(
+      'Link not recognized',
+      'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, disable reminders under Settings, Notifications.',
+      400
+    );
+  }
+  return page(
+    'You are unsubscribed',
+    'You will no longer receive reminder emails (spending reports and budget alerts). You can turn them back on any time under Settings, Notifications in the app.'
   );
 });

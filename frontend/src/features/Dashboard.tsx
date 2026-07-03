@@ -862,8 +862,19 @@ export default function Dashboard() {
               >
                 <div class={styles.modalHeader}>
                   <div class={styles.modalTitle}>Dashboard Views</div>
-                  <button class={styles.modalClose} onClick={() => setShowSettingsModal(false)}>
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <button
+                    class={styles.modalClose}
+                    onClick={() => setShowSettingsModal(false)}
+                    aria-label="Close"
+                  >
+                    <svg
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
