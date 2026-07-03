@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Subscriptions: the "Monthly Total" now normalizes each plan to its monthly cost (a yearly plan counts as amount/12, weekly as x52/12) instead of summing raw amounts, and each card shows its real billing period ("/yr", "/wk") instead of always reading like a monthly price. The bill form also offers a Yearly frequency now.
+- Adding a bill or subscription in the local/demo (serverless) mode failed with a validation error — the form sends the same field names as the cloud API (`dueDate`), which the local validator did not accept.
+
 ### Added
 
 - Richer demo data: each example profile now carries a realistic set of subscriptions that scales with income (a lean pair on the low-income profile up to a dozen — streaming, cloud storage, gaming, developer tools — on the high-income one), all using real brand names so the Bills → Subscriptions view shows proper brand icons.

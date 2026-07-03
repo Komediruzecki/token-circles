@@ -12,6 +12,7 @@
 /** @jsxImportSource solid-js */
 import { Show } from 'solid-js'
 import { formatCurrency } from '../core/api'
+import { frequencySuffix } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
 import ConfirmButton from './ConfirmButton'
 import styles from './SubscriptionCard.module.css'
@@ -102,9 +103,7 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
         </div>
         <div class={styles.amount}>
           <span class={styles.amountValue}>{formatCurrency(sub().amount)}</span>
-          <span class={styles.frequency}>
-            /{sub().frequency === 'monthly' ? 'mo' : sub().frequency === 'weekly' ? 'wk' : 'biwk'}
-          </span>
+          <span class={styles.frequency}>/{frequencySuffix(sub().frequency)}</span>
         </div>
       </div>
 
