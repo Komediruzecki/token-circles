@@ -198,3 +198,25 @@ body {
   margin: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* #root is the single flex child of the flex `body`. Flex items default to
+   `min-width: auto`, which refuses to shrink below the content's intrinsic width —
+   that forced the whole app to its widest content (~780px) and clipped it on phones.
+   Allow it to shrink to the viewport so pages become genuinely responsive. */
+#root {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* iOS-safe form controls: mobile Safari force-zooms the page when a focused
+   input/select/textarea has a font-size below 16px — with our overflow-x:hidden
+   containers that reads as the app breaking/"crashing" when a dropdown is opened.
+   Keep controls at >=16px on touch devices so focusing never triggers the zoom. */
+@media (pointer: coarse), (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

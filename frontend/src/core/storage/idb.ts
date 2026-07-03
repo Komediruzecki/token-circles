@@ -748,8 +748,16 @@ export async function seedDefaultCategories(profileId: number): Promise<void> {
   const existing = await db.getAllFromIndex('categories', 'by_profile', profileId)
   if (existing.length > 0) return // Already seeded
 
+  const now = new Date().toISOString()
   for (const cat of DEFAULT_CATEGORIES) {
-    await db.add('categories', { ...cat, profile_id: profileId })
+    // icon/parent_id/created_at are required by CategorySchema — write complete rows.
+    await db.add('categories', {
+      icon: '',
+      parent_id: null,
+      created_at: now,
+      ...cat,
+      profile_id: profileId,
+    })
   }
 }
 
@@ -761,8 +769,10 @@ const DEMO_PROFILES = [
   { name: 'Example High Income', income: 12000, spendFraction: 0.72 },
 ]
 
+// Account types must match AccountSchema's enum (giro/savings/ib/cash — 'checking' was
+// renamed to 'giro' in v4; stale 'checking' rows broke /accounts validation in demo mode).
 const DEMO_ACCOUNTS = [
-  { name: 'Checking Account', type: 'checking', currency: 'EUR' },
+  { name: 'Checking Account', type: 'giro', currency: 'EUR' },
   { name: 'Savings Account', type: 'savings', currency: 'EUR' },
 ]
 
@@ -789,8 +799,16 @@ export async function seedDemoProfiles(): Promise<void> {
   async function seedCats(profileId: number) {
     const cats = await db.getAllFromIndex('categories', 'by_profile', profileId)
     if (cats.length > 0) return
+    const now = new Date().toISOString()
     for (const cat of DEFAULT_CATEGORIES) {
-      await db.add('categories', { ...cat, profile_id: profileId })
+      // icon/parent_id/created_at are required by CategorySchema — write complete rows.
+      await db.add('categories', {
+        icon: '',
+        parent_id: null,
+        created_at: now,
+        ...cat,
+        profile_id: profileId,
+      })
     }
   }
 
@@ -824,7 +842,7 @@ export async function seedDemoProfiles(): Promise<void> {
         : 2.5
     const accountIds: number[] = []
     for (const acct of DEMO_ACCOUNTS) {
-      const multiplier = acct.type === 'checking' ? 0.3 : savingsMult
+      const multiplier = acct.type === 'giro' ? 0.3 : savingsMult
       const balance = Math.round(profile.income * multiplier)
       const id = (await db.add('accounts', {
         name: acct.name,
@@ -857,6 +875,8 @@ export async function seedDemoProfiles(): Promise<void> {
         const monthlyIncome = Math.round(profile.income * salaryGrowth)
         const salaryCat = catByName('Salary')
         if (salaryCat) {
+          // beneficiary/payor/amount_local/exchange_rate/created_at/updated_at are required
+          // by TransactionSchema — incomplete rows fail the ApiClient response validation.
           await db.add('transactions', {
             description: 'Monthly Salary',
             amount: monthlyIncome,
@@ -868,6 +888,12 @@ export async function seedDemoProfiles(): Promise<void> {
             reconciled: 1,
             notes: '',
             account_id: accountIds[0],
+            beneficiary: '',
+            payor: 'Employer',
+            amount_local: null,
+            exchange_rate: 1,
+            created_at: `${monthStr}-01T00:00:00.000Z`,
+            updated_at: `${monthStr}-01T00:00:00.000Z`,
           })
         }
 
@@ -884,17 +910,24 @@ export async function seedDemoProfiles(): Promise<void> {
           )
           if (amount <= 0) continue
 
+          const txDate = `${monthStr}-${String(day).padStart(2, '0')}`
           await db.add('transactions', {
             description: ex.description,
             amount,
             type: 'expense',
             category_id: cat.id,
-            date: `${monthStr}-${String(day).padStart(2, '0')}`,
+            date: txDate,
             currency: 'EUR',
             profile_id: profileId,
             reconciled: year < endYear || month < endMonth ? 1 : 0,
             notes: '',
             account_id: accountIds[0],
+            beneficiary: ex.name,
+            payor: '',
+            amount_local: null,
+            exchange_rate: 1,
+            created_at: `${txDate}T00:00:00.000Z`,
+            updated_at: `${txDate}T00:00:00.000Z`,
           })
         }
       }
@@ -993,7 +1026,7 @@ export async function seedDemoProfiles(): Promise<void> {
     if (!profile.name.includes('Low')) {
       await db.add('accounts', {
         name: 'Investment Account',
-        type: 'investment',
+        type: 'ib',
         currency: 'EUR',
         balance: profile.name.includes('High') ? 150000 : 25000,
         starting_balance: profile.name.includes('High') ? 120000 : 20000,
@@ -1005,7 +1038,7 @@ export async function seedDemoProfiles(): Promise<void> {
     if (profile.name.includes('High')) {
       await db.add('accounts', {
         name: 'Retirement 401k',
-        type: 'retirement',
+        type: 'ib',
         currency: 'EUR',
         balance: 180000,
         starting_balance: 100000,

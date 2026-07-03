@@ -3,11 +3,12 @@
  */
 import { getDB } from '../idb'
 import { adapter, idParam, json, notFound, ok } from './helpers'
+import { normalizeCategory } from './normalize'
 
 export async function categoriesList(query: URLSearchParams): Promise<Response> {
   const type = query.get('type') as 'income' | 'expense' | undefined
   const cats = await adapter.listCategories(type)
-  return json(cats)
+  return json(cats.map(normalizeCategory))
 }
 
 export async function categoriesCreate(body: unknown): Promise<Response> {

@@ -66,12 +66,37 @@ export function LogViewer() {
   }
 
   const copyLogs = async () => {
+    const text = formatLogs()
     try {
-      await window.navigator.clipboard.writeText(formatLogs())
+      await window.navigator.clipboard.writeText(text)
       toast('Logs copied to clipboard', 'success')
+      return
     } catch {
-      toast('Could not copy logs (clipboard blocked)', 'error')
+      /* fall through to the legacy path — iOS Safari and non-secure contexts block the
+         async clipboard API outside a direct user gesture. */
     }
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      ta.setSelectionRange(0, text.length) // iOS needs an explicit selection range
+      // eslint-disable-next-line @typescript-eslint/no-deprecated, sonarjs/deprecation -- execCommand IS the legacy fallback for platforms (iOS Safari) that block the async clipboard API; deprecation is exactly why it's only the fallback.
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      if (ok) {
+        toast('Logs copied to clipboard', 'success')
+        return
+      }
+    } catch {
+      /* fall through to download */
+    }
+    // Last resort: the clipboard is fully blocked — hand the logs over as a file instead.
+    exportLogs()
+    toast('Clipboard blocked — downloaded logs as a file instead', 'info')
   }
 
   const getFilteredLogs = () => {

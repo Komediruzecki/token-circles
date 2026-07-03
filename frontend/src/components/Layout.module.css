@@ -248,7 +248,9 @@
 
   .main {
     margin-left: 0;
-    padding: 16px;
+    /* Clear the fixed hamburger toggle (top: ~12px + 36px tall) so page titles
+       are never rendered underneath it. */
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 16px 16px;
     overflow-x: hidden;
   }
 
@@ -272,7 +274,7 @@
 
 @media (max-width: 480px) {
   .main {
-    padding: 12px 10px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 10px 12px;
     overflow-x: hidden;
   }
 
@@ -321,7 +323,7 @@
 
 @media (max-width: 380px) {
   .main {
-    padding: 12px 8px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 8px 12px;
   }
 
   .page-header h2 {

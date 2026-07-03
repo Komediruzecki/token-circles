@@ -305,3 +305,54 @@
 .btnSecondary:hover {
   background: var(--btn-ghost-hover);
 }
+
+/* Mobile: the fixed-width columns (110+80+120+80px) exceed a phone screen before the
+   message even starts. Stack each log entry as a card: meta on one wrapped line,
+   message full-width and readable below. */
+@media (max-width: 640px) {
+  .tableHeader {
+    display: none;
+  }
+
+  .row {
+    flex-wrap: wrap;
+    align-items: baseline;
+    row-gap: 2px;
+    padding: 8px 10px;
+  }
+
+  .colTime,
+  .colLevel,
+  .colComponent,
+  .colAction {
+    width: auto;
+    padding: 0 8px 0 0;
+  }
+
+  .colTime {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+  }
+
+  .colMessage {
+    flex: 1 1 100%;
+    order: 5;
+    padding: 2px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .colAction {
+    margin-left: auto;
+  }
+
+  .details {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+}

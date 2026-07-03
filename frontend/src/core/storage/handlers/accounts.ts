@@ -3,10 +3,11 @@
  */
 import { getDB } from '../idb'
 import { adapter, idParam, json, notFound, ok } from './helpers'
+import { normalizeAccount } from './normalize'
 
 export async function accountsList(): Promise<Response> {
   const accts = await adapter.listAccounts()
-  return json(accts)
+  return json(accts.map(normalizeAccount))
 }
 
 export async function accountsCreate(body: unknown): Promise<Response> {

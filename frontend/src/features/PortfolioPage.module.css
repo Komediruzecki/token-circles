@@ -387,6 +387,13 @@
     grid-template-columns: 1fr;
   }
 
+  /* Grid items default to min-width:auto and refuse to shrink below the holdings
+     table's intrinsic width; let them shrink so .tableWrapper actually scrolls. */
+  .tableSection,
+  .sidebar {
+    min-width: 0;
+  }
+
   .summaryRow {
     grid-template-columns: repeat(2, 1fr);
   }

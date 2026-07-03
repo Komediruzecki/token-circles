@@ -420,6 +420,10 @@
   padding: 4px;
   border-radius: var(--radius);
   width: fit-content;
+  /* Phones: the three tabs are wider than the screen — scroll instead of clipping. */
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .tabBtn {
   display: inline-flex;

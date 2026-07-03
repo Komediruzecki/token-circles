@@ -282,6 +282,7 @@
 
 .customDates {
   display: flex;
+  flex-wrap: wrap; /* phones: FROM/TO side by side don't fit — wrap instead of overflowing off-screen */
   gap: 12px;
   margin-top: 10px;
   padding-top: 10px;
@@ -292,6 +293,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+
+.dateInput input {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .inputLabel {

@@ -3,6 +3,7 @@
  */
 import { getDB } from '../idb'
 import { adapter, idParam, json, notFound, ok } from './helpers'
+import { normalizeTransaction } from './normalize'
 
 export async function transactionsList(query: URLSearchParams): Promise<Response> {
   const filters: Record<string, unknown> = {}
@@ -27,11 +28,11 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
   const catMap = new Map(cats.map((c) => [c.id, c]))
   const enriched = txns.map((t) => {
     const cat = catMap.get(t.category_id)
-    return {
+    return normalizeTransaction({
       ...t,
       category_name: cat?.name || null,
       category_color: cat?.color || null,
-    }
+    })
   })
 
   return json(enriched)

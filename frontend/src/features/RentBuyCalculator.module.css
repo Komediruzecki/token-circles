@@ -182,3 +182,16 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+/* Responsive: the two-column calculator and its 2-col form grids don't fit a phone. */
+@media (max-width: 768px) {
+  .calc-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

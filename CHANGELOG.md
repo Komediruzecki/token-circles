@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Guided onboarding tours now navigate to each feature's page and reliably highlight it. They were rebuilt on stable `data-tour` anchors (instead of the fragile CSS/label selectors that often missed), steps that couldn't be shown without data or extra clicks were removed or re-pointed at always-visible elements, and the walkthrough overlay was hardened against page-navigation timing.
+- Mobile: pages no longer render at desktop width and get clipped on phones — the app layout now genuinely shrinks to the viewport (the root container previously refused to shrink below its widest content, ~780px). The menu button no longer covers page titles; the Bills tabs, transaction date-range filters, portfolio holdings, and the Rent-vs-Buy form now fit or scroll properly on small screens.
+- Mobile: opening a dropdown or focusing an input no longer makes iOS Safari zoom/jump the page (form controls now stay at the 16px size iOS requires), which read as the app "crashing" from the Settings chart-export dropdown.
+- Debug logs are now readable on phones (entries stack as cards instead of a fixed five-column table wider than the screen), and "Copy" falls back to a legacy clipboard path or a file download when the clipboard is blocked (iOS).
+- Demo mode: fresh demo data failed the app's own response validation on the accounts, transactions, and categories endpoints (stale `checking`/`investment`/`retirement` account types from before the v4 rename, and seeded rows missing now-required fields), flooding the console with errors and breaking parts of the UI. The seeder now writes schema-complete rows and the serverless read path normalizes legacy rows from existing installs.
 
 ### Changed
 
