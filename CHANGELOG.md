@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The dashboard header is now two rows: the title on the left with the view actions (Dashboard Views, Refresh) anchored right, and all period controls (month navigator + quick-select) together on their own row below — no more cramming everything onto one line.
 - The dashboard period selector is now a compact segmented control (Today / Week / Month / Quarter / Year / 7D / 30D / 90D / All) that fits on one row — about half the header on desktop — and scrolls horizontally on phones instead of wrapping into multiple rows. Full period names show as tooltips.
 
 ### Fixed
