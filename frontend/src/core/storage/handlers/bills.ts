@@ -78,7 +78,8 @@ export async function billsCreate(body: unknown): Promise<Response> {
       name,
       amount,
       frequency: (b.frequency as string) || 'monthly',
-      due_date: (b.due_date as string) || '',
+      // The Bills form (and the worker API) send camelCase `dueDate`; internal callers use snake.
+      due_date: ((b.due_date ?? b.dueDate) as string) || '',
       day_of_month: (b.day_of_month as number) || 1,
       category_id:
         b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
@@ -114,7 +115,7 @@ export async function billsUpdate(
     if (b.name !== undefined) bill.name = b.name
     if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
     if (b.frequency !== undefined) bill.frequency = b.frequency
-    if (b.due_date !== undefined) bill.due_date = b.due_date
+    if (b.due_date !== undefined || b.dueDate !== undefined) bill.due_date = b.due_date ?? b.dueDate
     if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
     if (b.category_id !== undefined)
       bill.category_id = b.category_id !== null ? Number(b.category_id) : null

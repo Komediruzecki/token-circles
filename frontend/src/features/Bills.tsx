@@ -62,10 +62,19 @@ import SubscriptionCard from '../components/SubscriptionCard'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
 import styles from './BillsPage.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { SubscriptionCardBill } from '../components/SubscriptionCard'
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  monthly: 'Monthly',
+  weekly: 'Weekly',
+  biweekly: 'Biweekly',
+  yearly: 'Yearly',
+}
+const frequencyLabel = (frequency: string) => FREQUENCY_LABELS[frequency] ?? 'Monthly'
 
 interface Bill {
   id: number
@@ -77,7 +86,7 @@ interface Bill {
   category_name?: string
   category_color?: string
   account_id?: number
-  frequency: 'monthly' | 'weekly' | 'biweekly'
+  frequency: 'monthly' | 'weekly' | 'biweekly' | 'yearly'
   paid: boolean
   autopay: boolean
   profile_id: number
@@ -140,8 +149,11 @@ export default function Bills() {
     bills().filter((b) => (b.type || 'bill') === 'subscription')
   )
   const activeSubscriptions = createMemo(() => subscriptions().filter((b) => b.is_active !== 0))
+  // Monthly total: normalize each subscription's price to its monthly equivalent
+  // (yearly / 12, weekly * 52/12, ...) — summing raw amounts would count an annual
+  // plan's full-year price as a monthly cost.
   const totalMonthlySubs = createMemo(() =>
-    activeSubscriptions().reduce((sum, b) => sum + b.amount, 0)
+    activeSubscriptions().reduce((sum, b) => sum + monthlyEquivalent(b.amount, b.frequency), 0)
   )
 
   // Group active subscriptions by category
@@ -612,11 +624,7 @@ export default function Bills() {
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
                             {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
-                            {bill.frequency === 'monthly'
-                              ? 'Monthly'
-                              : bill.frequency === 'weekly'
-                                ? 'Weekly'
-                                : 'Biweekly'}
+                            {frequencyLabel(bill.frequency)}
                           </p>
                         </div>
                       </div>
@@ -708,12 +716,7 @@ export default function Bills() {
                             {bill.paid && <span class={styles.paidBadge}>Paid</span>}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            {formatDate(bill.due_date)} •{' '}
-                            {bill.frequency === 'monthly'
-                              ? 'Monthly'
-                              : bill.frequency === 'weekly'
-                                ? 'Weekly'
-                                : 'Biweekly'}
+                            {formatDate(bill.due_date)} • {frequencyLabel(bill.frequency)}
                             {bill.category && ` • ${bill.category}`}
                           </p>
                         </div>
@@ -873,6 +876,7 @@ export default function Bills() {
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
                   <option value="biweekly">Biweekly</option>
+                  <option value="yearly">Yearly</option>
                 </select>
               </div>
               <div class={styles.formGroup}>

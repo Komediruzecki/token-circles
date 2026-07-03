@@ -66,18 +66,29 @@ export const budgetUpdateSchema = budgetCreateSchema.partial()
 
 // ── Bill ───────────────────────────────────────────────────────────────────────
 
-export const billCreateSchema = z.object({
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+// The Bills form (and the live worker API) use camelCase `dueDate`; internal callers
+// (seeder, import) use snake_case `due_date`. Accept either — requiring only the snake
+// form made every "Add Bill" in serverless/demo mode fail with a 400.
+const billBaseSchema = z.object({
   name: z.string().min(1).max(100),
   amount: z.number().nonnegative(),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  due_date: isoDate.optional(),
+  dueDate: isoDate.optional(),
   category_id: z.number().int().positive().nullable().optional(),
   recurring: z.boolean().optional(),
-  frequency: z.enum(['monthly', 'weekly', 'biweekly']).optional(),
+  frequency: z.enum(['daily', 'weekly', 'biweekly', 'monthly', 'yearly']).optional(),
   autopay: z.boolean().optional(),
   type: z.enum(['bill', 'subscription']).optional(),
 })
 
-export const billUpdateSchema = billCreateSchema.partial()
+export const billCreateSchema = billBaseSchema.refine((b) => b.due_date || b.dueDate, {
+  message: 'due date is required',
+  path: ['due_date'],
+})
+
+export const billUpdateSchema = billBaseSchema.partial()
 
 // ── Loan ───────────────────────────────────────────────────────────────────────
 
