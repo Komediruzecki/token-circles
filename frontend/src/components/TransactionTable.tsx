@@ -4,7 +4,7 @@
  */
 import { For } from 'solid-js'
 import { formatCurrency } from '../core/api'
-import { originalAmountLabel, txBaseValue } from '../core/currency'
+import { isEstimatedBaseValue, originalAmountLabel, txBaseValue } from '../core/currency'
 import styles from './TransactionTable.module.css'
 import type { Transaction } from '../types/models'
 
@@ -220,9 +220,34 @@ export default function TransactionTable(props: TransactionTableProps) {
                         ? ''
                         : '-'}
                     {formatCurrency(txBaseValue(transaction))}
+                    {isEstimatedBaseValue(transaction) && (
+                      <span
+                        class={styles.estimatedFlag}
+                        title={`Estimated conversion from ${transaction.currency} — no local-currency amount was provided, so this uses an approximate rate.`}
+                        aria-label="Estimated conversion"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 9v2m0 4h.01M12 3l9 16H3l9-16z"
+                          />
+                        </svg>
+                      </span>
+                    )}
                   </div>
                   {originalAmountLabel(transaction) && (
                     <div class={styles.amountOriginal}>{originalAmountLabel(transaction)}</div>
+                  )}
+                  {isEstimatedBaseValue(transaction) && (
+                    <div class={styles.amountOriginal}>~ from {transaction.currency} (est.)</div>
                   )}
                 </td>
                 <td class={styles.typeCol}>

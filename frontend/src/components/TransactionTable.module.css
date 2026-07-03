@@ -161,6 +161,16 @@
   margin-top: 2px;
 }
 
+/* Warning shown when the base-currency value is an approximate FX estimate */
+.estimated-flag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--warning, #f59e0b);
+  vertical-align: middle;
+  cursor: help;
+}
+
 .type-col {
   width: 80px;
   text-align: center;

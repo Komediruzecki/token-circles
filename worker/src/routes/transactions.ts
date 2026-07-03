@@ -20,9 +20,15 @@ interface TxRow {
   category_id: number | null;
   type: string | null;
   amount: number;
+  amount_local?: number | null;
   profile_id: number;
   reconciled?: number | null;
   [key: string]: unknown;
+}
+
+/** Base-currency value used for all account-balance math (amount_local first). */
+function baseAmount(tx: { amount: number; amount_local?: number | null }): number {
+  return typeof tx.amount_local === 'number' ? tx.amount_local : tx.amount;
 }
 
 interface TagRow {
@@ -333,7 +339,7 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
       // transfer_account_id) are reversed too — the old `if (!tx.account_id) continue` skipped them.
       const txRows = await db.all<TxRow>(
         c.env.DB,
-        `SELECT id, category_id, account_id, transfer_account_id, type, amount
+        `SELECT id, category_id, account_id, transfer_account_id, type, amount, amount_local
            FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
         ...pids,
         ...chunk
@@ -341,24 +347,25 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
       const stmts: D1PreparedStatement[] = [];
       for (const tx of txRows) {
         if (tx.category_id) affectedCategories.add(tx.category_id);
+        const v = baseAmount(tx);
         if (tx.account_id) {
           if (tx.type === 'transfer' && tx.transfer_account_id) {
             stmts.push(
               c.env.DB.prepare(
                 `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-              ).bind(tx.amount, tx.account_id, ...pids),
+              ).bind(v, tx.account_id, ...pids),
               c.env.DB.prepare(
                 `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-              ).bind(tx.amount, tx.transfer_account_id, ...pids)
+              ).bind(v, tx.transfer_account_id, ...pids)
             );
           } else if (tx.type === 'transfer') {
             stmts.push(
               c.env.DB.prepare(
                 `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-              ).bind(tx.amount, tx.account_id, ...pids)
+              ).bind(v, tx.account_id, ...pids)
             );
           } else if (tx.type === 'income' || tx.type === 'expense') {
-            const delta = tx.type === 'income' ? -tx.amount : tx.amount;
+            const delta = tx.type === 'income' ? -v : v;
             stmts.push(
               c.env.DB.prepare(
                 `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -369,7 +376,7 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
           stmts.push(
             c.env.DB.prepare(
               `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-            ).bind(tx.amount, tx.transfer_account_id, ...pids)
+            ).bind(v, tx.transfer_account_id, ...pids)
           );
         }
       }
@@ -605,24 +612,26 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     ),
   ];
 
-  // Auto-update linked account balances.
+  // Auto-update linked account balances using the base-currency value so balances
+  // stay in one currency even for foreign-currency transactions.
+  const balanceValue = amount_local ?? amount;
   if (resolvedAccountId && type === 'transfer' && resolvedTransferAccountId) {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(amount, resolvedAccountId, ...pids),
+      ).bind(balanceValue, resolvedAccountId, ...pids),
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(amount, resolvedTransferAccountId, ...pids)
+      ).bind(balanceValue, resolvedTransferAccountId, ...pids)
     );
   } else if (resolvedAccountId && type === 'transfer') {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(amount, resolvedAccountId, ...pids)
+      ).bind(balanceValue, resolvedAccountId, ...pids)
     );
   } else if (resolvedAccountId && (type === 'income' || type === 'expense')) {
-    const delta = type === 'income' ? amount : -amount;
+    const delta = type === 'income' ? balanceValue : -balanceValue;
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -638,7 +647,7 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(amount, resolvedTransferAccountId, ...pids)
+      ).bind(balanceValue, resolvedTransferAccountId, ...pids)
     );
   }
 
@@ -914,7 +923,7 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
   // Fetch full tx before delete for account reversal and goal recalc.
   const tx = await db.first<TxRow>(
     c.env.DB,
-    'SELECT category_id, account_id, transfer_account_id, type, amount FROM transactions WHERE id = ? AND profile_id = ?',
+    'SELECT category_id, account_id, transfer_account_id, type, amount, amount_local FROM transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
   );
@@ -923,6 +932,7 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
   // up front so the balance reversal and the delete can commit as one atomic batch.
   if (!tx) throw new HttpError(404, 'Not found');
 
+  const v = baseAmount(tx);
   const stmts: D1PreparedStatement[] = [
     c.env.DB.prepare('DELETE FROM transactions WHERE id = ? AND profile_id = ?').bind(id, pid),
   ];
@@ -932,19 +942,19 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(tx.amount, tx.account_id, ...pids),
+        ).bind(v, tx.account_id, ...pids),
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(tx.amount, tx.transfer_account_id, ...pids)
+        ).bind(v, tx.transfer_account_id, ...pids)
       );
     } else if (tx.type === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(tx.amount, tx.account_id, ...pids)
+        ).bind(v, tx.account_id, ...pids)
       );
     } else if (tx.type === 'income' || tx.type === 'expense') {
-      const delta = tx.type === 'income' ? -tx.amount : tx.amount;
+      const delta = tx.type === 'income' ? -v : v;
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -957,7 +967,7 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(tx.amount, tx.transfer_account_id, ...pids)
+      ).bind(v, tx.transfer_account_id, ...pids)
     );
   }
 

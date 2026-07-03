@@ -144,22 +144,26 @@ interface BalanceAdjustment {
 
 /** Compute how a transaction affects account balances.
  *  Returns an array of {accountId, delta} pairs.
- *  Positive delta = add to balance, negative = subtract. */
+ *  Positive delta = add to balance, negative = subtract.
+ *  Uses the base-currency value (amount_local) so balances stay in one currency
+ *  even when transactions are imported in a foreign currency. */
 export function computeBalanceDeltas(tx: {
   account_id?: number | null
   transfer_account_id?: number | null
   type: string
   amount: number
+  amount_local?: number | null
 }): BalanceAdjustment[] {
+  const value = typeof tx.amount_local === 'number' ? tx.amount_local : tx.amount
   const adj: BalanceAdjustment[] = []
   if (tx.account_id) {
     if (tx.type === 'transfer' && tx.transfer_account_id) {
-      adj.push({ accountId: tx.account_id, delta: -tx.amount })
-      adj.push({ accountId: tx.transfer_account_id, delta: tx.amount })
+      adj.push({ accountId: tx.account_id, delta: -value })
+      adj.push({ accountId: tx.transfer_account_id, delta: value })
     } else if (tx.type === 'transfer') {
-      adj.push({ accountId: tx.account_id, delta: -tx.amount })
+      adj.push({ accountId: tx.account_id, delta: -value })
     } else if (tx.type === 'income' || tx.type === 'expense') {
-      adj.push({ accountId: tx.account_id, delta: tx.type === 'income' ? tx.amount : -tx.amount })
+      adj.push({ accountId: tx.account_id, delta: tx.type === 'income' ? value : -value })
     }
   }
   if (
@@ -167,7 +171,7 @@ export function computeBalanceDeltas(tx: {
     tx.transfer_account_id &&
     (tx.type === 'income' || tx.type === 'transfer')
   ) {
-    adj.push({ accountId: tx.transfer_account_id, delta: tx.amount })
+    adj.push({ accountId: tx.transfer_account_id, delta: value })
   }
   return adj
 }

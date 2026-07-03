@@ -511,17 +511,17 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       ),
       db.all<{ account_id: number; total: number }>(
         DB,
-        `SELECT account_id, COALESCE(SUM(amount),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type IN ('expense','transfer') GROUP BY account_id`,
+        `SELECT account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type IN ('expense','transfer') GROUP BY account_id`,
         ...ids
       ),
       db.all<{ account_id: number; total: number }>(
         DB,
-        `SELECT account_id, COALESCE(SUM(amount),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type = 'income' GROUP BY account_id`,
+        `SELECT account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type = 'income' GROUP BY account_id`,
         ...ids
       ),
       db.all<{ transfer_account_id: number; total: number }>(
         DB,
-        `SELECT transfer_account_id, COALESCE(SUM(amount),0) AS total FROM transactions WHERE transfer_account_id IN (${ph}) AND type IN ('income','transfer') GROUP BY transfer_account_id`,
+        `SELECT transfer_account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE transfer_account_id IN (${ph}) AND type IN ('income','transfer') GROUP BY transfer_account_id`,
         ...ids
       ),
     ]);

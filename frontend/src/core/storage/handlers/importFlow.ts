@@ -1,6 +1,7 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
+import { getLocalCurrency } from '../../api'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
@@ -683,12 +684,25 @@ export async function importExecute(body: unknown): Promise<Response> {
         }
       }
 
+      // Currency fields (mirrors the worker import): the sheet's "amount in local
+      // currency" column becomes amount_local — the value in the user's base
+      // currency, which the app reports as the transaction's value. Without that
+      // column the amount is already in the base currency, so amount_local = amount.
+      const currency = toStr(row.currency).trim() || getLocalCurrency()
+      const amountLocalRaw = toStr(row.amount_local).trim()
+      const amountLocal = amountLocalRaw ? Math.abs(parseFloat(amountLocalRaw)) : Math.abs(amount)
+      const exchangeRateRaw = toStr(row.exchange_rate).trim()
+      const exchangeRate = exchangeRateRaw ? parseFloat(exchangeRateRaw) : 1
+
       const transaction = {
         profile_id: profileId,
         type,
         description,
         date,
         amount: Math.abs(amount),
+        amount_local: Number.isFinite(amountLocal) ? amountLocal : Math.abs(amount),
+        currency,
+        exchange_rate: Number.isFinite(exchangeRate) ? exchangeRate : 1,
         category_id: categoryId,
         notes: toStr(row.notes),
         beneficiary: toStr(row.beneficiary),
@@ -736,6 +750,7 @@ export async function importExecute(body: unknown): Promise<Response> {
             transfer_account_id?: number | null
             type: string
             amount: number
+            amount_local?: number | null
           }
         )) {
           if (missing.has(adj.accountId)) continue
