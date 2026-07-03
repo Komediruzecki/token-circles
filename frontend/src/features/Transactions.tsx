@@ -1187,14 +1187,14 @@ export default function Transactions() {
       {/* Receipt View Modal */}
       {isReceiptModalOpen() && selectedReceipt() && (
         <div
-          class={`${styles.modalOverlay} ${styles.show} ${styles.receiptModal}`}
+          class={`${styles.modalOverlay} ${styles.show}`}
           id="receipt-modal"
           onclick={() => {
             closeReceiptModal()
           }}
         >
           <div
-            class={`${styles.modal} ${styles.modalLg}`}
+            class={`${styles.modal} ${styles.receiptModal}`}
             onclick={(e) => {
               e.stopPropagation()
             }}
