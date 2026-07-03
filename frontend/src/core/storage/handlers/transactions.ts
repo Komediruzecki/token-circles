@@ -2,8 +2,12 @@
  * Transactions handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
+import { recalcGoalsByCategory } from './goals'
 import { adapter, idParam, json, notFound, ok } from './helpers'
 import { normalizeTransaction } from './normalize'
+
+const toCat = (v: unknown): number | null =>
+  typeof v === 'number' ? v : typeof v === 'string' && v ? Number(v) : null
 
 export async function transactionsList(query: URLSearchParams): Promise<Response> {
   const filters: Record<string, unknown> = {}
@@ -53,6 +57,7 @@ export async function transactionsCreate(body: unknown): Promise<Response> {
   const id = await adapter.createTransaction(
     tx as unknown as Parameters<typeof adapter.createTransaction>[0]
   )
+  await recalcGoalsByCategory(toCat(tx.category_id))
   // Normalize like the list endpoint: the client validates this response against the
   // full TransactionSchema, and callers omit optional fields (beneficiary, notes, ...).
   return json(normalizeTransaction({ id, ...tx }), 201)
@@ -70,12 +75,24 @@ export async function transactionsUpdate(
   body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  await adapter.updateTransaction(idParam(params), body as Record<string, unknown>)
+  const id = idParam(params)
+  const db = await getDB()
+  const before = await db.get('transactions', id)
+  await adapter.updateTransaction(id, body as Record<string, unknown>)
+  // Recompute both the previous and new category (an edit may re-categorize the tx).
+  const oldCat = toCat(before?.category_id)
+  const newCat = toCat((body as Record<string, unknown>).category_id) ?? oldCat
+  await recalcGoalsByCategory(oldCat)
+  if (newCat !== oldCat) await recalcGoalsByCategory(newCat)
   return ok()
 }
 
 export async function transactionsDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteTransaction(idParam(params))
+  const id = idParam(params)
+  const db = await getDB()
+  const before = await db.get('transactions', id)
+  await adapter.deleteTransaction(id)
+  await recalcGoalsByCategory(toCat(before?.category_id))
   return ok()
 }
 
