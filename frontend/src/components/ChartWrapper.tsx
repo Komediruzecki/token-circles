@@ -70,7 +70,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         const tooltipBorder = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
         const isPieOrDoughnut =
           chartType === 'doughnut' || chartType === 'pie' || chartType === 'polarArea'
-        const options = props.options || {
+        const defaultOptions = {
           responsive: true,
           maintainAspectRatio: false,
           layout: isPieOrDoughnut
@@ -134,6 +134,16 @@ export default function ChartWrapper(props: ChartWrapperProps) {
             duration: 750,
             easing: 'easeInOutQuad' as const,
           },
+        }
+
+        // Always force responsive + maintainAspectRatio:false. A caller-provided options
+        // object often omits maintainAspectRatio; Chart.js then defaults it to true and the
+        // chart (esp. a doughnut) balloons to the full container width instead of filling the
+        // fixed-height container. Other option keys keep the caller's (or default) values.
+        const options = {
+          ...(props.options ?? defaultOptions),
+          responsive: true,
+          maintainAspectRatio: false,
         }
 
         const newChart = new ChartJS(ctx, {
