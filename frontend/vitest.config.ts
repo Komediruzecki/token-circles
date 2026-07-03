@@ -1,7 +1,10 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vitest/config'
+import solid from 'vite-plugin-solid'
 
 export default defineConfig({
+  // Solid JSX transform so tests can import .tsx modules (components, brand icons).
+  plugins: [solid()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
