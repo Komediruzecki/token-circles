@@ -16,6 +16,13 @@ savingsGoalsRoutes.get('/api/savings-goals', requireAuth, async (c) => {
   return c.json(rows)
 })
 
+// The frontend sends `target_date`; the column is `deadline`. Accept either.
+const readDeadline = (b: Record<string, any>): string | null | undefined => {
+  if (b.deadline !== undefined) return b.deadline || null
+  if (b.target_date !== undefined) return b.target_date || null
+  return undefined
+}
+
 savingsGoalsRoutes.post('/api/savings-goals', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const b = (await c.req.json()) as Record<string, any>
@@ -25,8 +32,9 @@ savingsGoalsRoutes.post('/api/savings-goals', requireAuth, async (c) => {
     name: b.name,
     target_amount: b.target_amount,
     current_amount: b.current_amount || 0,
-    deadline: b.deadline || null,
+    deadline: readDeadline(b) ?? null,
     notes: b.notes || '',
+    monthly_contribution: b.monthly_contribution ?? 0,
     category_id: b.category_id || null,
   })
   return c.json({ id: res.meta.last_row_id }, 201)
@@ -35,17 +43,35 @@ savingsGoalsRoutes.post('/api/savings-goals', requireAuth, async (c) => {
 savingsGoalsRoutes.put('/api/savings-goals/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const b = (await c.req.json()) as Record<string, any>
+  // Partial update: only set fields that were actually provided. Binding an
+  // undefined value (e.g. current_amount, which the edit form doesn't send) makes
+  // D1 throw a 500, and blindly writing null would wipe the saved progress.
+  const fields: Record<string, unknown> = {}
+  if (b.name !== undefined) fields.name = b.name
+  if (b.target_amount !== undefined) fields.target_amount = b.target_amount
+  if (b.current_amount !== undefined) fields.current_amount = b.current_amount
+  const deadline = readDeadline(b)
+  if (deadline !== undefined) fields.deadline = deadline
+  if (b.notes !== undefined) fields.notes = b.notes || ''
+  if (b.monthly_contribution !== undefined) fields.monthly_contribution = b.monthly_contribution ?? 0
+  if (b.category_id !== undefined) fields.category_id = b.category_id ?? null
+
+  // Nothing to change: confirm the goal exists so the client still gets a clean result.
+  if (Object.keys(fields).length === 0) {
+    const exists = await db.first(
+      c.env.DB,
+      'SELECT id FROM savings_goals WHERE id = ? AND profile_id = ?',
+      c.req.param('id'),
+      pid
+    )
+    if (!exists) throw new HttpError(404, 'Not found')
+    return c.json({ ok: true })
+  }
+
   const res = await db.update(
     c.env.DB,
     'savings_goals',
-    {
-      name: b.name,
-      target_amount: b.target_amount,
-      current_amount: b.current_amount,
-      deadline: b.deadline || null,
-      notes: b.notes || '',
-      category_id: b.category_id !== undefined ? b.category_id : null,
-    },
+    fields,
     'id = ? AND profile_id = ?',
     c.req.param('id'),
     pid

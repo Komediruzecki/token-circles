@@ -189,6 +189,15 @@ export default function Goals() {
     }
   }
 
+  // Accept both '.' and ',' as the decimal separator (a native number input rejects
+  // '.' and clears on ',' in comma-decimal locales).
+  const sanitizeDecimal = (s: string): string => {
+    let out = s.replace(/,/g, '.').replace(/[^0-9.]/g, '')
+    const first = out.indexOf('.')
+    if (first !== -1) out = out.slice(0, first + 1) + out.slice(first + 1).replace(/\./g, '')
+    return out
+  }
+
   // Contribute to manually tracked goal
   const [contributingGoalId, setContributingGoalId] = createSignal<number | null>(null)
   const [contributeAmount, setContributeAmount] = createSignal('')
@@ -376,22 +385,24 @@ export default function Goals() {
                         {!goal.category_id && contributingGoalId() !== goal.id && (
                           <button
                             data-test-id="goal-contribute-btn"
-                            class={styles.btnSm}
-                            title="Add contribution"
+                            class={`${styles.btnPrimary} ${styles.btnSm}`}
+                            title="Add money toward this goal"
                             onclick={() => {
                               startContribute(goal.id)
                             }}
                           >
                             <svg
-                              width="16"
-                              height="16"
+                              width="14"
+                              height="14"
                               fill="none"
                               stroke="currentColor"
                               stroke-width="2"
                               viewBox="0 0 24 24"
+                              style="margin-right:4px;vertical-align:middle"
                             >
                               <path d="M12 5v14M5 12h14" />
                             </svg>
+                            Add Funds
                           </button>
                         )}
                         <ConfirmButton
@@ -414,13 +425,14 @@ export default function Goals() {
                     {contributingGoalId() === goal.id && (
                       <div class={styles.contributeForm}>
                         <input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
+                          type="text"
+                          inputmode="decimal"
                           class={styles.formControl}
                           placeholder="Amount..."
                           value={contributeAmount()}
-                          oninput={(e) => setContributeAmount(e.target.value)}
+                          oninput={(e) =>
+                            setContributeAmount(sanitizeDecimal(e.currentTarget.value))
+                          }
                           onkeydown={(e) => {
                             if (e.key === 'Enter') submitContribute(goal.id)
                             if (e.key === 'Escape') cancelContribute()
@@ -454,6 +466,13 @@ export default function Goals() {
                           {formatCurrency(goal.target_amount)}
                         </span>
                       </div>
+                      {goal.category_id && (
+                        <p class={styles.goalTrackHint}>
+                          Progress tracks automatically from your
+                          {goal.category_name ? ` ${goal.category_name}` : ''} transactions —
+                          add spending in that category to move it.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )
@@ -687,12 +706,14 @@ export default function Goals() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Target Amount</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputmode="decimal"
                   class={styles.formControl}
                   placeholder="5000.00"
                   value={formData().target_amount}
-                  oninput={(e) => setFormData({ ...formData(), target_amount: e.target.value })}
+                  oninput={(e) =>
+                    setFormData({ ...formData(), target_amount: sanitizeDecimal(e.currentTarget.value) })
+                  }
                   required
                 />
               </div>
@@ -709,13 +730,16 @@ export default function Goals() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Monthly Contribution</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputmode="decimal"
                   class={styles.formControl}
                   placeholder="e.g., 500.00"
                   value={formData().monthly_contribution}
                   oninput={(e) =>
-                    setFormData({ ...formData(), monthly_contribution: e.target.value })
+                    setFormData({
+                      ...formData(),
+                      monthly_contribution: sanitizeDecimal(e.currentTarget.value),
+                    })
                   }
                 />
               </div>
