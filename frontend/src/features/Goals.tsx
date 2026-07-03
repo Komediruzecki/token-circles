@@ -490,6 +490,11 @@ export default function Goals() {
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
+                // Doughnuts default to radius '100%', so the ring touches the canvas edge
+                // exactly and sub-pixel rounding shaves the bottom flat. Keep a margin.
+                // (radius is a doughnut-controller option the generic options type lacks.)
+                ...({ radius: '88%' } as Record<string, unknown>),
+                layout: { padding: 6 },
                 plugins: {
                   legend: {
                     position: 'right',

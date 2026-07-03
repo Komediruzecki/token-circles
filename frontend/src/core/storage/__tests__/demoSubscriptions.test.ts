@@ -47,3 +47,22 @@ describe('DEMO_SUBSCRIPTIONS', () => {
     }
   })
 })
+
+describe('matchBrand coverage for common subscription names', () => {
+  it.each([
+    ['OneDrive', 'OneDrive'], // must NOT fall through to the Microsoft four-squares
+    ['Microsoft 365', 'Microsoft'],
+    ['Xbox Game Pass', 'Microsoft'],
+    ['Twitch', 'Twitch'],
+    ['Adobe Creative Cloud', 'Adobe'],
+    ['Photoshop', 'Adobe'],
+    ['Notion', 'Notion'],
+    ['ChatGPT Plus', 'ChatGPT'],
+    ['OpenAI', 'ChatGPT'],
+    ['Netflix', 'Netflix'],
+    ['Amazon Prime', 'Amazon Prime'],
+    ['Disney+', 'Disney+'],
+  ])('%s resolves to %s', (name, expected) => {
+    expect(matchBrand(name).displayName).toBe(expected)
+  })
+})

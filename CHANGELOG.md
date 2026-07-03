@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Savings Goals doughnut no longer has its bottom edge shaved flat (the ring rendered at exactly the canvas boundary); it now keeps a small margin and is always a full circle.
+- OneDrive gets its own cloud icon instead of the Microsoft four-squares, and five more common services resolve to proper brand icons: Twitch, Adobe (Creative Cloud/Photoshop/Lightroom), Notion, and ChatGPT/OpenAI.
 - The Bills calendar tab failed with "not found" in local/demo mode — the calendar endpoint existed only on the cloud API and is now served locally too.
 - Netflix, Amazon, and Disney+ subscription icons were malformed (Netflix literally rendered the letter "M"); replaced with proper simple marks and audited the whole icon set.
 - The Savings Goals progress chart could grow past its card; it now stays contained.

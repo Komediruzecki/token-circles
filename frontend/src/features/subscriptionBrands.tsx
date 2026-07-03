@@ -185,6 +185,77 @@ function DiscordIcon() {
   )
 }
 
+function OneDriveIcon() {
+  // Simple cloud silhouette.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M7.5 18.5h9.25a3.75 3.75 0 0 0 .57-7.46 5.5 5.5 0 0 0-10.6-1.16A4.25 4.25 0 0 0 7.5 18.5z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function TwitchIcon() {
+  // The Twitch "glitch" speech bubble with two eye slits.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        fill-rule="evenodd"
+        clip-rule="evenodd"
+        d="M5 3 3.5 6.5V19h4v3h3l3-3h4l4-4V3H5zm14.5 11.5-2.5 2.5h-4l-3 3v-3H6.5V4.5h13v10z"
+        fill="currentColor"
+      />
+      <path d="M10.5 7.5h2v5h-2v-5zm5 0h2v5h-2v-5z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function AdobeIcon() {
+  // The Adobe "A": two outer wedges and a centered inner wedge.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M9.2 3H3v18L9.2 3z" fill="currentColor" />
+      <path d="M14.8 3H21v18L14.8 3z" fill="currentColor" />
+      <path d="M12 8.2 16.3 21h-3l-1.1-3.2H9.3L12 8.2z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function NotionIcon() {
+  // Framed bold N.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <rect
+        x="3.5"
+        y="3.5"
+        width="17"
+        height="17"
+        rx="2.5"
+        stroke="currentColor"
+        stroke-width="1.8"
+      />
+      <path d="M8 17V7h1.8l4.4 6.7V7H16v10h-1.8L9.8 10.3V17H8z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function OpenAIIcon() {
+  // Simplified hexagonal ring (nod to the knot mark).
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 3.2 19.6 7.6v8.8L12 20.8 4.4 16.4V7.6L12 3.2z"
+        stroke="currentColor"
+        stroke-width="1.9"
+        stroke-linejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+    </svg>
+  )
+}
+
 function GenericSubscriptionIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -215,6 +286,11 @@ const ICONS: Record<string, () => any> = {
   github: GithubIcon,
   dropbox: DropboxIcon,
   discord: DiscordIcon,
+  onedrive: OneDriveIcon,
+  twitch: TwitchIcon,
+  adobe: AdobeIcon,
+  notion: NotionIcon,
+  openai: OpenAIIcon,
 }
 
 const BRANDS: SubscriptionBrand[] = [
@@ -291,7 +367,16 @@ const BRANDS: SubscriptionBrand[] = [
     defaultCategory: 'Cloud',
   },
   {
-    keywords: ['microsoft', 'office 365', 'onedrive', 'xbox', 'xbox live', 'xbox game pass'],
+    // Before the Microsoft entry so "OneDrive" gets the cloud, not the four squares.
+    keywords: ['onedrive'],
+    displayName: 'OneDrive',
+    color: '#0078D4',
+    bgColor: 'rgba(0,120,212,0.08)',
+    icon: OneDriveIcon,
+    defaultCategory: 'Cloud',
+  },
+  {
+    keywords: ['microsoft', 'office 365', 'xbox', 'xbox live', 'xbox game pass'],
     displayName: 'Microsoft',
     color: '#00A4EF',
     bgColor: 'rgba(0,164,239,0.08)',
@@ -321,6 +406,38 @@ const BRANDS: SubscriptionBrand[] = [
     bgColor: 'rgba(88,101,242,0.08)',
     icon: DiscordIcon,
     defaultCategory: 'Communication',
+  },
+  {
+    keywords: ['twitch'],
+    displayName: 'Twitch',
+    color: '#9146FF',
+    bgColor: 'rgba(145,70,255,0.08)',
+    icon: TwitchIcon,
+    defaultCategory: 'Streaming',
+  },
+  {
+    keywords: ['adobe', 'creative cloud', 'photoshop', 'lightroom'],
+    displayName: 'Adobe',
+    color: '#FA0F00',
+    bgColor: 'rgba(250,15,0,0.08)',
+    icon: AdobeIcon,
+    defaultCategory: 'Software',
+  },
+  {
+    keywords: ['notion'],
+    displayName: 'Notion',
+    color: '#E8E8E8',
+    bgColor: 'rgba(232,232,232,0.08)',
+    icon: NotionIcon,
+    defaultCategory: 'Software',
+  },
+  {
+    keywords: ['chatgpt', 'openai'],
+    displayName: 'ChatGPT',
+    color: '#10A37F',
+    bgColor: 'rgba(16,163,127,0.08)',
+    icon: OpenAIIcon,
+    defaultCategory: 'Software',
   },
 ]
 
