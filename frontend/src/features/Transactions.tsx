@@ -43,6 +43,7 @@ import { api, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
+import { txBaseValue } from '../core/currency'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
@@ -109,16 +110,17 @@ export default function Transactions() {
     refreshTransactions()
   })
 
-  // Calculate filtered-period totals (respects all active filters)
+  // Calculate filtered-period totals (respects all active filters). Sum the
+  // base-currency value so mixed-currency rows add up correctly (not raw amount).
   createEffect(() => {
     const txs = filteredTransactions()
     const income = txs
       .filter((t) => t.type === 'income')
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+      .reduce((sum, t) => sum + Math.abs(txBaseValue(t)), 0)
     const expenses = txs
       .filter((t) => t.type === 'expense')
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-    const total = txs.reduce((sum, t) => sum + Math.abs(t.amount), 0)
+      .reduce((sum, t) => sum + Math.abs(txBaseValue(t)), 0)
+    const total = txs.reduce((sum, t) => sum + Math.abs(txBaseValue(t)), 0)
     setTotalIncome(income)
     setTotalExpenses(expenses)
     setNetBalance(income - expenses)
@@ -426,19 +428,20 @@ export default function Transactions() {
     return filtered.slice(start, start + itemsPerPage())
   })
 
-  // Page-level totals (defined after paginatedTransactions to avoid TDZ — createMemo runs eagerly)
+  // Page-level totals (defined after paginatedTransactions to avoid TDZ — createMemo runs eagerly).
+  // Base-currency value, so mixed-currency pages total correctly.
   const pageIncome = createMemo(() =>
     paginatedTransactions()
       .filter((t) => t.type === 'income')
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
+      .reduce((s, t) => s + Math.abs(txBaseValue(t)), 0)
   )
   const pageExpenses = createMemo(() =>
     paginatedTransactions()
       .filter((t) => t.type === 'expense')
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
+      .reduce((s, t) => s + Math.abs(txBaseValue(t)), 0)
   )
   const pageTotal = createMemo(() =>
-    paginatedTransactions().reduce((s, t) => s + Math.abs(t.amount), 0)
+    paginatedTransactions().reduce((s, t) => s + Math.abs(txBaseValue(t)), 0)
   )
 
   const totalPages = createMemo(() => Math.ceil(filteredTransactions().length / itemsPerPage()))

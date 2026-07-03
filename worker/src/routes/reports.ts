@@ -106,7 +106,7 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
     (
       await db.first<{ t: number }>(
         c.env.DB,
-        `SELECT COALESCE(SUM(amount),0) t FROM transactions WHERE profile_id = ? AND type='income' AND date >= ? AND date <= ?`,
+        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)),0) t FROM transactions WHERE profile_id = ? AND type='income' AND date >= ? AND date <= ?`,
         pid,
         start,
         end
@@ -116,7 +116,7 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
     (
       await db.first<{ t: number }>(
         c.env.DB,
-        `SELECT COALESCE(SUM(amount),0) t FROM transactions WHERE profile_id = ? AND type='expense' AND date >= ? AND date <= ?`,
+        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)),0) t FROM transactions WHERE profile_id = ? AND type='expense' AND date >= ? AND date <= ?`,
         pid,
         start,
         end
@@ -124,7 +124,7 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
     )?.t || 0;
   const byCat = await db.all<{ name: string; total: number }>(
     c.env.DB,
-    `SELECT COALESCE(c.name,'Uncategorized') name, SUM(t.amount) total FROM transactions t
+    `SELECT COALESCE(c.name,'Uncategorized') name, SUM(COALESCE(t.amount_local, t.amount)) total FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id = ? AND t.type='expense' AND t.date >= ? AND t.date <= ?
        GROUP BY c.id ORDER BY total DESC`,
@@ -410,7 +410,7 @@ reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
     (
       await db.first<{ t: number }>(
         c.env.DB,
-        `SELECT COALESCE(SUM(amount),0) t FROM transactions WHERE profile_id IN (${inClause}) AND type=? AND date >= ? AND date <= ?`,
+        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)),0) t FROM transactions WHERE profile_id IN (${inClause}) AND type=? AND date >= ? AND date <= ?`,
         ...pids,
         type,
         start,
@@ -422,7 +422,7 @@ reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
 
   const monthlyRows = await db.all<{ ym: string; type: string; total: number }>(
     c.env.DB,
-    `SELECT substr(date,1,7) ym, type, SUM(amount) total FROM transactions
+    `SELECT substr(date,1,7) ym, type, SUM(COALESCE(amount_local, amount)) total FROM transactions
        WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND type IN ('income','expense')
        GROUP BY ym, type ORDER BY ym`,
     ...pids,
@@ -437,7 +437,7 @@ reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
   }
   const byCat = await db.all<{ name: string; total: number }>(
     c.env.DB,
-    `SELECT COALESCE(c.name,'Uncategorized') name, SUM(t.amount) total FROM transactions t
+    `SELECT COALESCE(c.name,'Uncategorized') name, SUM(COALESCE(t.amount_local, t.amount)) total FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.type='expense' AND t.date >= ? AND t.date <= ?
        GROUP BY c.id ORDER BY total DESC LIMIT 15`,
@@ -502,7 +502,7 @@ reportsRoutes.get('/api/reports/overview', requireAuth, async (c) => {
     (
       await db.first<{ total: number }>(
         c.env.DB,
-        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${incomeWhere}`,
+        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions WHERE ${incomeWhere}`,
         ...incomeParams
       )
     )?.total || 0;
@@ -510,7 +510,7 @@ reportsRoutes.get('/api/reports/overview', requireAuth, async (c) => {
     (
       await db.first<{ total: number }>(
         c.env.DB,
-        `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE ${expenseWhere}`,
+        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions WHERE ${expenseWhere}`,
         ...expenseParams
       )
     )?.total || 0;
@@ -537,7 +537,7 @@ reportsRoutes.get('/api/reports/overview', requireAuth, async (c) => {
   if (includeCategories === 'true') {
     response.categoryBreakdown = await db.all(
       c.env.DB,
-      `SELECT c.name, c.id, SUM(t.amount) as total
+      `SELECT c.name, c.id, SUM(COALESCE(t.amount_local, t.amount)) as total
          FROM transactions t
          LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
          WHERE t.profile_id = ?
@@ -626,7 +626,7 @@ reportsRoutes.get('/api/reports/compare', requireAuth, async (c) => {
       (
         await db.first<{ total: number }>(
           c.env.DB,
-          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+          `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions
            WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
           pid,
           startDate,
@@ -637,7 +637,7 @@ reportsRoutes.get('/api/reports/compare', requireAuth, async (c) => {
       (
         await db.first<{ total: number }>(
           c.env.DB,
-          `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+          `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions
            WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`,
           pid,
           startDate,

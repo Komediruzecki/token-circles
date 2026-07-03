@@ -153,6 +153,14 @@
   transition: color 0.2s;
 }
 
+/* Original amount in its source currency, shown small under the base-currency value */
+.amount-original {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
 .type-col {
   width: 80px;
   text-align: center;

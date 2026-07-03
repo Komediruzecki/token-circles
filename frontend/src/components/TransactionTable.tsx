@@ -3,6 +3,8 @@
  * Renders transaction list with sorting, filtering, and pagination
  */
 import { For } from 'solid-js'
+import { formatCurrency } from '../core/api'
+import { originalAmountLabel, txBaseValue } from '../core/currency'
 import styles from './TransactionTable.module.css'
 import type { Transaction } from '../types/models'
 
@@ -22,13 +24,6 @@ interface TransactionTableProps {
 export default function TransactionTable(props: TransactionTableProps) {
   const handleSort = (field: string) => {
     props.onSort?.(field)
-  }
-
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(amount)
   }
 
   return (
@@ -211,14 +206,24 @@ export default function TransactionTable(props: TransactionTableProps) {
                   </span>
                 </td>
                 <td class={styles.amountCol}>
-                  <div class={`${styles.amount} ${styles[transaction.type]}`}>
+                  <div
+                    class={`${styles.amount} ${styles[transaction.type]}`}
+                    title={
+                      originalAmountLabel(transaction)
+                        ? `Original: ${originalAmountLabel(transaction)}`
+                        : undefined
+                    }
+                  >
                     {transaction.type === 'income'
                       ? '+'
                       : transaction.type === 'transfer'
                         ? ''
                         : '-'}
-                    {formatCurrency(transaction.amount, transaction.currency)}
+                    {formatCurrency(txBaseValue(transaction))}
                   </div>
+                  {originalAmountLabel(transaction) && (
+                    <div class={styles.amountOriginal}>{originalAmountLabel(transaction)}</div>
+                  )}
                 </td>
                 <td class={styles.typeCol}>
                   <span class={`${styles.typeBadge} ${styles[transaction.type]}`}>

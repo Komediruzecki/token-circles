@@ -33,7 +33,7 @@ import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import SupportContact from '../components/SupportContact'
-import { toast } from '../core/api.js'
+import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
@@ -187,7 +187,9 @@ function Reports() {
 }
 
 export default function Settings() {
-  const [localCurrency, setLocalCurrency] = createSignal('USD')
+  // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
+  // not a hardcoded USD that mismatches how amounts actually render.
+  const [localCurrency, setLocalCurrency] = createSignal(getLocalCurrency())
   const [darkMode, setDarkMode] = createSignal(false)
   const [chartExportSettings, setChartExportSettings] =
     createSignal<ChartExportSettings>(loadChartExportSettings())

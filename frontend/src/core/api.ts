@@ -1140,7 +1140,14 @@ export const getLocalCurrency = (): string => {
   }
 }
 
-export const formatCurrency = (amount: number, currency: Models.Currency = 'EUR'): string => {
+// Default currency follows the user's base-currency setting (localStorage), so every
+// aggregate that omits an explicit currency renders in the base currency symbol and
+// updates when the setting changes. Pass an explicit currency only to show an entity
+// in its OWN currency (e.g. a foreign-currency account).
+export const formatCurrency = (
+  amount: number,
+  currency: Models.Currency = getLocalCurrency()
+): string => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
 }
 

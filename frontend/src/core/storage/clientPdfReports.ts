@@ -3,6 +3,7 @@
  * Uses jsPDF + Chart.js offscreen canvas (via Web Worker) to generate reports.
  */
 import { getLocalCurrency } from '../../core/api'
+import { txBaseValue } from '../../core/currency'
 import { getDB } from './idb'
 import type { ChartData } from 'chart.js'
 import type { jsPDF } from 'jspdf'
@@ -330,7 +331,7 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
       t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
-    const amt = Math.abs(t.amount)
+    const amt = Math.abs(txBaseValue(t))
     if (t.type === 'income') {
       totalIncome += amt
       if (!incomeByCat[name]) incomeByCat[name] = { name, color, total: 0 }
@@ -504,7 +505,7 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
       t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
-    const amt = Math.abs(t.amount)
+    const amt = Math.abs(txBaseValue(t))
     const moIdx = parseInt(t.date.substring(5, 7)) - 1
     if (t.type === 'income') {
       totalIncome += amt
@@ -735,7 +736,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
     const cat =
       t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
-    const amt = Math.abs(t.amount)
+    const amt = Math.abs(txBaseValue(t))
     if (cat?.tax_deductible) {
       if (!taxMap[name]) taxMap[name] = { count: 0, total: 0 }
       taxMap[name].count++
@@ -855,7 +856,7 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
     const cat =
       t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
-    const amt = Math.abs(t.amount)
+    const amt = Math.abs(txBaseValue(t))
     if (t.type === 'income') {
       totalIncome += amt
       if (!incomeMap[name]) incomeMap[name] = { count: 0, total: 0 }

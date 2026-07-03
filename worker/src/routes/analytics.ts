@@ -65,7 +65,7 @@ analyticsRoutes.get('/api/analytics/daily-heatmap', requireAuth, async (c) => {
 
   const rows = await db.all<{ date: string; total: number | null }>(
     c.env.DB,
-    `SELECT date, SUM(amount) as total
+    `SELECT date, SUM(COALESCE(amount_local, amount)) as total
        FROM transactions
        WHERE profile_id IN (${inClause})
          AND substr(date, 1, 4) = ?
