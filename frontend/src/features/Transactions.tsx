@@ -580,6 +580,31 @@ export default function Transactions() {
     }
   }
 
+  // Duplicate a row: prefill the add modal from an existing transaction so the user can
+  // quickly log a similar one (tweak the amount, keep the rest). This is a NEW record —
+  // formId stays null so submit creates instead of updates, and the receipt (which belongs
+  // to the original row) is intentionally not carried over.
+  const handleCopyTransaction = (transaction: Transaction) => {
+    setType(transaction.type)
+    setFormId(null)
+    setFormDescription(transaction.description)
+    setFormAmount(transaction.amount.toString())
+    setFormCurrency(transaction.currency || getLocalCurrency())
+    setFormExchangeRate('1')
+    setFormCategory(transaction.category_id || null)
+    setFormBeneficiary(transaction.beneficiary || '')
+    setFormPayor(transaction.payor || '')
+    setFormNotes(transaction.notes || '')
+    setFormDate(transaction.date)
+    setFormMeans(transaction.means_of_payment || '')
+    setFormAccountId(transaction.account_id || null)
+    setFormAmountLocal('')
+    setSelectedFile(null)
+    setExistingReceipt(null)
+    revokePreviewUrl()
+    setTransactionModalOpen(true)
+  }
+
   onMount(async () => {
     // (transactions load via the profileVersion effect above — no redundant fetch here)
     try {
@@ -1362,6 +1387,7 @@ export default function Transactions() {
             sortField={sortField()}
             sortOrder={sortOrder()}
             onEdit={handleEditTransaction}
+            onCopy={handleCopyTransaction}
             onDelete={handleDeleteTransaction}
             onViewReceipt={(t) => void openReceiptForTransaction(t)}
           />
