@@ -208,10 +208,13 @@ export default function Accounts() {
     return accounts().reduce((sum, acc) => sum + acc.balance, 0)
   })
 
-  // Filter transactions by account
+  // Filter transactions by account — money in or out: the account's own
+  // income/expense/transfer-out (account_id) plus transfers received (transfer_account_id).
   const getAccountTransactions = (accountId: number) => {
     const txs = transactions()
-    return Array.isArray(txs) ? txs.filter((t) => t.account_id === accountId) : []
+    return Array.isArray(txs)
+      ? txs.filter((t) => t.account_id === accountId || t.transfer_account_id === accountId)
+      : []
   }
 
   // Compute monthly income from loaded transactions
@@ -369,10 +372,7 @@ export default function Accounts() {
                         <div data-test-id="activity-section" class={styles.accountActivity}>
                           <div class={styles.activityHeader}>
                             <span class={styles.activityLabel}>Recent Activity</span>
-                            <a
-                              href={`#transactions?category=${encodeURIComponent(account.name)}`}
-                              class={styles.btnLink}
-                            >
+                            <a href={`#transactions?account=${account.id}`} class={styles.btnLink}>
                               View All →
                             </a>
                           </div>
