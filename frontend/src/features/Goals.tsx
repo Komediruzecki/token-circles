@@ -46,6 +46,7 @@ interface Goal {
   current_amount: number
   monthly_contribution: number
   target_date: string
+  tracking_start_date?: string | null
   profile_id: number
   created_at: string
   category_id?: number | null
@@ -79,6 +80,7 @@ export default function Goals() {
     target_date: '',
     monthly_contribution: '',
     category_id: '',
+    tracking_start_date: '',
   })
 
   // Load goals
@@ -101,6 +103,7 @@ export default function Goals() {
           created_at: s.created_at,
           category_id: s.category_id || null,
           category_name: s.category_id ? catMap.get(s.category_id) : undefined,
+          tracking_start_date: s.tracking_start_date || null,
         }))
       )
     } catch (err) {
@@ -133,7 +136,14 @@ export default function Goals() {
         : null,
     }
     const catId = formData().category_id ? parseInt(formData().category_id) : null
-    if (catId) data.category_id = catId
+    if (catId) {
+      data.category_id = catId
+      // Category goals track from this date on; default to today when unset.
+      data.tracking_start_date =
+        formData().tracking_start_date || new Date().toISOString().split('T')[0]
+    } else {
+      data.category_id = null
+    }
 
     try {
       if (editingGoal()) {
@@ -151,6 +161,7 @@ export default function Goals() {
         target_date: '',
         monthly_contribution: '',
         category_id: '',
+        tracking_start_date: '',
       })
       loadGoals()
     } catch (err) {
@@ -239,6 +250,7 @@ export default function Goals() {
       target_date: goal.target_date,
       monthly_contribution: goal.monthly_contribution ? goal.monthly_contribution.toString() : '',
       category_id: goal.category_id ? goal.category_id.toString() : '',
+      tracking_start_date: goal.tracking_start_date || '',
     })
     setShowAddModal(true)
   }
@@ -560,18 +572,22 @@ export default function Goals() {
                   const color = colors[idx % colors.length]
                   const monthly = g.monthly_contribution || 0
                   const remaining = g.target_amount - g.current_amount
-                  const monthsNeeded = Math.ceil(remaining / monthly)
+                  // Already met (or over) the target: no months to project.
+                  const monthsNeeded = remaining <= 0 ? 0 : Math.ceil(remaining / monthly)
                   const data: (number | null)[] = [g.current_amount]
                   for (let m = 1; m <= monthsNeeded; m++) {
                     data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
                   }
-                  // Compute achievement date label
+                  // Achievement label: "reached" when already met, else the projected month.
                   const now = new Date()
-                  const achieveDate = new Date(now.getFullYear(), now.getMonth() + monthsNeeded, 1)
-                  const achieveLabel = achieveDate.toLocaleDateString('en-US', {
-                    month: 'short',
-                    year: 'numeric',
-                  })
+                  const achieveLabel =
+                    monthsNeeded <= 0
+                      ? 'reached'
+                      : new Date(
+                          now.getFullYear(),
+                          now.getMonth() + monthsNeeded,
+                          1
+                        ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
                   return {
                     label: `${g.name} — target ${achieveLabel}`,
                     data,
@@ -682,6 +698,7 @@ export default function Goals() {
                     target_date: '',
                     monthly_contribution: '',
                     category_id: '',
+                    tracking_start_date: '',
                   })
                 }}
               >
@@ -777,6 +794,31 @@ export default function Goals() {
                   Transactions to this category will count toward goal progress
                 </p>
               </div>
+              {formData().category_id && (
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Count transactions from</label>
+                  <input
+                    type="date"
+                    class={styles.formControl}
+                    value={
+                      formData().tracking_start_date || new Date().toISOString().split('T')[0]
+                    }
+                    oninput={(e) =>
+                      setFormData({ ...formData(), tracking_start_date: e.currentTarget.value })
+                    }
+                  />
+                  <p
+                    style={{
+                      'font-size': '11px',
+                      color: 'var(--text-secondary)',
+                      'margin-top': '4px',
+                    }}
+                  >
+                    Only category transactions on/after this date count. Defaults to today so
+                    past history doesn't fill the goal — set it earlier to include prior activity.
+                  </p>
+                </div>
+              )}
               <div class={styles.modalFooter}>
                 <button
                   type="button"
@@ -790,6 +832,7 @@ export default function Goals() {
                       target_date: '',
                       monthly_contribution: '',
                       category_id: '',
+                      tracking_start_date: '',
                     })
                   }}
                 >

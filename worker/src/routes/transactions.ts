@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import { validateTransactionCreate, validateTransactionUpdate } from '../validation';
+import { recalcGoalsByCategory } from '../recalc-goals';
 import * as db from '../db';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
@@ -55,35 +56,9 @@ async function getTagsForTransaction(
   );
 }
 
-// Mirrors the Express recalcGoalsByCategory/recalcGoalProgress helpers: any savings
-// goal linked to `categoryId` has its current_amount set to SUM(ABS(amount)) of all
-// transactions in that category. SCOPED to the active profile(s): without the profile
-// predicate a forged/foreign category_id would let one user's write recompute (and corrupt)
-// another user's goal against their transactions.
-async function recalcGoalsByCategory(
-  d1: D1Database,
-  categoryId: number | null,
-  pids: number[]
-): Promise<void> {
-  if (!categoryId || pids.length === 0) return;
-  const inClause = pids.map(() => '?').join(',');
-  const goals = await db.all<{ id: number; category_id: number | null }>(
-    d1,
-    `SELECT id, category_id FROM savings_goals WHERE category_id = ? AND profile_id IN (${inClause})`,
-    categoryId,
-    ...pids
-  );
-  for (const g of goals) {
-    if (!g.category_id) continue;
-    const total = await db.first<{ total: number }>(
-      d1,
-      `SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id = ? AND profile_id IN (${inClause})`,
-      g.category_id,
-      ...pids
-    );
-    await db.update(d1, 'savings_goals', { current_amount: total?.total ?? 0 }, 'id = ?', g.id);
-  }
-}
+// recalcGoalsByCategory now lives in ../recalc-goals (shared with the savings-goals route
+// so linking/creating a category goal recomputes immediately, not only on the next
+// transaction change). It counts base-currency value, dated from each goal's tracking start.
 
 // D1 caps bound variables at ~100 per statement. Split an id list into chunks small enough that
 // `chunk.length + extra` placeholders stay under that ceiling (extra = profile-id + SET binds).
