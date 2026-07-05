@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { getProfileId } = require('../middleware/profile');
-const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
 module.exports = function ({ apiRateLimiter, uploadReceipt, logError, requireAuth }) {

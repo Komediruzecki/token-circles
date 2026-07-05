@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }) {
@@ -95,7 +94,7 @@ module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, re
       if (req.repos.profiles.profileCount() <= 1)
         return res.status(400).json({ error: 'Cannot delete the last profile' });
       req.repos.profiles.deleteAllDataForProfile(pid);
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -164,7 +163,7 @@ module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, re
         { name: 'Salary', color: '#22c55e', icon: 'briefcase', type: 'income', tax_deductible: 0 },
       ];
       req.repos.categories.seedDefaults(pid, defaults);
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 

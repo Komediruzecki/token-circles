@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
@@ -53,7 +52,7 @@ module.exports = function ({ apiRateLimiter , requireAuth }) {
       category_id: category_id !== undefined ? category_id : null,
     });
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -61,7 +60,7 @@ module.exports = function ({ apiRateLimiter , requireAuth }) {
     const pid = getProfileId(req);
     const result = req.repos.goals.deleteById(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 

@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
@@ -52,7 +51,7 @@ module.exports = function ({ apiRateLimiter, requireAuth }) {
 
       const entries = Object.entries(req.body);
       for (const [k, v] of entries) req.repos.settings.upsert(k, String(v), pid);
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 

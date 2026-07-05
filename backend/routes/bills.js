@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler, NotFoundError } = require('../lib/errors');
 
@@ -210,14 +209,14 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
       notes: notes ?? '',
       type: type ?? 'bill',
     });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
   router.delete('/api/bills/:id', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     req.repos.bills.deleteById(req.params.id, pid);
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 

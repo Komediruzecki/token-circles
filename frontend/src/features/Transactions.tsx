@@ -254,9 +254,7 @@ export default function Transactions() {
     )
       return
     try {
-      for (const id of ids) {
-        await api.deleteTransaction(id)
-      }
+      await api.bulkDeleteTransactions(ids)
       setSelectedTransactions([])
       await refreshTransactions()
     } catch (error) {
@@ -900,6 +898,7 @@ export default function Transactions() {
                     class={styles.formControl}
                     data-test-id="tx-date"
                     value={formDate()}
+                    onInput={(e) => setFormDate((e.target as HTMLInputElement).value)}
                     required
                   />
                 </div>

@@ -1,5 +1,5 @@
 const express = require('express');
-const { toCamelCase, getCategoryIcon } = require('../utils');
+const { getCategoryIcon } = require('../utils');
 const {
   getProfileId,
   getProfileIds,
@@ -45,17 +45,25 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
 
   function recalcGoalProgress(goalId, repos, profileIds) {
     const goal = repos.goals.get('SELECT * FROM savings_goals WHERE id=?', goalId);
-    if (!goal || !goal.category_id) return;
+    if (!goal || !goal.category_id || !goal.profile_id) return;
+    // Scope to the goal's own profile so other profiles' transactions with the same
+    // category_id don't leak into this goal's progress calculation.
     const total = repos.transactions.get(
-      'SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id=?',
-      goal.category_id
+      'SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id=? AND profile_id=?',
+      goal.category_id,
+      goal.profile_id
     );
-    repos.goals.updateAmount(goalId, profileIds[0], total.total);
+    repos.goals.updateAmount(goalId, goal.profile_id, total.total);
   }
 
   function recalcGoalsByCategory(categoryId, repos, profileIds) {
     if (!categoryId) return;
-    const goals = repos.goals.all('SELECT id FROM savings_goals WHERE category_id=?', categoryId);
+    const inClause = profileIds.map(() => '?').join(',');
+    const goals = repos.goals.all(
+      `SELECT id FROM savings_goals WHERE category_id=? AND profile_id IN (${inClause})`,
+      categoryId,
+      ...profileIds
+    );
     for (const g of goals) recalcGoalProgress(g.id, repos, profileIds);
   }
 
@@ -290,7 +298,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         net_balance: (result.total_income || 0) - (result.total_expense || 0),
         count: result.count || 0,
       };
-      res.json(toCamelCase(data));
+      res.json(data);
     })
   );
 
@@ -438,7 +446,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         info.lastInsertRowid,
         pid
       );
-      res.json(toCamelCase(created));
+      res.json(created);
     })
   );
 
@@ -867,7 +875,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         if (e === NOT_FOUND) return res.status(404).json({ error: 'Not found' });
         throw e;
       }
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -944,7 +952,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         if (e === NOT_FOUND) return res.status(404).json({ error: 'Not found' });
         throw e;
       }
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 

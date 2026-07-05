@@ -15,7 +15,6 @@ const db = require('./database');
 const { seedThreeTierProfiles } = require('./database');
 const mime = require('mime-types');
 const { reposMiddleware } = require('./repositories');
-const { toCamelCase } = require('./utils');
 const spreadsheetService = require('./services/spreadsheetService');
 const pdfService = require('./services/pdfService');
 const pdfRenderService = require('./services/pdfRenderService');
@@ -331,7 +330,7 @@ app.post('/api/logs/clear', requireAuth, async (req, res) => {
       LOGS_FILE,
       JSON.stringify({ version: '1.0', max_entries: 500, entries: [] })
     );
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -555,7 +554,7 @@ if (process.env.NODE_ENV === 'test') {
   app.post('/api/test/reset-rate-limit', (req, res) => {
     if (global.__rateLimitStore) global.__rateLimitStore.clear();
     if (global.__authRateLimitStore) global.__authRateLimitStore.clear();
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
   });
 
   app.post('/api/test/reset-password', (req, res) => {
@@ -563,7 +562,7 @@ if (process.env.NODE_ENV === 'test') {
       const bcrypt = require('bcrypt');
       const hash = bcrypt.hashSync('something-like-this', 12);
       db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'person');
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

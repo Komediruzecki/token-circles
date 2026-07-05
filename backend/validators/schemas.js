@@ -24,7 +24,7 @@ const validId = z.number().int().positive().finite();
 
 const transactionCreateSchema = z.object({
   description: nonEmptyString.max(500),
-  amount: z.number().finite().refine(val => {
+  amount: z.number().min(0, 'Amount must be non-negative').finite().refine(val => {
     const parts = Math.abs(val).toString().split('.');
     return parts.length === 1 || parts[1].length <= 2;
   }, { message: "Amount must have at most 2 decimal places" }),
@@ -49,7 +49,7 @@ const transactionCreateSchema = z.object({
 
 const transactionUpdateSchema = z.object({
   description: nonEmptyString.max(500).optional(),
-  amount: z.number().finite().refine(val => {
+  amount: z.number().min(0, 'Amount must be non-negative').finite().refine(val => {
     const parts = Math.abs(val).toString().split('.');
     return parts.length === 1 || parts[1].length <= 2;
   }, { message: "Amount must have at most 2 decimal places" }).optional(),

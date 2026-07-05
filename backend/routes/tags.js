@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler, AppError } = require('../lib/errors');
 
@@ -77,14 +76,14 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
       throw err;
     }
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
   }));
 
   router.delete('/api/tags/:id', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const result = req.repos.tags.deleteById(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
   }));
 
   // Add tags to a transaction (replaces existing)
@@ -98,7 +97,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
     req.repos.tags.setTransactionTags(req.params.id, tagIds, pid);
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
   }));
 
   // Update tags for a transaction (alias for POST — replaces existing)
@@ -112,7 +111,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });
 
     req.repos.tags.setTransactionTags(req.params.id, tagIds, pid);
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
   }));
 
   // Get tags for a transaction

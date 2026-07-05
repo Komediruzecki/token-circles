@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const loanCalc = require('../models/loanCalculator');
 const { asyncHandler } = require('../lib/errors');
@@ -102,7 +101,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
       }
     }
 
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -110,7 +109,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     const pid = getProfileId(req);
     const result = req.repos.loans.deleteById(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -140,7 +139,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
       start_month,
       end_month: end_month || null,
     });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -149,7 +148,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     const loan = req.repos.loans.getById(req.params.id, pid);
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
     req.repos.loans.deleteRatePeriodById(req.params.rateId, req.params.id);
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -174,7 +173,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     const loan = req.repos.loans.getById(req.params.id, pid);
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
     req.repos.loans.deletePrepayment(req.params.prepayId, req.params.id);
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 

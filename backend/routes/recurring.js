@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
@@ -178,7 +177,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         notes: notes ?? '',
         active: active ?? 1,
       });
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -188,7 +187,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     asyncHandler((req, res) => {
       const pid = getProfileId(req);
       req.repos.recurring.deleteById(req.params.id, pid);
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 

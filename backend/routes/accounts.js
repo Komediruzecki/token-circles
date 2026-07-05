@@ -1,6 +1,8 @@
 const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
+const { validate } = require('../validators/middleware');
+const { accountCreateSchema } = require('../validators/schemas');
 
 module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   const router = express.Router();
@@ -12,21 +14,18 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
 
   }));
 
-  router.post('/api/accounts', apiRateLimiter, requireAuth, asyncHandler((req, res) => {
+  router.post('/api/accounts', apiRateLimiter, requireAuth, validate(accountCreateSchema), asyncHandler((req, res) => {
     const pid = getProfileId(req);
     const { name, bank_name, type, currency, balance, notes, starting_balance, starting_date } =
       req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
-    const validTypes = ['giro', 'ib', 'savings', 'cash'];
-    const accountType = validTypes.includes(type) ? type : 'giro';
     const startBalance =
       starting_balance !== undefined ? parseFloat(starting_balance) : parseFloat(balance) || 0;
     const startDate = starting_date || null;
     const result = req.repos.accounts.create({
       name: name.trim(),
       bank_name: bank_name || '',
-      type: accountType,
-      currency: currency || 'USD',
+      type,
+      currency,
       balance: startBalance,
       notes: notes || '',
       profile_id: pid,

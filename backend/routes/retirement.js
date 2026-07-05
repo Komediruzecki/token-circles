@@ -1,5 +1,5 @@
 const express = require('express');
-const { toCamelCase, calculateRetirementProjection } = require('../utils');
+const { calculateRetirementProjection } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
@@ -98,7 +98,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
       expected_return_rate: expected_return_rate || 7,
     });
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -106,7 +106,7 @@ module.exports = function ({ apiRateLimiter, logError , requireAuth }) {
     const pid = getProfileId(req);
     const result = req.repos.retirementGoals.deleteById(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 

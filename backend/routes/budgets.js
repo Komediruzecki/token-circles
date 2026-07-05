@@ -1,7 +1,6 @@
 'use strict';
 const express = require('express');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
-const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
 module.exports = function ({ apiRateLimiter , requireAuth }) {
@@ -42,7 +41,7 @@ module.exports = function ({ apiRateLimiter , requireAuth }) {
       rollover_enabled: rollover_enabled ? 1 : 0,
     });
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 
@@ -50,7 +49,7 @@ module.exports = function ({ apiRateLimiter , requireAuth }) {
     const pid = getProfileId(req);
     const result = req.repos.budgets.deleteById(req.params.id, pid);
     if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-    res.json(toCamelCase({ ok: true }));
+    res.json({ ok: true });
 
   }));
 

@@ -4,10 +4,15 @@
 const path = require('path');
 const fs = require('fs');
 
-// Helper function to convert snake_case keys to camelCase
+/**
+ * DEPRECATED: toCamelCase was intentionally a no-op because the frontend expects
+ * snake_case keys from the API (matching DB column names). It is kept for
+ * backward compatibility during migration. New code should return objects
+ * directly without wrapping in toCamelCase().
+ *
+ * TODO: Remove this function and all callers after audit phase 2.
+ */
 function toCamelCase(obj) {
-  // Frontend and localHandlers use snake_case directly
-  // Returning the object directly so that we don't break frontend types and validation schemas
   return obj;
 }
 
@@ -137,4 +142,4 @@ function isValidHexColor(color) {
   return /^#[0-9a-fA-F]{6}$/.test(String(color || ''));
 }
 
-module.exports = { toCamelCase, getCategoryIcon, calculateRetirementProjection, isValidEmail, isValidHexColor };
+module.exports = { getCategoryIcon, calculateRetirementProjection, isValidEmail, isValidHexColor };

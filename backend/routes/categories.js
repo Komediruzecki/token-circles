@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { getCategoryIcon, toCamelCase } = require('../utils');
+const { getCategoryIcon } = require('../utils');
 const { getProfileId, getProfileIds } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
@@ -60,7 +60,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
       });
 
       res.json(
-        toCamelCase({
+        {
           id: result.lastInsertRowid,
           name: name.trim(),
           color: color.trim(),
@@ -68,7 +68,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
           type: type.trim(),
           parent_id,
           profile_id: pid,
-        })
+        }
       );
     })
   );
@@ -211,11 +211,11 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         confidence || 0.9
       );
       res.json(
-        toCamelCase({
+        {
           ok: true,
           id: result.id,
           use_count: result.use_count,
-        })
+        }
       );
     })
   );
@@ -229,7 +229,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
       const pid = getProfileId(req);
       const result = req.repos.categories.deleteMapping(req.params.id, pid);
       if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -279,7 +279,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         parent_id: parent_id || null,
         tax_deductible: tax_deductible ? 1 : 0,
       });
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -291,7 +291,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
       const pid = getProfileId(req);
       const result = req.repos.categories.deleteById(req.params.id, pid);
       if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
   router.post(

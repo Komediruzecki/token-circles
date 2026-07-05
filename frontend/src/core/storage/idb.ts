@@ -161,7 +161,8 @@ export function computeBalanceDeltas(tx: {
       adj.push({ accountId: tx.account_id, delta: -value })
       adj.push({ accountId: tx.transfer_account_id, delta: value })
     } else if (tx.type === 'transfer') {
-      adj.push({ accountId: tx.account_id, delta: -value })
+      // Transfer without a destination — money would vanish. Skip the adjustment
+      // so balances aren't silently corrupted; the UI should validate this upstream.
     } else if (tx.type === 'income' || tx.type === 'expense') {
       adj.push({ accountId: tx.account_id, delta: tx.type === 'income' ? value : -value })
     }
@@ -293,7 +294,14 @@ export class IndexedDBAdapter implements StorageAdapter {
     for (const adj of computeBalanceDeltas(existing)) {
       await this._adjustAccountBalance(adj.accountId, -adj.delta)
     }
-    Object.assign(existing, tx)
+    // Preserve amount_local unless the partial update explicitly overrides it.
+    // Object.assign would silently overwrite it with undefined when tx was built
+    // from a spread that included an undefined amount_local, causing balance drift.
+    const preserved: Record<string, unknown> = { ...tx }
+    if (!('amount_local' in tx) && typeof (existing as any).amount_local === 'number') {
+      preserved.amount_local = (existing as any).amount_local
+    }
+    Object.assign(existing, preserved)
     await db.put('transactions', existing)
     for (const adj of computeBalanceDeltas(existing)) {
       await this._adjustAccountBalance(adj.accountId, adj.delta)
@@ -309,6 +317,19 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
     await db.delete('transactions', id)
+  }
+
+  async bulkDeleteTransactions(ids: number[]): Promise<void> {
+    const db = await getDB()
+    for (const id of ids) {
+      const old = await db.get('transactions', id)
+      if (old) {
+        for (const adj of computeBalanceDeltas(old)) {
+          await this._adjustAccountBalance(adj.accountId, -adj.delta)
+        }
+      }
+      await db.delete('transactions', id)
+    }
   }
 
   async deleteAllTransactions(): Promise<void> {

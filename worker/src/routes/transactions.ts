@@ -699,7 +699,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // Fetch old transaction for account balance reversal.
   const oldTx = await db.first<TxRow>(
     c.env.DB,
-    'SELECT account_id, transfer_account_id, type, amount FROM transactions WHERE id = ? AND profile_id = ?',
+    'SELECT account_id, transfer_account_id, type, amount, amount_local FROM transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
   );
@@ -716,6 +716,11 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   if (amount !== undefined) {
     updates.push('amount = ?');
     params.push(amount);
+    // If amount is changing but amount_local is not explicitly provided, clear the
+    // stale base-currency value so balance math falls back to the new raw amount.
+    if (amount_local === undefined) {
+      updates.push('amount_local = NULL');
+    }
     hasUpdate = true;
   }
   if (date !== undefined) {
@@ -794,6 +799,9 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // eviction between them permanently drifted account balances.
   if (!oldTx) throw new HttpError(404, 'Not found');
 
+  // Use base-currency value for all balance math (matches create + delete paths).
+  const oldV = baseAmount(oldTx);
+
   updates.push("updated_at = datetime('now')");
   params.push(id, pid);
 
@@ -805,19 +813,19 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldTx.amount, oldTx.account_id, ...pids),
+        ).bind(oldV, oldTx.account_id, ...pids),
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldTx.amount, oldTx.transfer_account_id, ...pids)
+        ).bind(oldV, oldTx.transfer_account_id, ...pids)
       );
     } else if (oldTx.type === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldTx.amount, oldTx.account_id, ...pids)
+        ).bind(oldV, oldTx.account_id, ...pids)
       );
     } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
-      const oldDelta = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+      const oldDelta = oldTx.type === 'income' ? -oldV : oldV;
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -830,7 +838,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(oldTx.amount, oldTx.transfer_account_id, ...pids)
+      ).bind(oldV, oldTx.transfer_account_id, ...pids)
     );
   }
 
@@ -847,24 +855,34 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     transfer_account_id !== undefined ? transfer_account_id || null : oldTx.transfer_account_id;
   const newType = type !== undefined ? type : oldTx.type;
   const newAmount = amount !== undefined ? amount : oldTx.amount;
+  // Compute the base-currency amount for the new balance effect, matching the reversal
+  // logic: if amount_local was explicitly provided, use it; if amount changed (and
+  // amount_local was cleared to NULL above), use the new raw amount; otherwise preserve
+  // the old base-currency value.
+  const newAmountLocal =
+    amount_local !== undefined
+      ? (amount_local ?? newAmount)
+      : amount !== undefined
+        ? newAmount
+        : baseAmount(oldTx);
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmount, newAccountId, ...pids),
+        ).bind(newAmountLocal, newAccountId, ...pids),
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmount, newTransferAccountId, ...pids)
+        ).bind(newAmountLocal, newTransferAccountId, ...pids)
       );
     } else if (newType === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmount, newAccountId, ...pids)
+        ).bind(newAmountLocal, newAccountId, ...pids)
       );
     } else if (newType === 'income' || newType === 'expense') {
-      const newDelta = newType === 'income' ? newAmount : -newAmount;
+      const newDelta = newType === 'income' ? newAmountLocal : -newAmountLocal;
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -876,7 +894,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(newAmount, newTransferAccountId, ...pids)
+      ).bind(newAmountLocal, newTransferAccountId, ...pids)
     );
   }
 
