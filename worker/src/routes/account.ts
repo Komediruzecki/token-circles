@@ -50,7 +50,8 @@ async function deleteStripeCustomer(
 
 // DELETE /api/account — permanently delete the signed-in user's account and ALL of their data.
 // Confirm by sending { confirm } equal to the account email (case-insensitive) or the word "delete".
-// GDPR Art. 17 — available in all environments.
+// Dev = hard delete (immediate). Prod will use a soft delete (deactivate now, purge later) — until
+// that exists we refuse to hard-delete in production so data can't be destroyed there by accident.
 accountRoutes.delete('/api/account', requireAuth, async (c) => {
   const userId = c.get('userId');
   const body = (await c.req.json().catch(() => ({}))) as { confirm?: string };
@@ -70,10 +71,9 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
     throw new HttpError(400, 'Confirmation does not match. Type your account email or "delete".');
   }
 
-  // GDPR Art. 17 Right to Erasure — account deletion is fully implemented and must be
-  // available in all environments. The atomic D1-batch + R2-purge + Stripe-delete handler
-  // below is complete and has been verified.
-  // Deletion is gated by email confirmation above (user must type their email or "delete").
+  if (c.env.APP_ENV === 'production') {
+    throw new HttpError(501, 'Account deletion is not enabled in production yet');
+  }
 
   // Cancel/remove billing first (outside the DB batch; best-effort, never blocks).
   await deleteStripeCustomer(c.env, user.stripe_customer_id);
