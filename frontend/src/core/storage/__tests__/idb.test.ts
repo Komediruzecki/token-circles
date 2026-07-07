@@ -156,6 +156,59 @@ describe('IndexedDBAdapter', () => {
     expect(txns[0].amount).toBe(200)
   })
 
+  it('updateTransaction preserves amount_local on a partial update that omits it', async () => {
+    const adapter = new IndexedDBAdapter()
+    // Foreign-currency row: amount is HRK, amount_local is the base (EUR) value.
+    const id = await adapter.createTransaction({
+      type: 'expense',
+      amount: 750,
+      amount_local: 100,
+      currency: 'HRK',
+      description: 'FX',
+      date: '2026-05-12',
+      category_id: 1,
+      profile_id: 1,
+    } as any)
+
+    // Edit an unrelated field — must NOT wipe amount_local (that caused balance drift).
+    await adapter.updateTransaction(id, { description: 'FX edited' })
+    let txns = await adapter.listTransactions()
+    expect(txns[0].description).toBe('FX edited')
+    expect((txns[0] as any).amount_local).toBe(100)
+
+    // An explicit amount_local in the patch still overrides (e.g. currency change).
+    await adapter.updateTransaction(id, { amount_local: null, currency: 'EUR' } as any)
+    txns = await adapter.listTransactions()
+    expect((txns[0] as any).amount_local).toBeNull()
+  })
+
+  it('listTransactions date range stays scoped to the current profile (no cross-profile leak)', async () => {
+    const adapter = new IndexedDBAdapter()
+    await adapter.createTransaction({
+      type: 'expense',
+      amount: 10,
+      description: 'p1',
+      date: '2026-04-10',
+      category_id: 1,
+      profile_id: 1,
+    } as any)
+    // Same date, different profile — the by_date index spans profiles, so the
+    // handler must filter these out.
+    localStorage.setItem('currentProfileId', '2')
+    await adapter.createTransaction({
+      type: 'expense',
+      amount: 99,
+      description: 'p2',
+      date: '2026-04-10',
+      category_id: 1,
+      profile_id: 2,
+    } as any)
+
+    localStorage.setItem('currentProfileId', '1')
+    const rows = await adapter.listTransactions({ date_from: '2026-04-01', date_to: '2026-04-30' })
+    expect(rows.map((t) => t.description)).toEqual(['p1'])
+  })
+
   it('deleteAllTransactions clears all transactions', async () => {
     const adapter = new IndexedDBAdapter()
     await adapter.createTransaction({

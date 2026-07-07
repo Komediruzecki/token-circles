@@ -161,7 +161,8 @@ export function computeBalanceDeltas(tx: {
       adj.push({ accountId: tx.account_id, delta: -value })
       adj.push({ accountId: tx.transfer_account_id, delta: value })
     } else if (tx.type === 'transfer') {
-      adj.push({ accountId: tx.account_id, delta: -value })
+      // Transfer without a destination — money would vanish. Skip the adjustment
+      // so balances aren't silently corrupted; the UI should validate this upstream.
     } else if (tx.type === 'income' || tx.type === 'expense') {
       adj.push({ accountId: tx.account_id, delta: tx.type === 'income' ? value : -value })
     }
@@ -249,17 +250,41 @@ export class IndexedDBAdapter implements StorageAdapter {
   async listTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
     const db = await getDB()
     const pids = this.getCurrentProfileIds()
+    const pidSet = new Set(pids)
     let txns: Transaction[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('transactions', 'by_profile', pid)
-      txns.push(...rows)
+
+    // Use the by_date index for date-range queries (O(log N + M) instead of O(N)).
+    // Falls back to by_profile when no date filters are provided.
+    const hasDateRange = !!(filters?.date_from || filters?.date_to)
+    if (hasDateRange) {
+      let range: IDBKeyRange | null = null
+      if (filters!.date_from && filters!.date_to) {
+        range = IDBKeyRange.bound(filters!.date_from, filters!.date_to)
+      } else if (filters!.date_from) {
+        range = IDBKeyRange.lowerBound(filters!.date_from)
+      } else if (filters!.date_to) {
+        range = IDBKeyRange.upperBound(filters!.date_to)
+      }
+      if (range) {
+        const rows = await db.getAllFromIndex('transactions', 'by_date', range)
+        // Filter to current profile(s) — by_date spans all profiles.
+        txns = rows.filter((r: Transaction) => pidSet.has(r.profile_id))
+      }
+    } else {
+      for (const pid of pids) {
+        const rows = await db.getAllFromIndex('transactions', 'by_profile', pid)
+        txns.push(...rows)
+      }
     }
 
     if (filters) {
       if (filters.type) txns = txns.filter((t) => t.type === filters.type)
       if (filters.category_id) txns = txns.filter((t) => t.category_id === filters.category_id)
-      if (filters.date_from) txns = txns.filter((t) => t.date >= filters.date_from!)
-      if (filters.date_to) txns = txns.filter((t) => t.date <= filters.date_to!)
+      if (!hasDateRange) {
+        // Apply date filters in JS only when we didn't use the by_date index.
+        if (filters.date_from) txns = txns.filter((t) => t.date >= filters.date_from!)
+        if (filters.date_to) txns = txns.filter((t) => t.date <= filters.date_to!)
+      }
       if (filters.search) {
         const q = filters.search.toLowerCase()
         txns = txns.filter(
@@ -293,7 +318,14 @@ export class IndexedDBAdapter implements StorageAdapter {
     for (const adj of computeBalanceDeltas(existing)) {
       await this._adjustAccountBalance(adj.accountId, -adj.delta)
     }
-    Object.assign(existing, tx)
+    // Preserve amount_local unless the partial update explicitly overrides it.
+    // Object.assign would silently overwrite it with undefined when tx was built
+    // from a spread that included an undefined amount_local, causing balance drift.
+    const preserved: Record<string, unknown> = { ...tx }
+    if (!('amount_local' in tx) && typeof (existing as any).amount_local === 'number') {
+      preserved.amount_local = (existing as any).amount_local
+    }
+    Object.assign(existing, preserved)
     await db.put('transactions', existing)
     for (const adj of computeBalanceDeltas(existing)) {
       await this._adjustAccountBalance(adj.accountId, adj.delta)
@@ -309,6 +341,19 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
     await db.delete('transactions', id)
+  }
+
+  async bulkDeleteTransactions(ids: number[]): Promise<void> {
+    const db = await getDB()
+    for (const id of ids) {
+      const old = await db.get('transactions', id)
+      if (old) {
+        for (const adj of computeBalanceDeltas(old)) {
+          await this._adjustAccountBalance(adj.accountId, -adj.delta)
+        }
+      }
+      await db.delete('transactions', id)
+    }
   }
 
   async deleteAllTransactions(): Promise<void> {
