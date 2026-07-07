@@ -365,6 +365,17 @@ export class ApiClient {
     await this.request(`/transactions/${id}`, undefined, { method: 'DELETE' })
   }
 
+  /**
+   * Bulk delete transactions
+   */
+  async bulkDeleteTransactions(ids: number[]): Promise<void> {
+    if (!ids.length) return
+    await this.request(`/transactions/bulk`, undefined, {
+      method: 'PUT',
+      body: { ids, action: 'delete' },
+    })
+  }
+
   // ============ CATEGORIES ============
 
   /**

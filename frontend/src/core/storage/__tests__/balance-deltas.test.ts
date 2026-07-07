@@ -58,13 +58,15 @@ describe('computeBalanceDeltas', () => {
     ])
   })
 
-  it('transfer without destination only decreases source', () => {
+  it('transfer without destination makes no adjustment (money must not vanish)', () => {
     const deltas = computeBalanceDeltas({
       account_id: 1,
       type: 'transfer',
       amount: 300,
     })
-    expect(deltas).toEqual([{ accountId: 1, delta: -300 }])
+    // Previously this debited the source with no offsetting credit, silently
+    // destroying money. The guard now skips the adjustment entirely.
+    expect(deltas).toEqual([])
   })
 
   it('transfer TO account without source account', () => {
