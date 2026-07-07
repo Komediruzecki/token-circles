@@ -6,10 +6,28 @@ import {
   analyticsDistinctYears,
   analyticsSankey,
   analyticsWeeks,
+  budgetsCreate,
   categoriesCreate,
   reportsCustom,
   transactionsCreate,
 } from '../localHandlers.js'
+
+type SankeyResult = {
+  nodes: { name: string; category: string }[]
+  links: { source: string; target: string; value: number }[]
+  hasBudgets?: boolean
+}
+
+// Every link endpoint must resolve to a node by name — the invariant d3-sankey's
+// layout requires (its default keys nodes by name via `.nodeId`). A violation is
+// exactly what threw "missing: Total Budget" and crashed the chart.
+function assertResolvable(s: SankeyResult) {
+  const names = new Set(s.nodes.map((n) => n.name))
+  for (const l of s.links) {
+    expect(names.has(l.source)).toBe(true)
+    expect(names.has(l.target)).toBe(true)
+  }
+}
 
 describe('localHandlers - analytics and reports', () => {
   let catId: number
@@ -21,6 +39,7 @@ describe('localHandlers - analytics and reports', () => {
     await db.clear('profiles')
     await db.clear('transactions')
     await db.clear('categories')
+    await db.clear('budgets')
 
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
 
@@ -92,16 +111,46 @@ describe('localHandlers - analytics and reports', () => {
     expect(trends.numDays).toBeDefined()
   })
 
-  it('gets sankey data', async () => {
-    const params = new URLSearchParams({
-      date_from: '2026-01-01',
-      date_to: '2026-12-31',
-    })
-    const res = await analyticsSankey(params)
+  it('sankey resolves every link endpoint to a node (no crash)', async () => {
+    const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
     expect(res.status).toBe(200)
-    const sankey = await res.json()
-    expect(sankey.nodes).toBeInstanceOf(Array)
-    expect(sankey.links).toBeInstanceOf(Array)
+    const sankey = (await res.json()) as SankeyResult
+    expect(sankey.nodes.length).toBeGreaterThan(0)
+    expect(sankey.links.length).toBeGreaterThan(0)
+    assertResolvable(sankey)
+  })
+
+  it('sankey uses spending as the budget when no budgets are set', async () => {
+    const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
+    const sankey = (await res.json()) as SankeyResult
+    expect(sankey.hasBudgets).toBe(false)
+    const budgetLink = sankey.links.find((l) => l.source === 'Total Budget' && l.target === 'Food')
+    const actualLink = sankey.links.find((l) => l.source === 'Food' && l.target === 'Total Actual')
+    expect(budgetLink?.value).toBe(50)
+    expect(actualLink?.value).toBe(50)
+    // Equal budget/actual => nothing left over, so no orphan "Unused Budget".
+    expect(sankey.nodes.some((n) => n.name === 'Unused Budget')).toBe(false)
+    assertResolvable(sankey)
+  })
+
+  it('sankey reflects an explicit budget (planned vs actual + unused)', async () => {
+    await budgetsCreate({ category_id: catId, amount: 80, period: 'monthly' })
+    const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
+    const sankey = (await res.json()) as SankeyResult
+    expect(sankey.hasBudgets).toBe(true)
+    const budgetLink = sankey.links.find((l) => l.source === 'Total Budget' && l.target === 'Food')
+    expect(budgetLink?.value).toBe(80)
+    const unused = sankey.links.find((l) => l.target === 'Unused Budget')
+    expect(unused?.value).toBe(30)
+    assertResolvable(sankey)
+  })
+
+  it('sankey is empty for a month with no activity', async () => {
+    const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '3' }))
+    const sankey = (await res.json()) as SankeyResult
+    expect(sankey.nodes).toEqual([])
+    expect(sankey.links).toEqual([])
+    expect(sankey.hasBudgets).toBe(false)
   })
 
   it('generates a custom report', async () => {

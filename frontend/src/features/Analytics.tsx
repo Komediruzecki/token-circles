@@ -26,7 +26,15 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import { createEffect, createMemo, createResource, createSignal, For, onMount } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
@@ -66,6 +74,8 @@ interface WeekData {
 interface SankeyResponse {
   nodes: SankeyData['nodes']
   links: SankeyData['links']
+  /** False when the month has spending but no budgets (diagram uses spending as the budget). */
+  hasBudgets?: boolean
 }
 
 interface CategoryTrendsResponse {
@@ -157,6 +167,9 @@ export default function Analytics() {
     nodes: [],
     links: [],
   })
+  // False when the selected month has spending but no budgets set — the diagram
+  // then uses spending as the budget and we nudge the user to set real budgets.
+  const [sankeyHasBudgets, setSankeyHasBudgets] = createSignal(true)
   // categoryType and stackedYear are declared above (before resources that depend on them)
   const [stackedView, setStackedView] = createSignal<'year' | 'month'>('year')
   const [stackedMonth, setStackedMonth] = createSignal(new Date().getMonth() + 1)
@@ -227,8 +240,7 @@ export default function Analytics() {
     const chart = stackedChart()
     if (!chart) return
     const now = Date.now()
-    const isDouble =
-      lastLegendClick.index === datasetIndex && now - lastLegendClick.time < 350
+    const isDouble = lastLegendClick.index === datasetIndex && now - lastLegendClick.time < 350
     lastLegendClick = { index: datasetIndex, time: now }
     if (isDouble) {
       const alreadySolo = chart.data.datasets.every(
@@ -360,6 +372,18 @@ export default function Analytics() {
     }
   }
 
+  // Month/year the Sankey is showing, e.g. "April 2026".
+  const sankeyMonthLabel = () =>
+    new Date(sankeyYear(), sankeyMonth() - 1, 1).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    })
+
+  // Send the user to the Budgets page to set budgets for the flow diagram.
+  const goToBudgets = () => {
+    window.location.hash = '#budgets'
+  }
+
   // Load sankey data
   const loadSankeyData = async () => {
     try {
@@ -367,9 +391,12 @@ export default function Analytics() {
         `/api/analytics/sankey?year=${sankeyYear()}&month=${sankeyMonth()}`
       )
       setSankeyData({ nodes: res.nodes || [], links: res.links || [] })
+      // Older responses omit the flag; assume budgeted so we don't nag wrongly.
+      setSankeyHasBudgets(res.hasBudgets !== false)
     } catch (err) {
       console.error('Failed to load sankey data', err)
       setSankeyData({ nodes: [], links: [] })
+      setSankeyHasBudgets(true)
     }
   }
 
@@ -513,9 +540,7 @@ export default function Analytics() {
             >
               <div class={styles.statLabel}>
                 Savings Rate
-                <InfoTip
-                  text={`(Income − Expenses) ÷ Income × 100, across ${stackedYear()}`}
-                />
+                <InfoTip text={`(Income − Expenses) ÷ Income × 100, across ${stackedYear()}`} />
               </div>
               <div
                 class={`${styles.statValue} ${data()!.savingsRate >= 20 ? styles.positive : data()!.savingsRate >= 10 ? styles.warning : styles.negative}`}
@@ -747,7 +772,9 @@ export default function Analytics() {
                     <select
                       class={styles.heatmapTypeSelect}
                       value={soloCategory()}
-                      onchange={(e) => { applySoloCategory(e.currentTarget.value); }}
+                      onchange={(e) => {
+                        applySoloCategory(e.currentTarget.value)
+                      }}
                       title="Focus the chart on a single category"
                     >
                       <option value="">All categories</option>
@@ -1388,11 +1415,33 @@ export default function Analytics() {
                 data-tour="analytics-sankey"
               >
                 {sankeyData().nodes.length === 0 ? (
-                  <div class={styles.emptyState}>
-                    No budget data for this month. Set budgets to see the flow diagram.
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;color:var(--text-secondary);text-align:center;">
+                    <span>No transactions for {sankeyMonthLabel()}.</span>
+                    <button
+                      style="padding:8px 16px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;"
+                      onClick={goToBudgets}
+                    >
+                      Set budgets
+                    </button>
                   </div>
                 ) : (
-                  <SankeyChart data={sankeyData()} height={400} />
+                  <>
+                    <SankeyChart data={sankeyData()} height={400} />
+                    <Show when={!sankeyHasBudgets()}>
+                      <div style="margin-top:10px;padding:10px 14px;background:var(--bg-secondary,rgba(99,102,241,0.08));border:1px solid var(--border);border-radius:8px;color:var(--text-secondary);font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                        <span>
+                          No budgets set for {sankeyMonthLabel()} — showing this month's spending as
+                          the budget.
+                        </span>
+                        <button
+                          style="padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;"
+                          onClick={goToBudgets}
+                        >
+                          Set budgets
+                        </button>
+                      </div>
+                    </Show>
+                  </>
                 )}
               </div>
             </div>
