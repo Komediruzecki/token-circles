@@ -54,7 +54,7 @@ import {
 import { loadBankImportMemory, rememberBankImportChoice } from '../core/bankImport/memory'
 import { classifyCategory } from '../core/categoryClassifier'
 import styles from './Import.module.css'
-import type { BankId, StatementMeta } from '../core/bankImport'
+import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../core/bankImport'
 
 // Column field names for mapping
 const FIELD_NAMES = [
@@ -390,6 +390,11 @@ export default function Import() {
     setError(null)
     setResultMessage(null)
     setImportId('')
+    // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
+    // and the preview's rules editor is gated correctly by bankFiles().length.
+    setBankFiles([])
+    setBankWarnings([])
+    setShowBankRules(false)
   }
 
   // File upload
@@ -521,39 +526,66 @@ export default function Import() {
 
   // Parse + transform every recognized file into the canonical table, then hand
   // off to the existing mapping step (which the user confirms/remaps).
-  const processBankFiles = async () => {
-    const rows = bankFiles()
-    const recognized = rows.filter((r) => r.bankId)
+  // Core bank transform shared by "Process" (upload) and "Recalculate" (preview):
+  // validate the recognized files, run the adapters through the given rules (or the
+  // persisted ones), and return the canonical table. Returns null on validation
+  // failure (after surfacing the error). Throws propagate to the caller's try.
+  const runBankTransform = async (rulesOverride?: {
+    categoryRules: CategoryRuleSet
+    transferRules: TransferRuleSet
+  }) => {
+    const recognized = bankFiles().filter((r) => r.bankId)
     if (recognized.length === 0) {
       setError('None of the files were recognized as a supported bank statement')
-      return
+      return null
     }
     if (recognized.some((r) => !r.targetAccount)) {
       setError('Choose a target account for every recognized file')
-      return
+      return null
     }
+    const knownAccounts = bankAccounts().map((a) => a.name)
+    const categoryRules = rulesOverride?.categoryRules ?? loadCategoryRules()
+    const stored = rulesOverride?.transferRules ?? loadTransferRules()
+    // The user's own account names always count as transfer endpoints, on top of
+    // whatever they configured in the rules editor.
+    const transferRules = {
+      ...stored,
+      ownAccounts: Array.from(new Set([...stored.ownAccounts, ...knownAccounts])),
+    }
+    const result = await processFiles(
+      recognized.map((r) => ({
+        filename: r.file.name,
+        bytes: r.bytes,
+        bankId: r.bankId!,
+        targetAccount: r.targetAccount,
+      })),
+      { categoryRules, transferRules, knownAccounts }
+    )
+    const filename =
+      recognized.length === 1 ? recognized[0].file.name : `${recognized.length} statements`
+    return { result, recognized, filename }
+  }
+
+  const bankUploadResult = (result: { headers: string[]; rows: string[][] }, filename: string) => ({
+    headers: result.headers,
+    rows: result.rows,
+    filename,
+    fileId: `bank-${Date.now()}`,
+    sheetName: 'Bank Import',
+    sheetNames: ['Bank Import'],
+    totalRows: result.rows.length,
+    duplicateCount: 0,
+    duplicateIndices: [],
+  })
+
+  const processBankFiles = async () => {
     setLoading(true)
     setError(null)
     setBankWarnings([])
     try {
-      const knownAccounts = bankAccounts().map((a) => a.name)
-      const categoryRules = loadCategoryRules()
-      const stored = loadTransferRules()
-      // The user's own account names always count as transfer endpoints, on top of
-      // whatever they configured in the rules editor.
-      const transferRules = {
-        ...stored,
-        ownAccounts: Array.from(new Set([...stored.ownAccounts, ...knownAccounts])),
-      }
-      const result = await processFiles(
-        recognized.map((r) => ({
-          filename: r.file.name,
-          bytes: r.bytes,
-          bankId: r.bankId!,
-          targetAccount: r.targetAccount,
-        })),
-        { categoryRules, transferRules, knownAccounts }
-      )
+      const outcome = await runBankTransform()
+      if (!outcome) return
+      const { result, recognized, filename } = outcome
       setBankWarnings(result.warnings)
       // Remember each account choice so the next matching statement auto-routes.
       recognized.forEach((r) => {
@@ -563,18 +595,7 @@ export default function Import() {
         setError('No transactions were found in the selected files')
         return
       }
-      setUploadResult({
-        headers: result.headers,
-        rows: result.rows,
-        filename:
-          recognized.length === 1 ? recognized[0].file.name : `${recognized.length} statements`,
-        fileId: `bank-${Date.now()}`,
-        sheetName: 'Bank Import',
-        sheetNames: ['Bank Import'],
-        totalRows: result.rows.length,
-        duplicateCount: 0,
-        duplicateIndices: [],
-      })
+      setUploadResult(bankUploadResult(result, filename))
       setSheetResult(null)
       setHeaders(result.headers)
       setRows(result.rows)
@@ -618,8 +639,13 @@ export default function Import() {
     }
   }
 
-  const saveBankRules = () => {
-    const cats = categoryRuleDraft
+  // Build rule sets from the editor drafts, persist them, and return them so the
+  // caller (Save or Recalculate) can use the exact same values immediately.
+  const persistBankRulesFromDraft = (): {
+    categoryRules: CategoryRuleSet
+    transferRules: TransferRuleSet
+  } => {
+    const categoryRules = categoryRuleDraft
       .map((r) => ({
         category: r.category.trim(),
         keywords: r.keywords
@@ -628,7 +654,7 @@ export default function Import() {
           .filter(Boolean),
       }))
       .filter((r) => r.category && r.keywords.length > 0)
-    saveCategoryRules(cats)
+    saveCategoryRules(categoryRules)
 
     const keywords = transferKeywordDraft()
       .split(',')
@@ -639,8 +665,17 @@ export default function Import() {
       const sig = c.signature.trim().toLowerCase()
       if (sig && c.account) counterparts[sig] = c.account
     }
-    const existing = loadTransferRules()
-    saveTransferRules({ ownAccounts: existing.ownAccounts, keywords, counterparts })
+    const transferRules: TransferRuleSet = {
+      ownAccounts: loadTransferRules().ownAccounts,
+      keywords,
+      counterparts,
+    }
+    saveTransferRules(transferRules)
+    return { categoryRules, transferRules }
+  }
+
+  const saveBankRules = () => {
+    persistBankRulesFromDraft()
     loadBankRules()
     setResultMessage({ type: 'success', text: 'Bank import rules saved.' })
   }
@@ -649,6 +684,46 @@ export default function Import() {
     resetBankImportRules()
     loadBankRules()
     setResultMessage({ type: 'success', text: 'Bank import rules reset to defaults.' })
+  }
+
+  // Re-run the transform with the just-saved edited rules and refresh the preview in
+  // place, preserving the user's manual income/expense/account type choices.
+  const recalculateBankPreview = async () => {
+    setLoading(true)
+    setError(null)
+    setBankWarnings([])
+    try {
+      const rules = persistBankRulesFromDraft()
+      loadBankRules()
+      const outcome = await runBankTransform(rules)
+      if (!outcome) return
+      const { result, filename } = outcome
+      setBankWarnings(result.warnings)
+      if (result.rows.length === 0) {
+        setError('No transactions after recalculation — check your rules')
+        return
+      }
+      setUploadResult(bankUploadResult(result, filename))
+      setSheetResult(null)
+      setHeaders(result.headers)
+      setRows(result.rows)
+      const mapping = autoDetectMapping(result.headers)
+      setColumnMapping(mapping)
+      if (mapping['category'] !== undefined) {
+        const existing = categoryTypes()
+        const merged: Record<string, 'income' | 'expense' | 'account'> = {}
+        for (const cat of detectCategories()) {
+          merged[cat] = existing[cat] ?? classifyCategory(cat)
+        }
+        setCategoryTypes(merged)
+      }
+      goToPreview()
+      setResultMessage({ type: 'success', text: 'Preview recalculated from your rules.' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to recalculate the preview')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Google Sheets fetch
@@ -900,6 +975,215 @@ export default function Import() {
     void loadBankCategories()
     loadBankRules()
   })
+
+  // The Bank Imports categorization + transfer rules editor. Rendered on the upload
+  // tab, and on the preview step with a Recalculate button that re-runs the transform.
+  const bankRulesEditor = (opts: { onRecalculate?: () => void } = {}) => (
+    <div style={{ 'margin-top': '16px' }}>
+      <button
+        class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+        onClick={() => setShowBankRules(!showBankRules())}
+      >
+        {showBankRules() ? 'Hide' : 'Edit'} categorization &amp; transfer rules
+      </button>
+
+      <Show when={showBankRules()}>
+        <div
+          style={{
+            'margin-top': '10px',
+            border: '1px solid var(--border)',
+            'border-radius': '8px',
+            padding: '12px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '14px',
+          }}
+        >
+          <div>
+            <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
+              Category keyword rules
+            </p>
+            <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+              A transaction gets the category whose longest matching keyword appears in its
+              description (most specific wins). Pick an existing category or type a new one;
+              comma-separate keywords.
+            </p>
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
+              <For each={categoryRuleDraft}>
+                {(rule, i) => (
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '6px',
+                      'align-items': 'center',
+                      'flex-wrap': 'wrap',
+                    }}
+                  >
+                    <input
+                      class={styles.ruleField}
+                      style={{ flex: '0 0 160px' }}
+                      list="bankCategoryList"
+                      placeholder="Category (pick or type)"
+                      value={rule.category}
+                      onInput={(e) => {
+                        setCategoryRuleDraft(i(), 'category', e.currentTarget.value)
+                      }}
+                    />
+                    <input
+                      class={styles.ruleField}
+                      style={{ flex: '1 1 220px' }}
+                      placeholder="keyword1, keyword2, ..."
+                      value={rule.keywords}
+                      onInput={(e) => {
+                        setCategoryRuleDraft(i(), 'keywords', e.currentTarget.value)
+                      }}
+                    />
+                    <button
+                      class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => {
+                        setCategoryRuleDraft(
+                          produce((d) => {
+                            d.splice(i(), 1)
+                          })
+                        )
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </For>
+              <datalist id="bankCategoryList">
+                <For each={bankCategories()}>{(c) => <option value={c} />}</For>
+              </datalist>
+            </div>
+            <button
+              class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+              style={{ 'margin-top': '8px' }}
+              onClick={() => {
+                setCategoryRuleDraft(
+                  produce((d) => {
+                    d.push({ category: '', keywords: '' })
+                  })
+                )
+              }}
+            >
+              Add category rule
+            </button>
+          </div>
+
+          <div>
+            <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
+              Transfer rules
+            </p>
+            <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+              A movement is treated as a transfer when its text contains one of these keywords or
+              one of your account names. Map a counterpart signature (a keyword or a card's last 4
+              digits) to the account it represents so both sides are linked.
+            </p>
+            <input
+              class={styles.ruleField}
+              style={{ width: '100%', 'margin-bottom': '8px' }}
+              placeholder="Transfer keywords: top-up, transfer, ibkr, ..."
+              value={transferKeywordDraft()}
+              onInput={(e) => {
+                setTransferKeywordDraft(e.currentTarget.value)
+              }}
+            />
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
+              <For each={counterpartDraft}>
+                {(cp, i) => (
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '6px',
+                      'align-items': 'center',
+                      'flex-wrap': 'wrap',
+                    }}
+                  >
+                    <input
+                      class={styles.ruleField}
+                      style={{ flex: '0 0 150px' }}
+                      placeholder="Signature (e.g. 1399)"
+                      value={cp.signature}
+                      onInput={(e) => {
+                        setCounterpartDraft(i(), 'signature', e.currentTarget.value)
+                      }}
+                    />
+                    <span style="color: var(--text-secondary);">→</span>
+                    <select
+                      class={styles.mappingSelect}
+                      style={{ flex: '0 0 170px' }}
+                      value={cp.account}
+                      onChange={(e) => {
+                        setCounterpartDraft(i(), 'account', e.currentTarget.value)
+                      }}
+                    >
+                      <option value="">Account…</option>
+                      <For each={bankAccounts()}>
+                        {(a) => <option value={a.name}>{a.name}</option>}
+                      </For>
+                    </select>
+                    <button
+                      class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => {
+                        setCounterpartDraft(
+                          produce((d) => {
+                            d.splice(i(), 1)
+                          })
+                        )
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </For>
+            </div>
+            <button
+              class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+              style={{ 'margin-top': '8px' }}
+              onClick={() => {
+                setCounterpartDraft(
+                  produce((d) => {
+                    d.push({ signature: '', account: '' })
+                  })
+                )
+              }}
+            >
+              Add counterpart
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
+            <Show when={opts.onRecalculate}>
+              <button
+                class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
+                disabled={loading()}
+                onClick={() => {
+                  opts.onRecalculate?.()
+                }}
+              >
+                Recalculate preview
+              </button>
+            </Show>
+            <button
+              class={`${styles.btn} ${opts.onRecalculate ? styles.btnOutline : styles.btnPrimary} ${styles.btnSm}`}
+              onClick={saveBankRules}
+            >
+              Save rules
+            </button>
+            <button
+              class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+              onClick={resetBankRules}
+            >
+              Reset to defaults
+            </button>
+          </div>
+        </div>
+      </Show>
+    </div>
+  )
 
   // Data entry step (with tabs for Google Sheets, File Upload, Paste CSV)
   const dataEntryStep = () => (
@@ -1659,199 +1943,7 @@ export default function Import() {
             </ul>
           </Show>
 
-          <div style={{ 'margin-top': '16px' }}>
-            <button
-              class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
-              onClick={() => setShowBankRules(!showBankRules())}
-            >
-              {showBankRules() ? 'Hide' : 'Edit'} categorization &amp; transfer rules
-            </button>
-
-            <Show when={showBankRules()}>
-              <div
-                style={{
-                  'margin-top': '10px',
-                  border: '1px solid var(--border)',
-                  'border-radius': '8px',
-                  padding: '12px',
-                  display: 'flex',
-                  'flex-direction': 'column',
-                  gap: '14px',
-                }}
-              >
-                <div>
-                  <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
-                    Category keyword rules
-                  </p>
-                  <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
-                    A transaction gets the category whose longest matching keyword appears in its
-                    description (most specific wins). Pick an existing category or type a new one;
-                    comma-separate keywords.
-                  </p>
-                  <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-                    <For each={categoryRuleDraft}>
-                      {(rule, i) => (
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: '6px',
-                            'align-items': 'center',
-                            'flex-wrap': 'wrap',
-                          }}
-                        >
-                          <input
-                            class={styles.ruleField}
-                            style={{ flex: '0 0 160px' }}
-                            list="bankCategoryList"
-                            placeholder="Category (pick or type)"
-                            value={rule.category}
-                            onInput={(e) => {
-                              setCategoryRuleDraft(i(), 'category', e.currentTarget.value)
-                            }}
-                          />
-                          <input
-                            class={styles.ruleField}
-                            style={{ flex: '1 1 220px' }}
-                            placeholder="keyword1, keyword2, ..."
-                            value={rule.keywords}
-                            onInput={(e) => {
-                              setCategoryRuleDraft(i(), 'keywords', e.currentTarget.value)
-                            }}
-                          />
-                          <button
-                            class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                            onClick={() => {
-                              setCategoryRuleDraft(
-                                produce((d) => {
-                                  d.splice(i(), 1)
-                                })
-                              )
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </For>
-                    <datalist id="bankCategoryList">
-                      <For each={bankCategories()}>{(c) => <option value={c} />}</For>
-                    </datalist>
-                  </div>
-                  <button
-                    class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
-                    style={{ 'margin-top': '8px' }}
-                    onClick={() => {
-                      setCategoryRuleDraft(
-                        produce((d) => {
-                          d.push({ category: '', keywords: '' })
-                        })
-                      )
-                    }}
-                  >
-                    Add category rule
-                  </button>
-                </div>
-
-                <div>
-                  <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
-                    Transfer rules
-                  </p>
-                  <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
-                    A movement is treated as a transfer when its text contains one of these keywords
-                    or one of your account names. Map a counterpart signature (a keyword or a card's
-                    last 4 digits) to the account it represents so both sides are linked.
-                  </p>
-                  <input
-                    class={styles.ruleField}
-                    style={{ width: '100%', 'margin-bottom': '8px' }}
-                    placeholder="Transfer keywords: top-up, transfer, ibkr, ..."
-                    value={transferKeywordDraft()}
-                    onInput={(e) => {
-                      setTransferKeywordDraft(e.currentTarget.value)
-                    }}
-                  />
-                  <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-                    <For each={counterpartDraft}>
-                      {(cp, i) => (
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: '6px',
-                            'align-items': 'center',
-                            'flex-wrap': 'wrap',
-                          }}
-                        >
-                          <input
-                            class={styles.ruleField}
-                            style={{ flex: '0 0 150px' }}
-                            placeholder="Signature (e.g. 1399)"
-                            value={cp.signature}
-                            onInput={(e) => {
-                              setCounterpartDraft(i(), 'signature', e.currentTarget.value)
-                            }}
-                          />
-                          <span style="color: var(--text-secondary);">→</span>
-                          <select
-                            class={styles.mappingSelect}
-                            style={{ flex: '0 0 170px' }}
-                            value={cp.account}
-                            onChange={(e) => {
-                              setCounterpartDraft(i(), 'account', e.currentTarget.value)
-                            }}
-                          >
-                            <option value="">Account…</option>
-                            <For each={bankAccounts()}>
-                              {(a) => <option value={a.name}>{a.name}</option>}
-                            </For>
-                          </select>
-                          <button
-                            class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                            onClick={() => {
-                              setCounterpartDraft(
-                                produce((d) => {
-                                  d.splice(i(), 1)
-                                })
-                              )
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                  <button
-                    class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
-                    style={{ 'margin-top': '8px' }}
-                    onClick={() => {
-                      setCounterpartDraft(
-                        produce((d) => {
-                          d.push({ signature: '', account: '' })
-                        })
-                      )
-                    }}
-                  >
-                    Add counterpart
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
-                    onClick={saveBankRules}
-                  >
-                    Save rules
-                  </button>
-                  <button
-                    class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                    onClick={resetBankRules}
-                  >
-                    Reset to defaults
-                  </button>
-                </div>
-              </div>
-            </Show>
-          </div>
+          {bankRulesEditor()}
         </>
       )}
     </div>
@@ -2133,6 +2225,11 @@ export default function Import() {
             </button>
           </div>
         </div>
+
+        {/* Bank-statement rules: tweak categorization/transfers and recalculate in place */}
+        <Show when={bankFiles().length > 0}>
+          {bankRulesEditor({ onRecalculate: recalculateBankPreview })}
+        </Show>
 
         {/* Table */}
         <div class={styles.tableWrapper}>
