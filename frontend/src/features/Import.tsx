@@ -35,11 +35,26 @@
  * Handles CSV/Excel file and Google Sheets import with full 12-field column mapping, duplicate detection, and category type review
  */
 
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import { createStore, produce, reconcile } from 'solid-js/store'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
+import {
+  detectBank,
+  listAdapters,
+  loadCategoryRules,
+  loadTransferRules,
+  processFiles,
+  resetBankImportRules,
+  resolveTargetAccount,
+  saveCategoryRules,
+  saveTransferRules,
+  toDetectInput,
+} from '../core/bankImport'
+import { loadBankImportMemory, rememberBankImportChoice } from '../core/bankImport/memory'
 import { classifyCategory } from '../core/categoryClassifier'
 import styles from './Import.module.css'
+import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../core/bankImport'
 
 // Column field names for mapping
 const FIELD_NAMES = [
@@ -83,6 +98,24 @@ const HEADER_VARIANTS: Record<string, string[]> = {
   ],
 } as const
 
+/**
+ * Indices of rows whose full (trimmed) content is identical to an earlier row in the
+ * same import — within-batch duplicates, e.g. the same transaction appearing in two
+ * overlapping statement periods uploaded together. The first occurrence is kept; every
+ * later identical copy is returned. (Duplicates against already-imported data are
+ * handled separately by the server on execute.)
+ */
+function computeRowDuplicates(rows: string[][]): number[] {
+  const seen = new Set<string>()
+  const dups: number[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const key = rows[i].map((c) => (c ?? '').trim()).join('\x01')
+    if (seen.has(key)) dups.push(i)
+    else seen.add(key)
+  }
+  return dups
+}
+
 interface UploadResult {
   fileId: string
   filename: string
@@ -119,7 +152,7 @@ interface ImportLogEntry {
 
 export default function Import() {
   // Import method tab
-  type ImportTab = 'google-sheets' | 'file-upload' | 'paste-csv'
+  type ImportTab = 'google-sheets' | 'file-upload' | 'paste-csv' | 'bank-imports'
   const [activeImportTab, setActiveImportTab] = createSignal<ImportTab>('google-sheets')
 
   const profileHeaders = () => {
@@ -149,7 +182,9 @@ export default function Import() {
   // File upload state
   const [uploadResult, setUploadResult] = createSignal<UploadResult | null>(null)
   const [selectedSheet, setSelectedSheet] = createSignal<string>('')
-  const [fileId, setFileId] = createSignal<string>('')
+  // Getter unused since duplicate detection moved client-side (it was only read by
+  // the removed /api/import/file-sheet call); the setter still records the upload id.
+  const [_fileId, setFileId] = createSignal<string>('')
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = createSignal<string>('')
@@ -159,6 +194,37 @@ export default function Import() {
   // Paste CSV state
   const [pastedText, setPastedText] = createSignal('')
   const [pasteDelimiter, setPasteDelimiter] = createSignal<'auto' | 'comma' | 'tab'>('auto')
+
+  // Bank Imports state
+  interface BankFileRow {
+    file: File
+    bytes: Uint8Array
+    bankId: BankId | null
+    confidence: number
+    meta: StatementMeta
+    targetAccount: string
+  }
+  const [bankFiles, setBankFiles] = createSignal<BankFileRow[]>([])
+  const [bankAccounts, setBankAccounts] = createSignal<
+    { id: number; name: string; bank_name?: string | null }[]
+  >([])
+  const [bankWarnings, setBankWarnings] = createSignal<string[]>([])
+
+  // Editable categorization + transfer rules (persisted per profile). Keywords are
+  // edited as comma-separated strings for a friendlier input, split on save.
+  const [showBankRules, setShowBankRules] = createSignal(false)
+  // Stores (not signals) so editing one row's field updates it in place — a signal
+  // + .map() would replace the row object and make <For> recreate the DOM node,
+  // dropping input focus on every keystroke.
+  const [categoryRuleDraft, setCategoryRuleDraft] = createStore<
+    { category: string; keywords: string }[]
+  >([])
+  const [transferKeywordDraft, setTransferKeywordDraft] = createSignal('')
+  const [counterpartDraft, setCounterpartDraft] = createStore<
+    { signature: string; account: string }[]
+  >([])
+  // Existing category names — powers the category-rule combobox (datalist).
+  const [bankCategories, setBankCategories] = createSignal<string[]>([])
 
   const parsePastedData = (text: string) => {
     if (!text.trim()) return
@@ -243,7 +309,7 @@ export default function Import() {
   const [selectedRows, setSelectedRows] = createSignal<Set<number>>(new Set())
   const [currentPage, setCurrentPage] = createSignal(1)
   const [rowsPerPage, setRowsPerPage] = createSignal(50)
-  const [duplicateIndices, _setDuplicateIndices] = createSignal<number[]>([])
+  const [duplicateIndices, setDuplicateIndices] = createSignal<number[]>([])
 
   // Loading/error
   const [loading, setLoading] = createSignal(false)
@@ -268,11 +334,9 @@ export default function Import() {
     return []
   }
 
-  const hasDuplicateCount = () => {
-    if (uploadResult()) return uploadResult()!.duplicateCount
-    if (sheetResult()) return sheetResult()!.duplicateCount
-    return 0
-  }
+  // Rows flagged as within-batch duplicates (identical to an earlier row in this
+  // import), memoized as a Set for O(1) lookup in the preview table.
+  const duplicateSet = createMemo(() => new Set(duplicateIndices()))
 
   // Calculate auto-detection mapping
   const autoDetectMapping = (headers: string[]) => {
@@ -324,7 +388,12 @@ export default function Import() {
     const rows = currentRows()
     if (rows.length === 0) return
     setActiveStep('preview')
-    setSelectedRows(new Set<number>(rows.map((_, i) => i)))
+    const dups = computeRowDuplicates(rows)
+    setDuplicateIndices(dups)
+    const dupSet = new Set(dups)
+    // Skip duplicates by default: select every row except the duplicate copies. The
+    // user can re-check a duplicate row (or use "Import All") to include it anyway.
+    setSelectedRows(new Set<number>(rows.map((_, i) => i).filter((i) => !dupSet.has(i))))
     setCurrentPage(1)
   }
 
@@ -344,6 +413,11 @@ export default function Import() {
     setError(null)
     setResultMessage(null)
     setImportId('')
+    // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
+    // and the preview's rules editor is gated correctly by bankFiles().length.
+    setBankFiles([])
+    setBankWarnings([])
+    setShowBankRules(false)
   }
 
   // File upload
@@ -395,6 +469,284 @@ export default function Import() {
     event.preventDefault()
     const file = event.dataTransfer?.files[0]
     if (file) handleFileUpload(file)
+  }
+
+  // ---- Bank Imports ----
+  const loadBankAccounts = async () => {
+    try {
+      const res = await apiFetch('/api/accounts', { headers: profileHeaders() })
+      if (!res.ok) return
+      const list = await res.json()
+      if (Array.isArray(list)) {
+        setBankAccounts(
+          list.map((a: Record<string, unknown>) => ({
+            id: a.id as number,
+            name: a.name as string,
+            bank_name: (a.bank_name as string) ?? null,
+          }))
+        )
+      }
+    } catch {
+      // Account picker simply falls back to manual entry
+    }
+  }
+
+  // Detect the bank + sniff metadata for one file, then best-effort resolve the
+  // target account (remembered choice → IBAN/name heuristic).
+  const analyzeBankFile = async (file: File): Promise<BankFileRow> => {
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const det = detectBank(toDetectInput(file.name, bytes))
+    let meta: StatementMeta = {}
+    if (det) {
+      try {
+        meta = (await det.adapter.parse(bytes, file.name)).meta
+      } catch {
+        // Metadata is best-effort; parsing runs again at process time
+      }
+    }
+    const targetAccount = det
+      ? (resolveTargetAccount(
+          det.adapter.id,
+          meta,
+          file.name,
+          bankAccounts(),
+          loadBankImportMemory()
+        ) ?? '')
+      : ''
+    return {
+      file,
+      bytes,
+      bankId: det?.adapter.id ?? null,
+      confidence: det?.confidence ?? 0,
+      meta,
+      targetAccount,
+    }
+  }
+
+  const addBankFiles = async (files: FileList | File[]) => {
+    setError(null)
+    const analyzed = await Promise.all(Array.from(files).map(analyzeBankFile))
+    setBankFiles([...bankFiles(), ...analyzed])
+  }
+
+  const handleBankFileSelect = (event: Event) => {
+    const target = event.target as HTMLInputElement
+    if (target.files?.length) void addBankFiles(target.files)
+    target.value = ''
+  }
+
+  const handleBankDrop = (event: DragEvent) => {
+    event.preventDefault()
+    if (event.dataTransfer?.files?.length) void addBankFiles(event.dataTransfer.files)
+  }
+
+  const updateBankFile = (idx: number, patch: Partial<BankFileRow>) => {
+    setBankFiles(bankFiles().map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+  }
+  const removeBankFile = (idx: number) => {
+    setBankFiles(bankFiles().filter((_, i) => i !== idx))
+  }
+
+  // Parse + transform every recognized file into the canonical table, then hand
+  // off to the existing mapping step (which the user confirms/remaps).
+  // Core bank transform shared by "Process" (upload) and "Recalculate" (preview):
+  // validate the recognized files, run the adapters through the given rules (or the
+  // persisted ones), and return the canonical table. Returns null on validation
+  // failure (after surfacing the error). Throws propagate to the caller's try.
+  const runBankTransform = async (rulesOverride?: {
+    categoryRules: CategoryRuleSet
+    transferRules: TransferRuleSet
+  }) => {
+    const recognized = bankFiles().filter((r) => r.bankId)
+    if (recognized.length === 0) {
+      setError('None of the files were recognized as a supported bank statement')
+      return null
+    }
+    if (recognized.some((r) => !r.targetAccount)) {
+      setError('Choose a target account for every recognized file')
+      return null
+    }
+    const knownAccounts = bankAccounts().map((a) => a.name)
+    const categoryRules = rulesOverride?.categoryRules ?? loadCategoryRules()
+    const stored = rulesOverride?.transferRules ?? loadTransferRules()
+    // The user's own account names always count as transfer endpoints, on top of
+    // whatever they configured in the rules editor.
+    const transferRules = {
+      ...stored,
+      ownAccounts: Array.from(new Set([...stored.ownAccounts, ...knownAccounts])),
+    }
+    const result = await processFiles(
+      recognized.map((r) => ({
+        filename: r.file.name,
+        bytes: r.bytes,
+        bankId: r.bankId!,
+        targetAccount: r.targetAccount,
+      })),
+      { categoryRules, transferRules, knownAccounts }
+    )
+    const filename =
+      recognized.length === 1 ? recognized[0].file.name : `${recognized.length} statements`
+    return { result, recognized, filename }
+  }
+
+  const bankUploadResult = (result: { headers: string[]; rows: string[][] }, filename: string) => ({
+    headers: result.headers,
+    rows: result.rows,
+    filename,
+    fileId: `bank-${Date.now()}`,
+    sheetName: 'Bank Import',
+    sheetNames: ['Bank Import'],
+    totalRows: result.rows.length,
+    duplicateCount: 0,
+    duplicateIndices: [],
+  })
+
+  const processBankFiles = async () => {
+    setLoading(true)
+    setError(null)
+    setBankWarnings([])
+    try {
+      const outcome = await runBankTransform()
+      if (!outcome) return
+      const { result, recognized, filename } = outcome
+      setBankWarnings(result.warnings)
+      // Remember each account choice so the next matching statement auto-routes.
+      recognized.forEach((r) => {
+        rememberBankImportChoice(r.bankId!, r.meta, r.file.name, r.targetAccount)
+      })
+      if (result.rows.length === 0) {
+        setError('No transactions were found in the selected files')
+        return
+      }
+      setUploadResult(bankUploadResult(result, filename))
+      setSheetResult(null)
+      setHeaders(result.headers)
+      setRows(result.rows)
+      goToMapping()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process bank files')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ---- Bank import rules editor ----
+  const loadBankRules = () => {
+    setCategoryRuleDraft(
+      reconcile(
+        loadCategoryRules().map((r) => ({ category: r.category, keywords: r.keywords.join(', ') }))
+      )
+    )
+    const t = loadTransferRules()
+    setTransferKeywordDraft(t.keywords.join(', '))
+    setCounterpartDraft(
+      reconcile(
+        Object.entries(t.counterparts).map(([signature, account]) => ({ signature, account }))
+      )
+    )
+  }
+
+  const loadBankCategories = async () => {
+    try {
+      const res = await apiFetch('/api/categories', { headers: profileHeaders() })
+      if (!res.ok) return
+      const list = await res.json()
+      if (Array.isArray(list)) {
+        const names = list
+          .map((c: Record<string, unknown>) => (typeof c.name === 'string' ? c.name : ''))
+          .filter(Boolean)
+        setBankCategories([...new Set<string>(names)].sort((a, b) => a.localeCompare(b)))
+      }
+    } catch {
+      // Combobox simply offers no suggestions
+    }
+  }
+
+  // Build rule sets from the editor drafts, persist them, and return them so the
+  // caller (Save or Recalculate) can use the exact same values immediately.
+  const persistBankRulesFromDraft = (): {
+    categoryRules: CategoryRuleSet
+    transferRules: TransferRuleSet
+  } => {
+    const categoryRules = categoryRuleDraft
+      .map((r) => ({
+        category: r.category.trim(),
+        keywords: r.keywords
+          .split(',')
+          .map((k) => k.trim())
+          .filter(Boolean),
+      }))
+      .filter((r) => r.category && r.keywords.length > 0)
+    saveCategoryRules(categoryRules)
+
+    const keywords = transferKeywordDraft()
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean)
+    const counterparts: Record<string, string> = {}
+    for (const c of counterpartDraft) {
+      const sig = c.signature.trim().toLowerCase()
+      if (sig && c.account) counterparts[sig] = c.account
+    }
+    const transferRules: TransferRuleSet = {
+      ownAccounts: loadTransferRules().ownAccounts,
+      keywords,
+      counterparts,
+    }
+    saveTransferRules(transferRules)
+    return { categoryRules, transferRules }
+  }
+
+  const saveBankRules = () => {
+    persistBankRulesFromDraft()
+    loadBankRules()
+    setResultMessage({ type: 'success', text: 'Bank import rules saved.' })
+  }
+
+  const resetBankRules = () => {
+    resetBankImportRules()
+    loadBankRules()
+    setResultMessage({ type: 'success', text: 'Bank import rules reset to defaults.' })
+  }
+
+  // Re-run the transform with the just-saved edited rules and refresh the preview in
+  // place, preserving the user's manual income/expense/account type choices.
+  const recalculateBankPreview = async () => {
+    setLoading(true)
+    setError(null)
+    setBankWarnings([])
+    try {
+      const rules = persistBankRulesFromDraft()
+      loadBankRules()
+      const outcome = await runBankTransform(rules)
+      if (!outcome) return
+      const { result, filename } = outcome
+      setBankWarnings(result.warnings)
+      if (result.rows.length === 0) {
+        setError('No transactions after recalculation — check your rules')
+        return
+      }
+      setUploadResult(bankUploadResult(result, filename))
+      setSheetResult(null)
+      setHeaders(result.headers)
+      setRows(result.rows)
+      const mapping = autoDetectMapping(result.headers)
+      setColumnMapping(mapping)
+      if (mapping['category'] !== undefined) {
+        const existing = categoryTypes()
+        const merged: Record<string, 'income' | 'expense' | 'account'> = {}
+        for (const cat of detectCategories()) {
+          merged[cat] = existing[cat] ?? classifyCategory(cat)
+        }
+        setCategoryTypes(merged)
+      }
+      goToPreview()
+      setResultMessage({ type: 'success', text: 'Preview recalculated from your rules.' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to recalculate the preview')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Google Sheets fetch
@@ -521,23 +873,13 @@ export default function Import() {
         rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
       }
 
-      // Server-side duplicate detection for new-only mode
-      const dupCount = hasDuplicateCount() ?? 0
+      // "Import only new" skips the within-batch duplicate rows detected on preview.
+      // (Duplicates against already-imported data are skipped by the server on execute
+      // regardless of mode.)
+      const dupCount = duplicateIndices().length
       if (mode === 'new' && dupCount > 0) {
-        const previewResponse = await apiFetch('/api/import/file-sheet', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...profileHeaders() },
-          body: JSON.stringify({
-            fileId: fileId(),
-            sheetName: selectedSheet(),
-            mapping,
-          }),
-        })
-
-        const previewData = await previewResponse.json()
-        if (previewData.duplicateIndices) {
-          rowsToImport = rowsToImport.filter((_, i) => !previewData.duplicateIndices!.includes(i))
-        }
+        const dupSet = duplicateSet()
+        rowsToImport = rowsToImport.filter((_, i) => !dupSet.has(i))
       }
 
       // Reuse a stable id across retries so the worker can de-dupe a re-run of the same import.
@@ -577,7 +919,9 @@ export default function Import() {
           ? uploadResult()?.filename || 'File upload'
           : activeImportTab() === 'google-sheets'
             ? `Google Sheet${selectedSheet() ? ` (${selectedSheet()})` : ''}`
-            : 'Pasted CSV'
+            : activeImportTab() === 'bank-imports'
+              ? uploadResult()?.filename || 'Bank statements'
+              : 'Pasted CSV'
       apiFetch('/api/import-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
@@ -597,7 +941,9 @@ export default function Import() {
         }),
       })
         .then(() => loadImportLogs())
-        .catch((e: unknown) => { console.error('Failed to record import log:', e); })
+        .catch((e: unknown) => {
+          console.error('Failed to record import log:', e)
+        })
 
       // Opt-in: set each historical month's budgets to that month's spending so the
       // budget-vs-spent charts aren't empty for imported history.
@@ -610,7 +956,10 @@ export default function Import() {
           })
           const bfData = await bf.json()
           if (bfData?.ok) {
-            toast(`Set budgets for ${bfData.months} month${bfData.months === 1 ? '' : 's'} from spending`, 'success')
+            toast(
+              `Set budgets for ${bfData.months} month${bfData.months === 1 ? '' : 's'} from spending`,
+              'success'
+            )
           }
         } catch (e) {
           console.error('Failed to backfill budgets after import:', e)
@@ -637,7 +986,219 @@ export default function Import() {
     })
     setCategoryTypes(types)
     void loadImportLogs()
+    void loadBankAccounts()
+    void loadBankCategories()
+    loadBankRules()
   })
+
+  // The Bank Imports categorization + transfer rules editor. Rendered on the upload
+  // tab, and on the preview step with a Recalculate button that re-runs the transform.
+  const bankRulesEditor = (opts: { onRecalculate?: () => void } = {}) => (
+    <div style={{ 'margin-top': '16px' }}>
+      <button
+        class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+        onClick={() => setShowBankRules(!showBankRules())}
+      >
+        {showBankRules() ? 'Hide' : 'Edit'} categorization &amp; transfer rules
+      </button>
+
+      <Show when={showBankRules()}>
+        <div
+          style={{
+            'margin-top': '10px',
+            border: '1px solid var(--border)',
+            'border-radius': '8px',
+            padding: '12px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '14px',
+          }}
+        >
+          <div>
+            <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
+              Category keyword rules
+            </p>
+            <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+              A transaction gets the category whose longest matching keyword appears in its
+              description (most specific wins). Pick an existing category or type a new one;
+              comma-separate keywords.
+            </p>
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
+              <For each={categoryRuleDraft}>
+                {(rule, i) => (
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '6px',
+                      'align-items': 'center',
+                      'flex-wrap': 'wrap',
+                    }}
+                  >
+                    <input
+                      class={styles.ruleField}
+                      style={{ flex: '0 0 160px' }}
+                      list="bankCategoryList"
+                      placeholder="Category (pick or type)"
+                      value={rule.category}
+                      onInput={(e) => {
+                        setCategoryRuleDraft(i(), 'category', e.currentTarget.value)
+                      }}
+                    />
+                    <input
+                      class={styles.ruleField}
+                      style={{ flex: '1 1 220px' }}
+                      placeholder="keyword1, keyword2, ..."
+                      value={rule.keywords}
+                      onInput={(e) => {
+                        setCategoryRuleDraft(i(), 'keywords', e.currentTarget.value)
+                      }}
+                    />
+                    <button
+                      class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => {
+                        setCategoryRuleDraft(
+                          produce((d) => {
+                            d.splice(i(), 1)
+                          })
+                        )
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </For>
+              <datalist id="bankCategoryList">
+                <For each={bankCategories()}>{(c) => <option value={c} />}</For>
+              </datalist>
+            </div>
+            <button
+              class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+              style={{ 'margin-top': '8px' }}
+              onClick={() => {
+                setCategoryRuleDraft(
+                  produce((d) => {
+                    d.push({ category: '', keywords: '' })
+                  })
+                )
+              }}
+            >
+              Add category rule
+            </button>
+          </div>
+
+          <div>
+            <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
+              Transfer rules
+            </p>
+            <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+              A movement is treated as a transfer when its text contains one of these keywords or
+              one of your account names. Map a counterpart signature (a keyword or a card's last 4
+              digits) to the account it represents so both sides are linked.
+            </p>
+            <input
+              class={styles.ruleField}
+              style={{ width: '100%', 'margin-bottom': '8px' }}
+              placeholder="Transfer keywords: top-up, transfer, ibkr, ..."
+              value={transferKeywordDraft()}
+              onInput={(e) => {
+                setTransferKeywordDraft(e.currentTarget.value)
+              }}
+            />
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
+              <For each={counterpartDraft}>
+                {(cp, i) => (
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '6px',
+                      'align-items': 'center',
+                      'flex-wrap': 'wrap',
+                    }}
+                  >
+                    <input
+                      class={styles.ruleField}
+                      style={{ flex: '0 0 150px' }}
+                      placeholder="Signature (e.g. 1399)"
+                      value={cp.signature}
+                      onInput={(e) => {
+                        setCounterpartDraft(i(), 'signature', e.currentTarget.value)
+                      }}
+                    />
+                    <span style="color: var(--text-secondary);">→</span>
+                    <select
+                      class={styles.mappingSelect}
+                      style={{ flex: '0 0 170px' }}
+                      value={cp.account}
+                      onChange={(e) => {
+                        setCounterpartDraft(i(), 'account', e.currentTarget.value)
+                      }}
+                    >
+                      <option value="">Account…</option>
+                      <For each={bankAccounts()}>
+                        {(a) => <option value={a.name}>{a.name}</option>}
+                      </For>
+                    </select>
+                    <button
+                      class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => {
+                        setCounterpartDraft(
+                          produce((d) => {
+                            d.splice(i(), 1)
+                          })
+                        )
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </For>
+            </div>
+            <button
+              class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+              style={{ 'margin-top': '8px' }}
+              onClick={() => {
+                setCounterpartDraft(
+                  produce((d) => {
+                    d.push({ signature: '', account: '' })
+                  })
+                )
+              }}
+            >
+              Add counterpart
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
+            <Show when={opts.onRecalculate}>
+              <button
+                class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
+                disabled={loading()}
+                onClick={() => {
+                  opts.onRecalculate?.()
+                }}
+              >
+                Recalculate preview
+              </button>
+            </Show>
+            <button
+              class={`${styles.btn} ${opts.onRecalculate ? styles.btnOutline : styles.btnPrimary} ${styles.btnSm}`}
+              onClick={saveBankRules}
+            >
+              Save rules
+            </button>
+            <button
+              class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+              onClick={resetBankRules}
+            >
+              Reset to defaults
+            </button>
+          </div>
+        </div>
+      </Show>
+    </div>
+  )
 
   // Data entry step (with tabs for Google Sheets, File Upload, Paste CSV)
   const dataEntryStep = () => (
@@ -661,6 +1222,12 @@ export default function Import() {
           onClick={() => setActiveImportTab('paste-csv')}
         >
           Paste CSV
+        </button>
+        <button
+          class={`${styles.tab} ${activeImportTab() === 'bank-imports' ? styles.active : ''}`}
+          onClick={() => setActiveImportTab('bank-imports')}
+        >
+          Bank Imports
         </button>
       </div>
 
@@ -1251,6 +1818,149 @@ export default function Import() {
           )}
         </>
       )}
+
+      {/* Bank Imports Tab */}
+      {activeImportTab() === 'bank-imports' && (
+        <>
+          <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
+            Upload bank statements (Revolut, Erste, PBZ). We detect the bank, map each statement to
+            one of your accounts and convert it into the standard import table — which you confirm
+            on the next step. CSV and XLS supported.
+          </p>
+          <div
+            class={`${styles.dropzone} ${loading() ? styles.disabled : ''}`}
+            onDragOver={handleDragOver}
+            onDrop={handleBankDrop}
+          >
+            <input
+              type="file"
+              id="bank-file-input"
+              accept=".csv,.xls,.xlsx"
+              multiple
+              class={styles.fileInput}
+              disabled={loading()}
+              onChange={handleBankFileSelect}
+            />
+            <label for="bank-file-input" class={styles.uploadLabel}>
+              <svg
+                class={styles.dropzoneIcon}
+                width="48"
+                height="48"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path d="M3 21h18M5 21V9l7-4 7 4v12M9 21v-6h6v6M8 12h.01M16 12h.01" />
+              </svg>
+              <p class={styles.dropzoneTitle}>Click or drag bank statements here</p>
+              <p class={styles.dropzoneHint}>
+                Revolut / Erste (CSV), PBZ (XLS) — multiple files OK
+              </p>
+            </label>
+          </div>
+
+          {bankAccounts().length === 0 && (
+            <p class={styles.error} style={{ 'margin-top': '8px' }}>
+              You have no accounts yet. Create an account first so statements can be linked to it.
+            </p>
+          )}
+
+          <Show when={bankFiles().length > 0}>
+            <div
+              style={{
+                'margin-top': '12px',
+                display: 'flex',
+                'flex-direction': 'column',
+                gap: '8px',
+              }}
+            >
+              <For each={bankFiles()}>
+                {(row, i) => (
+                  <div
+                    style={{
+                      display: 'flex',
+                      'align-items': 'center',
+                      gap: '8px',
+                      'flex-wrap': 'wrap',
+                      border: '1px solid var(--border)',
+                      'border-radius': '8px',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: '1 1 180px',
+                        'font-size': '13px',
+                        'overflow-wrap': 'anywhere',
+                      }}
+                    >
+                      {row.file.name}
+                      {row.meta.iban ? (
+                        <span style="color: var(--text-secondary);"> · {row.meta.iban}</span>
+                      ) : null}
+                    </span>
+                    <select
+                      class={styles.mappingSelect}
+                      style={{ 'max-width': '130px' }}
+                      value={row.bankId ?? ''}
+                      onChange={(e) => {
+                        updateBankFile(i(), {
+                          bankId: (e.currentTarget.value || null) as BankId | null,
+                        })
+                      }}
+                    >
+                      <option value="">Unknown</option>
+                      <For each={listAdapters()}>
+                        {(a) => <option value={a.id}>{a.label}</option>}
+                      </For>
+                    </select>
+                    <select
+                      class={styles.mappingSelect}
+                      style={{ 'max-width': '170px' }}
+                      value={row.targetAccount}
+                      onChange={(e) => {
+                        updateBankFile(i(), { targetAccount: e.currentTarget.value })
+                      }}
+                    >
+                      <option value="">Choose account…</option>
+                      <For each={bankAccounts()}>
+                        {(a) => <option value={a.name}>{a.name}</option>}
+                      </For>
+                    </select>
+                    <button
+                      class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                      onClick={() => {
+                        removeBankFile(i())
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </For>
+            </div>
+
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              style={{ 'margin-top': '12px' }}
+              onClick={processBankFiles}
+              disabled={loading()}
+            >
+              Process &amp; Continue to Mapping
+            </button>
+          </Show>
+
+          <Show when={bankWarnings().length > 0}>
+            <ul
+              style={{ 'margin-top': '10px', color: 'var(--text-secondary)', 'font-size': '12px' }}
+            >
+              <For each={bankWarnings()}>{(w) => <li>{w}</li>}</For>
+            </ul>
+          </Show>
+
+          {bankRulesEditor()}
+        </>
+      )}
     </div>
   )
 
@@ -1481,6 +2191,13 @@ export default function Import() {
               </div>
             )}
           </div>
+          {duplicates > 0 && (
+            <p style={{ margin: '0 0 12px', 'font-size': '12px', color: 'var(--text-secondary)' }}>
+              {duplicates} duplicate row{duplicates === 1 ? '' : 's'} (identical to an earlier row
+              in this import) unselected by default — check a row, or use "Import All", to include
+              it.
+            </p>
+          )}
           <label
             style={{
               display: 'flex',
@@ -1499,8 +2216,8 @@ export default function Import() {
               style={{ 'margin-top': '2px' }}
             />
             <span>
-              Set each month's budget to what was spent that month (fills the budget charts
-              for imported history; overwrites existing budgets).
+              Set each month's budget to what was spent that month (fills the budget charts for
+              imported history; overwrites existing budgets).
             </span>
           </label>
           <div class={styles.importButtons}>
@@ -1531,6 +2248,11 @@ export default function Import() {
           </div>
         </div>
 
+        {/* Bank-statement rules: tweak categorization/transfers and recalculate in place */}
+        <Show when={bankFiles().length > 0}>
+          {bankRulesEditor({ onRecalculate: recalculateBankPreview })}
+        </Show>
+
         {/* Table */}
         <div class={styles.tableWrapper}>
           <table class={styles.previewTable}>
@@ -1554,8 +2276,14 @@ export default function Import() {
               <For each={currentRows().slice(startRow(), endRow())}>
                 {(row, idx) => {
                   const actualIndex = startRow() + idx()
+                  const isDuplicate = () => duplicateSet().has(actualIndex)
                   return (
-                    <tr>
+                    <tr
+                      classList={{ [styles.duplicate]: isDuplicate() }}
+                      title={
+                        isDuplicate() ? 'Duplicate of an earlier row in this import' : undefined
+                      }
+                    >
                       <td class={styles.selectCol}>
                         <input
                           type="checkbox"
@@ -1564,6 +2292,9 @@ export default function Import() {
                             toggleRow(actualIndex)
                           }}
                         />
+                        <Show when={isDuplicate()}>
+                          <span class={styles.dupBadge}>dup</span>
+                        </Show>
                       </td>
                       <For each={row}>{(cell) => <td>{cell ?? ''}</td>}</For>
                     </tr>
@@ -1688,7 +2419,8 @@ export default function Import() {
                       <strong>{log.source || 'Import'}</strong>
                       <span style={{ color: 'var(--text-secondary)', 'margin-left': '8px' }}>
                         {new Date(log.created_at).toLocaleString()} — {log.imported} imported
-                        {log.duplicates_skipped > 0 && `, ${log.duplicates_skipped} duplicates skipped`}
+                        {log.duplicates_skipped > 0 &&
+                          `, ${log.duplicates_skipped} duplicates skipped`}
                       </span>
                     </summary>
                     <div

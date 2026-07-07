@@ -573,8 +573,11 @@ export async function importExecute(body: unknown): Promise<Response> {
       const date = normalizeDate(row.date) || toStr(row.date)
       const amount = parseFloat(toStr(row.amount) || '0')
       // Determine transaction type.
-      // For account-type categories (IB, Revolut, etc.), the type is always from the
-      // account's perspective: positive amount = money INTO account (income),
+      // An explicit "transfer" always wins — a transfer between two accounts is a
+      // transfer regardless of sign, and the category names the destination account
+      // (e.g. bank imports: means_of_payment = source, category = destination).
+      // Otherwise, for account-type categories (IB, Revolut, etc.), the type is from
+      // the account's perspective: positive amount = money INTO account (income),
       // negative = money OUT (expense). Bank statement types are ignored for accounts
       // because the bank's perspective (e.g. "Expense" for a deposit) is inverted.
       let type = 'expense'
@@ -582,9 +585,11 @@ export async function importExecute(body: unknown): Promise<Response> {
       const catName = toStr(row.category).toLowerCase().trim()
       const catType = catTypes[catName]
 
-      if (catType === 'account') {
+      if (rawType === 'transfer') {
+        type = 'transfer'
+      } else if (catType === 'account') {
         type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
-      } else if (['income', 'expense', 'transfer'].includes(rawType)) {
+      } else if (rawType === 'income' || rawType === 'expense') {
         type = rawType
       } else if (catType && (catType === 'income' || catType === 'expense')) {
         type = catType
@@ -675,8 +680,18 @@ export async function importExecute(body: unknown): Promise<Response> {
         const mopId = mopAccountMap.get(mopValue)!
         if (type === 'income' && !accountId) {
           accountId = mopId
-        } else if (type === 'transfer' && !transferAccountId) {
-          transferAccountId = mopId
+        } else if (type === 'transfer') {
+          // Two-account transfer: the category already resolved the DESTINATION
+          // account, so means_of_payment is the SOURCE — link it as account_id so
+          // the balance moves on both sides (matches the worker import, which sets
+          // account_id from means_of_payment and transfer_account_id from category).
+          // When no destination was resolved, keep the prior behavior of treating
+          // means_of_payment as the transfer account.
+          if (transferAccountId && transferAccountId !== mopId && !accountId) {
+            accountId = mopId
+          } else if (!transferAccountId) {
+            transferAccountId = mopId
+          }
         }
         // For expense: money leaves the means_of_payment account
         if (type === 'expense' && !accountId) {

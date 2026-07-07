@@ -6,6 +6,11 @@
 @import './preflight.css';
 
 :root {
+  /* Render native controls (select option popups, scrollbars, date pickers) in
+     the active theme. Without this, a dark app leaves the browser's native
+     <option> list white → white-on-white text. */
+  color-scheme: light;
+
   /* Fonts */
   --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
@@ -105,6 +110,8 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
+
   --bg: #0f172a;
   --bg-color: #0f172a;
   --bg-secondary: #1e293b;
