@@ -393,9 +393,9 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
           const catId =
             data.category_id === null || data.category_id === ''
               ? null
-              : parseInt(data.category_id, 10)
+              : parseInt(data.category_id, 10);
           if (catId !== null && (!Number.isFinite(catId) || catId <= 0)) {
-            throw new HttpError(400, 'Invalid category_id — must be a positive integer or null')
+            throw new HttpError(400, 'Invalid category_id — must be a positive integer or null');
           }
           updates.push('category_id = ?');
           setParams.push(catId);
@@ -403,10 +403,15 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
           // Convert boolean to integer for SQLite — coerce safely to avoid
           // string "false" being truthy in JS.
           updates.push('reconciled = ?');
-          setParams.push(data.reconciled === true || data.reconciled === 1 || data.reconciled === '1' ? 1 : 0);
+          setParams.push(
+            data.reconciled === true || data.reconciled === 1 || data.reconciled === '1' ? 1 : 0
+          );
         } else if (field === 'type') {
           if (!['income', 'expense', 'transfer', 'deduction'].includes(data.type)) {
-            throw new HttpError(400, 'Invalid type. Must be income, expense, transfer, or deduction');
+            throw new HttpError(
+              400,
+              'Invalid type. Must be income, expense, transfer, or deduction'
+            );
           }
           updates.push('type = ?');
           setParams.push(data.type);
@@ -531,6 +536,20 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   // Business rule: income amounts must be positive.
   if (Number(amount) < 0 && type === 'income') {
     throw new HttpError(400, 'Income amount must be positive');
+  }
+
+  // Validate account ownership before accepting account_id from client input.
+  if (
+    account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+  ) {
+    throw new HttpError(403, 'Account does not belong to this profile');
+  }
+  if (
+    transfer_account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(transfer_account_id), pid))
+  ) {
+    throw new HttpError(403, 'Transfer account does not belong to this profile');
   }
 
   const resolvedDate = date || new Date().toISOString().split('T')[0];
@@ -707,6 +726,20 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     id,
     pid
   );
+
+  // Validate account ownership if account_id or transfer_account_id are being changed.
+  if (
+    account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+  ) {
+    throw new HttpError(403, 'Account does not belong to this profile');
+  }
+  if (
+    transfer_account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(transfer_account_id), pid))
+  ) {
+    throw new HttpError(403, 'Transfer account does not belong to this profile');
+  }
 
   const updates: string[] = [];
   const params: unknown[] = [];

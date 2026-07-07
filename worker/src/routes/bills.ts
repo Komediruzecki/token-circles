@@ -397,6 +397,12 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   );
   if (!bill) throw new HttpError(404, 'Not found');
 
+  // Idempotency guard: prevent double-submission from creating duplicate
+  // transactions for the same bill in the same period.
+  if (isBillPaidForCurrentPeriod(bill, new Date())) {
+    throw new HttpError(409, 'Bill already paid for current period');
+  }
+
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Atomic batch: INSERT transaction, adjust linked account balance (if

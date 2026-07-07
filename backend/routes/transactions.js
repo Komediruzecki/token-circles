@@ -317,6 +317,17 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         return res.status(400).json({ error: 'Income amount must be positive' });
       }
 
+      // Validate account ownership before accepting account_id from client input.
+      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
+        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      }
+      if (
+        transfer_account_id != null &&
+        !req.repos.accounts.accountBelongsToProfile(transfer_account_id, pid)
+      ) {
+        return res.status(403).json({ error: 'Transfer account does not belong to this profile' });
+      }
+
       // Use the provided date or parse it
       const resolvedDate = date || new Date().toISOString().split('T')[0];
 
@@ -648,6 +659,17 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         req.params.id,
         pid
       );
+
+      // Validate account ownership if account_id or transfer_account_id are being changed.
+      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
+        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      }
+      if (
+        transfer_account_id != null &&
+        !req.repos.accounts.accountBelongsToProfile(transfer_account_id, pid)
+      ) {
+        return res.status(403).json({ error: 'Transfer account does not belong to this profile' });
+      }
 
       let updates = [];
       let params = [];

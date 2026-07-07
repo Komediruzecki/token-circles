@@ -94,6 +94,8 @@ export async function accountBelongsToProfile(
   accountId: number,
   profileId: number
 ): Promise<boolean> {
+  // Short-circuit: reject non-integer / non-positive values before hitting the DB.
+  if (!Number.isInteger(accountId) || accountId <= 0) return false;
   const row = await first<{ id: number }>(
     db,
     'SELECT id FROM accounts WHERE id = ? AND profile_id = ?',

@@ -273,6 +273,12 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
       const bill = req.repos.bills.getById(req.params.id, pid);
       if (!bill) return res.status(404).json({ error: 'Not found' });
 
+      // Idempotency guard: prevent double-submission from creating duplicate
+      // transactions for the same bill in the same period.
+      if (isBillPaidForCurrentPeriod(bill, new Date())) {
+        return res.status(409).json({ error: 'Bill already paid for current period' });
+      }
+
       const todayStr = new Date().toISOString().split('T')[0];
       // Wrap in a transaction so the INSERT, balance UPDATE, and markPaid are
       // atomic. Matches the D1 batch semantics of the worker.

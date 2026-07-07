@@ -216,6 +216,18 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     apiRateLimiter,
     asyncHandler((req, res) => {
       const pid = getProfileId(req);
+      const r = req.repos.recurring.getById(req.params.id, pid);
+      if (!r) return res.status(404).json({ error: 'Not found' });
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      // Idempotency guard: if next_date is already in the future, the current
+      // period was already populated (or hasn't arrived yet).
+      if (r.next_date && r.next_date > todayStr) {
+        return res
+          .status(409)
+          .json({ error: 'Recurring transaction already populated for current period' });
+      }
+
       const result = req.repos.recurring.populate(req.params.id, pid);
       if (!result) return res.status(404).json({ error: 'Not found' });
 

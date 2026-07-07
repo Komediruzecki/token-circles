@@ -95,6 +95,8 @@ class BaseRepository {
    * cross-profile account references.
    */
   accountBelongsToProfile(accountId, profileId) {
+    // Short-circuit: reject non-integer / non-positive values before hitting the DB.
+    if (!Number.isInteger(accountId) || accountId <= 0) return false;
     const row = this.get(
       'SELECT id FROM accounts WHERE id = ? AND profile_id = ?',
       accountId,

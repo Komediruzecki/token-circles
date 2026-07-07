@@ -276,7 +276,16 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   );
   if (!r) throw new HttpError(404, 'Not found');
 
-  const date = r.next_date || new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Idempotency guard: if next_date is already in the future, the current
+  // period was already populated (or hasn't arrived yet). Either way,
+  // prevent double-population from creating duplicate transactions.
+  if (r.next_date && r.next_date > todayStr) {
+    throw new HttpError(409, 'Recurring transaction already populated for current period');
+  }
+
+  const date = r.next_date || todayStr;
 
   let next = new Date(date);
   if (r.frequency === 'monthly') next.setMonth(next.getMonth() + 1);
