@@ -250,17 +250,41 @@ export class IndexedDBAdapter implements StorageAdapter {
   async listTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
     const db = await getDB()
     const pids = this.getCurrentProfileIds()
+    const pidSet = new Set(pids)
     let txns: Transaction[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('transactions', 'by_profile', pid)
-      txns.push(...rows)
+
+    // Use the by_date index for date-range queries (O(log N + M) instead of O(N)).
+    // Falls back to by_profile when no date filters are provided.
+    const hasDateRange = !!(filters?.date_from || filters?.date_to)
+    if (hasDateRange) {
+      let range: IDBKeyRange | null = null
+      if (filters!.date_from && filters!.date_to) {
+        range = IDBKeyRange.bound(filters!.date_from, filters!.date_to)
+      } else if (filters!.date_from) {
+        range = IDBKeyRange.lowerBound(filters!.date_from)
+      } else if (filters!.date_to) {
+        range = IDBKeyRange.upperBound(filters!.date_to)
+      }
+      if (range) {
+        const rows = await db.getAllFromIndex('transactions', 'by_date', range)
+        // Filter to current profile(s) — by_date spans all profiles.
+        txns = rows.filter((r: Transaction) => pidSet.has(r.profile_id))
+      }
+    } else {
+      for (const pid of pids) {
+        const rows = await db.getAllFromIndex('transactions', 'by_profile', pid)
+        txns.push(...rows)
+      }
     }
 
     if (filters) {
       if (filters.type) txns = txns.filter((t) => t.type === filters.type)
       if (filters.category_id) txns = txns.filter((t) => t.category_id === filters.category_id)
-      if (filters.date_from) txns = txns.filter((t) => t.date >= filters.date_from!)
-      if (filters.date_to) txns = txns.filter((t) => t.date <= filters.date_to!)
+      if (!hasDateRange) {
+        // Apply date filters in JS only when we didn't use the by_date index.
+        if (filters.date_from) txns = txns.filter((t) => t.date >= filters.date_from!)
+        if (filters.date_to) txns = txns.filter((t) => t.date <= filters.date_to!)
+      }
       if (filters.search) {
         const q = filters.search.toLowerCase()
         txns = txns.filter(

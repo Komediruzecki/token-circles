@@ -58,8 +58,11 @@ export async function analyticsDailyHeatmap(query: URLSearchParams): Promise<Res
     if (!year) return json({ error: 'year required' }, 400)
     const type = query.get('type') === 'income' ? 'income' : 'expense'
 
-    const allTxns = await adapter.listTransactions()
-    const rows = allTxns.filter((t) => t.date.startsWith(String(year)) && t.type === type)
+    const rows = await adapter.listTransactions({
+      date_from: `${year}-01-01`,
+      date_to: `${year}-12-31`,
+      type,
+    })
 
     const dates: Record<string, number> = {}
     for (const t of rows) {
@@ -104,9 +107,12 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
     const edDate = new Date(ey, em - 1, ed)
     const numDays = Math.round((edDate.getTime() - sdDate.getTime()) / 86400000) + 1
 
-    const allTxns = await adapter.listTransactions()
     const cats = await adapter.listCategories(type as 'income' | 'expense')
-    const txns = allTxns.filter((t) => t.type === type && t.date >= startStr && t.date <= endStr)
+    const txns = await adapter.listTransactions({
+      date_from: startStr,
+      date_to: endStr,
+      type: type as 'income' | 'expense',
+    })
 
     // Generate labels based on view level
     const labels: string[] = []
@@ -210,9 +216,11 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
         cmpStart = `${cmpYear}-01-01`
         cmpEnd = `${cmpYear}-12-31`
       }
-      const cmpTxns = allTxns.filter(
-        (t) => t.type === type && t.date >= cmpStart && t.date <= cmpEnd
-      )
+      const cmpTxns = await adapter.listTransactions({
+        date_from: cmpStart,
+        date_to: cmpEnd,
+        type: type as 'income' | 'expense',
+      })
 
       const cmpCatData: Record<string, { category: string; color: string; data: number[] }> = {}
       for (const c of cats) {
@@ -257,7 +265,6 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     const startStr = `${year}-${String(month).padStart(2, '0')}-01`
     const endStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-    const allTxns = await adapter.listTransactions()
     const budgets = await adapter.listBudgets()
     const cats = await adapter.listCategories()
 
@@ -270,10 +277,12 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     }
     const activeBudgets = Array.from(budgetMap.values())
 
-    // Get actual spending for this month
-    const profileTxns = allTxns.filter(
-      (t) => t.type === 'expense' && t.date >= startStr && t.date <= endStr
-    )
+    // Get actual spending for this month (use by_date index via listTransactions)
+    const profileTxns = await adapter.listTransactions({
+      date_from: startStr,
+      date_to: endStr,
+      type: 'expense',
+    })
 
     const actualMap = new Map<number, number>()
     for (const t of profileTxns) {
@@ -385,7 +394,11 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
 export async function statsMonthly(query: URLSearchParams): Promise<Response> {
   try {
     const months = parseInt(query.get('months') || '24')
-    const profileTxns = await adapter.listTransactions()
+    // Compute earliest date needed — only load transactions within the window.
+    const earliest = new Date()
+    earliest.setMonth(earliest.getMonth() - months)
+    const dateFrom = `${earliest.getFullYear()}-${String(earliest.getMonth() + 1).padStart(2, '0')}-01`
+    const profileTxns = await adapter.listTransactions({ date_from: dateFrom })
 
     // Bucket income/expense by YYYY-MM in ONE pass instead of doing three full
     // filter/reduce passes per requested month. Buckets are keyed by
