@@ -298,75 +298,62 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
 
     const nodes: SankeyNode[] = []
     const links: SankeyLink[] = []
-    const nodeNames = new Set<string>()
 
-    nodes.push({ name: 'Total Budget', category: 'budget' })
-    nodeNames.add('Total Budget')
+    // Categories to show: any with a budget or actual spending this month.
+    const catIds = new Set<number>([...budgetMap.keys(), ...actualMap.keys()])
+    // Nothing to visualize — let the UI show its empty state instead of an
+    // orphan "Total Budget"/"Total Actual" pair with no flow between them.
+    if (catIds.size === 0) return json({ nodes: [], links: [], hasBudgets: false })
 
-    for (const b of activeBudgets) {
-      const cat = catMap.get(b.category_id)
-      const catName = cat?.name || `Category ${b.category_id}`
-      if (!nodeNames.has(catName)) {
-        nodes.push({ name: catName, category: 'category', color: cat?.color })
-        nodeNames.add(catName)
-      }
-    }
+    const hasBudgets = activeBudgets.length > 0
+    const BUDGET = 'Total Budget'
+    const ACTUAL = 'Total Actual'
+    nodes.push({ name: BUDGET, category: 'budget' })
 
-    nodes.push({ name: 'Total Actual', category: 'actual' })
-    nodeNames.add('Total Actual')
-
+    // One row per category. When a category has no explicit budget we treat its
+    // budget as its own spending, so an un-budgeted month still renders a proper
+    // flow (Budget -> Category -> Actual) that simply collapses to spending ==
+    // budget. Once the user sets real budgets, the planned-vs-actual gap appears.
     let totalBudget = 0
-    for (const b of activeBudgets) {
-      totalBudget += b.amount
-      const cat = catMap.get(b.category_id)
-      const catName = cat?.name || `Category ${b.category_id}`
-      links.push({
-        source: 'Total Budget',
-        target: catName,
-        value: b.amount,
-        sourceCategory: 'budget',
-        targetCategory: 'category',
-      })
-    }
-
     let totalActual = 0
-    for (const b of activeBudgets) {
-      const actual = actualMap.get(b.category_id) || 0
-      totalActual += actual
-      const cat = catMap.get(b.category_id)
-      const catName = cat?.name || `Category ${b.category_id}`
-      links.push({
-        source: catName,
-        target: 'Total Actual',
-        value: actual,
-        sourceCategory: 'category',
-        targetCategory: 'actual',
-      })
-    }
-
-    // If no budgets, use actual spending directly
-    if (activeBudgets.length === 0) {
-      for (const [catId, amount] of actualMap) {
-        const cat = catMap.get(catId)
-        if (cat) {
-          nodes.push({ name: cat.name, category: 'category', color: cat.color })
-          links.push({
-            source: cat.name,
-            target: 'Total Actual',
-            value: amount,
-            sourceCategory: 'category',
-            targetCategory: 'actual',
-          })
-        }
+    for (const catId of catIds) {
+      const cat = catMap.get(catId)
+      const catName = cat?.name || 'Uncategorized'
+      const actual = actualMap.get(catId) || 0
+      const explicit = budgetMap.get(catId)
+      const budget = explicit ? explicit.amount : actual
+      if (budget <= 0 && actual <= 0) continue
+      nodes.push({ name: catName, category: 'category', color: cat?.color })
+      if (budget > 0) {
+        totalBudget += budget
+        links.push({
+          source: BUDGET,
+          target: catName,
+          value: budget,
+          sourceCategory: 'budget',
+          targetCategory: 'category',
+        })
+      }
+      if (actual > 0) {
+        totalActual += actual
+        links.push({
+          source: catName,
+          target: ACTUAL,
+          value: actual,
+          sourceCategory: 'category',
+          targetCategory: 'actual',
+        })
       }
     }
 
-    // Budget unused → "Unused Budget" node
+    nodes.push({ name: ACTUAL, category: 'actual' })
+
+    // Any planned budget left unspent flows to a savings node.
     const budgetUnused = totalBudget - totalActual
-    if (budgetUnused > 0 && activeBudgets.length > 0) {
+    if (budgetUnused > 0) {
       nodes.push({ name: 'Unused Budget', category: 'savings' })
       links.push({
-        source: 'Total Budget',
+        source: BUDGET,
         target: 'Unused Budget',
         value: budgetUnused,
         sourceCategory: 'budget',
@@ -374,7 +361,7 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
       })
     }
 
-    return json({ nodes, links })
+    return json({ nodes, links, hasBudgets })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

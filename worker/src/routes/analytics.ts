@@ -327,6 +327,16 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
     actualSpending.map((a) => [a.category_id, a])
   )
 
+  // Category name/colour lookup (needed for spending in categories that have no
+  // budget row this month).
+  const cats = await db.all<{ id: number; name: string; color: string | null }>(
+    c.env.DB,
+    `SELECT id, name, color FROM categories WHERE profile_id IN (${inClause})`,
+    ...pids
+  )
+  const catMap = new Map(cats.map((cat) => [cat.id, cat]))
+  const budgetMap = new Map(budgets.map((b) => [b.category_id, b]))
+
   // Build nodes and links for sankey.
   interface SankeyNode {
     name: string
@@ -342,82 +352,67 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
   }
   const nodes: SankeyNode[] = []
   const links: SankeyLink[] = []
-  const nodeNames = new Set<string>()
 
-  // "Total Budget" source node.
-  nodes.push({ name: 'Total Budget', category: 'budget' })
-  nodeNames.add('Total Budget')
+  // Categories to show: any with a budget or actual spending this month.
+  const catIds = new Set<number>([
+    ...budgetMap.keys(),
+    ...actualSpending.map((a) => a.category_id).filter((id): id is number => id != null),
+  ])
+  // Nothing to visualize — let the UI show its empty state.
+  if (catIds.size === 0) {
+    return c.json({ nodes: [], links: [], hasBudgets: false })
+  }
 
-  // Category nodes.
-  budgets.forEach((b) => {
-    if (!nodeNames.has(b.cat_name)) {
-      nodes.push({ name: b.cat_name, category: 'category', color: b.cat_color })
-      nodeNames.add(b.cat_name)
-    }
-  })
+  const hasBudgets = budgets.length > 0
+  const BUDGET = 'Total Budget'
+  const ACTUAL = 'Total Actual'
+  nodes.push({ name: BUDGET, category: 'budget' })
 
-  // "Total Actual" node.
-  nodes.push({ name: 'Total Actual', category: 'actual' })
-  nodeNames.add('Total Actual')
-
-  // Budget -> Category links (planned flow).
+  // One row per category. When a category has no explicit budget we treat its
+  // budget as its own spending, so an un-budgeted month still renders a proper
+  // flow (Budget -> Category -> Actual) that collapses to spending == budget.
+  // Once the user sets real budgets, the planned-vs-actual gap appears.
   let totalBudget = 0
-  budgets.forEach((b) => {
-    totalBudget += b.budget_amount
-    links.push({
-      source: 'Total Budget',
-      target: b.cat_name,
-      value: b.budget_amount,
-      sourceCategory: 'budget',
-      targetCategory: 'category',
-    })
-  })
-
-  // Category -> Actual links (actual spent).
   let totalActual = 0
-  budgets.forEach((b) => {
-    const actual = actualMap.get(b.category_id)
-    const actualAmount = actual ? actual.actual_amount : 0
-    totalActual += actualAmount
-    links.push({
-      source: b.cat_name,
-      target: 'Total Actual',
-      value: actualAmount,
-      sourceCategory: 'category',
-      targetCategory: 'actual',
-    })
-  })
-
-  // If no budgets, use actual spending as flow.
-  if (budgets.length === 0) {
-    for (const a of actualSpending) {
-      const cat = await db.first<{ name: string; color: string | null }>(
-        c.env.DB,
-        'SELECT name, color FROM categories WHERE id = ?',
-        a.category_id
-      )
-      if (cat) {
-        if (!nodeNames.has(cat.name)) {
-          nodes.push({ name: cat.name, category: 'category', color: cat.color })
-          nodeNames.add(cat.name)
-        }
-        links.push({
-          source: cat.name,
-          target: 'Total Actual',
-          value: a.actual_amount,
-          sourceCategory: 'category',
-          targetCategory: 'actual',
-        })
-      }
+  for (const catId of catIds) {
+    const cat = catMap.get(catId)
+    const catName = cat?.name || 'Uncategorized'
+    const actualRow = actualMap.get(catId)
+    const actual = actualRow ? actualRow.actual_amount : 0
+    const explicit = budgetMap.get(catId)
+    const budget = explicit ? explicit.budget_amount : actual
+    if (budget <= 0 && actual <= 0) continue
+    nodes.push({ name: catName, category: 'category', color: cat?.color })
+    if (budget > 0) {
+      totalBudget += budget
+      links.push({
+        source: BUDGET,
+        target: catName,
+        value: budget,
+        sourceCategory: 'budget',
+        targetCategory: 'category',
+      })
+    }
+    if (actual > 0) {
+      totalActual += actual
+      links.push({
+        source: catName,
+        target: ACTUAL,
+        value: actual,
+        sourceCategory: 'category',
+        targetCategory: 'actual',
+      })
     }
   }
 
-  // Budget unused (budget - actual) -> "Unused Budget" node if there's a difference.
+  nodes.push({ name: ACTUAL, category: 'actual' })
+
+  // Any planned budget left unspent flows to a savings node.
   const budgetUnused = totalBudget - totalActual
-  if (budgetUnused > 0 && budgets.length > 0) {
+  if (budgetUnused > 0) {
     nodes.push({ name: 'Unused Budget', category: 'savings' })
     links.push({
-      source: 'Total Budget',
+      source: BUDGET,
       target: 'Unused Budget',
       value: budgetUnused,
       sourceCategory: 'budget',
@@ -425,5 +420,5 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
     })
   }
 
-  return c.json({ nodes, links })
+  return c.json({ nodes, links, hasBudgets })
 })

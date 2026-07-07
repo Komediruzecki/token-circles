@@ -64,7 +64,15 @@ export default function SankeyChart(props: Props) {
 
   const renderSankey = async () => {
     const container = containerRef
-    if (!container || !props.data?.nodes?.length) return
+    if (!container) return
+
+    // A Sankey needs at least one link to lay out. With no nodes/links (an empty
+    // or budget-less month), clear any previous diagram and bail — feeding
+    // d3-sankey a graph it can't resolve throws and would surface as a crash.
+    if (!props.data?.nodes?.length || !props.data?.links?.length) {
+      container.replaceChildren()
+      return
+    }
 
     const d3 = await getD3()
 
@@ -84,6 +92,10 @@ export default function SankeyChart(props: Props) {
       .attr('viewBox', [0, 0, width, height])
 
     const sankeyGenerator = sankey<SankeyNodeDatum, SankeyLinkDatum>()
+      // Links reference nodes by their `name` string, so key nodes by name.
+      // Without this, d3-sankey defaults to indexing by `node.index` and throws
+      // "missing: <name>" the moment any link is present.
+      .nodeId((d) => d.name)
       .nodeWidth(20)
       .nodePadding(10)
       .extent([
@@ -98,14 +110,24 @@ export default function SankeyChart(props: Props) {
       savings: '#06b6d4',
     }
 
-    const { nodes, links } = sankeyGenerator({
-      nodes: props.data.nodes.map(
-        (d) => ({ ...d, x0: 0, x1: 0, y0: 0, y1: 0 }) satisfies SankeyNodeDatum
-      ),
-      links: props.data.links.map(
-        (d) => ({ ...d, width: 0, y0: 0, y1: 0 }) satisfies SankeyLinkDatum
-      ),
-    })
+    let laidOut: ReturnType<typeof sankeyGenerator>
+    try {
+      laidOut = sankeyGenerator({
+        nodes: props.data.nodes.map(
+          (d) => ({ ...d, x0: 0, x1: 0, y0: 0, y1: 0 }) satisfies SankeyNodeDatum
+        ),
+        links: props.data.links.map(
+          (d) => ({ ...d, width: 0, y0: 0, y1: 0 }) satisfies SankeyLinkDatum
+        ),
+      })
+    } catch (err) {
+      // Malformed graph (unknown node reference or a cycle). Don't let it bubble
+      // up as an unhandled rejection / app crash — just leave the area blank.
+      console.warn('Sankey layout failed', err)
+      d3.select(container).selectAll('svg').remove()
+      return
+    }
+    const { nodes, links } = laidOut
 
     // Draw links
     const link = svg
