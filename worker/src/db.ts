@@ -34,6 +34,27 @@ export async function first<T = Record<string, unknown>>(
     .first<T>()) ?? null
 }
 
+/**
+ * True when the given account id exists and belongs to `profileId`. Used to
+ * reject client-supplied account_id / transfer_account_id values that reference
+ * another user's account (IDOR guard). Rejects non-integer / non-positive ids
+ * before touching the DB.
+ */
+export async function accountBelongsToProfile(
+  db: D1Database,
+  accountId: number,
+  profileId: number
+): Promise<boolean> {
+  if (!Number.isInteger(accountId) || accountId <= 0) return false
+  const row = await first<{ id: number }>(
+    db,
+    'SELECT id FROM accounts WHERE id = ? AND profile_id = ?',
+    accountId,
+    profileId
+  )
+  return row !== null
+}
+
 export async function run(
   db: D1Database,
   sql: string,

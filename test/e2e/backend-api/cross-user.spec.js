@@ -399,4 +399,82 @@ describe('Cross-Profile Isolation E2E', () => {
       global.expect(found).toBeUndefined();
     });
   });
+
+  // Regression: IDOR guard on writes — a transaction must not be able to name an
+  // account_id / transfer_account_id owned by another profile. Without the
+  // accountBelongsToProfile() check these would succeed (201) and let one profile
+  // move another profile's account balance.
+  describe('Account ownership on write (IDOR)', () => {
+    let foreignAccountId;
+
+    beforeAll(async () => {
+      const acc = await agent.post('/api/accounts')
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile2Id)
+        .send({ name: 'Profile 2 Only Account', type: 'giro', balance: 1000 });
+      foreignAccountId = acc.body.id;
+    });
+
+    test('XUI-021: create rejects an account_id from another profile', async () => {
+      global.expect(foreignAccountId).toBeDefined();
+      const resp = await agent.post('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile1Id)
+        .send({
+          description: 'IDOR attempt',
+          amount: 50,
+          date: '2026-04-25',
+          type: 'expense',
+          account_id: foreignAccountId
+        });
+      global.expect(resp.status).toBe(403);
+    });
+
+    test('XUI-022: create rejects a transfer_account_id from another profile', async () => {
+      const resp = await agent.post('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile1Id)
+        .send({
+          description: 'IDOR transfer attempt',
+          amount: 50,
+          date: '2026-04-25',
+          type: 'transfer',
+          transfer_account_id: foreignAccountId
+        });
+      global.expect(resp.status).toBe(403);
+    });
+
+    test('XUI-023: update rejects an account_id from another profile', async () => {
+      // Profile 1 creates a legitimate transaction, then tries to point it at
+      // profile 2's account via PUT.
+      const own = await agent.post('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile1Id)
+        .send({ description: 'Own tx', amount: 10, date: '2026-04-25', type: 'expense' });
+      const resp = await agent.put(`/api/transactions/${own.body.id}`)
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile1Id)
+        .send({ account_id: foreignAccountId });
+      global.expect(resp.status).toBe(403);
+    });
+
+    test('XUI-024: create accepts an account_id owned by the same profile', async () => {
+      // Control: the guard must not reject legitimate same-profile accounts.
+      const own = await agent.post('/api/accounts')
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile1Id)
+        .send({ name: 'Profile 1 Own Account', type: 'giro', balance: 0 });
+      const resp = await agent.post('/api/transactions')
+        .set('X-Skip-RateLimit', 'true')
+        .set('X-Profile-Id', profile1Id)
+        .send({
+          description: 'Legit',
+          amount: 25,
+          date: '2026-04-25',
+          type: 'expense',
+          account_id: own.body.id
+        });
+      global.expect(resp.status).toBe(200);
+    });
+  });
 });

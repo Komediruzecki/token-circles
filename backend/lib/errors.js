@@ -73,15 +73,7 @@ class UnauthorizedError extends AppError {
  */
 function asyncHandler(fn) {
   return (req, res, next) => {
-    try {
-      const result = fn(req, res, next);
-      // If the handler returns a promise, catch rejections
-      if (result && typeof result.catch === 'function') {
-        result.catch(next);
-      }
-    } catch (err) {
-      next(err);
-    }
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
 

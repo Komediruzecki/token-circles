@@ -87,6 +87,32 @@ class BaseRepository {
     const sql = `DELETE FROM ${table} WHERE ${where}`;
     return this.run(sql, ...params);
   }
+
+  /**
+   * Verify that an account belongs to the given profile. Callers MUST validate
+   * account ownership before accepting account_id from client input — otherwise
+   * a user can reference another user's account, polluting transaction data with
+   * cross-profile account references.
+   */
+  accountBelongsToProfile(accountId, profileId) {
+    // Short-circuit: reject non-integer / non-positive values before hitting the DB.
+    if (!Number.isInteger(accountId) || accountId <= 0) return false;
+    const row = this.get(
+      'SELECT id FROM accounts WHERE id = ? AND profile_id = ?',
+      accountId,
+      profileId
+    );
+    return row !== undefined;
+  }
+
+  /**
+   * Execute a callback inside a better-sqlite3 transaction. If the callback
+   * throws, the transaction is rolled back. All repos share the same `db`
+   * instance, so cross-repo operations inside the callback are atomic.
+   */
+  transaction(fn) {
+    return this.db.transaction(fn)();
+  }
 }
 
 module.exports = { BaseRepository };

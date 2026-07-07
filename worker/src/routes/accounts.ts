@@ -29,8 +29,9 @@ accountsRoutes.post('/api/accounts', requireAuth, async (c) => {
   const b = (await c.req.json()) as Record<string, any>
   if (!b.name) throw new HttpError(400, 'Name is required')
   const accountType = VALID_TYPES.includes(b.type) ? b.type : 'giro'
-  const startBalance =
-    b.starting_balance !== undefined ? parseFloat(b.starting_balance) : parseFloat(b.balance) || 0
+  const startBalanceRaw =
+    b.starting_balance !== undefined ? parseFloat(b.starting_balance) : parseFloat(b.balance)
+  const startBalance = Number.isFinite(startBalanceRaw) ? startBalanceRaw : 0
   const startDate = b.starting_date || null
   const res = await db.insert(c.env.DB, 'accounts', {
     name: String(b.name).trim(),
@@ -89,12 +90,12 @@ accountsRoutes.put('/api/accounts/:id', requireAuth, async (c) => {
     bank_name: b.bank_name !== undefined ? b.bank_name : (existing.bank_name ?? ''),
     type: accountType,
     currency: b.currency || 'USD',
-    balance: isNaN(balanceVal) ? existing.balance : balanceVal,
+    balance: Number.isFinite(balanceVal) ? balanceVal : existing.balance,
     notes: b.notes || '',
   }
   if (b.starting_balance !== undefined) {
     const sb = parseFloat(b.starting_balance)
-    data.starting_balance = isNaN(sb) ? 0 : sb
+    data.starting_balance = Number.isFinite(sb) ? sb : (existing.starting_balance ?? 0)
   }
   if (b.starting_date !== undefined) data.starting_date = b.starting_date || null
 

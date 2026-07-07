@@ -1,6 +1,5 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const { toCamelCase } = require('../utils');
 const { asyncHandler } = require('../lib/errors');
 
 function validatePasswordComplexity(password) {
@@ -41,10 +40,10 @@ module.exports = function ({ apiRateLimiter, authRateLimiter, requireAuth, logEr
   }));
 
   router.post('/api/auth/logout', apiRateLimiter, (req, res) => {
-    res.clearCookie('connect.sid');
+    res.clearCookie('connect.sid', { secure: true, httpOnly: true, sameSite: 'lax' });
     req.session.destroy((err) => {
       if (err) return res.status(500).json({ error: 'Logout failed' });
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     });
   });
 

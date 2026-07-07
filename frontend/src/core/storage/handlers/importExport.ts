@@ -18,17 +18,18 @@ export async function exportByType(
   const data = await adapter.exportData()
 
   if (fmt === 'csv' && type === 'transactions') {
+    const csvQuote = (s: string | null | undefined): string => `"${(s ?? '').replace(/"/g, '""')}"`
     const csv = ['date,type,description,amount,currency,category_id,notes']
     for (const t of data.transactions) {
       csv.push(
         [
           t.date,
           t.type,
-          `"${t.description}"`,
+          csvQuote(t.description),
           t.amount,
           t.currency,
           t.category_id ?? '',
-          `"${t.notes || ''}"`,
+          csvQuote(t.notes),
         ].join(',')
       )
     }

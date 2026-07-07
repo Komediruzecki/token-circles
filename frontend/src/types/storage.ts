@@ -17,6 +17,7 @@ export interface StorageAdapter {
   createTransaction(tx: Transaction): Promise<number>
   updateTransaction(id: number, tx: Partial<Transaction>): Promise<void>
   deleteTransaction(id: number): Promise<void>
+  bulkDeleteTransactions(ids: number[]): Promise<void>
   deleteAllTransactions(): Promise<void>
 
   // Category management

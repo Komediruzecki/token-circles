@@ -101,6 +101,15 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
     'subscription_data[metadata][plan]': plan, // so subscription.updated/deleted know the tier
     success_url: `${origin}/?billing=success#settings`,
     cancel_url: `${origin}/?billing=cancel#settings`,
+    // EU VAT / tax compliance — requires Stripe Tax to be enabled in the Stripe
+    // dashboard. If Stripe Tax is not configured the Stripe API will reject the
+    // session with a clear error rather than silently booking tax-exclusive.
+    // `automatic_tax` is a nested object param — must be sent as
+    // automatic_tax[enabled]=true, NOT a flat automatic_tax=enabled (which
+    // Stripe ignores/rejects, leaving checkout VAT-exclusive).
+    'automatic_tax[enabled]': 'true',
+    billing_address_collection: 'required',
+    'tax_id_collection[enabled]': 'true',
   };
   if (u?.stripe_customer_id) params.customer = u.stripe_customer_id;
   else if (u?.email) params.customer_email = u.email;

@@ -128,7 +128,7 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
   }
   if (reconciled !== undefined) {
     if (reconciled === '0' || reconciled === 'false') {
-      where.push('(t.reconciled = 0 OR t.reconciled IS NULL)');
+      where.push('COALESCE(t.reconciled, 0) = 0');
     } else if (reconciled === '1' || reconciled === 'true') {
       where.push('t.reconciled = 1');
     }
@@ -390,19 +390,28 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(data, field)) {
         if (field === 'category_id') {
-          updates.push('category_id = ?');
-          setParams.push(
+          const catId =
             data.category_id === null || data.category_id === ''
               ? null
-              : parseInt(data.category_id, 10)
-          );
+              : parseInt(data.category_id, 10);
+          if (catId !== null && (!Number.isFinite(catId) || catId <= 0)) {
+            throw new HttpError(400, 'Invalid category_id — must be a positive integer or null');
+          }
+          updates.push('category_id = ?');
+          setParams.push(catId);
         } else if (field === 'reconciled') {
-          // Convert boolean to integer for SQLite.
+          // Convert boolean to integer for SQLite — coerce safely to avoid
+          // string "false" being truthy in JS.
           updates.push('reconciled = ?');
-          setParams.push(data.reconciled ? 1 : 0);
+          setParams.push(
+            data.reconciled === true || data.reconciled === 1 || data.reconciled === '1' ? 1 : 0
+          );
         } else if (field === 'type') {
-          if (!['income', 'expense', 'transfer'].includes(data.type)) {
-            throw new HttpError(400, 'Invalid type. Must be income, expense, or transfer');
+          if (!['income', 'expense', 'transfer', 'deduction'].includes(data.type)) {
+            throw new HttpError(
+              400,
+              'Invalid type. Must be income, expense, transfer, or deduction'
+            );
           }
           updates.push('type = ?');
           setParams.push(data.type);
@@ -470,8 +479,8 @@ transactionsRoutes.get('/api/transactions/reconcile/summary', requireAuth, async
     `SELECT
       COUNT(*) as total,
       SUM(CASE WHEN reconciled = 1 THEN 1 ELSE 0 END) as reconciled_count,
-      SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN 1 ELSE 0 END) as unreconciled_count,
-      SUM(CASE WHEN reconciled = 0 OR reconciled IS NULL THEN amount ELSE 0 END) as unreconciled_total
+      SUM(CASE WHEN COALESCE(reconciled, 0) = 0 THEN 1 ELSE 0 END) as unreconciled_count,
+      SUM(CASE WHEN COALESCE(reconciled, 0) = 0 THEN amount ELSE 0 END) as unreconciled_total
      FROM transactions WHERE profile_id IN (${inClause})`,
     ...pids
   );
@@ -527,6 +536,20 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   // Business rule: income amounts must be positive.
   if (Number(amount) < 0 && type === 'income') {
     throw new HttpError(400, 'Income amount must be positive');
+  }
+
+  // Validate account ownership before accepting account_id from client input.
+  if (
+    account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+  ) {
+    throw new HttpError(403, 'Account does not belong to this profile');
+  }
+  if (
+    transfer_account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(transfer_account_id), pid))
+  ) {
+    throw new HttpError(403, 'Transfer account does not belong to this profile');
   }
 
   const resolvedDate = date || new Date().toISOString().split('T')[0];
@@ -699,10 +722,24 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // Fetch old transaction for account balance reversal.
   const oldTx = await db.first<TxRow>(
     c.env.DB,
-    'SELECT account_id, transfer_account_id, type, amount FROM transactions WHERE id = ? AND profile_id = ?',
+    'SELECT account_id, transfer_account_id, type, amount, amount_local FROM transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
   );
+
+  // Validate account ownership if account_id or transfer_account_id are being changed.
+  if (
+    account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+  ) {
+    throw new HttpError(403, 'Account does not belong to this profile');
+  }
+  if (
+    transfer_account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(transfer_account_id), pid))
+  ) {
+    throw new HttpError(403, 'Transfer account does not belong to this profile');
+  }
 
   const updates: string[] = [];
   const params: unknown[] = [];
@@ -716,6 +753,11 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   if (amount !== undefined) {
     updates.push('amount = ?');
     params.push(amount);
+    // If amount is changing but amount_local is not explicitly provided, clear the
+    // stale base-currency value so balance math falls back to the new raw amount.
+    if (amount_local === undefined) {
+      updates.push('amount_local = NULL');
+    }
     hasUpdate = true;
   }
   if (date !== undefined) {
@@ -769,10 +811,14 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     hasUpdate = true;
   }
   if (reconciled !== undefined) {
+    // Coerce safely — a JSON string like "false" is truthy in JS, so a plain
+    // `reconciled ? 1 : 0` would wrongly set reconciled = 1 (matches the bulk path).
+    const reconciledInt =
+      reconciled === true || reconciled === 1 || reconciled === '1' ? 1 : 0;
     updates.push('reconciled = ?');
     updates.push("reconciled_at = CASE WHEN ? = 1 THEN datetime('now') ELSE reconciled_at END");
-    params.push(reconciled ? 1 : 0);
-    params.push(reconciled ? 1 : 0);
+    params.push(reconciledInt);
+    params.push(reconciledInt);
     hasUpdate = true;
   }
   if (account_id !== undefined) {
@@ -794,6 +840,9 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // eviction between them permanently drifted account balances.
   if (!oldTx) throw new HttpError(404, 'Not found');
 
+  // Use base-currency value for all balance math (matches create + delete paths).
+  const oldV = baseAmount(oldTx);
+
   updates.push("updated_at = datetime('now')");
   params.push(id, pid);
 
@@ -805,19 +854,19 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldTx.amount, oldTx.account_id, ...pids),
+        ).bind(oldV, oldTx.account_id, ...pids),
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldTx.amount, oldTx.transfer_account_id, ...pids)
+        ).bind(oldV, oldTx.transfer_account_id, ...pids)
       );
     } else if (oldTx.type === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldTx.amount, oldTx.account_id, ...pids)
+        ).bind(oldV, oldTx.account_id, ...pids)
       );
     } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
-      const oldDelta = oldTx.type === 'income' ? -oldTx.amount : oldTx.amount;
+      const oldDelta = oldTx.type === 'income' ? -oldV : oldV;
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -830,7 +879,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(oldTx.amount, oldTx.transfer_account_id, ...pids)
+      ).bind(oldV, oldTx.transfer_account_id, ...pids)
     );
   }
 
@@ -847,24 +896,34 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     transfer_account_id !== undefined ? transfer_account_id || null : oldTx.transfer_account_id;
   const newType = type !== undefined ? type : oldTx.type;
   const newAmount = amount !== undefined ? amount : oldTx.amount;
+  // Compute the base-currency amount for the new balance effect, matching the reversal
+  // logic: if amount_local was explicitly provided, use it; if amount changed (and
+  // amount_local was cleared to NULL above), use the new raw amount; otherwise preserve
+  // the old base-currency value.
+  const newAmountLocal =
+    amount_local !== undefined
+      ? (amount_local ?? newAmount)
+      : amount !== undefined
+        ? newAmount
+        : baseAmount(oldTx);
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmount, newAccountId, ...pids),
+        ).bind(newAmountLocal, newAccountId, ...pids),
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmount, newTransferAccountId, ...pids)
+        ).bind(newAmountLocal, newTransferAccountId, ...pids)
       );
     } else if (newType === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmount, newAccountId, ...pids)
+        ).bind(newAmountLocal, newAccountId, ...pids)
       );
     } else if (newType === 'income' || newType === 'expense') {
-      const newDelta = newType === 'income' ? newAmount : -newAmount;
+      const newDelta = newType === 'income' ? newAmountLocal : -newAmountLocal;
       stmts.push(
         c.env.DB.prepare(
           `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
@@ -876,7 +935,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     stmts.push(
       c.env.DB.prepare(
         `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(newAmount, newTransferAccountId, ...pids)
+      ).bind(newAmountLocal, newTransferAccountId, ...pids)
     );
   }
 

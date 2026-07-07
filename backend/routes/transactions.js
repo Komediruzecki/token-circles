@@ -1,5 +1,5 @@
 const express = require('express');
-const { toCamelCase, getCategoryIcon } = require('../utils');
+const { getCategoryIcon } = require('../utils');
 const {
   getProfileId,
   getProfileIds,
@@ -19,43 +19,34 @@ const {
   bulkReconcileSchema,
 } = require('../validators/schemas');
 
-// Date parsing utility - handles DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD
-function parseDateString(dateStr) {
-  if (!dateStr) return new Date().toISOString().split('T')[0];
-  if (typeof dateStr === 'number') {
-    // Excel date code
-    const d = spreadsheetService.parseExcelDate(dateStr);
-    if (d) return new Date(d.y, d.m - 1, d.d).toISOString().split('T')[0];
-  }
-  const s = String(dateStr).trim();
-  // Try DD/MM/YYYY or DD-MM-YYYY (European)
-  const euMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (euMatch) {
-    const [, d, m, y] = euMatch;
-    return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toISOString().split('T')[0];
-  }
-  // Try MM/DD/YYYY (US) or ISO
-  const date = new Date(s);
-  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
-  return new Date().toISOString().split('T')[0];
-}
+// Date parsing utility — shared with lib/dates.js
+const { createParseDateString } = require('../lib/dates');
+const parseDateString = createParseDateString(spreadsheetService);
 
 module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
   const router = express.Router();
 
   function recalcGoalProgress(goalId, repos, profileIds) {
     const goal = repos.goals.get('SELECT * FROM savings_goals WHERE id=?', goalId);
-    if (!goal || !goal.category_id) return;
+    if (!goal || !goal.category_id || !goal.profile_id) return;
+    // Scope to the goal's own profile so other profiles' transactions with the same
+    // category_id don't leak into this goal's progress calculation.
     const total = repos.transactions.get(
-      'SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id=?',
-      goal.category_id
+      'SELECT COALESCE(SUM(ABS(amount)), 0) as total FROM transactions WHERE category_id=? AND profile_id=?',
+      goal.category_id,
+      goal.profile_id
     );
-    repos.goals.updateAmount(goalId, profileIds[0], total.total);
+    repos.goals.updateAmount(goalId, goal.profile_id, total.total);
   }
 
   function recalcGoalsByCategory(categoryId, repos, profileIds) {
     if (!categoryId) return;
-    const goals = repos.goals.all('SELECT id FROM savings_goals WHERE category_id=?', categoryId);
+    const inClause = profileIds.map(() => '?').join(',');
+    const goals = repos.goals.all(
+      `SELECT id FROM savings_goals WHERE category_id=? AND profile_id IN (${inClause})`,
+      categoryId,
+      ...profileIds
+    );
     for (const g of goals) recalcGoalProgress(g.id, repos, profileIds);
   }
 
@@ -129,7 +120,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
       }
       if (reconciled !== undefined) {
         if (reconciled === '0' || reconciled === 'false') {
-          sql += ' AND (t.reconciled = 0 OR t.reconciled IS NULL)';
+          sql += ' AND COALESCE(t.reconciled, 0) = 0';
         } else if (reconciled === '1' || reconciled === 'true') {
           sql += ' AND t.reconciled = 1';
         }
@@ -290,7 +281,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         net_balance: (result.total_income || 0) - (result.total_expense || 0),
         count: result.count || 0,
       };
-      res.json(toCamelCase(data));
+      res.json(data);
     })
   );
 
@@ -324,6 +315,17 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
       // but this ensures the type/amount combination makes sense)
       if (Number(amount) < 0 && type === 'income') {
         return res.status(400).json({ error: 'Income amount must be positive' });
+      }
+
+      // Validate account ownership before accepting account_id from client input.
+      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
+        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      }
+      if (
+        transfer_account_id != null &&
+        !req.repos.accounts.accountBelongsToProfile(transfer_account_id, pid)
+      ) {
+        return res.status(403).json({ error: 'Transfer account does not belong to this profile' });
       }
 
       // Use the provided date or parse it
@@ -438,7 +440,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         info.lastInsertRowid,
         pid
       );
-      res.json(toCamelCase(created));
+      res.json(created);
     })
   );
 
@@ -658,6 +660,17 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         pid
       );
 
+      // Validate account ownership if account_id or transfer_account_id are being changed.
+      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
+        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      }
+      if (
+        transfer_account_id != null &&
+        !req.repos.accounts.accountBelongsToProfile(transfer_account_id, pid)
+      ) {
+        return res.status(403).json({ error: 'Transfer account does not belong to this profile' });
+      }
+
       let updates = [];
       let params = [];
 
@@ -867,7 +880,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         if (e === NOT_FOUND) return res.status(404).json({ error: 'Not found' });
         throw e;
       }
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -944,7 +957,7 @@ module.exports = function ({ apiRateLimiter, requireAuth, logError }) {
         if (e === NOT_FOUND) return res.status(404).json({ error: 'Not found' });
         throw e;
       }
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 

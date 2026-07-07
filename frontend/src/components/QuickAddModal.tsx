@@ -3,7 +3,7 @@
  * Quick transaction entry (Ctrl+Shift+T shortcut)
  */
 import { createSignal, For, onCleanup, onMount } from 'solid-js'
-import { api, toast } from '../core/api'
+import { api, getLocalCurrency, toast } from '../core/api'
 import quickAddModalStyles from './QuickAddModal.module.css'
 import type { Category } from '../types/models'
 
@@ -48,11 +48,10 @@ export function QuickAddModal(props: QuickAddModalProps) {
         date: data.date,
         beneficiary: '',
         payor: '',
-        currency: 'EUR',
+        currency: getLocalCurrency(),
         amount_local: amountNum >= 0 ? amountNum : null,
         exchange_rate: 1,
         notes: '',
-        profile_id: 1,
       })
       props.onSave(newTransaction)
       props.onClose()

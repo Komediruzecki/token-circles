@@ -41,8 +41,10 @@ async function deleteStripeCustomer(
       method: 'DELETE',
       headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
     });
-  } catch {
-    /* best-effort */
+  } catch (err) {
+    /* Continue with local deletion — GDPR requires it. Log the error so the
+       operator can manually clean up the Stripe customer record if needed. */
+    console.error('Stripe customer deletion failed:', err);
   }
 }
 
