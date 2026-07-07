@@ -35,7 +35,7 @@
  * Handles CSV/Excel file and Google Sheets import with full 12-field column mapping, duplicate detection, and category type review
  */
 
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js'
 import { createStore, produce, reconcile } from 'solid-js/store'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
@@ -97,6 +97,24 @@ const HEADER_VARIANTS: Record<string, string[]> = {
     'domestic amount',
   ],
 } as const
+
+/**
+ * Indices of rows whose full (trimmed) content is identical to an earlier row in the
+ * same import — within-batch duplicates, e.g. the same transaction appearing in two
+ * overlapping statement periods uploaded together. The first occurrence is kept; every
+ * later identical copy is returned. (Duplicates against already-imported data are
+ * handled separately by the server on execute.)
+ */
+function computeRowDuplicates(rows: string[][]): number[] {
+  const seen = new Set<string>()
+  const dups: number[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const key = rows[i].map((c) => (c ?? '').trim()).join('\x01')
+    if (seen.has(key)) dups.push(i)
+    else seen.add(key)
+  }
+  return dups
+}
 
 interface UploadResult {
   fileId: string
@@ -164,7 +182,9 @@ export default function Import() {
   // File upload state
   const [uploadResult, setUploadResult] = createSignal<UploadResult | null>(null)
   const [selectedSheet, setSelectedSheet] = createSignal<string>('')
-  const [fileId, setFileId] = createSignal<string>('')
+  // Getter unused since duplicate detection moved client-side (it was only read by
+  // the removed /api/import/file-sheet call); the setter still records the upload id.
+  const [_fileId, setFileId] = createSignal<string>('')
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = createSignal<string>('')
@@ -289,7 +309,7 @@ export default function Import() {
   const [selectedRows, setSelectedRows] = createSignal<Set<number>>(new Set())
   const [currentPage, setCurrentPage] = createSignal(1)
   const [rowsPerPage, setRowsPerPage] = createSignal(50)
-  const [duplicateIndices, _setDuplicateIndices] = createSignal<number[]>([])
+  const [duplicateIndices, setDuplicateIndices] = createSignal<number[]>([])
 
   // Loading/error
   const [loading, setLoading] = createSignal(false)
@@ -314,11 +334,9 @@ export default function Import() {
     return []
   }
 
-  const hasDuplicateCount = () => {
-    if (uploadResult()) return uploadResult()!.duplicateCount
-    if (sheetResult()) return sheetResult()!.duplicateCount
-    return 0
-  }
+  // Rows flagged as within-batch duplicates (identical to an earlier row in this
+  // import), memoized as a Set for O(1) lookup in the preview table.
+  const duplicateSet = createMemo(() => new Set(duplicateIndices()))
 
   // Calculate auto-detection mapping
   const autoDetectMapping = (headers: string[]) => {
@@ -370,7 +388,12 @@ export default function Import() {
     const rows = currentRows()
     if (rows.length === 0) return
     setActiveStep('preview')
-    setSelectedRows(new Set<number>(rows.map((_, i) => i)))
+    const dups = computeRowDuplicates(rows)
+    setDuplicateIndices(dups)
+    const dupSet = new Set(dups)
+    // Skip duplicates by default: select every row except the duplicate copies. The
+    // user can re-check a duplicate row (or use "Import All") to include it anyway.
+    setSelectedRows(new Set<number>(rows.map((_, i) => i).filter((i) => !dupSet.has(i))))
     setCurrentPage(1)
   }
 
@@ -850,23 +873,13 @@ export default function Import() {
         rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
       }
 
-      // Server-side duplicate detection for new-only mode
-      const dupCount = hasDuplicateCount() ?? 0
+      // "Import only new" skips the within-batch duplicate rows detected on preview.
+      // (Duplicates against already-imported data are skipped by the server on execute
+      // regardless of mode.)
+      const dupCount = duplicateIndices().length
       if (mode === 'new' && dupCount > 0) {
-        const previewResponse = await apiFetch('/api/import/file-sheet', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...profileHeaders() },
-          body: JSON.stringify({
-            fileId: fileId(),
-            sheetName: selectedSheet(),
-            mapping,
-          }),
-        })
-
-        const previewData = await previewResponse.json()
-        if (previewData.duplicateIndices) {
-          rowsToImport = rowsToImport.filter((_, i) => !previewData.duplicateIndices!.includes(i))
-        }
+        const dupSet = duplicateSet()
+        rowsToImport = rowsToImport.filter((_, i) => !dupSet.has(i))
       }
 
       // Reuse a stable id across retries so the worker can de-dupe a re-run of the same import.
@@ -906,7 +919,9 @@ export default function Import() {
           ? uploadResult()?.filename || 'File upload'
           : activeImportTab() === 'google-sheets'
             ? `Google Sheet${selectedSheet() ? ` (${selectedSheet()})` : ''}`
-            : 'Pasted CSV'
+            : activeImportTab() === 'bank-imports'
+              ? uploadResult()?.filename || 'Bank statements'
+              : 'Pasted CSV'
       apiFetch('/api/import-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
@@ -2176,6 +2191,13 @@ export default function Import() {
               </div>
             )}
           </div>
+          {duplicates > 0 && (
+            <p style={{ margin: '0 0 12px', 'font-size': '12px', color: 'var(--text-secondary)' }}>
+              {duplicates} duplicate row{duplicates === 1 ? '' : 's'} (identical to an earlier row
+              in this import) unselected by default — check a row, or use "Import All", to include
+              it.
+            </p>
+          )}
           <label
             style={{
               display: 'flex',
@@ -2254,8 +2276,14 @@ export default function Import() {
               <For each={currentRows().slice(startRow(), endRow())}>
                 {(row, idx) => {
                   const actualIndex = startRow() + idx()
+                  const isDuplicate = () => duplicateSet().has(actualIndex)
                   return (
-                    <tr>
+                    <tr
+                      classList={{ [styles.duplicate]: isDuplicate() }}
+                      title={
+                        isDuplicate() ? 'Duplicate of an earlier row in this import' : undefined
+                      }
+                    >
                       <td class={styles.selectCol}>
                         <input
                           type="checkbox"
@@ -2264,6 +2292,9 @@ export default function Import() {
                             toggleRow(actualIndex)
                           }}
                         />
+                        <Show when={isDuplicate()}>
+                          <span class={styles.dupBadge}>dup</span>
+                        </Show>
                       </td>
                       <For each={row}>{(cell) => <td>{cell ?? ''}</td>}</For>
                     </tr>
