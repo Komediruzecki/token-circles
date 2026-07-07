@@ -780,17 +780,14 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
     `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`
   )
 
-  // budgetsRepo.bulkCreateMonthly — D1 has no sync transaction here, so loop inserts.
-  for (const item of expenses) {
-    await db.run(
-      c.env.DB,
-      'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)',
-      item.category_id,
-      item.total,
-      'monthly',
-      currStart,
-      pid
-    )
+  // Batch all INSERTs into a single D1 batch call to avoid N+1 round-trips.
+  if (expenses.length > 0) {
+    const stmts = expenses.map((item) =>
+      c.env.DB.prepare(
+        'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
+      ).bind(item.category_id, item.total, 'monthly', currStart, pid)
+    );
+    await c.env.DB.batch(stmts);
   }
 
   return c.json({ ok: true, count: expenses.length })

@@ -9,22 +9,8 @@ const { asyncHandler } = require('../lib/errors');
 module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheetService , requireAuth }) {
   const router = express.Router();
 
-  function parseDateString(dateStr) {
-    if (!dateStr) return new Date().toISOString().split('T')[0];
-    if (typeof dateStr === 'number') {
-      const d = spreadsheetService.parseExcelDate(dateStr);
-      if (d) return new Date(d.y, d.m - 1, d.d).toISOString().split('T')[0];
-    }
-    const s = String(dateStr).trim();
-    const euMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-    if (euMatch) {
-      const [, d, m, y] = euMatch;
-      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d)).toISOString().split('T')[0];
-    }
-    const date = new Date(s);
-    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
-    return new Date().toISOString().split('T')[0];
-  }
+  const { createParseDateString } = require('../lib/dates');
+  const parseDateString = createParseDateString(spreadsheetService);
 
   const importFiles = {};
 
@@ -131,7 +117,7 @@ module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheet
     });
 
   }));
-  router.post('/api/import/googlesheet', apiRateLimiter, asyncHandler((req, res) => {
+  router.post('/api/import/googlesheet', apiRateLimiter, asyncHandler(async (req, res) => {
     const { url, sheetName } = req.body;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
@@ -210,77 +196,75 @@ module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheet
     }
 
     // Execute: try CSV first (respects gid), then fall back to XLSX for sheet listing
-    (async () => {
-      try {
-        if (sheetName) {
-          // Specific sheet requested — try CSV with gid first, then XLSX workbook
-          const csvResult = await tryCsvExport();
-          if (!csvResult.error) {
-            return res.json({
-              headers: csvResult.headers,
-              rows: csvResult.rows,
-              selectedSheet: csvResult.sheetName,
-              sheetNames: [csvResult.sheetName],
-            });
-          }
-
-          // CSV failed — try XLSX, find the matching sheet by name
-          const xlsxResult = await tryXlsxAndListSheets();
-          if (xlsxResult.error) {
-            return res.status(500).json({
-              error:
-                'Failed to fetch Google Sheet: ' +
-                xlsxResult.error +
-                ". Make sure the sheet is shared as 'Anyone with link can view'.",
-            });
-          }
-
-          const targetSheet = xlsxResult.sheetNames.includes(sheetName)
-            ? sheetName
-            : xlsxResult.sheetNames[0];
-          const sheet = xlsxResult.workbook.Sheets[targetSheet];
-          const data = spreadsheetService.sheetToJson(sheet, { header: 1 });
-          const headers = (data[0] || []).map(String);
-          const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ''));
+    try {
+      if (sheetName) {
+        // Specific sheet requested — try CSV with gid first, then XLSX workbook
+        const csvResult = await tryCsvExport();
+        if (!csvResult.error) {
           return res.json({
-            headers,
-            rows,
-            selectedSheet: targetSheet,
-            sheetNames: xlsxResult.sheetNames,
-          });
-        } else {
-          // No specific sheet — try CSV first, fall back to XLSX for sheet list
-          const csvResult = await tryCsvExport();
-          if (!csvResult.error && csvResult.headers.length > 0) {
-            return res.json({
-              headers: csvResult.headers,
-              rows: csvResult.rows,
-              selectedSheet: csvResult.sheetName,
-              sheetNames: [csvResult.sheetName],
-            });
-          }
-
-          // CSV failed or returned empty — get sheet names via XLSX
-          const xlsxResult = await tryXlsxAndListSheets();
-          if (xlsxResult.error) {
-            return res.status(500).json({
-              error:
-                'Failed to fetch Google Sheet: ' +
-                xlsxResult.error +
-                ". Make sure the sheet is shared as 'Anyone with link can view'.",
-            });
-          }
-          return res.json({
-            sheetNames: xlsxResult.sheetNames,
-            selectedSheet: xlsxResult.sheetNames[0],
+            headers: csvResult.headers,
+            rows: csvResult.rows,
+            selectedSheet: csvResult.sheetName,
+            sheetNames: [csvResult.sheetName],
           });
         }
-      } catch (err) {
-        console.error(err.message);
-        logError('error', err);
-        res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + err.message });
+
+        // CSV failed — try XLSX, find the matching sheet by name
+        const xlsxResult = await tryXlsxAndListSheets();
+        if (xlsxResult.error) {
+          return res.status(500).json({
+            error:
+              'Failed to fetch Google Sheet: ' +
+              xlsxResult.error +
+              ". Make sure the sheet is shared as 'Anyone with link can view'.",
+          });
+        }
+
+        const targetSheet = xlsxResult.sheetNames.includes(sheetName)
+          ? sheetName
+          : xlsxResult.sheetNames[0];
+        const sheet = xlsxResult.workbook.Sheets[targetSheet];
+        const data = spreadsheetService.sheetToJson(sheet, { header: 1 });
+        const headers = (data[0] || []).map(String);
+        const rows = data.slice(1).filter((r) => r.some((c) => c != null && c !== ''));
+        return res.json({
+          headers,
+          rows,
+          selectedSheet: targetSheet,
+          sheetNames: xlsxResult.sheetNames,
+        });
+      } else {
+        // No specific sheet — try CSV first, fall back to XLSX for sheet list
+        const csvResult = await tryCsvExport();
+        if (!csvResult.error && csvResult.headers.length > 0) {
+          return res.json({
+            headers: csvResult.headers,
+            rows: csvResult.rows,
+            selectedSheet: csvResult.sheetName,
+            sheetNames: [csvResult.sheetName],
+          });
+        }
+
+        // CSV failed or returned empty — get sheet names via XLSX
+        const xlsxResult = await tryXlsxAndListSheets();
+        if (xlsxResult.error) {
+          return res.status(500).json({
+            error:
+              'Failed to fetch Google Sheet: ' +
+              xlsxResult.error +
+              ". Make sure the sheet is shared as 'Anyone with link can view'.",
+          });
+        }
+        return res.json({
+          sheetNames: xlsxResult.sheetNames,
+          selectedSheet: xlsxResult.sheetNames[0],
+        });
       }
-    })();
+    } catch (err) {
+      console.error(err.message);
+      logError('error', err);
+      res.status(500).json({ error: 'Failed to fetch Google Sheet: ' + err.message });
+    }
   }));
   router.post('/api/import/execute', apiRateLimiter, asyncHandler((req, res) => {
     const pid = getProfileId(req);
@@ -295,10 +279,12 @@ module.exports = function ({ apiRateLimiter, logError, uploadImport, spreadsheet
     // Also populate a name→accountId map for resolving Means of Payment (FROM) and Category (TO)
     const accountIdMap = new Map();
 
-    // First, add existing accounts to the map so they can be referenced by name
+    // First, add existing accounts to the map so they can be referenced by name.
+    // Restrict to the primary profile so imported transactions don't get linked
+    // to another profile's account with the same name.
     const existingAccounts = repos.accounts.all(
-      `SELECT id, name FROM accounts WHERE profile_id IN (${pids.map(() => '?').join(',')})`,
-      ...pids
+      'SELECT id, name FROM accounts WHERE profile_id = ?',
+      pid
     );
     for (const acc of existingAccounts) {
       accountIdMap.set(acc.name.toLowerCase(), acc.id);

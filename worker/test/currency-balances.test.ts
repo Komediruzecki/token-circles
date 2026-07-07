@@ -75,4 +75,48 @@ describe('account balances use the base-currency value', () => {
     expect(del.status).toBe(200);
     expect(await balance()).toBeCloseTo(100, 2);
   });
+
+  async function createFxExpense(amountLocal: number): Promise<number> {
+    const res = await SELF.fetch('https://example.com/api/transactions', {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Profile-Id': '400' },
+      body: JSON.stringify({
+        description: 'Toll',
+        amount: 19,
+        amount_local: amountLocal,
+        currency: 'HRK',
+        type: 'expense',
+        date: '2026-03-10',
+        account_id: 4000,
+      }),
+    });
+    return ((await res.json()) as { id: number }).id;
+  }
+
+  it('editing an unrelated field on a foreign row leaves the balance unchanged', async () => {
+    await createFxExpense(2.47); // balance 97.53
+    const id = await env.DB.prepare('SELECT id FROM transactions LIMIT 1').first<{ id: number }>();
+    const res = await SELF.fetch(`https://example.com/api/transactions/${id!.id}`, {
+      method: 'PUT',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Profile-Id': '400' },
+      body: JSON.stringify({ description: 'Toll (edited)' }),
+    });
+    expect(res.status).toBe(200);
+    // The PUT reverses the old row and re-applies it; because it reverses using
+    // amount_local (baseAmount), not the raw 19 HRK, the net change is zero.
+    expect(await balance()).toBeCloseTo(97.53, 2);
+  });
+
+  it('changing amount_local on a foreign row re-bases the balance exactly', async () => {
+    const id = await createFxExpense(2.47); // balance 97.53
+    const res = await SELF.fetch(`https://example.com/api/transactions/${id}`, {
+      method: 'PUT',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Profile-Id': '400' },
+      body: JSON.stringify({ amount: 19, amount_local: 3.53, currency: 'HRK' }),
+    });
+    expect(res.status).toBe(200);
+    // Reverse old base (2.47) then apply new base (3.53): 100 − 3.53 = 96.47.
+    // The pre-fix bug reversed the raw 19 HRK and would leave 100 − 19 − 3.53.
+    expect(await balance()).toBeCloseTo(96.47, 2);
+  });
 });

@@ -289,6 +289,16 @@ class SelfHostedAdapter implements StorageAdapter {
     })
   }
 
+  async bulkDeleteTransactions(ids: number[]): Promise<void> {
+    if (!ids.length) return
+    await fetch('/api/transactions/bulk', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, action: 'delete' }),
+    })
+  }
+
   async deleteAllTransactions(): Promise<void> {
     await fetch('/api/transactions/all', {
       method: 'DELETE',

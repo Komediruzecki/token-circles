@@ -397,4 +397,23 @@ describe('localHandlers - transactions', () => {
     const res = await transactionsUpdate({ p1: '99999' }, { amount: 500, description: 'Ghost' })
     expect(res.status).toBe(200)
   })
+
+  it('CSV export escapes embedded double-quotes and commas', async () => {
+    await transactionsCreate({
+      amount: 12.5,
+      type: 'expense',
+      date: '2026-05-20',
+      description: 'She said "hi"',
+      notes: 'a, b, c',
+      category_id: 1,
+    })
+    const res = await transactionsExport(new URLSearchParams())
+    expect(res.status).toBe(200)
+    const csv = await res.text()
+    const dataLine = csv.split('\n')[1]
+    // Interior quotes doubled, and the comma-bearing notes wrapped in quotes —
+    // so the row round-trips through an RFC-4180 parser without corruption.
+    expect(dataLine).toContain('"She said ""hi"""')
+    expect(dataLine).toContain('"a, b, c"')
+  })
 })

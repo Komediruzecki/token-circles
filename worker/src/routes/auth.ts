@@ -194,7 +194,7 @@ authRoutes.post('/api/auth/register', async (c) => {
       .bind('Personal Profile', userId)
       .run();
     await sendMail(c.env, email, 'Welcome to Token Circles', welcomeEmailHtml(base)).catch(
-      () => {}
+      (e) => { console.error('Welcome email failed:', e) }
     );
   }
   // Identical response regardless of existence; no session cookie is set (the user signs in next).

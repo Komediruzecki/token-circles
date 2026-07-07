@@ -105,17 +105,18 @@ export async function transactionsExport(query: URLSearchParams): Promise<Respon
   const txns = await adapter.listTransactions(
     filters as Parameters<typeof adapter.listTransactions>[0] | undefined
   )
+  const csvQuote = (s: string | null | undefined): string => `"${(s ?? '').replace(/"/g, '""')}"`
   const csv = ['date,type,description,amount,currency,category_id,notes']
   for (const t of txns) {
     csv.push(
       [
         t.date,
         t.type,
-        `"${t.description}"`,
+        csvQuote(t.description),
         t.amount,
         t.currency || 'EUR',
         t.category_id || '',
-        `"${t.notes || ''}"`,
+        csvQuote(t.notes),
       ].join(',')
     )
   }
