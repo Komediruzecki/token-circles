@@ -25,13 +25,31 @@ export function isTransfer(text: string, rules: TransferRuleSet): boolean {
  */
 export function resolveCounterpart(text: string, rules: TransferRuleSet): string | null {
   const s = text.toLowerCase()
+  // Rank matching signatures by specificity so order in the rules object doesn't
+  // decide: a purely-numeric signature (a card last-4 / account fragment) is a more
+  // specific identifier than a brand keyword, and within a group the longer wins.
+  // So { revolut, 0418 } on "POS Revolut**0418*" resolves via 0418, not revolut.
+  const matches: { account: string; numeric: boolean; len: number }[] = []
   for (const [signature, account] of Object.entries(rules.counterparts)) {
-    if (signature && s.includes(signature.toLowerCase())) return account
+    const sig = signature.toLowerCase().trim()
+    if (sig && s.includes(sig))
+      matches.push({ account, numeric: /^\d+$/.test(sig), len: sig.length })
   }
+  if (matches.length > 0) {
+    matches.sort((a, b) => Number(b.numeric) - Number(a.numeric) || b.len - a.len)
+    return matches[0].account
+  }
+  // Fall back to any own-account name mentioned in the text (longest wins).
+  let best: string | null = null
+  let bestLen = 0
   for (const account of rules.ownAccounts) {
-    if (account && s.includes(account.toLowerCase())) return account
+    const a = account.toLowerCase().trim()
+    if (a.length > bestLen && s.includes(a)) {
+      best = account
+      bestLen = a.length
+    }
   }
-  return null
+  return best
 }
 
 /**

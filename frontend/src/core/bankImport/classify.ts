@@ -23,6 +23,19 @@ export interface RawTxn {
   notes?: string
   /** Force transfer regardless of keywords (e.g. Revolut Type = Topup/Transfer). */
   forceTransfer?: boolean
+  /**
+   * A signature of the ORIGINAL statement row (full timestamps, balance, fee, …),
+   * used for within-batch duplicate detection. Two genuinely distinct same-day
+   * transactions differ here (per-second time / balance), while the same
+   * transaction appearing in two overlapping statements matches — unlike the
+   * coarse canonical row, whose date is only yyyy-mm-dd.
+   */
+  dedupKey?: string
+}
+
+/** Scope the raw-row dedup signature to the statement's account. */
+function dedupKeyOf(raw: RawTxn, ctx: TransformContext): string | undefined {
+  return raw.dedupKey ? `${ctx.targetAccount}${raw.dedupKey}` : undefined
 }
 
 export function buildTxn(raw: RawTxn, ctx: TransformContext): CanonicalTxn {
@@ -49,6 +62,7 @@ export function buildTxn(raw: RawTxn, ctx: TransformContext): CanonicalTxn {
         beneficiary: raw.beneficiary,
         payor: raw.payor,
         notes: raw.notes,
+        dedupKey: dedupKeyOf(raw, ctx),
       }
     }
     // Transfer suspected but the counterpart account is unknown. Import as signed
@@ -77,5 +91,6 @@ function incomeExpense(raw: RawTxn, ctx: TransformContext, notes?: string): Cano
     beneficiary: raw.beneficiary,
     payor: raw.payor,
     notes,
+    dedupKey: dedupKeyOf(raw, ctx),
   }
 }

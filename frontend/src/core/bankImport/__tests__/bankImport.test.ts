@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
+import { autoDetectMapping, FIELD_NAMES } from '../../importMapping'
 import { resolveTargetAccount, statementSignature } from '../accountResolver'
 import { ersteAdapter } from '../adapters/erste'
 import { pbzAdapter } from '../adapters/pbz'
@@ -16,6 +17,7 @@ import {
 } from '../parse'
 import { processFiles, toDetectInput } from '../process'
 import { detectBank } from '../registry'
+import { resolveCounterpart } from '../transferRules'
 import type { CategoryRuleSet, TransferRuleSet, TransformContext } from '../types'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -54,6 +56,25 @@ describe('matchCategory (longest match)', () => {
   })
 })
 
+describe('resolveCounterpart (longest signature wins)', () => {
+  it('prefers a specific card last-4 over a generic keyword', () => {
+    const rules = {
+      ownAccounts: [],
+      keywords: [],
+      counterparts: { revolut: 'Revolut EUR', '0418': 'Revolut USD' },
+    }
+    // A generic "revolut" is listed first but the specific "0418" must win.
+    expect(resolveCounterpart('POS Revolut**0418* Dublin', rules)).toBe('Revolut USD')
+    // Without the card suffix, the generic keyword still resolves.
+    expect(resolveCounterpart('POS Revolut Dublin', rules)).toBe('Revolut EUR')
+  })
+  it('falls back to an own-account name, else null', () => {
+    const rules = { ownAccounts: ['Erste Current'], keywords: [], counterparts: {} }
+    expect(resolveCounterpart('Top-up to Erste Current', rules)).toBe('Erste Current')
+    expect(resolveCounterpart('Nothing here', rules)).toBeNull()
+  })
+})
+
 // ---------------------------------------------------------------------------
 // parse utilities
 // ---------------------------------------------------------------------------
@@ -83,6 +104,26 @@ describe('parse utils', () => {
     expect(rows).toEqual([
       ['a', 'b', 'c'],
       ['1', 'x;y', '3'],
+    ])
+  })
+
+  it('treats a stray mid-field quote as literal (does not collapse the row)', () => {
+    // The lone " must NOT open a quoted field, or the following ";" get swallowed
+    // and the 5-column row collapses (which would drop the transaction).
+    const rows = splitDelimited('1;PROMO 24" TV;9,99;EUR;x', ';')
+    expect(rows[0]).toHaveLength(5)
+    expect(rows[0]).toEqual(['1', 'PROMO 24" TV', '9,99', 'EUR', 'x'])
+  })
+
+  it('keeps balanced mid-field quotes and handles escaped quotes', () => {
+    expect(splitDelimited('a;KEKS za "I send";b', ';')[0]).toEqual(['a', 'KEKS za "I send"', 'b'])
+    // "" inside a properly quoted field is one literal quote.
+    expect(splitDelimited('"a""b";c', ';')[0]).toEqual(['a"b', 'c'])
+    // A comma inside a quoted Revolut field stays intact.
+    expect(splitDelimited('Card,"Top-up, extra",5.00', ',')[0]).toEqual([
+      'Card',
+      'Top-up, extra',
+      '5.00',
     ])
   })
 
@@ -290,6 +331,38 @@ describe('registry + process', () => {
 })
 
 // ---------------------------------------------------------------------------
+// within-batch duplicate detection (raw-row dedup, not the coarse canonical row)
+// ---------------------------------------------------------------------------
+describe('duplicate detection', () => {
+  const header =
+    'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance'
+  const mk = (lines: string[]) => enc([header, ...lines].join('\n'))
+
+  it('does NOT flag distinct same-day transactions with different timestamps', async () => {
+    // Same day, same amount, same description → identical CANONICAL rows, but the
+    // raw rows differ (times + balance), so they must not be treated as duplicates.
+    const csv = mk([
+      'Card Payment,Current,2026-06-11 10:00:00,2026-06-11 11:00:00,CLAUDE,-12.5,0.00,EUR,COMPLETED,100.00',
+      'Card Payment,Current,2026-06-11 14:30:05,2026-06-11 15:00:00,CLAUDE,-12.5,0.00,EUR,COMPLETED,87.50',
+    ])
+    const result = await processFiles([{ filename: 'r.csv', bytes: csv, targetAccount: 'Revolut' }])
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows[0].slice(0, 7)).toEqual(result.rows[1].slice(0, 7)) // canonical rows equal
+    expect(result.duplicateIndices).toEqual([]) // …but not flagged as duplicates
+  })
+
+  it('flags a true duplicate (identical raw statement row twice)', async () => {
+    const line =
+      'Card Payment,Current,2026-06-11 10:00:00,2026-06-11 11:00:00,CLAUDE,-12.5,0.00,EUR,COMPLETED,100.00'
+    const result = await processFiles([
+      { filename: 'r.csv', bytes: mk([line, line]), targetAccount: 'Revolut' },
+    ])
+    expect(result.rows).toHaveLength(2)
+    expect(result.duplicateIndices).toEqual([1]) // the second copy is the duplicate
+  })
+})
+
+// ---------------------------------------------------------------------------
 // account resolver
 // ---------------------------------------------------------------------------
 describe('account resolver', () => {
@@ -322,47 +395,11 @@ describe('account resolver', () => {
 // canonical headers must auto-map onto the app's import fields (contract guard)
 // ---------------------------------------------------------------------------
 describe('canonical header auto-mapping', () => {
-  // Mirror of Import.tsx HEADER_VARIANTS — if that changes, this guard should too.
-  const FIELD_ORDER = [
-    'date',
-    'description',
-    'amount',
-    'category',
-    'currency',
-    'beneficiary',
-    'payor',
-    'means_of_payment',
-    'exchange_rate',
-    'notes',
-    'type',
-    'amount_local',
-  ]
-  const HEADER_VARIANTS: Record<string, string[]> = {
-    date: ['date', 'datum', 'trans date', 'transaction date'],
-    description: ['description', 'desc', 'memo', 'note', 'narration', 'details'],
-    amount: ['amount', 'sum', 'total', 'value', 'suma'],
-    category: ['category', 'cat', 'kategoria'],
-    currency: ['currency', 'waluta', 'curr'],
-    beneficiary: ['beneficiary', 'beneficjent', 'recipient', 'payee'],
-    payor: ['payor', 'payer', 'from'],
-    means_of_payment: ['payment', 'method', 'means', 'payment method'],
-    exchange_rate: ['rate', 'exchange rate', 'kurs'],
-    notes: ['notes', 'note', 'remark', 'comments'],
-    type: ['type', 'typ', 'tx type', 'transaction type'],
-    amount_local: ['amount local', 'local amount', 'amount in local currency'],
-  }
-  const autoDetect = (headers: string[]) => {
-    const mapping: Record<string, number> = {}
-    for (const field of FIELD_ORDER) {
-      const lower = headers.map((h) => h.toLowerCase())
-      const idx = lower.findIndex((h) => HEADER_VARIANTS[field].some((v) => h.includes(v)))
-      if (idx !== -1) mapping[field] = idx
-    }
-    return mapping
-  }
-
+  // Exercises the REAL importMapping.autoDetectMapping (not a hand-copy), so this
+  // guard actually fails if a HEADER_VARIANTS change ever misroutes the bank-import
+  // canonical headers in production.
   it('maps each canonical header to the intended field/index', () => {
-    const m = autoDetect([...CANONICAL_HEADERS])
+    const m = autoDetectMapping([...CANONICAL_HEADERS])
     expect(m.date).toBe(0)
     expect(m.type).toBe(1)
     expect(m.means_of_payment).toBe(2)
@@ -373,5 +410,12 @@ describe('canonical header auto-mapping', () => {
     expect(m.beneficiary).toBe(7)
     expect(m.payor).toBe(8)
     expect(m.notes).toBe(9)
+  })
+
+  it('maps every required import field', () => {
+    const m = autoDetectMapping([...CANONICAL_HEADERS])
+    for (const field of FIELD_NAMES.filter((f) => f.required)) {
+      expect(m[field.key], `required field "${field.key}" must auto-map`).toBeGreaterThanOrEqual(0)
+    }
   })
 })

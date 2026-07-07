@@ -675,9 +675,16 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
 
       // Map means_of_payment to account (e.g. "Erste Current" as the account
-      // where salary arrives or where transfer proceeds land).
-      if (mopValue && mopAccountMap.has(mopValue)) {
-        const mopId = mopAccountMap.get(mopValue)!
+      // where salary arrives or where transfer proceeds land). For a TRANSFER, also
+      // fall back to accountIdMap: a self-transfer names the same account-typed value
+      // in both means_of_payment and category, and mopAccountMap deliberately skips
+      // names already in accountIdMap — without this fallback the source stays unlinked
+      // and the self-transfer would one-sided-credit instead of netting to zero.
+      let mopId = mopValue ? mopAccountMap.get(mopValue) : undefined
+      if (mopId === undefined && mopValue && type === 'transfer') {
+        mopId = accountIdMap.get(mopValue)
+      }
+      if (mopId !== undefined) {
         if (type === 'income' && !accountId) {
           accountId = mopId
         } else if (type === 'transfer') {
@@ -685,9 +692,11 @@ export async function importExecute(body: unknown): Promise<Response> {
           // account, so means_of_payment is the SOURCE — link it as account_id so
           // the balance moves on both sides (matches the worker import, which sets
           // account_id from means_of_payment and transfer_account_id from category).
-          // When no destination was resolved, keep the prior behavior of treating
-          // means_of_payment as the transfer account.
-          if (transferAccountId && transferAccountId !== mopId && !accountId) {
+          // When source and destination are the SAME account, both sides still get
+          // linked so the deltas cancel (a self-transfer nets to zero) rather than
+          // one-sided crediting. When no destination was resolved, fall back to
+          // treating means_of_payment as the transfer account.
+          if (transferAccountId && !accountId) {
             accountId = mopId
           } else if (!transferAccountId) {
             transferAccountId = mopId
