@@ -514,6 +514,64 @@ export function App() {
     },
   ]
 
+  // --- Sidebar grouping: collapsible, indented sub-groups with persisted open state ---
+  const navByName: Record<string, (typeof navItems)[number]> = {}
+  for (const item of navItems) navByName[item.name] = item
+  const pick = (...names: string[]) =>
+    names.map((n) => navByName[n]).filter((x): x is (typeof navItems)[number] => Boolean(x))
+  const navSections: { group?: string; items: (typeof navItems)[number][] }[] = [
+    { items: pick('dashboard', 'transactions', 'accounts', 'bills') },
+    { group: 'Planning', items: pick('budgets', 'goals', 'loans', 'retirement') },
+    { group: 'Calculators', items: pick('compound', 'emergency', 'rentBuy') },
+    { group: 'Analytics', items: pick('analytics', 'portfolio') },
+    { items: pick('housing', 'counterparties', 'import', 'settings') },
+  ]
+
+  const loadOpenGroups = (): Record<string, boolean> => {
+    try {
+      const raw = localStorage.getItem('sidebarGroupsOpen')
+      return raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+    } catch {
+      return {}
+    }
+  }
+  const [openGroups, setOpenGroups] = createSignal<Record<string, boolean>>(loadOpenGroups())
+  const groupHasActive = (items: (typeof navItems)[number][]) =>
+    items.some((it) => it.name === activePage())
+  // A group renders expanded when the user hasn't collapsed it (default open) OR it
+  // holds the current page (so the active item is always visible even if collapsed).
+  const isGroupExpanded = (section: { group?: string; items: (typeof navItems)[number][] }) =>
+    (openGroups()[section.group ?? ''] ?? true) || groupHasActive(section.items)
+  const toggleGroup = (group: string) => {
+    const next = { ...openGroups(), [group]: !(openGroups()[group] ?? true) }
+    setOpenGroups(next)
+    try {
+      localStorage.setItem('sidebarGroupsOpen', JSON.stringify(next))
+    } catch {
+      /* ignore quota / disabled storage */
+    }
+  }
+
+  const navLink = (item: (typeof navItems)[number]) => (
+    <a
+      href={`#${item.name}`}
+      class={
+        activePage() === item.name ? layoutStyles.sidebarNavActive : layoutStyles.sidebarNavLink
+      }
+      onClick={(e) => {
+        e.preventDefault()
+        setActivePage(item.name)
+        setSidebarCollapsed(true)
+        window.location.hash = item.name
+      }}
+    >
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        {item.icon}
+      </svg>
+      <span>{item.label}</span>
+    </a>
+  )
+
   return (
     <Show when={!isResetRoute} fallback={<ResetPassword />}>
       <Show
@@ -813,27 +871,47 @@ export function App() {
                 )}
               </div>
               <nav class={layoutStyles.sidebarNav}>
-                {navItems.map((item) => (
-                  <a
-                    href={`#${item.name}`}
-                    class={
-                      activePage() === item.name
-                        ? layoutStyles.sidebarNavActive
-                        : layoutStyles.sidebarNavLink
-                    }
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setActivePage(item.name)
-                      setSidebarCollapsed(true)
-                      window.location.hash = item.name
-                    }}
-                  >
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      {item.icon}
-                    </svg>
-                    <span>{item.label}</span>
-                  </a>
-                ))}
+                <For each={navSections}>
+                  {(section) => (
+                    <Show
+                      when={section.group}
+                      fallback={<For each={section.items}>{(item) => navLink(item)}</For>}
+                    >
+                      <div class={layoutStyles.sidebarGroup}>
+                        <button
+                          type="button"
+                          class={`${layoutStyles.sidebarGroupHeader}${
+                            groupHasActive(section.items)
+                              ? ` ${  layoutStyles.sidebarGroupActive}`
+                              : ''
+                          }`}
+                          aria-expanded={isGroupExpanded(section)}
+                          onClick={() => { toggleGroup(section.group!); }}
+                        >
+                          <span>{section.group}</span>
+                          <svg
+                            class={`${layoutStyles.sidebarChevron}${
+                              isGroupExpanded(section) ? ` ${  layoutStyles.sidebarChevronOpen}` : ''
+                            }`}
+                            width="14"
+                            height="14"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                        <Show when={isGroupExpanded(section)}>
+                          <div class={layoutStyles.sidebarGroupItems}>
+                            <For each={section.items}>{(item) => navLink(item)}</For>
+                          </div>
+                        </Show>
+                      </div>
+                    </Show>
+                  )}
+                </For>
                 <button
                   class={layoutStyles.sidebarNavLink}
                   style={{
