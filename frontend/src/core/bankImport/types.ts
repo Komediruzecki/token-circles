@@ -39,6 +39,11 @@ export interface CanonicalTxn {
   beneficiary?: string
   payor?: string
   notes?: string
+  /**
+   * Signature of the source statement row (full timestamps/balance) used for
+   * within-batch duplicate detection. Not serialized into the visible import row.
+   */
+  dedupKey?: string
 }
 
 /** Statement-level metadata sniffed during parsing (used for account routing). */

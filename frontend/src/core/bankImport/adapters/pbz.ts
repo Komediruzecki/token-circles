@@ -60,6 +60,10 @@ export const pbzAdapter: BankAdapter = {
         currency: (r[COL.currency] || '').trim() || parsed.meta.currency || 'EUR',
         description,
         counterparty: description,
+        // PBZ has no per-row time or id, so the full row (date, type, opis, amount)
+        // is the best available signature — two same-day identical rows can't be
+        // told apart from a true duplicate.
+        dedupKey: r.join('\x01'),
       }
       out.push(buildTxn(raw, ctx))
     }

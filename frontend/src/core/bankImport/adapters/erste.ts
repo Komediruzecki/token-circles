@@ -90,6 +90,10 @@ export const ersteAdapter: BankAdapter = {
         counterparty,
         beneficiary: amount < 0 ? counterparty : undefined,
         payor: amount > 0 ? counterparty : undefined,
+        // Raw row WITHOUT the per-statement sequence number (col 0), which differs
+        // between overlapping exports; the balance + reference still discriminate
+        // genuinely distinct same-day rows.
+        dedupKey: r.slice(1).join('\x01'),
       }
       out.push(buildTxn(raw, ctx))
     }

@@ -311,6 +311,38 @@ describe('registry + process', () => {
 })
 
 // ---------------------------------------------------------------------------
+// within-batch duplicate detection (raw-row dedup, not the coarse canonical row)
+// ---------------------------------------------------------------------------
+describe('duplicate detection', () => {
+  const header =
+    'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance'
+  const mk = (lines: string[]) => enc([header, ...lines].join('\n'))
+
+  it('does NOT flag distinct same-day transactions with different timestamps', async () => {
+    // Same day, same amount, same description → identical CANONICAL rows, but the
+    // raw rows differ (times + balance), so they must not be treated as duplicates.
+    const csv = mk([
+      'Card Payment,Current,2026-06-11 10:00:00,2026-06-11 11:00:00,CLAUDE,-12.5,0.00,EUR,COMPLETED,100.00',
+      'Card Payment,Current,2026-06-11 14:30:05,2026-06-11 15:00:00,CLAUDE,-12.5,0.00,EUR,COMPLETED,87.50',
+    ])
+    const result = await processFiles([{ filename: 'r.csv', bytes: csv, targetAccount: 'Revolut' }])
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows[0].slice(0, 7)).toEqual(result.rows[1].slice(0, 7)) // canonical rows equal
+    expect(result.duplicateIndices).toEqual([]) // …but not flagged as duplicates
+  })
+
+  it('flags a true duplicate (identical raw statement row twice)', async () => {
+    const line =
+      'Card Payment,Current,2026-06-11 10:00:00,2026-06-11 11:00:00,CLAUDE,-12.5,0.00,EUR,COMPLETED,100.00'
+    const result = await processFiles([
+      { filename: 'r.csv', bytes: mk([line, line]), targetAccount: 'Revolut' },
+    ])
+    expect(result.rows).toHaveLength(2)
+    expect(result.duplicateIndices).toEqual([1]) // the second copy is the duplicate
+  })
+})
+
+// ---------------------------------------------------------------------------
 // account resolver
 // ---------------------------------------------------------------------------
 describe('account resolver', () => {

@@ -333,7 +333,11 @@ export default function Import() {
     const rows = currentRows()
     if (rows.length === 0) return
     setActiveStep('preview')
-    const dups = computeRowDuplicates(rows)
+    // Bank imports precompute duplicates from the RAW statement rows (per-second
+    // timestamps / balance intact), so two distinct same-day transactions aren't
+    // flagged; other sources fall back to a full canonical-row hash.
+    const dups =
+      bankFiles().length > 0 ? (uploadResult()?.duplicateIndices ?? []) : computeRowDuplicates(rows)
     setDuplicateIndices(dups)
     const dupSet = new Set(dups)
     // Skip duplicates by default: select every row except the duplicate copies. The
@@ -537,7 +541,10 @@ export default function Import() {
     return { result, recognized, filename }
   }
 
-  const bankUploadResult = (result: { headers: string[]; rows: string[][] }, filename: string) => ({
+  const bankUploadResult = (
+    result: { headers: string[]; rows: string[][]; duplicateIndices: number[] },
+    filename: string
+  ) => ({
     headers: result.headers,
     rows: result.rows,
     filename,
@@ -545,8 +552,8 @@ export default function Import() {
     sheetName: 'Bank Import',
     sheetNames: ['Bank Import'],
     totalRows: result.rows.length,
-    duplicateCount: 0,
-    duplicateIndices: [],
+    duplicateCount: result.duplicateIndices.length,
+    duplicateIndices: result.duplicateIndices,
   })
 
   const processBankFiles = async () => {
