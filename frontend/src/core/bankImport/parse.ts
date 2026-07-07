@@ -17,9 +17,11 @@ export function decodeText(bytes: Uint8Array, encoding = 'utf-8'): string {
 }
 
 /**
- * Split delimited text into a trimmed string matrix. Quote-aware: a delimiter
- * inside a double-quoted field is literal, and `""` is an escaped quote. Mirrors
- * the app's existing CSV parser but with a configurable delimiter.
+ * Split delimited text into a trimmed string matrix (RFC 4180-ish). A `"` opens a
+ * quoted field ONLY at the start of a field; inside a quoted field a delimiter is
+ * literal and `""` is an escaped quote. A `"` anywhere else (mid-field) is a plain
+ * character — so a stray quote in a description (e.g. `PROMO 24" TV`) can't swallow
+ * the rest of the row's delimiters and drop the transaction.
  */
 export function splitDelimited(text: string, delimiter: string): string[][] {
   const rows: string[][] = []
@@ -30,20 +32,30 @@ export function splitDelimited(text: string, delimiter: string): string[][] {
     const cols: string[] = []
     let cur = ''
     let inQuotes = false
+    let fieldStart = true // nothing consumed into the current field yet
     for (let i = 0; i < line.length; i++) {
       const ch = line[i]
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          cur += '"'
-          i++
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') {
+            cur += '"' // escaped quote
+            i++
+          } else {
+            inQuotes = false // closing quote
+          }
         } else {
-          inQuotes = !inQuotes
+          cur += ch
         }
-      } else if (ch === delimiter && !inQuotes) {
+      } else if (ch === '"' && fieldStart) {
+        inQuotes = true // opening quote (only valid at field start)
+        fieldStart = false
+      } else if (ch === delimiter) {
         cols.push(cur)
         cur = ''
+        fieldStart = true
       } else {
         cur += ch
+        fieldStart = false
       }
     }
     cols.push(cur)

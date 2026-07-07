@@ -70,6 +70,9 @@ export const revolutAdapter: BankAdapter = {
         description: r[COL.description] || '',
         counterparty: r[COL.description] || '',
         forceTransfer: kind.includes('topup') || kind.includes('transfer'),
+        // Full raw row (incl. Started/Completed timestamps + Balance) → distinct
+        // same-day transactions aren't treated as duplicates of each other.
+        dedupKey: r.join('\x01'),
       }
       out.push(buildTxn(raw, ctx))
     }

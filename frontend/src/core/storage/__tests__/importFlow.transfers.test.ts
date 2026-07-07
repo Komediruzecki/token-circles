@@ -122,4 +122,25 @@ describe('importExecute — two-sided transfers (bank imports)', () => {
     expect(txns[0].transfer_account_id).toBe(erste)
     expect((await db.get('accounts', erste)).balance).toBe(1100) // unchanged prior behavior
   })
+
+  it('nets a same-account (self) transfer to zero', async () => {
+    const db = await getDB()
+    const revolut = (await db.add('accounts', {
+      name: 'Revolut',
+      balance: 100,
+      profile_id: 1,
+    })) as number
+    // means_of_payment and category both resolve to the SAME account.
+    const rows = [['2026-05-23', 'Transfer', 'Revolut', 'Revolut', '40', 'EUR', 'Self move']]
+    await importExecute({
+      rows,
+      mapping: MAPPING,
+      categoryTypes: { Revolut: 'account' },
+      dry_run: false,
+    })
+    const txns = await db.getAllFromIndex('transactions', 'by_profile', 1)
+    expect(txns[0].account_id).toBe(revolut)
+    expect(txns[0].transfer_account_id).toBe(revolut)
+    expect((await db.get('accounts', revolut)).balance).toBe(100) // -40 then +40 = net 0
+  })
 })

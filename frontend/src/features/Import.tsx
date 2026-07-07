@@ -53,50 +53,9 @@ import {
 } from '../core/bankImport'
 import { loadBankImportMemory, rememberBankImportChoice } from '../core/bankImport/memory'
 import { classifyCategory } from '../core/categoryClassifier'
+import { autoDetectMapping, FIELD_NAMES } from '../core/importMapping'
 import styles from './Import.module.css'
 import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../core/bankImport'
-
-// Column field names for mapping
-const FIELD_NAMES = [
-  { key: 'date', label: 'Date', required: true },
-  { key: 'description', label: 'Description', required: true },
-  { key: 'amount', label: 'Amount', required: true },
-  { key: 'category', label: 'Category', required: false },
-  { key: 'currency', label: 'Currency', required: false },
-  { key: 'beneficiary', label: 'Beneficiary', required: false },
-  { key: 'payor', label: 'Payor', required: false },
-  { key: 'means_of_payment', label: 'Means of Payment', required: false },
-  { key: 'exchange_rate', label: 'Exchange Rate', required: false },
-  { key: 'notes', label: 'Notes', required: false },
-  { key: 'type', label: 'Type', required: false },
-  { key: 'amount_local', label: 'Amount Local', required: false },
-] as const
-
-// Header name variants for auto-detection
-const HEADER_VARIANTS: Record<string, string[]> = {
-  date: ['date', 'datum', 'trans date', 'transaction date'],
-  description: ['description', 'desc', 'memo', 'note', 'narration', 'details'],
-  amount: ['amount', 'sum', 'total', 'value', 'suma'],
-  category: ['category', 'cat', 'kategoria'],
-  currency: ['currency', 'waluta', 'curr'],
-  beneficiary: ['beneficiary', 'beneficjent', 'recipient', 'payee'],
-  payor: ['payor', 'payer', 'płatnik', 'from'],
-  means_of_payment: ['payment', 'method', 'means', 'payment method'],
-  exchange_rate: ['rate', 'exchange rate', 'kurs'],
-  notes: ['notes', 'note', 'remark', 'comments'],
-  type: ['type', 'typ', 'tx type', 'transaction type'],
-  amount_local: [
-    'amount local',
-    'local amount',
-    'amount pln',
-    'amount in local currency',
-    'local currency',
-    'local curr',
-    'amount (local)',
-    'local value',
-    'domestic amount',
-  ],
-} as const
 
 /**
  * Indices of rows whose full (trimmed) content is identical to an earlier row in the
@@ -338,20 +297,6 @@ export default function Import() {
   // import), memoized as a Set for O(1) lookup in the preview table.
   const duplicateSet = createMemo(() => new Set(duplicateIndices()))
 
-  // Calculate auto-detection mapping
-  const autoDetectMapping = (headers: string[]) => {
-    const mapping: Record<string, number> = {}
-    FIELD_NAMES.forEach((field) => {
-      const variants = HEADER_VARIANTS[field.key]
-      const lowerHeaders = headers.map((h) => h.toLowerCase())
-      const idx = lowerHeaders.findIndex((h) => variants.some((v) => h.includes(v.toLowerCase())))
-      if (idx !== -1) {
-        mapping[field.key] = idx
-      }
-    })
-    return mapping
-  }
-
   // Detect unique categories
   const detectCategories = () => {
     const categories = new Set<string>()
@@ -388,7 +333,11 @@ export default function Import() {
     const rows = currentRows()
     if (rows.length === 0) return
     setActiveStep('preview')
-    const dups = computeRowDuplicates(rows)
+    // Bank imports precompute duplicates from the RAW statement rows (per-second
+    // timestamps / balance intact), so two distinct same-day transactions aren't
+    // flagged; other sources fall back to a full canonical-row hash.
+    const dups =
+      bankFiles().length > 0 ? (uploadResult()?.duplicateIndices ?? []) : computeRowDuplicates(rows)
     setDuplicateIndices(dups)
     const dupSet = new Set(dups)
     // Skip duplicates by default: select every row except the duplicate copies. The
@@ -526,7 +475,10 @@ export default function Import() {
   const addBankFiles = async (files: FileList | File[]) => {
     setError(null)
     const analyzed = await Promise.all(Array.from(files).map(analyzeBankFile))
-    setBankFiles([...bankFiles(), ...analyzed])
+    // Functional update: two quick drops both await here, so read the latest list
+    // at commit time rather than a stale snapshot (else the second drop clobbers
+    // the first).
+    setBankFiles((prev) => [...prev, ...analyzed])
   }
 
   const handleBankFileSelect = (event: Event) => {
@@ -589,7 +541,10 @@ export default function Import() {
     return { result, recognized, filename }
   }
 
-  const bankUploadResult = (result: { headers: string[]; rows: string[][] }, filename: string) => ({
+  const bankUploadResult = (
+    result: { headers: string[]; rows: string[][]; duplicateIndices: number[] },
+    filename: string
+  ) => ({
     headers: result.headers,
     rows: result.rows,
     filename,
@@ -597,8 +552,8 @@ export default function Import() {
     sheetName: 'Bank Import',
     sheetNames: ['Bank Import'],
     totalRows: result.rows.length,
-    duplicateCount: 0,
-    duplicateIndices: [],
+    duplicateCount: result.duplicateIndices.length,
+    duplicateIndices: result.duplicateIndices,
   })
 
   const processBankFiles = async () => {
@@ -730,8 +685,13 @@ export default function Import() {
       setSheetResult(null)
       setHeaders(result.headers)
       setRows(result.rows)
-      const mapping = autoDetectMapping(result.headers)
-      setColumnMapping(mapping)
+      // Headers are unchanged (fixed canonical set), so keep the user's column
+      // mapping rather than reverting a manual remap; only auto-detect if none set.
+      let mapping = columnMapping()
+      if (Object.keys(mapping).length === 0) {
+        mapping = autoDetectMapping(result.headers)
+        setColumnMapping(mapping)
+      }
       if (mapping['category'] !== undefined) {
         const existing = categoryTypes()
         const merged: Record<string, 'income' | 'expense' | 'account'> = {}
@@ -2165,9 +2125,12 @@ export default function Import() {
   // Preview step
   const previewStep = () => {
     const headers = currentHeaders()
-    const total = currentRows().length
-    const selected = selectedRows().size
-    const duplicates = duplicateIndices().length
+    // Getters (not plain consts) so the stats stay reactive — e.g. after
+    // Recalculate, which refreshes rows/selection/duplicates without remounting
+    // the preview (Show doesn't re-run previewStep on a preview→preview change).
+    const total = () => currentRows().length
+    const selected = () => selectedRows().size
+    const duplicates = () => duplicateIndices().length
 
     return (
       <>
@@ -2176,26 +2139,26 @@ export default function Import() {
           <div class={styles.previewStats}>
             <div class={styles.statItem}>
               <span class={styles.statLabel}>Total Rows</span>
-              <span class={styles.statValue}>{total}</span>
+              <span class={styles.statValue}>{total()}</span>
             </div>
             <div class={styles.statItem}>
               <span class={styles.statLabel}>Selected</span>
-              <span class={styles.statValue}>{selected}</span>
+              <span class={styles.statValue}>{selected()}</span>
             </div>
-            {duplicates > 0 && (
+            {duplicates() > 0 && (
               <div class={styles.statItem}>
                 <span class={styles.statLabel}>Duplicates</span>
-                <span class={`${styles.statValue} ${duplicates > 0 ? styles.duplicate : ''}`}>
-                  {duplicates}
+                <span class={`${styles.statValue} ${duplicates() > 0 ? styles.duplicate : ''}`}>
+                  {duplicates()}
                 </span>
               </div>
             )}
           </div>
-          {duplicates > 0 && (
+          {duplicates() > 0 && (
             <p style={{ margin: '0 0 12px', 'font-size': '12px', color: 'var(--text-secondary)' }}>
-              {duplicates} duplicate row{duplicates === 1 ? '' : 's'} (identical to an earlier row
-              in this import) unselected by default — check a row, or use "Import All", to include
-              it.
+              {duplicates()} duplicate row{duplicates() === 1 ? '' : 's'} (identical to an earlier
+              row in this import) unselected by default — check a row, or use "Import All", to
+              include it.
             </p>
           )}
           <label
@@ -2226,14 +2189,14 @@ export default function Import() {
               onClick={() => handleImport('selected')}
               disabled={selectedRows().size === 0}
             >
-              Import Selected ({selected})
+              Import Selected ({selected()})
             </button>
-            {duplicates > 0 && (
+            {duplicates() > 0 && (
               <button
                 class={`${styles.btn} ${styles.btnSecondary}`}
                 onClick={() => handleImport('new')}
               >
-                Import Only New (Skip {duplicates} Duplicates)
+                Import Only New (Skip {duplicates()} Duplicates)
               </button>
             )}
             <button
@@ -2261,7 +2224,7 @@ export default function Import() {
                 <th class={styles.selectCol}>
                   <input
                     type="checkbox"
-                    checked={selected === total}
+                    checked={selected() === total()}
                     onChange={(e) => {
                       toggleAll(e.currentTarget.checked)
                     }}
@@ -2306,7 +2269,7 @@ export default function Import() {
         </div>
 
         {/* Pagination */}
-        {total > rowsPerPage() && (
+        {total() > rowsPerPage() && (
           <div class={styles.pagination}>
             <button
               class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
