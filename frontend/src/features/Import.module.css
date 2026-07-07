@@ -246,6 +246,28 @@
   border-color: var(--primary);
 }
 
+/* Keep the native option list readable in dark mode (avoid white-on-white). */
+.mappingSelect option {
+  color: var(--text);
+  background: var(--card-bg);
+}
+
+/* Text input used in the Bank Imports rules editor. */
+.ruleField {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--card-bg);
+  min-width: 0;
+}
+.ruleField:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 /* Category type review */
 .categoryReview {
   margin-bottom: 24px;

@@ -5,6 +5,7 @@ import { ersteAdapter } from '../adapters/erste'
 import { pbzAdapter } from '../adapters/pbz'
 import { revolutAdapter } from '../adapters/revolut'
 import { CANONICAL_HEADERS } from '../canonical'
+import { matchCategory } from '../categoryRules'
 import {
   decodeText,
   normalizeDate,
@@ -31,6 +32,26 @@ const baseCtx = (over: Partial<TransformContext> = {}): TransformContext => ({
   transferRules: { ownAccounts: [], keywords: [], counterparts: {} },
   knownAccounts: [],
   ...over,
+})
+
+// ---------------------------------------------------------------------------
+// category matching — longest keyword wins
+// ---------------------------------------------------------------------------
+describe('matchCategory (longest match)', () => {
+  const rules: CategoryRuleSet = [
+    { category: 'Groceries', keywords: ['spar'] },
+    { category: 'Fuel', keywords: ['spar food & fuel'] },
+  ]
+  it('prefers the longer (more specific) keyword regardless of rule order', () => {
+    // "spar" (Groceries) is listed first, but the longer "spar food & fuel" wins.
+    expect(matchCategory('SPAR Food & Fuel Zapresic', rules)).toBe('Fuel')
+    // A plain SPAR line still matches the short keyword.
+    expect(matchCategory('SPAR supermarket', rules)).toBe('Groceries')
+  })
+  it('returns null when nothing matches', () => {
+    expect(matchCategory('Kaufland', rules)).toBeNull()
+    expect(matchCategory('', rules)).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -36,6 +36,7 @@
  */
 
 import { createSignal, For, onMount, Show } from 'solid-js'
+import { createStore, produce, reconcile } from 'solid-js/store'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import {
@@ -192,13 +193,18 @@ export default function Import() {
   // Editable categorization + transfer rules (persisted per profile). Keywords are
   // edited as comma-separated strings for a friendlier input, split on save.
   const [showBankRules, setShowBankRules] = createSignal(false)
-  const [categoryRuleDraft, setCategoryRuleDraft] = createSignal<
+  // Stores (not signals) so editing one row's field updates it in place — a signal
+  // + .map() would replace the row object and make <For> recreate the DOM node,
+  // dropping input focus on every keystroke.
+  const [categoryRuleDraft, setCategoryRuleDraft] = createStore<
     { category: string; keywords: string }[]
   >([])
   const [transferKeywordDraft, setTransferKeywordDraft] = createSignal('')
-  const [counterpartDraft, setCounterpartDraft] = createSignal<
+  const [counterpartDraft, setCounterpartDraft] = createStore<
     { signature: string; account: string }[]
   >([])
+  // Existing category names — powers the category-rule combobox (datalist).
+  const [bankCategories, setBankCategories] = createSignal<string[]>([])
 
   const parsePastedData = (text: string) => {
     if (!text.trim()) return
@@ -583,17 +589,37 @@ export default function Import() {
   // ---- Bank import rules editor ----
   const loadBankRules = () => {
     setCategoryRuleDraft(
-      loadCategoryRules().map((r) => ({ category: r.category, keywords: r.keywords.join(', ') }))
+      reconcile(
+        loadCategoryRules().map((r) => ({ category: r.category, keywords: r.keywords.join(', ') }))
+      )
     )
     const t = loadTransferRules()
     setTransferKeywordDraft(t.keywords.join(', '))
     setCounterpartDraft(
-      Object.entries(t.counterparts).map(([signature, account]) => ({ signature, account }))
+      reconcile(
+        Object.entries(t.counterparts).map(([signature, account]) => ({ signature, account }))
+      )
     )
   }
 
+  const loadBankCategories = async () => {
+    try {
+      const res = await apiFetch('/api/categories', { headers: profileHeaders() })
+      if (!res.ok) return
+      const list = await res.json()
+      if (Array.isArray(list)) {
+        const names = list
+          .map((c: Record<string, unknown>) => (typeof c.name === 'string' ? c.name : ''))
+          .filter(Boolean)
+        setBankCategories([...new Set<string>(names)].sort((a, b) => a.localeCompare(b)))
+      }
+    } catch {
+      // Combobox simply offers no suggestions
+    }
+  }
+
   const saveBankRules = () => {
-    const cats = categoryRuleDraft()
+    const cats = categoryRuleDraft
       .map((r) => ({
         category: r.category.trim(),
         keywords: r.keywords
@@ -609,7 +635,7 @@ export default function Import() {
       .map((k) => k.trim())
       .filter(Boolean)
     const counterparts: Record<string, string> = {}
-    for (const c of counterpartDraft()) {
+    for (const c of counterpartDraft) {
       const sig = c.signature.trim().toLowerCase()
       if (sig && c.account) counterparts[sig] = c.account
     }
@@ -871,6 +897,7 @@ export default function Import() {
     setCategoryTypes(types)
     void loadImportLogs()
     void loadBankAccounts()
+    void loadBankCategories()
     loadBankRules()
   })
 
@@ -1574,7 +1601,7 @@ export default function Import() {
                       ) : null}
                     </span>
                     <select
-                      class={styles.formControl}
+                      class={styles.mappingSelect}
                       style={{ 'max-width': '130px' }}
                       value={row.bankId ?? ''}
                       onChange={(e) => {
@@ -1589,7 +1616,7 @@ export default function Import() {
                       </For>
                     </select>
                     <select
-                      class={styles.formControl}
+                      class={styles.mappingSelect}
                       style={{ 'max-width': '170px' }}
                       value={row.targetAccount}
                       onChange={(e) => {
@@ -1657,11 +1684,12 @@ export default function Import() {
                     Category keyword rules
                   </p>
                   <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
-                    A transaction gets the first category whose keywords appear in its description.
-                    Comma-separate keywords.
+                    A transaction gets the category whose longest matching keyword appears in its
+                    description (most specific wins). Pick an existing category or type a new one;
+                    comma-separate keywords.
                   </p>
                   <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-                    <For each={categoryRuleDraft()}>
+                    <For each={categoryRuleDraft}>
                       {(rule, i) => (
                         <div
                           style={{
@@ -1672,51 +1700,53 @@ export default function Import() {
                           }}
                         >
                           <input
-                            class={styles.formControl}
-                            style={{ flex: '0 0 150px' }}
-                            placeholder="Category"
+                            class={styles.ruleField}
+                            style={{ flex: '0 0 160px' }}
+                            list="bankCategoryList"
+                            placeholder="Category (pick or type)"
                             value={rule.category}
                             onInput={(e) => {
-                              const v = e.currentTarget.value
-                              setCategoryRuleDraft(
-                                categoryRuleDraft().map((r, j) =>
-                                  j === i() ? { ...r, category: v } : r
-                                )
-                              )
+                              setCategoryRuleDraft(i(), 'category', e.currentTarget.value)
                             }}
                           />
                           <input
-                            class={styles.formControl}
+                            class={styles.ruleField}
                             style={{ flex: '1 1 220px' }}
                             placeholder="keyword1, keyword2, ..."
                             value={rule.keywords}
                             onInput={(e) => {
-                              const v = e.currentTarget.value
-                              setCategoryRuleDraft(
-                                categoryRuleDraft().map((r, j) =>
-                                  j === i() ? { ...r, keywords: v } : r
-                                )
-                              )
+                              setCategoryRuleDraft(i(), 'keywords', e.currentTarget.value)
                             }}
                           />
                           <button
                             class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                            onClick={() =>
-                              setCategoryRuleDraft(categoryRuleDraft().filter((_, j) => j !== i()))
-                            }
+                            onClick={() => {
+                              setCategoryRuleDraft(
+                                produce((d) => {
+                                  d.splice(i(), 1)
+                                })
+                              )
+                            }}
                           >
                             Remove
                           </button>
                         </div>
                       )}
                     </For>
+                    <datalist id="bankCategoryList">
+                      <For each={bankCategories()}>{(c) => <option value={c} />}</For>
+                    </datalist>
                   </div>
                   <button
                     class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
                     style={{ 'margin-top': '8px' }}
-                    onClick={() =>
-                      setCategoryRuleDraft([...categoryRuleDraft(), { category: '', keywords: '' }])
-                    }
+                    onClick={() => {
+                      setCategoryRuleDraft(
+                        produce((d) => {
+                          d.push({ category: '', keywords: '' })
+                        })
+                      )
+                    }}
                   >
                     Add category rule
                   </button>
@@ -1732,14 +1762,16 @@ export default function Import() {
                     last 4 digits) to the account it represents so both sides are linked.
                   </p>
                   <input
-                    class={styles.formControl}
+                    class={styles.ruleField}
                     style={{ width: '100%', 'margin-bottom': '8px' }}
                     placeholder="Transfer keywords: top-up, transfer, ibkr, ..."
                     value={transferKeywordDraft()}
-                    onInput={(e) => setTransferKeywordDraft(e.currentTarget.value)}
+                    onInput={(e) => {
+                      setTransferKeywordDraft(e.currentTarget.value)
+                    }}
                   />
                   <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-                    <For each={counterpartDraft()}>
+                    <For each={counterpartDraft}>
                       {(cp, i) => (
                         <div
                           style={{
@@ -1750,31 +1782,21 @@ export default function Import() {
                           }}
                         >
                           <input
-                            class={styles.formControl}
+                            class={styles.ruleField}
                             style={{ flex: '0 0 150px' }}
                             placeholder="Signature (e.g. 1399)"
                             value={cp.signature}
                             onInput={(e) => {
-                              const v = e.currentTarget.value
-                              setCounterpartDraft(
-                                counterpartDraft().map((r, j) =>
-                                  j === i() ? { ...r, signature: v } : r
-                                )
-                              )
+                              setCounterpartDraft(i(), 'signature', e.currentTarget.value)
                             }}
                           />
                           <span style="color: var(--text-secondary);">→</span>
                           <select
-                            class={styles.formControl}
+                            class={styles.mappingSelect}
                             style={{ flex: '0 0 170px' }}
                             value={cp.account}
                             onChange={(e) => {
-                              const v = e.currentTarget.value
-                              setCounterpartDraft(
-                                counterpartDraft().map((r, j) =>
-                                  j === i() ? { ...r, account: v } : r
-                                )
-                              )
+                              setCounterpartDraft(i(), 'account', e.currentTarget.value)
                             }}
                           >
                             <option value="">Account…</option>
@@ -1784,9 +1806,13 @@ export default function Import() {
                           </select>
                           <button
                             class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                            onClick={() =>
-                              setCounterpartDraft(counterpartDraft().filter((_, j) => j !== i()))
-                            }
+                            onClick={() => {
+                              setCounterpartDraft(
+                                produce((d) => {
+                                  d.splice(i(), 1)
+                                })
+                              )
+                            }}
                           >
                             Remove
                           </button>
@@ -1797,9 +1823,13 @@ export default function Import() {
                   <button
                     class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
                     style={{ 'margin-top': '8px' }}
-                    onClick={() =>
-                      setCounterpartDraft([...counterpartDraft(), { signature: '', account: '' }])
-                    }
+                    onClick={() => {
+                      setCounterpartDraft(
+                        produce((d) => {
+                          d.push({ signature: '', account: '' })
+                        })
+                      )
+                    }}
                   >
                     Add counterpart
                   </button>

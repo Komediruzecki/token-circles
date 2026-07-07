@@ -10,20 +10,27 @@
 import type { CategoryRuleSet } from './types'
 
 /**
- * Return the category for `text`, or null if nothing matches. Rules are checked
- * in order, so put more specific rules first. Matching is case-insensitive
- * substring — the same semantics as the original sheet-based matrix.
+ * Return the category for `text`, or null if nothing matches. The **longest**
+ * matching keyword wins (most specific), so a rule with `"spar food & fuel"`
+ * beats one with `"spar"` even if the latter is listed first; rule order only
+ * breaks exact-length ties. Matching is case-insensitive substring.
  */
 export function matchCategory(text: string, rules: CategoryRuleSet): string | null {
   const s = text.toLowerCase()
   if (!s.trim()) return null
+  let best: string | null = null
+  let bestLen = 0
   for (const rule of rules) {
     for (const kw of rule.keywords) {
       const k = kw.toLowerCase().trim()
-      if (k && s.includes(k)) return rule.category
+      // Strict `>` keeps the first rule on a length tie (stable, order = priority).
+      if (k.length > bestLen && s.includes(k)) {
+        best = rule.category
+        bestLen = k.length
+      }
     }
   }
-  return null
+  return best
 }
 
 /**
