@@ -111,6 +111,20 @@ describe('computeBalanceDeltas', () => {
     expect(deltas).toEqual([{ accountId: 2, delta: 200 }])
   })
 
+  it('income with BOTH account_id and transfer_account_id credits only account_id', () => {
+    // The income lands in account_id; transfer_account_id must NOT also be
+    // credited (that would double-credit). The worker import balance recompute
+    // (worker/src/routes/imports.ts) mirrors this — its inTransfer query only
+    // credits transfer_account_id for transfers or for income with no account_id.
+    const deltas = computeBalanceDeltas({
+      account_id: 1,
+      transfer_account_id: 2,
+      type: 'income',
+      amount: 100,
+    })
+    expect(deltas).toEqual([{ accountId: 1, delta: 100 }])
+  })
+
   it('no account_id yields empty deltas', () => {
     const deltas = computeBalanceDeltas({
       type: 'expense',
