@@ -36,14 +36,17 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         type,
         category_id,
         account_id,
+        transfer_account_id,
         frequency,
         day_of_month,
         next_date,
         notes,
       } = req.body;
-      // Validate account ownership before accepting account_id from client input.
-      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
-        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      // Validate ownership of any client-supplied account id (source or transfer dest).
+      for (const acc of [account_id, transfer_account_id]) {
+        if (acc != null && !req.repos.accounts.accountBelongsToProfile(acc, pid)) {
+          return res.status(403).json({ error: 'Account does not belong to this profile' });
+        }
       }
       const info = req.repos.recurring.create({
         profile_id: pid,
@@ -52,6 +55,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         type: type || 'expense',
         category_id: category_id || null,
         account_id: account_id || null,
+        transfer_account_id: transfer_account_id || null,
         frequency: frequency || 'monthly',
         day_of_month: day_of_month || null,
         next_date: next_date || null,
@@ -175,15 +179,18 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         type,
         category_id,
         account_id,
+        transfer_account_id,
         frequency,
         day_of_month,
         next_date,
         notes,
         active,
       } = req.body;
-      // Validate account ownership if account_id is being changed.
-      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
-        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      // Validate ownership of any client-supplied account id (source or transfer dest).
+      for (const acc of [account_id, transfer_account_id]) {
+        if (acc != null && !req.repos.accounts.accountBelongsToProfile(acc, pid)) {
+          return res.status(403).json({ error: 'Account does not belong to this profile' });
+        }
       }
       req.repos.recurring.update(req.params.id, pid, {
         description: description ?? '',
@@ -191,6 +198,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         type: type ?? 'expense',
         category_id: category_id ?? null,
         account_id: account_id ?? null,
+        transfer_account_id: transfer_account_id ?? null,
         frequency: frequency ?? 'monthly',
         day_of_month: day_of_month ?? null,
         next_date: next_date ?? null,

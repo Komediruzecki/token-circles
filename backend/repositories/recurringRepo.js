@@ -49,30 +49,41 @@ class RecurringRepository extends BaseRepository {
     // are atomic. Matches the D1 batch semantics of the worker.
     return this.transaction(() => {
       const result = this.run(
-        `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, beneficiary, payor)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         profileId,
         r.description,
         r.amount,
         r.type,
         r.category_id,
         r.account_id ?? null,
+        r.transfer_account_id ?? null,
         date,
         r.notes || '',
         '',
         ''
       );
-      // Update linked account balance for income/expense/deduction. Transfers are
-      // skipped: the recurring model has no destination account, so a one-legged
-      // debit would destroy money. The transaction is still recorded.
-      if (r.account_id != null && r.type !== 'transfer') {
-        const delta = r.type === 'income' ? r.amount : -r.amount;
+      // Adjust account balances, mirroring the serverless computeBalanceDeltas:
+      //   - transfer with From (account_id) + To (transfer_account_id): debit From, credit To;
+      //   - income/expense with an account: move that one account;
+      //   - a transfer missing a leg makes NO change (money can't vanish);
+      //   - an account-less recurring is a pure reminder (no balance change).
+      const bal = (delta, accId) =>
         this.run(
           'UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?',
           delta,
-          r.account_id,
+          accId,
           profileId
         );
+      if (r.account_id != null) {
+        if (r.type === 'transfer' && r.transfer_account_id != null) {
+          bal(-r.amount, r.account_id);
+          bal(r.amount, r.transfer_account_id);
+        } else if (r.type === 'income' || r.type === 'expense') {
+          bal(r.type === 'income' ? r.amount : -r.amount, r.account_id);
+        }
+      } else if (r.transfer_account_id != null && (r.type === 'income' || r.type === 'transfer')) {
+        bal(r.amount, r.transfer_account_id);
       }
       // Advance next_date past the populated period — every frequency must move
       // forward or the route's idempotency guard (next_date > today) never trips

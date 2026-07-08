@@ -235,6 +235,10 @@ export interface RecurringTransaction {
   category_name: string | null
   category_color: string | null
   day_of_month: number | null
+  /** Source account: money moves out (expense/transfer) or in (income). Null = reminder only. */
+  account_id?: number | null
+  /** Destination account for a Transfer (money moves in). Null for non-transfers. */
+  transfer_account_id?: number | null
   notes: string | null
   profile_id: ProfileId
 }

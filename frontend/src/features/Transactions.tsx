@@ -777,7 +777,11 @@ export default function Transactions() {
       />
 
       {/* Recurring Transactions */}
-      <RecurringSection categories={categories()} onRefreshTransactions={refreshTransactions} />
+      <RecurringSection
+        categories={categories()}
+        accounts={accounts()}
+        onRefreshTransactions={refreshTransactions}
+      />
 
       {/* Transaction Modal */}
       <div

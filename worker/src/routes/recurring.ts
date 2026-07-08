@@ -17,6 +17,7 @@ interface RecurringRow {
   type: string;
   category_id: number | null;
   account_id: number | null;
+  transfer_account_id: number | null;
   frequency: string;
   day_of_month: number | null;
   next_date: string | null;
@@ -170,17 +171,17 @@ recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
     type,
     category_id,
     account_id,
+    transfer_account_id,
     frequency,
     day_of_month,
     next_date,
     notes,
   } = b;
-  // Validate account ownership before accepting account_id from client input.
-  if (
-    account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
-  ) {
-    throw new HttpError(403, 'Account does not belong to this profile');
+  // Validate ownership of any client-supplied account id (source or transfer dest).
+  for (const acc of [account_id, transfer_account_id]) {
+    if (acc != null && !(await db.accountBelongsToProfile(c.env.DB, Number(acc), pid))) {
+      throw new HttpError(403, 'Account does not belong to this profile');
+    }
   }
   const res = await db.insert(c.env.DB, 'recurring_transactions', {
     profile_id: pid,
@@ -189,6 +190,7 @@ recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
     type: type || 'expense',
     category_id: category_id || null,
     account_id: account_id || null,
+    transfer_account_id: transfer_account_id || null,
     frequency: frequency || 'monthly',
     day_of_month: day_of_month || null,
     next_date: next_date || null,
@@ -214,18 +216,18 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
     type,
     category_id,
     account_id,
+    transfer_account_id,
     frequency,
     day_of_month,
     next_date,
     notes,
     active,
   } = b;
-  // Validate account ownership if account_id is being changed.
-  if (
-    account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
-  ) {
-    throw new HttpError(403, 'Account does not belong to this profile');
+  // Validate ownership of any client-supplied account id (source or transfer dest).
+  for (const acc of [account_id, transfer_account_id]) {
+    if (acc != null && !(await db.accountBelongsToProfile(c.env.DB, Number(acc), pid))) {
+      throw new HttpError(403, 'Account does not belong to this profile');
+    }
   }
   await db.update(
     c.env.DB,
@@ -236,6 +238,7 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
       type: type ?? 'expense',
       category_id: category_id ?? null,
       account_id: account_id ?? null,
+      transfer_account_id: transfer_account_id ?? null,
       frequency: frequency ?? 'monthly',
       day_of_month: day_of_month ?? null,
       next_date: next_date ?? null,
@@ -301,11 +304,11 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
 
   const stmts: D1PreparedStatement[] = [];
 
-  // 1. Insert the transaction, including account_id if set.
+  // 1. Insert the transaction, including account_id / transfer_account_id if set.
   stmts.push(
     c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, beneficiary, payor)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       pid,
       r.description,
@@ -313,6 +316,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
       r.type,
       r.category_id,
       r.account_id ?? null,
+      r.transfer_account_id ?? null,
       date,
       r.notes || '',
       '',
@@ -320,18 +324,27 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
     )
   );
 
-  // 2. Adjust the linked account balance for income/expense/deduction. Transfers
-  //    are skipped: the recurring model has no destination account, so a
-  //    one-legged debit would destroy money (credit nothing). The transaction is
-  //    still recorded; balances are left untouched. (Full transfer-recurring
-  //    support would need a transfer_account_id column + a two-legged update.)
-  if (r.account_id != null && r.type !== 'transfer') {
-    const delta = r.type === 'income' ? r.amount : -r.amount;
-    stmts.push(
-      c.env.DB.prepare(
-        'UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?'
-      ).bind(delta, r.account_id, pid)
-    );
+  // 2. Adjust account balances, mirroring the serverless computeBalanceDeltas
+  //    (frontend/src/core/storage/idb.ts) exactly:
+  //      - transfer with From (account_id) + To (transfer_account_id): debit From, credit To;
+  //      - income/expense with an account: move that one account;
+  //      - a transfer missing a leg makes NO change (money can't vanish);
+  //      - an account-less recurring is a pure reminder (no balance change).
+  const bal = (delta: number, accId: number) =>
+    c.env.DB.prepare(
+      'UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?'
+    ).bind(delta, accId, pid);
+  if (r.account_id != null) {
+    if (r.type === 'transfer' && r.transfer_account_id != null) {
+      stmts.push(bal(-r.amount, r.account_id), bal(r.amount, r.transfer_account_id));
+    } else if (r.type === 'income' || r.type === 'expense') {
+      stmts.push(bal(r.type === 'income' ? r.amount : -r.amount, r.account_id));
+    }
+  } else if (
+    r.transfer_account_id != null &&
+    (r.type === 'income' || r.type === 'transfer')
+  ) {
+    stmts.push(bal(r.amount, r.transfer_account_id));
   }
 
   // 3. Advance next_date.

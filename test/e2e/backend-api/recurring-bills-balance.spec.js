@@ -123,4 +123,44 @@ describe('Recurring & Bills balance integrity E2E', () => {
     global.expect(second.status).toBe(409);
     global.expect(await balanceOf(accId)).toBe(900);
   });
+
+  test('REC-BAL-005: a transfer recurring with From + To moves money two-legged', async () => {
+    const from = await createAccount(1000);
+    const to = await createAccount(500);
+    const rec = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
+      description: 'Monthly savings',
+      amount: 200,
+      type: 'transfer',
+      account_id: from,
+      transfer_account_id: to,
+      frequency: 'monthly',
+      next_date: today,
+    });
+    const pop = await agent
+      .post(`/api/recurring/${rec.body.id}/populate`)
+      .set('X-Skip-RateLimit', 'true');
+    global.expect(pop.status).toBe(200);
+    // From debited, To credited — conserved.
+    global.expect(await balanceOf(from)).toBe(800);
+    global.expect(await balanceOf(to)).toBe(700);
+  });
+
+  test('REC-BAL-006: create rejects a transfer_account_id owned by another profile', async () => {
+    // Profile 999 owns an account; profile 1 must not be able to name it.
+    await agent.post('/api/test/seed-profile-999').set('X-Skip-RateLimit', 'true').send();
+    const foreign = await agent
+      .post('/api/accounts')
+      .set('X-Skip-RateLimit', 'true')
+      .set('X-Profile-Id', '999')
+      .send({ name: `Foreign ${Date.now()}`, type: 'giro', balance: 0 });
+    const resp = await agent.post('/api/recurring').set('X-Skip-RateLimit', 'true').send({
+      description: 'IDOR transfer',
+      amount: 10,
+      type: 'transfer',
+      transfer_account_id: foreign.body.id,
+      frequency: 'monthly',
+      next_date: today,
+    });
+    global.expect(resp.status).toBe(403);
+  });
 });

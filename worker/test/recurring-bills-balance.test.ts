@@ -28,9 +28,19 @@ beforeEach(async () => {
     env.DB.prepare(
       "INSERT INTO accounts (id, profile_id, name, type, currency, balance, starting_balance) VALUES (5000, 500, 'Giro', 'giro', 'EUR', 1000, 1000)"
     ),
+    env.DB.prepare(
+      "INSERT INTO accounts (id, profile_id, name, type, currency, balance, starting_balance) VALUES (5001, 500, 'Savings', 'savings', 'EUR', 500, 500)"
+    ),
   ]);
   cookie = (await issueSessionCookie(50, 'password', env)).split(';')[0];
 });
+
+async function balanceOf(id: number): Promise<number> {
+  const row = await env.DB.prepare('SELECT balance FROM accounts WHERE id = ?')
+    .bind(id)
+    .first<{ balance: number }>();
+  return row?.balance ?? NaN;
+}
 
 function api(path: string, body?: unknown): Promise<Response> {
   return SELF.fetch(`https://example.com${path}`, {
@@ -67,12 +77,49 @@ describe('recurring populate + bill mark-paid balance integrity', () => {
     expect(await balance()).toBeCloseTo(950, 2);
   });
 
-  it('a transfer recurring does not corrupt the balance (no one-legged debit)', async () => {
+  it('a transfer recurring with no destination leaves the balance untouched', async () => {
     const id = await createRecurring('transfer', 50, 'monthly');
     const pop = await api(`/api/recurring/${id}/populate`);
     expect(pop.status).toBe(200);
-    // No destination account in the recurring model → balance must be untouched.
+    // account_id set but no transfer_account_id → no leg to credit, so no change.
     expect(await balance()).toBeCloseTo(1000, 2);
+  });
+
+  it('a transfer recurring with From + To moves money two-legged', async () => {
+    const created = await api('/api/recurring', {
+      description: 'Monthly savings',
+      amount: 200,
+      type: 'transfer',
+      account_id: 5000,
+      transfer_account_id: 5001,
+      frequency: 'monthly',
+      next_date: today,
+    });
+    const recId = ((await created.json()) as { id: number }).id;
+    const pop = await api(`/api/recurring/${recId}/populate`);
+    expect(pop.status).toBe(200);
+    expect(await balanceOf(5000)).toBeCloseTo(800, 2); // From 1000 - 200
+    expect(await balanceOf(5001)).toBeCloseTo(700, 2); // To 500 + 200
+  });
+
+  it('create rejects a transfer_account_id owned by another profile', async () => {
+    // Seed a second profile + account the caller (profile 500) does not own.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (501, 50, 'Other')"),
+      env.DB.prepare(
+        "INSERT INTO accounts (id, profile_id, name, type, currency, balance, starting_balance) VALUES (5099, 501, 'Foreign', 'giro', 'EUR', 0, 0)"
+      ),
+    ]);
+    const res = await api('/api/recurring', {
+      description: 'IDOR transfer',
+      amount: 10,
+      type: 'transfer',
+      account_id: 5000,
+      transfer_account_id: 5099,
+      frequency: 'monthly',
+      next_date: today,
+    });
+    expect(res.status).toBe(403);
   });
 
   it('a daily recurring advances next_date so a second same-day populate is a 409', async () => {

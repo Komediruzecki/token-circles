@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS recurring_transactions (
   type TEXT NOT NULL DEFAULT 'expense',
   category_id INTEGER,
   account_id INTEGER,
+  transfer_account_id INTEGER,
   frequency TEXT NOT NULL DEFAULT 'monthly',
   day_of_month INTEGER,
   next_date TEXT,

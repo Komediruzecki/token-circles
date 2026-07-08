@@ -2,7 +2,7 @@
  * RecurringSection Component
  * Manages recurring transactions — list, create, edit, delete, populate
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createSignal, For, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { showConfirm } from '../core/confirmStore'
 import styles from './RecurringSection.module.css'
@@ -10,6 +10,7 @@ import type { Category, RecurringTransaction } from '../types/models'
 
 interface RecurringSectionProps {
   categories: Category[]
+  accounts: Array<{ id: number; name: string }>
   onRefreshTransactions: () => void
 }
 
@@ -22,6 +23,8 @@ type RecurringFormData = Pick<
   | 'day_of_month'
   | 'next_date'
   | 'category_id'
+  | 'account_id'
+  | 'transfer_account_id'
   | 'notes'
 >
 
@@ -39,6 +42,8 @@ export default function RecurringSection(props: RecurringSectionProps) {
   const [formDay, setFormDay] = createSignal('')
   const [formNextDate, setFormNextDate] = createSignal(new Date().toISOString().slice(0, 10))
   const [formCategory, setFormCategory] = createSignal<number | null>(null)
+  const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
+  const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
   const [formNotes, setFormNotes] = createSignal('')
 
   const loadItems = async () => {
@@ -69,6 +74,8 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setFormDay(item.day_of_month?.toString() || '')
     setFormNextDate(item.next_date || new Date().toISOString().slice(0, 10))
     setFormCategory(item.category_id)
+    setFormAccountId(item.account_id ?? null)
+    setFormTransferAccountId(item.transfer_account_id ?? null)
     setFormNotes(item.notes || '')
     setIsModalOpen(true)
   }
@@ -81,6 +88,8 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setFormDay('')
     setFormNextDate(new Date().toISOString().slice(0, 10))
     setFormCategory(null)
+    setFormAccountId(null)
+    setFormTransferAccountId(null)
     setFormNotes('')
   }
 
@@ -93,6 +102,9 @@ export default function RecurringSection(props: RecurringSectionProps) {
       day_of_month: formDay() ? parseInt(formDay()) : null,
       next_date: formNextDate(),
       category_id: formCategory(),
+      account_id: formAccountId(),
+      // Only transfers have a destination; other types clear it.
+      transfer_account_id: formType() === 'transfer' ? formTransferAccountId() : null,
       notes: formNotes() || null,
     } satisfies RecurringFormData
 
@@ -364,6 +376,44 @@ export default function RecurringSection(props: RecurringSectionProps) {
                   value={formNextDate()}
                   onInput={(e) => setFormNextDate((e.target as HTMLInputElement).value)}
                 />
+              </div>
+              <div class={styles.formRow}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>
+                    {formType() === 'transfer' ? 'From account' : 'Account'}
+                  </label>
+                  <select
+                    class={styles.formControl}
+                    value={formAccountId() ?? ''}
+                    onChange={(e) => {
+                      const val = (e.target as HTMLSelectElement).value
+                      setFormAccountId(val ? parseInt(val) : null)
+                    }}
+                  >
+                    <option value="">None (reminder only)</option>
+                    <For each={props.accounts}>
+                      {(a) => <option value={a.id}>{a.name}</option>}
+                    </For>
+                  </select>
+                </div>
+                <Show when={formType() === 'transfer'}>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>To account</label>
+                    <select
+                      class={styles.formControl}
+                      value={formTransferAccountId() ?? ''}
+                      onChange={(e) => {
+                        const val = (e.target as HTMLSelectElement).value
+                        setFormTransferAccountId(val ? parseInt(val) : null)
+                      }}
+                    >
+                      <option value="">Select destination...</option>
+                      <For each={props.accounts}>
+                        {(a) => <option value={a.id}>{a.name}</option>}
+                      </For>
+                    </select>
+                  </div>
+                </Show>
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Category</label>
