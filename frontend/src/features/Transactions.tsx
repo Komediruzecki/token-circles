@@ -30,10 +30,11 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
+import InfoTip from '../components/InfoTip'
 import Pagination from '../components/Pagination'
 import ReconciliationModal from '../components/ReconciliationModal'
 import RecurringSection from '../components/RecurringSection'
@@ -74,7 +75,10 @@ export default function Transactions() {
   const [formDescription, setFormDescription] = createSignal('')
   const [formMeans, setFormMeans] = createSignal('')
   const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
+  const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
   const [formAmountLocal, setFormAmountLocal] = createSignal('')
+  // Advanced fields (currency/FX, counterparties, tags, notes, receipt) start hidden.
+  const [showAdvanced, setShowAdvanced] = createSignal(false)
   const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>(
     []
   )
@@ -536,13 +540,57 @@ export default function Transactions() {
     setFormPayor('')
     setFormNotes('')
     setFormMeans('')
-    setFormAccountId(null)
+    setFormAccountId(defaultAccountId())
+    setFormTransferAccountId(null)
     setFormAmountLocal('')
+    setShowAdvanced(false)
     setFormDate(new Date().toISOString().slice(0, 10))
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
     setTransactionModalOpen(true)
+  }
+
+  // Expand Advanced when editing/copying a row that already uses any advanced field,
+  // so existing data is never hidden behind the collapsed section.
+  const hasAdvancedData = (t: Transaction) =>
+    !!(
+      t.beneficiary ||
+      t.payor ||
+      t.notes ||
+      t.amount_local ||
+      t.receipt_id ||
+      (t.currency && t.currency !== getLocalCurrency())
+    )
+
+  // Remembering the last account used speeds up adding many transactions in a row.
+  // Scoped per profile so switching profiles doesn't carry the wrong account over.
+  const lastAccountKey = () => `lastAccountId:${localStorage.getItem('currentProfileId') || '1'}`
+  // Prefill the account for a fresh entry: last-used if it still exists, else the
+  // first account (the de-facto primary), else none.
+  const defaultAccountId = (): number | null => {
+    const accs = accounts()
+    if (accs.length === 0) return null
+    const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
+    if (Number.isFinite(stored) && accs.some((a) => a.id === stored)) return stored
+    return accs[0].id
+  }
+  // Create a starter "Cash" account inline when the user has none, then select it.
+  const createCashAccount = async () => {
+    try {
+      const acc = await api.createAccount({
+        name: 'Cash',
+        type: 'cash',
+        currency: getLocalCurrency(),
+        balance: 0,
+      } as unknown as Parameters<typeof api.createAccount>[0])
+      const acctData = await api.getAccounts()
+      if (Array.isArray(acctData)) setAccounts(acctData as any[])
+      setFormAccountId(acc.id)
+    } catch (error) {
+      console.error('Failed to create Cash account:', error)
+      toast('Failed to create account', 'error')
+    }
   }
 
   const handleEditTransaction = (transaction: Transaction) => {
@@ -559,6 +607,8 @@ export default function Transactions() {
     setFormDate(transaction.date)
     setFormMeans(transaction.means_of_payment || '')
     setFormAccountId(transaction.account_id || null)
+    setFormTransferAccountId(transaction.transfer_account_id || null)
+    setShowAdvanced(hasAdvancedData(transaction))
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
@@ -596,7 +646,9 @@ export default function Transactions() {
     setFormDate(transaction.date)
     setFormMeans(transaction.means_of_payment || '')
     setFormAccountId(transaction.account_id || null)
+    setFormTransferAccountId(transaction.transfer_account_id || null)
     setFormAmountLocal('')
+    setShowAdvanced(hasAdvancedData(transaction))
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
@@ -813,7 +865,10 @@ export default function Transactions() {
             <form id="tx-form">
               <input type="hidden" value={formId() ?? ''} />
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Type</label>
+                <label class={styles.formLabel}>
+                  Type
+                  <InfoTip text="Expense = money leaving an account. Income = money arriving. Transfer = moving money between two of your own accounts (counts as neither spending nor earning)." />
+                </label>
                 <div class={styles.typeSelector} data-test-id="tx-type-selector">
                   <button
                     type="button"
@@ -851,7 +906,10 @@ export default function Transactions() {
                 </div>
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Description</label>
+                <label class={styles.formLabel}>
+                  Description
+                  <InfoTip text="A short label for this entry (e.g. 'Weekly groceries', 'March salary'). Shown in lists and used by search and auto-categorization rules." />
+                </label>
                 <input
                   type="text"
                   class={styles.formControl}
@@ -863,7 +921,10 @@ export default function Transactions() {
               </div>
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Amount</label>
+                  <label class={styles.formLabel}>
+                    Amount
+                    <InfoTip text="How much money moved, as a positive number. The Type sets the direction — expense subtracts from the account, income adds to it." />
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -875,7 +936,10 @@ export default function Transactions() {
                   />
                 </div>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Currency</label>
+                  <label class={styles.formLabel}>
+                    Currency
+                    <InfoTip text="The currency the Amount is in — defaults to your local currency. Only change it for a foreign-currency transaction, then fill 'Amount in local currency' under Advanced so all balances stay comparable." />
+                  </label>
                   <select
                     class={styles.formControl}
                     data-test-id="tx-currency"
@@ -896,7 +960,10 @@ export default function Transactions() {
               </div>
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Date</label>
+                  <label class={styles.formLabel}>
+                    Date
+                    <InfoTip text="When the transaction happened. Drives every time-based view — monthly trends, this-month totals, budgets and the calendar heatmap." />
+                  </label>
                   <input
                     type="date"
                     class={styles.formControl}
@@ -906,26 +973,124 @@ export default function Transactions() {
                     required
                   />
                 </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Category</label>
+                <Show
+                  when={type() !== 'transfer'}
+                  fallback={
+                    <div class={styles.formGroup}>
+                      <label class={styles.formLabel}>
+                        To account
+                        <InfoTip text="The account the transfer moves money INTO. With the From account below, the transfer debits one and credits the other — no income/expense is recorded." />
+                      </label>
+                      <select
+                        class={styles.formControl}
+                        data-test-id="tx-transfer-account"
+                        value={formTransferAccountId() ?? ''}
+                        onInput={(e) => {
+                          const val = (e.target as HTMLSelectElement).value
+                          setFormTransferAccountId(val ? parseInt(val) : null)
+                        }}
+                      >
+                        <option value="">Select destination...</option>
+                        <For each={accounts()}>
+                          {(acct) => <option value={String(acct.id)}>{acct.name}</option>}
+                        </For>
+                      </select>
+                    </div>
+                  }
+                >
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>
+                      Category
+                      <InfoTip text="What kind of spending or income this is (Groceries, Salary, ...). Powers category breakdowns and budgets. Required for income and expense." />
+                    </label>
+                    <select
+                      class={styles.formControl}
+                      data-test-id="tx-category"
+                      value={formCategory() ?? ''}
+                      onchange={(e) => {
+                        const value = (e.target as HTMLSelectElement).value
+                        setFormCategory(value !== '' ? parseInt(value) : null)
+                      }}
+                    >
+                      <option value="">Uncategorized</option>
+                      <For each={filteredCategories()}>
+                        {(cat) => <option value={cat.id}>{cat.name}</option>}
+                      </For>
+                    </select>
+                  </div>
+                </Show>
+              </div>
+              <div class={styles.formGroup}>
+                <label class={styles.formLabel}>
+                  {type() === 'transfer' ? 'From account' : 'Account'}
+                  {type() !== 'transfer' && <span style="color: var(--danger, #ef4444)"> *</span>}
+                  <InfoTip text="Which of YOUR accounts the money moved out of (expense / transfer From) or into (income). Links the entry to a real balance so per-account totals and net worth stay accurate. Required for income and expense." />
+                </label>
+                <Show
+                  when={accounts().length > 0}
+                  fallback={
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
+                      <span style="font-size: 13px; color: var(--text-secondary)">
+                        No accounts yet.
+                      </span>
+                      <button
+                        type="button"
+                        data-test-id="tx-create-cash-account"
+                        onClick={createCashAccount}
+                        style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+                      >
+                        Create a "Cash" account
+                      </button>
+                    </div>
+                  }
+                >
                   <select
                     class={styles.formControl}
-                    data-test-id="tx-category"
-                    value={formCategory() ?? ''}
-                    onchange={(e) => {
-                      const value = (e.target as HTMLSelectElement).value
-                      setFormCategory(value !== '' ? parseInt(value) : null)
+                    data-test-id="tx-account"
+                    value={formAccountId() ?? ''}
+                    onInput={(e) => {
+                      const val = (e.target as HTMLSelectElement).value
+                      setFormAccountId(val ? parseInt(val) : null)
                     }}
                   >
-                    <option value="">Uncategorized</option>
-                    <For each={filteredCategories()}>
-                      {(cat) => <option value={cat.id}>{cat.name}</option>}
+                    <option value="">Select account...</option>
+                    <For each={accounts()}>
+                      {(acct) => (
+                        <option value={String(acct.id)}>
+                          {acct.name} ({acct.type})
+                        </option>
+                      )}
                     </For>
                   </select>
-                </div>
+                </Show>
               </div>
-              <div class={`${styles.formGroup} ${styles.txTagSelector}`}>
-                <label class={styles.formLabel}>Tags</label>
+
+              <button
+                type="button"
+                data-test-id="tx-advanced-toggle"
+                onClick={() => setShowAdvanced(!showAdvanced())}
+                style="display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 0; margin: 4px 0; color: var(--primary); cursor: pointer; font-size: 13px; font-weight: 500"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  style={{ transform: showAdvanced() ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+                {showAdvanced() ? 'Hide advanced options' : 'Show advanced options'}
+              </button>
+
+              <Show when={showAdvanced()}>
+                <div class={`${styles.formGroup} ${styles.txTagSelector}`}>
+                  <label class={styles.formLabel}>
+                    Tags
+                    <InfoTip text="Free-form labels you can attach to any transaction (e.g. tax-deductible, vacation, reimbursable) to slice reports beyond a single category." />
+                  </label>
                 <div class={styles.txTagChips}></div>
                 <div class={styles.txTagInputRow}>
                   <input
@@ -954,7 +1119,10 @@ export default function Transactions() {
               </div>
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Beneficiary</label>
+                  <label class={styles.formLabel}>
+                    Beneficiary
+                    <InfoTip text="Who you paid (the payee). Feeds the Counterparties view so you can see totals per merchant or person." />
+                  </label>
                   <input
                     type="text"
                     class={styles.formControl}
@@ -965,7 +1133,10 @@ export default function Transactions() {
                   />
                 </div>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Payor</label>
+                  <label class={styles.formLabel}>
+                    Payor
+                    <InfoTip text="Who paid you (the source of income). Feeds the Counterparties view." />
+                  </label>
                   <input
                     type="text"
                     class={styles.formControl}
@@ -978,7 +1149,10 @@ export default function Transactions() {
               </div>
               <div class={styles.formRow}>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Amount in Local Currency</label>
+                  <label class={styles.formLabel}>
+                    Amount in Local Currency
+                    <InfoTip text="This transaction's value converted to your local currency. All balances and reports use this so foreign-currency rows add up correctly. Leave blank if the Amount is already in your local currency." />
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -989,7 +1163,10 @@ export default function Transactions() {
                   />
                 </div>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Exchange Rate</label>
+                  <label class={styles.formLabel}>
+                    Exchange Rate
+                    <InfoTip text="Optional record of the rate used (foreign amount x rate = local amount). Informational only — the 'Amount in local currency' above is what balances actually use." />
+                  </label>
                   <input
                     type="number"
                     step="0.0001"
@@ -1001,47 +1178,10 @@ export default function Transactions() {
                 </div>
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Means of Payment</label>
-                <select
-                  class={styles.formControl}
-                  data-test-id="tx-means"
-                  value={formMeans()}
-                  onInput={(e) => setFormMeans((e.target as HTMLSelectElement).value)}
-                >
-                  <option value="">Select...</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Mobile Payment">Mobile Payment</option>
-                  <option value="Check">Check</option>
-                  <option value="Wire Transfer">Wire Transfer</option>
-                </select>
-              </div>
-              {accounts().length > 0 && (
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Account</label>
-                  <select
-                    class={styles.formControl}
-                    value={formAccountId() ?? ''}
-                    onInput={(e) => {
-                      const val = (e.target as HTMLSelectElement).value
-                      setFormAccountId(val ? parseInt(val) : null)
-                    }}
-                  >
-                    <option value="">No account</option>
-                    <For each={accounts()}>
-                      {(acct) => (
-                        <option value={String(acct.id)}>
-                          {acct.name} ({acct.type})
-                        </option>
-                      )}
-                    </For>
-                  </select>
-                </div>
-              )}
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Receipt</label>
+                <label class={styles.formLabel}>
+                  Receipt
+                  <InfoTip text="Attach a photo or PDF of the receipt/invoice for your records — viewable later from the transaction row." />
+                </label>
                 <div class={styles.receiptUploadContainer}>
                   <label class={styles.receiptPlaceholder} for="tx-receipt">
                     <svg
@@ -1154,7 +1294,10 @@ export default function Transactions() {
                 </div>
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Notes</label>
+                <label class={styles.formLabel}>
+                  Notes
+                  <InfoTip text="Any extra detail you want to keep — reference numbers, context, reminders. Not used in reports." />
+                </label>
                 <textarea
                   class={styles.formControl}
                   data-test-id="tx-notes"
@@ -1163,6 +1306,7 @@ export default function Transactions() {
                   onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}
                 ></textarea>
               </div>
+              </Show>
             </form>
           </div>
           <div class={styles.modalFooter}>
@@ -1193,6 +1337,17 @@ export default function Transactions() {
                   toast('Please select a category', 'warning')
                   return
                 }
+                if (type() !== 'transfer' && formAccountId() === null) {
+                  toast('Please choose which account this affects', 'warning')
+                  return
+                }
+                if (
+                  type() === 'transfer' &&
+                  (formAccountId() === null || formTransferAccountId() === null)
+                ) {
+                  toast('A transfer needs both a From and a To account', 'warning')
+                  return
+                }
 
                 const txData: Record<string, unknown> = {
                   description: desc,
@@ -1203,6 +1358,8 @@ export default function Transactions() {
                   currency: formCurrency() || getLocalCurrency(),
                   means_of_payment: formMeans() || undefined,
                   account_id: formAccountId() ?? undefined,
+                  transfer_account_id:
+                    type() === 'transfer' ? (formTransferAccountId() ?? undefined) : undefined,
                   notes: formNotes() || undefined,
                   beneficiary: formBeneficiary() || undefined,
                   payor: formPayor() || undefined,
@@ -1235,6 +1392,10 @@ export default function Transactions() {
                     }
                   }
 
+                  // Remember the account for the next quick entry.
+                  if (formAccountId() !== null) {
+                    localStorage.setItem(lastAccountKey(), String(formAccountId()))
+                  }
                   await refreshTransactions()
                   setTransactionModalOpen(false)
                   setSelectedFile(null)
