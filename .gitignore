@@ -62,8 +62,9 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code local settings (per-user, machine-specific)
-.claude/settings.local.json
+# Claude Code agent workspace (per-user, machine-specific) — never commit.
+# Keeps internal plans/skills/settings out of the public repo.
+.claude/
 
 # Test artifacts
 test-results/

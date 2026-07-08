@@ -68,12 +68,3 @@ Detailed EARS (Exactly As Required Specification) documents for all features:
 | Profiles       | [specs/backend/profiles.md](specs/backend/profiles.md)           |
 
 See also: [specs/INDEX.md](specs/INDEX.md)
-
-## Architecture & History
-
-- [SolidJS Migration Report](solidjs-migration-report.md) — Migration from vanilla JS to SolidJS
-- [Issues Postmortems](issues/) — Root cause analyses for past production issues
-
-## Archive
-
-- [Archived Plans](archive/) — Historical planning documents
