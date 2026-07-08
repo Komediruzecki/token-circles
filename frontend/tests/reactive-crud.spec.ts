@@ -216,6 +216,16 @@ test.describe('Transactions CRUD', () => {
     await form.locator('input[type="text"]').first().fill(txDescription)
     await form.locator('input[type="number"]').first().fill('250.50')
     await form.locator('input[type="date"]').first().fill('2026-05-01')
+    // Category and Account are required for an expense — pick the first real option
+    // (index 0 is the placeholder). No-op if the seed has none.
+    await form
+      .locator('[data-test-id="tx-category"]')
+      .selectOption({ index: 1 })
+      .catch(() => {})
+    await form
+      .locator('[data-test-id="tx-account"]')
+      .selectOption({ index: 1 })
+      .catch(() => {})
 
     // Click Save Transaction — scope to the modal to avoid ambiguity
     // The modal has class _btn-primary (CSS module) and is inside the modal overlay
