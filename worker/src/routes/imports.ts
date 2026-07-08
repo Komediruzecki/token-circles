@@ -519,9 +519,16 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         `SELECT account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type = 'income' GROUP BY account_id`,
         ...ids
       ),
+      // Credit transfer_account_id for transfers (the destination leg), and for
+      // income ONLY when the row has no account_id. An income row with BOTH
+      // account_id and transfer_account_id is already credited to account_id by
+      // the inDirect query above, so crediting transfer_account_id here too would
+      // double-credit. This mirrors the serverless computeBalanceDeltas
+      // (frontend/src/core/storage/idb.ts): income → account_id only;
+      // transfer_account_id is credited only for transfers, or income sans account_id.
       db.all<{ transfer_account_id: number; total: number }>(
         DB,
-        `SELECT transfer_account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE transfer_account_id IN (${ph}) AND type IN ('income','transfer') GROUP BY transfer_account_id`,
+        `SELECT transfer_account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE transfer_account_id IN (${ph}) AND (type = 'transfer' OR (type = 'income' AND account_id IS NULL)) GROUP BY transfer_account_id`,
         ...ids
       ),
     ]);
