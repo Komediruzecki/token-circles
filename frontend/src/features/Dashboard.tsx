@@ -65,8 +65,10 @@ function loadWidgetPrefs() {
 
 export default function Dashboard() {
   const state = useAppState()
-  const [month, setMonth] = createSignal(5)
-  const [year, setYear] = createSignal(2026)
+  // Default to the current month/year (previously hard-coded to May 2026, which
+  // left the dashboard stuck on a past month once the real date moved on).
+  const [month, setMonth] = createSignal(new Date().getMonth() + 1)
+  const [year, setYear] = createSignal(new Date().getFullYear())
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [loading, setLoading] = createSignal(true)
