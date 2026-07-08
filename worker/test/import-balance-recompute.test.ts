@@ -36,9 +36,9 @@ beforeEach(async () => {
 });
 
 async function balanceOf(name: string): Promise<number> {
-  const row = await env.DB.prepare(
-    'SELECT balance FROM accounts WHERE name = ? AND profile_id = 900'
-  ).first<{ balance: number }>();
+  const row = await env.DB.prepare('SELECT balance FROM accounts WHERE name = ? AND profile_id = 900')
+    .bind(name)
+    .first<{ balance: number }>();
   return row?.balance ?? NaN;
 }
 
