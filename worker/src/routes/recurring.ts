@@ -1,33 +1,34 @@
-import { Hono } from 'hono'
-import type { AppEnv } from '../index'
-import { requireAuth } from '../auth'
-import { getProfileId } from '../profile'
-import { HttpError } from '../http'
-import * as db from '../db'
+import { Hono } from 'hono';
+import type { AppEnv } from '../index';
+import { requireAuth } from '../auth';
+import { getProfileId } from '../profile';
+import { HttpError } from '../http';
+import * as db from '../db';
 
 // Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
 // Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
 // kept identical (snake_case) to the Express backend.
-export const recurringRoutes = new Hono<AppEnv>()
+export const recurringRoutes = new Hono<AppEnv>();
 
 interface RecurringRow {
-  id: number
-  description: string
-  amount: number
-  type: string
-  category_id: number | null
-  frequency: string
-  day_of_month: number | null
-  next_date: string | null
-  notes: string | null
-  active: number
-  category_name?: string | null
-  category_color?: string | null
-  category_type?: string | null
+  id: number;
+  description: string;
+  amount: number;
+  type: string;
+  category_id: number | null;
+  account_id: number | null;
+  frequency: string;
+  day_of_month: number | null;
+  next_date: string | null;
+  notes: string | null;
+  active: number;
+  category_name?: string | null;
+  category_color?: string | null;
+  category_type?: string | null;
 }
 
 recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
+  const pid = await getProfileId(c);
   const rows = await db.all<RecurringRow>(
     c.env.DB,
     `
@@ -38,16 +39,16 @@ recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
       ORDER BY r.next_date ASC
     `,
     pid
-  )
-  return c.json(rows)
-})
+  );
+  return c.json(rows);
+});
 
 // IMPORTANT: /upcoming must come before /:id to avoid :id capturing "upcoming".
 recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const now = new Date()
-  const endDate = new Date()
-  endDate.setDate(endDate.getDate() + 30)
+  const pid = await getProfileId(c);
+  const now = new Date();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 30);
 
   const recurring = await db.all<RecurringRow>(
     c.env.DB,
@@ -59,27 +60,27 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
       WHERE r.profile_id = ? AND r.active = 1
     `,
     pid
-  )
+  );
 
   interface UpcomingItem {
-    id: number
-    description: string
-    amount: number
-    type: string
-    frequency: string
-    day_of_month: number | null
-    next_date: string
-    category_name?: string | null
-    category_color?: string | null
+    id: number;
+    description: string;
+    amount: number;
+    type: string;
+    frequency: string;
+    day_of_month: number | null;
+    next_date: string;
+    category_name?: string | null;
+    category_color?: string | null;
   }
 
-  const upcoming: UpcomingItem[] = []
+  const upcoming: UpcomingItem[] = [];
   for (const r of recurring) {
-    let cursor = new Date(r.next_date || now.toISOString().split('T')[0])
+    let cursor = new Date(r.next_date || now.toISOString().split('T')[0]);
     if (cursor < now) {
-      cursor = new Date(now.toISOString().split('T')[0])
+      cursor = new Date(now.toISOString().split('T')[0]);
     }
-    const maxDate = new Date(endDate.toISOString().split('T')[0])
+    const maxDate = new Date(endDate.toISOString().split('T')[0]);
 
     while (cursor <= maxDate) {
       upcoming.push({
@@ -92,42 +93,44 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
         next_date: cursor.toISOString().split('T')[0],
         category_name: r.category_name,
         category_color: r.category_color,
-      })
+      });
 
       if (r.frequency === 'daily') {
-        cursor.setDate(cursor.getDate() + 1)
+        cursor.setDate(cursor.getDate() + 1);
       } else if (r.frequency === 'weekly') {
-        cursor.setDate(cursor.getDate() + 7)
+        cursor.setDate(cursor.getDate() + 7);
       } else if (r.frequency === 'monthly') {
-        cursor.setMonth(cursor.getMonth() + 1)
-        const day = r.day_of_month || cursor.getDate()
-        cursor.setDate(Math.min(day, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()))
+        cursor.setMonth(cursor.getMonth() + 1);
+        const day = r.day_of_month || cursor.getDate();
+        cursor.setDate(
+          Math.min(day, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate())
+        );
       } else if (r.frequency === 'yearly') {
-        cursor.setFullYear(cursor.getFullYear() + 1)
+        cursor.setFullYear(cursor.getFullYear() + 1);
       } else {
-        break
+        break;
       }
     }
   }
 
-  upcoming.sort((a, b) => a.next_date.localeCompare(b.next_date))
+  upcoming.sort((a, b) => a.next_date.localeCompare(b.next_date));
 
   interface CategoryBucket {
-    name: string
-    color?: string | null
-    total: number
-    items: UpcomingItem[]
+    name: string;
+    color?: string | null;
+    total: number;
+    items: UpcomingItem[];
   }
-  const byCategory: Record<string, CategoryBucket> = {}
-  let totalMonthly = 0
+  const byCategory: Record<string, CategoryBucket> = {};
+  let totalMonthly = 0;
   for (const item of upcoming) {
-    const catKey = item.category_name || 'Uncategorized'
+    const catKey = item.category_name || 'Uncategorized';
     if (!byCategory[catKey]) {
-      byCategory[catKey] = { name: catKey, color: item.category_color, total: 0, items: [] }
+      byCategory[catKey] = { name: catKey, color: item.category_color, total: 0, items: [] };
     }
-    byCategory[catKey]!.total += item.amount
-    byCategory[catKey]!.items.push(item)
-    totalMonthly += item.amount
+    byCategory[catKey]!.total += item.amount;
+    byCategory[catKey]!.items.push(item);
+    totalMonthly += item.amount;
   }
 
   const currencyRow = await db.first<{ value: string }>(
@@ -135,59 +138,95 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
     'SELECT value FROM settings WHERE key = ? AND profile_id = ?',
     'local_currency',
     pid
-  )
-  const currency = currencyRow ? currencyRow.value : 'EUR'
+  );
+  const currency = currencyRow ? currencyRow.value : 'EUR';
 
   return c.json({
     transactions: upcoming.slice(0, 20),
     byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
     totalMonthly,
     currency,
-  })
-})
+  });
+});
 
 recurringRoutes.get('/api/recurring/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
+  const pid = await getProfileId(c);
   const r = await db.first<RecurringRow>(
     c.env.DB,
     'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
     c.req.param('id'),
     pid
-  )
-  if (!r) throw new HttpError(404, 'Not found')
-  return c.json(r)
-})
+  );
+  if (!r) throw new HttpError(404, 'Not found');
+  return c.json(r);
+});
 
 recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const b = (await c.req.json()) as Record<string, any>
-  const { description, amount, type, category_id, frequency, day_of_month, next_date, notes } = b
+  const pid = await getProfileId(c);
+  const b = (await c.req.json()) as Record<string, any>;
+  const {
+    description,
+    amount,
+    type,
+    category_id,
+    account_id,
+    frequency,
+    day_of_month,
+    next_date,
+    notes,
+  } = b;
+  // Validate account ownership before accepting account_id from client input.
+  if (
+    account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+  ) {
+    throw new HttpError(403, 'Account does not belong to this profile');
+  }
   const res = await db.insert(c.env.DB, 'recurring_transactions', {
     profile_id: pid,
     description: description || '',
     amount,
     type: type || 'expense',
     category_id: category_id || null,
+    account_id: account_id || null,
     frequency: frequency || 'monthly',
     day_of_month: day_of_month || null,
     next_date: next_date || null,
     notes: notes || '',
-  })
-  return c.json({ id: res.meta.last_row_id })
-})
+  });
+  return c.json({ id: res.meta.last_row_id });
+});
 
 recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const id = c.req.param('id')
+  const pid = await getProfileId(c);
+  const id = c.req.param('id');
   const existing = await db.first<RecurringRow>(
     c.env.DB,
     'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
-  )
-  if (!existing) throw new HttpError(404, 'Not found')
-  const b = (await c.req.json()) as Record<string, any>
-  const { description, amount, type, category_id, frequency, day_of_month, next_date, notes, active } = b
+  );
+  if (!existing) throw new HttpError(404, 'Not found');
+  const b = (await c.req.json()) as Record<string, any>;
+  const {
+    description,
+    amount,
+    type,
+    category_id,
+    account_id,
+    frequency,
+    day_of_month,
+    next_date,
+    notes,
+    active,
+  } = b;
+  // Validate account ownership if account_id is being changed.
+  if (
+    account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+  ) {
+    throw new HttpError(403, 'Account does not belong to this profile');
+  }
   await db.update(
     c.env.DB,
     'recurring_transactions',
@@ -196,6 +235,7 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
       amount: amount ?? 0,
       type: type ?? 'expense',
       category_id: category_id ?? null,
+      account_id: account_id ?? null,
       frequency: frequency ?? 'monthly',
       day_of_month: day_of_month ?? null,
       next_date: next_date ?? null,
@@ -205,54 +245,108 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
     'id = ? AND profile_id = ?',
     id,
     pid
-  )
-  return c.json({ ok: true })
-})
+  );
+  return c.json({ ok: true });
+});
 
 recurringRoutes.delete('/api/recurring/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  await db.del(c.env.DB, 'recurring_transactions', 'id = ? AND profile_id = ?', c.req.param('id'), pid)
-  return c.json({ ok: true })
-})
+  const pid = await getProfileId(c);
+  await db.del(
+    c.env.DB,
+    'recurring_transactions',
+    'id = ? AND profile_id = ?',
+    c.req.param('id'),
+    pid
+  );
+  return c.json({ ok: true });
+});
 
 // "Process due": materializes a transaction from the recurring rule and advances next_date.
+// Executed in one atomic D1 batch: INSERT the transaction, adjust the linked account
+// balance (if account_id is set), and advance the next_date — so a mid-flight failure
+// cannot create a transaction without updating the balance.
 recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const id = c.req.param('id')
+  const pid = await getProfileId(c);
+  const id = c.req.param('id');
   const r = await db.first<RecurringRow>(
     c.env.DB,
     'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
-  )
-  if (!r) throw new HttpError(404, 'Not found')
+  );
+  if (!r) throw new HttpError(404, 'Not found');
 
-  const date = r.next_date || new Date().toISOString().split('T')[0]
-  const tx = await db.run(
-    c.env.DB,
-    `INSERT INTO transactions (profile_id, description, amount, type, category_id, date, notes, beneficiary, payor)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    pid,
-    r.description,
-    r.amount,
-    r.type,
-    r.category_id,
-    date,
-    r.notes || '',
-    '',
-    ''
-  )
+  const todayStr = new Date().toISOString().split('T')[0];
 
-  let next = new Date(date)
-  if (r.frequency === 'monthly') next.setMonth(next.getMonth() + 1)
-  else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7)
-  else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1)
-  const nextStr = next.toISOString().split('T')[0]
-  await db.update(c.env.DB, 'recurring_transactions', { next_date: nextStr }, 'id = ? AND profile_id = ?', id, pid)
+  // Idempotency guard: if next_date is already in the future, the current
+  // period was already populated (or hasn't arrived yet). Either way,
+  // prevent double-population from creating duplicate transactions.
+  if (r.next_date && r.next_date > todayStr) {
+    throw new HttpError(409, 'Recurring transaction already populated for current period');
+  }
+
+  const date = r.next_date || todayStr;
+
+  // Advance next_date past the populated period. EVERY frequency must move the
+  // date forward — if it stalls (e.g. daily/biweekly falling through to no-op),
+  // next_date stays <= today and the idempotency guard above never trips, so the
+  // rule can be populated repeatedly and each run debits the account again.
+  const next = new Date(date);
+  if (r.frequency === 'daily') next.setDate(next.getDate() + 1);
+  else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7);
+  else if (r.frequency === 'biweekly') next.setDate(next.getDate() + 14);
+  else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
+  else next.setMonth(next.getMonth() + 1); // monthly + safe default: always advance.
+  const nextStr = next.toISOString().split('T')[0];
+
+  const stmts: D1PreparedStatement[] = [];
+
+  // 1. Insert the transaction, including account_id if set.
+  stmts.push(
+    c.env.DB.prepare(
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, beneficiary, payor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      pid,
+      r.description,
+      r.amount,
+      r.type,
+      r.category_id,
+      r.account_id ?? null,
+      date,
+      r.notes || '',
+      '',
+      ''
+    )
+  );
+
+  // 2. Adjust the linked account balance for income/expense/deduction. Transfers
+  //    are skipped: the recurring model has no destination account, so a
+  //    one-legged debit would destroy money (credit nothing). The transaction is
+  //    still recorded; balances are left untouched. (Full transfer-recurring
+  //    support would need a transfer_account_id column + a two-legged update.)
+  if (r.account_id != null && r.type !== 'transfer') {
+    const delta = r.type === 'income' ? r.amount : -r.amount;
+    stmts.push(
+      c.env.DB.prepare(
+        'UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?'
+      ).bind(delta, r.account_id, pid)
+    );
+  }
+
+  // 3. Advance next_date.
+  stmts.push(
+    c.env.DB.prepare(
+      'UPDATE recurring_transactions SET next_date = ? WHERE id = ? AND profile_id = ?'
+    ).bind(nextStr, id, pid)
+  );
+
+  const results = await c.env.DB.batch(stmts);
+  const txLastRowId = results[0]?.meta?.last_row_id;
 
   return c.json({
     ok: true,
-    transactionId: tx.meta.last_row_id,
+    transactionId: txLastRowId,
     next_date: nextStr,
-  })
-})
+  });
+});

@@ -1,5 +1,4 @@
 const express = require('express');
-const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
 
@@ -31,14 +30,28 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     apiRateLimiter,
     asyncHandler((req, res) => {
       const pid = getProfileId(req);
-      const { description, amount, type, category_id, frequency, day_of_month, next_date, notes } =
-        req.body;
+      const {
+        description,
+        amount,
+        type,
+        category_id,
+        account_id,
+        frequency,
+        day_of_month,
+        next_date,
+        notes,
+      } = req.body;
+      // Validate account ownership before accepting account_id from client input.
+      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
+        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      }
       const info = req.repos.recurring.create({
         profile_id: pid,
         description: description || '',
         amount,
         type: type || 'expense',
         category_id: category_id || null,
+        account_id: account_id || null,
         frequency: frequency || 'monthly',
         day_of_month: day_of_month || null,
         next_date: next_date || null,
@@ -161,24 +174,30 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
         amount,
         type,
         category_id,
+        account_id,
         frequency,
         day_of_month,
         next_date,
         notes,
         active,
       } = req.body;
+      // Validate account ownership if account_id is being changed.
+      if (account_id != null && !req.repos.accounts.accountBelongsToProfile(account_id, pid)) {
+        return res.status(403).json({ error: 'Account does not belong to this profile' });
+      }
       req.repos.recurring.update(req.params.id, pid, {
         description: description ?? '',
         amount: amount ?? 0,
         type: type ?? 'expense',
         category_id: category_id ?? null,
+        account_id: account_id ?? null,
         frequency: frequency ?? 'monthly',
         day_of_month: day_of_month ?? null,
         next_date: next_date ?? null,
         notes: notes ?? '',
         active: active ?? 1,
       });
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -188,7 +207,7 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     asyncHandler((req, res) => {
       const pid = getProfileId(req);
       req.repos.recurring.deleteById(req.params.id, pid);
-      res.json(toCamelCase({ ok: true }));
+      res.json({ ok: true });
     })
   );
 
@@ -197,21 +216,25 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
     apiRateLimiter,
     asyncHandler((req, res) => {
       const pid = getProfileId(req);
+      const r = req.repos.recurring.getById(req.params.id, pid);
+      if (!r) return res.status(404).json({ error: 'Not found' });
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      // Idempotency guard: if next_date is already in the future, the current
+      // period was already populated (or hasn't arrived yet).
+      if (r.next_date && r.next_date > todayStr) {
+        return res
+          .status(409)
+          .json({ error: 'Recurring transaction already populated for current period' });
+      }
+
       const result = req.repos.recurring.populate(req.params.id, pid);
       if (!result) return res.status(404).json({ error: 'Not found' });
-
-      const date = result.next_date || new Date().toISOString().split('T')[0];
-      let next = new Date(date);
-      if (result.frequency === 'monthly') next.setMonth(next.getMonth() + 1);
-      else if (result.frequency === 'weekly') next.setDate(next.getDate() + 7);
-      else if (result.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
-      const nextStr = next.toISOString().split('T')[0];
-      req.repos.recurring.update(req.params.id, pid, { next_date: nextStr });
 
       res.json({
         ok: true,
         transactionId: result.transactionId,
-        next_date: nextStr,
+        next_date: result.next_date,
       });
     })
   );
