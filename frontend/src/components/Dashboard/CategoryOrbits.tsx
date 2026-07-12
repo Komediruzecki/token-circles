@@ -9,6 +9,7 @@
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import { formatCurrency, getLocalCurrency } from '../../core/api'
+import { OTHER_COLOR, paletteColor } from '../../core/brandPalette'
 import styles from './CategoryOrbits.module.css'
 
 const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
@@ -21,17 +22,6 @@ export interface CategoryOrbitsProps {
   label?: string
   maxRings?: number
 }
-
-const FALLBACK_COLORS = [
-  '#6e9bff',
-  '#f0a860',
-  '#59d2a2',
-  '#e0708a',
-  '#93b4ff',
-  '#e8c268',
-  '#4fb3d9',
-  '#c9a0ff',
-]
 
 const C = 130 // svg center
 const R_OUTER = 104
@@ -52,7 +42,7 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
     const rest = sorted.slice(max)
     const rows = top.map((c, i) => ({
       name: c.category_name || 'Uncategorized',
-      color: c.category_color || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
+      color: c.category_color || paletteColor(i),
       amount: c.amount,
       share: c.amount / total,
     }))
@@ -60,7 +50,7 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
       const restAmount = rest.reduce((s, c) => s + c.amount, 0)
       rows.push({
         name: `Other (${rest.length})`,
-        color: '#7182a8',
+        color: OTHER_COLOR,
         amount: restAmount,
         share: restAmount / total,
       })

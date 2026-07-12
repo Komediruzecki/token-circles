@@ -430,11 +430,11 @@
 
 /* status classes */
 .status-over {
-  background: rgba(239, 68, 68, 0.05);
+  background: rgba(255, 157, 157, 0.06);
 }
 
 .status-warning {
-  background: rgba(234, 179, 8, 0.05);
+  background: rgba(240, 168, 96, 0.06);
 }
 
 .status-ok {
@@ -615,7 +615,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay, rgba(0, 0, 0, 0.5));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -885,17 +885,17 @@
 }
 
 .chart-status-over {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(255, 157, 157, 0.15);
   color: var(--danger);
 }
 
 .chart-status-warning {
-  background: rgba(234, 179, 8, 0.15);
+  background: rgba(240, 168, 96, 0.15);
   color: var(--warning);
 }
 
 .chart-status-ok {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(125, 255, 176, 0.15);
   color: var(--success);
 }
 
@@ -923,21 +923,21 @@
 }
 
 .rollover-on {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(125, 255, 176, 0.15);
   color: var(--success);
 }
 
 .rollover-on:hover {
-  background: rgba(34, 197, 94, 0.25);
+  background: rgba(125, 255, 176, 0.25);
 }
 
 .rollover-off {
-  background: rgba(107, 114, 128, 0.15);
+  background: rgba(113, 130, 168, 0.15);
   color: var(--text-secondary);
 }
 
 .rollover-off:hover {
-  background: rgba(107, 114, 128, 0.25);
+  background: rgba(113, 130, 168, 0.25);
 }
 
 /* Chart section headings */
@@ -1316,4 +1316,31 @@
   .catCardName {
     font-size: 14px;
   }
+}
+
+/* ── Brand coherence: glass surfaces (Orbit design system) ──
+   Appended overrides so they win over the earlier (duplicated) card rules
+   without editing each definition. */
+.summary-card,
+.chart-wrapper,
+.budget-forecast,
+.table-container {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border-color: color-mix(in oklab, var(--primary) 10%, var(--border));
+}
+
+.summary-card.highlighted {
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow: var(--glow-primary, none);
+}
+
+/* Section headings speak the display serif, matching the dashboard. */
+.categoryChartSection h3,
+.budget-forecast h3,
+.budget-allocations h2,
+.categories-section h2 {
+  font-family: var(--font-display, inherit);
+  letter-spacing: -0.01em;
 }

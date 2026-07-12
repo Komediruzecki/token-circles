@@ -129,6 +129,15 @@ export default function Dashboard() {
   // DashboardSettings registers its reset action here so the modal header can host the button.
   const [resetViews, setResetViews] = createSignal<(() => void) | null>(null)
 
+  // The overview deck is the default view; the classic charts + widgets live
+  // below a "show more" toggle (choice persisted).
+  const [showMore, setShowMore] = createSignal(localStorage.getItem('dashboard_showMore') === '1')
+  const toggleShowMore = () => {
+    const next = !showMore()
+    setShowMore(next)
+    localStorage.setItem('dashboard_showMore', next ? '1' : '0')
+  }
+
   const prefs = loadWidgetPrefs()
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(prefs.visible)
   const [widgetOrder, setWidgetOrder] = createSignal<string[]>(prefs.order)
@@ -828,102 +837,125 @@ export default function Dashboard() {
             recentTransactions={metrics()!.recentTransactions || []}
           />
 
-          {/* Charts Section — always visible */}
-          <div
-            class={styles.chartsGrid}
-            role="region"
-            aria-label="charts overview"
-            data-test-id="dashboard-charts"
-            data-tour="dashboard-charts"
+          {/* Show more — reveals the classic charts + widget tail below the deck. */}
+          <button
+            type="button"
+            class={styles.showMoreToggle}
+            onClick={toggleShowMore}
+            aria-expanded={showMore()}
           >
-            <div class={styles.card}>
-              <div class={styles.cardHeader}>
-                <div class={styles.cardTitle}>Net Worth Over Time</div>
-              </div>
-              <div class={styles.chartContainerTall}>
-                {monthlyData() ? (
-                  <ChartErrorBoundary title="Net Worth chart">
-                    <ChartWrapper
-                      type="line"
-                      data={{
-                        labels: monthlyData()!.labels,
-                        datasets: [
-                          {
-                            label: 'Net Worth',
-                            data: monthlyData()!.netWorth,
-                            borderColor: theme.getChartColors().primary,
-                            backgroundColor: theme.getChartColors().primaryBg,
-                            fill: true,
-                            tension: 0.4,
-                          },
-                        ],
-                      }}
-                      height={320}
-                      variant="tall"
-                      showExport
-                      filename="net-worth-over-time"
-                    />
-                  </ChartErrorBoundary>
-                ) : (
-                  <div class={styles.emptyState}>Loading chart data...</div>
-                )}
-              </div>
-            </div>
-            <div class={styles.card}>
-              <div class={styles.cardHeader}>
-                <div class={styles.cardTitle}>Cash Flow (12 Months)</div>
-              </div>
-              <div class={styles.chartContainerMedium}>
-                {monthlyData() ? (
-                  <ChartErrorBoundary title="Cash Flow chart">
-                    <ChartWrapper
-                      type="line"
-                      data={{
-                        labels: monthlyData()!.monthlyLabels,
-                        datasets: [
-                          {
-                            label: 'Income',
-                            data: monthlyData()!.income,
-                            borderColor: theme.getChartColors().income,
-                            backgroundColor: theme.getChartColors().incomeBg,
-                            fill: true,
-                            tension: 0.4,
-                          },
-                          {
-                            label: 'Expenses',
-                            data: monthlyData()!.expenses,
-                            borderColor: theme.getChartColors().expense,
-                            backgroundColor: theme.getChartColors().expenseBg,
-                            fill: true,
-                            tension: 0.4,
-                          },
-                        ],
-                      }}
-                      height={300}
-                      variant="medium"
-                      showExport
-                      filename="cash-flow-12months"
-                    />
-                  </ChartErrorBoundary>
-                ) : (
-                  <div class={styles.emptyState}>Loading chart data...</div>
-                )}
-              </div>
-            </div>
-          </div>
+            {showMore() ? 'Show less' : 'Show more'}
+            <svg
+              viewBox="0 0 16 16"
+              class={styles.showMoreChevron}
+              classList={{ [styles.showMoreChevronOpen]: showMore() }}
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              aria-hidden="true"
+            >
+              <path d="M4 6l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
 
-          {/* Dynamic Widgets — rendered in saved order, only visible widgets shown */}
-          <For each={widgetOrder()}>
-            {(widgetId) => (
-              <>
-                {isWidgetVisible(widgetId) &&
-                widgetId !== 'metrics' &&
-                !widgetId.startsWith('deck-')
-                  ? renderWidget(widgetId)
-                  : null}
-              </>
-            )}
-          </For>
+          <Show when={showMore()}>
+            {/* Charts Section */}
+            <div
+              class={styles.chartsGrid}
+              role="region"
+              aria-label="charts overview"
+              data-test-id="dashboard-charts"
+              data-tour="dashboard-charts"
+            >
+              <div class={styles.card}>
+                <div class={styles.cardHeader}>
+                  <div class={styles.cardTitle}>Net Worth Over Time</div>
+                </div>
+                <div class={styles.chartContainerTall}>
+                  {monthlyData() ? (
+                    <ChartErrorBoundary title="Net Worth chart">
+                      <ChartWrapper
+                        type="line"
+                        data={{
+                          labels: monthlyData()!.labels,
+                          datasets: [
+                            {
+                              label: 'Net Worth',
+                              data: monthlyData()!.netWorth,
+                              borderColor: theme.getChartColors().primary,
+                              backgroundColor: theme.getChartColors().primaryBg,
+                              fill: true,
+                              tension: 0.4,
+                            },
+                          ],
+                        }}
+                        height={320}
+                        variant="tall"
+                        showExport
+                        filename="net-worth-over-time"
+                      />
+                    </ChartErrorBoundary>
+                  ) : (
+                    <div class={styles.emptyState}>Loading chart data...</div>
+                  )}
+                </div>
+              </div>
+              <div class={styles.card}>
+                <div class={styles.cardHeader}>
+                  <div class={styles.cardTitle}>Cash Flow (12 Months)</div>
+                </div>
+                <div class={styles.chartContainerMedium}>
+                  {monthlyData() ? (
+                    <ChartErrorBoundary title="Cash Flow chart">
+                      <ChartWrapper
+                        type="line"
+                        data={{
+                          labels: monthlyData()!.monthlyLabels,
+                          datasets: [
+                            {
+                              label: 'Income',
+                              data: monthlyData()!.income,
+                              borderColor: theme.getChartColors().income,
+                              backgroundColor: theme.getChartColors().incomeBg,
+                              fill: true,
+                              tension: 0.4,
+                            },
+                            {
+                              label: 'Expenses',
+                              data: monthlyData()!.expenses,
+                              borderColor: theme.getChartColors().expense,
+                              backgroundColor: theme.getChartColors().expenseBg,
+                              fill: true,
+                              tension: 0.4,
+                            },
+                          ],
+                        }}
+                        height={300}
+                        variant="medium"
+                        showExport
+                        filename="cash-flow-12months"
+                      />
+                    </ChartErrorBoundary>
+                  ) : (
+                    <div class={styles.emptyState}>Loading chart data...</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Widgets — rendered in saved order, only visible widgets shown */}
+            <For each={widgetOrder()}>
+              {(widgetId) => (
+                <>
+                  {isWidgetVisible(widgetId) &&
+                  widgetId !== 'metrics' &&
+                  !widgetId.startsWith('deck-')
+                    ? renderWidget(widgetId)
+                    : null}
+                </>
+              )}
+            </For>
+          </Show>
 
           {/* Widget Settings Modal */}
           <Show when={showSettingsModal()}>

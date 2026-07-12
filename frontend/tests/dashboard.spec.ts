@@ -31,6 +31,9 @@ test.describe('Dashboard @smoke', () => {
   })
 
   test('shows the charts region', async ({ page }) => {
+    // The classic charts now live below a "Show more" toggle (the overview deck
+    // is the default view), so expand it before asserting the region is shown.
+    await page.getByRole('button', { name: /show more/i }).click()
     await expect(page.getByTestId('dashboard-charts')).toBeVisible()
   })
 

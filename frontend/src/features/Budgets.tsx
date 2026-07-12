@@ -36,9 +36,11 @@ import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
+import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import { api, getLocalCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
 import { theme } from '../core/theme'
 import styles from './BudgetsPage.module.css'
@@ -172,7 +174,7 @@ export default function Budgets() {
   const [catFormData, setCatFormData] = createSignal({
     name: '',
     type: 'expense' as 'expense' | 'income',
-    color: '#3b82f6',
+    color: '#6e9bff',
     icon: '',
   })
 
@@ -437,7 +439,7 @@ export default function Budgets() {
       }
       setShowCatModal(false)
       setEditingCategory(null)
-      setCatFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+      setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
       loadCategories()
     } catch (err) {
       console.error('Failed to save category:', err)
@@ -677,35 +679,15 @@ export default function Budgets() {
           {allocations().length === 0 ? (
             <div class={styles.emptyState}>No allocations for this month</div>
           ) : (
-            <Chart
-              type="doughnut"
-              data={{
-                labels: allocations().map((a) => a.category_name),
-                datasets: [
-                  {
-                    data: allocations().map((a) => a.allocated),
-                    backgroundColor: allocations().map((a) => a.category_color || '#6b7280'),
-                    borderWidth: 0,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'right',
-                    labels: {
-                      usePointStyle: true,
-                      padding: 15,
-                      font: { size: 12 },
-                      color: chartColors().legend,
-                    },
-                  },
-                },
-              }}
-              height={250}
-              width="100%"
+            <CategoryOrbits
+              categories={allocations().map((a) => ({
+                category_name: a.category_name,
+                category_color: a.category_color,
+                amount: a.allocated,
+              }))}
+              periodText={`${MONTHS[currentMonthNum() - 1]} ${currentYearNum()}`}
+              label="budgeted"
+              maxRings={7}
             />
           )}
         </div>
@@ -724,15 +706,15 @@ export default function Budgets() {
                   {
                     label: 'Budget',
                     data: allocations().map((a) => a.allocated),
-                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(110, 155, 255, 0.55)',
+                    borderColor: 'rgba(110, 155, 255, 1)',
                     borderWidth: 1,
                   },
                   {
                     label: 'Spent',
                     data: allocations().map((a) => a.spent),
-                    backgroundColor: 'rgba(239, 68, 68, 0.6)',
-                    borderColor: 'rgba(239, 68, 68, 1)',
+                    backgroundColor: 'rgba(240, 168, 96, 0.55)',
+                    borderColor: 'rgba(240, 168, 96, 1)',
                     borderWidth: 1,
                   },
                 ],
@@ -790,12 +772,12 @@ export default function Budgets() {
                   {
                     label: 'Adherence %',
                     data: [...improvements()].reverse().map((item) => item.adherence_pct),
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderColor: 'rgba(110, 155, 255, 1)',
+                    backgroundColor: 'rgba(110, 155, 255, 0.12)',
                     fill: true,
                     tension: 0.3,
                     pointRadius: 4,
-                    pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                    pointBackgroundColor: 'rgba(110, 155, 255, 1)',
                   },
                 ],
               }}
@@ -1123,7 +1105,7 @@ export default function Budgets() {
             class={styles.btnPrimary}
             onClick={() => {
               setEditingCategory(null)
-              setCatFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+              setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
               setShowCatModal(true)
             }}
           >
@@ -1274,18 +1256,7 @@ export default function Budgets() {
                       <div class={styles.catColorPicker}>
                         <span class={styles.catColorLabel}>Color:</span>
                         <div class={styles.catColorDots}>
-                          <For
-                            each={[
-                              '#ef4444',
-                              '#f97316',
-                              '#eab308',
-                              '#22c55e',
-                              '#3b82f6',
-                              '#8b5cf6',
-                              '#ec4899',
-                              '#6b7280',
-                            ]}
-                          >
+                          <For each={CATEGORY_PALETTE}>
                             {(color) => (
                               <button
                                 class={`${styles.catColorDot} ${category.color === color ? styles.catColorDotActive : ''}`}
@@ -1409,7 +1380,7 @@ export default function Budgets() {
             if (e.target === e.currentTarget) {
               setShowCatModal(false)
               setEditingCategory(null)
-              setCatFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+              setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
             }
           }}
         >
@@ -1426,7 +1397,7 @@ export default function Budgets() {
                 onClick={() => {
                   setShowCatModal(false)
                   setEditingCategory(null)
-                  setCatFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+                  setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
                 }}
               >
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1471,18 +1442,7 @@ export default function Budgets() {
               <div class={styles.catFormGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.catColorDots}>
-                  <For
-                    each={[
-                      '#ef4444',
-                      '#f97316',
-                      '#eab308',
-                      '#22c55e',
-                      '#3b82f6',
-                      '#8b5cf6',
-                      '#ec4899',
-                      '#6b7280',
-                    ]}
-                  >
+                  <For each={CATEGORY_PALETTE}>
                     {(color) => (
                       <button
                         class={`${styles.catColorDot} ${styles.catColorDotLarge} ${catFormData().color === color ? styles.catColorDotActive : ''}`}
@@ -1514,7 +1474,7 @@ export default function Budgets() {
                   onClick={() => {
                     setShowCatModal(false)
                     setEditingCategory(null)
-                    setCatFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+                    setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
                   }}
                 >
                   Cancel

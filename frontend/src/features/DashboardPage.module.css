@@ -576,3 +576,39 @@
     transform: translateY(0);
   }
 }
+
+/* Show-more toggle: reveals the classic charts + widgets below the deck. */
+.showMoreToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px auto 20px;
+  padding: 9px 20px;
+  background: color-mix(in oklab, var(--card-bg) 60%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 16%, var(--border));
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font: 500 13px var(--font-inter);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.showMoreToggle:hover {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--primary) 40%, transparent);
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+
+.showMoreChevron {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.3s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.showMoreChevronOpen {
+  transform: rotate(180deg);
+}

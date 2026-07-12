@@ -1078,7 +1078,10 @@ export default function Transactions() {
                   stroke="currentColor"
                   stroke-width="2"
                   viewBox="0 0 24 24"
-                  style={{ transform: showAdvanced() ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
+                  style={{
+                    transform: showAdvanced() ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 0.15s',
+                  }}
                 >
                   <path d="M9 18l6-6-6-6" />
                 </svg>
@@ -1091,221 +1094,225 @@ export default function Transactions() {
                     Tags
                     <InfoTip text="Free-form labels you can attach to any transaction (e.g. tax-deductible, vacation, reimbursable) to slice reports beyond a single category." />
                   </label>
-                <div class={styles.txTagChips}></div>
-                <div class={styles.txTagInputRow}>
-                  <input
-                    type="text"
-                    class={styles.txTagNewInput}
-                    data-test-id="tx-tag-new-input"
-                    placeholder="Type tag name, press Enter to create..."
-                    onKeyDown={async (e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        const input = e.target as HTMLInputElement
-                        const tagName = input.value.trim()
-                        if (tagName) {
-                          try {
-                            const newTag = await api.createTag(tagName, '#6366f1')
-                            setSelectedTags([...selectedTags(), newTag.id])
-                            input.value = ''
-                          } catch {
-                            // Tag creation failed
+                  <div class={styles.txTagChips}></div>
+                  <div class={styles.txTagInputRow}>
+                    <input
+                      type="text"
+                      class={styles.txTagNewInput}
+                      data-test-id="tx-tag-new-input"
+                      placeholder="Type tag name, press Enter to create..."
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const input = e.target as HTMLInputElement
+                          const tagName = input.value.trim()
+                          if (tagName) {
+                            try {
+                              const newTag = await api.createTag(tagName, '#6e9bff')
+                              setSelectedTags([...selectedTags(), newTag.id])
+                              input.value = ''
+                            } catch {
+                              // Tag creation failed
+                            }
                           }
                         }
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div class={styles.formRow}>
+                <div class={styles.formRow}>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>
+                      Beneficiary
+                      <InfoTip text="Who you paid (the payee). Feeds the Counterparties view so you can see totals per merchant or person." />
+                    </label>
+                    <input
+                      type="text"
+                      class={styles.formControl}
+                      data-test-id="tx-beneficiary"
+                      placeholder="Who you paid"
+                      value={formBeneficiary()}
+                      onInput={(e) => setFormBeneficiary((e.target as HTMLInputElement).value)}
+                    />
+                  </div>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>
+                      Payor
+                      <InfoTip text="Who paid you (the source of income). Feeds the Counterparties view." />
+                    </label>
+                    <input
+                      type="text"
+                      class={styles.formControl}
+                      data-test-id="tx-payor"
+                      placeholder="Who paid you"
+                      value={formPayor()}
+                      onInput={(e) => setFormPayor((e.target as HTMLInputElement).value)}
+                    />
+                  </div>
+                </div>
+                <div class={styles.formRow}>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>
+                      Amount in Local Currency
+                      <InfoTip text="This transaction's value converted to your local currency. All balances and reports use this so foreign-currency rows add up correctly. Leave blank if the Amount is already in your local currency." />
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      class={styles.formControl}
+                      data-test-id="tx-amount-local"
+                      value={formAmountLocal()}
+                      onInput={(e) => setFormAmountLocal((e.target as HTMLInputElement).value)}
+                    />
+                  </div>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>
+                      Exchange Rate
+                      <InfoTip text="Optional record of the rate used (foreign amount x rate = local amount). Informational only — the 'Amount in local currency' above is what balances actually use." />
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      class={styles.formControl}
+                      data-test-id="tx-exchange-rate"
+                      value={formExchangeRate()}
+                      onInput={(e) => setFormExchangeRate((e.target as HTMLInputElement).value)}
+                    />
+                  </div>
+                </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>
-                    Beneficiary
-                    <InfoTip text="Who you paid (the payee). Feeds the Counterparties view so you can see totals per merchant or person." />
+                    Receipt
+                    <InfoTip text="Attach a photo or PDF of the receipt/invoice for your records — viewable later from the transaction row." />
                   </label>
-                  <input
-                    type="text"
-                    class={styles.formControl}
-                    data-test-id="tx-beneficiary"
-                    placeholder="Who you paid"
-                    value={formBeneficiary()}
-                    onInput={(e) => setFormBeneficiary((e.target as HTMLInputElement).value)}
-                  />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Payor
-                    <InfoTip text="Who paid you (the source of income). Feeds the Counterparties view." />
-                  </label>
-                  <input
-                    type="text"
-                    class={styles.formControl}
-                    data-test-id="tx-payor"
-                    placeholder="Who paid you"
-                    value={formPayor()}
-                    onInput={(e) => setFormPayor((e.target as HTMLInputElement).value)}
-                  />
-                </div>
-              </div>
-              <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Amount in Local Currency
-                    <InfoTip text="This transaction's value converted to your local currency. All balances and reports use this so foreign-currency rows add up correctly. Leave blank if the Amount is already in your local currency." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    class={styles.formControl}
-                    data-test-id="tx-amount-local"
-                    value={formAmountLocal()}
-                    onInput={(e) => setFormAmountLocal((e.target as HTMLInputElement).value)}
-                  />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Exchange Rate
-                    <InfoTip text="Optional record of the rate used (foreign amount x rate = local amount). Informational only — the 'Amount in local currency' above is what balances actually use." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    class={styles.formControl}
-                    data-test-id="tx-exchange-rate"
-                    value={formExchangeRate()}
-                    onInput={(e) => setFormExchangeRate((e.target as HTMLInputElement).value)}
-                  />
-                </div>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>
-                  Receipt
-                  <InfoTip text="Attach a photo or PDF of the receipt/invoice for your records — viewable later from the transaction row." />
-                </label>
-                <div class={styles.receiptUploadContainer}>
-                  <label class={styles.receiptPlaceholder} for="tx-receipt">
-                    <svg
-                      width="20"
-                      height="20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    <span class={styles.receiptText}>Click to upload receipt</span>
-                  </label>
-                  <input
-                    id="tx-receipt"
-                    type="file"
-                    class={styles.receiptInput}
-                    accept="image/*,.pdf"
-                    onChange={_handleReceiptFileSelect}
-                  />
-                  {receiptPreviewUrl() && (
-                    <>
-                      {(selectedFile()?.type || existingReceipt()?.file_type || '').startsWith(
-                        'image/'
-                      ) ? (
-                        <img
-                          src={receiptPreviewUrl()!}
-                          alt="Receipt preview"
-                          class={styles.receiptThumbnail}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            padding: '16px',
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border)',
-                            'border-style': 'solid',
-                            'border-radius': '8px',
-                            'text-align': 'center',
-                          }}
-                        >
-                          <svg
-                            width="32"
-                            height="32"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            style="opacity: 0.5; margin-bottom: 8px"
+                  <div class={styles.receiptUploadContainer}>
+                    <label class={styles.receiptPlaceholder} for="tx-receipt">
+                      <svg
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <span class={styles.receiptText}>Click to upload receipt</span>
+                    </label>
+                    <input
+                      id="tx-receipt"
+                      type="file"
+                      class={styles.receiptInput}
+                      accept="image/*,.pdf"
+                      onChange={_handleReceiptFileSelect}
+                    />
+                    {receiptPreviewUrl() && (
+                      <>
+                        {(selectedFile()?.type || existingReceipt()?.file_type || '').startsWith(
+                          'image/'
+                        ) ? (
+                          <img
+                            src={receiptPreviewUrl()!}
+                            alt="Receipt preview"
+                            class={styles.receiptThumbnail}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              padding: '16px',
+                              background: 'var(--bg-secondary)',
+                              border: '1px solid var(--border)',
+                              'border-style': 'solid',
+                              'border-radius': '8px',
+                              'text-align': 'center',
+                            }}
                           >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <div style="font-size: 14px">
-                            {selectedFile()?.name || existingReceipt()?.original_name || 'Unknown'}
+                            <svg
+                              width="32"
+                              height="32"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              style="opacity: 0.5; margin-bottom: 8px"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                              />
+                            </svg>
+                            <div style="font-size: 14px">
+                              {selectedFile()?.name ||
+                                existingReceipt()?.original_name ||
+                                'Unknown'}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary)">
+                              {(
+                                (selectedFile()?.size ?? existingReceipt()?.file_size ?? 0) / 1024
+                              ).toFixed(1)}{' '}
+                              KB
+                            </div>
                           </div>
-                          <div style="font-size: 12px; color: var(--text-secondary)">
-                            {(
-                              (selectedFile()?.size ?? existingReceipt()?.file_size ?? 0) / 1024
-                            ).toFixed(1)}{' '}
-                            KB
-                          </div>
-                        </div>
-                      )}
-                      <div class={styles.receiptActions}>
-                        <button
-                          type="button"
-                          class={`${styles.btnGhost} ${styles.btnSm}`}
-                          onClick={async () => {
-                            const existing = existingReceipt()
-                            if (existing) {
-                              // Removing a stored receipt deletes it server-side
-                              if (
-                                !(await showConfirm(`Delete receipt "${existing.original_name}"?`))
-                              )
-                                return
-                              try {
-                                await api.deleteReceipt(existing.id)
-                                setExistingReceipt(null)
-                                await refreshTransactions()
-                              } catch (error) {
-                                console.error('Failed to delete receipt:', error)
-                                toast('Failed to delete receipt', 'error')
-                                return
+                        )}
+                        <div class={styles.receiptActions}>
+                          <button
+                            type="button"
+                            class={`${styles.btnGhost} ${styles.btnSm}`}
+                            onClick={async () => {
+                              const existing = existingReceipt()
+                              if (existing) {
+                                // Removing a stored receipt deletes it server-side
+                                if (
+                                  !(await showConfirm(
+                                    `Delete receipt "${existing.original_name}"?`
+                                  ))
+                                )
+                                  return
+                                try {
+                                  await api.deleteReceipt(existing.id)
+                                  setExistingReceipt(null)
+                                  await refreshTransactions()
+                                } catch (error) {
+                                  console.error('Failed to delete receipt:', error)
+                                  toast('Failed to delete receipt', 'error')
+                                  return
+                                }
                               }
-                            }
-                            setSelectedFile(null)
-                            revokePreviewUrl()
-                          }}
-                          title="Remove receipt"
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                              setSelectedFile(null)
+                              revokePreviewUrl()
+                            }}
+                            title="Remove receipt"
                           >
-                            <path d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                          Remove
-                        </button>
-                      </div>
-                    </>
-                  )}
+                            <svg
+                              width="16"
+                              height="16"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Remove
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>
-                  Notes
-                  <InfoTip text="Any extra detail you want to keep — reference numbers, context, reminders. Not used in reports." />
-                </label>
-                <textarea
-                  class={styles.formControl}
-                  data-test-id="tx-notes"
-                  rows="2"
-                  value={formNotes()}
-                  onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}
-                ></textarea>
-              </div>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>
+                    Notes
+                    <InfoTip text="Any extra detail you want to keep — reference numbers, context, reminders. Not used in reports." />
+                  </label>
+                  <textarea
+                    class={styles.formControl}
+                    data-test-id="tx-notes"
+                    rows="2"
+                    value={formNotes()}
+                    onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}
+                  ></textarea>
+                </div>
               </Show>
             </form>
           </div>

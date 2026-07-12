@@ -32,6 +32,13 @@ export default function TransactionSummaryBar(props: TransactionSummaryBarProps)
   const barClass = () =>
     props.variant === 'page' ? `${styles.summaryBar} ${styles.summaryBarPage}` : styles.summaryBar
 
+  // Income : expense split for the flow bar (mint vs salmon). Guard the all-zero
+  // case so an empty period doesn't divide by zero.
+  const incomePct = createMemo(() => {
+    const t = props.totalIncome + props.totalExpenses
+    return t > 0 ? (props.totalIncome / t) * 100 : 50
+  })
+
   return (
     <div class={barClass()}>
       {props.label && <span class={styles.periodLabel}>{props.label}</span>}
@@ -66,6 +73,12 @@ export default function TransactionSummaryBar(props: TransactionSummaryBarProps)
       <div class={styles.summaryItem}>
         <span class={styles.summaryLabel}>Transactions</span>
         <span class={styles.summaryValue}>{props.transactionCount}</span>
+      </div>
+
+      {/* Flow bar: income:expense split of the period, in brand mint/salmon. */}
+      <div class={styles.flowBar} aria-hidden="true">
+        <span class={styles.flowIncome} style={{ width: `${incomePct()}%` }} />
+        <span class={styles.flowExpense} style={{ width: `${100 - incomePct()}%` }} />
       </div>
     </div>
   )
