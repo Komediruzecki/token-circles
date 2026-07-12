@@ -2,9 +2,25 @@
  * Import handlers — IndexedDB-backed implementations
  */
 import { getLocalCurrency } from '../../api'
+import { parseFlexibleNumber } from '../../bankImport/parse'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
+
+const pad2 = (n: number): string => String(n).padStart(2, '0')
+
+/** Parse a spreadsheet amount cell that may be numeric or locale-formatted text
+ *  ("1.234,56", "1,234.56", "1234,56"). Bare parseFloat truncated these — a 1000x
+ *  corruption for European statements (audit I1). Returns NaN for blank/garbage.
+ *  Exported for tests. */
+export function parseAmount(v: unknown): number {
+  if (typeof v === 'number') return v
+  const s = toStr(v).trim()
+  if (!s) return NaN
+  const n = parseFlexibleNumber(s)
+  // parseFlexibleNumber returns 0 for unparseable input; distinguish a real 0 from garbage.
+  return n === 0 && !/\d/.test(s) ? NaN : n
+}
 
 function toStr(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -13,8 +29,9 @@ function toStr(v: unknown): string {
 }
 
 /** Normalize a date value to yyyy-mm-dd format.
- *  Handles: Google Viz Date(Y,M,D), dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, yyyy/mm/dd, Excel serial numbers */
-function normalizeDate(v: unknown): string {
+ *  Handles: Google Viz Date(Y,M,D), dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, yyyy/mm/dd, Excel serial numbers.
+ *  Exported for tests. */
+export function normalizeDate(v: unknown): string {
   if (v === null || v === undefined) return ''
   // Zero / empty numeric value — not a date
   if (v === 0 || v === '0') return ''
@@ -28,11 +45,12 @@ function normalizeDate(v: unknown): string {
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }
   }
-  // Excel serial date (days since 1900-01-01, with the 1900 leap year bug)
+  // Excel serial date (days since 1900-01-01, with the 1900 leap year bug). A serial is a
+  // calendar day, so read UTC parts — using local parts would shift it a day west of UTC.
   if (typeof v === 'number' && v > 1 && v < 200000) {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000))
     if (isNaN(d.getTime())) return ''
-    return d.toISOString().slice(0, 10)
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`
   }
   const s = toStr(v).trim()
   if (!s) return ''
@@ -43,25 +61,35 @@ function normalizeDate(v: unknown): string {
   if (slashYmd) {
     return `${slashYmd[1]}-${slashYmd[2].padStart(2, '0')}-${slashYmd[3].padStart(2, '0')}`
   }
-  // dd/mm/yyyy or dd-mm-yyyy
+  // dd/mm/yyyy or mm/dd/yyyy (or with - . space separators). Resolve ambiguity by value:
+  // a field > 12 can only be the day; if both are <= 12 default to day-first (EU-focused app).
   const dmy = s.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
   if (dmy) {
-    const d = parseInt(dmy[1]),
-      m = parseInt(dmy[2]),
+    const a = parseInt(dmy[1]),
+      b = parseInt(dmy[2]),
       y = parseInt(dmy[3])
-    if (d > 12 && m <= 12) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    let day: number, mon: number
+    if (a > 12 && b <= 12) {
+      day = a
+      mon = b // unambiguous day-first
+    } else if (b > 12 && a <= 12) {
+      mon = a
+      day = b // unambiguous month-first (e.g. US 04/13/2026)
+    } else if (a <= 12 && b <= 12) {
+      day = a
+      mon = b // ambiguous → day-first default
+    } else {
+      return '' // both > 12 — invalid
     }
-    if (d <= 31 && m <= 12) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    }
-    return ''
+    if (mon < 1 || mon > 12 || day < 1 || day > 31) return ''
+    return `${y}-${pad2(mon)}-${pad2(day)}`
   }
-  // Try native Date parse as fallback
+  // Native Date parse fallback. Use LOCAL parts (the user typed a local calendar date);
+  // toISOString() would shift it a day in any non-UTC zone.
   const dt = new Date(s)
   if (!isNaN(dt.getTime())) {
     const y = dt.getFullYear()
-    if (y >= 1971 && y <= 2100) return dt.toISOString().slice(0, 10)
+    if (y >= 1971 && y <= 2100) return `${y}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`
   }
   return ''
 }
@@ -72,6 +100,35 @@ interface ImportSession {
 }
 
 const importSessions = new Map<string, ImportSession>()
+const SESSION_TTL_MS = 30 * 60 * 1000 // 30 minutes
+const MAX_SESSIONS = 20
+// Largest import file we parse in-memory (audit S8). Guards against a huge/crafted
+// workbook exhausting memory; the receipts path caps uploads similarly.
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024 // 10 MB
+
+/** Store an upload session under a random id, evicting expired ones and bounding the map
+ *  size so it can't grow without limit (audit I6). */
+function putSession(workbook: WorkBook): string {
+  const now = Date.now()
+  for (const [id, s] of importSessions) {
+    if (now - s.uploadedAt > SESSION_TTL_MS) importSessions.delete(id)
+  }
+  while (importSessions.size >= MAX_SESSIONS) {
+    let oldestId: string | null = null
+    let oldestAt = Infinity
+    for (const [id, s] of importSessions) {
+      if (s.uploadedAt < oldestAt) {
+        oldestAt = s.uploadedAt
+        oldestId = id
+      }
+    }
+    if (oldestId === null) break
+    importSessions.delete(oldestId)
+  }
+  const id = globalThis.crypto.randomUUID()
+  importSessions.set(id, { workbook, uploadedAt: now })
+  return id
+}
 
 async function parseSheetData(workbook: WorkBook) {
   const sheetName = workbook.SheetNames[0] || 'Sheet1'
@@ -129,10 +186,15 @@ async function detectDuplicates(
   // round-trips unambiguously and can never collide across different pairs (a
   // NUL never appears in a date or a description), keeping this exactly as
   // strict as the original tuple comparison.
+  // Key is date + normalized description; amount is matched within a penny inside the bucket.
+  // (Account/type/currency aren't reliably known at dedup time — type is inferred from the amount
+  // sign later, and the account is resolved in importExecute — so account/type-aware dedup would
+  // need dedup moved after resolution; tracked as a follow-up.) NUL-joined so the parts
+  // round-trip unambiguously. toStr guards a null description (previously threw, aborting import).
   const keyOf = (date: string, desc: string) => `${date}\x00${desc}`
   const existingByKey = new Map<string, number[]>()
   for (const t of existing) {
-    const k = keyOf(t.date as string, (t.description as string).toLowerCase().trim())
+    const k = keyOf(toStr(t.date), toStr(t.description).toLowerCase().trim())
     const amt = Number(t.amount)
     const bucket = existingByKey.get(k)
     if (bucket) bucket.push(amt)
@@ -146,10 +208,15 @@ async function detectDuplicates(
     const row = rows[i]
     const date = normalizeDate(row.date) || toStr(row.date)
     const desc = toStr(row.description).toLowerCase().trim()
-    const amount = parseFloat(toStr(row.amount) || '0')
+    // Locale-aware amount parse so a European-formatted import ("1.234,56") matches the stored
+    // value instead of being read as 1.234 and missing the duplicate (audit I1/I4).
+    const amount = parseAmount(row.amount)
 
     const bucket = existingByKey.get(keyOf(date, desc))
-    const isDup = bucket ? bucket.some((amt) => Math.abs(amt - amount) < 0.01) : false
+    const isDup =
+      bucket && Number.isFinite(amount)
+        ? bucket.some((amt) => Math.abs(amt - amount) < 0.01)
+        : false
     if (isDup) duplicates.push(i)
     else clean.push(row)
   }
@@ -162,6 +229,9 @@ export async function importUpload(body: unknown): Promise<Response> {
     const formData = body as FormData
     const file = formData.get('file') as File | null
     if (!file) return json({ error: 'No file uploaded' }, 400)
+    if (file.size > MAX_IMPORT_BYTES) {
+      return json({ error: 'File too large (max 10 MB)' }, 413)
+    }
 
     const ext = file.name.split('.').pop()?.toLowerCase()
     const buffer = await file.arrayBuffer()
@@ -175,9 +245,7 @@ export async function importUpload(body: unknown): Promise<Response> {
       workbook = XLSX.read(buffer, { type: 'array' })
     }
 
-    // eslint-disable-next-line sonarjs/pseudo-random
-    const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    importSessions.set(sessionId, { workbook, uploadedAt: Date.now() })
+    const sessionId = putSession(workbook)
 
     const rows = await parseSheetData(workbook)
     return json({ session_id: sessionId, filename: file.name, rows, row_count: rows.length })
@@ -295,21 +363,25 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return { headers, rows }
   }
 
-  // Strategy 0: CORS proxy (required for browser — Google doesn't set CORS headers)
+  // CORS-proxy fallback: routes the user's sheet through the third-party corsproxy.io, which
+  // then sees the sheet URL and contents. Kept as a LAST resort and created lazily so it never
+  // fires when a direct-to-Google method works (audit S5). Google doesn't set CORS on the raw
+  // /export endpoint, so this is the fallback for non-published sheets.
   const rawUrl = gid
     ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
     : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
   const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`
-  const strategy0 = tryStrategy(proxyUrl, (text) => {
-    const { headers, rows } = parseCSV(text)
-    const cleaned = cleanColumns(headers, rows)
-    return json({
-      headers: cleaned.headers,
-      rows: cleaned.rows,
-      sheetNames: [sheetName || 'Sheet1'],
-      selectedSheet: sheetName || 'Sheet1',
+  const proxyFallback = () =>
+    tryStrategy(proxyUrl, (text) => {
+      const { headers, rows } = parseCSV(text)
+      const cleaned = cleanColumns(headers, rows)
+      return json({
+        headers: cleaned.headers,
+        rows: cleaned.rows,
+        sheetNames: [sheetName || 'Sheet1'],
+        selectedSheet: sheetName || 'Sheet1',
+      })
     })
-  })
 
   // Strategy 1: Published CSV
   const pubUrl = gid
@@ -387,13 +459,9 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     }, GOOGLE_SHEETS_TIMEOUT + 500)
   })
 
-  const strategies: Promise<ReturnType<typeof json>>[] = [
-    strategy0,
-    strategy1,
-    strategy2,
-    strategy3,
-  ]
-  const errors: string[] = []
+  // Direct-to-Google strategies (no third party) are tried first; the CORS proxy is only
+  // used if they all fail (audit S5).
+  const strategies: Promise<ReturnType<typeof json>>[] = [strategy1, strategy2, strategy3]
 
   // Try strategies sequentially with fast failure — first success wins,
   // but each gets at most GOOGLE_SHEETS_TIMEOUT total across all attempts
@@ -403,11 +471,12 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
         for (const s of strategies) {
           try {
             return await s
-          } catch (e) {
-            errors.push((e as Error).message)
+          } catch {
+            // Direct method failed — try the next one.
           }
         }
-        throw new Error(errors.join('; ') || 'All strategies failed')
+        // All direct methods failed — fall back to the third-party CORS proxy as a last resort.
+        return await proxyFallback()
       })(),
       deadline,
     ])
@@ -571,7 +640,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       const row = clean[i]
       const description = toStr(row.description)
       const date = normalizeDate(row.date) || toStr(row.date)
-      const amount = parseFloat(toStr(row.amount) || '0')
+      const amount = parseAmount(row.amount)
       // Determine transaction type.
       // An explicit "transfer" always wins — a transfer between two accounts is a
       // transfer regardless of sign, and the category names the destination account
