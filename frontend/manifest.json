@@ -1,11 +1,11 @@
 {
-  "name": "Finance Manager",
-  "short_name": "Finance",
-  "description": "Personal finance tracker with budgeting, transactions, and reporting",
+  "name": "Token Circles",
+  "short_name": "Token Circles",
+  "description": "Your money, in clear orbit — budgeting, transactions, and reporting",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3b82f6",
+  "background_color": "#0a0e1c",
+  "theme_color": "#0a0e1c",
   "orientation": "portrait",
   "icons": [
     {

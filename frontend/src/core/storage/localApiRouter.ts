@@ -64,7 +64,7 @@ const routes: RouteDef[] = [
     handler: () =>
       Promise.resolve(
         json({
-          name: 'Finance Manager',
+          name: 'Token Circles',
           version: '4.0.0',
           mode: 'serverless',
           storage: 'indexeddb',
