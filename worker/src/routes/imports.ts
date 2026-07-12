@@ -6,6 +6,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
+import { recomputeBalancesForAccounts } from '../recompute-balances';
 
 // Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
 function parseCsv(text: string): { headers: string[]; rows: string[][] } {
@@ -589,58 +590,9 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   const imported = txStmts.length;
 
   // Recompute balances for ALL the profile's accounts (preserves the original's self-healing pass),
-  // but via aggregated GROUP BY queries + one batched UPDATE instead of 5 queries per account.
-  const recomputeIds = [...new Set(accountIdMap.values())];
-  if (recomputeIds.length) {
-    const ids = recomputeIds;
-    const ph = ids.map(() => '?').join(',');
-    const [starts, out, inDirect, inTransfer] = await Promise.all([
-      db.all<{ id: number; starting_balance: number | null }>(
-        DB,
-        `SELECT id, starting_balance FROM accounts WHERE id IN (${ph})`,
-        ...ids
-      ),
-      db.all<{ account_id: number; total: number }>(
-        DB,
-        `SELECT account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type IN ('expense','transfer') GROUP BY account_id`,
-        ...ids
-      ),
-      db.all<{ account_id: number; total: number }>(
-        DB,
-        `SELECT account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE account_id IN (${ph}) AND type = 'income' GROUP BY account_id`,
-        ...ids
-      ),
-      // Credit transfer_account_id for transfers (the destination leg), and for
-      // income ONLY when the row has no account_id. An income row with BOTH
-      // account_id and transfer_account_id is already credited to account_id by
-      // the inDirect query above, so crediting transfer_account_id here too would
-      // double-credit. This mirrors the serverless computeBalanceDeltas
-      // (frontend/src/core/storage/idb.ts): income → account_id only;
-      // transfer_account_id is credited only for transfers, or income sans account_id.
-      db.all<{ transfer_account_id: number; total: number }>(
-        DB,
-        `SELECT transfer_account_id, COALESCE(SUM(COALESCE(amount_local, amount)),0) AS total FROM transactions WHERE transfer_account_id IN (${ph}) AND (type = 'transfer' OR (type = 'income' AND account_id IS NULL)) GROUP BY transfer_account_id`,
-        ...ids
-      ),
-    ]);
-    const startMap = new Map(starts.map((s) => [s.id, s.starting_balance || 0]));
-    const outMap = new Map(out.map((r) => [r.account_id, r.total]));
-    const inDirMap = new Map(inDirect.map((r) => [r.account_id, r.total]));
-    const inTransMap = new Map(inTransfer.map((r) => [r.transfer_account_id, r.total]));
-    const updates = ids.map((id) =>
-      DB.prepare('UPDATE accounts SET balance = ? WHERE id = ?').bind(
-        Math.round(
-          ((startMap.get(id) || 0) -
-            (outMap.get(id) || 0) +
-            (inDirMap.get(id) || 0) +
-            (inTransMap.get(id) || 0)) *
-            100
-        ) / 100,
-        id
-      )
-    );
-    if (updates.length) await DB.batch(updates);
-  }
+  // via the shared recompute routine (also used by POST /api/accounts/recompute-balances) so the
+  // two never diverge.
+  await recomputeBalancesForAccounts(DB, [...accountIdMap.values()]);
 
   return c.json({
     imported,

@@ -280,6 +280,13 @@ const routes: RouteDef[] = [
       POST: (ctx) => h.accountsCreate(ctx.body),
     }),
   },
+  // Literal path — registered before /accounts/(\d+) so it isn't shadowed (it wouldn't
+  // match the numeric pattern anyway, but keep the intent explicit).
+  {
+    pattern: /^\/accounts\/recompute-balances$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: () => h.accountsRecomputeBalances() }),
+  },
   {
     pattern: /^\/accounts\/(\d+)$/,
     methods: ['GET', 'PUT', 'DELETE'],

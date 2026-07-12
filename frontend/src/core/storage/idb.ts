@@ -20,9 +20,26 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 9
+const DB_VERSION = 10
 
-function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
+/** Thrown by deleteAccount when transactions still reference the account.
+ *  The accounts handler maps this to a 409 JSON response. */
+export class AccountInUseError extends Error {
+  constructor(message = 'Account has transactions — reassign or delete them first.') {
+    super(message)
+    this.name = 'AccountInUseError'
+  }
+}
+
+function upgradeSchema(
+  db: IDBPDatabase,
+  oldVersion: number,
+  _newVersion: number | null,
+  // The versionchange transaction from idb; typed loosely so the v10 data migration can
+  // walk the accounts store without importing idb's deep generic cursor types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx?: any
+): void | Promise<void> {
   // v1: base stores
   if (oldVersion < 1) {
     db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
@@ -106,6 +123,33 @@ function upgradeSchema(db: IDBPDatabase, oldVersion: number) {
   if (oldVersion < 9) {
     const il = db.createObjectStore('import_logs', { keyPath: 'id', autoIncrement: true })
     il.createIndex('by_profile', 'profile_id')
+  }
+
+  // v10: unify the account starting-date field name (audit D7). The same concept was
+  // written under three names — canonical `starting_date` (read by the UI + worker), plus
+  // legacy `starting_balance_date` (demo seed) and `balance_date` (CSV/bank import). Only
+  // `starting_date` is ever read, so backfill it from either legacy field for any account
+  // row that lacks it. Uses the upgrade transaction so the data migration commits with the
+  // version bump. Guarded on `tx` so a fresh DB (no legacy rows) is a no-op.
+  if (oldVersion < 10 && oldVersion >= 1 && tx) {
+    const store = tx.objectStore('accounts')
+    // Cursor walk is awaited request-by-request within the upgrade transaction (idb keeps
+    // it alive as long as each awaited op belongs to that transaction).
+    const migrate = async (): Promise<void> => {
+      let cursor = await store.openCursor()
+      while (cursor) {
+        const a = cursor.value as Record<string, unknown>
+        if (a && (a.starting_date === null || a.starting_date === undefined)) {
+          const legacy = a.starting_balance_date ?? a.balance_date
+          if (legacy !== null && legacy !== undefined) {
+            a.starting_date = legacy
+            await cursor.update(a)
+          }
+        }
+        cursor = await cursor.continue()
+      }
+    }
+    return migrate()
   }
 }
 
@@ -518,7 +562,47 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async deleteAccount(id: number): Promise<void> {
     const db = await getDB()
-    await db.delete('accounts', id)
+    // Block deletion while transactions still reference the account (audit A6) — removing it
+    // would leave those transactions pointing at a missing account. Callers must reassign or
+    // delete them first. The account's own balance-history snapshots are owned by it and are
+    // removed with it (cascade).
+    const txns = (await db.getAll('transactions')) as Transaction[]
+    if (txns.some((t) => t.account_id === id || t.transfer_account_id === id)) {
+      throw new AccountInUseError()
+    }
+    const history = await db.getAllFromIndex('balanceHistory', 'by_account', id)
+    const t = db.transaction(['accounts', 'balanceHistory'], 'readwrite')
+    for (const h of history) await t.objectStore('balanceHistory').delete(h.id as number)
+    await t.objectStore('accounts').delete(id)
+    await t.done
+  }
+
+  /**
+   * Repair/recompute stored account balances for a profile (audit A1/D3). For each account,
+   * balance := starting_balance + the sum of that account's balance deltas across the profile's
+   * transactions, using the SAME convention as the create/update paths (computeBalanceDeltas,
+   * base currency via amount_local). Fixes balances that drifted from a crash, an interrupted
+   * write, or a legacy bug.
+   */
+  async recomputeBalances(profileId: number): Promise<void> {
+    const db = await getDB()
+    const accounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
+    const txns = await db.getAllFromIndex('transactions', 'by_profile', profileId)
+    const balances = new Map<number, number>()
+    for (const a of accounts) balances.set(a.id, a.starting_balance ?? 0)
+    for (const tx of txns as Transaction[]) {
+      for (const { accountId, delta } of computeBalanceDeltas(tx)) {
+        // Only touch this profile's accounts (a transfer's legs are same-profile).
+        if (balances.has(accountId)) {
+          balances.set(accountId, (balances.get(accountId) ?? 0) + delta)
+        }
+      }
+    }
+    for (const a of accounts) {
+      // Round to cents to avoid float drift, matching the worker recompute.
+      a.balance = Math.round((balances.get(a.id) ?? a.starting_balance ?? 0) * 100) / 100
+      await db.put('accounts', a)
+    }
   }
 
   // ---- Budgets ----
@@ -1057,7 +1141,7 @@ export async function seedDemoProfiles(): Promise<void> {
         currency: acct.currency,
         balance,
         starting_balance: balance,
-        starting_balance_date: '2020-01-01',
+        starting_date: '2020-01-01',
         notes: '',
         profile_id: profileId,
       })) as number
@@ -1237,7 +1321,7 @@ export async function seedDemoProfiles(): Promise<void> {
         currency: 'EUR',
         balance: profile.name.includes('High') ? 150000 : 25000,
         starting_balance: profile.name.includes('High') ? 120000 : 20000,
-        starting_balance_date: '2020-01-01',
+        starting_date: '2020-01-01',
         notes: '',
         profile_id: profileId,
       })
@@ -1249,7 +1333,7 @@ export async function seedDemoProfiles(): Promise<void> {
         currency: 'EUR',
         balance: 180000,
         starting_balance: 100000,
-        starting_balance_date: '2015-01-01',
+        starting_date: '2015-01-01',
         notes: 'Tax-advantaged retirement account',
         profile_id: profileId,
       })

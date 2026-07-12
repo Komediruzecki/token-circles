@@ -598,7 +598,7 @@ export async function importExecute(body: unknown): Promise<Response> {
           type: accType,
           balance,
           starting_balance: balance,
-          balance_date: balanceDate,
+          starting_date: balanceDate,
           profile_id: profileId,
           created_at: new Date().toISOString(),
         }

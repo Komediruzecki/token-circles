@@ -58,6 +58,7 @@ export {
   accountsHistoryRecord,
   accountsList,
   accountsReconciliationSummary,
+  accountsRecomputeBalances,
   accountsTimeline,
   accountsUpdate,
 } from './handlers/accounts'
