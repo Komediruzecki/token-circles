@@ -533,7 +533,7 @@ export default function Budgets() {
   })
 
   return (
-    <div class={`page page-budgets page-enter ${styles.budgetsPage}`}>
+    <div data-test-id="budgets-page" class={`page page-budgets page-enter ${styles.budgetsPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="budgets-header" data-tour="budgets-header">
@@ -648,23 +648,26 @@ export default function Budgets() {
 
       {/* Budget Summary Cards */}
       <div data-test-id="budget-summary" class={styles.budgetSummary} data-tour="budgets-summary">
-        <div class={styles.summaryCard}>
+        <div data-test-id="budgets-summary-income" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Income</div>
           <div class={styles.summaryValue}>{formatCurrency(summary()?.income ?? 0)}</div>
         </div>
-        <div class={styles.summaryCard}>
+        <div data-test-id="budgets-summary-allocated" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Allocated</div>
           <div class={styles.summaryValue}>{formatCurrency(summary()?.total_budget || 0)}</div>
         </div>
-        <div class={styles.summaryCard}>
+        <div data-test-id="budgets-summary-spent" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Spent</div>
           <div class={styles.summaryValue}>{formatCurrency(summary()?.total_spent || 0)}</div>
         </div>
-        <div class={`${styles.summaryCard} ${styles.highlighted}`}>
+        <div
+          data-test-id="budgets-summary-remaining"
+          class={`${styles.summaryCard} ${styles.highlighted}`}
+        >
           <div class={styles.summaryLabel}>Remaining</div>
           <div class={styles.summaryValue}>{formatCurrency(summary()?.remaining || 0)}</div>
         </div>
-        <div class={styles.summaryCard}>
+        <div data-test-id="budgets-summary-unallocated" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Unallocated</div>
           <div class={styles.summaryValue}>
             {formatCurrency(summary()?.zero_based_remaining || 0)}
@@ -673,7 +676,7 @@ export default function Budgets() {
       </div>
 
       {/* Category Allocation Chart */}
-      <div class={styles.categoryChartSection}>
+      <div data-test-id="budgets-chart-allocation" class={styles.categoryChartSection}>
         <h3>Category Allocation</h3>
         <div class={styles.chartWrapper}>
           {allocations().length === 0 ? (
@@ -822,7 +825,7 @@ export default function Budgets() {
       )}
 
       {/* Forecast Section */}
-      <div class={styles.budgetForecast}>
+      <div data-test-id="budgets-forecast" class={styles.budgetForecast}>
         <div class={styles.forecastHeader}>
           <div class={styles.forecastTitle}>
             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -960,6 +963,7 @@ export default function Budgets() {
               Backfill from Spending
             </button>
             <button
+              data-test-id="budgets-add-allocation-btn"
               class={styles.btnPrimary}
               onClick={() => {
                 // Default to the first unbudgeted category; the modal has a picker so the
@@ -1024,7 +1028,10 @@ export default function Budgets() {
               <tbody>
                 <For each={allocations()}>
                   {(item) => (
-                    <tr class={styles[getStatusClass(item.status)]}>
+                    <tr
+                      data-test-id="budgets-allocation-row"
+                      class={styles[getStatusClass(item.status)]}
+                    >
                       <td>
                         <div class={styles.categoryCell}>
                           <div
@@ -1033,22 +1040,31 @@ export default function Budgets() {
                           >
                             {getCategorySvg(item.category_name)}
                           </div>
-                          <span class={styles.categoryName}>{item.category_name}</span>
+                          <span
+                            data-test-id="budgets-allocation-category"
+                            class={styles.categoryName}
+                          >
+                            {item.category_name}
+                          </span>
                         </div>
                       </td>
-                      <td class={styles.amountCol}>{formatCurrency(item.allocated)}</td>
+                      <td data-test-id="budgets-allocation-amount" class={styles.amountCol}>
+                        {formatCurrency(item.allocated)}
+                      </td>
                       <td class={styles.amountCol}>{formatCurrency(item.spent)}</td>
                       <td class={`${styles.amountCol} ${styles.statusOk}`}>
                         {formatCurrency(item.remaining_budget)}
                       </td>
                       <td class={styles.percentCol}>
-                        <div class={styles.progressBar}>
+                        <div data-test-id="budgets-allocation-progress" class={styles.progressBar}>
                           <div
                             class={styles.progressFill}
                             style={`width: ${item.percent_used}%; --color: ${item.category_color}`}
                           />
                         </div>
-                        <span class={styles.percentValue}>{Math.round(item.percent_used)}%</span>
+                        <span data-test-id="budgets-allocation-percent" class={styles.percentValue}>
+                          {Math.round(item.percent_used)}%
+                        </span>
                       </td>
                       <td class={styles.statusCol}>
                         <div style={{ display: 'flex', gap: '6px', 'flex-wrap': 'wrap' }}>
@@ -1171,7 +1187,7 @@ export default function Budgets() {
                           <h3 class={styles.catCardName}>{category.name}</h3>
                           <span class={styles.catCardType}>{category.type}</span>
                         </div>
-                        <div class={styles.catCardActions}>
+                        <div data-test-id="budgets-category-actions" class={styles.catCardActions}>
                           <button
                             class={styles.catActionBtn}
                             onClick={() => {
@@ -1299,6 +1315,7 @@ export default function Budgets() {
           }}
         >
           <div
+            data-test-id="budgets-allocate-modal"
             class={`${styles.modal} ${styles.modalSmall}`}
             onClick={(e) => {
               e.stopPropagation()
