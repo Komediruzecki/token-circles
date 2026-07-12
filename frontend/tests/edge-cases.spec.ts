@@ -1,310 +1,144 @@
 import { expect, test } from '@playwright/test'
 import { login, navigateToRoute } from './test-helpers'
 
+// Robustness checks across pages. Selectors use data-test-id (see tests/README.md); each test
+// ends on a real "the app is still usable" assertion (a known test-id is visible) rather than the
+// previous `expect(true).toBeTruthy()` / `>= 0` placeholders.
+
 test.describe('Edge Cases & Error Handling', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
   })
 
-  test('should handle empty states gracefully', async ({ page }) => {
-    // Test with no data scenario
-    const emptyStateSelectors = [
-      '.empty-state',
-      '[data-test-id="empty-state"]',
-      '[class*="empty"]',
-      '[class*="no-data"]',
-    ]
-
-    for (const selector of emptyStateSelectors) {
-      const element = page.locator(selector)
-      const count = await element.count()
-      if (count > 0) {
-        await expect(element).toBeVisible()
-      }
-    }
-  })
-
-  test('should handle loading states', async ({ page }) => {
-    await navigateToRoute(page, 'dashboard')
-
-    const loadingSelectors = ['.loading', '[data-test-id="loading"]', '[class*="loading"]']
-
-    for (const selector of loadingSelectors) {
-      const element = page.locator(selector)
-      const count = await element.count()
-      if (count > 0) {
-        await expect(element).toBeVisible()
-      }
-    }
-  })
-
-  test('should handle network errors gracefully', async ({ page }) => {
-    // Test with simulated network error
+  test('should survive navigating away and back', async ({ page }) => {
     await page.goto('about:blank')
     await page.goBack()
     await page.waitForLoadState('networkidle')
-
-    const pageContent = await page.content()
-    expect(pageContent).toBeTruthy()
+    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 15000 })
   })
 
-  test('should handle large datasets', async ({ page }) => {
+  test('should paginate a large transaction dataset', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
-
-    // Check if table has pagination
-    const pagination = page.getByRole('navigation', { name: /pagination/i })
-    const paginationCount = await pagination.count()
-    expect(paginationCount).toBeGreaterThanOrEqual(0)
-
-    // Check if there are multiple pages of data
-    const rows = page.locator('table tr, [data-test-id="tx-row"]')
-    const rowCount = await rows.count()
-    expect(rowCount).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('transactions-table')).toBeVisible({ timeout: 10000 })
+    // The demo seed spans many years — more than one 50-row page — so pagination renders.
+    await expect(page.getByTestId('transactions-pagination').first()).toBeVisible()
   })
 
-  test('should handle form validation', async ({ page }) => {
+  test('should reject an empty account form (modal stays open)', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
-
-    const addBtn = page.locator('[data-test-id="add-account-btn"]')
-    if (await addBtn.isVisible().catch(() => false)) {
-      await addBtn.click()
-      await page.waitForTimeout(300)
-
-      // Submit form without data
-      const submitBtn = page.locator('[data-test-id="add-account-modal"] button[type="submit"]')
-      await submitBtn.click().catch(() => {})
-      await page.waitForTimeout(300)
-
-      // Check if validation messages are shown
-      const errorMessages = page.getByText(/required|invalid|error/i)
-      const count = await errorMessages.count()
-      expect(count).toBeGreaterThanOrEqual(0)
-    }
+    await page.getByTestId('add-account-btn').click()
+    const modal = page.getByTestId('add-account-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    await modal
+      .locator('button[type="submit"]')
+      .click()
+      .catch(() => {})
+    // Required-field validation should keep the modal open rather than submit.
+    await expect(modal).toBeVisible()
   })
 
-  test('should handle duplicate submissions', async ({ page }) => {
+  test('should tolerate duplicate budget submissions', async ({ page }) => {
     await navigateToRoute(page, 'budgets')
-
-    const addBtn = page.getByRole('button', { name: /Add Budget/i })
-    if (await addBtn.isVisible()) {
-      await addBtn.click()
-      await page.waitForTimeout(300)
-
-      // Try to submit the same form multiple times
-      const submitBtn = page.getByRole('button', { name: /save budget/i })
-      for (let i = 0; i < 3; i++) {
-        await submitBtn.click()
-        await page.waitForTimeout(100)
-      }
-
-      // Should not crash or show errors
-      expect(true).toBeTruthy()
+    await page.getByTestId('budgets-add-allocation-btn').click()
+    const modal = page.getByTestId('budgets-allocate-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    const submit = modal.locator('button[type="submit"]')
+    for (let i = 0; i < 3; i++) {
+      // Short per-click timeout: the submit may be disabled (empty form), and a bare click()
+      // would otherwise block on actionability until the whole test times out.
+      await submit.click({ timeout: 2000 }).catch(() => {})
+      await page.waitForTimeout(100)
     }
+    // The app must not crash — the dashboard nav remains reachable.
+    await expect(page.getByTestId('nav-link-dashboard')).toBeAttached()
   })
 
-  test('should handle rapid navigation', async ({ page }) => {
-    const pages = ['dashboard', 'transactions', 'accounts', 'budgets', 'goals']
-
-    for (const pageName of pages) {
+  test('should handle rapid navigation across pages', async ({ page }) => {
+    for (const pageName of ['dashboard', 'transactions', 'accounts', 'budgets', 'goals']) {
       await navigateToRoute(page, pageName)
       await page.waitForTimeout(200)
     }
-
-    // Should complete without errors
-    expect(true).toBeTruthy()
+    await expect(page.getByTestId('goals-grid')).toBeVisible({ timeout: 10000 })
   })
 
-  test('should handle keyboard navigation', async ({ page }) => {
+  test('should handle keyboard navigation without crashing', async ({ page }) => {
     await navigateToRoute(page, 'dashboard')
-
-    // Tab through interactive elements
     await page.keyboard.press('Tab')
-    await page.waitForTimeout(100)
-
     await page.keyboard.press('Tab')
-    await page.waitForTimeout(100)
-
-    // Press Enter on first element
     await page.keyboard.press('Enter')
-    await page.waitForTimeout(100)
-
-    expect(true).toBeTruthy()
+    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 15000 })
   })
 
-  test('should handle long text content', async ({ page }) => {
-    await navigateToRoute(page, 'settings')
-
-    // Check if form fields handle long text
-    const textarea = page.locator('textarea')
-    const count = await textarea.count()
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should handle special characters in input', async ({ page }) => {
+  test('should accept special characters in an account name', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
+    await page.getByTestId('add-account-btn').click()
+    const modal = page.getByTestId('add-account-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    const nameInput = modal.locator('input[type="text"]').first()
+    await nameInput.fill('Account <test>&"\'')
+    await expect(nameInput).toHaveValue('Account <test>&"\'')
+  })
 
-    const addBtn = page.getByTestId('add-account-btn')
-    if (await addBtn.isVisible()) {
-      await addBtn.click()
-      await page.waitForTimeout(300)
-
-      // Test with special characters
-      const nameInput = page.getByRole('textbox', { name: /name/i })
-      if (await nameInput.isVisible()) {
-        await nameInput.fill('Account <test>&"\'')
-        await page.waitForTimeout(200)
-
-        expect(true).toBeTruthy()
-      }
+  test('should accept a negative balance value', async ({ page }) => {
+    await navigateToRoute(page, 'accounts')
+    await page.getByTestId('add-account-btn').click()
+    const modal = page.getByTestId('add-account-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    const numberInput = modal.locator('input[type="number"]').first()
+    if (await numberInput.isVisible().catch(() => false)) {
+      await numberInput.fill('-500.00')
+      await expect(numberInput).toHaveValue('-500.00')
     }
   })
 
-  test('should handle negative numbers', async ({ page }) => {
-    await navigateToRoute(page, 'accounts')
-
-    const addBtn = page.getByTestId('add-account-btn')
-    if (await addBtn.isVisible()) {
-      await addBtn.click()
-      await page.waitForTimeout(300)
-
-      // Test with negative number
-      const balanceInput = page.getByRole('spinbutton', { name: /balance/i })
-      if (await balanceInput.isVisible()) {
-        await balanceInput.fill('-500.00')
-        await page.waitForTimeout(200)
-
-        expect(true).toBeTruthy()
-      }
-    }
-  })
-
-  test('should handle very large numbers', async ({ page }) => {
-    await navigateToRoute(page, 'transactions')
-
-    const amountInput = page.getByRole('spinbutton')
-    const count = await amountInput.count()
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should handle responsive design', async ({ page }) => {
-    // Test desktop view
+  test('should adjust between desktop and mobile viewports', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 })
     await navigateToRoute(page, 'dashboard')
-    await page.waitForTimeout(500)
-
-    // Test mobile view
+    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 15000 })
     await page.setViewportSize({ width: 375, height: 667 })
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    expect(true).toBeTruthy()
+    await expect(page.getByTestId('dashboard-header')).toBeVisible()
   })
 
-  test('should handle modal overlay clicks', async ({ page }) => {
+  test('should close the account modal with Escape', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
-
-    const addBtn = page.getByTestId('add-account-btn')
-    if (await addBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await addBtn.click()
-      await page.waitForTimeout(500)
-
-      // Click on modal overlay to close it
-      const overlay = page.locator('[class*="overlay"], [class*="backdrop"]')
-      const overlayCount = await overlay.count()
-      if (overlayCount > 0) {
-        await overlay
-          .first()
-          .click({ timeout: 5000 })
-          .catch(() => {})
-        await page.waitForTimeout(500)
-      }
-
-      // Close modal via Escape as fallback
-      await page.keyboard.press('Escape')
-      await page.waitForTimeout(500)
-    }
-
-    expect(true).toBeTruthy()
-  })
-
-  test('should handle modal ESC key close', async ({ page }) => {
-    await navigateToRoute(page, 'accounts')
-
-    const addBtn = page.getByTestId('add-account-btn')
-    if (await addBtn.isVisible()) {
-      await addBtn.click()
-      await page.waitForTimeout(300)
-
-      // Press ESC to close modal
-      await page.keyboard.press('Escape')
-      await page.waitForTimeout(200)
-
-      expect(true).toBeTruthy()
-    }
+    await page.getByTestId('add-account-btn').click()
+    const modal = page.getByTestId('add-account-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    await page.keyboard.press('Escape')
+    // Escape-to-close is best-effort; either way the page stays usable.
+    await expect(page.getByTestId('nav-link-dashboard')).toBeAttached()
   })
 
   test('should handle browser back/forward buttons', async ({ page }) => {
     await navigateToRoute(page, 'dashboard')
-    await page.waitForTimeout(500)
-
     await navigateToRoute(page, 'transactions')
-    await page.waitForTimeout(500)
-
     await page.goBack()
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(500)
-
-    expect(true).toBeTruthy()
+    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 15000 })
   })
 
-  test('should handle form reset', async ({ page }) => {
+  test('should reset an account form via cancel', async ({ page }) => {
     await navigateToRoute(page, 'accounts')
-
-    const addBtn = page.getByTestId('add-account-btn')
-    if (await addBtn.isVisible()) {
-      await addBtn.click()
-      await page.waitForTimeout(300)
-
-      // Fill in form fields
-      const nameInput = page.getByRole('textbox', { name: /name/i })
-      if (await nameInput.isVisible()) {
-        await nameInput.fill('Test Account')
-        await page.waitForTimeout(200)
-
-        // Reset form
-        const cancelBtn = page.getByRole('button', { name: /cancel/i })
-        if (await cancelBtn.isVisible()) {
-          await cancelBtn.click()
-          await page.waitForTimeout(200)
-        }
-      }
+    await page.getByTestId('add-account-btn').click()
+    const modal = page.getByTestId('add-account-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    await modal.locator('input[type="text"]').first().fill('Test Account')
+    const cancel = modal.getByRole('button', { name: /cancel/i })
+    if (await cancel.isVisible().catch(() => false)) {
+      await cancel.click()
+      await expect(modal).toBeHidden({ timeout: 3000 })
     }
   })
 
-  test('should handle concurrent requests', async ({ page }) => {
+  test('should handle concurrent navigation requests', async ({ page }) => {
     await navigateToRoute(page, 'dashboard')
-
-    // Trigger multiple navigation actions concurrently
-    const promises = [
+    await Promise.all([
       navigateToRoute(page, 'transactions'),
       navigateToRoute(page, 'accounts'),
       navigateToRoute(page, 'budgets'),
-    ]
-
-    await Promise.all(promises)
+    ])
     await page.waitForLoadState('networkidle')
-
-    expect(true).toBeTruthy()
-  })
-
-  test('should handle timezone changes', async ({ page }) => {
-    await navigateToRoute(page, 'dashboard')
-    await page.waitForTimeout(500)
-
-    // Verify date displays
-    const dates = page.getByText(/\d{1,2}\/\d{1,2}\/\d{4}/)
-    const count = await dates.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('nav-link-dashboard')).toBeAttached()
   })
 })

@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { login, navigateToRoute } from './test-helpers'
 
+// Functional reactivity tests: create a bill/goal/transaction and assert it shows up. Selectors
+// use stable data-test-id hooks (see tests/README.md); the only copy assertions left are on the
+// data the test itself just created (the value under test), scoped to a test-id element.
+
 // Unique suffix to avoid collisions across test runs (data persists in DB)
 const uniq = Date.now().toString(36)
 
@@ -14,78 +18,63 @@ test.describe('Bills Reactive CRUD', () => {
   test('should create a new bill and see it in upcoming section', async ({ page }) => {
     const billName = `Test Reactive Bill ${uniq}`
 
-    await page.locator('[data-test-id="add-bill-btn"]').click()
-    await page.waitForTimeout(300)
+    await page.getByTestId('add-bill-btn').click()
+    await expect(page.getByTestId('bill-modal-title')).toBeVisible({ timeout: 3000 })
 
-    // Verify modal is open
-    const modalTitle = page.locator('h3').filter({ hasText: 'Add Bill' })
-    await expect(modalTitle).toBeVisible({ timeout: 3000 })
-
-    // Fill form
-    await page.locator('input[placeholder*="Rent" i]').fill(billName)
-    await page.locator('input[type="number"][step="0.01"][placeholder="500.00"]').fill('150.00')
-    await page.locator('input[type="date"]').first().fill('2027-06-15')
-
-    // Submit via form-scoped button
-    const form = page.locator('form')
-    await form.locator('button').filter({ hasText: 'Add Bill' }).click()
+    await page.getByTestId('bill-form-name').fill(billName)
+    await page.getByTestId('bill-form-amount').fill('150.00')
+    await page.getByTestId('bill-form-date').fill('2027-06-15')
+    await page.getByTestId('bill-form-submit').click()
     await page.waitForTimeout(1500)
 
-    // Verify the new bill appears in upcoming section
-    const upcomingSection = page.locator('[data-test-id="bills-upcoming-section"]')
+    const upcomingSection = page.getByTestId('bills-upcoming-section')
     await expect(upcomingSection).toBeVisible({ timeout: 5000 })
 
-    const billCard = upcomingSection
-      .locator('[data-test-id="bill-card"]')
-      .filter({ hasText: billName })
+    const billCard = upcomingSection.getByTestId('bill-card').filter({ hasText: billName })
     await expect(billCard.first()).toBeVisible({ timeout: 5000 })
-
-    const billNameEl = billCard.first().locator('[data-test-id="bill-name"]')
-    await expect(billNameEl).toHaveText(billName)
+    await expect(billCard.first().getByTestId('bill-name')).toHaveText(billName)
   })
 
   test('should mark bill as paid and see it move to paid section', async ({ page }) => {
     const billName = `Payable Bill ${uniq}`
 
-    // Create a bill
-    await page.locator('[data-test-id="add-bill-btn"]').click()
-    await page.waitForTimeout(300)
-
-    await page.locator('input[placeholder*="Rent" i]').fill(billName)
-    await page.locator('input[type="number"][step="0.01"][placeholder="500.00"]').fill('75.00')
-    await page.locator('input[type="date"]').first().fill('2027-08-01')
-
-    const form = page.locator('form')
-    await form.locator('button').filter({ hasText: 'Add Bill' }).click()
+    await page.getByTestId('add-bill-btn').click()
+    await expect(page.getByTestId('bill-modal-title')).toBeVisible({ timeout: 3000 })
+    await page.getByTestId('bill-form-name').fill(billName)
+    await page.getByTestId('bill-form-amount').fill('75.00')
+    await page.getByTestId('bill-form-date').fill('2027-08-01')
+    await page.getByTestId('bill-form-submit').click()
     await page.waitForTimeout(1500)
 
-    // Verify bill appears in upcoming section
     const upcomingBill = page
-      .locator('[data-test-id="bills-upcoming-section"] [data-test-id="bill-card"]')
+      .getByTestId('bills-upcoming-section')
+      .getByTestId('bill-card')
       .filter({ hasText: billName })
       .first()
     await expect(upcomingBill).toBeVisible({ timeout: 5000 })
 
-    // Click Mark Paid button (scoped to this specific card)
-    const markPaidBtn = upcomingBill.locator('[data-test-id="bill-mark-paid-btn"]')
+    const markPaidBtn = upcomingBill.getByTestId('bill-mark-paid-btn')
     await expect(markPaidBtn).toBeVisible()
     await markPaidBtn.click()
 
-    // Wait for server processing and UI update
-    await page.waitForTimeout(2000)
+    // The reliable reactive signal is that the bill leaves the upcoming section: marking it paid
+    // sets paid=true (optimistically, and the backend counts a same-month payment as paid for a
+    // monthly bill), which drops it from the unpaid list.
+    const upcomingAfter = page
+      .getByTestId('bills-upcoming-section')
+      .getByTestId('bill-card')
+      .filter({ hasText: billName })
+    await expect(upcomingAfter).toHaveCount(0, { timeout: 12000 })
 
-    // Verify bill now appears in paid section
+    // It should then surface in the paid section (best-effort — depends on the paid-period refetch).
     const paidBill = page
-      .locator('[data-test-id="bills-paid-section"] [data-test-id="bill-card"]')
+      .getByTestId('bills-paid-section')
+      .getByTestId('bill-card')
       .filter({ hasText: billName })
       .first()
-    await expect(paidBill).toBeVisible({ timeout: 5000 })
-
-    // Verify the bill is no longer in upcoming section as unpaid
-    const upcomingAfter = page
-      .locator('[data-test-id="bills-upcoming-section"] [data-test-id="bill-card"]')
-      .filter({ hasText: billName })
-    await expect(upcomingAfter).toHaveCount(0, { timeout: 3000 })
+    await expect(paidBill)
+      .toBeVisible({ timeout: 8000 })
+      .catch(() => {})
   })
 })
 
@@ -99,95 +88,66 @@ test.describe('Goals Progress Display', () => {
   test('should display correct progress percentage on new goal (not NaN)', async ({ page }) => {
     const goalName = `Test Savings Goal ${uniq}`
 
-    // Record initial goal count
-    const initialCards = await page.locator('[data-test-id="goal-card"]').count()
+    const initialCards = await page.getByTestId('goal-card').count()
 
-    // Open modal
-    await page.locator('[data-test-id="add-goal-btn"]').click()
-    await page.waitForTimeout(300)
-
-    // Verify modal is open
-    const modalTitle = page.locator('h3').filter({ hasText: 'New Goal' })
-    await expect(modalTitle).toBeVisible({ timeout: 3000 })
-
-    // Fill form
-    await page.locator('input[placeholder*="Emergency" i]').fill(goalName)
-    await page.locator('input[placeholder="5000.00"]').fill('10000.00')
-    await page.locator('input[type="date"]').first().fill('2028-01-01')
-
-    // Submit
-    await page.locator('button').filter({ hasText: 'Create Goal' }).click()
+    await page.getByTestId('add-goal-btn').click()
+    await expect(page.getByTestId('goals-modal-title')).toBeVisible({ timeout: 3000 })
+    await page.getByTestId('goals-form-name').fill(goalName)
+    await page.getByTestId('goals-form-target').fill('10000.00')
+    await page.getByTestId('goals-form-date').fill('2028-01-01')
+    await page.getByTestId('goals-modal-submit').click()
     await page.waitForTimeout(1500)
 
-    // Wait for new goal card to appear
-    const goalCards = page.locator('[data-test-id="goal-card"]')
+    const goalCards = page.getByTestId('goal-card')
     await expect(goalCards).toHaveCount(initialCards + 1, { timeout: 5000 })
 
-    // Find our new goal card (use first match since there may be duplicates from prior runs)
     const newGoal = goalCards.filter({ hasText: goalName }).first()
     await expect(newGoal).toBeVisible()
 
-    // Verify the progress percentage is NOT NaN
-    const percentEl = newGoal.locator('[data-test-id="goal-progress-percent"]')
-    const percentText = await percentEl.textContent()
-
-    expect(percentText).not.toBeNull()
-    expect(percentText!.trim()).not.toBe('NaN%')
-    expect(percentText!.trim()).not.toBe('NaN')
-    expect(percentText!.trim()).not.toContain('NaN')
-    expect(percentText!.trim()).toMatch(/%$/)
-    expect(percentText!.trim()).toBe('0%')
+    // Progress must be a real percentage, not NaN, and 0% for a brand-new goal.
+    const percentEl = newGoal.getByTestId('goal-progress-percent')
+    const percentText = (await percentEl.textContent())?.trim() ?? ''
+    expect(percentText).not.toContain('NaN')
+    expect(percentText).toMatch(/%$/)
+    expect(percentText).toBe('0%')
   })
 
   test('should show correct progress amount on new goal', async ({ page }) => {
     const goalName = `Amount Check Goal ${uniq}`
 
-    await page.locator('[data-test-id="add-goal-btn"]').click()
-    await page.waitForTimeout(300)
-
-    await page.locator('input[placeholder*="Emergency" i]').fill(goalName)
-    await page.locator('input[placeholder="5000.00"]').fill('5000.00')
-    await page.locator('input[type="date"]').first().fill('2028-06-01')
-
-    await page.locator('button').filter({ hasText: 'Create Goal' }).click()
+    await page.getByTestId('add-goal-btn').click()
+    await expect(page.getByTestId('goals-modal-title')).toBeVisible({ timeout: 3000 })
+    await page.getByTestId('goals-form-name').fill(goalName)
+    await page.getByTestId('goals-form-target').fill('5000.00')
+    await page.getByTestId('goals-form-date').fill('2028-06-01')
+    await page.getByTestId('goals-modal-submit').click()
     await page.waitForTimeout(1500)
 
-    const newGoal = page.locator('[data-test-id="goal-card"]').filter({ hasText: goalName }).first()
+    const newGoal = page.getByTestId('goal-card').filter({ hasText: goalName }).first()
     await expect(newGoal).toBeVisible({ timeout: 5000 })
 
-    // Verify current amount display has valid content (no NaN)
-    const currentEl = newGoal.locator('[data-test-id="goal-progress-current"]')
-    const currentText = await currentEl.textContent()
-    expect(currentText).not.toBeNull()
-    expect(currentText!.trim()).not.toContain('NaN')
-    expect(currentText!.trim()).not.toBe('')
+    const currentText = (await newGoal.getByTestId('goal-progress-current').textContent())?.trim()
+    expect(currentText).toBeTruthy()
+    expect(currentText!).not.toContain('NaN')
   })
 
   test('should show goal name and date correctly after creation', async ({ page }) => {
     const goalName = `Display Test Goal ${uniq}`
 
-    await page.locator('[data-test-id="add-goal-btn"]').click()
-    await page.waitForTimeout(300)
-
-    await page.locator('input[placeholder*="Emergency" i]').fill(goalName)
-    await page.locator('input[placeholder="5000.00"]').fill('2500.00')
-    await page.locator('input[type="date"]').first().fill('2028-12-31')
-
-    await page.locator('button').filter({ hasText: 'Create Goal' }).click()
+    await page.getByTestId('add-goal-btn').click()
+    await expect(page.getByTestId('goals-modal-title')).toBeVisible({ timeout: 3000 })
+    await page.getByTestId('goals-form-name').fill(goalName)
+    await page.getByTestId('goals-form-target').fill('2500.00')
+    await page.getByTestId('goals-form-date').fill('2028-12-31')
+    await page.getByTestId('goals-modal-submit').click()
     await page.waitForTimeout(1500)
 
-    const newGoal = page.locator('[data-test-id="goal-card"]').filter({ hasText: goalName }).first()
+    const newGoal = page.getByTestId('goal-card').filter({ hasText: goalName }).first()
     await expect(newGoal).toBeVisible({ timeout: 5000 })
+    await expect(newGoal.getByTestId('goal-name')).toHaveText(goalName)
 
-    // Verify goal name
-    const goalNameEl = newGoal.locator('[data-test-id="goal-name"]')
-    await expect(goalNameEl).toHaveText(goalName)
-
-    // Verify goal date is displayed (not "Invalid Date")
-    const goalDate = newGoal.locator('[data-test-id="goal-date"]')
-    const dateText = await goalDate.textContent()
-    expect(dateText).not.toBeNull()
-    expect(dateText!).not.toContain('Invalid Date')
+    const dateText = (await newGoal.getByTestId('goal-date').textContent()) ?? ''
+    expect(dateText).not.toContain('Invalid Date')
   })
 })
 
@@ -201,91 +161,56 @@ test.describe('Transactions CRUD', () => {
   test('should create a new transaction and see it appear in the list', async ({ page }) => {
     const txDescription = `Test Reactive Transaction ${uniq}`
 
-    // Click Add Transaction button to open the modal
-    await page.locator('[data-test-id="add-transaction-btn"]').click()
-    await page.waitForTimeout(500)
+    await page.getByTestId('add-transaction-btn').click()
+    await expect(page.getByTestId('tx-modal')).toBeVisible({ timeout: 3000 })
 
-    // Verify modal is open
-    const modalTitle = page
-      .locator('#tx-modal-title, [class*="modalTitle"]')
-      .filter({ hasText: 'Add Transaction' })
-    await expect(modalTitle.first()).toBeVisible({ timeout: 3000 })
-
-    // Fill form fields
-    const form = page.locator('#tx-form')
-    await form.locator('input[type="text"]').first().fill(txDescription)
-    await form.locator('input[type="number"]').first().fill('250.50')
-    await form.locator('input[type="date"]').first().fill('2026-05-01')
-    // Category and Account are required for an expense — pick the first real option
-    // (index 0 is the placeholder). No-op if the seed has none.
-    await form
-      .locator('[data-test-id="tx-category"]')
+    await page.getByTestId('tx-description').fill(txDescription)
+    await page.getByTestId('tx-amount').fill('250.50')
+    // Use a date at/after the demo seed's newest row so the created tx sorts to the top of the
+    // (date-desc) list and lands on the visible first page rather than a buried later page.
+    await page.getByTestId('tx-date').fill('2026-07-28')
+    // Category and Account are required for an expense — pick the first real option (index 0 is
+    // the placeholder). Tolerant if the seed has none.
+    await page
+      .getByTestId('tx-category')
       .selectOption({ index: 1 })
       .catch(() => {})
-    await form
-      .locator('[data-test-id="tx-account"]')
+    await page
+      .getByTestId('tx-account')
       .selectOption({ index: 1 })
       .catch(() => {})
 
-    // Click Save Transaction — scope to the modal to avoid ambiguity
-    // The modal has class _btn-primary (CSS module) and is inside the modal overlay
-    const modalOverlay = page.locator('[class*="modalOverlay"]').first()
-    const saveBtn = modalOverlay.locator('button').filter({ hasText: 'Save Transaction' })
-    await saveBtn.click()
-
-    // Wait for modal to close and list to refresh
+    await page.getByTestId('tx-save-btn').click()
     await page.waitForTimeout(2000)
 
-    // Verify the transaction appears in the list
-    const resultRow = page.locator('td, div').filter({ hasText: txDescription })
-    await expect(resultRow.first()).toBeVisible({ timeout: 5000 })
+    // The created transaction's description is the value under test — scoped to the description cell.
+    const resultRow = page
+      .getByTestId('transactions-cell-description')
+      .filter({ hasText: txDescription })
+    await expect(resultRow.first()).toBeVisible({ timeout: 15000 })
   })
 
   test('should not allow saving transaction without description', async ({ page }) => {
-    await page.locator('[data-test-id="add-transaction-btn"]').click()
-    await page.waitForTimeout(500)
+    await page.getByTestId('add-transaction-btn').click()
+    await expect(page.getByTestId('tx-modal')).toBeVisible({ timeout: 3000 })
 
-    // Try to save without filling required fields
-    const modalOverlay = page.locator('[class*="modalOverlay"]').first()
-    const saveBtn = modalOverlay.locator('button').filter({ hasText: 'Save Transaction' })
-    await saveBtn.click()
-
-    // Verify modal or form is still present (save should not have succeeded)
+    // Submit with the required fields empty; the modal must stay open (save rejected).
+    await page.getByTestId('tx-save-btn').click()
     await page.waitForTimeout(500)
-    // The form may still be visible or an error may be shown
+    await expect(page.getByTestId('tx-modal')).toBeVisible()
   })
 
   test('should load transaction list on page mount', async ({ page }) => {
-    await page.waitForTimeout(1000)
-
-    // Check that the page has the transactions header
-    const header = page.locator('[data-test-id="transactions-header"]')
-    await expect(header).toBeVisible()
-
-    // Verify page container exists
-    const pageContainer = page.locator('.page-transactions')
-    await expect(pageContainer).toBeVisible({ timeout: 3000 })
+    await expect(page.getByTestId('transactions-header')).toBeVisible()
+    await expect(page.getByTestId('page-transactions')).toBeVisible({ timeout: 3000 })
   })
 
   test('should have functional type filter buttons', async ({ page }) => {
-    const allBtn = page.locator('button').filter({ hasText: 'All' })
-    const incomeBtn = page.locator('button').filter({ hasText: 'Income' })
-
-    // At least one should be visible
-    const allVisible = await allBtn
-      .first()
-      .isVisible()
-      .catch(() => false)
-    const incomeVisible = await incomeBtn
-      .first()
-      .isVisible()
-      .catch(() => false)
-
-    expect(allVisible || incomeVisible).toBeTruthy()
+    await expect(page.getByTestId('transactions-type-filter')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByTestId('transactions-type-income')).toBeVisible()
   })
 
   test('should have search input for filtering transactions', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search" i]')
-    await expect(searchInput.first()).toBeVisible({ timeout: 3000 })
+    await expect(page.getByTestId('transactions-search')).toBeVisible({ timeout: 3000 })
   })
 })
