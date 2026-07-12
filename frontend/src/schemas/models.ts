@@ -76,6 +76,15 @@ export const BudgetSchema = z.object({
   end_date: z.string().nullable(),
   created_at: z.string(),
   profile_id: z.number(),
+  // Rollover fields must be listed here or Zod strips them from every fetched budget
+  // (ApiClient.request returns schema.parse(rawData)). The worker persists
+  // rollover_enabled as 0/1, so accept a coercible boolean.
+  rollover_enabled: z
+    .boolean()
+    .or(z.number().transform((n) => !!n))
+    .optional(),
+  rollover_amount: z.number().optional().default(0),
+  rollover_used: z.number().optional().default(0),
 })
 
 export const SavingsGoalSchema = z.object({
