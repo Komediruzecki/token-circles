@@ -27,13 +27,15 @@
   margin-bottom: 24px;
 }
 .housing-page .summary-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
 }
 .housing-page .summary-card.highlighted {
-  border-color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
 }
 .housing-page .summary-label {
   font-size: 12px;
@@ -493,14 +495,16 @@
 
 /* camel-case module classes */
 .summary-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
 }
 
 .summary-card.highlighted {
-  border-color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
 }
 
 .btn-sm {
@@ -582,11 +586,20 @@
 
 /* Subscription Tracker Card */
 .subscriptionSection {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 24px;
+}
+/* Orbit + list, side by side on wide screens */
+.subscriptionBody {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
 }
 .sectionHeader {
   display: flex;
@@ -616,6 +629,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 320px;
+  min-width: 0;
 }
 .subItem {
   display: flex;
