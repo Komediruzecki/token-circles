@@ -25,9 +25,9 @@ test.describe('Bills CRUD Operations @smoke', () => {
   test('should have bills sections', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const sections = page.locator('h2, [role="heading"], h1')
-    const count = await sections.count()
-    expect(count).toBeGreaterThanOrEqual(1)
+    // The bills grid renders both the upcoming and paid sections for the seeded profile.
+    await expect(getByTestId(page, 'bills-upcoming-section')).toBeVisible()
+    await expect(getByTestId(page, 'bills-paid-section')).toBeVisible()
   })
 
   test('should have upcoming bills section', async ({ page }) => {

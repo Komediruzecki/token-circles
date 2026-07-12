@@ -647,8 +647,11 @@ export default function Bills() {
                             {bill.name}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            {formatDate(bill.due_date)} • {daysUntil(bill.due_date)} •{' '}
-                            {frequencyLabel(bill.frequency)}
+                            <span data-test-id="bill-due-date">{formatDate(bill.due_date)}</span> •{' '}
+                            {daysUntil(bill.due_date)} •{' '}
+                            <span data-test-id="bill-frequency">
+                              {frequencyLabel(bill.frequency)}
+                            </span>
                           </p>
                         </div>
                       </div>
@@ -656,9 +659,12 @@ export default function Bills() {
                         data-test-id="bill-amount-container"
                         class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
                       >
-                        <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                        <div data-test-id="bill-amount" class={styles.amountValue}>
+                          {formatCurrency(bill.amount)}
+                        </div>
                         <div class={styles.billActions}>
                           <button
+                            data-test-id="bill-mark-paid-btn"
                             class={`${styles.btnPrimary} ${styles.btnSm}`}
                             onClick={() => markPaid(bill.id)}
                             disabled={markingPaid().has(bill.id)}
@@ -666,6 +672,7 @@ export default function Bills() {
                             {markingPaid().has(bill.id) ? 'Paying...' : 'Mark Paid'}
                           </button>
                           <button
+                            data-test-id="bill-edit-btn"
                             class={`${styles.btnGhost} ${styles.btnSm}`}
                             onClick={() => {
                               openEditModal(bill)
@@ -737,18 +744,28 @@ export default function Bills() {
                         <div class={styles.billInfo}>
                           <h3 data-test-id="bill-name" class={styles.billName}>
                             {bill.name}
-                            {bill.paid && <span class={styles.paidBadge}>Paid</span>}
+                            {bill.paid && (
+                              <span data-test-id="bill-status" class={styles.paidBadge}>
+                                Paid
+                              </span>
+                            )}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            {formatDate(bill.due_date)} • {frequencyLabel(bill.frequency)}
+                            <span data-test-id="bill-due-date">{formatDate(bill.due_date)}</span> •{' '}
+                            <span data-test-id="bill-frequency">
+                              {frequencyLabel(bill.frequency)}
+                            </span>
                             {bill.category && ` • ${bill.category}`}
                           </p>
                         </div>
                       </div>
                       <div class={styles.billAmount}>
-                        <div class={styles.amountValue}>{formatCurrency(bill.amount)}</div>
+                        <div data-test-id="bill-amount" class={styles.amountValue}>
+                          {formatCurrency(bill.amount)}
+                        </div>
                         <div class={styles.billActions}>
                           <button
+                            data-test-id="bill-edit-btn"
                             class={`${styles.btnGhost} ${styles.btnSm}`}
                             onClick={() => {
                               openEditModal(bill)
@@ -771,21 +788,23 @@ export default function Bills() {
                                   : 'Mark Paid'}
                             </button>
                           ) : (
-                            <ConfirmButton
-                              class={`${styles.btnSm} ${styles.btnGhost}`}
-                              onConfirm={() => deleteBill(bill.id)}
-                              label={
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              }
-                            />
+                            <span data-test-id="bill-delete-btn">
+                              <ConfirmButton
+                                class={`${styles.btnSm} ${styles.btnGhost}`}
+                                onConfirm={() => deleteBill(bill.id)}
+                                label={
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                }
+                              />
+                            </span>
                           )}
                         </div>
                       </div>

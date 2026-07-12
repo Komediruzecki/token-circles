@@ -8,7 +8,7 @@ test.describe('Bills', () => {
   })
 
   test('should display bills header', async ({ page }) => {
-    const header = page.getByRole('heading', { name: /bills/i, level: 1 })
+    const header = page.getByTestId('bills-header')
     await expect(header).toBeVisible()
   })
 
@@ -18,7 +18,7 @@ test.describe('Bills', () => {
   })
 
   test('should have add bill button', async ({ page }) => {
-    const addBtn = page.getByRole('button', { name: /Add Bill/i })
+    const addBtn = page.getByTestId('add-bill-btn')
     await expect(addBtn).toBeVisible()
   })
 
@@ -31,87 +31,68 @@ test.describe('Bills', () => {
   test('should display bill cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const billCards = page.getByTestId('bill-card')
-    const count = await billCards.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // The demo profile seeds unpaid regular bills, each rendered as a bill-card.
+    await expect(page.getByTestId('bill-card').first()).toBeVisible()
   })
 
   test('should display bill name', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const names = page.getByTestId('bill-name')
-    const count = await names.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('bill-name').first()).toBeVisible()
   })
 
   test('should display bill amount', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const amounts = page.getByTestId('bill-amount')
-    const count = await amounts.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('bill-amount').first()).toBeVisible()
   })
 
   test('should display bill due date', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const dueDates = page.getByTestId('bill-due-date')
-    const count = await dueDates.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('bill-due-date').first()).toBeVisible()
   })
 
   test('should display bill frequency', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const frequencies = page.getByTestId('bill-frequency')
-    const count = await frequencies.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('bill-frequency').first()).toBeVisible()
   })
 
   test('should display bill status badges', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const statusBadges = page.getByTestId('bill-status')
-    const count = await statusBadges.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // The demo profile seeds a paid bill (Rent), which renders a "Paid" status badge.
+    await expect(page.getByTestId('bill-status').first()).toBeVisible()
   })
 
   test('should display autopay indicator', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const autopayIndicators = page.getByTestId('bill-autopay')
-    const count = await autopayIndicators.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // Autopay status is surfaced through the bill icon (a distinct glyph when autopay is on).
+    await expect(page.getByTestId('bill-icon').first()).toBeVisible()
   })
 
   test('should have bill edit/delete buttons', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const editBtns = page.getByTestId('bill-edit-btn')
-    const deleteBtns = page.getByTestId('bill-delete-btn')
-
-    const editCount = await editBtns.count()
-    const deleteCount = await deleteBtns.count()
-
-    expect(editCount).toBeGreaterThanOrEqual(0)
-    expect(deleteCount).toBeGreaterThanOrEqual(0)
+    // Every bill card exposes an edit button; paid bills (seeded: Rent) expose a delete button.
+    await expect(page.getByTestId('bill-edit-btn').first()).toBeVisible()
+    await expect(page.getByTestId('bill-delete-btn').first()).toBeVisible()
   })
 
   test('should display next due date', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    // The "next due" info is shown in bill details - find any bill details text
-    const details = page.getByText(/2026|Monthly|Weekly|Biweekly/, { exact: false }).first()
-    await expect(details).toBeVisible()
+    // The due date / next-due info is shown in the bill details line.
+    await expect(page.getByTestId('bill-details').first()).toBeVisible()
   })
 
   test('should display bill category', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    // Category might not always be shown
-    const category = page.getByText(/Rent|Electricity|Insurance|Utilities/i)
-    const count = await category.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // Category, when set on a bill, is appended to the bill details line.
+    await expect(page.getByTestId('bill-details').first()).toBeVisible()
   })
 
   test('should display bill notes', async ({ page }) => {
@@ -124,9 +105,8 @@ test.describe('Bills', () => {
   test('should have pay bill button', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const payBtns = page.getByTestId('bill-mark-paid-btn')
-    const count = await payBtns.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // Unpaid bills (seeded) each render a "Mark Paid" button.
+    await expect(page.getByTestId('bill-mark-paid-btn').first()).toBeVisible()
   })
 
   test('should display total monthly spending', async ({ page }) => {
@@ -155,10 +135,8 @@ test.describe('Bills', () => {
   test('should display recurring bill indicator', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    // Autopay is indicated by 🤖 icon
-    const autopayIcons = page.getByTestId('bill-icon')
-    const count = await autopayIcons.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // Each bill card renders an icon glyph indicating its type/autopay state.
+    await expect(page.getByTestId('bill-icon').first()).toBeVisible()
   })
 
   test('should have bill checklist', async ({ page }) => {
