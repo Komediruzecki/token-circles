@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
 import { authRoutes } from './routes/auth';
 import { profilesRoutes } from './routes/profiles';
 import { accountRoutes } from './routes/account';
@@ -69,6 +70,26 @@ const app = new Hono<AppEnv>();
 // session cookie cross-origin; with credentials, `*` is invalid anyway, so fail CLOSED (allow
 // nothing cross-origin) rather than reflect `*` when CORS_ORIGIN is unset/misconfigured.
 app.use('*', (c, next) => cors({ origin: c.env.CORS_ORIGIN ?? '', credentials: true })(c, next));
+
+// Security headers on every response (audit S2). The API returns JSON plus a few inline-styled
+// transactional HTML pages (password-reset landing, unsubscribe), so the CSP allows inline styles
+// but no scripts, and forbids framing. HSTS pins HTTPS; nosniff blocks MIME sniffing on any
+// file/receipt bytes proxied through the API.
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'none'"],
+      styleSrc: ["'unsafe-inline'"],
+      imgSrc: ['data:', 'https:'],
+      baseUri: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+    strictTransportSecurity: 'max-age=31536000; includeSubDomains',
+    xFrameOptions: 'DENY',
+    referrerPolicy: 'no-referrer',
+  })
+);
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 app.get('/api/health', (c) => c.json({ ok: true, env: c.env.APP_ENV ?? 'unknown' }));

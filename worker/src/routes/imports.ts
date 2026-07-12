@@ -4,6 +4,7 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
+import { enforce } from '../ratelimit';
 import * as db from '../db';
 
 // Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
@@ -170,6 +171,8 @@ const INCOME_KEYWORDS = [
 // replaces the old stateful upload->fileId->file-sheet flow). The parsed rows then
 // go to POST /api/import/execute.
 importRoutes.post('/api/import/upload', requireAuth, async (c) => {
+  const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
+  if (rl) return rl;
   const body = await c.req.parseBody();
   const file = body['file'] ?? body['import'];
   if (!(file instanceof File)) throw new HttpError(400, 'No file uploaded');
@@ -214,6 +217,8 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
 // the sheet can't be exported as CSV, or to enumerate multiple tab names) needs the
 // spreadsheet parser and is reported as a 501-style error.
 importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
+  const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
+  if (rl) return rl;
   const b = (await c.req.json()) as Record<string, any>;
   const { url, sheetName } = b;
   if (!url) throw new HttpError(400, 'URL is required');
@@ -297,6 +302,8 @@ importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
 // as 'account', creates missing categories, inserts each transaction scoped to the
 // active profile, then recomputes affected account balances. All pure DB work.
 importRoutes.post('/api/import/execute', requireAuth, async (c) => {
+  const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
+  if (rl) return rl;
   const pid = await getProfileId(c);
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
