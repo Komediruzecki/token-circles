@@ -1,0 +1,59 @@
+/**
+ * CounterpartyMeridian — balance-beam ledger diagram.
+ */
+
+.wrap {
+  width: 100%;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.axisLabel {
+  font-family: var(--font-inter, inherit);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  fill: var(--text-secondary);
+}
+
+.name {
+  font-family: var(--font-inter, inherit);
+  font-size: 12px;
+  fill: var(--text);
+}
+
+.amount {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.row {
+  transition: opacity 0.15s ease;
+  cursor: default;
+}
+
+.dim {
+  opacity: 0.32;
+}
+
+.more {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.empty {
+  margin: 0;
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

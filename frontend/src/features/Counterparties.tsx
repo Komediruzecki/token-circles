@@ -3,6 +3,7 @@
  * Aggregates beneficiary/payor data to show "who owes who"
  */
 import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import CounterpartyMeridian from '../components/CounterpartyMeridian'
 import { formatCurrency } from '../core/api'
 import { apiGet } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -136,6 +137,21 @@ export default function Counterparties() {
                   {formatCurrency(netPosition())}
                 </div>
               </div>
+            </div>
+
+            <div class={styles.meridianCard}>
+              <h3 class={styles.meridianTitle}>Balance Meridian</h3>
+              <p class={styles.meridianSub}>
+                Who owes who, ranked by net — nodes sized by transaction count
+              </p>
+              <CounterpartyMeridian
+                rows={counterparties().map((c) => ({
+                  name: c.name,
+                  net: c.net,
+                  transaction_count: c.transaction_count,
+                }))}
+                maxRows={8}
+              />
             </div>
 
             <div class={styles.tableWrap}>
