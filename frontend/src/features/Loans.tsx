@@ -362,28 +362,32 @@ export default function Loans() {
       </div>
 
       {/* Summary Cards */}
-      <div class={styles.loansSummary}>
-        <div class={styles.summaryCard} style={{ 'border-color': 'var(--primary)' }}>
+      <div data-test-id="loans-summary" class={styles.loansSummary}>
+        <div
+          data-test-id="loans-summary-card"
+          class={styles.summaryCard}
+          style={{ 'border-color': 'var(--primary)' }}
+        >
           <div class={styles.summaryLabel}>Total Borrowed</div>
           <div class={styles.summaryValue}>{formatAmount(totalPrincipal())}</div>
         </div>
-        <div class={styles.summaryCard}>
+        <div data-test-id="loans-summary-card" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Remaining Balance</div>
           <div class={styles.summaryValue}>{formatAmount(totalRemaining())}</div>
         </div>
-        <div class={styles.summaryCard}>
+        <div data-test-id="loans-summary-card" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Active Loans</div>
           <div class={styles.summaryValue}>
             {loans().filter((l) => l.status === 'active').length}
           </div>
         </div>
-        <div class={styles.summaryCard}>
+        <div data-test-id="loans-summary-card" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Paid Off</div>
           <div class={styles.summaryValue}>{loans().filter((l) => l.status === 'paid').length}</div>
         </div>
       </div>
 
-      <div data-tour="loans-list">
+      <div data-test-id="loans-list" data-tour="loans-list">
         {loading() ? (
           <div data-test-id="loading-state" class={styles.emptyState}>
             Loading loans...
@@ -407,7 +411,7 @@ export default function Loans() {
                 const progress = getProgress(loan)
 
                 return (
-                  <div class={styles.loanCard}>
+                  <div class={styles.loanCard} data-test-id="loans-item">
                     <div class={styles.loanHeader}>
                       <div class={styles.loanIcon}>
                         <svg
@@ -422,13 +426,18 @@ export default function Loans() {
                         </svg>
                       </div>
                       <div class={styles.loanInfo}>
-                        <h3 class={styles.loanName}>{loan.name}</h3>
-                        <Badge status={getLoanBadgeStatus(loan.status)}>
-                          {getStatusLabel(loan.status)}
-                        </Badge>
+                        <h3 class={styles.loanName} data-test-id="loans-item-name">
+                          {loan.name}
+                        </h3>
+                        <span data-test-id="loans-item-status">
+                          <Badge status={getLoanBadgeStatus(loan.status)}>
+                            {getStatusLabel(loan.status)}
+                          </Badge>
+                        </span>
                       </div>
                       <div class={styles.loanActions}>
                         <button
+                          data-test-id="loans-prepay-btn"
                           class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                           title="Prepayments"
                           onclick={() => {
@@ -448,6 +457,7 @@ export default function Loans() {
                           </svg>
                         </button>
                         <button
+                          data-test-id="loans-amortization-btn"
                           class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                           title="View Amortization"
                           onclick={() => {
@@ -467,6 +477,7 @@ export default function Loans() {
                           </svg>
                         </button>
                         <button
+                          data-test-id="loans-item-edit"
                           class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                           onclick={() => {
                             editLoan(loan)
@@ -482,39 +493,49 @@ export default function Loans() {
                             <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <ConfirmButton
-                          class={`${styles.btnSm} ${styles.btnGhost}`}
-                          onConfirm={() => deleteLoan(loan.id)}
-                          label={
-                            <svg
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          }
-                        />
+                        <span data-test-id="loans-item-delete">
+                          <ConfirmButton
+                            class={`${styles.btnSm} ${styles.btnGhost}`}
+                            onConfirm={() => deleteLoan(loan.id)}
+                            label={
+                              <svg
+                                width="16"
+                                height="16"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            }
+                          />
+                        </span>
                       </div>
                     </div>
                     <div class={styles.loanBalance}>
                       <div class={styles.balanceLabel}>Remaining Balance</div>
-                      <div class={styles.balanceAmount}>{formatAmount(remaining)}</div>
+                      <div class={styles.balanceAmount} data-test-id="loans-item-remaining">
+                        {formatAmount(remaining)}
+                      </div>
                     </div>
-                    <div class={styles.loanDetails}>
+                    <div class={styles.loanDetails} data-test-id="loans-item-details">
                       <div class={styles.detailRow}>
                         <span class={styles.detailLabel}>Principal</span>
-                        <span class={styles.detailValue}>{formatAmount(loan.principal)}</span>
+                        <span class={styles.detailValue} data-test-id="loans-item-principal">
+                          {formatAmount(loan.principal)}
+                        </span>
                       </div>
                       <div class={styles.detailRow}>
                         <span class={styles.detailLabel}>Interest Rate</span>
-                        <span class={styles.detailValue}>{loan.interest_rate}%</span>
+                        <span class={styles.detailValue} data-test-id="loans-item-rate">
+                          {loan.interest_rate}%
+                        </span>
                       </div>
                       <div class={styles.detailRow}>
                         <span class={styles.detailLabel}>Monthly Payment</span>
-                        <span class={styles.detailValue}>{formatAmount(monthly)}</span>
+                        <span class={styles.detailValue} data-test-id="loans-item-monthly">
+                          {formatAmount(monthly)}
+                        </span>
                       </div>
                       <div class={styles.detailRow}>
                         <span class={styles.detailLabel}>Next Payment</span>
@@ -524,12 +545,17 @@ export default function Loans() {
                       </div>
                     </div>
                     <div class={styles.loanProgress}>
-                      <div class={styles.progressBar}>
+                      <div class={styles.progressBar} data-test-id="loans-item-progress">
                         <div class={styles.progressFill} style={{ width: `${progress}%` }} />
                       </div>
                       <div class={styles.progressStats}>
-                        <span class={styles.progressPercent}>{progress}% paid</span>
-                        <span class={styles.progressCurrent}>
+                        <span
+                          class={styles.progressPercent}
+                          data-test-id="loans-item-progress-percent"
+                        >
+                          {progress}% paid
+                        </span>
+                        <span class={styles.progressCurrent} data-test-id="loans-item-total-paid">
                           {formatAmount(loan.total_paid)} paid
                         </span>
                       </div>
@@ -544,7 +570,7 @@ export default function Loans() {
 
       {/* Loan Charts */}
       {loans().length > 0 && (
-        <div class={styles.loanAmortizationSection}>
+        <div class={styles.loanAmortizationSection} data-test-id="loans-charts">
           <h3>Loan Overview</h3>
           <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '16px' }}>
             <div class={styles.amortizationChartWrapper}>
@@ -674,6 +700,7 @@ export default function Loans() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
+          data-test-id="loans-modal"
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"
@@ -755,6 +782,7 @@ export default function Loans() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Term (months)</label>
                 <input
+                  data-test-id="loans-form-term"
                   type="number"
                   class={styles.formControl}
                   placeholder="60"
@@ -766,6 +794,7 @@ export default function Loans() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Start Date</label>
                 <input
+                  data-test-id="loans-form-start-date"
                   type="date"
                   class={styles.formControl}
                   value={formData().start_date}
@@ -958,12 +987,14 @@ export default function Loans() {
 
       {/* Amortization Table */}
       {showAmortization() && amortizationLoan() && (
-        <LoanAmortizationTable
-          loanId={amortizationLoan()!.id}
-          loan={amortizationLoan()!}
-          showDetailed={false}
-          recalculateKey={amortizationRecalculateKey()}
-        />
+        <div data-test-id="loans-amortization">
+          <LoanAmortizationTable
+            loanId={amortizationLoan()!.id}
+            loan={amortizationLoan()!}
+            showDetailed={false}
+            recalculateKey={amortizationRecalculateKey()}
+          />
+        </div>
       )}
 
       {/* Prepayments Modal */}
