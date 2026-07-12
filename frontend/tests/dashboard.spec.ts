@@ -1,79 +1,57 @@
 import { expect, test } from '@playwright/test'
 import { login, navigateToRoute } from './test-helpers'
 
+// Structural assertions target stable `data-test-id` hooks, never user-visible copy: a card
+// renamed from "Recent Transactions" to "Transactions" must not break a smoke test. See
+// tests/README.md for the test-id convention.
 test.describe('Dashboard @smoke', () => {
   test.beforeEach(async ({ page }) => {
-    // Login first
     await login(page)
-
-    // Navigate to dashboard page
     await navigateToRoute(page, 'dashboard')
+    // The metrics grid renders once the dashboard data resolves; use it as the ready signal so
+    // the per-test assertions below don't race the initial fetch (slow under parallel CI load).
+    await expect(page.getByTestId('dashboard-metrics')).toBeVisible({ timeout: 15000 })
   })
 
-  test('should display dashboard header', async ({ page }) => {
-    const header = page.getByTestId('dashboard-header')
-    await expect(header).toBeVisible()
+  test('renders the page header and subtitle', async ({ page }) => {
+    await expect(page.getByTestId('dashboard-header')).toBeVisible()
+    await expect(page.getByTestId('dashboard-subtitle')).toBeVisible()
   })
 
-  test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.getByText(/Overview|financial|summary/i, { exact: false })
-    await expect(subtitle).toBeVisible()
+  test('shows the net worth, income and expense metric cards', async ({ page }) => {
+    await expect(page.getByTestId('dashboard-metric-networth')).toBeVisible()
+    await expect(page.getByTestId('dashboard-metric-income')).toBeVisible()
+    await expect(page.getByTestId('dashboard-metric-expenses')).toBeVisible()
   })
 
-  test('should display balance summary cards', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const balanceLabel = page.getByText('Net Worth', { exact: true }).first()
-    const incomeLabel = page.getByText('Income', { exact: true }).first()
-    const expenseLabel = page.getByText('Expenses', { exact: true }).first()
-
-    await expect(balanceLabel).toBeVisible()
-    await expect(incomeLabel).toBeVisible()
-    await expect(expenseLabel).toBeVisible()
+  test('shows a rendered net worth value', async ({ page }) => {
+    const value = page.getByTestId('dashboard-metric-networth-value')
+    await expect(value).toBeVisible()
+    await expect(value).toHaveText(/\d/) // a formatted money amount, currency-agnostic
   })
 
-  test('should display balance values', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const balanceValue = page.getByText(/[€$][\d,]+\.\d{2}/).first()
-    await expect(balanceValue).toBeVisible({ timeout: 10000 })
+  test('shows the charts region', async ({ page }) => {
+    await expect(page.getByTestId('dashboard-charts')).toBeVisible()
   })
 
-  test('should have chart section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const chartSection = page.getByRole('region', { name: /chart|overview|analytics/i })
-    await expect(chartSection).toBeVisible()
+  test('shows the transactions strip with recent activity', async ({ page }) => {
+    // The overview deck's Transactions panel (renamed from "Recent Transactions"). It renders when
+    // the profile has recent activity, which the demo data provides — this is the assertion whose
+    // raw-string predecessor silently broke when the card title changed.
+    await expect(page.getByTestId('dashboard-transactions')).toBeVisible()
+    await expect(page.getByTestId('dashboard-transaction-item').first()).toBeVisible()
   })
 
-  test('should have transactions summary', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const recentTransactions = page.getByText(/Recent Transactions/i)
-    await expect(recentTransactions).toBeVisible()
+  test('exposes the header actions', async ({ page }) => {
+    await expect(page.getByTestId('dashboard-refresh')).toBeVisible()
+    await expect(page.getByTestId('dashboard-views')).toBeVisible()
   })
 
-  test('should display quick action buttons', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const addBtn = page.getByRole('button', { name: /add transaction|add account/i })
-    const addBtnCount = await addBtn.count()
-    expect(addBtnCount).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should have quick links to other pages', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const sidebarLinks = page.getByRole('link', { name: /accounts|transactions|budgets/i })
-    const count = await sidebarLinks.count()
-    expect(count).toBeGreaterThanOrEqual(3)
-  })
-
-  test('should display spending trend chart', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const chart = page.getByRole('img', { name: /chart|graph|trend/i })
-    const count = await chart.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+  test('has navigation links to the key pages', async ({ page }) => {
+    // Attached rather than visible: the links always exist in the nav, but the sidebar may be
+    // collapsed depending on viewport/state, which is orthogonal to "the routes are wired up".
+    await expect(page.getByTestId('nav-link-accounts')).toBeAttached()
+    await expect(page.getByTestId('nav-link-transactions')).toBeAttached()
+    await expect(page.getByTestId('nav-link-budgets')).toBeAttached()
   })
 })
