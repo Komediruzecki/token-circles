@@ -615,6 +615,7 @@ export function App() {
                 <div class={profileStyles.profileDropdown}>
                   <button
                     class={profileStyles.profileDropdownBtn}
+                    data-test-id="profile-dropdown-btn"
                     onClick={toggleDropdown}
                     style={{
                       display: 'flex',
@@ -744,6 +745,7 @@ export function App() {
 
                     <div
                       class={profileStyles.profileDropdownItem}
+                      data-test-id="profile-create-item"
                       onClick={() => {
                         setIsProfileModalOpen(true)
                       }}
