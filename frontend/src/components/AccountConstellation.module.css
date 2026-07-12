@@ -1,0 +1,113 @@
+/**
+ * AccountConstellation — orbital net-worth map.
+ */
+
+.wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: center;
+  justify-items: center;
+  gap: 20px 28px;
+}
+
+.svg {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+}
+
+.empty {
+  margin: 18px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.node {
+  transition: opacity 0.25s ease;
+  cursor: pointer;
+}
+
+.nodeDim {
+  opacity: 0.22;
+}
+
+.coreValue {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.coreLabel {
+  font-family: var(--font-inter);
+  font-size: 7px;
+  letter-spacing: 0.2em;
+  fill: var(--text-secondary);
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition:
+    opacity 0.25s ease,
+    background 0.2s ease;
+  cursor: pointer;
+}
+
+.legendRow:hover {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+
+.legendDim {
+  opacity: 0.35;
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in oklab, currentcolor 45%, transparent);
+}
+
+.legendName {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legendType {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.legendAmount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text);
+  text-align: right;
+}
