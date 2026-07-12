@@ -830,12 +830,13 @@ export default function Bills() {
         >
           <div
             class={styles.modal}
+            data-test-id="bill-modal"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>
+              <h3 class={styles.modalTitle} data-test-id="bill-modal-title">
                 {editingId() ? 'Edit' : 'Add'}{' '}
                 {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
               </h3>
@@ -857,6 +858,7 @@ export default function Bills() {
                 <input
                   type="text"
                   class={styles.formControl}
+                  data-test-id="bill-form-name"
                   placeholder="e.g., Rent, Electricity, Internet"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
@@ -870,6 +872,7 @@ export default function Bills() {
                   type="number"
                   step="0.01"
                   class={styles.formControl}
+                  data-test-id="bill-form-amount"
                   placeholder="500.00"
                   value={formData().amount}
                   oninput={(e) => setFormData({ ...formData(), amount: e.target.value })}
@@ -881,6 +884,7 @@ export default function Bills() {
                 <input
                   type="date"
                   class={styles.formControl}
+                  data-test-id="bill-form-date"
                   value={formData().due_date}
                   oninput={(e) => setFormData({ ...formData(), due_date: e.target.value })}
                   required
@@ -971,7 +975,7 @@ export default function Bills() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <button type="submit" class={styles.btnPrimary} data-test-id="bill-form-submit">
                   {editingId() ? 'Update' : 'Add'}{' '}
                   {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
                 </button>
