@@ -269,6 +269,10 @@ export default function Import() {
   const [currentPage, setCurrentPage] = createSignal(1)
   const [rowsPerPage, setRowsPerPage] = createSignal(50)
   const [duplicateIndices, setDuplicateIndices] = createSignal<number[]>([])
+  // Category-column values with no matching existing category (from the preview's
+  // dry-run). The user confirms which to create; unchecked names import uncategorized (B5).
+  const [newCategories, setNewCategories] = createSignal<string[]>([])
+  const [approvedCategories, setApprovedCategories] = createSignal<Set<string>>(new Set())
 
   // Loading/error
   const [loading, setLoading] = createSignal(false)
@@ -329,7 +333,7 @@ export default function Import() {
     }
   }
 
-  const goToPreview = () => {
+  const goToPreview = async () => {
     const rows = currentRows()
     if (rows.length === 0) return
     setActiveStep('preview')
@@ -344,6 +348,44 @@ export default function Import() {
     // user can re-check a duplicate row (or use "Import All") to include it anyway.
     setSelectedRows(new Set<number>(rows.map((_, i) => i).filter((i) => !dupSet.has(i))))
     setCurrentPage(1)
+    await fetchNewCategories()
+  }
+
+  // Dry-run the import to learn which category-column values would be newly created,
+  // so the user can confirm before creation (B5). Default: all selected.
+  const fetchNewCategories = async () => {
+    if (columnMapping()['category'] === undefined) {
+      setNewCategories([])
+      setApprovedCategories(new Set<string>())
+      return
+    }
+    try {
+      const res = await apiFetch('/api/import/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...profileHeaders() },
+        body: JSON.stringify({
+          rows: currentRows(),
+          mapping: columnMapping(),
+          categoryTypes: categoryTypes(),
+          dry_run: true,
+        }),
+      })
+      const data = await res.json()
+      const list: string[] = Array.isArray(data?.new_categories) ? data.new_categories : []
+      setNewCategories(list)
+      setApprovedCategories(new Set(list))
+    } catch {
+      // Non-fatal: fall back to auto-create-all (no approvedCategories sent on import).
+      setNewCategories([])
+      setApprovedCategories(new Set<string>())
+    }
+  }
+
+  const toggleApprovedCategory = (name: string, checked: boolean) => {
+    const next = new Set(approvedCategories())
+    if (checked) next.add(name)
+    else next.delete(name)
+    setApprovedCategories(next)
   }
 
   const resetForm = () => {
@@ -355,6 +397,8 @@ export default function Import() {
     setSheetUrl('')
     setColumnMapping({})
     setCategoryTypes({})
+    setNewCategories([])
+    setApprovedCategories(new Set<string>())
     setRows([])
     setHeaders([])
     setSelectedRows(new Set<number>())
@@ -700,7 +744,7 @@ export default function Import() {
         }
         setCategoryTypes(merged)
       }
-      goToPreview()
+      await goToPreview()
       setResultMessage({ type: 'success', text: 'Preview recalculated from your rules.' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to recalculate the preview')
@@ -859,6 +903,9 @@ export default function Import() {
           accountBalances: accountBalances(),
           accountBalanceDates: accountBalanceDates(),
           importId: iid,
+          // Only gate category creation when the preview surfaced new categories to
+          // confirm; otherwise omit the field to keep auto-create-all (B5 backward-compat).
+          ...(newCategories().length > 0 ? { approvedCategories: [...approvedCategories()] } : {}),
         }),
       })
 
@@ -2111,7 +2158,9 @@ export default function Import() {
             </button>
             <button
               class={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={goToPreview}
+              onClick={() => {
+                void goToPreview()
+              }}
               disabled={loading()}
             >
               Continue to Preview
@@ -2161,6 +2210,49 @@ export default function Import() {
               include it.
             </p>
           )}
+          <Show when={newCategories().length > 0}>
+            <div
+              style={{
+                margin: '4px 0 14px',
+                padding: '10px 12px',
+                border: '1px solid var(--border)',
+                'border-radius': '8px',
+              }}
+            >
+              <p class={styles.mappingLabel} style={{ 'margin-bottom': '4px' }}>
+                New categories to create
+              </p>
+              <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+                These category values don't match an existing category. Uncheck any you don't want
+                created — rows with an unchecked category import without a category.
+              </p>
+              <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '8px 16px' }}>
+                <For each={newCategories()}>
+                  {(name) => (
+                    <label
+                      style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '6px',
+                        'font-size': '13px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={approvedCategories().has(name)}
+                        onChange={(e) => {
+                          toggleApprovedCategory(name, e.currentTarget.checked)
+                        }}
+                      />
+                      <span>{name}</span>
+                    </label>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+
           <label
             style={{
               display: 'flex',

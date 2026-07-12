@@ -49,27 +49,28 @@ describe('perf: import duplicate detection (O(N+M) rewrite)', () => {
       amount: 900,
     })
 
-    // Build an import session via importFileSheet using a tiny in-memory workbook.
-    // importFileSheet reads from a stored session, so drive detection through
-    // importExecute(dry_run) which calls the same detectDuplicates internally and
-    // returns imported/skipped counts. We assert dup handling via the "clean"
-    // path: only non-duplicate rows are imported.
+    // Drive resolution-aware detection through importExecute(dry_run), which returns
+    // imported/duplicates counts. Amounts are NEGATIVE so each row resolves to type
+    // 'expense', matching the seeded expense transactions (the resolved key includes
+    // type, so a positive/income row would NOT be a duplicate of these — see the A2
+    // tests below).
     const rows = [
-      ['2026-05-01', 'Coffee', '3.5'], // dup of existing (exact)
-      ['2026-05-01', 'coffee', '3.504'], // dup: desc case-insensitive + amount within 0.01
-      ['2026-05-02', 'Rent', '900'], // dup of existing
-      ['2026-05-03', 'Groceries', '42.10'], // NEW
-      ['2026-05-01', 'Coffee', '3.52'], // NEW: amount differs by > 0.01 (0.02)
+      ['2026-05-01', 'Coffee', '-3.5'], // dup of existing (exact)
+      ['2026-05-01', 'coffee', '-3.504'], // dup: desc case-insensitive + amount within 0.01
+      ['2026-05-02', 'Rent', '-900'], // dup of existing
+      ['2026-05-03', 'Groceries', '-42.10'], // NEW
+      ['2026-05-01', 'Coffee', '-3.52'], // NEW: amount differs by > 0.01 (0.02)
     ]
     const res = await importExecute({
       rows,
       mapping: { date: 0, description: 1, amount: 2 },
       dry_run: true,
     })
-    const body = (await res.json()) as { imported: number; skipped: number }
-    // 5 rows: 3 duplicates removed by detectDuplicates, 2 remain and are
-    // "imported" (dry-run counts them). None are skipped for missing fields.
+    const body = (await res.json()) as { imported: number; skipped: number; duplicates: number }
+    // 5 rows: 3 flagged as duplicates, 2 remain and are "imported" (dry-run counts
+    // them). None are skipped for missing fields.
     expect(body.imported).toBe(2)
+    expect(body.duplicates).toBe(3)
     expect(body.skipped).toBe(0)
   })
 
