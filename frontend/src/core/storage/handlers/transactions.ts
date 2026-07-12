@@ -78,6 +78,10 @@ export async function transactionsUpdate(
   const id = idParam(params)
   const db = await getDB()
   const before = await db.get('transactions', id)
+  // Only act on a row belonging to a selected profile (audit B2) — mirrors the bulk guard.
+  if (before && !adapter.getCurrentProfileIds().includes(before.profile_id)) {
+    return notFound('Transaction')
+  }
   // A transfer must keep a destination account across the edit (audit D2). Check the
   // merged old+new state so a partial update that flips type to transfer, or clears the
   // destination, is rejected rather than silently producing an inert/unbalanced row.
@@ -101,6 +105,10 @@ export async function transactionsDelete(params: Record<string, string>): Promis
   const id = idParam(params)
   const db = await getDB()
   const before = await db.get('transactions', id)
+  // Only delete a row belonging to a selected profile (audit B2).
+  if (before && !adapter.getCurrentProfileIds().includes(before.profile_id)) {
+    return notFound('Transaction')
+  }
   await adapter.deleteTransaction(id)
   await recalcGoalsByCategory(toCat(before?.category_id))
   return ok()
@@ -151,7 +159,9 @@ export async function transactionsSummary(): Promise<Response> {
 export async function reconcileToggle(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
   const txn = await db.get('transactions', idParam(params))
-  if (!txn) return notFound('Transaction')
+  // Treat a row outside the selected profiles as not found (audit B2).
+  if (!txn || !adapter.getCurrentProfileIds().includes(txn.profile_id))
+    return notFound('Transaction')
   const now = new Date().toISOString()
   txn.reconciled = txn.reconciled ? 0 : 1
   txn.reconciled_at = txn.reconciled ? now : null
@@ -270,11 +280,13 @@ export async function reconcileBatch(body: unknown): Promise<Response> {
   const ids = (body as Record<string, unknown>).transaction_ids as number[]
   if (!Array.isArray(ids)) return json({ error: 'transaction_ids array required' }, 400)
   const db = await getDB()
+  const pids = adapter.getCurrentProfileIds()
   const now = new Date().toISOString()
   let updated = 0
   for (const id of ids) {
     const txn = await db.get('transactions', id)
-    if (txn && !txn.reconciled) {
+    // Skip rows outside the selected profiles (audit B2).
+    if (txn && pids.includes(txn.profile_id) && !txn.reconciled) {
       txn.reconciled = 1
       txn.reconciled_at = now
       await db.put('transactions', txn)

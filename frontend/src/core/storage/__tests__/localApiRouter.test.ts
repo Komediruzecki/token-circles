@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // Test the route matching and dispatch logic from localApiRouter.
 // We test the exported `routeApiRequest` function which handles URL parsing,
@@ -9,6 +9,30 @@ import { describe, expect, it } from 'vitest'
 async function loadModule() {
   return await import('../localApiRouter.js')
 }
+
+// The exchange-rate handler is the only route that reaches the network (open.er-api.com).
+// Stub fetch so these tests are deterministic and pass offline (audit D1) — they exercise the
+// handler's parsing/response shape, not the upstream API.
+beforeAll(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: 'success',
+            base_code: 'EUR',
+            rates: { EUR: 1, USD: 1.08, GBP: 0.85 },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+    )
+  )
+})
+afterAll(() => vi.unstubAllGlobals())
 
 describe('localApiRouter - route matching', () => {
   it('returns 200 for known GET route /api/health', async () => {

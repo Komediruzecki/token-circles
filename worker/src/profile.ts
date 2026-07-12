@@ -28,20 +28,29 @@ export async function ensureProfile(c: Context<AppEnv>): Promise<number> {
   return p.id;
 }
 
-/** Resolve + authorize the active profile. A missing, malformed, stale or unowned X-Profile-Id
- *  gracefully falls back to the user's first profile (created if needed) — a stale id in the
- *  browser's localStorage must never 403 the whole app. Data stays user-scoped either way. */
+/** Resolve + authorize the active profile. An ABSENT X-Profile-Id gracefully falls back to the
+ *  user's first profile (created if needed) — a stale/missing id in the browser must never 403 the
+ *  whole app on read. But a write (POST/PUT/PATCH/DELETE) that names a specific profile the user
+ *  does NOT own is rejected with a 403 rather than silently landing the data in a different profile
+ *  (audit B3); a read with such a header still falls back. Data stays user-scoped either way. */
 export async function getProfileId(c: Context<AppEnv>): Promise<number> {
   const userId = c.get('userId');
-  const raw = c.req.header('X-Profile-Id');
-  const id = raw && /^\d+$/.test(raw.trim()) ? parseInt(raw.trim(), 10) : NaN;
-  if (Number.isFinite(id)) {
-    const owned = await c.env.DB.prepare(
-      'SELECT 1 AS ok FROM profiles WHERE id = ? AND user_id = ?'
-    )
-      .bind(id, userId)
-      .first();
-    if (owned) return id;
+  const trimmed = (c.req.header('X-Profile-Id') ?? '').trim();
+  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(c.req.method.toUpperCase());
+  if (trimmed !== '') {
+    const id = /^\d+$/.test(trimmed) ? parseInt(trimmed, 10) : NaN;
+    if (Number.isFinite(id)) {
+      const owned = await c.env.DB.prepare(
+        'SELECT 1 AS ok FROM profiles WHERE id = ? AND user_id = ?'
+      )
+        .bind(id, userId)
+        .first();
+      if (owned) return id;
+    }
+    // Header is present but malformed or names a profile this user doesn't own.
+    if (isWrite) {
+      throw new HttpError(403, 'Profile does not belong to this user, or is invalid');
+    }
   }
   return ensureProfile(c);
 }
