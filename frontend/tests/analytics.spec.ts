@@ -4,6 +4,12 @@ import { expect, test } from '@playwright/test'
  * Analytics page tests.
  * Tests that the page loads without full page reloads on filter changes
  * and that the monthly savings card is present.
+ *
+ * Structural assertions target stable `data-test-id` hooks in Analytics.tsx rather than
+ * user-visible copy or CSS-module class fragments (`[class*="statLabel"]`), which change with
+ * design/wording. See tests/README.md for the test-id convention. These tests run in serverless
+ * mode, where the app auto-seeds demo data (transactions from 2000 to the current year) on first
+ * load, so the analytics content renders with real values.
  */
 
 test('analytics page - loads without errors and shows header', async ({ page }) => {
@@ -22,9 +28,9 @@ test('analytics page - loads without errors and shows header', async ({ page }) 
   })
   await page.waitForTimeout(2000)
 
-  // Analytics header should be visible
-  const header = page.locator('h1')
-  await expect(header.first()).toBeVisible({ timeout: 10000 })
+  // Analytics page header (the H1) should be visible. It renders unconditionally, independent of
+  // whether analytics data has resolved.
+  await expect(page.getByTestId('analytics-header')).toBeVisible({ timeout: 10000 })
 
   // No console errors (filter out CORS/network errors that aren't our bugs)
   const relevantErrors = consoleErrors.filter(
@@ -47,50 +53,25 @@ test('analytics page - year change does not cause full page navigation', async (
   })
   await page.waitForTimeout(2000)
 
-  // Get initial URL
-  const initialUrl = page.url()
+  // The Category Trends year picker. Demo mode seeds multiple years, so it has >1 option.
+  const yearSelect = page.getByTestId('analytics-trends-year')
+  await expect(yearSelect).toBeVisible({ timeout: 10000 })
 
-  // Find all select elements and try changing a year one
-  const selects = page.locator('select')
-  const count = await selects.count()
+  // Switch to a different year and confirm it applied as an in-page filter change (no full
+  // reload / hash navigation away from the analytics route).
+  const options = await yearSelect.locator('option').allTextContents()
+  const currentValue = await yearSelect.inputValue()
+  const otherOption = options.find((o) => o.trim() !== currentValue && !isNaN(Number(o.trim())))
 
-  if (count > 0) {
-    // Try each select to find one with multiple year options
-    for (let i = 0; i < count; i++) {
-      const select = selects.nth(i)
-      const options = await select.locator('option').allTextContents()
-
-      if (options.length > 1) {
-        const currentValue = await select.inputValue()
-        const otherOption = options.find(
-          (o) => o.trim() !== currentValue && !isNaN(Number(o.trim()))
-        )
-
-        if (otherOption) {
-          let urlChanged = false
-          page.on('framenavigated', () => {
-            urlChanged = true
-          })
-
-          await select.selectOption(otherOption.trim())
-          await page.waitForTimeout(1500)
-
-          // URL should NOT have changed (no hash navigation)
-          const currentUrl = page.url()
-
-          // Either the URL is the same or only the hash changed (same page)
-          // A full reload would change the entire URL
-          if (urlChanged) {
-            console.log('URL changed from', initialUrl, 'to', currentUrl)
-          }
-
-          // At minimum, we're still on the analytics page
-          expect(currentUrl).toContain('analytics')
-          break
-        }
-      }
-    }
+  if (otherOption) {
+    await yearSelect.selectOption(otherOption.trim())
+    await page.waitForTimeout(1500)
+    // The select reflects the new year — the change took effect in place.
+    await expect(yearSelect).toHaveValue(otherOption.trim())
   }
+
+  // A full reload would navigate off the SPA route; we must still be on the analytics page.
+  expect(page.url()).toContain('analytics')
 })
 
 test('analytics page - monthly savings section present', async ({ page }) => {
@@ -104,32 +85,11 @@ test('analytics page - monthly savings section present', async ({ page }) => {
   })
   await page.waitForTimeout(2000)
 
-  // Check for monthly savings section — it should be present even if data is empty
-  // The section label contains "Monthly Savings (Month Year)"
-  const monthlyLabel = page.locator('[class*="statLabel"]', {
-    hasText: 'Monthly Savings',
-  })
-  const isVisible = await monthlyLabel.isVisible({ timeout: 3000 }).catch(() => false)
-
-  if (isVisible) {
-    console.log('Monthly savings section is visible')
-
-    // Check for monthly stat cards
-    const monthlyIncome = page.locator('[class*="statLabel"]', { hasText: 'Monthly Income' })
-    const monthlyExpense = page.locator('[class*="statLabel"]', { hasText: 'Monthly Expense' })
-
-    const incomeVisible = await monthlyIncome.isVisible({ timeout: 2000 }).catch(() => false)
-    const expenseVisible = await monthlyExpense.isVisible({ timeout: 2000 }).catch(() => false)
-
-    console.log('Monthly Income visible:', incomeVisible)
-    console.log('Monthly Expense visible:', expenseVisible)
-  } else {
-    // No data available — the page shows "No data available" but shouldn't crash
-    console.log('No analytics data available (expected when IndexedDB is empty)')
-    const emptyState = page.locator('text=No data available')
-    const emptyVisible = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
-    console.log('Empty state visible:', emptyVisible)
-  }
+  // The Monthly Savings card and its per-month income/expense breakdown cards. All render once
+  // analytics data resolves, which demo mode guarantees.
+  await expect(page.getByTestId('analytics-monthly-savings')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('analytics-monthly-income')).toBeVisible()
+  await expect(page.getByTestId('analytics-monthly-expense')).toBeVisible()
 })
 
 test('analytics page - monthly selectors exist in monthly card', async ({ page }) => {
@@ -143,24 +103,8 @@ test('analytics page - monthly selectors exist in monthly card', async ({ page }
   })
   await page.waitForTimeout(2000)
 
-  // Find the monthly savings card section and its select elements
-  const monthlyLabel = page.locator('[class*="statLabel"]', {
-    hasText: 'Monthly Savings',
-  })
-
-  const labelVisible = await monthlyLabel.isVisible({ timeout: 3000 }).catch(() => false)
-
-  if (labelVisible) {
-    // The monthly card has select elements (year + month)
-    // Those selects should be within the same parent card area
-    const parentCard = monthlyLabel.locator('..')
-    const selects = parentCard.locator('select')
-    const selectCount = await selects.count()
-
-    console.log('Monthly card select count:', selectCount)
-    // Should have at least 1 select (month picker)
-    expect(selectCount).toBeGreaterThanOrEqual(1)
-  } else {
-    console.log('Monthly savings section not visible (no data)')
-  }
+  // The monthly savings card exposes a month picker. It always renders 12 options (Jan–Dec).
+  const monthSelect = page.getByTestId('analytics-monthly-month')
+  await expect(monthSelect).toBeVisible({ timeout: 10000 })
+  await expect(monthSelect.locator('option')).toHaveCount(12)
 })
