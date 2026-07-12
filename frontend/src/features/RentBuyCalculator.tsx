@@ -548,8 +548,8 @@ export default function RentBuyCalculator(props: Props) {
                       {
                         label: 'Renting Net Cost',
                         data: results().map((r) => r.rentNetCost),
-                        borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderColor: '#f0a860',
+                        backgroundColor: 'rgba(240, 168, 96, 0.12)',
                         fill: true,
                         tension: 0.3,
                         borderWidth: 2,
@@ -557,8 +557,8 @@ export default function RentBuyCalculator(props: Props) {
                       {
                         label: 'Buying Net Cost',
                         data: results().map((r) => r.buyNetCost),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: '#6e9bff',
+                        backgroundColor: 'rgba(110, 155, 255, 0.12)',
                         fill: true,
                         tension: 0.3,
                         borderWidth: 2,

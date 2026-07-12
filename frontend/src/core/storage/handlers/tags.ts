@@ -29,10 +29,10 @@ export async function tagsCreate(body: unknown): Promise<Response> {
   const id = await db.add('tags', {
     profile_id: pid,
     name: name.trim(),
-    color: (b.color as string) || '#6366f1',
+    color: (b.color as string) || '#6e9bff',
     created_at: new Date().toISOString(),
   })
-  return json({ id, name: name.trim(), color: (b.color as string) || '#6366f1' }, 201)
+  return json({ id, name: name.trim(), color: (b.color as string) || '#6e9bff' }, 201)
 }
 
 export async function tagsGetTransactions(params: Record<string, string>): Promise<Response> {

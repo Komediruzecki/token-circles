@@ -98,9 +98,9 @@ export default function EmergencyFundCalculator() {
                     label: 'Coverage',
                     data: coverage().map((c) => c.coveragePct),
                     backgroundColor: coverage().map((c) => {
-                      if (c.status === 'complete') return 'rgba(16, 185, 129, 0.8)'
-                      if (c.status === 'partial') return 'rgba(245, 158, 11, 0.8)'
-                      return 'rgba(239, 68, 68, 0.8)'
+                      if (c.status === 'complete') return 'rgba(89, 210, 162, 0.85)'
+                      if (c.status === 'partial') return 'rgba(240, 168, 96, 0.85)'
+                      return 'rgba(255, 157, 157, 0.85)'
                     }),
                     borderColor: coverage().map((c) => {
                       if (c.status === 'complete') return 'rgb(16, 185, 129)'

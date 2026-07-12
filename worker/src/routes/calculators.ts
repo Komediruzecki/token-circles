@@ -42,9 +42,9 @@ calculatorsRoutes.post('/api/calculator/compound-interest', requireAuth, async (
   }
 
   const scenarios = [
-    { name: 'Conservative', return: 4, color: '#3b82f6' },
-    { name: 'Moderate', return: 6, color: '#10b981' },
-    { name: 'Optimistic', return: 8, color: '#8b5cf6' },
+    { name: 'Conservative', return: 4, color: '#6e9bff' },
+    { name: 'Moderate', return: 6, color: '#59d2a2' },
+    { name: 'Optimistic', return: 8, color: '#f0a860' },
   ].map((s) => {
     const r = s.return / 100;
     let bal = principal;
