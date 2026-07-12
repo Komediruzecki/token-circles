@@ -398,6 +398,18 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   // Stable client-supplied id for this import; stamped on every row so a retry is idempotent
   // (the prior attempt's rows are deleted first). Null for old clients → unchanged behaviour.
   const importId = typeof b.importId === 'string' && b.importId ? b.importId : null;
+  // Preview mode: compute new_categories + duplicate estimate WITHOUT mutating (B5/A2).
+  const dryRun = Boolean(b.dry_run ?? b.dryRun);
+  // Category-creation gating (audit B5): when `approvedCategories` (alias `createCategories`)
+  // is present — even as an empty array — a new category is only created when its name is in
+  // the approved list; unapproved rows import uncategorized. Absent → auto-create-all (compat).
+  const approvedRaw = b.approvedCategories ?? b.createCategories;
+  const gateCategories = approvedRaw !== undefined;
+  const approvedCats = new Set(
+    (Array.isArray(approvedRaw) ? approvedRaw : []).map((s: unknown) =>
+      String(s).trim().toLowerCase()
+    )
+  );
 
   const DB = c.env.DB;
   const today = () => new Date().toISOString().split('T')[0];
@@ -415,9 +427,10 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   await loadAccounts();
 
   // Batch-create accounts for the category names the user flagged as 'account' type (+ history).
+  // Skipped in dry-run (preview must not mutate).
   let accountsCreated = 0;
   const createdAccountNames: string[] = [];
-  if (categoryTypes) {
+  if (!dryRun && categoryTypes) {
     const toCreate = Object.entries(categoryTypes as Record<string, string>)
       .filter(
         ([name, t]) => t === 'account' && !accountIdMap.has(String(name).trim().toLowerCase())
@@ -479,9 +492,14 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     seenNew.add(lower);
     newCats.push(name);
   }
-  if (newCats.length) {
+  // Only create approved names when gating is on; unapproved values import uncategorized
+  // (category_id resolves to null below). Absent → create every new name (backward-compat).
+  const catsToCreate = gateCategories
+    ? newCats.filter((name) => approvedCats.has(name.toLowerCase()))
+    : newCats;
+  if (!dryRun && catsToCreate.length) {
     await DB.batch(
-      newCats.map((name) => {
+      catsToCreate.map((name) => {
         const color = NEW_CATEGORY_COLORS[colorIndex % NEW_CATEGORY_COLORS.length];
         colorIndex++;
         const catType =
@@ -502,7 +520,54 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
   const txStmts: D1PreparedStatement[] = [];
 
-  for (const row of rows as Array<Record<string, any>>) {
+  // Resolution-aware duplicate detection (audit A2), matching the serverless import.
+  // Key on the RESOLVED (date, lowercased description, account_id, type, currency) with a
+  // ±0.01 amount tolerance; two rows that share only date+description+amount but differ in
+  // account/type/currency get different keys and both import. Dedup against existing stored
+  // transactions AND rows accepted earlier in THIS import. Rows belonging to the current
+  // importId are excluded from the existing set — a retry deletes and re-inserts them, so they
+  // must not count as their own duplicates.
+  const dedupKeyOf = (
+    date: string,
+    desc: string,
+    accountId: number | null,
+    type: string,
+    currency: string
+  ): string => `${date}\x00${desc}\x00${accountId ?? ''}\x00${type}\x00${currency}`;
+  const existingForDedup = await db.all<{
+    date: string;
+    description: string | null;
+    amount: number;
+    type: string | null;
+    currency: string | null;
+    account_id: number | null;
+  }>(
+    DB,
+    `SELECT date, description, amount, type, currency, account_id FROM transactions
+       WHERE profile_id = ?${importId ? ' AND (import_id IS NULL OR import_id != ?)' : ''}`,
+    ...(importId ? [pid, importId] : [pid])
+  );
+  const dedupBuckets = new Map<string, number[]>();
+  for (const t of existingForDedup) {
+    const k = dedupKeyOf(
+      String(t.date ?? ''),
+      String(t.description ?? '')
+        .toLowerCase()
+        .trim(),
+      t.account_id ?? null,
+      String(t.type ?? ''),
+      String(t.currency ?? '') || 'USD'
+    );
+    const amt = Math.abs(Number(t.amount));
+    const bucket = dedupBuckets.get(k);
+    if (bucket) bucket.push(amt);
+    else dedupBuckets.set(k, [amt]);
+  }
+  const duplicateIndices: number[] = [];
+
+  const rowsArr = rows as Array<Record<string, any>>;
+  for (let ri = 0; ri < rowsArr.length; ri++) {
+    const row = rowsArr[ri]!;
     const catRaw = pick(row, mapping, 'category');
     const catName = catRaw ? String(catRaw).trim() : '';
     const catLower = catName.toLowerCase();
@@ -551,11 +616,31 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       : null;
     const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
 
+    const description = pick(row, mapping, 'description') || '';
+    const parsedDate = parseDateString(dateRaw);
+    // Duplicate check on the resolved fields; a match is reported (not silently dropped) and
+    // skipped from the insert, while a legitimately-different same-day/-amount row imports.
+    const dedupKey = dedupKeyOf(
+      parsedDate,
+      String(description).toLowerCase().trim(),
+      accountId,
+      validatedType,
+      currency
+    );
+    const dupBucket = dedupBuckets.get(dedupKey);
+    const isDup = dupBucket ? dupBucket.some((a) => Math.abs(a - amount) < 0.01) : false;
+    if (isDup) {
+      duplicateIndices.push(ri);
+      continue;
+    }
+    if (dupBucket) dupBucket.push(amount);
+    else dedupBuckets.set(dedupKey, [amount]);
+
     txStmts.push(
       DB.prepare(TX_SQL).bind(
-        pick(row, mapping, 'description') || '',
+        description,
         amount,
-        parseDateString(dateRaw),
+        parsedDate,
         pick(row, mapping, 'beneficiary') || '',
         pick(row, mapping, 'payor') || '',
         categoryId,
@@ -571,6 +656,22 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         importId
       )
     );
+  }
+
+  // Preview mode: report what WOULD be created without mutating anything (B5/A2).
+  if (dryRun) {
+    return c.json({
+      imported: txStmts.length,
+      dry_run: true,
+      duplicates: duplicateIndices.length,
+      duplicate_indices: duplicateIndices,
+      new_categories: newCats,
+      accounts_created: 0,
+      categories_created: 0,
+      created_accounts: [],
+      created_categories: [],
+      message: 'Dry run — no changes made',
+    });
   }
 
   // Idempotent retry: drop any rows a prior (partial) run of THIS import created before re-inserting,
@@ -596,10 +697,13 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
 
   return c.json({
     imported,
+    duplicates: duplicateIndices.length,
+    duplicate_indices: duplicateIndices,
+    new_categories: newCats,
     accounts_created: accountsCreated,
-    categories_created: newCats.length,
+    categories_created: catsToCreate.length,
     created_accounts: createdAccountNames,
-    created_categories: newCats,
+    created_categories: catsToCreate,
     message: `Successfully imported ${imported} transactions`,
   });
 });
