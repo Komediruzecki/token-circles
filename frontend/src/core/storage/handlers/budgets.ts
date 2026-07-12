@@ -5,6 +5,7 @@ import { getDB } from '../idb'
 import {
   adapter,
   endOfNextMonth,
+  getAllForProfiles,
   getAmount,
   idParam,
   json,
@@ -144,18 +145,19 @@ export async function budgetsAlerts(query: URLSearchParams): Promise<Response> {
 
 export async function budgetsHistory(query: URLSearchParams): Promise<Response> {
   try {
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
     const categoryId = parseInt(query.get('category_id')!)
     const months = parseInt(query.get('months')!) || 6
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
+    // Multi-profile (household) selection, mirroring budgetsList. category_id is
+    // globally unique across profiles, so filtering by it selects the owning
+    // profile's rows regardless of how many profiles are gathered.
+    const budgets = (await getAllForProfiles('budgets'))
       .filter((b: Record<string, unknown>) => b.category_id === categoryId)
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
         (b.start_date as string).localeCompare(a.start_date as string)
       )
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+    const txns = (await getAllForProfiles('transactions')).filter(
       (t: Record<string, unknown>) => t.type === 'expense' && t.category_id === categoryId
     )
 
@@ -197,18 +199,12 @@ export async function budgetsHistory(query: URLSearchParams): Promise<Response> 
 
 export async function budgetsImprovements(query: URLSearchParams): Promise<Response> {
   try {
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
     const numMonths = parseInt(query.get('months')!) || 6
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)) as Record<
-      string,
-      unknown
-    >[]
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
-      string,
-      unknown
-    >[]
+    // Multi-profile (household) selection, mirroring budgetsList: aggregate across
+    // all selected profiles so the summary matches the list's profile scope.
+    const budgets = await getAllForProfiles('budgets')
+    const txns = await getAllForProfiles('transactions')
 
     const monthlyMap: Record<string, { budget: number; spent: number }> = {}
     for (const b of budgets) {
@@ -242,7 +238,7 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
 
     if (history.length > 0) {
       const latestMo = history[0].month
-      const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+      const cats = await getAllForProfiles('categories')
       const catMap: Record<number, Record<string, unknown>> = {}
       for (const c of cats) catMap[c.id as number] = c
 
@@ -275,8 +271,6 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
 
 export async function budgetsSummary(query: URLSearchParams): Promise<Response> {
   try {
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
     const now = new Date()
     const y = parseInt(query.get('year')!) || now.getFullYear()
     const m = parseInt(query.get('month')!) || now.getMonth() + 1
@@ -288,11 +282,21 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
     const pm = prevMonth(y, m)
     const prevStart = monthStart(pm.year, pm.month)
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
-      (b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate
+    // Multi-profile (household) selection, mirroring budgetsList so the summary
+    // covers the same profiles as the list.
+    const allBudgets = await getAllForProfiles('budgets')
+    const allTxns = await getAllForProfiles('transactions')
+
+    // D13: budgetsAllocate writes one row per month with no end_date, so the old
+    // `!end_date || end_date >= startDate` filter stacked every prior month's row
+    // for a category. Restrict to budgets whose start_date falls in the queried
+    // month (mirrors budgetsZeroBased) — exactly one row per category per month.
+    const budgets = allBudgets.filter(
+      (b: Record<string, unknown>) =>
+        (b.start_date as string) >= startDate && (b.start_date as string) < endDate
     )
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+    const txns = allTxns.filter(
       (t: Record<string, unknown>) =>
         t.type === 'expense' &&
         t.category_id !== null &&
@@ -300,7 +304,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         (t.date as string) < endDate
     )
 
-    const prevTxns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
+    const prevTxns = allTxns.filter(
       (t: Record<string, unknown>) =>
         t.type === 'expense' &&
         t.category_id !== null &&
@@ -320,7 +324,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
       prevSpentMap[cid] = (prevSpentMap[cid] || 0) + getAmount(t)
     }
 
-    const prevBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+    const prevBudgets = allBudgets.filter(
       (b: Record<string, unknown>) =>
         (b.start_date as string) >= prevStart && (b.start_date as string) < startDate
     )
@@ -337,7 +341,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
       }
     }
 
-    const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+    const cats = await getAllForProfiles('categories')
     const catMap: Record<number, Record<string, unknown>> = {}
     for (const c of cats) catMap[c.id as number] = c
 
@@ -391,19 +395,18 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
 
 export async function budgetsZeroBased(query: URLSearchParams): Promise<Response> {
   try {
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
     const month = query.get('month') || new Date().toISOString().slice(0, 7)
     const startOfMonth = `${month}-01`
     const endOfMonth = endOfNextMonth(startOfMonth)
 
-    const cats = (await db.getAllFromIndex('categories', 'by_profile', pid))
+    // Multi-profile (household) selection, mirroring budgetsList.
+    const cats = (await getAllForProfiles('categories'))
       .filter((c: Record<string, unknown>) => c.type === 'expense')
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
         (a.name as string).localeCompare(b.name as string)
       )
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
+    const budgets = (await getAllForProfiles('budgets')).filter(
       (b: Record<string, unknown>) =>
         (b.start_date as string) >= startOfMonth &&
         (b.start_date as string) < endOfMonth &&
@@ -413,7 +416,7 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
     const budgetMap: Record<number, Record<string, unknown>> = {}
     for (const b of budgets) budgetMap[b.category_id as number] = b
 
-    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
+    const txns = await getAllForProfiles('transactions')
     const spentMap: Record<number, number> = {}
     for (const t of txns) {
       if (t.type !== 'expense' || !t.category_id) continue
@@ -805,8 +808,7 @@ export async function budgetsBackfillFromSpending(body: unknown): Promise<Respon
 
     const fromStart = `${fromMonth}-01`
     const [ty, tm] = toMonth.split('-').map(Number)
-    const toEnd =
-      tm === 12 ? `${ty + 1}-01-01` : `${ty}-${String(tm + 1).padStart(2, '0')}-01`
+    const toEnd = tm === 12 ? `${ty + 1}-01-01` : `${ty}-${String(tm + 1).padStart(2, '0')}-01`
 
     const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
       (bb: Record<string, unknown>) =>
@@ -901,11 +903,10 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
 
 export async function budgetsForecast(query: URLSearchParams): Promise<Response> {
   try {
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
     const month = query.get('month') || new Date().toISOString().slice(0, 7)
 
-    const budgets = (await db.getAllFromIndex('budgets', 'by_profile', pid))
+    // Multi-profile (household) selection, mirroring budgetsList.
+    const budgets = (await getAllForProfiles('budgets'))
       .filter((b: Record<string, unknown>) => (b.start_date as string) <= month)
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
         (b.start_date as string).localeCompare(a.start_date as string)
@@ -921,10 +922,7 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       })
     }
 
-    const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
-      string,
-      unknown
-    >[]
+    const txns = await getAllForProfiles('transactions')
 
     // Precompute expense totals bucketed by (category_id, YYYY-MM) in ONE pass
     // over the transactions, instead of rescanning the full list per budget.

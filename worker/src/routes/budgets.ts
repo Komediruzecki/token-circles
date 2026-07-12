@@ -68,7 +68,10 @@ interface BudgetRow {
 
 // GET /api/budgets/summary — base budget vs spend plus auto-rollover from prior month.
 budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
+  // Multi-profile (household) selection, matching GET /api/budgets so the summary
+  // covers the same profiles as the list.
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');
   const month = c.req.query('month');
   const y = year ? Number(year) : new Date().getFullYear();
@@ -78,24 +81,28 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
   const nextY = m === 12 ? y + 1 : y;
   const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
 
-  // budgetsRepo.listActive
+  // D13: budgetsAllocate writes one row per month with no end_date, so the old
+  // `end_date IS NULL OR end_date >= ?` filter stacked every prior month's row for
+  // a category. Restrict to budgets whose start_date falls in the queried month
+  // (mirrors zero-based) — exactly one row per category per month.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
      FROM budgets b
      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
-    pid,
-    startDate
+     WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?`,
+    ...pids,
+    startDate,
+    endDate
   );
 
   const spent = await db.all<{ category_id: number; total: number }>(
     c.env.DB,
     `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
        FROM transactions
-       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
        GROUP BY category_id`,
-    pid,
+    ...pids,
     startDate,
     endDate
   );
@@ -118,8 +125,8 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     c.env.DB,
     `SELECT b.category_id, b.amount as budget_amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
        FROM budgets b
-       WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?`,
-    pid,
+       WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?`,
+    ...pids,
     prevStart,
     prevEnd
   );
@@ -128,9 +135,9 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     c.env.DB,
     `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
        FROM transactions
-       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
        GROUP BY category_id`,
-    pid,
+    ...pids,
     prevStart,
     prevEnd
   );
@@ -178,7 +185,10 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
 
 // GET /api/budgets/history — per-month budget vs spent for one category.
 budgetsRoutes.get('/api/budgets/history', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
+  // Multi-profile (household) selection, matching GET /api/budgets. category_id is
+  // globally unique, so the IN clause simply widens the search to the owning profile.
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const categoryId = c.req.query('category_id');
   const months = c.req.query('months') ?? 6;
 
@@ -192,11 +202,11 @@ budgetsRoutes.get('/api/budgets/history', requireAuth, async (c) => {
          AND t.date >= b.start_date
          AND t.date < date(b.start_date, '+1 month')
          AND t.type = 'expense'
-       WHERE b.profile_id = ? AND b.category_id = ?
+       WHERE b.profile_id IN (${inClause}) AND b.category_id = ?
        GROUP BY b.start_date
        ORDER BY b.start_date DESC
        LIMIT ?`,
-    pid,
+    ...pids,
     parseInt(String(categoryId)),
     parseInt(String(months))
   );
@@ -206,7 +216,9 @@ budgetsRoutes.get('/api/budgets/history', requireAuth, async (c) => {
 
 // GET /api/budgets/improvements — month-over-month adherence (window fns) + donut data.
 budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
+  // Multi-profile (household) selection, matching GET /api/budgets.
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const months = c.req.query('months') ?? 6;
   const numMonths = parseInt(String(months));
 
@@ -222,7 +234,7 @@ budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
           AND t.profile_id = b.profile_id
           AND t.date >= b.start_date
           AND t.date < date(b.start_date, '+1 month')
-        WHERE b.profile_id = ?
+        WHERE b.profile_id IN (${inClause})
         GROUP BY b.start_date
       ),
       aggregated AS (
@@ -247,7 +259,7 @@ budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
       FROM aggregated
       ORDER BY month DESC
       LIMIT ?`,
-    pid,
+    ...pids,
     numMonths
   );
 
@@ -260,9 +272,9 @@ budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
       `SELECT c.name, c.color, b.amount as budget_amount
          FROM budgets b
          JOIN categories c ON c.id = b.category_id AND c.profile_id = b.profile_id
-         WHERE b.profile_id = ? AND strftime('%Y-%m', b.start_date) = ?
+         WHERE b.profile_id IN (${inClause}) AND strftime('%Y-%m', b.start_date) = ?
          ORDER BY b.amount DESC`,
-      pid,
+      ...pids,
       latestMonth
     );
   }
@@ -460,7 +472,9 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
 
 // GET /api/budgets/zero-based — allocation form (categories + budgets + spend + income).
 budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
+  // Multi-profile (household) selection, matching GET /api/budgets.
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
   const startOfMonth = `${month}-01`;
   const nextMonth = new Date(
@@ -470,14 +484,14 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
 
   const categories = await db.all<{ id: number; name: string; color: string; icon: string }>(
     c.env.DB,
-    `SELECT id, name, color, icon FROM categories WHERE profile_id = ? AND type = 'expense' ORDER BY name`,
-    pid
+    `SELECT id, name, color, icon FROM categories WHERE profile_id IN (${inClause}) AND type = 'expense' ORDER BY name`,
+    ...pids
   );
 
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
-    `SELECT * FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ? AND period = 'monthly'`,
-    pid,
+    `SELECT * FROM budgets WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ? AND period = 'monthly'`,
+    ...pids,
     startOfMonth,
     endOfMonth
   );
@@ -488,9 +502,9 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     c.env.DB,
     `SELECT category_id, SUM(COALESCE(amount_local, amount)) as total
        FROM transactions
-       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
+       WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? AND type = 'expense' AND category_id IS NOT NULL
        GROUP BY category_id`,
-    pid,
+    ...pids,
     startOfMonth,
     endOfMonth
   );
@@ -501,8 +515,8 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     c.env.DB,
     `SELECT SUM(COALESCE(amount_local, amount)) as total
        FROM transactions
-       WHERE profile_id = ? AND date >= ? AND date < ? AND type = 'income'`,
-    pid,
+       WHERE profile_id IN (${inClause}) AND date >= ? AND date < ? AND type = 'income'`,
+    ...pids,
     startOfMonth,
     endOfMonth
   );
@@ -511,8 +525,8 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
   const alreadyBudgetedRow = await db.first<{ total: number | null }>(
     c.env.DB,
     `SELECT SUM(amount) as total FROM budgets
-       WHERE profile_id = ? AND start_date >= ? AND start_date < ?`,
-    pid,
+       WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ?`,
+    ...pids,
     startOfMonth,
     endOfMonth
   );
@@ -555,7 +569,9 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
 
 // GET /api/budgets/forecast — historical averages + 6-month projection with inflation.
 budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
+  // Multi-profile (household) selection, matching GET /api/budgets.
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
 
   const budgets = await db.all<BudgetRow>(
@@ -563,9 +579,9 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
     `SELECT b.*, c.name as category_name, c.color as category_color
        FROM budgets b
        JOIN categories c ON c.id = b.category_id AND c.profile_id = b.profile_id
-       WHERE b.profile_id = ? AND b.start_date <= ?
+       WHERE b.profile_id IN (${inClause}) AND b.start_date <= ?
        ORDER BY b.start_date DESC`,
-    pid,
+    ...pids,
     month
   );
 
@@ -599,9 +615,9 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
         AND t.date >= b.start_date
         AND t.date < date(b.start_date, '+1 month')
         AND t.type = 'expense'
-      WHERE b.profile_id = ?
+      WHERE b.profile_id IN (${inClause})
       GROUP BY month, b.category_id, b.period`,
-    pid
+    ...pids
   );
 
   const categoryAverages: Record<number, { total: number; count: number; avgAmount: number }> = {};
@@ -676,11 +692,11 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
         AND t.profile_id = b.profile_id
         AND t.date >= b.start_date
         AND t.date < date(b.start_date, '+1 month')
-      WHERE b.profile_id = ? AND strftime('%Y-%m', start_date) <= ?
+      WHERE b.profile_id IN (${inClause}) AND strftime('%Y-%m', start_date) <= ?
       GROUP BY month
       ORDER BY month DESC
       LIMIT ?`,
-    pid,
+    ...pids,
     now.toISOString().slice(0, 7),
     6
   );

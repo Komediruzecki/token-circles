@@ -123,6 +123,10 @@ export interface Budget {
   end_date: string | null
   created_at: string
   profile_id: ProfileId
+  // The worker stores rollover_enabled as 0/1; the schema coerces it to a boolean.
+  rollover_enabled?: boolean
+  rollover_amount?: number
+  rollover_used?: number
 }
 
 export interface CategoryAllocation {
