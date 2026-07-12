@@ -74,8 +74,10 @@
 }
 
 .categories-page .category-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
   position: relative;
@@ -345,8 +347,10 @@
 }
 
 .category-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
   position: relative;
@@ -613,8 +617,10 @@
 }
 
 .category-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
   position: relative;

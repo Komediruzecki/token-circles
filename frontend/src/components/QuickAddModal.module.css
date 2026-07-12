@@ -152,7 +152,7 @@
 }
 
 .amountInput:focus {
-  border-color: #6366f1;
+  border-color: var(--primary);
 }
 
 .dark-mode .amountInput:focus {
@@ -255,7 +255,7 @@
 .categorySelect:focus,
 .descriptionInput:focus,
 .dateInput:focus {
-  border-color: #6366f1;
+  border-color: var(--primary);
 }
 
 .dark-mode .categorySelect:focus,
@@ -312,7 +312,7 @@
 }
 
 .cancelButton:hover:not(:disabled) {
-  border-color: #6366f1;
+  border-color: var(--primary);
   background: #f5f3ff;
 }
 
@@ -321,7 +321,7 @@
 }
 
 .saveButton {
-  background: #6366f1;
+  background: var(--primary);
   color: white;
 }
 

@@ -36,7 +36,12 @@ import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { CATEGORY_PALETTE } from '../core/brandPalette'
 import styles from './CategoriesPage.module.css'
+
+/** Brand "constellation" swatches offered when picking a category color. */
+const COLOR_CHOICES = CATEGORY_PALETTE
+const DEFAULT_COLOR = CATEGORY_PALETTE[0]
 
 interface Category {
   id: number
@@ -89,7 +94,7 @@ export default function Categories() {
   const [formData, setFormData] = createSignal({
     name: '',
     type: 'expense' as 'expense' | 'income',
-    color: '#3b82f6',
+    color: DEFAULT_COLOR,
     icon: '',
   })
 
@@ -113,7 +118,7 @@ export default function Categories() {
       }
       setShowAddModal(false)
       setEditingCategory(null)
-      setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+      setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
       refetchCategories()
     } catch (err) {
       console.error('Failed to save category:', err)
@@ -194,20 +199,12 @@ export default function Categories() {
     void refetchCategories()
   })
 
-  const categoryIconColors: Record<string, string> = {
-    '#ef4444': 'bg-red-100 text-red-600',
-    '#f97316': 'bg-orange-100 text-orange-600',
-    '#eab308': 'bg-yellow-100 text-yellow-600',
-    '#22c55e': 'bg-green-100 text-green-600',
-    '#3b82f6': 'bg-blue-100 text-blue-600',
-    '#8b5cf6': 'bg-violet-100 text-violet-600',
-    '#ec4899': 'bg-pink-100 text-pink-600',
-    '#6b7280': 'bg-gray-100 text-gray-600',
-  }
-
-  const getIconClass = (color: string): string => {
-    return categoryIconColors[color] || 'bg-blue-100 text-blue-600'
-  }
+  // Tint the icon chip with the category's own color (a translucent wash of
+  // the color behind a matching glyph), so every category reads in its hue.
+  const iconStyle = (color: string) => ({
+    background: `color-mix(in oklab, ${color} 20%, transparent)`,
+    color,
+  })
 
   return (
     <div class={`page page-categories page-enter ${styles.categoriesPage}`}>
@@ -278,7 +275,6 @@ export default function Categories() {
               )}
             >
               {(category) => {
-                const iconClass = getIconClass(category.color)
                 const summary = budgetSummary()[category.id]
                 const spent = summary?.spent || 0
                 const budget = summary?.budget || 0
@@ -291,7 +287,8 @@ export default function Categories() {
                     <div class={styles.categoryHeader}>
                       <div
                         data-test-id="category-color"
-                        class={`${styles.categoryIcon} ${iconClass}`}
+                        class={styles.categoryIcon}
+                        style={iconStyle(category.color)}
                       >
                         <CategoryIcon name={category.name} icon={category.icon} size={18} />
                       </div>
@@ -382,18 +379,7 @@ export default function Categories() {
                     <div class={styles.categoryColors}>
                       <span class={styles.colorLabel}>Color:</span>
                       <div class={styles.colorPicker}>
-                        <For
-                          each={[
-                            '#ef4444',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                          ]}
-                        >
+                        <For each={COLOR_CHOICES}>
                           {(color) => (
                             <button
                               class={`${styles.colorBtn} ${category.color === color ? styles.active : ''}`}
@@ -435,7 +421,7 @@ export default function Categories() {
             if (e.target === e.currentTarget) {
               setShowAddModal(false)
               setEditingCategory(null)
-              setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+              setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
             }
           }}
         >
@@ -454,7 +440,7 @@ export default function Categories() {
                 onClick={() => {
                   setShowAddModal(false)
                   setEditingCategory(null)
-                  setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+                  setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
                 }}
               >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -499,18 +485,7 @@ export default function Categories() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Color</label>
                 <div class={styles.colorPicker}>
-                  <For
-                    each={[
-                      '#ef4444',
-                      '#f97316',
-                      '#eab308',
-                      '#22c55e',
-                      '#3b82f6',
-                      '#8b5cf6',
-                      '#ec4899',
-                      '#6b7280',
-                    ]}
-                  >
+                  <For each={COLOR_CHOICES}>
                     {(color) => (
                       <button
                         class={`${styles.colorPickerBtn} ${formData().color === color ? styles.active : ''}`}
@@ -542,7 +517,7 @@ export default function Categories() {
                   onClick={() => {
                     setShowAddModal(false)
                     setEditingCategory(null)
-                    setFormData({ name: '', type: 'expense', color: '#3b82f6', icon: '' })
+                    setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
                   }}
                 >
                   Cancel
