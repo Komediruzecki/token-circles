@@ -28,7 +28,11 @@ export default function TransactionTable(props: TransactionTableProps) {
   }
 
   return (
-    <div class={styles.transactionTable} data-tour="transactions-table">
+    <div
+      class={styles.transactionTable}
+      data-test-id="transactions-table"
+      data-tour="transactions-table"
+    >
       <table>
         <thead>
           <tr>
@@ -52,6 +56,7 @@ export default function TransactionTable(props: TransactionTableProps) {
             </th>
             <th
               class={`${styles.col} ${styles.dateCol}`}
+              data-test-id="transactions-sort-date"
               onClick={() => {
                 handleSort('date')
               }}
@@ -110,7 +115,10 @@ export default function TransactionTable(props: TransactionTableProps) {
         <tbody>
           <For each={props.transactions}>
             {(transaction) => (
-              <tr class={transaction.reconciled ? styles.reconciled : ''}>
+              <tr
+                class={transaction.reconciled ? styles.reconciled : ''}
+                data-test-id="transactions-row"
+              >
                 <td class={styles.checkboxCol}>
                   <input
                     type="checkbox"
@@ -128,7 +136,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                     }}
                   />
                 </td>
-                <td class={styles.dateCol}>
+                <td class={styles.dateCol} data-test-id="transactions-cell-date">
                   {transaction.reconciled && (
                     <svg
                       width="12"
@@ -144,7 +152,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                   )}
                   {new Date(transaction.date).toLocaleDateString()}
                 </td>
-                <td class={styles.descriptionCol}>
+                <td class={styles.descriptionCol} data-test-id="transactions-cell-description">
                   <div class={styles.description}>
                     {transaction.description}
                     {typeof transaction.receipt_id === 'number' && (
@@ -190,7 +198,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                     </div>
                   )}
                 </td>
-                <td class={styles.categoryCol}>
+                <td class={styles.categoryCol} data-test-id="transactions-cell-category">
                   <div class={styles.categoryName}>
                     <span
                       class={styles.categoryDot}
@@ -206,7 +214,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                     <span class={styles.fromTo}>{transaction.category_name || '—'}</span>
                   </span>
                 </td>
-                <td class={styles.amountCol}>
+                <td class={styles.amountCol} data-test-id="transactions-cell-amount">
                   <div
                     class={`${styles.amount} ${styles[transaction.type]}`}
                     title={

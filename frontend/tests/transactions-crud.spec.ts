@@ -24,20 +24,8 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should open add transaction modal', async ({ page }) => {
-    // Click on Add Transaction button (if exists) or open modal via data-action
-    const addBtn = page
-      .locator('[data-test-id="add-transaction-btn"], .pageHeader button:has-text("Add")')
-      .first()
-    if (await addBtn.isVisible()) {
-      await addBtn.click()
-    } else {
-      // Try data-action
-      await page.locator('[data-test-id="add-transaction-btn"]').first().click()
-    }
-    await page.waitForSelector('[data-test-id="tx-modal"]', {
-      state: 'visible',
-      timeout: 5000,
-    })
+    await page.getByTestId('add-transaction-btn').click()
+    await expect(page.getByTestId('tx-modal')).toBeVisible()
   })
 
   test('should open modal via close button', async ({ page }) => {
@@ -67,33 +55,13 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should have transaction form fields', async ({ page }) => {
-    // Try to find the modal
-    const modal = page.locator('[data-test-id="tx-modal"]')
-    if (await modal.isVisible({ timeout: 1000 }).catch(() => false)) {
-      // Modal is open, check form fields
-      await expect(page.locator('[data-test-id="tx-description"]')).toBeVisible()
-      await expect(page.locator('[data-test-id="tx-amount"]')).toBeVisible()
-      await expect(page.locator('[data-test-id="tx-date"]')).toBeVisible()
-      await expect(page.locator('[data-test-id="tx-category"]')).toBeVisible()
-      await expect(page.locator('[data-test-id="tx-currency"]')).toBeVisible()
-    } else {
-      // Modal is closed, check for potential add button
-      const addBtn = page
-        .locator('button:has-text("Add")')
-        .filter({ hasText: /Transaction|Add/ })
-        .first()
-      if (await addBtn.isVisible().catch(() => false)) {
-        await addBtn.click()
-        await page.waitForSelector('[data-test-id="tx-modal"]', {
-          state: 'visible',
-          timeout: 3000,
-        })
-        await expect(page.locator('[data-test-id="tx-description"]')).toBeVisible()
-        await expect(page.locator('[data-test-id="tx-amount"]')).toBeVisible()
-        await expect(page.locator('[data-test-id="tx-date"]')).toBeVisible()
-        await expect(page.locator('[data-test-id="tx-category"]')).toBeVisible()
-      }
-    }
+    await page.getByTestId('add-transaction-btn').click()
+    await expect(page.getByTestId('tx-modal')).toBeVisible()
+    await expect(page.getByTestId('tx-description')).toBeVisible()
+    await expect(page.getByTestId('tx-amount')).toBeVisible()
+    await expect(page.getByTestId('tx-date')).toBeVisible()
+    await expect(page.getByTestId('tx-category')).toBeVisible()
+    await expect(page.getByTestId('tx-currency')).toBeVisible()
   })
 
   test('should have currency options', async ({ page }) => {
@@ -115,28 +83,13 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should have date field populated', async ({ page }) => {
-    // Try to open modal if not already open
-    const addBtn = page
-      .locator('[data-test-id="add-transaction-btn"], button:has-text("Add")')
-      .first()
-    if (!(await addBtn.isVisible().catch(() => false))) {
-      await page
-        .locator('[data-test-id="add-transaction-btn"]')
-        .first()
-        .click()
-        .catch(() => {})
-    } else {
-      await addBtn.click()
-    }
+    await page.getByTestId('add-transaction-btn').click()
+    await expect(page.getByTestId('tx-modal')).toBeVisible()
 
-    // Wait for modal to open
-    await page.waitForSelector('[data-test-id="tx-modal"]', {
-      state: 'visible',
-      timeout: 3000,
-    })
-
-    const dateInput = page.locator('[data-test-id="tx-date"]')
+    const dateInput = page.getByTestId('tx-date')
     await expect(dateInput).toBeVisible()
+    // The date field defaults to today (YYYY-MM-DD), so it should never be empty.
+    await expect(dateInput).toHaveValue(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   test('should have means of payment select', async ({ page }) => {
@@ -176,9 +129,9 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should have receipt upload area', async ({ page }) => {
-    const receiptLabel = page.locator(
-      'label[for="tx-receipt"], .receipt-placeholder, [data-test-id="tx-receipt-label"]'
-    )
+    // Dormant unless the modal's advanced section is expanded; the copy is the point of the
+    // test, scoped to the receipt-label test-id.
+    const receiptLabel = page.getByTestId('tx-receipt-label')
     if (await receiptLabel.isVisible().catch(() => false)) {
       await expect(receiptLabel).toHaveText(/Click to upload receipt/i)
     }
@@ -266,36 +219,32 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should have receipt modal with preview', async ({ page }) => {
-    // Look for receipt modal or try to open it
-    const receiptModal = page.locator('#receipt-modal, [data-test-id="receipt-modal"]')
+    // Dormant unless a receipt is open; selectors migrated to test-ids for when it is.
+    const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
       await expect(receiptModal).toBeVisible()
-      const img = receiptModal.locator('img')
-      await expect(img).toBeVisible()
+      await expect(receiptModal.locator('img')).toBeVisible()
     }
   })
 
   test('should have receipt metadata section', async ({ page }) => {
-    const receiptModal = page.locator('#receipt-modal, [data-test-id="receipt-modal"]')
+    const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const metaItems = receiptModal.locator('.receipt-meta-item')
-      await expect(metaItems).toHaveCount(4)
+      await expect(page.getByTestId('receipt-meta-item')).toHaveCount(4)
     }
   })
 
   test('should have receipt download button', async ({ page }) => {
-    const receiptModal = page.locator('#receipt-modal, [data-test-id="receipt-modal"]')
+    const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const downloadBtn = receiptModal.locator('a:has-text("Download")')
-      await expect(downloadBtn).toBeVisible()
+      await expect(page.getByTestId('receipt-download')).toBeVisible()
     }
   })
 
   test('should have receipt delete button', async ({ page }) => {
-    const receiptModal = page.locator('#receipt-modal, [data-test-id="receipt-modal"]')
+    const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const deleteBtn = receiptModal.locator('button:has-text("Delete")')
-      await expect(deleteBtn).toBeVisible()
+      await expect(page.getByTestId('receipt-delete')).toBeVisible()
     }
   })
 
@@ -388,7 +337,7 @@ test.describe('Transactions CRUD Operations', () => {
 
     if (modalVisible) {
       // Try to submit form without filling required fields
-      const saveBtn = page.locator('[data-test-id="tx-save-btn"], button:has-text("Save")').first()
+      const saveBtn = page.getByTestId('tx-save-btn')
       await saveBtn.click().catch(() => {})
 
       // Form should still be open or closed gracefully
@@ -456,32 +405,24 @@ test.describe('Transactions CRUD Operations', () => {
 
   test('should be visible on page', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
-    await page.waitForSelector('.page-transactions, [data-test-id="page-transactions"]', {
-      state: 'attached',
-      timeout: 5000,
-    })
-    await expect(
-      page.locator('.page-transactions, [data-test-id="page-transactions"]')
-    ).toBeVisible()
+    await expect(page.getByTestId('page-transactions')).toBeVisible()
   })
 
   test('should load transactions list', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
-    await page.waitForTimeout(500)
 
-    // Try to find transaction list elements
-    const txElements = page.locator('.transaction-card, [data-testid="transaction-row"]')
-    const count = await txElements.count()
-    // Either there are transactions, or the page has other content
-    expect(count).toBeGreaterThanOrEqual(0)
+    // The seeded backend profile has transactions (the same data the dashboard's recent-activity
+    // panel relies on), so the table renders with rows.
+    await expect(page.getByTestId('transactions-table')).toBeVisible()
+    await expect(page.getByTestId('transactions-row').first()).toBeVisible()
+    expect(await page.getByTestId('transactions-row').count()).toBeGreaterThan(0)
   })
 
   test('should have filter buttons (if visible)', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
-    await page.waitForTimeout(500)
 
-    // Check for filter type selector if it exists
-    const txTypeSelector = page.locator('[data-test-id="tx-type-selector"]')
+    // The type selector lives inside the (closed) transaction modal here, so this stays guarded.
+    const txTypeSelector = page.getByTestId('tx-type-selector')
     const hasSelector = await txTypeSelector.isVisible({ timeout: 2000 }).catch(() => false)
     if (hasSelector) {
       await expect(txTypeSelector).toBeVisible()
@@ -546,15 +487,9 @@ test.describe('Transactions CRUD Operations', () => {
       timeout: 5000,
     })
 
-    // Cancel the modal
-    const cancelBtn = page
-      .locator('button')
-      .filter({ hasText: /cancel/i })
-      .first()
+    // The modal footer's Cancel control.
+    const cancelBtn = page.getByTestId('tx-cancel-btn')
     await expect(cancelBtn).toBeVisible()
-
-    // Just verify cancel button exists
-    expect(true).toBeTruthy()
   })
 
   test('should support switching between Add and Edit modes', async ({ page }) => {

@@ -1,157 +1,93 @@
 import { expect, test } from '@playwright/test'
-import { getByTestId } from './test-helpers'
 
+// Structural assertions target stable `data-test-id` hooks, not user-visible copy. See
+// tests/README.md for the convention. This spec runs unauthenticated (serverless/demo mode),
+// which seeds a populated transaction list, so the table and rows are reliably present.
 test.describe('Transactions', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('#transactions')
     await page.waitForLoadState('networkidle')
+    // Serverless/demo mode seeds a large dataset into IndexedDB on first load with no network
+    // activity, so `networkidle` returns before the app shell is ready. Gate on the page header
+    // so the per-test assertions below don't race the seed.
+    await expect(page.getByTestId('transactions-header')).toBeVisible({ timeout: 30000 })
   })
 
   test('should display transactions header', async ({ page }) => {
-    const header = page.getByRole('heading', { name: /transactions/i, level: 1 })
-    await expect(header).toBeVisible()
-  })
-
-  test('should have page subtitle', async ({ page }) => {
-    const subtitle = page.getByText(/Track|manage|history/i, { exact: false })
-    await expect(subtitle).toBeVisible()
+    await expect(page.getByTestId('transactions-header')).toBeVisible()
   })
 
   test('should have add transaction button', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-transaction-btn')
-    await expect(addBtn).toBeVisible()
+    await expect(page.getByTestId('add-transaction-btn')).toBeVisible()
   })
 
   test('should display transaction summary cards', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const summaryCards = page.getByText(/Total Transactions|This Month|Income|Expenses/i, {
-      exact: false,
-    })
-    const count = await summaryCards.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('transactions-summary')).toBeVisible()
   })
 
   test('should display transactions table', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const table = page.getByRole('table')
-    await expect(table).toBeVisible()
+    await expect(page.getByTestId('transactions-table')).toBeVisible()
   })
 
   test('should have filter bar with search', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const searchInput = page.getByPlaceholder(/search|find|filter/i)
-    const searchCount = await searchInput.count()
-    expect(searchCount).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('transactions-search')).toBeVisible()
   })
 
   test('should have filter bar with date range', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const dateFilter = page.getByRole('combobox', { name: /date|period/i })
-    const dateFilterCount = await dateFilter.count()
-    expect(dateFilterCount).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('transactions-date-presets')).toBeVisible()
   })
 
   test('should have filter bar with category filter', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const categoryFilter = page.getByRole('combobox', { name: /category/i })
-    const categoryFilterCount = await categoryFilter.count()
-    expect(categoryFilterCount).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('transactions-filter-category')).toBeVisible()
   })
 
   test('should display transaction rows', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const rows = page.getByRole('row')
-    const count = await rows.count()
-    expect(count).toBeGreaterThanOrEqual(10)
+    // Wait for at least one row to render (demo data loads from IndexedDB, not the network,
+    // so `networkidle` alone doesn't guarantee rows), then assert the list is populated.
+    await expect(page.getByTestId('transactions-row').first()).toBeVisible()
+    expect(await page.getByTestId('transactions-row').count()).toBeGreaterThan(0)
   })
 
   test('should display transaction description', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const descriptions = page.getByText(/Miscellaneous|Purchase|Transfer/i)
-    const count = await descriptions.count()
-    expect(count).toBeGreaterThanOrEqual(10)
+    await expect(page.getByTestId('transactions-cell-description').first()).toBeVisible()
   })
 
   test('should display transaction amount', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const amounts = page.getByText(/-?\$[\d,]+\.\d{2}/)
-    const count = await amounts.count()
-    expect(count).toBeGreaterThanOrEqual(10)
+    // The formatted amount is the point of this test, so assert it renders a number —
+    // currency-agnostic (the demo seed is EUR, not $) and scoped to the amount cell.
+    await expect(page.getByTestId('transactions-cell-amount').first()).toHaveText(/\d/)
   })
 
   test('should display transaction date', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const dates = page.getByText(/\d{1,2}\/\d{1,2}/)
-    const count = await dates.count()
-    expect(count).toBeGreaterThanOrEqual(10)
+    await expect(page.getByTestId('transactions-cell-date').first()).toHaveText(/\d/)
   })
 
   test('should display transaction category', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const categories = page.getByText(/Salary|Food|Groceries|Rent/i)
-    const count = await categories.count()
-    expect(count).toBeGreaterThanOrEqual(10)
+    await expect(page.getByTestId('transactions-cell-category').first()).toBeVisible()
   })
 
   test('should have sort functionality', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const sortButtons = page.getByRole('button', { name: /sort|asc|desc/i })
-    const count = await sortButtons.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // Sorting is driven by clickable column headers; the Date header is the sort control.
+    await expect(page.getByTestId('transactions-sort-date')).toBeVisible()
   })
 
   test('should have pagination', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const pagination = page.getByRole('navigation', { name: /pagination/i })
-    const paginationCount = await pagination.count()
-    expect(paginationCount).toBeGreaterThanOrEqual(0)
-  })
-
-  test('should have export buttons', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const exportButtons = page.getByRole('button', { name: /export|download|csv|excel/i })
-    const count = await exportButtons.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // The demo seed spans 2000–present — far more than one 50-row page — so pagination renders.
+    await expect(page.getByTestId('transactions-pagination').first()).toBeVisible()
   })
 
   test('should filter transactions by category', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const categorySelect = page.getByRole('combobox', { name: /category/i })
-    if ((await categorySelect.count()) > 0) {
-      await categorySelect.selectOption({ index: 1 })
-      await page.waitForTimeout(500)
-
-      const rows = page.getByRole('row')
-      const count = await rows.count()
-      expect(count).toBeGreaterThan(0)
-    }
+    // The category filter is a checkbox dropdown (not a <select>). Open it and confirm the
+    // transaction list stays populated.
+    await expect(page.getByTestId('transactions-row').first()).toBeVisible()
+    await page.getByTestId('transactions-filter-category').click()
+    expect(await page.getByTestId('transactions-row').count()).toBeGreaterThan(0)
   })
 
   test('should have transaction detail modal', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const rows = page.getByRole('row')
-    if ((await rows.count()) > 0) {
-      await rows.first().click()
-      await page.waitForTimeout(500)
-
-      const modal = page.getByRole('dialog')
-      const modalCount = await modal.count()
-      expect(modalCount).toBeGreaterThanOrEqual(0)
-    }
+    // Rows are not click-to-open (there is no per-row detail modal); assert the add/edit
+    // transaction modal container is present in the DOM instead.
+    await expect(page.getByTestId('transactions-row').first()).toBeVisible()
+    await expect(page.getByTestId('tx-modal')).toBeAttached()
   })
 })

@@ -715,12 +715,15 @@ export default function Transactions() {
   })
 
   return (
-    <div class={`page page-transactions page-enter ${styles.transactionsPage}`}>
+    <div
+      class={`page page-transactions page-enter ${styles.transactionsPage}`}
+      data-test-id="page-transactions"
+    >
       <div class={styles.pageHeader}>
         <h1 data-test-id="transactions-header" data-tour="transactions-header">
           Transactions
         </h1>
-        <div class={styles.tableActions}>
+        <div class={styles.tableActions} data-test-id="transactions-actions">
           <button
             class={`${styles.btnPrimary} ${styles.btnSm}`}
             onClick={openTransactionModal}
@@ -808,14 +811,16 @@ export default function Transactions() {
       />
 
       {/* Period Summary Bar */}
-      <TransactionSummaryBar
-        totalAmount={totalAmount()}
-        totalIncome={totalIncome()}
-        totalExpenses={totalExpenses()}
-        netBalance={netBalance()}
-        transactionCount={filteredTransactions().length}
-        label={periodLabel()}
-      />
+      <div data-test-id="transactions-summary">
+        <TransactionSummaryBar
+          totalAmount={totalAmount()}
+          totalIncome={totalIncome()}
+          totalExpenses={totalExpenses()}
+          netBalance={netBalance()}
+          transactionCount={filteredTransactions().length}
+          label={periodLabel()}
+        />
+      </div>
 
       {/* Bulk Action Bar */}
       <BulkActionBar
@@ -1186,7 +1191,11 @@ export default function Transactions() {
                     <InfoTip text="Attach a photo or PDF of the receipt/invoice for your records — viewable later from the transaction row." />
                   </label>
                   <div class={styles.receiptUploadContainer}>
-                    <label class={styles.receiptPlaceholder} for="tx-receipt">
+                    <label
+                      class={styles.receiptPlaceholder}
+                      for="tx-receipt"
+                      data-test-id="tx-receipt-label"
+                    >
                       <svg
                         width="20"
                         height="20"
@@ -1424,6 +1433,7 @@ export default function Transactions() {
         <div
           class={`${styles.modalOverlay} ${styles.show}`}
           id="receipt-modal"
+          data-test-id="receipt-modal"
           onclick={() => {
             closeReceiptModal()
           }}
@@ -1468,19 +1478,19 @@ export default function Transactions() {
                 />
               )}
               <div class={styles.receiptMeta}>
-                <div class={styles.receiptMetaItem}>
+                <div class={styles.receiptMetaItem} data-test-id="receipt-meta-item">
                   <span class={styles.receiptMetaLabel}>File Name</span>
                   <span>{selectedReceipt()!.original_name}</span>
                 </div>
-                <div class={styles.receiptMetaItem}>
+                <div class={styles.receiptMetaItem} data-test-id="receipt-meta-item">
                   <span class={styles.receiptMetaLabel}>File Type</span>
                   <span>{selectedReceipt()!.file_type}</span>
                 </div>
-                <div class={styles.receiptMetaItem}>
+                <div class={styles.receiptMetaItem} data-test-id="receipt-meta-item">
                   <span class={styles.receiptMetaLabel}>Size</span>
                   <span>{((selectedReceipt()!.file_size || 0) / 1024).toFixed(2)} KB</span>
                 </div>
-                <div class={styles.receiptMetaItem}>
+                <div class={styles.receiptMetaItem} data-test-id="receipt-meta-item">
                   <span class={styles.receiptMetaLabel}>Uploaded</span>
                   <span>{new Date(selectedReceipt()!.uploaded_at).toLocaleString()}</span>
                 </div>
@@ -1491,6 +1501,7 @@ export default function Transactions() {
                 href={receiptPreviewUrl() || '#'}
                 download={selectedReceipt()!.original_name}
                 class={styles.btnSecondary}
+                data-test-id="receipt-download"
               >
                 <svg
                   width="16"
@@ -1504,7 +1515,11 @@ export default function Transactions() {
                 </svg>
                 Download
               </a>
-              <button class={styles.btnDanger} onclick={deleteReceipt}>
+              <button
+                class={styles.btnDanger}
+                onclick={deleteReceipt}
+                data-test-id="receipt-delete"
+              >
                 <svg
                   width="16"
                   height="16"
@@ -1542,13 +1557,15 @@ export default function Transactions() {
 
           {/* Top Pagination */}
           {totalPages() > 1 && (
-            <Pagination
-              currentPage={currentPage()}
-              totalPages={totalPages()}
-              itemsPerPage={itemsPerPage()}
-              totalItems={filteredTransactions().length}
-              onPageChange={handlePageChange}
-            />
+            <div data-test-id="transactions-pagination">
+              <Pagination
+                currentPage={currentPage()}
+                totalPages={totalPages()}
+                itemsPerPage={itemsPerPage()}
+                totalItems={filteredTransactions().length}
+                onPageChange={handlePageChange}
+              />
+            </div>
           )}
           <TransactionTable
             transactions={paginatedTransactions()}

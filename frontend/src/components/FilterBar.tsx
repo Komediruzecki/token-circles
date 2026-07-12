@@ -229,7 +229,11 @@ export default function FilterBar(props: FilterBarProps) {
       <div class={styles.filterRow}>
         {/* Category dropdown */}
         <div class={styles.filterDropdown}>
-          <button class={styles.filterBtn} onClick={toggleCatDropdown}>
+          <button
+            class={styles.filterBtn}
+            data-test-id="transactions-filter-category"
+            onClick={toggleCatDropdown}
+          >
             <span class={styles.filterLabel}>{catLabel()}</span>
             <svg
               width="10"
@@ -373,12 +377,13 @@ export default function FilterBar(props: FilterBarProps) {
 
         {/* Type filter */}
         {props.onFilterTypeChange && (
-          <div class={styles.typeBtns}>
+          <div class={styles.typeBtns} data-test-id="transactions-type-filter">
             <For each={['all', 'income', 'expense', 'transfer']}>
               {(t) => (
                 <button
                   class={`${styles.typeBtn} ${(props.filterType || 'all') === t ? styles.typeBtnActive : ''}`}
                   onClick={() => props.onFilterTypeChange?.(t)}
+                  data-test-id={`transactions-type-${t}`}
                 >
                   {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
                 </button>
@@ -392,6 +397,7 @@ export default function FilterBar(props: FilterBarProps) {
           <input
             type="text"
             class={styles.searchInput}
+            data-test-id="transactions-search"
             placeholder="Search..."
             value={props.searchTerm || ''}
             onInput={(e) => props.onSearchChange?.((e.target as HTMLInputElement).value)}
@@ -399,7 +405,7 @@ export default function FilterBar(props: FilterBarProps) {
         )}
 
         {/* Date presets */}
-        <div class={styles.dateFilters}>
+        <div class={styles.dateFilters} data-test-id="transactions-date-presets">
           <For each={['all', 'month', 'lastMonth', 'year']}>
             {(p) => (
               <button
