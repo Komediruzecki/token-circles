@@ -1,6 +1,6 @@
 /**
  * Audit auth hardening regressions, run against the real worker in workerd via Miniflare.
- *   - S7: passwords are hashed with PBKDF2 at 600k iterations; a registered user can log in and a
+ *   - S7: passwords are hashed with PBKDF2 at 100k iterations (the Cloudflare Workers cap); a registered user can log in and a
  *         wrong password is rejected.
  *   - S9: verifyTurnstile fails CLOSED when TURNSTILE_SECRET is unset in a deployed environment
  *         (APP_ENV !== 'development'), and stays open for local dev (APP_ENV === 'development').
@@ -14,7 +14,7 @@ import type { AppEnv } from '../src/index';
 import { hashPassword, verifyPassword } from '../src/auth';
 import { verifyTurnstile } from '../src/turnstile';
 
-// ── S7: PBKDF2 at 600k iterations ─────────────────────────────────────────────
+// ── S7: PBKDF2 at 100k iterations (the Cloudflare Workers cap) ─────────────────────────────────────────────
 
 describe('password hashing (audit S7)', () => {
   beforeEach(async () => {
@@ -23,9 +23,9 @@ describe('password hashing (audit S7)', () => {
     }
   });
 
-  it('hashes at 600k iterations and round-trips verification', async () => {
+  it('hashes at 100k iterations and round-trips verification', async () => {
     const stored = await hashPassword('correct horse battery staple');
-    expect(stored.startsWith('pbkdf2$600000$')).toBe(true);
+    expect(stored.startsWith('pbkdf2$100000$')).toBe(true);
     expect(await verifyPassword('correct horse battery staple', stored)).toBe(true);
     expect(await verifyPassword('wrong password', stored)).toBe(false);
   });
