@@ -294,7 +294,10 @@ export default function Retirement() {
   })
 
   return (
-    <div class={`page page-retirement page-enter ${styles.retirementPage}`}>
+    <div
+      class={`page page-retirement page-enter ${styles.retirementPage}`}
+      data-test-id="retirement-page"
+    >
       <div class={styles.pageHeader} data-test-id="retirement-page-header">
         <div class={styles.headerTop}>
           <h1 data-test-id="retirement-header" data-tour="retirement-header">
@@ -321,75 +324,77 @@ export default function Retirement() {
       <div class={styles.retirementProjections} data-test-id="retirement-projections">
         <h2 class={styles.sectionTitle}>Projected Balances Over Time</h2>
         {projection() ? (
-          <Chart
-            id="retirement-projection-chart"
-            type="line"
-            data={{
-              labels: projectedBalances().map((pb) => pb.age.toString()),
-              datasets: [
-                {
-                  label: 'Projected Balance',
-                  data: projectedBalances().map((pb) => pb.balance),
-                  borderColor: '#59d2a2',
-                  backgroundColor: 'rgba(89, 210, 162, 0.12)',
-                  fill: true,
-                  tension: 0.4,
-                  pointRadius: 4,
-                  pointHoverRadius: 6,
+          <div data-test-id="retirement-chart">
+            <Chart
+              id="retirement-projection-chart"
+              type="line"
+              data={{
+                labels: projectedBalances().map((pb) => pb.age.toString()),
+                datasets: [
+                  {
+                    label: 'Projected Balance',
+                    data: projectedBalances().map((pb) => pb.balance),
+                    borderColor: '#59d2a2',
+                    backgroundColor: 'rgba(89, 210, 162, 0.12)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                  },
+                ],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  x: {
+                    title: {
+                      display: true,
+                      text: 'Age',
+                      color: chartColors().text,
+                    },
+                    ticks: {
+                      stepSize: 5,
+                      color: chartColors().text,
+                    },
+                    grid: { color: chartColors().border },
+                  },
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      callback: (value: any) => formatAmount(value),
+                      color: chartColors().text,
+                    },
+                    grid: { color: chartColors().border },
+                  },
                 },
-              ],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: {
-                  title: {
+                plugins: {
+                  legend: {
                     display: true,
-                    text: 'Age',
-                    color: chartColors().text,
+                    labels: {
+                      usePointStyle: true,
+                      padding: 15,
+                      font: { size: 12 },
+                      color: chartColors().text,
+                    },
                   },
-                  ticks: {
-                    stepSize: 5,
-                    color: chartColors().text,
-                  },
-                  grid: { color: chartColors().border },
-                },
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    callback: (value: any) => formatAmount(value),
-                    color: chartColors().text,
-                  },
-                  grid: { color: chartColors().border },
-                },
-              },
-              plugins: {
-                legend: {
-                  display: true,
-                  labels: {
-                    usePointStyle: true,
-                    padding: 15,
-                    font: { size: 12 },
-                    color: chartColors().text,
-                  },
-                },
-                tooltip: {
-                  mode: 'index',
-                  intersect: false,
-                  callbacks: {
-                    label: (context: any) => {
-                      const age = context.label
-                      const balance = formatAmount(context.raw)
-                      return `${age} years: ${balance}`
+                  tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                      label: (context: any) => {
+                        const age = context.label
+                        const balance = formatAmount(context.raw)
+                        return `${age} years: ${balance}`
+                      },
                     },
                   },
                 },
-              },
-            }}
-            height={250}
-            width="100%"
-          />
+              }}
+              height={250}
+              width="100%"
+            />
+          </div>
         ) : (
           <div class={styles.emptyState}>Loading projection...</div>
         )}
@@ -499,9 +504,11 @@ export default function Retirement() {
                           <h3 data-test-id="retirement-goal-name" class={styles.goalName}>
                             {goal.name}
                           </h3>
-                          <Badge status={getRetirementBadgeStatus(goal.retirement_age)}>
-                            Retire at {formatAge(goal.retirement_age)}
-                          </Badge>
+                          <span data-test-id="retirement-age-badge" style={{ display: 'contents' }}>
+                            <Badge status={getRetirementBadgeStatus(goal.retirement_age)}>
+                              Retire at {formatAge(goal.retirement_age)}
+                            </Badge>
+                          </span>
                         </div>
                         <div class={styles.goalActions}>
                           <button
@@ -521,21 +528,26 @@ export default function Retirement() {
                               <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                          <ConfirmButton
-                            class={`${styles.btnSm} ${styles.btnGhost}`}
-                            onConfirm={() => deleteGoal(goal.id)}
-                            label={
-                              <svg
-                                width="16"
-                                height="16"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            }
-                          />
+                          <span
+                            data-test-id="retirement-goal-delete-btn"
+                            style={{ display: 'contents' }}
+                          >
+                            <ConfirmButton
+                              class={`${styles.btnSm} ${styles.btnGhost}`}
+                              onConfirm={() => deleteGoal(goal.id)}
+                              label={
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              }
+                            />
+                          </span>
                         </div>
                       </div>
                       <div data-test-id="retirement-goal-balance" class={styles.goalBalance}>
@@ -599,6 +611,7 @@ export default function Retirement() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
+          data-test-id="retirement-modal-overlay"
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"
@@ -620,16 +633,18 @@ export default function Retirement() {
           }}
         >
           <div
+            data-test-id="retirement-modal"
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>
+              <h3 data-test-id="retirement-modal-title" class={styles.modalTitle}>
                 {editingGoal() ? 'Edit Goal' : 'Add Retirement Goal'}
               </h3>
               <button
+                data-test-id="retirement-modal-close"
                 class={styles.modalClose}
                 onClick={() => {
                   setShowAddModal(false)
@@ -658,6 +673,7 @@ export default function Retirement() {
                   type="text"
                   class={styles.formControl}
                   placeholder="e.g., Full Retirement, Early Retirement"
+                  data-test-id="retirement-form-name"
                   value={formData().name}
                   oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
                   required
@@ -671,6 +687,7 @@ export default function Retirement() {
                     step="0.01"
                     class={styles.formControl}
                     placeholder="1000000"
+                    data-test-id="retirement-form-target-amount"
                     value={formData().target_amount}
                     oninput={(e) => setFormData({ ...formData(), target_amount: e.target.value })}
                     required
@@ -683,6 +700,7 @@ export default function Retirement() {
                     step="0.01"
                     class={styles.formControl}
                     placeholder="50000"
+                    data-test-id="retirement-form-current-amount"
                     value={formData().current_amount}
                     oninput={(e) => setFormData({ ...formData(), current_amount: e.target.value })}
                     required
@@ -698,6 +716,7 @@ export default function Retirement() {
                     max="100"
                     class={styles.formControl}
                     placeholder="30"
+                    data-test-id="retirement-form-current-age"
                     value={formData().current_age}
                     oninput={(e) => setFormData({ ...formData(), current_age: e.target.value })}
                     required
@@ -711,6 +730,7 @@ export default function Retirement() {
                     max="100"
                     class={styles.formControl}
                     placeholder="65"
+                    data-test-id="retirement-form-retirement-age"
                     value={formData().retirement_age}
                     oninput={(e) => setFormData({ ...formData(), retirement_age: e.target.value })}
                     required
@@ -723,6 +743,7 @@ export default function Retirement() {
                   <input
                     type="date"
                     class={styles.formControl}
+                    data-test-id="retirement-form-target-date"
                     value={formData().target_date}
                     oninput={(e) => setFormData({ ...formData(), target_date: e.target.value })}
                     required
@@ -735,6 +756,7 @@ export default function Retirement() {
                     step="0.01"
                     class={styles.formControl}
                     placeholder="500"
+                    data-test-id="retirement-form-monthly-contribution"
                     value={formData().monthly_contribution}
                     oninput={(e) =>
                       setFormData({ ...formData(), monthly_contribution: e.target.value })
@@ -752,6 +774,7 @@ export default function Retirement() {
                   max="20"
                   class={styles.formControl}
                   placeholder="7"
+                  data-test-id="retirement-form-expected-return"
                   value={formData().expected_return_rate}
                   oninput={(e) =>
                     setFormData({ ...formData(), expected_return_rate: e.target.value })
@@ -759,8 +782,9 @@ export default function Retirement() {
                   required
                 />
               </div>
-              <div class={styles.modalFooter}>
+              <div data-test-id="retirement-modal-footer" class={styles.modalFooter}>
                 <button
+                  data-test-id="retirement-modal-cancel"
                   type="button"
                   class={styles.btnSecondary}
                   onClick={() => {
@@ -780,7 +804,11 @@ export default function Retirement() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <button
+                  type="submit"
+                  data-test-id="retirement-modal-submit"
+                  class={styles.btnPrimary}
+                >
                   {editingGoal() ? 'Update' : 'Add'} Goal
                 </button>
               </div>
