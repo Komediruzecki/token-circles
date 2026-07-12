@@ -51,8 +51,10 @@
   gap: 16px;
 }
 .retirement-page .projection-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -77,8 +79,10 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -123,8 +127,10 @@
   gap: 16px;
 }
 .retirement-page .goal-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -182,6 +188,12 @@
 }
 .retirement-page .retirement-projections {
   margin-bottom: 24px;
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+  border-radius: var(--radius);
+  padding: 20px;
 }
 .retirement-page .projection-chart {
   margin-bottom: 16px;

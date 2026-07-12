@@ -29,9 +29,11 @@
 import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import RenewalCycle from '../components/RenewalCycle'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { paletteColor } from '../core/brandPalette'
 import styles from './HousingPage.module.css'
 
 interface Housing {
@@ -277,32 +279,43 @@ export default function HousingForm() {
             </h3>
             <span class={styles.subTotal}>{formatCurrency(totalSubsCost())}/mo</span>
           </div>
-          <div class={styles.subscriptionList}>
-            <For each={activeSubs()}>
-              {(sub) => (
-                <div class={styles.subItem}>
-                  <div class={styles.subItemInfo}>
-                    <span
-                      class={styles.subDot}
-                      style={{ background: sub.category_color || 'var(--primary)' }}
-                    />
-                    <div>
-                      <div class={styles.subItemName}>{sub.name}</div>
-                      <div class={styles.subItemMeta}>
-                        {sub.frequency === 'monthly'
-                          ? 'Monthly'
-                          : sub.frequency === 'weekly'
-                            ? 'Weekly'
-                            : 'Biweekly'}
-                        {sub.due_date &&
-                          ` · Due ${new Date(sub.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+          <div class={styles.subscriptionBody}>
+            <RenewalCycle
+              subs={activeSubs().map((s) => ({
+                name: s.name,
+                amount: s.amount,
+                due_date: s.due_date,
+                category_color: s.category_color,
+              }))}
+              total={totalSubsCost()}
+            />
+            <div class={styles.subscriptionList}>
+              <For each={activeSubs()}>
+                {(sub, i) => (
+                  <div class={styles.subItem}>
+                    <div class={styles.subItemInfo}>
+                      <span
+                        class={styles.subDot}
+                        style={{ background: sub.category_color || paletteColor(i()) }}
+                      />
+                      <div>
+                        <div class={styles.subItemName}>{sub.name}</div>
+                        <div class={styles.subItemMeta}>
+                          {sub.frequency === 'monthly'
+                            ? 'Monthly'
+                            : sub.frequency === 'weekly'
+                              ? 'Weekly'
+                              : 'Biweekly'}
+                          {sub.due_date &&
+                            ` · Due ${new Date(sub.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                        </div>
                       </div>
                     </div>
+                    <div class={styles.subItemAmount}>{formatCurrency(sub.amount)}</div>
                   </div>
-                  <div class={styles.subItemAmount}>{formatCurrency(sub.amount)}</div>
-                </div>
-              )}
-            </For>
+                )}
+              </For>
+            </div>
           </div>
         </div>
       )}

@@ -1,0 +1,48 @@
+/**
+ * RenewalCycle — monthly billing-cycle orbit.
+ */
+
+.wrap {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.svg {
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.coreValue {
+  font-family: var(--font-display, inherit);
+  font-size: 19px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.coreLabel {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 1px;
+  fill: var(--text-secondary);
+}
+
+.todayLabel {
+  font-family: var(--font-mono, monospace);
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  fill: var(--primary);
+}
+
+.sat {
+  transition: opacity 0.15s ease;
+  cursor: default;
+}
+
+.dim {
+  opacity: 0.3;
+}
