@@ -87,23 +87,100 @@ function getCategoryIcon(name: string): string {
 }
 
 // ── parseDateString — ported from importRoutes.parseDateString ────────────────
-// The numeric Excel-serial branch is dropped: it relied on spreadsheetService and
-// only fires for binary-spreadsheet imports, which aren't supported on Workers.
+// Ported with two audit fixes (I2):
+//   1. An out-of-range month/day no longer silently rolls into another month/year.
+//      The old `new Date(y, m-1, d)` turned "04/13/2026" into Jan 2027 (month index 12
+//      overflows to the next year); it now counts as unparseable and falls back to today().
+//   2. The final date is formatted from the explicit y/m/d integers as `${y}-${pad(m)}-${pad(d)}`
+//      rather than via `new Date(...).toISOString()`, so the runtime timezone can never shift
+//      the calendar day. For strings only the JS Date parser understands, UTC parts are used.
+//
+// The numeric Excel-serial branch is dropped: it relied on spreadsheetService and only fires for
+// binary-spreadsheet imports, which aren't supported on Workers.
 function parseDateString(dateStr: unknown): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
   const today = () => new Date().toISOString().split('T')[0];
+  const inRange = (m: number, d: number) => m >= 1 && m <= 12 && d >= 1 && d <= 31;
+  const format = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
   if (dateStr === null || dateStr === undefined || dateStr === '') return today();
   const s = String(dateStr).trim();
-  const euMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (euMatch) {
-    const [, d, m, y] = euMatch;
-    return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10))
-      .toISOString()
-      .split('T')[0];
+
+  // ISO yyyy-mm-dd (the unambiguous, leading form): take the parts verbatim.
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1]!, 10);
+    const m = parseInt(isoMatch[2]!, 10);
+    const d = parseInt(isoMatch[3]!, 10);
+    return inRange(m, d) ? format(y, m, d) : today();
   }
+
+  // nn[/.-]nn[/.-]yyyy — ambiguous day/month order. Resolve by range:
+  //   first > 12  → day-first;   second > 12 → month-first;
+  //   both <= 12  → day-first (this app targets EU banks);   both > 12 → invalid.
+  const dmyMatch = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (dmyMatch) {
+    const a = parseInt(dmyMatch[1]!, 10);
+    const b = parseInt(dmyMatch[2]!, 10);
+    const y = parseInt(dmyMatch[3]!, 10);
+    let d: number;
+    let m: number;
+    if (a > 12 && b <= 12) {
+      d = a;
+      m = b; // day-first
+    } else if (b > 12 && a <= 12) {
+      m = a;
+      d = b; // month-first
+    } else if (a <= 12 && b <= 12) {
+      d = a;
+      m = b; // ambiguous → day-first (EU default)
+    } else {
+      return today(); // both > 12 → unparseable
+    }
+    return inRange(m, d) ? format(y, m, d) : today();
+  }
+
+  // Anything else the JS Date parser understands (e.g. "Apr 13 2026", ISO datetimes).
+  // Format from UTC parts so a calendar day is never shifted by the runtime timezone
+  // (a bare Excel serial isn't handled here — that branch is intentionally dropped, above).
   const date = new Date(s);
-  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+  if (!isNaN(date.getTime())) {
+    return format(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+  }
   return today();
 }
+
+// ── parseFlexibleAmount — mirror of the frontend bankImport parseFlexibleNumber (I1) ──
+// EU bank exports write amounts with either convention. When BOTH separators are present the
+// LAST one is the decimal separator ("1.234,56" and "1,234.56" both → 1234.56); a lone comma is
+// a decimal comma ("1234,56" → 1234.56); otherwise it is a plain dot-decimal number. A value that
+// is already a JS number passes straight through. Unparseable → 0 (the prior `Number()`/`|| 0`
+// default). Used for the transaction amount(s) that feed account balances in /import/execute.
+function parseFlexibleAmount(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value === null || value === undefined) return 0;
+  const s = String(value).replace(/\s/g, '');
+  if (!s) return 0;
+  const hasDot = s.includes('.');
+  const hasComma = s.includes(',');
+  // European: strip '.' thousands, treat ',' as the decimal point.
+  const european = () => parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  // US/JS: strip ',' thousands, '.' is already the decimal point.
+  const dot = () => parseFloat(s.replace(/,/g, ''));
+  let n: number;
+  if (hasDot && hasComma) {
+    n = s.lastIndexOf(',') > s.lastIndexOf('.') ? european() : dot();
+  } else if (hasComma) {
+    n = european();
+  } else {
+    n = dot();
+  }
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Cap the uploaded file size BEFORE parsing (S8). /import/upload parses xlsx/csv entirely in
+// memory, so an unbounded body is a memory-exhaustion vector; 10 MB comfortably covers real
+// bank exports. Mirrors the RECEIPT_MAX_BYTES guard in routes/receipts.ts.
+const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 
 // Pull a value from a row using any of the casing variants the Express code checks.
 function pick(row: Record<string, any>, mapping: Record<string, any>, key: string): any {
@@ -176,6 +253,13 @@ importRoutes.post('/api/import/upload', requireAuth, async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'] ?? body['import'];
   if (!(file instanceof File)) throw new HttpError(400, 'No file uploaded');
+  // Size cap BEFORE parsing (S8): refuse an oversized workbook rather than parse it in memory.
+  if (file.size > IMPORT_MAX_BYTES) {
+    throw new HttpError(
+      413,
+      `File too large (max ${Math.round(IMPORT_MAX_BYTES / 1024 / 1024)}MB)`
+    );
+  }
   const requested =
     typeof body['sheetName'] === 'string' ? (body['sheetName'] as string) : undefined;
   const buf = new Uint8Array(await file.arrayBuffer());
@@ -423,7 +507,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     const catLower = catName.toLowerCase();
     const categoryId = catLower && categoryMap.has(catLower) ? categoryMap.get(catLower)! : null;
 
-    const amountRaw = parseFloat(pick(row, mapping, 'amount')) || 0;
+    const amountRaw = parseFlexibleAmount(pick(row, mapping, 'amount'));
     const amount = Math.abs(amountRaw);
     const dateRaw = pick(row, mapping, 'date') ?? today();
     const currency = pick(row, mapping, 'currency') || 'USD';
@@ -475,7 +559,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         pick(row, mapping, 'payor') || '',
         categoryId,
         currency,
-        parseFloat(pick(row, mapping, 'amount_local') ?? amount) || amount,
+        parseFlexibleAmount(pick(row, mapping, 'amount_local') ?? amount) || amount,
         mopName,
         parseFloat(pick(row, mapping, 'exchange_rate') ?? 1.0) || 1.0,
         validatedType,
