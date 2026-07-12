@@ -8,19 +8,22 @@ test.describe('Loan Amortization Table', () => {
   })
 
   test('should display amortization schedule when clicking View Amortization', async ({ page }) => {
-    // Find and click the first "View Amortization" button
-    const amortBtn = page.locator('[title="View Amortization"]').first()
+    // Open the amortization view for the first seeded loan.
+    const amortBtn = page.getByTestId('loans-amortization-btn').first()
     await expect(amortBtn).toBeVisible({ timeout: 10000 })
     await amortBtn.click()
 
-    // Wait for API call and render - Total Paid summary card should appear
-    await expect(page.getByText('Total Paid')).toBeVisible({ timeout: 10000 })
+    // The panel is rendered by LoanAmortizationTable — a component outside this migration's scope,
+    // so it exposes no inner test-ids of its own. Loans.tsx wraps it in the `loans-amortization`
+    // container, so scope these assertions under that hook instead of searching the whole page.
+    // The summary-card labels are the point of the copy assertions, so matching text is correct.
+    const amortization = page.getByTestId('loans-amortization')
+    await expect(amortization).toBeVisible({ timeout: 10000 })
+    await expect(amortization.getByText('Total Paid')).toBeVisible({ timeout: 10000 })
+    await expect(amortization.getByText('Total Interest')).toBeVisible()
+    await expect(amortization.getByText('Payoff Date')).toBeVisible()
 
-    // Verify summary cards show data
-    await expect(page.getByText('Total Interest')).toBeVisible()
-    await expect(page.getByText('Payoff Date')).toBeVisible()
-
-    // Verify the amortization schedule table is rendered
-    await expect(page.locator(`[class*="amortTable"] table`)).toBeVisible()
+    // The rendered amortization schedule table lives inside the same container.
+    await expect(amortization.locator('table').first()).toBeVisible()
   })
 })
