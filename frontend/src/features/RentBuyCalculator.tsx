@@ -245,7 +245,9 @@ export default function RentBuyCalculator(props: Props) {
   return (
     <div class={sharedStyles.page}>
       <div class={sharedStyles.pageHeader}>
-        <h1 data-tour="calc-rentbuy">Rent vs Buy Calculator</h1>
+        <h1 data-test-id="rent-buy-header" data-tour="calc-rentbuy">
+          Rent vs Buy Calculator
+        </h1>
         <p>Compare long-term costs between renting and buying</p>
       </div>
 

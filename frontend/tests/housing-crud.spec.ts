@@ -47,10 +47,9 @@ test.describe('Housing CRUD Operations', () => {
 
   test('should display loading state', async ({ page }) => {
     await navigateToRoute(page, 'housing')
-    await page.waitForTimeout(500)
 
-    const content = page.locator('h1').first()
-    const hasContent = await content.isVisible({ timeout: 500 }).catch(() => false)
-    expect(hasContent).toBe(true)
+    // The header renders immediately, outside the loading/empty/list branch, so it is the
+    // stable signal that the page mounted regardless of data state.
+    await expect(getByTestId(page, 'housing-header')).toBeVisible()
   })
 })

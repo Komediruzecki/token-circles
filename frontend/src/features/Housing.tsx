@@ -243,16 +243,21 @@ export default function HousingForm() {
       </div>
 
       {/* Summary Cards */}
-      <div class={styles.housingSummary}>
-        <div class={`${styles.summaryCard} ${styles.highlighted}`}>
+      <div class={styles.housingSummary} data-test-id="housing-summary">
+        <div
+          class={`${styles.summaryCard} ${styles.highlighted}`}
+          data-test-id="housing-summary-total"
+        >
           <div class={styles.summaryLabel}>Monthly Total</div>
-          <div class={styles.summaryValue}>{formatAmount(totalMonthlyCost())}</div>
+          <div class={styles.summaryValue} data-test-id="housing-summary-total-value">
+            {formatAmount(totalMonthlyCost())}
+          </div>
         </div>
-        <div class={styles.summaryCard}>
+        <div class={styles.summaryCard} data-test-id="housing-summary-active">
           <div class={styles.summaryLabel}>Active Expenses</div>
           <div class={styles.summaryValue}>{housings().length}</div>
         </div>
-        <div class={styles.summaryCard}>
+        <div class={styles.summaryCard} data-test-id="housing-summary-autopay">
           <div class={styles.summaryLabel}>Autopay Enabled</div>
           <div class={styles.summaryValue}>
             {housings().filter((h) => h.autopay === true || h.autopay === 1).length}
@@ -323,7 +328,7 @@ export default function HousingForm() {
       {loading() ? (
         <div class={styles.emptyState}>Loading housing expenses...</div>
       ) : housings().length === 0 ? (
-        <div class={styles.emptyState}>
+        <div class={styles.emptyState} data-test-id="housing-empty">
           <p>No housing expenses yet</p>
           <p>Add your first housing expense to start tracking your housing costs.</p>
           <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
@@ -331,47 +336,57 @@ export default function HousingForm() {
           </button>
         </div>
       ) : (
-        <div class={styles.housingList}>
+        <div class={styles.housingList} data-test-id="housing-list">
           <For each={housings()}>
             {(housing) => (
-              <div class={styles.housingCard}>
+              <div class={styles.housingCard} data-test-id="housing-card">
                 <div class={styles.housingHeader}>
                   <div class={styles.housingIcon}>{getTypeIcon(housing.type)}</div>
                   <div class={styles.housingInfo}>
-                    <h3 class={styles.housingName}>{getPropertyName(housing)}</h3>
-                    <p class={styles.housingType}>{getTypeLabel(housing.type)}</p>
+                    <h3 class={styles.housingName} data-test-id="housing-card-name">
+                      {getPropertyName(housing)}
+                    </h3>
+                    <p class={styles.housingType} data-test-id="housing-card-type">
+                      {getTypeLabel(housing.type)}
+                    </p>
                   </div>
                   <div class={styles.housingActions}>
-                    {housing.autopay === true || housing.autopay === 1 ? (
-                      <Badge status="success">Autopay</Badge>
-                    ) : (
-                      <Badge status="default">Manual</Badge>
-                    )}
-                    <ConfirmButton
-                      class={`${styles.btnSm} ${styles.btnGhost}`}
-                      onConfirm={() => deleteHousing(housing.id)}
-                      label={
-                        <svg
-                          width="16"
-                          height="16"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      }
-                    />
+                    <span data-test-id="housing-card-autopay">
+                      {housing.autopay === true || housing.autopay === 1 ? (
+                        <Badge status="success">Autopay</Badge>
+                      ) : (
+                        <Badge status="default">Manual</Badge>
+                      )}
+                    </span>
+                    <span data-test-id="housing-card-delete">
+                      <ConfirmButton
+                        class={`${styles.btnSm} ${styles.btnGhost}`}
+                        onConfirm={() => deleteHousing(housing.id)}
+                        label={
+                          <svg
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        }
+                      />
+                    </span>
                   </div>
                 </div>
                 <div class={styles.housingAmount}>
                   <div class={styles.amountLabel}>Monthly Cost</div>
-                  <div class={styles.amountValue}>{formatAmount(getMonthlyAmount(housing))}</div>
+                  <div class={styles.amountValue} data-test-id="housing-card-amount">
+                    {formatAmount(getMonthlyAmount(housing))}
+                  </div>
                 </div>
                 <div class={styles.housingDetails}>
                   <div class={styles.detailItem}>
                     <span class={styles.detailLabel}>Due</span>
-                    <span class={styles.detailValue}>
+                    <span class={styles.detailValue} data-test-id="housing-card-due">
                       {housing.due_date
                         ? housing.due_date
                         : `${housing.due_month} / ${housing.due_day}`}
@@ -380,7 +395,9 @@ export default function HousingForm() {
                   {housing.notes && (
                     <div class={styles.detailItem}>
                       <span class={styles.detailLabel}>Notes</span>
-                      <span class={styles.detailValue}>{housing.notes}</span>
+                      <span class={styles.detailValue} data-test-id="housing-card-notes">
+                        {housing.notes}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -396,6 +413,7 @@ export default function HousingForm() {
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"
+          data-test-id="housing-modal"
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false)
           }}
@@ -419,6 +437,7 @@ export default function HousingForm() {
                 <label class={styles.formLabel}>Expense Type</label>
                 <select
                   class={styles.formControl}
+                  data-test-id="housing-type-select"
                   value={formData().type}
                   oninput={(e) =>
                     setFormData({ ...formData(), type: e.target.value as Housing['type'] })
@@ -437,6 +456,7 @@ export default function HousingForm() {
                 <input
                   type="text"
                   class={styles.formControl}
+                  data-test-id="housing-property-input"
                   placeholder="e.g., Main Apartment, Monthly Payment"
                   value={formData().property_name}
                   oninput={(e) => setFormData({ ...formData(), property_name: e.target.value })}
@@ -449,6 +469,7 @@ export default function HousingForm() {
                   type="number"
                   step="0.01"
                   class={styles.formControl}
+                  data-test-id="housing-amount-input"
                   placeholder="1200.00"
                   value={formData().monthly_amount}
                   oninput={(e) => setFormData({ ...formData(), monthly_amount: e.target.value })}
@@ -460,6 +481,7 @@ export default function HousingForm() {
                   <label class={styles.formLabel}>Due Month</label>
                   <select
                     class={styles.formControl}
+                    data-test-id="housing-due-month-select"
                     value={formData().due_month}
                     oninput={(e) =>
                       setFormData({ ...formData(), due_month: parseInt(e.target.value) })
@@ -479,6 +501,7 @@ export default function HousingForm() {
                     min="1"
                     max="31"
                     class={styles.formControl}
+                    data-test-id="housing-due-day-input"
                     placeholder="1"
                     value={formData().due_day}
                     oninput={(e) =>
@@ -509,6 +532,7 @@ export default function HousingForm() {
                 <label class={styles.toggleSwitch}>
                   <input
                     type="checkbox"
+                    data-test-id="housing-autopay-toggle"
                     checked={formData().autopay}
                     oninput={(e) => setFormData({ ...formData(), autopay: e.target.checked })}
                   />
@@ -519,6 +543,7 @@ export default function HousingForm() {
                 <label class={styles.formLabel}>Notes (optional)</label>
                 <textarea
                   class={styles.formControl}
+                  data-test-id="housing-notes-input"
                   placeholder="Additional details..."
                   value={formData().notes}
                   oninput={(e) => setFormData({ ...formData(), notes: e.target.value })}
@@ -533,7 +558,7 @@ export default function HousingForm() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <button type="submit" class={styles.btnPrimary} data-test-id="housing-submit-btn">
                   Add Expense
                 </button>
               </div>

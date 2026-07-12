@@ -9,7 +9,7 @@ test.describe('Rent vs Buy Calculator', () => {
   })
 
   test('should display page header', async ({ page }) => {
-    const header = page.getByRole('heading', { name: /Rent vs Buy/i, level: 1 })
+    const header = getByTestId(page, 'rent-buy-header')
     await expect(header).toBeVisible()
   })
 
@@ -28,17 +28,17 @@ test.describe('Rent vs Buy Calculator', () => {
   })
 
   test('should calculate with default values and show results', async ({ page }) => {
-    await expect(page.getByText('Total Rent Paid')).toBeVisible({ timeout: 10000 })
-    await expect(
-      page.getByText('Total Mortgage + Costs').or(page.getByText('Total Mortgage'))
-    ).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('Winner')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'total-rent-paid')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'total-mortgage-costs')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'winner-value')).toBeVisible({ timeout: 10000 })
   })
 
   test('should show break-even year with default values', async ({ page }) => {
-    await expect(
-      page.getByText(/After/).and(page.getByText(/years, buying becomes cheaper/))
-    ).toBeVisible({ timeout: 10000 })
+    // The break-even message renders only when buying overtakes renting within the horizon,
+    // which the default inputs produce. Scope the copy assertion to its test-id container.
+    const message = getByTestId(page, 'break-even-message')
+    await expect(message).toBeVisible({ timeout: 10000 })
+    await expect(message).toContainText(/buying becomes cheaper/i)
   })
 
   test('default values produce numeric rent total', async ({ page }) => {
@@ -118,10 +118,10 @@ test.describe('Rent vs Buy Calculator', () => {
   })
 
   test('should show Winner and Savings in comparison card', async ({ page }) => {
-    const card = getByTestId(page, 'comparison-card')
-    await expect(card.getByText('Winner')).toBeVisible({ timeout: 10000 })
-    await expect(card.getByText('Savings', { exact: true })).toBeVisible({ timeout: 10000 })
-    await expect(card.getByText('Break-even')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'comparison-card')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'winner-value')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'savings-value')).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'break-even-value')).toBeVisible({ timeout: 10000 })
   })
 
   test('should show Rent Scenario and Buy Scenario summary cards with dynamic horizon', async ({
@@ -129,8 +129,17 @@ test.describe('Rent vs Buy Calculator', () => {
   }) => {
     await getByTestId(page, 'horizon-input').fill('25')
     await page.waitForTimeout(800)
-    await expect(page.getByText('Rent Scenario (25 years)')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('Buy Scenario (25 years)')).toBeVisible({ timeout: 10000 })
+    // The horizon value flows into the card titles, so the copy itself is under test here —
+    // scope it to each card's test-id rather than searching the whole page.
+    await expect(getByTestId(page, 'rent-scenario-card')).toContainText(
+      'Rent Scenario (25 years)',
+      {
+        timeout: 10000,
+      }
+    )
+    await expect(getByTestId(page, 'buy-scenario-card')).toContainText('Buy Scenario (25 years)', {
+      timeout: 10000,
+    })
   })
 
   test('should show graph/chart visualization', async ({ page }) => {
