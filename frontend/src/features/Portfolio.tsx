@@ -4,6 +4,7 @@
  */
 
 import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import {
   apiDelete,
   apiGet,
@@ -14,6 +15,7 @@ import {
   showToast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { paletteColor } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
 import { convertToBase } from '../core/currency'
 import styles from './PortfolioPage.module.css'
@@ -253,22 +255,6 @@ export default function Portfolio() {
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
   }
 
-  // Calculate allocation colors for pie chart
-  const allocationColors = [
-    '#3b82f6',
-    '#ef4444',
-    '#10b981',
-    '#f59e0b',
-    '#8b5cf6',
-    '#ec4899',
-    '#06b6d4',
-    '#f97316',
-    '#6366f1',
-    '#14b8a6',
-  ]
-
-  const getAllocationColor = (idx: number) => allocationColors[idx % allocationColors.length]
-
   return (
     <div class={`${styles.portfolioPage} page page-portfolio page-enter instrument-deck`}>
       <div class={styles.pageHeader}>
@@ -441,72 +427,19 @@ export default function Portfolio() {
               </div>
             </div>
 
-            {/* Allocation Sidebar */}
+            {/* Allocation Sidebar — holdings as a value constellation */}
             <div class={styles.sidebar}>
               <h2 class={styles.sectionTitle}>Allocation</h2>
               <Show when={summary()}>
-                <div class={styles.pieContainer}>
-                  <svg viewBox="0 0 200 200" class={styles.pieChart}>
-                    {(() => {
-                      const alloc = liveSummary()!.allocation
-                      if (alloc.length === 0) return null
-                      const total = alloc.reduce((s, a) => s + a.value, 0) || 1
-                      let cumulativeAngle = 0
-                      return alloc.map((a, i) => {
-                        const angle = (a.value / total) * 360
-                        const startAngle = cumulativeAngle
-                        cumulativeAngle += angle
-                        const endAngle = cumulativeAngle
-
-                        const startRad = ((startAngle - 90) * Math.PI) / 180
-                        const endRad = ((endAngle - 90) * Math.PI) / 180
-
-                        const r = 80
-                        const cx = 100
-                        const cy = 100
-
-                        const x1 = cx + r * Math.cos(startRad)
-                        const y1 = cy + r * Math.sin(startRad)
-                        const x2 = cx + r * Math.cos(endRad)
-                        const y2 = cy + r * Math.sin(endRad)
-
-                        const largeArc = angle > 180 ? 1 : 0
-
-                        const pathD = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
-
-                        return (
-                          <path
-                            d={pathD}
-                            fill={getAllocationColor(i)}
-                            stroke="var(--card-bg)"
-                            stroke-width="2"
-                          />
-                        )
-                      })
-                    })()}
-                    <circle cx="100" cy="100" r="45" fill="var(--card-bg)" />
-                  </svg>
-                  <div class={styles.pieTotal}>
-                    <div class={styles.pieTotalValue}>
-                      {formatAmount(liveSummary()!.totalValue)}
-                    </div>
-                  </div>
-                </div>
-                <div class={styles.legend}>
-                  <For each={liveSummary()!.allocation}>
-                    {(a, i) => (
-                      <div class={styles.legendItem}>
-                        <span
-                          class={styles.legendDot}
-                          style={{ background: getAllocationColor(i()) }}
-                        />
-                        <span class={styles.legendTicker}>{a.ticker}</span>
-                        <span class={styles.legendPct}>{a.percentage.toFixed(1)}%</span>
-                        <span class={styles.legendValue}>{formatAmount(a.value)}</span>
-                      </div>
-                    )}
-                  </For>
-                </div>
+                <CategoryOrbits
+                  categories={liveSummary()!.allocation.map((a, i) => ({
+                    category_name: a.ticker,
+                    category_color: paletteColor(i),
+                    amount: a.value,
+                  }))}
+                  label="value"
+                  maxRings={8}
+                />
               </Show>
             </div>
           </div>
