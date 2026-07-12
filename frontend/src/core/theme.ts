@@ -91,14 +91,22 @@ export class ThemeStore {
   getChartColors() {
     const cs = window.getComputedStyle(document.documentElement)
     const token = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback
+    const alpha = (hex: string, a: number) => {
+      const m = /^#([0-9a-f]{6})$/i.exec(hex)
+      if (!m) return hex
+      const n = parseInt(m[1], 16)
+      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
+    }
     const primary = token('--primary', '#6e9bff')
+    const income = token('--income', '#7dffb0')
+    const expense = token('--expense', '#ff9d9d')
     return {
-      income: token('--income', '#7dffb0'),
-      expense: token('--expense', '#ff9d9d'),
+      income,
+      expense,
       transfer: token('--transfer', '#93b4ff'),
       primary,
-      incomeBg: 'rgba(34,197,94,.2)',
-      expenseBg: 'rgba(239,68,68,.2)',
+      incomeBg: alpha(income, 0.12),
+      expenseBg: alpha(expense, 0.12),
       primaryBg: token('--chart-primary-bg', 'rgba(110,155,255,.12)'),
       grid: token('--chart-grid', this.isDark() ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)'),
       text: token('--text', '#eaf0ff'),

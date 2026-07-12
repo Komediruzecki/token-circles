@@ -94,53 +94,83 @@
 }
 
 .metric-card {
-  background: var(--card-bg);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--primary) 14%, var(--border));
   box-shadow: var(--shadow);
   padding: 16px;
   position: relative;
   overflow: hidden;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Semantic accent: a soft light-line that fades out to the right, like an
+   instrument readout — color is information (income/expense/net). */
 .metric-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: var(--primary);
+  height: 2px;
+  background: linear-gradient(90deg, var(--metric-accent, var(--primary)) 0%, transparent 85%);
 }
 
-.metric-card.income::before {
-  background: var(--income);
+.metric-card::after {
+  content: '';
+  position: absolute;
+  top: -28px;
+  left: -12px;
+  width: 120px;
+  height: 56px;
+  background: radial-gradient(
+    closest-side,
+    var(--metric-accent, var(--primary)) 0%,
+    transparent 100%
+  );
+  opacity: 0.12;
+  pointer-events: none;
 }
 
-.metric-card.expense::before {
-  background: var(--expense);
+.metric-card.income {
+  --metric-accent: var(--income);
 }
 
-.metric-card.balance::before {
-  background: var(--primary);
+.metric-card.expense {
+  --metric-accent: var(--expense);
 }
 
-.metric-card.networth::before {
-  background: var(--success);
+.metric-card.balance {
+  --metric-accent: var(--primary);
+}
+
+.metric-card.networth {
+  --metric-accent: var(--accent-warm, var(--success));
 }
 
 .metric-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.16em;
 }
 
 .metric-value {
+  font-family: var(--font-display);
   font-size: 28px;
-  font-weight: 700;
-  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 6px;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -201,9 +231,11 @@
 }
 
 .widgetCard {
-  background: var(--card-bg);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   box-shadow: var(--shadow);
   padding: 16px;
   min-height: 200px;
@@ -267,9 +299,11 @@
 }
 
 .card {
-  background: var(--card-bg);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
   box-shadow: var(--shadow);
   padding: 20px;
   margin-bottom: 16px;
