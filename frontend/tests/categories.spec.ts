@@ -60,7 +60,7 @@ test.describe('Categories', () => {
     // Categories page shows spending per category instead of transaction count
     const cards = getByTestId(page, 'category-card')
     const count = await cards.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    expect(count).toBeGreaterThanOrEqual(1)
   })
 
   test('should display spending amount for category', async ({ page }) => {
@@ -68,7 +68,7 @@ test.describe('Categories', () => {
 
     const amounts = getByTestId(page, 'category-spending')
     const count = await amounts.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    expect(count).toBeGreaterThanOrEqual(1)
   })
 
   test('should have category action buttons', async ({ page }) => {
@@ -105,7 +105,7 @@ test.describe('Categories', () => {
     // Category color is shown via background color on the icon wrapper
     const colorIndicators = getByTestId(page, 'category-color')
     const count = await colorIndicators.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    expect(count).toBeGreaterThanOrEqual(1)
   })
 
   test('should have multiple category tabs', async ({ page }) => {
@@ -135,7 +135,7 @@ test.describe('Categories', () => {
     // Each category card shows its spending amount
     const spendingElements = getByTestId(page, 'category-spending')
     const count = await spendingElements.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    expect(count).toBeGreaterThanOrEqual(1)
   })
 
   test('should have add category modal', async ({ page }) => {
