@@ -31,7 +31,8 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createMemo, createResource, createSignal, For } from 'solid-js'
+import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
@@ -299,6 +300,21 @@ export default function Accounts() {
           </div>
         </div>
       </div>
+
+      <Show when={!loading() && accounts().length > 0}>
+        <div class={styles.netWorthMap}>
+          <h3 class={styles.netWorthMapTitle}>Net worth map</h3>
+          <AccountConstellation
+            accounts={accounts().map((a) => ({
+              id: a.id,
+              name: a.name,
+              type: a.type,
+              balance: a.balance,
+              bank_name: a.bank_name,
+            }))}
+          />
+        </div>
+      </Show>
 
       <div data-tour="accounts-list">
         {loading() ? (

@@ -138,7 +138,7 @@ export default function Bills() {
   const [categoryForm, setCategoryForm] = createSignal({
     name: '',
     type: 'expense' as 'expense' | 'income',
-    color: '#6b7280',
+    color: '#7182a8',
   })
 
   // Tab state: 'all' | 'subscriptions' | 'calendar'
@@ -194,7 +194,7 @@ export default function Bills() {
     try {
       await apiPost('/api/categories', categoryForm())
       showToast('Category added', 'success')
-      setCategoryForm({ name: '', type: 'expense', color: '#6b7280' })
+      setCategoryForm({ name: '', type: 'expense', color: '#7182a8' })
       setShowCategoryModal(false)
       refetchBills()
     } catch (err) {
