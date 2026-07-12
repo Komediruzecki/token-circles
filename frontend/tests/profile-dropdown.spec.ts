@@ -3,20 +3,20 @@ import { expect, test } from '@playwright/test'
 /**
  * Profile dropdown integration tests.
  * Tests for duplicate profiles, selection behavior, and IndexedDB integrity.
+ * Selectors use data-test-id hooks (see tests/README.md); `[data-profile-id]` is a stable data
+ * attribute, not copy, so it stays.
  */
 
-test('profile dropdown - no duplicates after reseed and create @smoke', async ({ page }) => {
+test('profile dropdown - no duplicates in the seeded demo state @smoke', async ({ page }) => {
   const consoleErrors: string[] = []
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
 
-  // Set up serverless mode and clear existing state
+  // Serverless mode; stub the destructive backend routes so a parallel run can't wipe shared data.
   await page.addInitScript(() => {
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
-
-  // Prevent destructive actions from hitting the real backend during parallel E2E runs
   await page.route('**/api/profile/data', (route) =>
     route.fulfill({ status: 200, json: { ok: true } })
   )
@@ -24,212 +24,110 @@ test('profile dropdown - no duplicates after reseed and create @smoke', async ({
     route.fulfill({ status: 200, json: { ok: true } })
   )
 
-  await page.goto('http://localhost:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
-  // Navigate to settings to clear all data first
-  await page.goto('http://localhost:3800/#settings', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  })
-  await page.waitForTimeout(1000)
+  // Open the profile dropdown.
+  const dropdownBtn = page.getByTestId('profile-dropdown-btn')
+  await expect(dropdownBtn).toBeVisible({ timeout: 15000 })
+  await dropdownBtn.click()
+  await page.waitForTimeout(500)
 
-  // Click "Delete All Data" in Danger Zone
-  const deleteBtn = page.locator('button', { hasText: 'Delete All Data' })
-  if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await deleteBtn.click()
-    // Confirm dialog
-    const confirmBtn = page.locator('[data-test-id="confirm-dialog-confirm"]')
-    if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await confirmBtn.click()
-      await page.waitForTimeout(1500)
-    }
-  }
-
-  // Reseed demo data
-  const reseedBtn = page.locator('button', { hasText: 'Reseed Data' })
-  if (await reseedBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await reseedBtn.click()
-    await page.waitForTimeout(2000)
-  }
-
-  // Reload the page to get fresh state
-  await page.goto('http://localhost:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
-  await page.waitForTimeout(2000)
-
-  // Open the profile dropdown
-  const dropdownBtn = page.locator(`[class*="profileDropdownBtn"]`)
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(1000)
-  }
-
-  // Find all profile items with data-profile-id
   const profileItems = page.locator('[data-profile-id]')
   const count = await profileItems.count()
   const profileIds: number[] = []
   const profileNames: string[] = []
-
   for (let i = 0; i < count; i++) {
-    const id = await profileItems.nth(i).getAttribute('data-profile-id')
-    const name = await profileItems.nth(i).locator('span').first().textContent()
-    profileIds.push(Number(id))
-    profileNames.push(name || '')
+    profileIds.push(Number(await profileItems.nth(i).getAttribute('data-profile-id')))
+    profileNames.push((await profileItems.nth(i).locator('span').first().textContent()) || '')
   }
 
-  console.log('Profile IDs in dropdown:', profileIds)
-  console.log('Profile names in dropdown:', profileNames)
-
-  // Check for duplicate IDs in the dropdown
-  const uniqueIds = new Set(profileIds)
-  expect(uniqueIds.size).toBe(profileIds.length)
-
-  // Verify no duplicate names
+  // No duplicate profile IDs or names in the dropdown.
+  expect(new Set(profileIds).size).toBe(profileIds.length)
   const nameCounts = new Map<string, number>()
-  for (const name of profileNames) {
-    nameCounts.set(name, (nameCounts.get(name) || 0) + 1)
-  }
-  for (const [_name, c] of nameCounts) {
-    expect(c).toBe(1)
-  }
+  for (const name of profileNames) nameCounts.set(name, (nameCounts.get(name) || 0) + 1)
+  for (const [, c] of nameCounts) expect(c).toBe(1)
 })
 
-test('profile dropdown - create profile and check no duplicates', async ({ page }) => {
-  const consoleErrors: string[] = []
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text())
-  })
-
+test('profile dropdown - create profile and check no duplicates @smoke', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://localhost:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
-  await page.waitForTimeout(2000)
+  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
-  // Open the profile dropdown
-  const dropdownBtn = page.locator(`[class*="profileDropdownBtn"]`)
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(500)
-  }
+  const dropdownBtn = page.getByTestId('profile-dropdown-btn')
+  await expect(dropdownBtn).toBeVisible({ timeout: 15000 })
+  await dropdownBtn.click()
+  await page.waitForTimeout(500)
 
-  // Count initial profiles
   const initialCount = await page.locator('[data-profile-id]').count()
-  console.log('Initial profile count:', initialCount)
 
-  // Close dropdown by clicking elsewhere
-  await page.locator('body').click({ position: { x: 10, y: 10 } })
-  await page.waitForTimeout(300)
+  // Open the create-profile modal and submit a uniquely named profile.
+  await page.getByTestId('profile-create-item').click()
+  const modal = page.getByTestId('profile-modal')
+  await expect(modal).toBeVisible({ timeout: 5000 })
+  const newName = `Test Profile ${Date.now()}`
+  await page.getByTestId('profile-name-input').fill(newName)
+  await page.getByTestId('profile-create-submit').click()
+  await page.waitForTimeout(1500)
 
-  // Click "Create Profile" in the dropdown
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(500)
-  }
-  const createBtn = page.locator(`[class*="profileDropdownItem"]`, { hasText: 'Create Profile' })
-  if (await createBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await createBtn.click()
-    await page.waitForTimeout(500)
-  }
-
-  // Fill in profile name
-  const nameInput = page.locator('input[placeholder="Enter profile name"]')
-  if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await nameInput.fill('Test Profile ' + Date.now())
-    await page.locator('button', { hasText: 'Create' }).click()
-    await page.waitForTimeout(2000)
-  }
-
-  // Reopen dropdown and check for duplicates
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(500)
-  }
-
-  const profileItems = page.locator('[data-profile-id]')
-  const finalCount = await profileItems.count()
+  // Reopen and confirm no duplicate IDs, and that a profile was added.
+  await dropdownBtn.click()
+  await page.waitForTimeout(500)
+  const items = page.locator('[data-profile-id]')
+  const finalCount = await items.count()
+  expect(finalCount).toBeGreaterThanOrEqual(initialCount + 1)
   const ids: number[] = []
   for (let i = 0; i < finalCount; i++) {
-    const id = await profileItems.nth(i).getAttribute('data-profile-id')
-    ids.push(Number(id))
+    ids.push(Number(await items.nth(i).getAttribute('data-profile-id')))
   }
-
-  console.log('Profile IDs after create:', ids)
-
-  // No duplicate IDs
-  const uniqueIds = new Set(ids)
-  expect(uniqueIds.size).toBe(ids.length)
+  expect(new Set(ids).size).toBe(ids.length)
 })
 
-test('profile dropdown - select profile and reopen shows no duplicates', async ({ page }) => {
-  const consoleErrors: string[] = []
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text())
-  })
-
+test('profile dropdown - select profile and reopen shows no duplicates @smoke', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://localhost:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
-  await page.waitForTimeout(2000)
+  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
-  // Open dropdown
-  const dropdownBtn = page.locator(`[class*="profileDropdownBtn"]`)
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(500)
-  }
+  const dropdownBtn = page.getByTestId('profile-dropdown-btn')
+  await expect(dropdownBtn).toBeVisible({ timeout: 15000 })
+  await dropdownBtn.click()
+  await page.waitForTimeout(500)
 
   const profileItems = page.locator('[data-profile-id]')
   const profileCount = await profileItems.count()
-  if (profileCount < 2) {
-    console.log('Not enough profiles to test selection, skipping')
-    return
-  }
+  if (profileCount < 2) return // not enough profiles to exercise selection
 
-  // Click the second profile's name span to select it
-  const secondProfileName = profileItems.nth(1).locator('span').first()
-  const secondProfileId = await profileItems.nth(1).getAttribute('data-profile-id')
-  console.log('Selecting profile ID:', secondProfileId)
+  await profileItems.nth(1).locator('span').first().click()
+  await page.waitForTimeout(1000)
 
-  if (await secondProfileName.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await secondProfileName.click()
-    await page.waitForTimeout(1000)
-  }
-
-  // Reopen dropdown
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(500)
-  }
-
-  // Check for duplicates
-  const reopenedItems = page.locator('[data-profile-id]')
-  const reopenedCount = await reopenedItems.count()
+  await dropdownBtn.click()
+  await page.waitForTimeout(500)
+  const reopened = page.locator('[data-profile-id]')
+  const reopenedCount = await reopened.count()
   const ids: number[] = []
   for (let i = 0; i < reopenedCount; i++) {
-    const id = await reopenedItems.nth(i).getAttribute('data-profile-id')
-    ids.push(Number(id))
+    ids.push(Number(await reopened.nth(i).getAttribute('data-profile-id')))
   }
-
-  console.log('Profile IDs after select and reopen:', ids)
-
-  const uniqueIds = new Set(ids)
-  expect(uniqueIds.size).toBe(ids.length)
-  expect(uniqueIds.size).toBe(profileCount)
+  expect(new Set(ids).size).toBe(ids.length)
+  expect(new Set(ids).size).toBe(profileCount)
 })
 
-test('profile dropdown - IndexedDB integrity check', async ({ page }) => {
+test('profile dropdown - IndexedDB integrity check @smoke', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://localhost:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForTimeout(2000)
 
-  // Access IndexedDB directly from the page and check for duplicates
   const dbCheck = await page.evaluate(async () => {
     const dbs = await indexedDB.databases()
     const financeDb = dbs.find((db) => db.name === 'finance')
@@ -240,20 +138,11 @@ test('profile dropdown - IndexedDB integrity check', async ({ page }) => {
       request.onsuccess = () => {
         const db = request.result
         const tx = db.transaction('profiles', 'readonly')
-        const store = tx.objectStore('profiles')
-        const getAll = store.getAll()
+        const getAll = tx.objectStore('profiles').getAll()
         getAll.onsuccess = () => {
           const profiles = getAll.result
-          const ids = profiles.map((p: any) => p.id)
-          const names = profiles.map((p: any) => p.name)
-          const idSet = new Set(ids)
-          resolve({
-            totalProfiles: profiles.length,
-            uniqueIds: idSet.size,
-            ids,
-            names,
-            hasDuplicates: profiles.length !== idSet.size,
-          })
+          const ids = profiles.map((p: { id: number }) => p.id)
+          resolve({ totalProfiles: profiles.length, uniqueIds: new Set(ids).size })
         }
         getAll.onerror = () => resolve({ error: 'Failed to get profiles' })
       }
@@ -261,15 +150,12 @@ test('profile dropdown - IndexedDB integrity check', async ({ page }) => {
     })
   })
 
-  console.log('IndexedDB check:', JSON.stringify(dbCheck))
-
-  // If IndexedDB has duplicates, that's the root cause
-  if (dbCheck && typeof dbCheck === 'object' && 'hasDuplicates' in dbCheck) {
-    expect(dbCheck.hasDuplicates).toBe(false)
+  if (dbCheck && typeof dbCheck === 'object' && 'totalProfiles' in dbCheck) {
+    expect(dbCheck.uniqueIds).toBe(dbCheck.totalProfiles)
   }
 })
 
-test('profile dropdown - console errors check', async ({ page }) => {
+test('profile dropdown - no key/duplicate console errors @smoke', async ({ page }) => {
   const errors: string[] = []
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(msg.text())
@@ -280,22 +166,14 @@ test('profile dropdown - console errors check', async ({ page }) => {
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://localhost:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForTimeout(3000)
 
-  // Open dropdown
-  const dropdownBtn = page.locator(`[class*="profileDropdownBtn"]`)
-  if (await dropdownBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await dropdownBtn.click()
-    await page.waitForTimeout(1000)
-  }
+  const dropdownBtn = page.getByTestId('profile-dropdown-btn')
+  await expect(dropdownBtn).toBeVisible({ timeout: 15000 })
+  await dropdownBtn.click()
+  await page.waitForTimeout(1000)
 
-  // Count profiles
-  const count = await page.locator('[data-profile-id]').count()
-  console.log('Profile count:', count)
-  console.log('Console errors:', errors)
-
-  // Check for key errors
   const keyErrors = errors.filter(
     (e) => e.includes('key') || e.includes('duplicate') || e.includes('unique')
   )

@@ -40,13 +40,14 @@ export default function ProfileModal(props: ProfileModalProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.modal} onKeyDown={handleKeyDown}>
+      <div class={styles.modal} data-test-id="profile-modal" onKeyDown={handleKeyDown}>
         <h3 class={styles.title}>Create Profile</h3>
         <div class={styles.field}>
           <label class={styles.label}>Profile Name</label>
           <input
             type="text"
             class={styles.input}
+            data-test-id="profile-name-input"
             placeholder="Enter profile name"
             value={name()}
             onInput={(e) => setName((e.target as HTMLInputElement).value)}
@@ -60,6 +61,7 @@ export default function ProfileModal(props: ProfileModalProps) {
           </button>
           <button
             class={styles.btnSubmit}
+            data-test-id="profile-create-submit"
             onClick={handleSubmit}
             disabled={loading() || !name().trim()}
             type="button"
