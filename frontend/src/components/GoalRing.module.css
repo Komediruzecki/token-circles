@@ -1,0 +1,61 @@
+/**
+ * GoalRing — orbital savings-goal progress ring.
+ */
+
+.ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.coreValue {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.corePct {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  fill: var(--text-secondary);
+}
+
+.meta {
+  min-width: 0;
+  max-width: 180px;
+}
+
+.name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.target {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.deadline {
+  color: var(--text-secondary);
+}
+
+.remaining {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.remaining.done {
+  color: var(--text-positive, var(--success));
+}
