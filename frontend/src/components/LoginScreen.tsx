@@ -2,6 +2,7 @@ import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
+import { LogoMark } from './Logo'
 import SupportContact from './SupportContact'
 import Turnstile, { resetTurnstile, turnstileEnabled } from './Turnstile'
 
@@ -125,8 +126,11 @@ export default function LoginScreen() {
           'text-align': 'center',
         }}
       >
-        <h1 style={{ 'font-size': '28px', 'font-weight': 700, margin: '0 0 4px' }}>
-          Finance<span style={{ color: 'var(--primary)' }}>.</span>
+        <div style={{ display: 'flex', 'justify-content': 'center', margin: '0 0 10px' }}>
+          <LogoMark size={44} />
+        </div>
+        <h1 style={{ 'font-size': '26px', 'font-weight': 600, margin: '0 0 4px' }}>
+          Token Circles
         </h1>
         <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {mode() === 'register'

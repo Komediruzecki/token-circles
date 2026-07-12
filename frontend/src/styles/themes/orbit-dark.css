@@ -1,0 +1,117 @@
+/**
+ * Theme: dark — "Orbital Observatory" (brand default)
+ * Deep-night indigo grounds, azure instruments, one dawn accent.
+ * Palette mirrors the Token Circles landing (packages/tokencircles global.css).
+ */
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Backgrounds — night ramp */
+  --bg: #0a0e1c;
+  --bg-color: #0a0e1c;
+  --bg-secondary: #0e1430;
+  --surface: #131c39;
+  --surface-hover: #172443;
+  --card-bg: #131c39;
+  --stat-bg: #0e1430;
+  --table-header-bg: #0e1430;
+  --table-hover: #172443;
+  --sidebar-bg: #070b16;
+  --sidebar-active-bg: rgba(110, 155, 255, 0.12);
+  --period-selector-bg: #172443;
+  --loan-stat-bg: #0e1430;
+  --amort-th-bg: #0e1430;
+  --col-map-bg: #0e1430;
+  --prepayment-bg: rgba(125, 255, 176, 0.08);
+  --rate-period-item-bg: #0e1430;
+
+  /* Text — starlight ink */
+  --text: #eaf0ff;
+  --text-primary: #eaf0ff;
+  --text-secondary: #9fb0d6;
+  --text-positive: #7dffb0;
+  --text-negative: #ff9d9d;
+  --color: #eaf0ff;
+  --sidebar-text: #9fb0d6;
+  --sidebar-active-text: #eaf0ff;
+  --chart-legend-text: #eaf0ff;
+
+  /* Borders */
+  --border: #26324f;
+  --border-color: #26324f;
+
+  /* Action — azure */
+  --primary: #6e9bff;
+  --primary-hover: #93b4ff;
+  --primary-bg: rgba(110, 155, 255, 0.12);
+  --primary-strong: #3b6fe0;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-outline: #ff9d9d;
+  --danger-bg: rgba(255, 157, 157, 0.06);
+  --warning: #f0a860;
+  --info: #6e9bff;
+
+  /* Semantic money — reserved for numbers, never decoration */
+  --income: #7dffb0;
+  --expense: #ff9d9d;
+  --transfer: #93b4ff;
+
+  /* Badges */
+  --badge-income-bg: rgba(125, 255, 176, 0.12);
+  --badge-income-text: #7dffb0;
+  --badge-expense-bg: rgba(255, 157, 157, 0.12);
+  --badge-expense-text: #ff9d9d;
+  --badge-transfer-bg: rgba(147, 180, 255, 0.12);
+  --badge-transfer-text: #93b4ff;
+
+  --type-income-bg: rgba(125, 255, 176, 0.12);
+  --type-expense-bg: rgba(255, 157, 157, 0.12);
+  --type-transfer-bg: rgba(147, 180, 255, 0.12);
+
+  --budget-bar-bg: #1e2949;
+
+  /* Buttons */
+  --btn-ghost-hover: #172443;
+  --btn-secondary-bg: #172443;
+  --btn-secondary-hover: #1e2949;
+  --btn-secondary-color: #eaf0ff;
+  --btn-success-hover: #16a34a;
+  --btn-danger-hover: #dc2626;
+
+  /* Chart */
+  --chart-primary-bg: rgba(110, 155, 255, 0.12);
+  --chart-grid: rgba(159, 176, 214, 0.08);
+  --chart-text: #9fb0d6;
+
+  /* Brand */
+  --accent-warm: #f0a860;
+  --glow-primary: 0 0 24px rgba(59, 111, 224, 0.35);
+
+  /* Misc */
+  --shadow: 0 1px 3px rgba(2, 4, 12, 0.5), 0 1px 2px rgba(2, 4, 12, 0.4);
+  --shadow-lg: 0 10px 24px -6px rgba(2, 4, 12, 0.6), 0 4px 8px -2px rgba(2, 4, 12, 0.4);
+  --modal-overlay: rgba(4, 6, 14, 0.72);
+  --profile-btn-bg: rgba(110, 155, 255, 0.08);
+  --profile-btn-hover: rgba(110, 155, 255, 0.16);
+  --period-btn-active-bg: #1e2949;
+  --period-btn-active-color: #eaf0ff;
+  --toggle-slider-bg: #7182a8;
+  --scrollbar-thumb: #26324f;
+  --scrollbar-thumb-hover: #3b4a70;
+  --month-nav-btn-hover-bg: #172443;
+  --dropdown-bg: #131c39;
+  --dropdown-border: rgba(110, 155, 255, 0.14);
+  --dropdown-text: #c6d2ee;
+  --income-bg: linear-gradient(135deg, rgba(125, 255, 176, 0.16) 0%, rgba(125, 255, 176, 0.1) 100%);
+  --income-text: #b8ffd6;
+}
+
+/* Atmosphere: fixed radial night-sky glow behind everything. */
+[data-theme='dark'] body {
+  background:
+    radial-gradient(1400px 800px at 50% -12%, #14204a 0%, #0e1430 42%, #0a0e1c 100%) fixed,
+    var(--bg);
+}

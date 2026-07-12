@@ -1,0 +1,42 @@
+/**
+ * Variant: .instrument-deck — graphite terminal surfaces (dark theme only).
+ * Not a theme: a scoped re-grounding for data-dense pages (Analytics,
+ * Portfolio) that trades the indigo observatory for near-black graphite,
+ * a colder azure, and mono numerals. Apply the class to a page container.
+ */
+
+[data-theme='dark'] .instrument-deck {
+  --bg: #0b0d10;
+  --bg-secondary: #0f1217;
+  --surface: #11141a;
+  --surface-hover: #161a22;
+  --card-bg: #11141a;
+  --stat-bg: #0f1217;
+  --table-header-bg: #0f1217;
+  --table-hover: #161a22;
+  --border: #21262d;
+  --border-color: #21262d;
+
+  --text: #e6edf3;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --chart-legend-text: #e6edf3;
+
+  --primary: #58a6ff;
+  --primary-hover: #79b8ff;
+  --primary-bg: rgba(88, 166, 255, 0.12);
+  --chart-primary-bg: rgba(88, 166, 255, 0.12);
+  --chart-grid: rgba(139, 148, 158, 0.1);
+  --chart-text: #8b949e;
+
+  --glow-primary: 0 0 20px rgba(88, 166, 255, 0.25);
+
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+
+/* Terminal register: tabular mono figures inside deck surfaces. */
+[data-theme='dark'] .instrument-deck :is(td, .stat-value, [data-amount]) {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
