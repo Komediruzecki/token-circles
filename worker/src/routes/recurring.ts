@@ -35,7 +35,7 @@ recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
     `
       SELECT r.*, c.name as category_name, c.color as category_color, c.type as category_type
       FROM recurring_transactions r
-      LEFT JOIN categories c ON r.category_id = c.id
+      LEFT JOIN categories c ON r.category_id = c.id AND c.profile_id = r.profile_id
       WHERE r.profile_id = ? AND r.active = 1
       ORDER BY r.next_date ASC
     `,
@@ -57,7 +57,7 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
       SELECT r.id, r.description, r.amount, r.type, r.frequency, r.day_of_month, r.next_date,
              c.name as category_name, c.color as category_color
       FROM recurring_transactions r
-      LEFT JOIN categories c ON r.category_id = c.id
+      LEFT JOIN categories c ON r.category_id = c.id AND c.profile_id = r.profile_id
       WHERE r.profile_id = ? AND r.active = 1
     `,
     pid
@@ -340,10 +340,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
     } else if (r.type === 'income' || r.type === 'expense') {
       stmts.push(bal(r.type === 'income' ? r.amount : -r.amount, r.account_id));
     }
-  } else if (
-    r.transfer_account_id != null &&
-    (r.type === 'income' || r.type === 'transfer')
-  ) {
+  } else if (r.transfer_account_id != null && (r.type === 'income' || r.type === 'transfer')) {
     stmts.push(bal(r.amount, r.transfer_account_id));
   }
 

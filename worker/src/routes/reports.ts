@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { requireAdvancedReports } from '../plan';
 import { getProfileId, getProfileIds } from '../profile';
 import { buildReportPdf } from '../pdf';
+import { enforce } from '../ratelimit';
 import * as db from '../db';
 
 // Port of backend/routes/reports.js. The JSON/data endpoints (tax-summary,
@@ -96,6 +97,8 @@ function pdfResponse(bytes: Uint8Array, filename: string): Response {
 // ── Monthly report (PDF) ─────────────────────────────────────────────
 // Worker-native PDF via pdf-lib (no Puppeteer/PDFKit). `month` = YYYY-MM (default current).
 reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
+  const rl = await enforce(c, `report-pdf:${c.get('userId')}`, 20, 300);
+  if (rl) return rl;
   const pid = await getProfileId(c);
   const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
   const start = `${month}-01`;
@@ -319,6 +322,8 @@ reportsRoutes.get('/api/reports/pl-summary', requireAuth, requireAdvancedReports
 
 // ── Year-End P&L Summary (PDF) ───────────────────────────────────────
 reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, requireAdvancedReports, async (c) => {
+  const rl = await enforce(c, `report-pdf:${c.get('userId')}`, 20, 300);
+  if (rl) return rl;
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');
@@ -401,6 +406,8 @@ reportsRoutes.post('/api/reports/custom', requireAuth, async (c) => {
 
 // ── Annual Financial Report (PDF) ────────────────────────────────────
 reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
+  const rl = await enforce(c, `report-pdf:${c.get('userId')}`, 20, 300);
+  if (rl) return rl;
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year') || String(new Date().getFullYear());

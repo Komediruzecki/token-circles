@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
+import { enforce } from '../ratelimit';
 import * as db from '../db';
 
 // Data export + wipe — port of backend/routes/exportRoutes.js (the GET routes + clear-all).
@@ -109,6 +110,8 @@ exportRoutes.get('/api/export/:type', requireAuth, async (c) => {
 
 // GET /api/export — full JSON backup across the selected profiles.
 exportRoutes.get('/api/export', requireAuth, async (c) => {
+  const rl = await enforce(c, `export:${c.get('userId')}`, 10, 300);
+  if (rl) return rl;
   const pids = await getProfileIds(c);
   const userId = c.get('userId');
   const inClause = pids.map(() => '?').join(',');
@@ -162,6 +165,8 @@ exportRoutes.get('/api/export', requireAuth, async (c) => {
 
 // DELETE /api/clear-all — wipe the active profile's data (mirrors the Express backend).
 exportRoutes.delete('/api/clear-all', requireAuth, async (c) => {
+  const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
+  if (rl) return rl;
   const pid = await getProfileId(c);
   await db.run(
     c.env.DB,
