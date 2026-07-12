@@ -4,6 +4,7 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, ensureProfile } from '../profile';
 import { HttpError } from '../http';
+import { enforce } from '../ratelimit';
 import { getUserPlan } from '../plan';
 import { planLimit } from '../plans';
 import * as db from '../db';
@@ -188,6 +189,8 @@ profilesRoutes.delete('/api/profiles/:id', requireAuth, async (c) => {
 
 // DELETE — wipe the active profile's data, keep the profile, reseed default categories.
 profilesRoutes.delete('/api/profile/data', requireAuth, async (c) => {
+  const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
+  if (rl) return rl;
   const pid = await getProfileId(c);
   await clearProfileData(c.env.DB, pid);
   await seedDefaultCategories(c.env.DB, pid);
@@ -197,6 +200,8 @@ profilesRoutes.delete('/api/profile/data', requireAuth, async (c) => {
 // POST — "reseed demo": the worker has no 3-tier demo dataset, so this is a data reset with
 // default categories (the rich demo lives in client-only mode's IndexedDB seed).
 profilesRoutes.post('/api/profiles/reseed-demo', requireAuth, async (c) => {
+  const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
+  if (rl) return rl;
   const pid = await getProfileId(c);
   await clearProfileData(c.env.DB, pid);
   await seedDefaultCategories(c.env.DB, pid);

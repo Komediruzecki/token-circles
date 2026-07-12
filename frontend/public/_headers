@@ -1,0 +1,15 @@
+# Security headers for the static-asset (SPA) responses (audit S2).
+# Vite copies this file into dist/, which the Cloudflare Worker serves as the assets root.
+#
+# NOTE: a full content CSP (default-src/script-src/connect-src) is intentionally NOT set here.
+# The app loads third-party scripts/frames (Stripe, Turnstile, Google sign-in) and calls
+# external APIs (the Worker API, exchange rates), so a strict CSP must be validated in a real
+# browser first — a wrong directive white-screens the app. This ships the framing/sniffing/
+# transport protections now; a tested content CSP is a follow-up.
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; upgrade-insecure-requests
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
