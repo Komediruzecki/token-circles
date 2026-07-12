@@ -45,6 +45,34 @@ function getMockDB() {
     clear: async (storeName: string) => {
       mockStores[storeName]?.clear()
     },
+    // Minimal readwrite-transaction facade backed by the same mock stores, so the
+    // adapter's single-transaction balance updates (audit D4) work under the mock.
+    transaction: (names?: string[] | string) => {
+      const makeStore = (storeName: string) => ({
+        add: async (value: unknown) => {
+          if (!mockStores[storeName]) mockStores[storeName] = new Map()
+          const id = mockNextId++
+          mockStores[storeName].set(id, { ...(value as object), id })
+          return id
+        },
+        get: async (id: number) => mockStores[storeName]?.get(id) ?? undefined,
+        put: async (value: unknown) => {
+          const record = value as { id: number }
+          if (!mockStores[storeName]) mockStores[storeName] = new Map()
+          mockStores[storeName].set(record.id, value)
+        },
+        delete: async (id: number) => {
+          mockStores[storeName]?.delete(id)
+        },
+      })
+      const first = Array.isArray(names) ? names[0] : (names ?? '')
+      return {
+        objectStore: (name: string) => makeStore(name),
+        store: makeStore(first),
+        done: Promise.resolve(),
+      }
+    },
+    objectStoreNames: { contains: () => true },
   }
 }
 
