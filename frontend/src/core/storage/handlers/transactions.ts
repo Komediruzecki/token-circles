@@ -78,6 +78,16 @@ export async function transactionsUpdate(
   const id = idParam(params)
   const db = await getDB()
   const before = await db.get('transactions', id)
+  // A transfer must keep a destination account across the edit (audit D2). Check the
+  // merged old+new state so a partial update that flips type to transfer, or clears the
+  // destination, is rejected rather than silently producing an inert/unbalanced row.
+  const patch = body as Record<string, unknown>
+  const mergedType = 'type' in patch ? patch.type : before?.type
+  const mergedDest =
+    'transfer_account_id' in patch ? patch.transfer_account_id : before?.transfer_account_id
+  if (mergedType === 'transfer' && (mergedDest === null || mergedDest === undefined)) {
+    return json({ error: 'A transfer must have a destination account' }, 400)
+  }
   await adapter.updateTransaction(id, body as Record<string, unknown>)
   // Recompute both the previous and new category (an edit may re-categorize the tx).
   const oldCat = toCat(before?.category_id)

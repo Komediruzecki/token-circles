@@ -32,6 +32,71 @@ function baseAmount(tx: { amount: number; amount_local?: number | null }): numbe
   return typeof tx.amount_local === 'number' ? tx.amount_local : tx.amount;
 }
 
+/**
+ * How a transaction of a given `type` moves the base-currency value across accounts.
+ * Mirrors the create/update/delete convention in this file (and the client's
+ * computeBalanceDeltas). Returns a per-account delta map.
+ */
+function balanceDeltasFor(
+  row: { account_id: number | null; transfer_account_id: number | null },
+  type: string | null,
+  value: number
+): Map<number, number> {
+  const m = new Map<number, number>();
+  const add = (acc: number | null, d: number) => {
+    if (acc) m.set(acc, (m.get(acc) ?? 0) + d);
+  };
+  if (row.account_id) {
+    if (type === 'transfer' && row.transfer_account_id) {
+      add(row.account_id, -value);
+      add(row.transfer_account_id, value);
+    } else if (type === 'transfer') {
+      add(row.account_id, -value);
+    } else if (type === 'income') {
+      add(row.account_id, value);
+    } else if (type === 'expense') {
+      add(row.account_id, -value);
+    }
+  } else if (row.transfer_account_id && (type === 'income' || type === 'transfer')) {
+    add(row.transfer_account_id, value);
+  }
+  return m;
+}
+
+/**
+ * Net balance-correction statements for changing a transaction's `type` while its amount and
+ * accounts stay the same (the only balance-relevant field a bulk update can change). Emits
+ * apply(newType) − apply(oldType) per affected account, so a bulk income→expense flip corrects
+ * the denormalized balance instead of leaving it double-counted (audit D1).
+ */
+function typeChangeBalanceStmts(
+  d1: D1Database,
+  inClause: string,
+  pids: number[],
+  row: TxRow,
+  newType: string
+): D1PreparedStatement[] {
+  const v = baseAmount(row);
+  const oldD = balanceDeltasFor(row, row.type, v);
+  const newD = balanceDeltasFor(row, newType, v);
+  const net = new Map<number, number>();
+  for (const [acc, d] of oldD) net.set(acc, (net.get(acc) ?? 0) - d);
+  for (const [acc, d] of newD) net.set(acc, (net.get(acc) ?? 0) + d);
+  const stmts: D1PreparedStatement[] = [];
+  for (const [acc, d] of net) {
+    if (d !== 0) {
+      stmts.push(
+        d1
+          .prepare(
+            `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
+          )
+          .bind(d, acc, ...pids)
+      );
+    }
+  }
+  return stmts;
+}
+
 interface TagRow {
   id: number;
   name: string;
@@ -428,18 +493,53 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
 
     updates.push("updated_at = datetime('now')");
 
+    // A bulk `type` change alters balance semantics (e.g. income→expense), and a `category_id`
+    // change moves goal contributions. When either is present we fetch the affected rows to
+    // correct account balances (audit D1) and recompute the touched category goals.
+    const typeChanging = Object.prototype.hasOwnProperty.call(data, 'type');
+    const categoryChanging = Object.prototype.hasOwnProperty.call(data, 'category_id');
+    const newType = typeChanging ? String(data.type) : null;
+    const affectedCategories = new Set<number>();
+
     let updated = 0;
     for (const chunk of idChunks) {
       const placeholders = chunk.map(() => '?').join(',');
-      const result = await db.run(
-        c.env.DB,
-        `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
-        ...setParams,
-        ...pids,
-        ...chunk
+      const stmts: D1PreparedStatement[] = [];
+      if (typeChanging || categoryChanging) {
+        const rows = await db.all<TxRow>(
+          c.env.DB,
+          `SELECT id, category_id, account_id, transfer_account_id, type, amount, amount_local
+             FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+          ...pids,
+          ...chunk
+        );
+        for (const row of rows) {
+          if (row.category_id) affectedCategories.add(row.category_id);
+          if (typeChanging && newType && row.type !== newType) {
+            stmts.push(...typeChangeBalanceStmts(c.env.DB, inClause, pids, row, newType));
+          }
+        }
+      }
+      // Balance corrections and the row UPDATE for this chunk commit atomically; the UPDATE is
+      // pushed last so its changes count is the final result in the batch.
+      stmts.push(
+        c.env.DB.prepare(
+          `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
+        ).bind(...setParams, ...pids, ...chunk)
       );
-      updated += result.meta.changes ?? 0;
+      const results = await c.env.DB.batch(stmts);
+      updated += results[results.length - 1].meta.changes ?? 0;
     }
+
+    if (categoryChanging) {
+      const newCat =
+        data.category_id === null || data.category_id === ''
+          ? null
+          : parseInt(data.category_id, 10);
+      if (newCat) affectedCategories.add(newCat);
+    }
+    for (const cat of affectedCategories) await recalcGoalsByCategory(c.env.DB, cat, pids);
+
     return c.json({ ok: true, updated });
   }
 
@@ -583,6 +683,12 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
       );
       if (matched) resolvedTransferAccountId = matched.id;
     }
+  }
+
+  // A transfer must land somewhere. Without a resolved destination the source-debit branch
+  // below removes money from the balance that is credited nowhere — a silent loss (audit D2).
+  if (type === 'transfer' && !resolvedTransferAccountId) {
+    throw new HttpError(400, 'A transfer must have a destination account');
   }
 
   // Persist the row and its balance side effects atomically. The INSERT is first in the batch so
@@ -813,8 +919,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   if (reconciled !== undefined) {
     // Coerce safely — a JSON string like "false" is truthy in JS, so a plain
     // `reconciled ? 1 : 0` would wrongly set reconciled = 1 (matches the bulk path).
-    const reconciledInt =
-      reconciled === true || reconciled === 1 || reconciled === '1' ? 1 : 0;
+    const reconciledInt = reconciled === true || reconciled === 1 || reconciled === '1' ? 1 : 0;
     updates.push('reconciled = ?');
     updates.push("reconciled_at = CASE WHEN ? = 1 THEN datetime('now') ELSE reconciled_at END");
     params.push(reconciledInt);
@@ -906,6 +1011,11 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
       : amount !== undefined
         ? newAmount
         : baseAmount(oldTx);
+  // A transfer must keep a destination in the merged post-update state (audit D2), otherwise
+  // the apply branch below debits the source and credits nothing.
+  if (newType === 'transfer' && !newTransferAccountId) {
+    throw new HttpError(400, 'A transfer must have a destination account');
+  }
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
       stmts.push(
