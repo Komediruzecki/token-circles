@@ -1,7 +1,7 @@
 /**
  * Accounts handlers — IndexedDB-backed implementations
  */
-import { getDB } from '../idb'
+import { AccountInUseError, getDB } from '../idb'
 import { adapter, idParam, json, notFound, ok } from './helpers'
 import { normalizeAccount } from './normalize'
 
@@ -37,8 +37,24 @@ export async function accountsUpdate(
 }
 
 export async function accountsDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteAccount(idParam(params))
+  try {
+    await adapter.deleteAccount(idParam(params))
+  } catch (err) {
+    // Referenced accounts are rejected (audit A6) with a 409 so the UI can prompt the user
+    // to reassign/delete the transactions first.
+    if (err instanceof AccountInUseError) return json({ error: err.message }, 409)
+    throw err
+  }
   return ok()
+}
+
+// POST /api/accounts/recompute-balances — repair stored balances for the active profile
+// from starting_balance + the ledger (audit A1/D3).
+export async function accountsRecomputeBalances(): Promise<Response> {
+  const pid = await adapter.getCurrentProfileId()
+  await adapter.recomputeBalances(pid)
+  const accts = await adapter.listAccounts()
+  return json({ ok: true, accounts: accts.map(normalizeAccount) })
 }
 
 export async function accountsHistory(params: Record<string, string>): Promise<Response> {
