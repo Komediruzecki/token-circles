@@ -233,8 +233,8 @@ export default function CompoundInterestCalculator() {
                   {
                     label: 'Balance',
                     data: results()!.projection.map((p) => p.balance),
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderColor: '#6e9bff',
+                    backgroundColor: 'rgba(110, 155, 255, 0.12)',
                     fill: true,
                     tension: 0.3,
                     borderWidth: 2,
@@ -242,8 +242,8 @@ export default function CompoundInterestCalculator() {
                   {
                     label: 'Contributions',
                     data: results()!.projection.map((p) => p.contributions),
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderColor: '#59d2a2',
+                    backgroundColor: 'rgba(89, 210, 162, 0.12)',
                     fill: true,
                     tension: 0.3,
                     borderWidth: 2,
@@ -251,8 +251,8 @@ export default function CompoundInterestCalculator() {
                   {
                     label: 'Interest',
                     data: results()!.projection.map((p) => p.interest),
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderColor: '#f0a860',
+                    backgroundColor: 'rgba(240, 168, 96, 0.12)',
                     fill: true,
                     tension: 0.3,
                     borderWidth: 2,
@@ -355,7 +355,7 @@ export default function CompoundInterestCalculator() {
                 {(s) => (
                   <div
                     class={styles.scenarioCard}
-                    style={`--color: ${s.color || '#6366f1'};` as any}
+                    style={`--color: ${s.color || '#6e9bff'};` as any}
                   >
                     <div class={styles.scenarioName}>{s.name}</div>
                     <div class={styles.scenarioStats}>

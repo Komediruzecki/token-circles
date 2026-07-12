@@ -330,8 +330,8 @@ export default function Retirement() {
                 {
                   label: 'Projected Balance',
                   data: projectedBalances().map((pb) => pb.balance),
-                  borderColor: '#22c55e',
-                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                  borderColor: '#59d2a2',
+                  backgroundColor: 'rgba(89, 210, 162, 0.12)',
                   fill: true,
                   tension: 0.4,
                   pointRadius: 4,

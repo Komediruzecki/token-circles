@@ -178,3 +178,13 @@
   color: var(--text-secondary);
   font-size: 16px;
 }
+
+/* Brand glass surfaces. */
+.summary-card,
+.chart-section,
+.details-section {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+}
