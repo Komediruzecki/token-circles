@@ -510,7 +510,9 @@ export default function Analytics() {
   return (
     <div class={`page page-analytics page-enter instrument-deck ${styles.analyticsPage}`}>
       <div class={styles.pageHeader}>
-        <h1 data-tour="analytics-header">Analytics</h1>
+        <h1 data-test-id="analytics-header" data-tour="analytics-header">
+          Analytics
+        </h1>
         <p class={styles.pageSubtitle}>Visualize your financial data and track trends</p>
       </div>
 
@@ -620,7 +622,11 @@ export default function Analytics() {
 
           {/* Monthly Savings Card */}
           <div class={styles.analyticsStats} style="margin-bottom:24px">
-            <div class={styles.statCard} style="border-left:3px solid var(--primary)">
+            <div
+              class={styles.statCard}
+              style="border-left:3px solid var(--primary)"
+              data-test-id="analytics-monthly-savings"
+            >
               <div class={styles.statLabel}>
                 Monthly Savings (
                 {new Date(stackedYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
@@ -634,6 +640,7 @@ export default function Analytics() {
                   class={styles.heatmapTypeSelect}
                   value={monthlyMonth()}
                   onchange={(e) => setMonthlyMonth(Number(e.currentTarget.value))}
+                  data-test-id="analytics-monthly-month"
                 >
                   {Array.from({ length: 12 }, (_, i) => (
                     <option value={i + 1}>
@@ -665,6 +672,7 @@ export default function Analytics() {
                     <>
                       <div
                         class={styles.statCard}
+                        data-test-id="analytics-monthly-income"
                         {...traceCardProps(() =>
                           monthTrace(
                             'Monthly Income',
@@ -682,6 +690,7 @@ export default function Analytics() {
                       </div>
                       <div
                         class={styles.statCard}
+                        data-test-id="analytics-monthly-expense"
                         {...traceCardProps(() =>
                           monthTrace(
                             'Monthly Expense',
@@ -813,6 +822,7 @@ export default function Analytics() {
                       setStackedYear(Number(e.currentTarget.value))
                       loadStackedData()
                     }}
+                    data-test-id="analytics-trends-year"
                   >
                     <For each={availableYears()}>
                       {(year) => <option value={year}>{year}</option>}
