@@ -6,7 +6,7 @@ import { z } from 'zod/v4'
 
 // ── Transaction ────────────────────────────────────────────────────────────────
 
-export const transactionCreateSchema = z.object({
+const transactionBaseSchema = z.object({
   type: z.enum(['income', 'expense', 'transfer']),
   amount: z.number().positive(),
   description: z.string().min(1),
@@ -19,9 +19,18 @@ export const transactionCreateSchema = z.object({
   beneficiary: z.string().optional(),
   payor: z.string().optional(),
   account_id: z.number().int().positive().nullable().optional(),
+  transfer_account_id: z.number().int().positive().nullable().optional(),
 })
 
-export const transactionUpdateSchema = transactionCreateSchema.partial()
+// A transfer moves money to a destination account; without one the balance effect is a
+// silent no-op on the client and a money-losing debit on the worker (audit D2). Require it
+// on create. Updates are guarded in the handler against the merged old+new state.
+export const transactionCreateSchema = transactionBaseSchema.refine(
+  (t) => t.type !== 'transfer' || typeof t.transfer_account_id === 'number',
+  { message: 'A transfer must have a destination account', path: ['transfer_account_id'] }
+)
+
+export const transactionUpdateSchema = transactionBaseSchema.partial()
 
 // ── Category ───────────────────────────────────────────────────────────────────
 

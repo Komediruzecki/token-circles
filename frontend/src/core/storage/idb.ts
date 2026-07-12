@@ -330,12 +330,29 @@ export class IndexedDBAdapter implements StorageAdapter {
       accountId: adj.accountId,
       delta: -adj.delta,
     }))
-    // Preserve amount_local unless the partial update explicitly overrides it.
-    // Object.assign would silently overwrite it with undefined when tx was built
-    // from a spread that included an undefined amount_local, causing balance drift.
+    // Merge the patch, handling amount_local so a partial edit can't drift the balance:
+    //  - if the caller sent amount_local, honour it (including an explicit null);
+    //  - else if the caller changed amount, recompute amount_local from the new amount so the
+    //    balance reflects the edit — previously the stale amount_local was kept, so editing a
+    //    foreign-currency amount left the balance unchanged and the row inconsistent (audit D8);
+    //  - else preserve the existing amount_local (an unrelated-field edit must not wipe it).
     const preserved: Record<string, unknown> = { ...tx }
     if (!('amount_local' in tx) && typeof (existing as any).amount_local === 'number') {
-      preserved.amount_local = (existing as any).amount_local
+      const amountChanging = 'amount' in tx && typeof tx.amount === 'number'
+      if (amountChanging) {
+        const rate =
+          typeof (tx as any).exchange_rate === 'number'
+            ? (tx as any).exchange_rate
+            : typeof (existing as any).exchange_rate === 'number'
+              ? (existing as any).exchange_rate
+              : null
+        // Recompute from the new amount when a rate is known; otherwise clear it so the
+        // balance math falls back to the new raw amount.
+        preserved.amount_local =
+          rate && rate > 0 ? Math.round((tx.amount as number) * rate * 100) / 100 : null
+      } else {
+        preserved.amount_local = (existing as any).amount_local
+      }
     }
     Object.assign(existing, preserved)
     await txStore.put(existing)
