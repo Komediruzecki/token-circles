@@ -333,7 +333,10 @@ export interface DashboardMonthMetrics {
 }
 
 export interface DashboardChartData {
+  /** Net-worth timeline labels (full history). */
   labels: string[]
+  /** Labels for the income/expenses series (true monthly stats, last 12). */
+  monthlyLabels: string[]
   income: number[]
   expenses: number[]
   netWorth: number[]

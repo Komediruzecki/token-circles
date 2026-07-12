@@ -8,7 +8,12 @@ import type { Component } from 'solid-js'
 
 const ALL_WIDGET_IDS = [
   'metrics',
-  'cash-flow-sankey',
+  'deck-sankey',
+  'deck-heatmap',
+  'deck-radar',
+  'deck-trends',
+  'deck-portfolio',
+  'deck-transactions',
   'category-chart',
   'recent-transactions',
   'upcoming-bills',
@@ -20,7 +25,12 @@ const ALL_WIDGET_IDS = [
 
 const DEFAULT_WIDGET_ORDER = [
   'metrics',
-  'cash-flow-sankey',
+  'deck-sankey',
+  'deck-heatmap',
+  'deck-radar',
+  'deck-trends',
+  'deck-portfolio',
+  'deck-transactions',
   'category-chart',
   'recent-transactions',
   'upcoming-bills',
@@ -60,8 +70,8 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
       ),
     },
     {
-      id: 'cash-flow-sankey',
-      name: 'Cash Flow Sankey',
+      id: 'deck-sankey',
+      name: 'Overview · Cash Flow',
       icon: (
         <svg
           width="18"
@@ -72,6 +82,93 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
           viewBox="0 0 24 24"
         >
           <path d="M4 6c6 0 10-2 16-2M4 12h16M4 18c6 0 10 2 16 2" stroke-linecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: 'deck-heatmap',
+      name: 'Overview · Spending Heatmap',
+      icon: (
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'deck-radar',
+      name: 'Overview · Budget Radar',
+      icon: (
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="5" />
+          <path d="M12 12V3" stroke-linecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: 'deck-trends',
+      name: 'Overview · Trends',
+      icon: (
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path d="M3 15l5-5 4 3 6-7M18 6h3v3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      id: 'deck-portfolio',
+      name: 'Overview · Portfolio',
+      icon: (
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path d="M4 6h16M4 12h10M4 18h13" stroke-linecap="round" />
+          <circle cx="19" cy="17.5" r="2.5" />
+        </svg>
+      ),
+    },
+    {
+      id: 'deck-transactions',
+      name: 'Overview · Transactions Strip',
+      icon: (
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M3 9h12M11 5l4 4-4 4M21 15H9M13 19l-4-4 4-4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       ),
     },

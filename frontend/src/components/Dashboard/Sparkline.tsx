@@ -2,16 +2,19 @@
  * Sparkline — tiny inline SVG trend line with a soft area fill.
  * Used inside metric cards; purely presentational, no chart.js overhead.
  */
-import { createMemo, Show } from 'solid-js'
+import { createMemo, createUniqueId, Show } from 'solid-js'
 
 export interface SparklineProps {
   data: number[]
   /** Any CSS color, including var(--token). Defaults to the theme primary. */
   color?: string
   height?: number
+  /** Adds a soft neon glow around the line (Direction A trend panels). */
+  glow?: boolean
 }
 
 export default function Sparkline(props: SparklineProps) {
+  const uid = createUniqueId()
   const W = 100
   const H = 30
   const points = createMemo(() => {
@@ -40,6 +43,15 @@ export default function Sparkline(props: SparklineProps) {
         style={{ width: '100%', height: `${props.height ?? 30}px`, display: 'block' }}
         aria-hidden="true"
       >
+        <Show when={props.glow}>
+          <filter id={`spark-glow-${uid}`} x="-40%" y="-120%" width="180%" height="340%">
+            <feGaussianBlur stdDeviation="1.6" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </Show>
         <path d={areaPath()} fill={color()} opacity="0.12" />
         <path
           d={linePath()}
@@ -49,6 +61,7 @@ export default function Sparkline(props: SparklineProps) {
           stroke-linejoin="round"
           stroke-linecap="round"
           vector-effect="non-scaling-stroke"
+          filter={props.glow ? `url(#spark-glow-${uid})` : undefined}
         />
         <circle
           cx={points()![points()!.length - 1].x}

@@ -1,0 +1,390 @@
+/**
+ * OverviewDeck — Direction A bento layout.
+ * Desktop mirrors the concept render:
+ *   sankey  sankey   heatmap
+ *   radar   trends   portfolio
+ *   tx      tx       tx
+ */
+
+.deck {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr 1fr;
+  grid-template-areas:
+    'sankey sankey heatmap'
+    'radar trends portfolio'
+    'tx tx tx';
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1180px) {
+  .deck {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'sankey sankey'
+      'heatmap radar'
+      'trends portfolio'
+      'tx tx';
+  }
+}
+
+@media (max-width: 720px) {
+  .deck {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'sankey' 'heatmap' 'radar' 'trends' 'portfolio' 'tx';
+  }
+}
+
+.sankey {
+  grid-area: sankey;
+  min-width: 0;
+}
+.heatmap {
+  grid-area: heatmap;
+  min-width: 0;
+}
+.radar {
+  grid-area: radar;
+  min-width: 0;
+}
+.trends {
+  grid-area: trends;
+  min-width: 0;
+}
+.portfolio {
+  grid-area: portfolio;
+  min-width: 0;
+}
+.txStrip {
+  grid-area: tx;
+  min-width: 0;
+}
+
+.panel {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panelTitle {
+  margin: 0;
+  font-family: var(--font-inter);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.panelMore {
+  font-size: 12px;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.panelMore:hover {
+  text-decoration: underline;
+}
+
+.empty {
+  margin: 18px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ── heatmap ── */
+.heatGrid {
+  display: grid;
+  grid-template-columns: 14px repeat(12, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+
+.heatMonth,
+.heatWeek {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.heatCell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.heatHot {
+  box-shadow: 0 0 10px rgba(110, 155, 255, 0.55);
+}
+
+/* ── radar ── */
+.radarBody {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.radarSvg {
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+}
+
+.radarSweep {
+  transform-origin: 75px 75px;
+  animation: deck-sweep 7s linear infinite;
+}
+
+@keyframes deck-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radarSweep {
+    animation: none;
+  }
+}
+
+.radarStats {
+  min-width: 0;
+}
+
+.radarPct {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.05;
+}
+
+.radarPctLabel {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.radarLegend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.radarLegend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 7px;
+}
+
+/* ── trends ── */
+.trendList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trendRow {
+  display: grid;
+  grid-template-columns: minmax(86px, auto) 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.trendRow:last-child {
+  border-bottom: none;
+}
+
+.trendLabel {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.trendValue {
+  margin: 1px 0 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.trendSpark {
+  min-width: 0;
+}
+
+.trendDelta {
+  margin: 0;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.up {
+  color: var(--text-positive);
+}
+
+.down {
+  color: var(--text-negative);
+}
+
+/* ── portfolio ── */
+.holdingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.holdingRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.holdingRow:last-child {
+  border-bottom: none;
+}
+
+.holdingDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.holdingMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.holdingTicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.holdingShares {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.holdingValue {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* ── transactions strip ── */
+.txRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 980px) {
+  .txRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .txRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.txItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 0;
+  background: color-mix(in oklab, var(--stat-bg) 70%, transparent);
+}
+
+.txIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+.txIncome {
+  background: var(--badge-income-bg);
+  color: var(--badge-income-text);
+}
+
+.txExpense {
+  background: var(--badge-expense-bg);
+  color: var(--badge-expense-text);
+}
+
+.txMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.txName {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txDate {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.txAmount {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
