@@ -303,21 +303,33 @@ export class IndexedDBAdapter implements StorageAdapter {
   async createTransaction(tx: Transaction): Promise<number> {
     const db = await getDB()
     const data = { ...tx }
+    // Resolve the profile id BEFORE opening the transaction — awaiting an
+    // unrelated read would let the readwrite transaction auto-commit early.
     if (!data.profile_id) data.profile_id = await this.getCurrentProfileId()
-    const id = (await db.add('transactions', data)) as number
-    for (const adj of computeBalanceDeltas(data)) {
-      await this._adjustAccountBalance(adj.accountId, adj.delta)
-    }
+    // Row insert + balance adjustment share one transaction so the read-modify-write
+    // on accounts is atomic and IndexedDB serializes concurrent balance mutations
+    // (otherwise interleaved create/update calls lost-update the balance — see audit D4).
+    const t = db.transaction(['transactions', 'accounts'], 'readwrite')
+    const id = (await t.objectStore('transactions').add(data)) as number
+    await this._applyDeltasInTx(t, computeBalanceDeltas(data))
+    await t.done
     return id
   }
 
   async updateTransaction(id: number, tx: Partial<Transaction>): Promise<void> {
     const db = await getDB()
-    const existing = await db.get('transactions', id)
-    if (!existing) return
-    for (const adj of computeBalanceDeltas(existing)) {
-      await this._adjustAccountBalance(adj.accountId, -adj.delta)
+    const t = db.transaction(['transactions', 'accounts'], 'readwrite')
+    const txStore = t.objectStore('transactions')
+    const existing = await txStore.get(id)
+    if (!existing) {
+      await t.done
+      return
     }
+    // Reverse the old row's effect, apply the new one — all in one transaction.
+    const deltas = computeBalanceDeltas(existing).map((adj) => ({
+      accountId: adj.accountId,
+      delta: -adj.delta,
+    }))
     // Preserve amount_local unless the partial update explicitly overrides it.
     // Object.assign would silently overwrite it with undefined when tx was built
     // from a spread that included an undefined amount_local, causing balance drift.
@@ -326,34 +338,44 @@ export class IndexedDBAdapter implements StorageAdapter {
       preserved.amount_local = (existing as any).amount_local
     }
     Object.assign(existing, preserved)
-    await db.put('transactions', existing)
-    for (const adj of computeBalanceDeltas(existing)) {
-      await this._adjustAccountBalance(adj.accountId, adj.delta)
-    }
+    await txStore.put(existing)
+    deltas.push(...computeBalanceDeltas(existing))
+    await this._applyDeltasInTx(t, deltas)
+    await t.done
   }
 
   async deleteTransaction(id: number): Promise<void> {
     const db = await getDB()
-    const old = await db.get('transactions', id)
+    const t = db.transaction(['transactions', 'accounts'], 'readwrite')
+    const txStore = t.objectStore('transactions')
+    const old = await txStore.get(id)
     if (old) {
-      for (const adj of computeBalanceDeltas(old)) {
-        await this._adjustAccountBalance(adj.accountId, -adj.delta)
-      }
+      const deltas = computeBalanceDeltas(old).map((adj) => ({
+        accountId: adj.accountId,
+        delta: -adj.delta,
+      }))
+      await txStore.delete(id)
+      await this._applyDeltasInTx(t, deltas)
     }
-    await db.delete('transactions', id)
+    await t.done
   }
 
   async bulkDeleteTransactions(ids: number[]): Promise<void> {
     const db = await getDB()
+    const t = db.transaction(['transactions', 'accounts'], 'readwrite')
+    const txStore = t.objectStore('transactions')
+    const deltas: { accountId: number; delta: number }[] = []
     for (const id of ids) {
-      const old = await db.get('transactions', id)
+      const old = await txStore.get(id)
       if (old) {
         for (const adj of computeBalanceDeltas(old)) {
-          await this._adjustAccountBalance(adj.accountId, -adj.delta)
+          deltas.push({ accountId: adj.accountId, delta: -adj.delta })
         }
+        await txStore.delete(id)
       }
-      await db.delete('transactions', id)
     }
+    await this._applyDeltasInTx(t, deltas)
+    await t.done
   }
 
   async deleteAllTransactions(): Promise<void> {
@@ -372,12 +394,33 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
   }
 
-  private async _adjustAccountBalance(accountId: number, delta: number): Promise<void> {
-    const db = await getDB()
-    const acct = await db.get('accounts', accountId)
-    if (acct) {
-      acct.balance = (acct.balance ?? 0) + delta
-      await db.put('accounts', acct)
+  /**
+   * Apply a set of balance deltas within an already-open readwrite transaction that
+   * includes the 'accounts' store. Deltas are coalesced per account so a transfer
+   * (two deltas) or a batch touches each account with a single read-modify-write,
+   * and the whole thing commits atomically with the caller's row change.
+   */
+  private async _applyDeltasInTx(
+    t: {
+      objectStore(name: 'accounts'): {
+        get(key: number): Promise<any>
+        put(value: any): Promise<unknown>
+      }
+    },
+    deltas: { accountId: number; delta: number }[]
+  ): Promise<void> {
+    if (deltas.length === 0) return
+    const byAccount = new Map<number, number>()
+    for (const { accountId, delta } of deltas) {
+      byAccount.set(accountId, (byAccount.get(accountId) ?? 0) + delta)
+    }
+    const store = t.objectStore('accounts')
+    for (const [accountId, delta] of byAccount) {
+      const acct = await store.get(accountId)
+      if (acct) {
+        acct.balance = (acct.balance ?? 0) + delta
+        await store.put(acct)
+      }
     }
   }
 
@@ -615,36 +658,72 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async exportData(): Promise<ExportData> {
     const db = await getDB()
-    const [transactions, categories, accounts, budgets, goals, loans, settings] = await Promise.all(
-      [
-        db.getAll('transactions'),
-        db.getAll('categories'),
-        db.getAll('accounts'),
-        db.getAll('budgets'),
-        db.getAll('goals'),
-        db.getAll('loans'),
-        this.getSettings(),
-      ]
-    )
+    const [
+      transactions,
+      categories,
+      accounts,
+      budgets,
+      goals,
+      loans,
+      portfolioHoldings,
+      bills,
+      recurring,
+      tags,
+      housings,
+      categoryMappings,
+      receipts,
+      balanceHistoryRows,
+      profiles,
+      settings,
+    ] = await Promise.all([
+      db.getAll('transactions'),
+      db.getAll('categories'),
+      db.getAll('accounts'),
+      db.getAll('budgets'),
+      db.getAll('goals'),
+      db.getAll('loans'),
+      db.getAll('portfolioHoldings'),
+      db.getAll('bills'),
+      db.getAll('recurring'),
+      db.getAll('tags'),
+      db.getAll('housings'),
+      db.getAll('categoryMappings'),
+      db.getAll('receipts'),
+      db.getAll('balanceHistory'),
+      db.getAll('profiles'),
+      this.getSettings(),
+    ])
 
     return {
       version: '2.0.0',
       export_date: new Date().toISOString(),
       storage_mode: 'serverless',
-      profiles: await db.getAll('profiles'),
+      profiles,
       categories,
       transactions,
       accounts,
       budgets,
       goals,
       loans,
+      portfolioHoldings,
+      bills,
+      recurring,
+      tags,
+      housings,
+      categoryMappings,
+      receipts,
+      balanceHistoryRows,
       settings,
     }
   }
 
   async importData(data: ExportData): Promise<void> {
     const db = await getDB()
-    // Clear existing data
+    // Clear existing data. Includes every user-created store so a restore fully
+    // replaces state and doesn't leave stale rows from the previous dataset.
+    // Previously bills/recurring/tags/housings/categoryMappings were neither
+    // cleared nor exported, so backups were incomplete and restores could orphan
+    // or drop data (audit D11).
     const stores = [
       'transactions',
       'categories',
@@ -656,9 +735,14 @@ export class IndexedDBAdapter implements StorageAdapter {
       'receipts',
       'profiles',
       'portfolioHoldings',
+      'bills',
+      'recurring',
+      'tags',
+      'housings',
+      'categoryMappings',
     ]
     for (const store of stores) {
-      await db.clear(store)
+      if (db.objectStoreNames.contains(store)) await db.clear(store)
     }
 
     // Import profiles and build ID mapping (old SQLite ID → new IndexedDB ID)
@@ -703,7 +787,8 @@ export class IndexedDBAdapter implements StorageAdapter {
       return record
     }
 
-    // Import data with profile_id remapping
+    // Import data with profile_id remapping. Records keep their original inline
+    // `id` (add() honours it), so account_id / transaction_id references survive.
     if (data.categories) for (const c of data.categories) await db.add('categories', remap(c))
     if (data.accounts) for (const a of data.accounts) await db.add('accounts', remap(a))
     if (data.budgets) for (const b of data.budgets) await db.add('budgets', remap(b))
@@ -712,6 +797,23 @@ export class IndexedDBAdapter implements StorageAdapter {
     if (data.transactions) for (const t of data.transactions) await db.add('transactions', remap(t))
     if (data.portfolioHoldings)
       for (const h of data.portfolioHoldings) await db.add('portfolioHoldings', remap(h))
+
+    // User-created stores that were previously dropped from backups (audit D11).
+    // Guarded by objectStore presence so an older DB without a store doesn't throw.
+    const addAll = async (store: string, rows?: Record<string, unknown>[]) => {
+      if (!rows || !db.objectStoreNames.contains(store)) return
+      for (const row of rows) await db.add(store, remap(row as { profile_id?: number }))
+    }
+    await addAll('bills', data.bills)
+    await addAll('recurring', data.recurring)
+    await addAll('tags', data.tags)
+    await addAll('housings', data.housings)
+    await addAll('categoryMappings', data.categoryMappings)
+    await addAll('receipts', data.receipts)
+    // balanceHistory rows key off account_id (preserved above), not profile_id.
+    if (data.balanceHistoryRows && db.objectStoreNames.contains('balanceHistory')) {
+      for (const row of data.balanceHistoryRows) await db.add('balanceHistory', row)
+    }
 
     // Import settings
     for (const [key, value] of Object.entries(data.settings)) {

@@ -200,6 +200,17 @@ export interface ExportData {
   retirementGoals?: ExportGoal[]
   portfolioHoldings?: ExportPortfolioHolding[]
 
+  // User-created stores that were previously omitted from backups, causing silent
+  // data loss on export/restore and on storage-mode migration (audit D11). Typed
+  // loosely because these round-trip verbatim through the local adapter.
+  bills?: Record<string, unknown>[]
+  recurring?: Record<string, unknown>[]
+  tags?: Record<string, unknown>[]
+  housings?: Record<string, unknown>[]
+  categoryMappings?: Record<string, unknown>[]
+  receipts?: Record<string, unknown>[]
+  balanceHistoryRows?: Record<string, unknown>[]
+
   settings: ExportSettings
 
   balanceHistory?: Record<number, BalanceEntryData>
