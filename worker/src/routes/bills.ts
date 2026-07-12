@@ -64,7 +64,7 @@ billsRoutes.get('/api/bills', requireAuth, async (c) => {
     `
       SELECT b.*, c.name as category_name, c.color as category_color
       FROM bills b
-      LEFT JOIN categories c ON b.category_id = c.id
+      LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
       WHERE b.profile_id = ?
       ORDER BY b.is_active DESC, b.name ASC
     `,
@@ -104,7 +104,7 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
     `
       SELECT b.*, c.name as category_name, c.color as category_color
       FROM bills b
-      LEFT JOIN categories c ON b.category_id = c.id
+      LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
       WHERE b.profile_id = ? AND b.is_active = 1
       ORDER BY b.name ASC
     `,
@@ -240,7 +240,7 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color
        FROM bills b
-       LEFT JOIN categories c ON b.category_id = c.id
+       LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
        WHERE b.profile_id = ? AND b.is_active = 1`,
     pid
   );
