@@ -68,17 +68,16 @@ test.describe('Accounts CRUD Operations', () => {
   })
 
   test('should display account cards', async ({ page }) => {
-    const accountCards = getByTestId(page, 'account-card')
-    const count = await accountCards.count()
-    // Should have at least 0 cards (can be empty)
-    expect(count).toBeGreaterThanOrEqual(0)
+    const accountCards = page.getByTestId('account-card')
+    await expect(accountCards.first()).toBeVisible()
+    // Demo data seeds several accounts, so at least one card renders.
+    expect(await accountCards.count()).toBeGreaterThanOrEqual(1)
   })
 
   test('should have account card with icon', async ({ page }) => {
-    const accountCards = getByTestId(page, 'account-card')
-    const icon = accountCards.getByTestId('account-icon')
-    const count = await icon.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    // Each account card renders exactly one type icon.
+    expect(await page.getByTestId('account-icon').count()).toBe(cardCount)
   })
 
   test('should have account icons matching account types', async ({ page }) => {
@@ -93,96 +92,80 @@ test.describe('Accounts CRUD Operations', () => {
   })
 
   test('should display account name', async ({ page }) => {
-    const accountName = getByTestId(page, 'account-name')
-    const count = await accountName.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    // One name heading per account card.
+    expect(await page.getByTestId('account-name').count()).toBe(cardCount)
+    await expect(page.getByTestId('account-name').first()).toBeVisible()
   })
 
   test('should display bank name', async ({ page }) => {
-    const bankName = getByTestId(page, 'account-bank')
-    const count = await bankName.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    // One bank line per account card (falls back to "No bank listed").
+    expect(await page.getByTestId('account-bank').count()).toBe(cardCount)
   })
 
   test('should display current balance card', async ({ page }) => {
-    const balanceLabel = page.getByText('Current Balance').first()
-    const balanceValue = getByTestId(page, 'account-balance').first()
-
-    await expect(balanceLabel).toBeVisible()
-    await expect(balanceValue).toBeVisible()
+    await expect(page.getByTestId('current-balance-card').first()).toBeVisible()
+    await expect(page.getByTestId('account-balance').first()).toBeVisible()
   })
 
   test('should display recent activity section', async ({ page }) => {
-    const activityHeader = page.getByText('Recent Activity').first()
-    await expect(activityHeader).toBeVisible()
+    await expect(page.getByTestId('activity-section').first()).toBeVisible()
   })
 
   test('should have activity header with view all link', async ({ page }) => {
-    const activitySection = getByTestId(page, 'activity-section')
-    const count = await activitySection.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    // One activity section per card, each carrying a "View All" link.
+    expect(await page.getByTestId('activity-section').count()).toBe(cardCount)
+    expect(await page.getByTestId('activity-view-all').count()).toBe(cardCount)
   })
 
   test('should have "View All" link', async ({ page }) => {
-    const viewAllLink = page.locator('a', { hasText: 'View All →' })
-    const count = await viewAllLink.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    expect(await page.getByTestId('activity-view-all').count()).toBe(cardCount)
   })
 
   test('should display activity list', async ({ page }) => {
-    const activityList = getByTestId(page, 'activity-list')
-    const count = await activityList.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    // Each card renders its own activity list container.
+    expect(await page.getByTestId('activity-list').count()).toBe(cardCount)
   })
 
   test('should display activity items', async ({ page }) => {
-    const activityItems = getByTestId(page, 'activity-item')
-    const count = await activityItems.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const itemCount = await page.getByTestId('activity-item').count()
+    // Each activity item carries exactly one amount.
+    expect(await page.getByTestId('activity-amount').count()).toBe(itemCount)
   })
 
   test('should display activity description', async ({ page }) => {
-    const description = getByTestId(page, 'activity-desc')
-    const count = await description.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const itemCount = await page.getByTestId('activity-item').count()
+    expect(await page.getByTestId('activity-desc').count()).toBe(itemCount)
   })
 
   test('should display activity date', async ({ page }) => {
-    const date = getByTestId(page, 'activity-date')
-    const count = await date.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const itemCount = await page.getByTestId('activity-item').count()
+    expect(await page.getByTestId('activity-date').count()).toBe(itemCount)
   })
 
   test('should display activity amount with +/-', async ({ page }) => {
-    const amount = getByTestId(page, 'activity-amount')
-    const count = await amount.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const itemCount = await page.getByTestId('activity-item').count()
+    expect(await page.getByTestId('activity-amount').count()).toBe(itemCount)
   })
 
   test('should have account type badge', async ({ page }) => {
-    const accountCards = getByTestId(page, 'account-card')
-    const cardCount = await accountCards.count()
-
-    if (cardCount > 0) {
-      const typeBadges = accountCards.getByTestId('account-type')
-      const badgeCount = await typeBadges.count()
-      expect(badgeCount).toBeGreaterThanOrEqual(0)
-    }
+    const cardCount = await page.getByTestId('account-card').count()
+    // Each account card shows exactly one type badge.
+    expect(await page.getByTestId('account-type').count()).toBe(cardCount)
   })
 
   test('should have account type badge text', async ({ page }) => {
-    const accountCards = getByTestId(page, 'account-card')
-    const typeBadges = accountCards.getByTestId('account-type')
-    const count = await typeBadges.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    expect(await page.getByTestId('account-type').count()).toBe(cardCount)
   })
 
   test('should have account actions button', async ({ page }) => {
-    const accountCards = getByTestId(page, 'account-card')
-    const deleteBtns = accountCards.locator('button').filter({
-      has: accountCards.locator('svg path[d*="M19 7l-.867"]'),
-    })
-    const count = await deleteBtns.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    const cardCount = await page.getByTestId('account-card').count()
+    // Each account card has exactly one delete control.
+    expect(await page.getByTestId('account-delete-btn').count()).toBe(cardCount)
   })
 })

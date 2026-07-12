@@ -358,25 +358,29 @@ export default function Accounts() {
                             </p>
                           </div>
                           <div class={styles.accountActions}>
-                            <Badge status={getAccountBadgeStatus(account.type)}>
-                              {account.type}
-                            </Badge>
-                            <ConfirmButton
-                              class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
-                              onConfirm={() => deleteAccount(account.id)}
-                              confirmLabel="Delete? This will remove all related transactions."
-                              label={
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              }
-                            />
+                            <span data-test-id="account-type" style={{ display: 'contents' }}>
+                              <Badge status={getAccountBadgeStatus(account.type)}>
+                                {account.type}
+                              </Badge>
+                            </span>
+                            <span data-test-id="account-delete-btn" style={{ display: 'contents' }}>
+                              <ConfirmButton
+                                class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                                onConfirm={() => deleteAccount(account.id)}
+                                confirmLabel="Delete? This will remove all related transactions."
+                                label={
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                }
+                              />
+                            </span>
                           </div>
                         </div>
                         <div data-test-id="current-balance-card" class={styles.accountBalance}>
@@ -388,7 +392,11 @@ export default function Accounts() {
                         <div data-test-id="activity-section" class={styles.accountActivity}>
                           <div class={styles.activityHeader}>
                             <span class={styles.activityLabel}>Recent Activity</span>
-                            <a href={`#transactions?account=${account.id}`} class={styles.btnLink}>
+                            <a
+                              href={`#transactions?account=${account.id}`}
+                              class={styles.btnLink}
+                              data-test-id="activity-view-all"
+                            >
                               View All →
                             </a>
                           </div>
@@ -396,7 +404,10 @@ export default function Accounts() {
                             <For each={getAccountTransactions(account.id).slice(0, 3)}>
                               {(tx: any) => (
                                 <div data-test-id="activity-item" class={styles.activityItem}>
-                                  <div data-test-id="activity-desc" class={styles.activityContent}>
+                                  <div
+                                    data-test-id="activity-content"
+                                    class={styles.activityContent}
+                                  >
                                     <div data-test-id="activity-desc" class={styles.activityDesc}>
                                       {tx.description}
                                     </div>
