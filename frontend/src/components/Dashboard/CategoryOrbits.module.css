@@ -1,0 +1,112 @@
+/**
+ * CategoryOrbits — concentric orbital-arc category chart.
+ */
+
+/* auto-fit: side-by-side in wide cards, chart-over-legend in narrow ones
+   (e.g. the Analytics two-column grid) — no container queries needed. */
+.wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: center;
+  justify-items: center;
+  gap: 20px 26px;
+}
+
+.orbits {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+}
+
+.empty {
+  margin: 18px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ring {
+  transition: opacity 0.25s ease;
+  cursor: pointer;
+}
+
+.ringDim {
+  opacity: 0.22;
+}
+
+.coreValue {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.coreLabel {
+  font-family: var(--font-inter);
+  font-size: 7.5px;
+  letter-spacing: 0.2em;
+  fill: var(--text-secondary);
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+  max-width: 460px;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  transition:
+    opacity 0.25s ease,
+    background 0.2s ease;
+  cursor: pointer;
+}
+
+.legendRow:hover {
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+
+.legendDim {
+  opacity: 0.35;
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in oklab, currentcolor 40%, transparent);
+}
+
+.legendName {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legendPct {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.legendAmount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: right;
+  min-width: 84px;
+}

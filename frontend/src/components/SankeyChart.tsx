@@ -103,11 +103,12 @@ export default function SankeyChart(props: Props) {
         [width - margin.right, height - margin.bottom],
       ])
 
+    // Brand palette (Orbit theme): azure source, dawn categories, mint actuals.
     const categoryColors: Record<string, string> = {
-      budget: '#6366f1',
-      category: '#f59e0b',
-      actual: '#10b981',
-      savings: '#06b6d4',
+      budget: '#6e9bff',
+      category: '#f0a860',
+      actual: '#59d2a2',
+      savings: '#4fb3d9',
     }
 
     let laidOut: ReturnType<typeof sankeyGenerator>
@@ -129,19 +130,22 @@ export default function SankeyChart(props: Props) {
     }
     const { nodes, links } = laidOut
 
-    // Draw links
+    // Draw links. Each flow carries its category's own color (target node
+    // first — budget→category; then source — category→actual), so the
+    // category hue travels the whole path instead of a muddy uniform tint.
     const link = svg
       .append('g')
       .attr('fill', 'none')
-      .attr('stroke-opacity', 0.4)
+      .attr('stroke-opacity', 0.45)
       .selectAll('path')
       .data(links)
       .join('path')
       .attr('d', sankeyLinkHorizontal())
       .attr('stroke', (d: SankeyLinkDatum) => {
         const targetNode = typeof d.target === 'object' ? (d.target as SankeyNodeDatum) : null
+        const sourceNode = typeof d.source === 'object' ? (d.source as SankeyNodeDatum) : null
         const targetCat: string = targetNode?.category || d.targetCategory || ''
-        return categoryColors[targetCat] || '#6366f1'
+        return targetNode?.color || sourceNode?.color || categoryColors[targetCat] || '#6e9bff'
       })
       .attr('stroke-width', (d: SankeyLinkDatum) => Math.max(1, d.width))
 
@@ -163,7 +167,7 @@ export default function SankeyChart(props: Props) {
       .attr('y', (d: SankeyNodeDatum) => d.y0)
       .attr('height', (d: SankeyNodeDatum) => Math.max(0, d.y1 - d.y0))
       .attr('width', (d: SankeyNodeDatum) => d.x1 - d.x0)
-      .attr('fill', (d: SankeyNodeDatum) => d.color || categoryColors[d.category] || '#6b7280')
+      .attr('fill', (d: SankeyNodeDatum) => d.color || categoryColors[d.category] || '#7182a8')
       .attr('rx', 3)
 
     node

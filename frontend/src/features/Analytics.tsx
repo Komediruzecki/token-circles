@@ -38,6 +38,7 @@ import {
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import Chart from '../components/Chart'
 import D3HeatmapChart from '../components/D3HeatmapChart'
+import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import ExportChartButton from '../components/ExportChartButton'
 import InfoTip from '../components/InfoTip'
 import SankeyChart from '../components/SankeyChart'
@@ -116,6 +117,7 @@ export default function Analytics() {
         return {
           category_id: i,
           category_name: (d.category as string) || (d.category_name as string) || 'Unknown',
+          category_color: d.color,
           amount: total,
         }
       })
@@ -193,7 +195,6 @@ export default function Analytics() {
     transactions: Transaction[]
     loading: boolean
   } | null>(null)
-  const [categoryChart, setCategoryChart] = createSignal<ChartJS | undefined>(undefined)
   const [stackedChart, setStackedChart] = createSignal<ChartJS | undefined>(undefined)
   // Trends chart category focus: '' = all visible. Kept in a signal so the mobile-friendly
   // dropdown and the legend double-click solo stay one mechanism.
@@ -1070,11 +1071,6 @@ export default function Analytics() {
                   {stackedYear()})
                 </h3>
                 <div class={styles.heatmapControls}>
-                  <ExportChartButton
-                    chart={categoryChart()}
-                    filename="category-breakdown"
-                    variant="inline"
-                  />
                   <select
                     class={styles.heatmapTypeSelect}
                     value={categoryType()}
@@ -1092,49 +1088,11 @@ export default function Analytics() {
                 {data()!.byCategory.length === 0 ? (
                   <div class={styles.emptyState}>No {categoryType()} data</div>
                 ) : (
-                  <Chart
-                    type="doughnut"
-                    data={{
-                      labels: data()!.byCategory.map(
-                        (item: { category_name: string }) => item.category_name
-                      ),
-                      datasets: [
-                        {
-                          data: data()!.byCategory.map((item: { amount: number }) => item.amount),
-                          backgroundColor: [
-                            '#dc2626',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#06b6d4',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                            '#14b8a6',
-                          ],
-                          borderWidth: 0,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'right',
-                          labels: {
-                            usePointStyle: true,
-                            padding: 15,
-                            font: { size: 12 },
-                            color: chartColors().text,
-                          },
-                        },
-                      },
-                    }}
-                    height={300}
-                    width="100%"
-                    onReady={setCategoryChart}
+                  <CategoryOrbits
+                    categories={data()!.byCategory}
+                    periodText={String(stackedYear())}
+                    label={categoryType() === 'income' ? 'earned' : 'spent'}
+                    maxRings={7}
                   />
                 )}
               </div>

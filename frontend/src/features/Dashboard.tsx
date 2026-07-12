@@ -7,6 +7,7 @@ import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
 import ChartWrapper from '../components/ChartWrapper'
 import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
+import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import OverviewDeck from '../components/Dashboard/OverviewDeck'
 import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
 import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
@@ -88,21 +89,6 @@ function loadWidgetPrefs() {
   }
   return { visible: DEFAULT_VISIBLE, order: DEFAULT_WIDGET_ORDER }
 }
-
-// Constellation palette for categorical charts — azure-anchored with warm
-// and mint counterpoints, readable on both the night and daylight grounds.
-const CATEGORY_PALETTE = [
-  '#6e9bff',
-  '#f0a860',
-  '#59d2a2',
-  '#e0708a',
-  '#93b4ff',
-  '#e8c268',
-  '#4fb3d9',
-  '#c9a0ff',
-  '#7182a8',
-  '#3b6fe0',
-]
 
 export default function Dashboard() {
   const state = useAppState()
@@ -376,46 +362,20 @@ export default function Dashboard() {
           <div class={styles.card}>
             <div class={styles.cardHeader}>
               <div class={styles.cardTitle}>Spending by Category</div>
+              <a href="#analytics" class={styles.widgetLink}>
+                Trends →
+              </a>
             </div>
-            <div class={styles.chartContainerTall}>
-              {metrics()!.expenseByCategory && metrics()!.expenseByCategory.length > 0 ? (
-                <ChartErrorBoundary title="Spending by Category chart">
-                  <ChartWrapper
-                    type="doughnut"
-                    data={{
-                      labels: metrics()!.expenseByCategory.map(
-                        (item: any) => item.category_name || 'Uncategorized'
-                      ),
-                      datasets: [
-                        {
-                          data: metrics()!.expenseByCategory.map((item: any) => item.total),
-                          backgroundColor: CATEGORY_PALETTE,
-                        },
-                      ],
-                    }}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: 'right',
-                          align: 'start',
-                          labels: {
-                            padding: 8,
-                            font: { size: 11 },
-                            usePointStyle: true,
-                            boxWidth: 8,
-                          },
-                        },
-                      },
-                    }}
-                    height={400}
-                    showExport
-                    filename="spending-by-category"
-                  />
-                </ChartErrorBoundary>
-              ) : (
-                <div class={styles.emptyState}>No expense data to display</div>
-              )}
-            </div>
+            <ChartErrorBoundary title="Spending by Category chart">
+              <CategoryOrbits
+                categories={(metrics()!.expenseByCategory || []).map((item: any) => ({
+                  category_name: item.category_name,
+                  category_color: item.category_color,
+                  amount: item.amount ?? item.total ?? 0,
+                }))}
+                periodText={periodText()}
+              />
+            </ChartErrorBoundary>
           </div>
         )
       case 'recent-transactions':
