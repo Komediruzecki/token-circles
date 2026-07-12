@@ -561,12 +561,13 @@ export default function Dashboard() {
         <div class={styles.headerTopRow}>
           <div class={styles.pageTitle}>
             <h2>Dashboard</h2>
-            <p>Your financial overview</p>
+            <p data-test-id="dashboard-subtitle">Your financial overview</p>
           </div>
           <div class={styles.headerButtons}>
             <button
               class={styles.btnSecondary}
               onClick={showSettings}
+              data-test-id="dashboard-views"
               title="Show, hide and reorder dashboard widgets"
             >
               <svg
@@ -586,7 +587,11 @@ export default function Dashboard() {
               </svg>
               Views
             </button>
-            <button class={styles.btnPrimary} onClick={() => loadDashboard()}>
+            <button
+              class={styles.btnPrimary}
+              onClick={() => loadDashboard()}
+              data-test-id="dashboard-refresh"
+            >
               <svg
                 width="16"
                 height="16"
@@ -664,6 +669,7 @@ export default function Dashboard() {
             >
               <div
                 class={`${styles.metricCard} ${styles.networth}`}
+                data-test-id="dashboard-metric-networth"
                 {...traceCardProps(() => ({
                   title: 'Net Worth',
                   formula: `Sum of all account balances (current)\n= ${money(metrics()!.balance)}`,
@@ -678,7 +684,9 @@ export default function Dashboard() {
                   Net Worth
                   <InfoTip text="Sum of all account balances right now (not period-filtered)" />
                 </div>
-                <div class={styles.metricValue}>{money(metrics()!.balance)}</div>
+                <div class={styles.metricValue} data-test-id="dashboard-metric-networth-value">
+                  {money(metrics()!.balance)}
+                </div>
                 <div class={styles.metricSubtext}>Total account balances</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momBalanceDelta != null && (
@@ -713,6 +721,7 @@ export default function Dashboard() {
               </div>
               <div
                 class={`${styles.metricCard} ${styles.income}`}
+                data-test-id="dashboard-metric-income"
                 {...traceCardProps(() => ({
                   title: 'Income',
                   formula: `Sum of income transactions in ${periodText()}\n= ${money(metrics()!.totalIncome)}`,
@@ -761,6 +770,7 @@ export default function Dashboard() {
               </div>
               <div
                 class={`${styles.metricCard} ${styles.expense}`}
+                data-test-id="dashboard-metric-expenses"
                 {...traceCardProps(() => ({
                   title: 'Expenses',
                   formula: `Sum of expense transactions in ${periodText()}\n= ${money(metrics()!.totalExpenses)}`,
@@ -863,6 +873,7 @@ export default function Dashboard() {
             class={styles.chartsGrid}
             role="region"
             aria-label="charts overview"
+            data-test-id="dashboard-charts"
             data-tour="dashboard-charts"
           >
             <div class={styles.card}>

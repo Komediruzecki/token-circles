@@ -137,7 +137,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
   const txIcon = (type: string) => (type === 'income' ? '↑' : type === 'expense' ? '↓' : '⇄')
 
   return (
-    <div class={styles.deck} data-tour="overview-deck">
+    <div class={styles.deck} data-test-id="dashboard-overview-deck" data-tour="overview-deck">
       {/* ── Cash flow Sankey ── */}
       <Show when={props.visible('deck-sankey')}>
         <section class={`${styles.panel} ${styles.sankey}`}>
@@ -371,7 +371,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
 
       {/* ── Transactions strip ── */}
       <Show when={props.visible('deck-transactions') && props.recentTransactions.length > 0}>
-        <section class={`${styles.panel} ${styles.txStrip}`}>
+        <section class={`${styles.panel} ${styles.txStrip}`} data-test-id="dashboard-transactions">
           <header class={styles.panelHeader}>
             <h3 class={styles.panelTitle}>Transactions</h3>
             <a href="#transactions" class={styles.panelMore}>
@@ -381,7 +381,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
           <div class={styles.txRow}>
             <For each={props.recentTransactions.slice(0, 4)}>
               {(tx) => (
-                <div class={styles.txItem}>
+                <div class={styles.txItem} data-test-id="dashboard-transaction-item">
                   <span
                     class={styles.txIcon}
                     classList={{

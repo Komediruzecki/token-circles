@@ -556,6 +556,7 @@ export function App() {
   const navLink = (item: (typeof navItems)[number]) => (
     <a
       href={`#${item.name}`}
+      data-test-id={`nav-link-${item.name}`}
       class={
         activePage() === item.name ? layoutStyles.sidebarNavActive : layoutStyles.sidebarNavLink
       }
