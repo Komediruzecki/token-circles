@@ -21,7 +21,11 @@ const encoder = new TextEncoder();
 export const SESSION_COOKIE = 'fm_session';
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const PBKDF2_ITERATIONS = 600_000; // OWASP current guidance for PBKDF2-SHA256
+// Cloudflare Workers' WebCrypto rejects PBKDF2 with more than 100,000 iterations
+// ("iteration counts above 100000 are not supported"), so this is the runtime ceiling — a
+// higher value (e.g. OWASP's 600k) makes hashPassword/verify throw at runtime. Do not raise it
+// without moving to a KDF the Workers runtime supports at higher cost (e.g. Argon2id via WASM).
+const PBKDF2_ITERATIONS = 100_000;
 
 // ── base64url ────────────────────────────────────────────────────────────────
 function b64urlEncode(data: ArrayBuffer | Uint8Array): string {

@@ -21,8 +21,10 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // A fixed, valid-format PBKDF2 hash (same 600k cost as a freshly minted real one) that no password
 // matches. Login verifies against this when the account or its hash is absent, so the response time
 // is the same whether or not the email is registered — closing the user-enumeration timing oracle.
-// Kept in lock-step with PBKDF2_ITERATIONS in auth.ts so the dummy verify costs the same as a real one.
-const DUMMY_PASSWORD_HASH = `pbkdf2$600000$${'A'.repeat(22)}$${'A'.repeat(43)}`;
+// Kept in lock-step with PBKDF2_ITERATIONS in auth.ts so the dummy verify costs the same as a real
+// one — and, critically, stays within the Workers PBKDF2 100k cap (a 600k dummy made login throw
+// for non-existent accounts instead of returning 401).
+const DUMMY_PASSWORD_HASH = `pbkdf2$100000$${'A'.repeat(22)}$${'A'.repeat(43)}`;
 
 // How long a password-reset magic link stays valid. Tune freely (a few hours is the
 // safe default; raise toward 24–72h if you want links to survive longer email delays).
