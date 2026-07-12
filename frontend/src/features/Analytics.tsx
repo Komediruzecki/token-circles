@@ -507,7 +507,7 @@ export default function Analytics() {
   })
 
   return (
-    <div class={`page page-analytics page-enter ${styles.analyticsPage}`}>
+    <div class={`page page-analytics page-enter instrument-deck ${styles.analyticsPage}`}>
       <div class={styles.pageHeader}>
         <h1 data-tour="analytics-header">Analytics</h1>
         <p class={styles.pageSubtitle}>Visualize your financial data and track trends</p>

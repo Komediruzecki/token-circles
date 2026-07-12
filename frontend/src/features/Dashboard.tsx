@@ -15,6 +15,7 @@ import InfoTip from '../components/InfoTip'
 import { PeriodPills } from '../components/PeriodPills'
 import { api, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { theme } from '../core/theme'
 import styles from './DashboardPage.module.css'
 import type { CalcTrace } from '../components/CalcTracer'
 import type * as Models from '../types/models'
@@ -62,6 +63,21 @@ function loadWidgetPrefs() {
   }
   return { visible: DEFAULT_VISIBLE, order: DEFAULT_WIDGET_ORDER }
 }
+
+// Constellation palette for categorical charts — azure-anchored with warm
+// and mint counterpoints, readable on both the night and daylight grounds.
+const CATEGORY_PALETTE = [
+  '#6e9bff',
+  '#f0a860',
+  '#59d2a2',
+  '#e0708a',
+  '#93b4ff',
+  '#e8c268',
+  '#4fb3d9',
+  '#c9a0ff',
+  '#7182a8',
+  '#3b6fe0',
+]
 
 export default function Dashboard() {
   const state = useAppState()
@@ -324,18 +340,7 @@ export default function Dashboard() {
                       datasets: [
                         {
                           data: metrics()!.expenseByCategory.map((item: any) => item.total),
-                          backgroundColor: [
-                            '#dc2626',
-                            '#f97316',
-                            '#eab308',
-                            '#22c55e',
-                            '#06b6d4',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#6b7280',
-                            '#14b8a6',
-                          ],
+                          backgroundColor: CATEGORY_PALETTE,
                         },
                       ],
                     }}
@@ -476,11 +481,11 @@ export default function Dashboard() {
                         (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0),
                       ],
                       backgroundColor: [
-                        '#22C55E',
-                        '#DC2626',
+                        theme.getChartColors().income,
+                        theme.getChartColors().expense,
                         (metrics()!.totalIncome || 0) - (metrics()!.totalExpenses || 0) >= 0
-                          ? '#22C55E'
-                          : '#DC2626',
+                          ? theme.getChartColors().income
+                          : theme.getChartColors().expense,
                       ],
                       borderRadius: 8,
                     },
@@ -783,8 +788,8 @@ export default function Dashboard() {
                           {
                             label: 'Net Worth',
                             data: monthlyData()!.netWorth,
-                            borderColor: '#8B5CF6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderColor: theme.getChartColors().primary,
+                            backgroundColor: theme.getChartColors().primaryBg,
                             fill: true,
                             tension: 0.4,
                           },
@@ -816,16 +821,16 @@ export default function Dashboard() {
                           {
                             label: 'Income',
                             data: monthlyData()!.income,
-                            borderColor: '#22C55E',
-                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            borderColor: theme.getChartColors().income,
+                            backgroundColor: theme.getChartColors().incomeBg,
                             fill: true,
                             tension: 0.4,
                           },
                           {
                             label: 'Expenses',
                             data: monthlyData()!.expenses,
-                            borderColor: '#EF4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderColor: theme.getChartColors().expense,
+                            backgroundColor: theme.getChartColors().expenseBg,
                             fill: true,
                             tension: 0.4,
                           },
@@ -867,10 +872,7 @@ export default function Dashboard() {
                 <div class={styles.modalHeader}>
                   <div class={styles.modalTitle}>Dashboard Views</div>
                   <div class={styles.modalHeaderActions}>
-                    <button
-                      class={styles.headerResetBtn}
-                      onClick={() => resetViews()?.()}
-                    >
+                    <button class={styles.headerResetBtn} onClick={() => resetViews()?.()}>
                       Reset Default
                     </button>
                     <button

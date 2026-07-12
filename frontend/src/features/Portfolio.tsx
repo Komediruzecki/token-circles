@@ -270,7 +270,7 @@ export default function Portfolio() {
   const getAllocationColor = (idx: number) => allocationColors[idx % allocationColors.length]
 
   return (
-    <div class={`${styles.portfolioPage} page page-portfolio page-enter`}>
+    <div class={`${styles.portfolioPage} page page-portfolio page-enter instrument-deck`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="portfolio-header" data-tour="portfolio-header">
@@ -330,7 +330,9 @@ export default function Portfolio() {
               class={`${styles.summaryValue} ${liveSummary()!.totalGain >= 0 ? styles.positive : styles.negative}`}
             >
               {formatAmount(liveSummary()!.totalGain)}
-              <span class={styles.gainPercent}>({formatPercent(liveSummary()!.totalGainPercent)})</span>
+              <span class={styles.gainPercent}>
+                ({formatPercent(liveSummary()!.totalGainPercent)})
+              </span>
             </div>
           </div>
           <div class={styles.summaryCard}>
@@ -485,7 +487,9 @@ export default function Portfolio() {
                     <circle cx="100" cy="100" r="45" fill="var(--card-bg)" />
                   </svg>
                   <div class={styles.pieTotal}>
-                    <div class={styles.pieTotalValue}>{formatAmount(liveSummary()!.totalValue)}</div>
+                    <div class={styles.pieTotalValue}>
+                      {formatAmount(liveSummary()!.totalValue)}
+                    </div>
                   </div>
                 </div>
                 <div class={styles.legend}>

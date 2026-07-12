@@ -18,6 +18,7 @@ import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
 import LoginModal from './components/LoginModal'
 import LoginScreen from './components/LoginScreen'
+import { LogoMark } from './components/Logo'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import QuickAddModal from './components/QuickAddModal'
@@ -598,9 +599,10 @@ export function App() {
             >
               <div class={layoutStyles.sidebarLogo}>
                 <h1>
-                  Finance<span>.</span>
+                  <LogoMark size={26} />
+                  Token Circles
                 </h1>
-                <p>Personal Finance Tracker</p>
+                <p>Your money, in clear orbit</p>
               </div>
               <div class={profileStyles.profileSelector}>
                 <div class={profileStyles.profileDropdown}>
@@ -882,16 +884,18 @@ export function App() {
                           type="button"
                           class={`${layoutStyles.sidebarGroupHeader}${
                             groupHasActive(section.items)
-                              ? ` ${  layoutStyles.sidebarGroupActive}`
+                              ? ` ${layoutStyles.sidebarGroupActive}`
                               : ''
                           }`}
                           aria-expanded={isGroupExpanded(section)}
-                          onClick={() => { toggleGroup(section.group!); }}
+                          onClick={() => {
+                            toggleGroup(section.group!)
+                          }}
                         >
                           <span>{section.group}</span>
                           <svg
                             class={`${layoutStyles.sidebarChevron}${
-                              isGroupExpanded(section) ? ` ${  layoutStyles.sidebarChevronOpen}` : ''
+                              isGroupExpanded(section) ? ` ${layoutStyles.sidebarChevronOpen}` : ''
                             }`}
                             width="14"
                             height="14"

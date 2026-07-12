@@ -1,202 +1,19 @@
 /**
  * Main CSS Entry Point
- * Preflight reset + CSS custom properties (design tokens)
+ * Preflight reset + Token Circles theme system (see themes/README.md).
+ *
+ * Themes own every color token; this file holds only theme-independent
+ * base styles. Adding a theme = new file in themes/ + import here +
+ * registry entry in src/core/theme.ts.
  */
 
 @import './preflight.css';
-
-:root {
-  /* Render native controls (select option popups, scrollbars, date pickers) in
-     the active theme. Without this, a dark app leaves the browser's native
-     <option> list white → white-on-white text. */
-  color-scheme: light;
-
-  /* Fonts */
-  --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-  /* Backgrounds */
-  --bg: #f8fafc;
-  --bg-color: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --surface: #ffffff;
-  --surface-hover: #f8fafc;
-  --card-bg: #fff;
-  --stat-bg: #f8fafc;
-  --table-header-bg: #f8fafc;
-  --table-hover: #f8fafc;
-  --sidebar-bg: #0f172a;
-  --sidebar-active-bg: #1e293b;
-  --period-selector-bg: #f1f5f9;
-  --loan-stat-bg: #f8fafc;
-  --amort-th-bg: #f8fafc;
-  --col-map-bg: #f8fafc;
-  --prepayment-bg: #f0fdf4;
-  --rate-period-item-bg: #f8fafc;
-
-  /* Text */
-  --text: #1e293b;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --text-positive: #22c55e;
-  --text-negative: #ef4444;
-  --color: #1e293b;
-  --sidebar-text: #94a3b8;
-  --sidebar-active-text: #f8fafc;
-  --chart-legend-text: #1e293b;
-
-  /* Borders */
-  --border: #e2e8f0;
-  --border-color: #e2e8f0;
-
-  /* Colors */
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --primary-bg: rgba(59, 130, 246, 0.1);
-  --success: #22c55e;
-  --danger: #ef4444;
-  --danger-hover: #dc2626;
-  --danger-outline: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.05);
-  --warning: #f59e0b;
-  --info: #3b82f6;
-  --income: #22c55e;
-  --expense: #ef4444;
-  --transfer: #6366f1;
-
-  /* Badge */
-  --badge-income-bg: #dcfce7;
-  --badge-income-text: #16a34a;
-  --badge-expense-bg: #fee2e2;
-  --badge-expense-text: #dc2626;
-  --badge-transfer-bg: #ede9fe;
-  --badge-transfer-text: #7c3aed;
-
-  /* Type backgrounds */
-  --type-income-bg: #dcfce7;
-  --type-expense-bg: #fee2e2;
-  --type-transfer-bg: #ede9fe;
-
-  /* Budget */
-  --budget-bar-bg: #e2e8f0;
-
-  /* Buttons */
-  --btn-ghost-hover: #f1f5f9;
-  --btn-secondary-bg: #f1f5f9;
-  --btn-secondary-hover: #e2e8f0;
-  --btn-secondary-color: var(--text);
-  --btn-success-hover: #16a34a;
-  --btn-danger-hover: #dc2626;
-
-  /* Chart */
-  --chart-primary-bg: rgba(59, 130, 246, 0.1);
-
-  /* Misc */
-  --radius: 12px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --modal-overlay: rgba(0, 0, 0, 0.4);
-  --page-padding: 24px;
-  --profile-btn-bg: rgba(255, 255, 255, 0.08);
-  --profile-btn-hover: rgba(255, 255, 255, 0.15);
-  --period-btn-active-bg: #1e293b;
-  --period-btn-active-color: #f1f5f9;
-  --toggle-slider-bg: #94a3b8;
-  --scrollbar-thumb: #cbd5e1;
-  --scrollbar-thumb-hover: #94a3b8;
-  --month-nav-btn-hover-bg: #f1f5f9;
-  --income-bg: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-  --income-text: #166534;
-}
-
-[data-theme='dark'] {
-  color-scheme: dark;
-
-  --bg: #0f172a;
-  --bg-color: #0f172a;
-  --bg-secondary: #1e293b;
-  --surface: #1e293b;
-  --surface-hover: #334155;
-  --card-bg: #1e293b;
-  --stat-bg: #1e293b;
-  --table-header-bg: #1e293b;
-  --table-hover: #1e293b;
-  --sidebar-bg: #020617;
-  --sidebar-active-bg: #1e293b;
-  --period-selector-bg: #334155;
-  --loan-stat-bg: #0f172a;
-  --amort-th-bg: #0f172a;
-  --col-map-bg: #0f172a;
-  --prepayment-bg: rgba(34, 197, 94, 0.1);
-  --rate-period-item-bg: #0f172a;
-
-  --text: #f1f5f9;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-positive: #4ade80;
-  --text-negative: #f87171;
-  --color: #f1f5f9;
-  --sidebar-text: #94a3b8;
-  --sidebar-active-text: #f8fafc;
-  --chart-legend-text: #f1f5f9;
-
-  --border: #334155;
-  --border-color: #334155;
-
-  --primary: #60a5fa;
-  --primary-hover: #3b82f6;
-  --primary-bg: rgba(96, 165, 250, 0.1);
-  --danger: #ef4444;
-  --danger-hover: #dc2626;
-  --danger-outline: #f87171;
-  --danger-bg: rgba(248, 113, 113, 0.05);
-  --info: #60a5fa;
-
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
-  --modal-overlay: rgba(0, 0, 0, 0.7);
-
-  --badge-income-bg: rgba(34, 197, 94, 0.15);
-  --badge-income-text: #4ade80;
-  --badge-expense-bg: rgba(239, 68, 68, 0.15);
-  --badge-expense-text: #f87171;
-  --badge-transfer-bg: rgba(99, 102, 241, 0.15);
-  --badge-transfer-text: #a5b4fc;
-
-  --type-income-bg: rgba(34, 197, 94, 0.15);
-  --type-expense-bg: rgba(239, 68, 68, 0.15);
-  --type-transfer-bg: rgba(99, 102, 241, 0.15);
-
-  --budget-bar-bg: #334155;
-
-  --btn-ghost-hover: #334155;
-  --btn-secondary-bg: #334155;
-  --btn-secondary-hover: #475569;
-  --btn-secondary-color: #f1f5f9;
-  --btn-success-hover: #059669;
-  --btn-danger-hover: #dc2626;
-
-  --chart-primary-bg: rgba(96, 165, 250, 0.1);
-
-  --profile-btn-bg: rgba(255, 255, 255, 0.05);
-  --profile-btn-hover: rgba(255, 255, 255, 0.1);
-  --period-btn-active-bg: #1e293b;
-  --period-btn-active-color: #f1f5f9;
-  --toggle-slider-bg: #64748b;
-  --scrollbar-thumb: #475569;
-  --scrollbar-thumb-hover: #64748b;
-  --month-nav-btn-hover-bg: #334155;
-  --dropdown-bg: #1e293b;
-  --dropdown-border: rgba(255, 255, 255, 0.1);
-  --dropdown-text: #cbd5e1;
-  --chart-grid: rgba(255, 255, 255, 0.06);
-  --chart-text: #94a3b8;
-  --income-bg: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.15) 100%);
-  --income-text: #d1fae5;
-}
+@import './themes/dawn-light.css';
+@import './themes/orbit-dark.css';
+@import './themes/instrument-deck.css';
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-inter);
   background: var(--bg);
   color: var(--text);
   display: flex;
@@ -204,6 +21,21 @@ body {
   min-height: 100dvh;
   margin: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Brand voice: page-level headings speak in the display serif. Everything
+   from h3 down stays in Inter — tables, modals, and forms are instruments. */
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--primary-strong, var(--primary));
+  color: #fff;
 }
 
 /* #root is the single flex child of the flex `body`. Flex items default to

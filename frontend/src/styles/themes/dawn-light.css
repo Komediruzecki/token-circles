@@ -1,0 +1,118 @@
+/**
+ * Theme: light — "Dawn"
+ * Designed daylight, not an inversion: paper-blue grounds, ink-navy text,
+ * the same azure doing the action work. Bound to :root as the no-JS fallback.
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* Backgrounds — paper-blue ramp */
+  --bg: #f7f9ff;
+  --bg-color: #f7f9ff;
+  --bg-secondary: #eef2fc;
+  --surface: #ffffff;
+  --surface-hover: #f2f5fd;
+  --card-bg: #ffffff;
+  --stat-bg: #f7f9ff;
+  --table-header-bg: #f2f5fd;
+  --table-hover: #f7f9ff;
+  --sidebar-bg: #0a0e1c;
+  --sidebar-active-bg: rgba(110, 155, 255, 0.14);
+  --period-selector-bg: #eef2fc;
+  --loan-stat-bg: #f7f9ff;
+  --amort-th-bg: #f7f9ff;
+  --col-map-bg: #f7f9ff;
+  --prepayment-bg: #effcf4;
+  --rate-period-item-bg: #f7f9ff;
+
+  /* Text — ink navy */
+  --text: #101830;
+  --text-primary: #101830;
+  --text-secondary: #5a6788;
+  --text-positive: #14985a;
+  --text-negative: #d64550;
+  --color: #101830;
+  --sidebar-text: #9fb0d6;
+  --sidebar-active-text: #eaf0ff;
+  --chart-legend-text: #101830;
+
+  /* Borders */
+  --border: #dde4f5;
+  --border-color: #dde4f5;
+
+  /* Action — azure (deep on light ground for contrast) */
+  --primary: #3b6fe0;
+  --primary-hover: #2f5cc4;
+  --primary-bg: rgba(59, 111, 224, 0.1);
+  --primary-strong: #3b6fe0;
+  --success: #14985a;
+  --danger: #d64550;
+  --danger-hover: #b93842;
+  --danger-outline: #d64550;
+  --danger-bg: rgba(214, 69, 80, 0.05);
+  --warning: #d97f2e;
+  --info: #3b6fe0;
+
+  /* Semantic money */
+  --income: #14985a;
+  --expense: #d64550;
+  --transfer: #5468d4;
+
+  /* Badges */
+  --badge-income-bg: #e2f7ec;
+  --badge-income-text: #0e7a47;
+  --badge-expense-bg: #fdeaec;
+  --badge-expense-text: #b93842;
+  --badge-transfer-bg: #e9ecfb;
+  --badge-transfer-text: #4353b0;
+
+  --type-income-bg: #e2f7ec;
+  --type-expense-bg: #fdeaec;
+  --type-transfer-bg: #e9ecfb;
+
+  --budget-bar-bg: #e4eaf8;
+
+  /* Buttons */
+  --btn-ghost-hover: #eef2fc;
+  --btn-secondary-bg: #eef2fc;
+  --btn-secondary-hover: #e0e7f8;
+  --btn-secondary-color: var(--text);
+  --btn-success-hover: #0e7a47;
+  --btn-danger-hover: #b93842;
+
+  /* Chart */
+  --chart-primary-bg: rgba(59, 111, 224, 0.1);
+  --chart-grid: rgba(16, 24, 48, 0.06);
+  --chart-text: #5a6788;
+
+  /* Brand */
+  --accent-warm: #d97f2e;
+  --glow-primary: 0 6px 18px rgba(59, 111, 224, 0.25);
+
+  /* Fonts (shared across themes; declared on :root so always present) */
+  --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* Misc */
+  --radius: 14px;
+  --shadow: 0 1px 3px rgba(20, 32, 74, 0.07), 0 1px 2px rgba(20, 32, 74, 0.05);
+  --shadow-lg: 0 12px 24px -6px rgba(20, 32, 74, 0.12), 0 4px 8px -2px rgba(20, 32, 74, 0.06);
+  --modal-overlay: rgba(16, 24, 48, 0.4);
+  --page-padding: 24px;
+  --profile-btn-bg: rgba(255, 255, 255, 0.08);
+  --profile-btn-hover: rgba(255, 255, 255, 0.15);
+  --period-btn-active-bg: #101830;
+  --period-btn-active-color: #f7f9ff;
+  --toggle-slider-bg: #9aa8c7;
+  --scrollbar-thumb: #ccd6ec;
+  --scrollbar-thumb-hover: #9aa8c7;
+  --month-nav-btn-hover-bg: #eef2fc;
+  --dropdown-bg: #ffffff;
+  --dropdown-border: #dde4f5;
+  --dropdown-text: #3a4560;
+  --income-bg: linear-gradient(135deg, #e2f7ec 0%, #d2f0e0 100%);
+  --income-text: #0e5c38;
+}
