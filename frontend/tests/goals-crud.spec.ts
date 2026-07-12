@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToRoute, getByTestId } from './test-helpers'
+import { login, navigateToRoute } from './test-helpers'
 
 test.describe('Goals CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -11,377 +11,262 @@ test.describe('Goals CRUD Operations', () => {
   })
 
   test('should display goals header', async ({ page }) => {
-    const header = getByTestId(page, 'goals-header')
-    await expect(header).toBeVisible()
+    await expect(page.getByTestId('goals-header')).toBeVisible()
   })
 
   test('should have page subtitle', async ({ page }) => {
-    const subtitle = getByTestId(page, 'goals-subtitle')
-    const text = await subtitle.textContent()
-    expect(text).toMatch(/Track savings progress|financial goals/i)
+    await expect(page.getByTestId('goals-subtitle')).toHaveText(
+      /Track your savings progress|financial goals/i
+    )
   })
 
   test('should have new goal button', async ({ page }) => {
-    const addBtn = page.getByTestId('add-goal-btn')
-    const cntisVisible = await addBtn.count()
-    expect(cntisVisible).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('add-goal-btn')).toBeVisible()
   })
 
   test('should have goals grid', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalsGrid = getByTestId(page, 'goals-grid')
-    await expect(goalsGrid).toBeVisible()
+    await expect(page.getByTestId('goals-grid')).toBeVisible()
   })
 
   test('should display goal cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalCards = getByTestId(page, 'goal-card')
-    const count = await goalCards.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-card').first()).toBeVisible()
   })
 
   test('should have goal card with icon', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalCards = getByTestId(page, 'goal-card')
-    const icons = goalCards.getByTestId('goal-icon')
-    const count = await icons.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-card').first().getByTestId('goal-icon')).toBeVisible()
   })
 
   test('should display goal icon 🎯', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalCards = getByTestId(page, 'goal-card')
-    const icons = goalCards.getByTestId('goal-icon')
-    const iconCount = await icons.count()
-    expect(iconCount).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-card').first().getByTestId('goal-icon')).toBeVisible()
   })
 
   test('should display goal name', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalNames = getByTestId(page, 'goal-name')
-    const chasNames = await goalNames.count()
-    expect(chasNames).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-name').first()).toHaveText(/\S/)
   })
 
   test('should display goal date and countdown', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalDates = getByTestId(page, 'goal-date')
-    const chasDates = await goalDates.count()
-    expect(chasDates).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-date').first()).toHaveText(/\d/)
   })
 
   test('should display days until target date', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const textElements = page.locator('text=/Due \d+ days|days overdue|due today|due tomorrow/')
-    const count = await textElements.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // The goal-date line embeds the countdown copy from daysUntil() ("Due in N days", "N days
+    // overdue", "Due today", "Due tomorrow").
+    await expect(page.getByTestId('goal-date').first()).toHaveText(/Due|overdue|today|tomorrow/i)
   })
 
   test('should have progress bar for goal', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const progressBars = getByTestId(page, 'goal-progress-bar')
-    if (await progressBars.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const count = await progressBars.count()
-      expect(count).toBeGreaterThanOrEqual(0)
-    }
+    await expect(page.getByTestId('goal-progress-bar').first()).toBeVisible()
   })
 
   test('should display progress percentage', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const progressPercent = getByTestId(page, 'goal-progress-percent')
-    const chasPercent = await progressPercent.count()
-    expect(chasPercent).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-progress-percent').first()).toHaveText(/%/)
   })
 
   test('should display progress current amount', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const progressCurrent = getByTestId(page, 'goal-progress-current')
-    const chasCurrent = await progressCurrent.count()
-    expect(chasCurrent).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-progress-current').first()).toHaveText(/\d/)
   })
 
   test('should display progress target', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const progressTarget = getByTestId(page, 'goal-progress-target')
-    const chasTarget = await progressTarget.count()
-    expect(chasTarget).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-progress-target').first()).toHaveText(/\d/)
   })
 
   test('should display current amount card', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const currentAmount = getByTestId(page, 'goal-balance')
-    const chasAmount = await currentAmount.count()
-    expect(chasAmount).toBeGreaterThanOrEqual(0)
+    // No separate balance card exists; the current amount is shown in the progress row.
+    await expect(page.getByTestId('goal-progress-current').first()).toBeVisible()
   })
 
   test('should have goal details section', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalDetails = getByTestId(page, 'goal-card')
-    const count = await goalDetails.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-card').first()).toBeVisible()
   })
 
   test('should display detail items (monthly, expected return, target date)', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const detailItems = getByTestId(page, 'goal-detail-item')
-    const count = await detailItems.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    // This component's card has no monthly/expected-return detail breakdown; assert the card renders.
+    await expect(page.getByTestId('goal-card').first()).toBeVisible()
   })
 
   test('should display monthly contribution', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const monthlyDetail = getByTestId(page, 'goal-detail-monthly')
-    const chasMonthly = await monthlyDetail.count()
-    expect(chasMonthly).toBeGreaterThanOrEqual(0)
+    // Monthly contribution is not surfaced on the goal card; assert the card renders.
+    await expect(page.getByTestId('goal-card').first()).toBeVisible()
   })
 
   test('should display expected return rate', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const returnDetail = getByTestId(page, 'goal-detail-return')
-    const chasReturn = await returnDetail.count()
-    expect(chasReturn).toBeGreaterThanOrEqual(0)
+    // Expected return is not surfaced on the goal card; assert the card renders.
+    await expect(page.getByTestId('goal-card').first()).toBeVisible()
   })
 
   test('should display target date', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const dateDetail = getByTestId(page, 'goal-detail-date')
-    const chasDate = await dateDetail.count()
-    expect(chasDate).toBeGreaterThanOrEqual(0)
+    // The target date is rendered in the goal-date line.
+    await expect(page.getByTestId('goal-date').first()).toHaveText(/\d/)
   })
 
   test('should have edit button on goal card', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const editBtns = getByTestId(page, 'goal-edit-btn')
-    const count = await editBtns.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-edit-btn').first()).toBeVisible()
   })
 
   test('should have delete button on goal card', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const deleteBtns = getByTestId(page, 'goal-delete-btn')
-    const count = await deleteBtns.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-delete-btn').first()).toBeVisible()
   })
 
   test('should open add goal modal', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-goal-btn')
-    if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await addBtn.click()
-      await page.waitForTimeout(200)
+    await page.getByTestId('add-goal-btn').click()
 
-      const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-      const chasModal = await modal.count()
-      expect(chasModal).toBeGreaterThanOrEqual(0)
-    }
+    await expect(page.getByTestId('goals-modal')).toBeVisible()
   })
 
   test('should have add/edit modal with title', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const title = modal.getByText(/Add Goal|Create Goal/)
-      await expect(title).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-modal-title')).toHaveText(/New Goal|Edit Goal/)
   })
 
   test('should have form group for goal name', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const nameGroup = modal.getByText('Goal Name')
-      await expect(nameGroup).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-form-name')).toBeVisible()
   })
 
   test('should have input for goal name', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const nameInput = modal.locator(
-        'input[placeholder*="Goal"], input[placeholder*="vacation"], input[placeholder*="fund"]'
-      )
-      await expect(nameInput).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-form-name')).toBeEditable()
   })
 
   test('should have form group for target amount', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const targetGroup = modal.getByText('Target Amount')
-      await expect(targetGroup).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-form-target')).toBeVisible()
   })
 
   test('should have input for target amount', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const targetInput = modal.locator('input[placeholder*="5000"], input[placeholder*="target"]')
-      await expect(targetInput).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-form-target')).toBeEditable()
   })
 
   test('should have form group for target date', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const dateGroup = modal.getByText('Target Date')
-      await expect(dateGroup).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-form-date')).toBeVisible()
   })
 
   test('should have date input for target date', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const dateInput = modal.locator('input[type="date"]')
-      await expect(dateInput).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-form-date')).toBeVisible()
   })
 
   test('should have modal footer with cancel and submit buttons', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modalFooter, [data-testid="modal-footer"]')
-      await expect(footer).toBeVisible()
-
-      const buttons = footer.locator('button')
-      const count = await buttons.count()
-      expect(count).toBeGreaterThanOrEqual(1)
-    }
+    await expect(page.getByTestId('goals-modal-footer')).toBeVisible()
+    await expect(page.getByTestId('goals-modal-cancel')).toBeVisible()
+    await expect(page.getByTestId('goals-modal-submit')).toBeVisible()
   })
 
   test('should have cancel button in modal footer', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modalFooter, [data-testid="modal-footer"]')
-      await expect(footer).toBeVisible()
-
-      const cancelBtn = footer.getByText('Cancel')
-      await expect(cancelBtn).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-modal-cancel')).toHaveText(/Cancel/)
   })
 
   test('should have create/update button in modal footer', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const footer = modal.locator('.modalFooter, [data-testid="modal-footer"]')
-      await expect(footer).toBeVisible()
-
-      const submitBtn = footer.getByText(/Create|Update/)
-      await expect(submitBtn).toBeVisible()
-    }
+    await expect(page.getByTestId('goals-modal-submit')).toHaveText(/Create|Update/)
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await page
-        .locator('.modalOverlay, [data-testid="modal-overlay"]')
-        .click({ position: { x: 0, y: 0 } })
-      await page.waitForTimeout(200)
-
-      const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
-      expect(isClosed).toBeFalsy()
-    }
+    const modal = page.getByTestId('goals-modal')
+    await expect(modal).toBeVisible()
+    // Clicking the overlay backdrop (not the inner dialog) dismisses the modal.
+    await modal.click({ position: { x: 0, y: 0 } })
+    await expect(modal).not.toBeVisible()
   })
 
   test('should close modal when clicking cancel button', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await modal.getByRole('button', { name: /Close/i }).click()
-      await page.waitForTimeout(200)
-
-      const isClosed = await modal.isVisible({ timeout: 500 }).catch(() => false)
-      expect(isClosed).toBeFalsy()
-    }
+    const modal = page.getByTestId('goals-modal')
+    await expect(modal).toBeVisible()
+    await page.getByTestId('goals-modal-cancel').click()
+    await expect(modal).not.toBeVisible()
   })
 
   test('should handle empty goals state', async ({ page }) => {
     await navigateToRoute(page, 'goals')
     await page.waitForTimeout(500)
 
-    const emptyState = getByTestId(page, 'empty-state')
-    const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasEmptyState).toBeFalsy()
+    // The seeded profile has goals, so the empty-state placeholder must not render.
+    await expect(page.getByTestId('goals-empty')).not.toBeVisible()
   })
 
   test('should show empty state message when no goals', async ({ page }) => {
     await navigateToRoute(page, 'goals')
     await page.waitForTimeout(500)
 
-    const emptyState = getByTestId(page, 'empty-state')
-    const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasEmptyText).toBeFalsy()
+    await expect(page.getByTestId('goals-empty')).not.toBeVisible()
   })
 
   test('should calculate progress percentage correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const progressBars = getByTestId(page, 'goal-progress-bar')
-    if (await progressBars.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const count = await progressBars.count()
-      expect(count).toBeGreaterThanOrEqual(0)
-    }
+    await expect(page.getByTestId('goal-progress-percent').first()).toHaveText(/%/)
   })
 
   test('should calculate days until target', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    await page
-      .locator('.goal-stats p')
-      .isVisible({ timeout: 2000 })
-      .catch(() => false)
-    expect(true).toBeTruthy() // Days calculation is environment-dependent
+    await expect(page.getByTestId('goal-date').first()).toHaveText(/Due|overdue|today|tomorrow/i)
   })
 
   test('should handle goal deletion confirmation', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const deleteBtns = getByTestId(page, 'goal-delete-btn')
-    const count = await deleteBtns.count()
-
-    if (count > 0) {
-      await deleteBtns.first().click()
-      await page.waitForTimeout(200)
-    }
+    const deleteBtn = page.getByTestId('goal-delete-btn').first()
+    await expect(deleteBtn).toBeVisible()
+    await deleteBtn.click()
+    // ConfirmButton swaps to an inline confirm prompt after the first click (no deletion yet).
+    await expect(deleteBtn).toContainText(/Confirm|Yes/i)
   })
 
   test('should handle console errors gracefully', async ({ page }) => {
@@ -409,63 +294,50 @@ test.describe('Goals CRUD Operations', () => {
     await navigateToRoute(page, 'goals')
     await page.waitForTimeout(500)
 
-    const contentArea = getByTestId(page, 'goals-header')
-    const hasContent = await contentArea.isVisible({ timeout: 500 }).catch(() => false)
-    expect(hasContent).toBe(true)
+    await expect(page.getByTestId('goals-header')).toBeVisible()
   })
 
   test('should have responsive goal cards', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const goalCards = getByTestId(page, 'goal-card')
-    const chasCards = await goalCards.count()
-    expect(chasCards).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-card').first()).toBeVisible()
   })
 
   test('should have proper form validation', async ({ page }) => {
-    await getByTestId(page, 'add-goal-btn').click()
+    await page.getByTestId('add-goal-btn').click()
 
-    const modal = page.locator('.modalOverlay, [data-testid="modal-overlay"]')
-    if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const submitBtn = modal.getByText(/Create|Update/)
-      await submitBtn.click()
-      await page.waitForTimeout(200)
+    const modal = page.getByTestId('goals-modal')
+    await expect(modal).toBeVisible()
+    await page.getByTestId('goals-modal-submit').click()
+    await page.waitForTimeout(200)
 
-      const isModalOpen = await modal.isVisible({ timeout: 500 }).catch(() => false)
-      expect(isModalOpen).toBeTruthy()
-    }
+    // Required fields are empty, so native validation blocks submit and the modal stays open.
+    await expect(modal).toBeVisible()
   })
 
   test('should be visible on page', async ({ page }) => {
     await navigateToRoute(page, 'goals')
-    await page.waitForSelector('.page.page-goals, [data-test-id="page-goals"]', {
-      state: 'attached',
-      timeout: 5000,
-    })
-    await expect(page.locator('.page.page-goals, [data-test-id="page-goals"]')).toBeVisible()
+
+    await expect(page.getByTestId('page-goals')).toBeVisible()
   })
 
   test('should render all page elements correctly', async ({ page }) => {
     await navigateToRoute(page, 'goals')
     await page.waitForTimeout(500)
 
-    await expect(getByTestId(page, 'goals-header')).toBeVisible()
-    await expect(getByTestId(page, 'goals-subtitle')).toBeVisible()
+    await expect(page.getByTestId('goals-header')).toBeVisible()
+    await expect(page.getByTestId('goals-subtitle')).toBeVisible()
   })
 
   test('should format date correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const dates = getByTestId(page, 'goal-date')
-    const chasDates = await dates.count()
-    expect(chasDates).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-date').first()).toHaveText(/\d/)
   })
 
   test('should format currency correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    const currencyValues = getByTestId(page, 'goal-progress-current')
-    const chasCurrency = await currencyValues.count()
-    expect(chasCurrency).toBeGreaterThanOrEqual(0)
+    await expect(page.getByTestId('goal-progress-current').first()).toHaveText(/\d/)
   })
 })

@@ -313,7 +313,7 @@ export default function Goals() {
   })
 
   return (
-    <div class={`page page-goals page-enter ${styles.goalsPage}`}>
+    <div data-test-id="page-goals" class={`page page-goals page-enter ${styles.goalsPage}`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
           <h1 data-test-id="goals-header" data-tour="goals-header">
@@ -340,7 +340,7 @@ export default function Goals() {
         {loading() ? (
           <div class={styles.emptyState}>Loading goals...</div>
         ) : goals().length === 0 ? (
-          <div class={styles.emptyState}>
+          <div data-test-id="goals-empty" class={styles.emptyState}>
             <p>No goals yet</p>
             <p>Create your first savings goal to start tracking.</p>
             <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
@@ -419,21 +419,23 @@ export default function Goals() {
                             Add Funds
                           </button>
                         )}
-                        <ConfirmButton
-                          class={styles.btnSm}
-                          onConfirm={() => deleteGoal(goal.id)}
-                          label={
-                            <svg
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          }
-                        />
+                        <span data-test-id="goal-delete-btn">
+                          <ConfirmButton
+                            class={styles.btnSm}
+                            onConfirm={() => deleteGoal(goal.id)}
+                            label={
+                              <svg
+                                width="16"
+                                height="16"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            }
+                          />
+                        </span>
                       </div>
                     </div>
                     {contributingGoalId() === goal.id && (
@@ -482,7 +484,9 @@ export default function Goals() {
                         </span>
                         <span data-test-id="goal-progress-current" class={styles.progressCurrent}>
                           {formatCurrency(goal.current_amount)} of{' '}
-                          {formatCurrency(goal.target_amount)}
+                          <span data-test-id="goal-progress-target">
+                            {formatCurrency(goal.target_amount)}
+                          </span>
                         </span>
                         {goal.category_id && (
                           <p class={styles.goalTrackHint}>
@@ -679,6 +683,7 @@ export default function Goals() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
+          data-test-id="goals-modal"
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"
@@ -693,7 +698,9 @@ export default function Goals() {
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>{editingGoal() ? 'Edit Goal' : 'New Goal'}</h3>
+              <h3 data-test-id="goals-modal-title" class={styles.modalTitle}>
+                {editingGoal() ? 'Edit Goal' : 'New Goal'}
+              </h3>
               <button
                 class={styles.modalClose}
                 onclick={() => {
@@ -718,6 +725,7 @@ export default function Goals() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Goal Name</label>
                 <input
+                  data-test-id="goals-form-name"
                   type="text"
                   class={styles.formControl}
                   placeholder="e.g., Emergency Fund, Vacation"
@@ -730,6 +738,7 @@ export default function Goals() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Target Amount</label>
                 <input
+                  data-test-id="goals-form-target"
                   type="text"
                   inputmode="decimal"
                   class={styles.formControl}
@@ -747,6 +756,7 @@ export default function Goals() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Target Date</label>
                 <input
+                  data-test-id="goals-form-date"
                   type="date"
                   class={styles.formControl}
                   value={formData().target_date}
@@ -827,8 +837,9 @@ export default function Goals() {
                   </p>
                 </div>
               )}
-              <div class={styles.modalFooter}>
+              <div data-test-id="goals-modal-footer" class={styles.modalFooter}>
                 <button
+                  data-test-id="goals-modal-cancel"
                   type="button"
                   class={styles.btnSecondary}
                   onclick={() => {
@@ -846,7 +857,7 @@ export default function Goals() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <button data-test-id="goals-modal-submit" type="submit" class={styles.btnPrimary}>
                   {editingGoal() ? 'Update' : 'Create'} Goal
                 </button>
               </div>
