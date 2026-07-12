@@ -117,7 +117,10 @@ function Reports() {
         return
       }
       const mStr = String(m).padStart(2, '0')
-      void downloadReport(() => pdf.generateMonthlyPdf(`${y}-${mStr}`, dark), `report-${y}-${mStr}.pdf`)
+      void downloadReport(
+        () => pdf.generateMonthlyPdf(`${y}-${mStr}`, dark),
+        `report-${y}-${mStr}.pdf`
+      )
     } else if (reportType() === 'annual') {
       void downloadReport(() => pdf.generateAnnualPdf(y, dark), `annual-report-${y}.pdf`)
     } else if (reportType() === 'tax') {
@@ -1344,7 +1347,7 @@ export default function Settings() {
                   View Changelog
                 </button>
                 <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                  See what&apos;s new in each version of Finance Manager.
+                  See what&apos;s new in each version of Token Circles.
                 </p>
                 <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
                   v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}

@@ -49,7 +49,7 @@ describe('localApiRouter - route matching', () => {
     const res = await routeApiRequest('http://localhost/api/app-info')
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.name).toBe('Finance Manager')
+    expect(data.name).toBe('Token Circles')
     expect(data.mode).toBe('serverless')
   })
 

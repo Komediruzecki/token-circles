@@ -87,12 +87,12 @@ export default defineConfig(({ mode }) => {
               registerType: 'autoUpdate',
               includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],
               manifest: {
-                name: 'Finance Manager',
-                short_name: 'Finance',
-                description: 'Personal finance tracker',
+                name: 'Token Circles',
+                short_name: 'Token Circles',
+                description: 'Your money, in clear orbit',
                 display: 'standalone',
-                background_color: '#ffffff',
-                theme_color: '#3b82f6',
+                background_color: '#0a0e1c',
+                theme_color: '#0a0e1c',
                 version: Date.now().toString(),
                 icons: [
                   {
