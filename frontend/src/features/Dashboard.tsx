@@ -7,24 +7,37 @@ import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
 import ChartWrapper from '../components/ChartWrapper'
 import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
+import OverviewDeck from '../components/Dashboard/OverviewDeck'
 import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
 import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
 import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
+import Sparkline from '../components/Dashboard/Sparkline'
 import { DashboardSettings } from '../components/DashboardSettings'
 import InfoTip from '../components/InfoTip'
 import { PeriodPills } from '../components/PeriodPills'
-import { api, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
+import { api, apiGet, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import styles from './DashboardPage.module.css'
 import type { CalcTrace } from '../components/CalcTracer'
+import type { SankeyData } from '../types/models'
 import type * as Models from '../types/models'
 
 // Format money in the user's selected currency (not the EUR default of formatCurrency).
 const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
 
+// The 'deck-*' ids form the Direction A overview deck (a fixed bento at the
+// top of the page, rendered by OverviewDeck); they support show/hide but not
+// reordering. Everything after them is the scroll-down tail, reorderable as
+// before.
 const DEFAULT_WIDGET_ORDER = [
   'metrics',
+  'deck-sankey',
+  'deck-heatmap',
+  'deck-radar',
+  'deck-trends',
+  'deck-portfolio',
+  'deck-transactions',
   'category-chart',
   'recent-transactions',
   'upcoming-bills',
@@ -36,10 +49,14 @@ const DEFAULT_WIDGET_ORDER = [
 
 const DEFAULT_VISIBLE = [
   'metrics',
+  'deck-sankey',
+  'deck-heatmap',
+  'deck-radar',
+  'deck-trends',
+  'deck-portfolio',
+  'deck-transactions',
   'category-chart',
-  'recent-transactions',
   'upcoming-bills',
-  'savings-rate',
   'budget-alerts',
 ]
 
@@ -56,6 +73,14 @@ function loadWidgetPrefs() {
         parsed.widgetOrder && Array.isArray(parsed.widgetOrder) && parsed.widgetOrder.length > 0
           ? parsed.widgetOrder
           : DEFAULT_WIDGET_ORDER
+      // Widgets added after the user saved their layout: splice them in (a saved
+      // order that predates a widget would otherwise hide it forever). An id
+      // missing from the saved order is new — user-hidden ids stay in order.
+      const newIds = DEFAULT_WIDGET_ORDER.filter((id) => !order.includes(id))
+      for (const id of newIds) {
+        order.splice(DEFAULT_WIDGET_ORDER.indexOf(id), 0, id)
+        if (DEFAULT_VISIBLE.includes(id) && !visible.includes(id)) visible.push(id)
+      }
       return { visible, order }
     } catch {
       /* ignore */
@@ -180,7 +205,7 @@ export default function Dashboard() {
 
   const loadMonthlyData = async (dateFrom?: string, dateTo?: string) => {
     try {
-      const [_chartsData, netWorthData] = await Promise.all([
+      const [chartsData, netWorthData] = await Promise.all([
         api.getDashboardCharts(12),
         api.getNetWorth(),
       ])
@@ -194,15 +219,25 @@ export default function Dashboard() {
           return tDate >= fromKey && tDate <= toKey
         })
       }
-      const labels = timeline.map((t) => {
-        const [y, m] = t.month.split('-')
-        const date = new Date(parseInt(y), parseInt(m) - 1)
-        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-      })
+      const fmtMonth = (month: string) => {
+        const [y, m] = month.split('-')
+        return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', {
+          month: 'short',
+          year: 'numeric',
+        })
+      }
+      const labels = timeline.map((t) => fmtMonth(t.month))
       const netWorth = timeline.map((t) => t.balance)
-      const income = timeline.map((t) => (t.netChange > 0 ? t.netChange : 0))
-      const expenses = timeline.map((t) => (t.netChange < 0 ? Math.abs(t.netChange) : 0))
-      setMonthlyData({ labels, income, expenses, netWorth })
+      // Real monthly income/expense stats (the net-worth timeline only knows
+      // net change, which zeroes out whichever side is smaller).
+      const monthly = chartsData.monthly || []
+      setMonthlyData({
+        labels,
+        monthlyLabels: monthly.map((m) => fmtMonth(m.month)),
+        income: monthly.map((m) => m.income || 0),
+        expenses: monthly.map((m) => m.expense || 0),
+        netWorth,
+      })
     } catch {
       /* optional */
     }
@@ -285,6 +320,20 @@ export default function Dashboard() {
   }
 
   const isWidgetVisible = (id: string) => visibleWidgets().includes(id)
+
+  // Cash-flow Sankey (income → categories) for the selected month — the same
+  // instrument as on Analytics, following the dashboard's period navigator.
+  const [sankeyData, setSankeyData] = createSignal<SankeyData | null>(null)
+  createEffect(() => {
+    const y = year()
+    const m = month()
+    void state.profileVersion
+    apiGet<{ nodes: SankeyData['nodes']; links: SankeyData['links'] }>(
+      `/api/analytics/sankey?year=${y}&month=${m}`
+    )
+      .then((res) => setSankeyData({ nodes: res.nodes || [], links: res.links || [] }))
+      .catch(() => setSankeyData(null))
+  })
 
   const renderWidget = (id: string) => {
     switch (id) {
@@ -653,6 +702,14 @@ export default function Dashboard() {
                     <span class={styles.metricDeltaLabel}>vs last month</span>
                   </div>
                 )}
+                <Show when={monthlyData()}>
+                  <div class={styles.metricSpark}>
+                    <Sparkline
+                      data={monthlyData()!.netWorth.slice(-12)}
+                      color="var(--accent-warm)"
+                    />
+                  </div>
+                </Show>
               </div>
               <div
                 class={`${styles.metricCard} ${styles.income}`}
@@ -696,6 +753,11 @@ export default function Dashboard() {
                     <span class={styles.metricDeltaLabel}>vs last month</span>
                   </div>
                 )}
+                <Show when={monthlyData()}>
+                  <div class={styles.metricSpark}>
+                    <Sparkline data={monthlyData()!.income.slice(-12)} color="var(--income)" />
+                  </div>
+                </Show>
               </div>
               <div
                 class={`${styles.metricCard} ${styles.expense}`}
@@ -739,6 +801,11 @@ export default function Dashboard() {
                     <span class={styles.metricDeltaLabel}>vs last month</span>
                   </div>
                 )}
+                <Show when={monthlyData()}>
+                  <div class={styles.metricSpark}>
+                    <Sparkline data={monthlyData()!.expenses.slice(-12)} color="var(--expense)" />
+                  </div>
+                </Show>
               </div>
               <div
                 class={`${styles.metricCard} ${styles.balance}`}
@@ -762,9 +829,34 @@ export default function Dashboard() {
                   {money(metrics()!.totalIncome - metrics()!.totalExpenses)}
                 </div>
                 <div class={styles.metricSubtext}>Monthly net</div>
+                <Show when={monthlyData()}>
+                  <div class={styles.metricSpark}>
+                    <Sparkline
+                      data={monthlyData()!
+                        .income.slice(-12)
+                        .map((v, i) => v - monthlyData()!.expenses.slice(-12)[i])}
+                      color="var(--primary)"
+                    />
+                  </div>
+                </Show>
               </div>
             </div>
           </Show>
+
+          {/* Direction A overview deck — the default "mission control" view.
+              Panels are individually hideable via Views; the classic widgets
+              and charts continue below the fold. */}
+          <OverviewDeck
+            visible={isWidgetVisible}
+            year={year()}
+            month={month()}
+            periodText={periodText()}
+            sankeyData={sankeyData()}
+            monthlyData={monthlyData()}
+            totalIncome={metrics()!.totalIncome || 0}
+            totalExpenses={metrics()!.totalExpenses || 0}
+            recentTransactions={metrics()!.recentTransactions || []}
+          />
 
           {/* Charts Section — always visible */}
           <div
@@ -816,7 +908,7 @@ export default function Dashboard() {
                     <ChartWrapper
                       type="line"
                       data={{
-                        labels: monthlyData()!.labels,
+                        labels: monthlyData()!.monthlyLabels,
                         datasets: [
                           {
                             label: 'Income',
@@ -853,7 +945,9 @@ export default function Dashboard() {
           <For each={widgetOrder()}>
             {(widgetId) => (
               <>
-                {isWidgetVisible(widgetId) && widgetId !== 'metrics'
+                {isWidgetVisible(widgetId) &&
+                widgetId !== 'metrics' &&
+                !widgetId.startsWith('deck-')
                   ? renderWidget(widgetId)
                   : null}
               </>

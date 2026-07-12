@@ -193,6 +193,11 @@
   color: var(--income);
 }
 
+.metricSpark {
+  margin-top: 10px;
+  opacity: 0.9;
+}
+
 .metric-subtext {
   font-size: 12px;
   color: var(--text-secondary);

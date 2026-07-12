@@ -4,6 +4,7 @@
  */
 import { createSignal } from 'solid-js'
 import { formatCurrency, getLocalCurrency } from '../../core/api'
+import OrbitGauge from './OrbitGauge'
 import styles from './SavingsRateCard.module.css'
 
 export interface SavingsRateCardProps {
@@ -15,13 +16,6 @@ export interface SavingsRateCardProps {
 
 export default function SavingsRateCard(props: SavingsRateCardProps) {
   const [goalInput, setGoalInput] = createSignal('')
-
-  const rateColor = () => {
-    const rate = props.savingsRate
-    if (rate >= 20) return styles.rateGood
-    if (rate >= 10) return styles.rateWarning
-    return styles.rateBad
-  }
 
   const goalStatus = () => {
     return props.savingsRate >= props.goal ? styles.goalMet : styles.goalUnder
@@ -38,6 +32,11 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
   return (
     <div class={styles.card}>
       <div class={styles.savingsRateContainer}>
+        {/* Orbit ring gauge: savings rate as the progress arc, goal as the dawn tick */}
+        <div class={styles.gaugeRow}>
+          <OrbitGauge value={props.savingsRate} goal={props.goal} label="Savings rate" />
+        </div>
+
         <div class={styles.savingsRateValue}>
           <span class={styles.rateLabel}>Period Savings:</span>
           <span
@@ -45,13 +44,6 @@ export default function SavingsRateCard(props: SavingsRateCardProps) {
           >
             {formatCurrency(props.monthlySavings, getLocalCurrency())}
           </span>
-        </div>
-
-        <div class={styles.rateDivider} />
-
-        <div class={styles.savingsRateValue}>
-          <span class={styles.rateLabel}>Savings Rate:</span>
-          <span class={`${styles.rateValue} ${rateColor()}`}>{props.savingsRate.toFixed(1)}%</span>
         </div>
 
         <div class={styles.goalSection}>
