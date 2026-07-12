@@ -38,6 +38,7 @@ import LoanAmortizationTable from '../components/LoanAmortizationTable'
 import { api as _api, formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { theme } from '../core/theme'
 import styles from './LoansPage.module.css'
 import type { LoanDetail, LoanPrepayment } from '../types/models'
@@ -565,16 +566,16 @@ export default function Loans() {
                     {
                       label: 'Principal',
                       data: loans().map((l) => l.principal),
-                      backgroundColor: 'rgba(34, 197, 94, 0.7)',
-                      borderColor: '#22c55e',
+                      backgroundColor: 'rgba(89, 210, 162, 0.7)',
+                      borderColor: '#59d2a2',
                       borderWidth: 0,
                       borderRadius: 4,
                     },
                     {
                       label: 'Remaining',
                       data: loans().map((l) => calculateRemaining(l)),
-                      backgroundColor: 'rgba(220, 38, 38, 0.7)',
-                      borderColor: '#dc2626',
+                      backgroundColor: 'rgba(255, 157, 157, 0.7)',
+                      borderColor: '#ff9d9d',
                       borderWidth: 0,
                       borderRadius: 4,
                     },
@@ -631,16 +632,7 @@ export default function Loans() {
                   datasets: [
                     {
                       data: loans().map((l) => l.principal),
-                      backgroundColor: [
-                        '#22c55e',
-                        '#3b82f6',
-                        '#f59e0b',
-                        '#ef4444',
-                        '#8b5cf6',
-                        '#ec4899',
-                        '#06b6d4',
-                        '#84cc16',
-                      ],
+                      backgroundColor: CATEGORY_PALETTE,
                       borderColor: chartColors().grid,
                       borderWidth: 2,
                     },

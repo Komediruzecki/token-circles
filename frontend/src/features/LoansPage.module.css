@@ -251,23 +251,23 @@
 
 /* Special amortization rows */
 .prepaymentRow {
-  background: rgba(16, 185, 129, 0.05);
+  background: rgba(89, 210, 162, 0.06);
 }
 
 .prepaymentRow td:first-child {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #59d2a2;
 }
 
 .rateChangeRow {
-  background: rgba(245, 158, 11, 0.05);
+  background: rgba(240, 168, 96, 0.06);
 }
 
 .rateChangeRow td:first-child {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid #f0a860;
 }
 
 .yearMarker {
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(89, 210, 162, 0.12);
 }
 
 .totalsRow {
@@ -414,7 +414,7 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay, rgba(0, 0, 0, 0.5));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -551,4 +551,14 @@
   .balanceAmount {
     font-size: 18px;
   }
+}
+
+/* Brand glass surfaces. */
+.summaryCard,
+.loanCard,
+.amortizationChartWrapper {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border-color: color-mix(in oklab, var(--primary) 10%, var(--border));
 }
