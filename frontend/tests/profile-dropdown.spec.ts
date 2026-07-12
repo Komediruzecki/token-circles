@@ -150,8 +150,9 @@ test('profile dropdown - IndexedDB integrity check @smoke', async ({ page }) => 
     })
   })
 
-  if (dbCheck && typeof dbCheck === 'object' && 'totalProfiles' in dbCheck) {
-    expect(dbCheck.uniqueIds).toBe(dbCheck.totalProfiles)
+  const result = dbCheck as { totalProfiles?: number; uniqueIds?: number; error?: string }
+  if (typeof result.totalProfiles === 'number') {
+    expect(result.uniqueIds).toBe(result.totalProfiles)
   }
 })
 
