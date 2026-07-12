@@ -168,6 +168,50 @@ async function parseSheetData(workbook: WorkBook) {
   return results
 }
 
+/** Dedup key from the RESOLVED fields (audit A2): date, normalized-lowercased
+ *  description, resolved account_id, type, and currency. Two rows that share only
+ *  date+description+amount but differ in account/type/currency get DIFFERENT keys,
+ *  so they are not treated as duplicates. NUL-joined so the parts round-trip
+ *  unambiguously; a null account_id becomes the empty string. */
+const resolvedDedupKey = (
+  date: string,
+  desc: string,
+  accountId: number | null,
+  type: string,
+  currency: string
+): string => `${date}\x00${desc}\x00${accountId ?? ''}\x00${type}\x00${currency}`
+
+/** Distinct category-column values in `rows` that do NOT match an existing category
+ *  (case-insensitive) in the active profile — the categories an import would create.
+ *  Excludes values that already name an existing account or are flagged as 'account'
+ *  type (those become accounts, not categories), mirroring the worker preview. Used to
+ *  ask the user for confirmation before creating categories (audit B5). */
+async function detectNewCategories(
+  rows: Record<string, unknown>[],
+  categoryTypes: Record<string, string> = {}
+): Promise<string[]> {
+  const db = await getDB()
+  const profileId = await adapter.getCurrentProfileId()
+  const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
+  const accounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
+  const existingCat = new Set(categories.map((c) => toStr(c.name).toLowerCase().trim()))
+  const existingAcct = new Set(accounts.map((a) => toStr(a.name).toLowerCase().trim()))
+  const catTypeLower: Record<string, string> = {}
+  for (const [k, v] of Object.entries(categoryTypes)) catTypeLower[k.toLowerCase().trim()] = v
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const raw = toStr(row.category).trim()
+    if (!raw) continue
+    const lower = raw.toLowerCase()
+    if (existingCat.has(lower) || existingAcct.has(lower) || seen.has(lower)) continue
+    if (catTypeLower[lower] === 'account') continue
+    seen.add(lower)
+    out.push(raw)
+  }
+  return out
+}
+
 async function detectDuplicates(
   rows: Record<string, unknown>[]
 ): Promise<{ duplicates: number[]; clean: Record<string, unknown>[] }> {
@@ -263,11 +307,15 @@ export async function importFileSheet(body: unknown): Promise<Response> {
 
     const rows = await parseSheetData(session.workbook)
     const { duplicates, clean } = await detectDuplicates(rows)
+    // Category-column values with no matching existing category — the categories an
+    // import would create, surfaced so the UI can confirm before creating (audit B5).
+    const newCategories = await detectNewCategories(rows)
     return json({
       rows,
       total: rows.length,
       new_items: clean.length,
       duplicate_indices: duplicates,
+      new_categories: newCategories,
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
@@ -530,7 +578,21 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (!session) return json({ error: 'Session expired or not found' }, 404)
       rows = await parseSheetData(session.workbook)
     }
-    const { clean } = await detectDuplicates(rows)
+    // Duplicate detection now runs AFTER account/type/currency resolution, inside the
+    // row loop below (audit A2) — so `clean` here is just all rows, not the
+    // pre-resolution deduped subset.
+    const clean = rows
+
+    // Category-creation gating (audit B5): when `approvedCategories` (alias
+    // `createCategories`) is present — even as an empty array — a category is only
+    // auto-created when its name is in the approved list; unapproved rows import
+    // uncategorized. When the field is ABSENT the prior auto-create-all behavior is
+    // kept, so non-UI callers and the bank-import flow are unaffected.
+    const approvedRaw = data.approvedCategories ?? data.createCategories
+    const gateCategories = approvedRaw !== undefined
+    const approvedCats = new Set(
+      (Array.isArray(approvedRaw) ? approvedRaw : []).map((s) => toStr(s).toLowerCase().trim())
+    )
 
     // Auto-detect "IB" / "Interactive Brokers" categories as account type.
     // Use case-insensitive check to avoid duplicates like "IB" + "ib".
@@ -550,6 +612,28 @@ export async function importExecute(body: unknown): Promise<Response> {
     const profileId = await adapter.getCurrentProfileId()
     const db = await getDB()
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
+
+    // Resolution-aware duplicate detection (audit A2): bucket existing stored
+    // transactions by the RESOLVED key (date, lowercased description, account_id,
+    // type, currency); the per-row check below matches within a ±0.01 amount
+    // tolerance inside a bucket. Accepted rows push their amount into the same map,
+    // so a later identical row in THIS import is caught as an in-file duplicate.
+    const existingTxns = await db.getAllFromIndex('transactions', 'by_profile', profileId)
+    const dedupBuckets = new Map<string, number[]>()
+    for (const t of existingTxns) {
+      const k = resolvedDedupKey(
+        normalizeDate(t.date) || toStr(t.date),
+        toStr(t.description).toLowerCase().trim(),
+        (t.account_id as number | null | undefined) ?? null,
+        toStr(t.type),
+        toStr(t.currency).trim() || getLocalCurrency()
+      )
+      const amt = Math.abs(Number(t.amount))
+      const bucket = dedupBuckets.get(k)
+      if (bucket) bucket.push(amt)
+      else dedupBuckets.set(k, [amt])
+    }
+    const duplicates: number[] = []
     // Names of records this import actually created (reused ones excluded) — reported
     // back to the UI for the import session log.
     const newlyCreatedAccounts: string[] = []
@@ -683,8 +767,10 @@ export async function importExecute(body: unknown): Promise<Response> {
         // Use lowered version only for matching; store original case in DB
         const catLower = rawCat.toLowerCase().trim()
         let cat = categories.find((c) => c.name.toLowerCase().trim() === catLower)
-        // Auto-create category if not found
-        if (!cat) {
+        // Auto-create category if not found. In dry-run we never mutate (preview only).
+        // When category creation is gated (audit B5), only create approved names — an
+        // unapproved category imports uncategorized (category_id null), not skipped.
+        if (!cat && !dryRun && (!gateCategories || approvedCats.has(catLower))) {
           const palette = [
             '#EF4444',
             '#F97316',
@@ -787,6 +873,30 @@ export async function importExecute(body: unknown): Promise<Response> {
       const exchangeRateRaw = toStr(row.exchange_rate).trim()
       const exchangeRate = exchangeRateRaw ? parseFloat(exchangeRateRaw) : 1
 
+      // Resolution-aware duplicate check (audit A2). Key on the SAME resolved
+      // account_id that is stored below, plus type + currency, so only a row that
+      // matches ALL of (date, description, account_id, type, currency) within the
+      // amount tolerance is flagged. A match is reported (not silently dropped) and
+      // skipped from the insert; a legitimately-different same-day/-amount row imports.
+      const resolvedAccountId =
+        accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null
+      const dedupKey = resolvedDedupKey(
+        date,
+        description.toLowerCase().trim(),
+        resolvedAccountId,
+        type,
+        currency
+      )
+      const absAmount = Math.abs(amount)
+      const dupBucket = dedupBuckets.get(dedupKey)
+      const isDuplicate = dupBucket ? dupBucket.some((a) => Math.abs(a - absAmount) < 0.01) : false
+      if (isDuplicate) {
+        duplicates.push(i)
+        continue
+      }
+      if (dupBucket) dupBucket.push(absAmount)
+      else dedupBuckets.set(dedupKey, [absAmount])
+
       const transaction = {
         profile_id: profileId,
         type,
@@ -874,12 +984,21 @@ export async function importExecute(body: unknown): Promise<Response> {
       await tx.done
     }
 
+    // Category-column values with no matching existing category — reported so a
+    // preview (dry-run) can confirm before creation (audit B5).
+    const newCategories = await detectNewCategories(clean, categoryTypes)
+
     return json({
       imported: imported.length,
       skipped: skipped.length,
       dry_run: dryRun,
       imported_ids: dryRun ? [] : imported,
       skipped_items: skipped,
+      // Rows flagged as duplicates of an existing/earlier-in-file transaction (audit A2).
+      duplicates: duplicates.length,
+      duplicate_indices: duplicates,
+      // Distinct category-column values that would be newly created (audit B5).
+      new_categories: newCategories,
       // Count what this run actually created (accountIdMap also holds reused accounts)
       accounts_created: dryRun ? 0 : newlyCreatedAccounts.length,
       categories_created: dryRun ? 0 : newlyCreatedCategories.length,
