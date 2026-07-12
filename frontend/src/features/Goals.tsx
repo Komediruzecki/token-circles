@@ -33,9 +33,11 @@
 import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
+import GoalRing from '../components/GoalRing'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { theme } from '../core/theme'
 import styles from './GoalsPage.module.css'
 
@@ -71,7 +73,7 @@ export default function Goals() {
   const [categoryForm, setCategoryForm] = createSignal({
     name: '',
     type: 'expense',
-    color: '#6366f1',
+    color: '#6e9bff',
   })
   const [editingGoal, setEditingGoal] = createSignal<Goal | null>(null)
   const [formData, setFormData] = createSignal({
@@ -192,7 +194,7 @@ export default function Goals() {
         color: categoryForm().color,
       })
       setShowCategoryModal(false)
-      setCategoryForm({ name: '', type: 'expense', color: '#6366f1' })
+      setCategoryForm({ name: '', type: 'expense', color: '#6e9bff' })
       loadCategories()
     } catch (err) {
       console.error('Failed to create category:', err)
@@ -465,10 +467,15 @@ export default function Goals() {
                         </button>
                       </div>
                     )}
-                    <div class={styles.goalProgress}>
-                      <div data-test-id="goal-progress-bar" class={styles.progressBar}>
-                        <div class={styles.progressFill} style={{ width: `${progress}%` }} />
-                      </div>
+                    <div data-test-id="goal-progress-bar" class={styles.goalProgress}>
+                      <GoalRing
+                        compact
+                        name={goal.name}
+                        current={goal.current_amount}
+                        target={goal.target_amount}
+                        deadline={goal.target_date}
+                        size={116}
+                      />
                       <div class={styles.progressStats}>
                         <span data-test-id="goal-progress-percent" class={styles.progressPercent}>
                           {progress}%
@@ -477,14 +484,14 @@ export default function Goals() {
                           {formatCurrency(goal.current_amount)} of{' '}
                           {formatCurrency(goal.target_amount)}
                         </span>
+                        {goal.category_id && (
+                          <p class={styles.goalTrackHint}>
+                            Progress tracks automatically from your
+                            {goal.category_name ? ` ${goal.category_name}` : ''} transactions — add
+                            spending in that category to move it.
+                          </p>
+                        )}
                       </div>
-                      {goal.category_id && (
-                        <p class={styles.goalTrackHint}>
-                          Progress tracks automatically from your
-                          {goal.category_name ? ` ${goal.category_name}` : ''} transactions —
-                          add spending in that category to move it.
-                        </p>
-                      )}
                     </div>
                   </div>
                 )
@@ -509,10 +516,11 @@ export default function Goals() {
                     data: goals().map((g) => g.current_amount),
                     backgroundColor: goals().map((g) => {
                       const progress = g.target_amount > 0 ? g.current_amount / g.target_amount : 0
-                      if (progress < 0.3) return '#dc2626'
-                      if (progress < 0.6) return '#eab308'
-                      if (progress < 0.9) return '#22c55e'
-                      return '#8b5cf6'
+                      // Brand progress ramp: salmon → dawn → mint → azure (met).
+                      if (progress < 0.3) return '#ff9d9d'
+                      if (progress < 0.6) return '#f0a860'
+                      if (progress < 0.9) return '#59d2a2'
+                      return '#6e9bff'
                     }),
                     borderWidth: 0,
                   },
@@ -568,8 +576,7 @@ export default function Goals() {
               data={{
                 labels: projectionLabels(),
                 datasets: projectionGoals().map((g, idx) => {
-                  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
-                  const color = colors[idx % colors.length]
+                  const color = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length]
                   const monthly = g.monthly_contribution || 0
                   const remaining = g.target_amount - g.current_amount
                   // Already met (or over) the target: no months to project.
@@ -729,7 +736,10 @@ export default function Goals() {
                   placeholder="5000.00"
                   value={formData().target_amount}
                   oninput={(e) =>
-                    setFormData({ ...formData(), target_amount: sanitizeDecimal(e.currentTarget.value) })
+                    setFormData({
+                      ...formData(),
+                      target_amount: sanitizeDecimal(e.currentTarget.value),
+                    })
                   }
                   required
                 />
@@ -800,9 +810,7 @@ export default function Goals() {
                   <input
                     type="date"
                     class={styles.formControl}
-                    value={
-                      formData().tracking_start_date || new Date().toISOString().split('T')[0]
-                    }
+                    value={formData().tracking_start_date || new Date().toISOString().split('T')[0]}
                     oninput={(e) =>
                       setFormData({ ...formData(), tracking_start_date: e.currentTarget.value })
                     }
@@ -814,8 +822,8 @@ export default function Goals() {
                       'margin-top': '4px',
                     }}
                   >
-                    Only category transactions on/after this date count. Defaults to today so
-                    past history doesn't fill the goal — set it earlier to include prior activity.
+                    Only category transactions on/after this date count. Defaults to today so past
+                    history doesn't fill the goal — set it earlier to include prior activity.
                   </p>
                 </div>
               )}

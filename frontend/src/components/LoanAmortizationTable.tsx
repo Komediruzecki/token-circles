@@ -238,16 +238,16 @@ export default function LoanAmortizationTable(props: Props) {
                       {
                         label: 'Principal',
                         data: schedule.map((r) => r.principal),
-                        backgroundColor: 'rgba(34, 197, 94, 0.7)',
-                        borderColor: '#22c55e',
+                        backgroundColor: 'rgba(89, 210, 162, 0.7)',
+                        borderColor: '#59d2a2',
                         borderWidth: 0,
                         borderRadius: 2,
                       },
                       {
                         label: 'Interest',
                         data: schedule.map((r) => r.interest),
-                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(255, 157, 157, 0.7)',
+                        borderColor: '#ff9d9d',
                         borderWidth: 0,
                         borderRadius: 2,
                       },
@@ -319,8 +319,8 @@ export default function LoanAmortizationTable(props: Props) {
                       {
                         label: 'Balance',
                         data: schedule.map((r) => r.balance),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: '#6e9bff',
+                        backgroundColor: 'rgba(110, 155, 255, 0.12)',
                         fill: true,
                         tension: 0.3,
                         pointRadius: 1,
@@ -461,7 +461,7 @@ export default function LoanAmortizationTable(props: Props) {
                 <span>
                   <span
                     style={{
-                      background: 'rgba(245, 158, 11, 0.15)',
+                      background: 'rgba(240, 168, 96, 0.15)',
                       padding: '2px 6px',
                       'border-radius': '4px',
                       'margin-right': '4px',
@@ -474,7 +474,7 @@ export default function LoanAmortizationTable(props: Props) {
                 <span>
                   <span
                     style={{
-                      background: 'rgba(16, 185, 129, 0.15)',
+                      background: 'rgba(89, 210, 162, 0.18)',
                       padding: '2px 6px',
                       'border-radius': '4px',
                       'margin-right': '4px',
@@ -642,7 +642,7 @@ export default function LoanAmortizationTable(props: Props) {
                   <span>
                     <span
                       style={{
-                        background: 'rgba(16, 185, 129, 0.2)',
+                        background: 'rgba(89, 210, 162, 0.2)',
                         padding: '2px 6px',
                         'border-radius': '4px',
                         'margin-right': '4px',
