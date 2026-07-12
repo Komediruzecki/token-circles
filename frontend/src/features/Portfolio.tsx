@@ -345,7 +345,7 @@ export default function Portfolio() {
             <div class={styles.tableSection}>
               <h2 class={styles.sectionTitle}>Holdings</h2>
               <div class={styles.tableWrapper}>
-                <table class={styles.table}>
+                <table data-test-id="portfolio-holdings" class={styles.table}>
                   <thead>
                     <tr>
                       <th>Ticker</th>
@@ -360,9 +360,11 @@ export default function Portfolio() {
                   <tbody>
                     <For each={displayHoldings()}>
                       {(h) => (
-                        <tr>
+                        <tr data-test-id="portfolio-holding-row">
                           <td>
-                            <span class={styles.ticker}>{h.ticker}</span>
+                            <span data-test-id="portfolio-ticker" class={styles.ticker}>
+                              {h.ticker}
+                            </span>
                           </td>
                           <td class={styles.right}>{h.shares}</td>
                           <td class={styles.right}>{formatAmount(h.purchase_price)}</td>
@@ -431,15 +433,17 @@ export default function Portfolio() {
             <div class={styles.sidebar}>
               <h2 class={styles.sectionTitle}>Allocation</h2>
               <Show when={summary()}>
-                <CategoryOrbits
-                  categories={liveSummary()!.allocation.map((a, i) => ({
-                    category_name: a.ticker,
-                    category_color: paletteColor(i),
-                    amount: a.value,
-                  }))}
-                  label="value"
-                  maxRings={8}
-                />
+                <div data-test-id="portfolio-allocation">
+                  <CategoryOrbits
+                    categories={liveSummary()!.allocation.map((a, i) => ({
+                      category_name: a.ticker,
+                      category_color: paletteColor(i),
+                      amount: a.value,
+                    }))}
+                    label="value"
+                    maxRings={8}
+                  />
+                </div>
               </Show>
             </div>
           </div>
@@ -449,19 +453,23 @@ export default function Portfolio() {
       {/* Add/Edit Modal */}
       <Show when={showAddModal()}>
         <div
+          data-test-id="portfolio-modal-overlay"
           class={styles.modalOverlay}
           onclick={(e) => {
             if (e.target === e.currentTarget) setShowAddModal(false)
           }}
         >
           <div
+            data-test-id="portfolio-modal"
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>{editingHolding() ? 'Edit Holding' : 'Add Holding'}</h3>
+              <h3 data-test-id="portfolio-modal-title" class={styles.modalTitle}>
+                {editingHolding() ? 'Edit Holding' : 'Add Holding'}
+              </h3>
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
@@ -475,6 +483,7 @@ export default function Portfolio() {
                   type="text"
                   class={styles.formControl}
                   placeholder="e.g., AAPL, SPY, NVDA"
+                  data-test-id="portfolio-form-ticker"
                   value={formData().ticker}
                   onInput={(e) =>
                     setFormData({ ...formData(), ticker: e.target.value.toUpperCase() })
@@ -489,6 +498,7 @@ export default function Portfolio() {
                   inputmode="decimal"
                   class={styles.formControl}
                   placeholder="Number of shares"
+                  data-test-id="portfolio-form-shares"
                   value={formData().shares}
                   onInput={(e) =>
                     setFormData({ ...formData(), shares: sanitizeDecimal(e.currentTarget.value) })
@@ -503,6 +513,7 @@ export default function Portfolio() {
                   inputmode="decimal"
                   class={styles.formControl}
                   placeholder="0.00"
+                  data-test-id="portfolio-form-price"
                   value={formData().purchasePrice}
                   onInput={(e) =>
                     setFormData({
@@ -518,6 +529,7 @@ export default function Portfolio() {
                 <input
                   type="date"
                   class={styles.formControl}
+                  data-test-id="portfolio-form-date"
                   value={formData().purchaseDate}
                   onInput={(e) => setFormData({ ...formData(), purchaseDate: e.target.value })}
                   required
@@ -529,6 +541,7 @@ export default function Portfolio() {
                   type="text"
                   class={styles.formControl}
                   placeholder="Optional notes"
+                  data-test-id="portfolio-form-notes"
                   value={formData().notes}
                   onInput={(e) => setFormData({ ...formData(), notes: e.target.value })}
                 />
@@ -541,7 +554,11 @@ export default function Portfolio() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={`${styles.btn} ${styles.btnPrimary}`}>
+                <button
+                  type="submit"
+                  data-test-id="portfolio-modal-submit"
+                  class={`${styles.btn} ${styles.btnPrimary}`}
+                >
                   {editingHolding() ? 'Update' : 'Add'} Holding
                 </button>
               </div>

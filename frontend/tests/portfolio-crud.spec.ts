@@ -33,76 +33,59 @@ test.describe('Portfolio CRUD Operations', () => {
   })
 
   test('should display holdings table', async ({ page }) => {
-    await page.waitForTimeout(2000)
-    const table = page.locator('table')
+    const table = page.getByTestId('portfolio-holdings')
     await expect(table).toBeVisible({ timeout: 10000 })
   })
 
   test('should display holding rows with tickers', async ({ page }) => {
-    await page.waitForTimeout(2000)
-    const rows = page.locator('table tbody tr')
-    const count = await rows.count()
-    expect(count).toBeGreaterThanOrEqual(1)
+    const rows = page.getByTestId('portfolio-holding-row')
+    await expect(rows.first()).toBeVisible({ timeout: 10000 })
+    const rowCount = await rows.count()
+    expect(rowCount).toBeGreaterThanOrEqual(1)
+    // Every holding row renders exactly one ticker cell.
+    expect(await page.getByTestId('portfolio-ticker').count()).toBe(rowCount)
   })
 
   test('should open add modal when clicking add holding', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-holding-btn')
-    await addBtn.click()
-    // Modal title should appear
-    const modalTitle = page.locator('h3', { hasText: 'Add Holding' })
-    await expect(modalTitle).toBeVisible({ timeout: 5000 })
+    await getByTestId(page, 'add-holding-btn').click()
+    await expect(page.getByTestId('portfolio-modal')).toBeVisible({ timeout: 5000 })
+    // Copy is the point: the modal opens in "add" mode (not "edit").
+    await expect(page.getByTestId('portfolio-modal-title')).toHaveText('Add Holding')
   })
 
   test('should show ticker input in add modal', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-holding-btn')
-    await addBtn.click()
-    const tickerInput = page.locator('input[placeholder*="AAPL"]')
-    await expect(tickerInput).toBeVisible({ timeout: 5000 })
+    await getByTestId(page, 'add-holding-btn').click()
+    await expect(page.getByTestId('portfolio-form-ticker')).toBeVisible({ timeout: 5000 })
   })
 
   test('should show shares, price, and date fields in modal', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-holding-btn')
-    await addBtn.click()
-    await page.waitForTimeout(300)
-    // Should have at least 4 input fields (ticker, shares, price, date)
-    const inputs = page.locator('input')
-    const count = await inputs.count()
-    // At least ticker, shares, price, date + maybe notes
-    expect(count).toBeGreaterThanOrEqual(3)
+    await getByTestId(page, 'add-holding-btn').click()
+    await expect(page.getByTestId('portfolio-form-shares')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('portfolio-form-price')).toBeVisible()
+    await expect(page.getByTestId('portfolio-form-date')).toBeVisible()
   })
 
   test('should show validation error on empty form submit', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-holding-btn')
-    await addBtn.click()
-    await page.waitForTimeout(300)
-    // Find and submit the form without filling anything
-    const submitBtn = page.locator('form button[type="submit"], form button.btnPrimary')
-    if (await submitBtn.isVisible()) {
-      await submitBtn.click()
-      // Should see an error toast or validation
-      await page.waitForTimeout(500)
-    }
+    await getByTestId(page, 'add-holding-btn').click()
+    const submitBtn = page.getByTestId('portfolio-modal-submit')
+    await expect(submitBtn).toBeVisible({ timeout: 5000 })
+    await submitBtn.click()
+    // Required fields block submission, so the modal stays open.
+    await expect(page.getByTestId('portfolio-modal')).toBeVisible()
   })
 
   test('should close modal when clicking overlay', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-holding-btn')
-    await addBtn.click()
-    await page.waitForTimeout(300)
-    const modalTitle = page.locator('h3', { hasText: 'Add Holding' })
-    await expect(modalTitle).toBeVisible({ timeout: 5000 })
-    // Click outside modal
-    await page.mouse.click(10, 10)
-    await page.waitForTimeout(300)
-    const modalAfter = page.locator('h3', { hasText: 'Add Holding' })
-    await expect(modalAfter).not.toBeVisible({ timeout: 3000 })
+    await getByTestId(page, 'add-holding-btn').click()
+    const modal = page.getByTestId('portfolio-modal')
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    // Click the overlay backdrop (top-left corner sits outside the centered modal).
+    await page.getByTestId('portfolio-modal-overlay').click({ position: { x: 5, y: 5 } })
+    await expect(modal).not.toBeVisible({ timeout: 3000 })
   })
 
   test('should display pie chart allocation', async ({ page }) => {
-    await page.waitForTimeout(2000)
-    const pieChart = page.locator('svg circle')
-    const count = await pieChart.count()
-    // Pie chart has a center circle
-    expect(count).toBeGreaterThanOrEqual(1)
+    const allocation = page.getByTestId('portfolio-allocation')
+    await expect(allocation).toBeVisible({ timeout: 10000 })
   })
 
   test('should refresh prices when clicking refresh', async ({ page }) => {
@@ -117,9 +100,11 @@ test.describe('Portfolio CRUD Operations', () => {
   })
 
   test('should navigate to portfolio page via hash', async ({ page }) => {
-    await page.goto('http://localhost:3800/#portfolio', { waitUntil: 'domcontentloaded' })
+    // Use 127.0.0.1 (not localhost) so the session cookie set by login() — bound to the
+    // 127.0.0.1 origin — rides along; a cross-origin hop would drop it to the login screen.
+    await page.goto('http://127.0.0.1:3800/#portfolio', { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(1000)
-    const header = getByTestId(page, 'portfolio-header')
+    const header = page.getByTestId('portfolio-header')
     await expect(header).toBeVisible({ timeout: 10000 })
   })
 
