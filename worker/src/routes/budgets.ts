@@ -657,7 +657,12 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
       ? categoryAverages[currentBudget.category_id].avgAmount
       : currentBudget.amount * 0.5;
 
-    const monthsDiff = new Date(fm.month + '-01').getMonth() - new Date().getMonth();
+    // Months from now to the forecast month, accounting for the year so a forecast that
+    // crosses into next year (e.g. Dec → Feb) isn't computed as a negative diff (which would
+    // zero out the inflation factor).
+    const fd = new Date(fm.month + '-01');
+    const nd = new Date();
+    const monthsDiff = (fd.getFullYear() - nd.getFullYear()) * 12 + (fd.getMonth() - nd.getMonth());
     const inflationFactor = Math.pow(1.03, Math.max(0, monthsDiff));
 
     const predictedSpent = avgSpending * inflationFactor;
@@ -752,11 +757,26 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
     budgetPeriod
   );
 
+  // Allocate is an upsert: re-allocating a category for the same month updates the amount
+  // instead of erroring, so users can freely change an allocation from the same action.
   if (existing) {
-    throw new HttpError(
-      400,
-      `Budget already exists for ${month}. Use PUT /api/budgets/:id to update it.`
+    await db.update(
+      c.env.DB,
+      'budgets',
+      { amount },
+      'id = ? AND profile_id = ?',
+      (existing as { id: number }).id,
+      pid
     );
+    return c.json({
+      id: (existing as { id: number }).id,
+      category_id,
+      amount,
+      period: budgetPeriod,
+      start_date,
+      profile_id: pid,
+      message: 'Budget updated successfully',
+    });
   }
 
   const info = await db.insert(c.env.DB, 'budgets', {
