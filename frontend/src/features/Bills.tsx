@@ -56,9 +56,10 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createMemo, createResource, createSignal, For } from 'solid-js'
+import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
 import SubscriptionCard from '../components/SubscriptionCard'
+import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -124,6 +125,7 @@ export default function Bills() {
   const bills = () => billsResource()?.bills ?? []
   const categories = () => billsResource()?.categories ?? []
   const [showAddModal, setShowAddModal] = createSignal(false)
+  const [showCatalog, setShowCatalog] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
   const [editingId, setEditingId] = createSignal<number | null>(null)
   const [formData, setFormData] = createSignal({
@@ -347,28 +349,50 @@ export default function Bills() {
           <h1 data-test-id="bills-header" data-tour="bills-header">
             Bills
           </h1>
-          <button
-            data-test-id="add-bill-btn"
-            data-tour="bills-add"
-            class={styles.btnPrimary}
-            onClick={() => {
-              setEditingId(null)
-              setFormData({
-                ...formData(),
-                name: '',
-                amount: '',
-                due_date: '',
-                category: '',
-                type: billTab() === 'subscriptions' ? 'subscription' : 'bill',
-              })
-              setShowAddModal(true)
-            }}
-          >
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            {billTab() === 'subscriptions' ? 'Add Subscription' : 'Add Bill'}
-          </button>
+          <div class={styles.headerActions}>
+            <Show when={billTab() === 'subscriptions'}>
+              <button
+                data-test-id="browse-catalog-btn"
+                class={styles.btnSecondary}
+                onClick={() => setShowCatalog(true)}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="3.2" />
+                </svg>
+                Browse catalog
+              </button>
+            </Show>
+            <button
+              data-test-id="add-bill-btn"
+              data-tour="bills-add"
+              class={styles.btnPrimary}
+              onClick={() => {
+                setEditingId(null)
+                setFormData({
+                  ...formData(),
+                  name: '',
+                  amount: '',
+                  due_date: '',
+                  category: '',
+                  type: billTab() === 'subscriptions' ? 'subscription' : 'bill',
+                })
+                setShowAddModal(true)
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              {billTab() === 'subscriptions' ? 'Add Subscription' : 'Add Bill'}
+            </button>
+          </div>
         </div>
         <p data-test-id="bills-subtitle" class={styles.pageSubtitle}>
           Track upcoming payments and never miss a due date
@@ -1016,6 +1040,15 @@ export default function Bills() {
       )}
 
       {/* View Bill Modal - disabled as unused - kept for future use */}
+
+      <SubscriptionCatalogModal
+        isOpen={showCatalog}
+        onClose={() => setShowCatalog(false)}
+        categories={categories}
+        onAdded={() => {
+          void refetchBills()
+        }}
+      />
     </div>
   )
 }

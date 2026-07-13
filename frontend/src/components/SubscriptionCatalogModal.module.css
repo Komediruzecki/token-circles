@@ -1,0 +1,279 @@
+/**
+ * SubscriptionCatalogModal — the bulk subscription shelf.
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in oklab, #05070f 62%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  width: 100%;
+  max-width: 720px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in oklab, var(--card-bg) 84%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--primary) 20%, var(--border));
+  border-radius: 18px;
+  box-shadow: 0 34px 80px -34px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  transform: translateY(8px) scale(0.99);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.overlay.open .modal {
+  transform: translateY(0) scale(1);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 14px;
+}
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-display, inherit);
+  color: var(--text);
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.close {
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+}
+.close:hover {
+  color: var(--text);
+}
+
+.searchRow {
+  padding: 0 22px 12px;
+}
+.search {
+  width: 100%;
+  background: var(--budget-bar-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 13px;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  outline: none;
+}
+.search:focus {
+  border-color: var(--primary);
+}
+.search::placeholder {
+  color: var(--text-secondary);
+}
+
+.body {
+  overflow-y: auto;
+  padding: 4px 22px 16px;
+  flex: 1;
+}
+.group {
+  margin-bottom: 18px;
+}
+.groupLabel {
+  margin: 0 0 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.tokens {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (max-width: 560px) {
+  .tokens {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tok {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--budget-bar-bg, rgba(255, 255, 255, 0.03));
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.2s,
+    background 0.15s;
+  min-width: 0;
+}
+.tok:hover {
+  border-color: color-mix(in oklab, var(--tc) 45%, var(--border));
+}
+.tok.on {
+  border-color: var(--tc);
+  box-shadow: 0 0 0 1px var(--tc);
+  background: color-mix(in oklab, var(--tc) 9%, var(--card-bg));
+}
+
+.badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 15px;
+}
+.info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tier {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.price {
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  flex: none;
+}
+.priceEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--card-bg);
+  border: 1px solid color-mix(in oklab, var(--tc) 40%, var(--border));
+  border-radius: 7px;
+  padding: 3px 7px;
+  flex: none;
+}
+.cur {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.priceInput {
+  width: 58px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.check {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: transparent;
+  flex: none;
+  width: 14px;
+  text-align: center;
+}
+.tok.on .check {
+  color: var(--tc);
+}
+
+.empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 22px;
+  border-top: 1px solid color-mix(in oklab, var(--primary) 8%, var(--border));
+  background: color-mix(in oklab, var(--budget-bar-bg, #000) 40%, transparent);
+}
+.tot {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.tot b {
+  color: var(--text-positive, var(--success));
+}
+.add {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  background: var(--primary);
+  cursor: pointer;
+  transition:
+    filter 0.14s,
+    transform 0.1s;
+  white-space: nowrap;
+}
+.add:hover {
+  filter: brightness(1.08);
+}
+.add:active {
+  transform: translateY(1px);
+}
+.add:disabled {
+  background: var(--budget-bar-bg, var(--border));
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .modal,
+  .tok,
+  .add {
+    transition: none;
+  }
+}
