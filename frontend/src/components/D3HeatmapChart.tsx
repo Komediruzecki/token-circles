@@ -4,6 +4,7 @@
  * with HTML tooltip and click drill-down
  */
 import { createEffect, onCleanup, onMount } from 'solid-js'
+import { theme } from '../core/theme'
 import type * as D3 from 'd3'
 
 let d3Module: typeof D3 | null = null
@@ -69,10 +70,19 @@ export default function D3HeatmapChart(props: Props) {
 
     const maxVal = d3.max(Array.from(props.data.values())) || 1
 
-    const colorFn =
-      props.type === 'expense'
-        ? (d3.scaleSequentialPow([0, maxVal], d3.interpolateReds) as any).exponent(0.4)
-        : (d3.scaleSequentialPow([0, maxVal], d3.interpolateGreens) as any).exponent(0.4)
+    // Brand intensity ramp: a dark (empty) ground rising to dawn for spending or
+    // mint for income — the "orbit" palette instead of the old red/green-on-white.
+    const dark = theme.isDark()
+    const emptyFill = dark ? '#161d34' : '#e9edfb'
+    const lowColor = dark ? '#26305a' : '#dfe6fa'
+    // A warm "heat" ramp for spending (rose → dawn) and a cool one for income
+    // (cyan → mint) — all brand hues, rising from the empty-cell ground.
+    const ramp =
+      props.type === 'expense' ? [lowColor, '#e0708a', '#f0a860'] : [lowColor, '#4fb3d9', '#59d2a2']
+    const cellStroke = dark ? 'rgba(255,255,255,0.035)' : 'rgba(20,33,64,0.06)'
+    const colorFn = (
+      d3.scaleSequentialPow([0, maxVal], d3.interpolateRgbBasis(ramp)) as any
+    ).exponent(0.6)
 
     const getValue = (date: Date) => {
       const dateStr = d3.timeFormat('%Y-%m-%d')(date)
@@ -117,10 +127,12 @@ export default function D3HeatmapChart(props: Props) {
       .attr('height', cellSize - 1.5)
       .attr('x', (d: Date) => d3.timeWeek.count(d3.timeYear(d), d) * cellSize)
       .attr('y', (d: Date) => (d.getDay() === 0 ? 6 * cellSize : (d.getDay() - 1) * cellSize))
-      .attr('rx', 2)
+      .attr('rx', 2.5)
+      .attr('stroke', cellStroke)
+      .attr('stroke-width', 1)
       .attr('fill', (d: Date) => {
         const val = getValue(d)
-        return val > 0 ? colorFn(val) : '#ffffff'
+        return val > 0 ? colorFn(val) : emptyFill
       })
       .on('mouseover', (event: MouseEvent, d: Date) => {
         if (!tooltipEl) return
@@ -193,6 +205,7 @@ export default function D3HeatmapChart(props: Props) {
   })
 
   createEffect(() => {
+    theme.isDark() // re-render when the theme flips (empty-cell + ramp colours change)
     if (props.data && props.year && props.type) renderHeatmap()
   })
 

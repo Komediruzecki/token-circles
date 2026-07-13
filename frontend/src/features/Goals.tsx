@@ -505,66 +505,21 @@ export default function Goals() {
         )}
       </div>
 
-      {/* Goals Progress Chart */}
+      {/* Goals Progress — an orbital ring per goal */}
       {goals().length > 0 && (
         <div class={styles.goalsChartSection}>
           <h3>Goals Progress</h3>
-          <div class={styles.chartWrapper}>
-            <Chart
-              id="goals-progress-chart"
-              type="doughnut"
-              data={{
-                labels: goals().map((g) => g.name),
-                datasets: [
-                  {
-                    data: goals().map((g) => g.current_amount),
-                    backgroundColor: goals().map((g) => {
-                      const progress = g.target_amount > 0 ? g.current_amount / g.target_amount : 0
-                      // Brand progress ramp: salmon → dawn → mint → azure (met).
-                      if (progress < 0.3) return '#ff9d9d'
-                      if (progress < 0.6) return '#f0a860'
-                      if (progress < 0.9) return '#59d2a2'
-                      return '#6e9bff'
-                    }),
-                    borderWidth: 0,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                // Doughnuts default to radius '100%', so the ring touches the canvas edge
-                // exactly and sub-pixel rounding shaves the bottom flat. Keep a margin.
-                // (radius is a doughnut-controller option the generic options type lacks.)
-                ...({ radius: '88%' } as Record<string, unknown>),
-                layout: { padding: 6 },
-                plugins: {
-                  legend: {
-                    position: 'right',
-                    labels: {
-                      usePointStyle: true,
-                      padding: 15,
-                      font: { size: 12 },
-                      color: chartColors().text,
-                    },
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: (context: any) => {
-                        const goal = goals()[context.dataIndex]
-                        const progress =
-                          goal.target_amount > 0
-                            ? Math.round((goal.current_amount / goal.target_amount) * 100)
-                            : 0
-                        return `${goal.name}: ${formatCurrency(goal.current_amount)} of ${formatCurrency(goal.target_amount)} (${progress}%)`
-                      },
-                    },
-                  },
-                },
-              }}
-              height={250}
-              width="100%"
-            />
+          <div class={styles.progressRings}>
+            <For each={goals()}>
+              {(g) => (
+                <GoalRing
+                  name={g.name}
+                  current={g.current_amount}
+                  target={g.target_amount}
+                  deadline={g.target_date}
+                />
+              )}
+            </For>
           </div>
         </div>
       )}
