@@ -145,6 +145,31 @@
 .bills-page .btn-primary:hover {
   background: var(--primary-hover);
 }
+.bills-page .btn-secondary {
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in oklab, var(--primary) 40%, var(--border));
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+.bills-page .btn-secondary:hover {
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  border-color: var(--primary);
+}
+.bills-page .header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .bills-page .btn-sm {
   padding: 4px 10px;
   font-size: 12px;
