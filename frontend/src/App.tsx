@@ -16,6 +16,7 @@ import {
 import { Dynamic } from 'solid-js/web'
 import CommandBar from './components/CommandBar'
 import ConfirmDialog from './components/ConfirmDialog'
+import GuidedOrbit from './components/GuidedOrbit'
 import layoutStyles from './components/Layout.module.css'
 import LoginModal from './components/LoginModal'
 import LoginScreen from './components/LoginScreen'
@@ -108,6 +109,8 @@ export function App() {
   const setQuickAddCategories = (c: Category[]) => {
     setQuickAddCategoriesStore(c)
   }
+  // Touch-friendly quick entry (Guided Orbit), opened by the floating + button.
+  const [isGuidedOpen, setIsGuidedOpen] = createSignal(false)
 
   const loadProfiles = async (autoSelect = false) => {
     try {
@@ -1030,6 +1033,36 @@ export function App() {
               onClose={() => {
                 setIsQuickAddOpen(false)
               }}
+              categories={() => quickAddCategories()}
+              onSave={() => {
+                toast('Entry added', 'success')
+                bumpProfileVersion()
+              }}
+            />
+
+            {/* Floating quick-add — the universal way in (works on touch, where
+                the ⌘K command bar has no shortcut). Opens the Guided Orbit. */}
+            <button
+              class={layoutStyles.fab}
+              onClick={() => setIsGuidedOpen(true)}
+              aria-label="Quick add entry"
+              title="Quick add (or ⌘K for the command bar)"
+            >
+              <svg
+                width="24"
+                height="24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+
+            <GuidedOrbit
+              isOpen={isGuidedOpen}
+              onClose={() => setIsGuidedOpen(false)}
               categories={() => quickAddCategories()}
               onSave={() => {
                 toast('Entry added', 'success')
