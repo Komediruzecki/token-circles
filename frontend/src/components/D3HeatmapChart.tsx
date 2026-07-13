@@ -46,8 +46,12 @@ export default function D3HeatmapChart(props: Props) {
 
     const width = container.clientWidth || 800
     if (width <= 0) return
-    const height = props.height || 160
     const margin = { top: 20, right: 20, bottom: 10, left: 40 }
+    // Bigger cells than before (was 10–14): the year heatmap read as too small / zoomed-out.
+    const cellSize = Math.max(15, Math.min(22, (width - margin.left - margin.right) / 53))
+    // Height tracks the cell size so bigger cells give a proportionally taller chart (no dead
+    // vertical space), with room for the month labels on top and the legend at the bottom.
+    const height = Math.max(props.height || 0, Math.round(margin.top + 7 * cellSize + 42))
 
     const d3 = await getD3()
     d3.select(container).selectAll('svg').remove()
@@ -60,8 +64,6 @@ export default function D3HeatmapChart(props: Props) {
       .attr('width', width)
       .attr('height', height)
       .attr('viewBox', [0, 0, width, height])
-
-    const cellSize = Math.max(10, Math.min(14, (width - margin.left - margin.right) / 53))
 
     const startDate = d3.timeYear.floor(new Date(props.year, 0, 1))
     const endDate = d3.timeYear.ceil(new Date(props.year, 11, 31))
