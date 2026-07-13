@@ -88,14 +88,18 @@ export default function LoginModal(props: LoginModalProps) {
         <form onSubmit={submit}>
           <input
             type="email"
+            name="email"
+            id="login-modal-email"
             placeholder="Email"
             value={email()}
             onInput={(e) => setEmail(e.currentTarget.value)}
-            autocomplete="email"
+            autocomplete="username"
             style={inputStyle}
           />
           <input
             type="password"
+            name="password"
+            id="login-modal-password"
             placeholder="Password"
             value={password()}
             onInput={(e) => setPassword(e.currentTarget.value)}

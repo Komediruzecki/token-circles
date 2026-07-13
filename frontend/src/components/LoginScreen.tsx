@@ -143,15 +143,21 @@ export default function LoginScreen() {
         <form onSubmit={submit}>
           <input
             type="email"
+            name="email"
+            id="login-email"
             placeholder="Email"
             value={email()}
             onInput={(e) => setEmail(e.currentTarget.value)}
-            autocomplete="email"
+            // `username` (not `email`) is the token password managers pair with the password
+            // field; combined with name/id it's what Android Chrome autofill keys off of.
+            autocomplete="username"
             style={inputStyle}
           />
           <Show when={mode() !== 'forgot'}>
             <input
               type="password"
+              name="password"
+              id="login-password"
               placeholder="Password"
               value={password()}
               onInput={(e) => setPassword(e.currentTarget.value)}
