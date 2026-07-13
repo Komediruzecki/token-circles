@@ -34,11 +34,12 @@ import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
+import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
 import { api as _api, formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { CATEGORY_PALETTE } from '../core/brandPalette'
+import { paletteColor } from '../core/brandPalette'
 import { theme } from '../core/theme'
 import styles from './LoansPage.module.css'
 import type { LoanDetail, LoanPrepayment } from '../types/models'
@@ -651,46 +652,14 @@ export default function Loans() {
               >
                 Debt Distribution
               </h4>
-              <Chart
-                type="doughnut"
-                data={{
-                  labels: loans().map((l) => l.name),
-                  datasets: [
-                    {
-                      data: loans().map((l) => l.principal),
-                      backgroundColor: CATEGORY_PALETTE,
-                      borderColor: chartColors().grid,
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom',
-                      labels: {
-                        usePointStyle: true,
-                        padding: 15,
-                        font: { size: 11 },
-                        color: chartColors().legend,
-                      },
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: (ctx: any) => {
-                          const val = ctx.parsed
-                          const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0)
-                          const pct = total > 0 ? `${Math.round((val / total) * 100)}%` : '0%'
-                          return ` ${formatAmount(val)} (${pct})`
-                        },
-                      },
-                    },
-                  },
-                }}
-                height={250}
-                width="100%"
+              <CategoryOrbits
+                categories={loans().map((l, i) => ({
+                  category_name: l.name,
+                  category_color: paletteColor(i),
+                  amount: calculateRemaining(l),
+                }))}
+                label="owed"
+                maxRings={8}
               />
             </div>
           </div>
