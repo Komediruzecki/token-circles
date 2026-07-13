@@ -37,12 +37,15 @@ import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
-import { api, getLocalCurrency } from '../core/api'
+import PeriodBar from '../components/PeriodBar'
+import { getLocalCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
+import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
+import { toYYYYMM } from '../utils/period'
 import styles from './BudgetsPage.module.css'
 import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
 
@@ -109,7 +112,9 @@ interface Category {
 
 export default function Budgets() {
   const state = useAppState()
-  const [month, setMonth] = createSignal(new Date().toISOString().slice(0, 7))
+  const { period, helpers } = usePeriod()
+  // The budget month follows the global focus period ("YYYY-MM" for any mode).
+  const month = () => toYYYYMM(period())
   const [improvements, setImprovements] = createSignal<BudgetImprovement[]>([])
   const [error, setError] = createSignal<string | null>(null)
   const [budgetMessage, setBudgetMessage] = createSignal<string>('')
@@ -157,8 +162,6 @@ export default function Budgets() {
   const [showAllocateModal, setShowAllocateModal] = createSignal(false)
   const [selectedCategory, setSelectedCategory] = createSignal<CategoryAllocation | null>(null)
   const [allocateAmount, setAllocateAmount] = createSignal('')
-  const [showMonthPicker, setShowMonthPicker] = createSignal(false)
-  const [showYearPicker, setShowYearPicker] = createSignal(false)
 
   // Categories state
   const [categories, setCategories] = createSignal<Category[]>([])
@@ -178,36 +181,6 @@ export default function Budgets() {
     icon: '',
   })
 
-  const MONTHS = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ]
-  const currentYear = () => new Date().getFullYear()
-  const [availableYears, setAvailableYears] = createSignal<number[]>([
-    currentYear() - 1,
-    currentYear(),
-    currentYear() + 1,
-  ])
-
-  const loadYearRange = async () => {
-    try {
-      const { years } = await api.getTransactionYears()
-      if (years.length > 0) setAvailableYears([...years].sort((a, b) => b - a))
-    } catch {
-      /* keep defaults */
-    }
-  }
-
   const currentMonthNum = () => parseInt(month().split('-')[1])
   const currentYearNum = () => parseInt(month().split('-')[0])
 
@@ -218,25 +191,6 @@ export default function Budgets() {
     const d = new Date(`${month()}-01T00:00:00`)
     d.setMonth(d.getMonth() - 1)
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }
-
-  const setMonthNum = (m: number) => {
-    const y = currentYearNum()
-    setMonth(`${y}-${String(m).padStart(2, '0')}`)
-  }
-  const setYearNum = (y: number) => {
-    const m = currentMonthNum()
-    setMonth(`${y}-${String(m).padStart(2, '0')}`)
-  }
-  const goToPrevMonth = () => {
-    const date = new Date(`${month()}-01`)
-    date.setMonth(date.getMonth() - 1)
-    setMonth(date.toISOString().slice(0, 7))
-  }
-  const goToNextMonth = () => {
-    const date = new Date(`${month()}-01`)
-    date.setMonth(date.getMonth() + 1)
-    setMonth(date.toISOString().slice(0, 7))
   }
 
   // Load historical improvements data for trend chart
@@ -518,7 +472,6 @@ export default function Budgets() {
   onMount(() => {
     loadImprovements()
     loadCategories()
-    loadYearRange()
   })
 
   // Reload when profile selection changes
@@ -526,7 +479,6 @@ export default function Budgets() {
     void state.profileVersion
     loadImprovements()
     loadCategories()
-    loadYearRange()
   })
 
   // Reload categories when month changes (budget resource auto-refetches via source tracking)
@@ -542,111 +494,19 @@ export default function Budgets() {
           <h1 data-test-id="budgets-header" data-tour="budgets-header">
             Budgets
           </h1>
-          <div data-test-id="month-selector" class={styles.monthSelector} data-tour="budgets-month">
-            <button
-              data-test-id="month-prev-btn"
-              class={styles.btnGhost}
-              onClick={goToPrevMonth}
-              aria-label="Previous month"
-            >
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <div class={styles.dropdownWrapper}>
-              <button
-                data-test-id="month-display"
-                class={styles.monthBtn}
-                onClick={() => {
-                  setShowMonthPicker(!showMonthPicker())
-                  setShowYearPicker(false)
-                }}
-              >
-                {MONTHS[currentMonthNum() - 1]}
-                <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
-                  <path d="M5 6L0 0h10z" />
-                </svg>
-              </button>
-              {showMonthPicker() && (
-                <div class={styles.dropdown}>
-                  <For each={MONTHS}>
-                    {(name, i) => (
-                      <button
-                        class={styles.dropdownItem}
-                        classList={{ [styles.selected]: i() + 1 === currentMonthNum() }}
-                        onClick={() => {
-                          setMonthNum(i() + 1)
-                          setShowMonthPicker(false)
-                        }}
-                      >
-                        {name}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              )}
-            </div>
-            <div class={styles.dropdownWrapper}>
-              <button
-                class={styles.yearBtn}
-                onClick={() => {
-                  setShowYearPicker(!showYearPicker())
-                  setShowMonthPicker(false)
-                }}
-              >
-                {currentYearNum()}
-                <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
-                  <path d="M5 6L0 0h10z" />
-                </svg>
-              </button>
-              {showYearPicker() && (
-                <div class={styles.dropdown}>
-                  <For each={availableYears()}>
-                    {(y) => (
-                      <button
-                        class={styles.dropdownItem}
-                        classList={{ [styles.selected]: y === currentYearNum() }}
-                        onClick={() => {
-                          setYearNum(y)
-                          setShowYearPicker(false)
-                        }}
-                      >
-                        {y}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              )}
-            </div>
-            <button class={styles.btnGhost} onClick={goToNextMonth} aria-label="Next month">
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-            {(showMonthPicker() || showYearPicker()) && (
-              <div
-                class={styles.overlay}
-                onClick={() => {
-                  setShowMonthPicker(false)
-                  setShowYearPicker(false)
-                }}
-              />
-            )}
-          </div>
         </div>
         <p data-test-id="budgets-subtitle" class={styles.pageSubtitle}>
           Zero-based budgeting: allocate every dollar to a category
         </p>
+      </div>
+
+      {/* Global period navigator */}
+      <div
+        data-test-id="month-selector"
+        data-tour="budgets-month"
+        style={{ 'margin-bottom': '16px' }}
+      >
+        <PeriodBar />
       </div>
 
       {/* Budget Summary Cards */}
@@ -691,7 +551,7 @@ export default function Budgets() {
                 category_color: a.category_color,
                 amount: a.allocated,
               }))}
-              periodText={`${MONTHS[currentMonthNum() - 1]} ${currentYearNum()}`}
+              periodText={helpers.label(period())}
               label="budgeted"
               maxRings={7}
             />

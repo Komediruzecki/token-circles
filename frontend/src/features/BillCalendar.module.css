@@ -411,3 +411,7 @@
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
 }
+
+.periodBar {
+  margin-bottom: 16px;
+}

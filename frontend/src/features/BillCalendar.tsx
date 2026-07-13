@@ -17,9 +17,12 @@
  * WHEN: The calendar renders
  * THEN: The bill dot shows in red (--danger color) with an overdue indicator
  */
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import PeriodBar from '../components/PeriodBar'
 import { apiGet, apiPost, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { usePeriod } from '../core/periodStore'
+import { toYYYYMM } from '../utils/period'
 import styles from './BillCalendar.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { Component } from 'solid-js'
@@ -59,16 +62,27 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const BillCalendar: Component<BillCalendarProps> = (props) => {
   const state = useAppState()
+  const { period } = usePeriod()
 
-  const [currentYear, setCurrentYear] = createSignal(new Date().getFullYear())
-  const [currentMonth, setCurrentMonth] = createSignal(new Date().getMonth() + 1)
+  // The calendar follows the global focus period (any mode resolves to its month).
+  const focus = createMemo(() => {
+    const [y, m] = toYYYYMM(period()).split('-').map(Number)
+    return { year: y, month: m } // month is 1-based
+  })
+
   const [selectedDay, setSelectedDay] = createSignal<number | null>(null)
   const [selectedBills, setSelectedBills] = createSignal<CalendarBill[]>([])
   const [markingPaid, setMarkingPaid] = createSignal(new Set<number>())
   const [popoverStyle, setPopoverStyle] = createSignal<Record<string, string>>({})
 
+  // Clear any open day popover when the focus month changes.
+  createEffect(() => {
+    focus()
+    setSelectedDay(null)
+  })
+
   const [calendarData, { refetch: refetchCalendar }] = createResource(
-    () => ({ year: currentYear(), month: currentMonth(), v: state.profileVersion }),
+    () => ({ year: focus().year, month: focus().month, v: state.profileVersion }),
     async ({ year, month }) => {
       const data = await apiGet<CalendarData>(`/api/bills/calendar?year=${year}&month=${month}`)
       return data
@@ -76,33 +90,6 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
   )
 
   const loading = () => calendarData.loading && !calendarData()
-
-  const prevMonth = () => {
-    if (currentMonth() === 1) {
-      setCurrentMonth(12)
-      setCurrentYear(currentYear() - 1)
-    } else {
-      setCurrentMonth(currentMonth() - 1)
-    }
-    setSelectedDay(null)
-  }
-
-  const nextMonth = () => {
-    if (currentMonth() === 12) {
-      setCurrentMonth(1)
-      setCurrentYear(currentYear() + 1)
-    } else {
-      setCurrentMonth(currentMonth() + 1)
-    }
-    setSelectedDay(null)
-  }
-
-  const goToToday = () => {
-    const now = new Date()
-    setCurrentYear(now.getFullYear())
-    setCurrentMonth(now.getMonth() + 1)
-    setSelectedDay(null)
-  }
 
   const daysArray = createMemo(() => {
     const data = calendarData()
@@ -115,8 +102,8 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
     const now = new Date()
     return (
       day === now.getDate() &&
-      currentMonth() === now.getMonth() + 1 &&
-      currentYear() === now.getFullYear()
+      focus().month === now.getMonth() + 1 &&
+      focus().year === now.getFullYear()
     )
   }
 
@@ -213,39 +200,8 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
 
   return (
     <div class={styles.calendarWrap}>
-      {/* Month header */}
-      <div class={styles.monthHeader}>
-        <button class={styles.navBtn} onClick={prevMonth} title="Previous month">
-          <svg
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-          >
-            <path d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div class={styles.monthLabelGroup}>
-          <h2 class={styles.monthLabel}>{calendarData()?.monthLabel || ''}</h2>
-          <button class={styles.todayBtn} onClick={goToToday}>
-            Today
-          </button>
-        </div>
-        <button class={styles.navBtn} onClick={nextMonth} title="Next month">
-          <svg
-            width="18"
-            height="18"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            viewBox="0 0 24 24"
-          >
-            <path d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
+      {/* Period navigator (global focus period) */}
+      <PeriodBar class={styles.periodBar} />
 
       {/* Summary bar */}
       <Show when={calendarData()}>

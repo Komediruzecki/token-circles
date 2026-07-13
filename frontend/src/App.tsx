@@ -44,6 +44,7 @@ import {
   useAppState,
 } from './core/appStore'
 import { logger } from './core/logger.js'
+import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import {
   setShowTourSelection,
   showTourSelection,
@@ -359,8 +360,70 @@ export function App() {
       document.removeEventListener('keydown', handleQuickAddKey)
     })
 
+    // Global period stepping: ←/→ moves the focus period on every page. Guarded so
+    // it never fires while typing, while a modal/dropdown is open, or while the
+    // PeriodOrbit popup (which owns its own arrow keys) is up.
+    const handlePeriodKeys = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (orbitOpen()) return
+      if (isQuickAddOpen() || isLoginModalOpen() || isProfileModalOpen() || showDropdown()) return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      e.preventDefault()
+      stepPeriod(e.key === 'ArrowRight' ? 1 : -1)
+    }
+    document.addEventListener('keydown', handlePeriodKeys)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handlePeriodKeys)
+    })
+
+    // Mirror the focus period into the URL hash + keep it across page navigation.
+    const disposePeriodSync = initPeriodSync()
+    onCleanup(disposePeriodSync)
+
     _setIsLoading(false)
   })
+
+  // Swipe left/right (mobile/tablet) steps the focus period — like 1Money, but the
+  // period label sweeps an orbit-arc as it advances. Guarded against vertical scroll
+  // intent and against swipes that begin inside a horizontally-scrollable element.
+  let swipeX = 0
+  let swipeY = 0
+  let swipeT = 0
+  let swipeGuarded = false
+  const startedInScrollable = (target: EventTarget | null): boolean => {
+    let el = target as HTMLElement | null
+    while (el && el !== document.body) {
+      const style = window.getComputedStyle(el)
+      const ox = style.overflowX
+      if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 4) return true
+      el = el.parentElement
+    }
+    return false
+  }
+  const onSwipeStart = (e: TouchEvent) => {
+    if (e.touches.length !== 1) {
+      swipeGuarded = true
+      return
+    }
+    swipeX = e.touches[0].clientX
+    swipeY = e.touches[0].clientY
+    swipeT = e.timeStamp
+    swipeGuarded = startedInScrollable(e.target)
+  }
+  const onSwipeEnd = (e: TouchEvent) => {
+    if (swipeGuarded) return
+    if (orbitOpen() || isQuickAddOpen() || isLoginModalOpen() || isProfileModalOpen()) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - swipeX
+    const dy = t.clientY - swipeY
+    const dt = e.timeStamp - swipeT
+    // Clear horizontal intent: long enough, fast enough, and mostly sideways.
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.8 || dt > 700) return
+    stepPeriod(dx < 0 ? 1 : -1) // swipe left → forward in time, right → back
+  }
 
   // Listen for hash changes (back/forward buttons, manual URL edits)
   const handleHashChange = () => {
@@ -983,7 +1046,7 @@ export function App() {
               </svg>
             </button>
 
-            <main class={layoutStyles.main}>
+            <main class={layoutStyles.main} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
               {Object.entries(allPages).map(([name, page]) => (
                 <Show when={activePage() === name && !_isLoading()}>
                   <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>

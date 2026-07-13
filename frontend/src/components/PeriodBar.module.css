@@ -1,0 +1,219 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+}
+
+/* ── Stepper + label ─────────────────────────────────────────────────────── */
+
+.stepperGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.step:hover {
+  color: var(--text);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+.step:active {
+  transform: translateY(1px);
+}
+
+.label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--primary) 16%, var(--border));
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.label:hover {
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+.labelText {
+  min-width: 6.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.orbitDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--primary) 70%, transparent);
+  flex: 0 0 auto;
+}
+
+.caret {
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+/* Orbit-arc sweep when advancing the period. */
+.label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--primary) 85%, transparent),
+    transparent
+  );
+  transform: translateX(-110%);
+  opacity: 0;
+}
+
+.pulseR::after {
+  animation: sweepR 0.44s ease;
+}
+
+.pulseL::after {
+  animation: sweepL 0.44s ease;
+}
+
+@keyframes sweepR {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+}
+
+@keyframes sweepL {
+  0% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulseR::after,
+  .pulseL::after {
+    animation: none;
+  }
+}
+
+/* ── Pills ───────────────────────────────────────────────────────────────── */
+
+.pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.pill:hover {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--primary) 32%, var(--border));
+}
+
+.pillActive {
+  color: var(--text);
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 20%, transparent) inset;
+}
+
+.pillShort {
+  display: none;
+}
+
+/* Compact pills on narrow screens: swap full labels for the short ones. */
+@media (max-width: 640px) {
+  .bar {
+    gap: 10px;
+  }
+  .pills {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .pill {
+    padding: 6px 10px;
+    flex: 1 1 auto;
+    text-align: center;
+  }
+  .pillFull {
+    display: none;
+  }
+  .pillShort {
+    display: inline;
+  }
+}

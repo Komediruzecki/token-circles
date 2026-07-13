@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, Show } from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
@@ -10,16 +10,17 @@ import ChartWrapper from '../components/ChartWrapper'
 import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import OverviewDeck from '../components/Dashboard/OverviewDeck'
-import { PeriodNavigator } from '../components/Dashboard/PeriodNavigator'
 import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
 import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
 import Sparkline from '../components/Dashboard/Sparkline'
 import { DashboardSettings } from '../components/DashboardSettings'
 import InfoTip from '../components/InfoTip'
-import { PeriodPills } from '../components/PeriodPills'
+import PeriodBar from '../components/PeriodBar'
 import { api, apiGet, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
+import { toRange, toYYYYMM } from '../utils/period'
 import styles from './DashboardPage.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { CalcTrace } from '../components/CalcTracer'
@@ -94,24 +95,20 @@ function loadWidgetPrefs() {
 
 export default function Dashboard() {
   const state = useAppState()
-  // Default to the current month/year (previously hard-coded to May 2026, which
-  // left the dashboard stuck on a past month once the real date moved on).
-  const [month, setMonth] = createSignal(new Date().getMonth() + 1)
-  const [year, setYear] = createSignal(new Date().getFullYear())
+  const { period, helpers } = usePeriod()
+  // Month/year and the "all time" flag derive from the global focus period.
+  const focus = () => {
+    const [y, m] = toYYYYMM(period()).split('-').map(Number)
+    return { year: y, month: m } // month is 1-based
+  }
+  const month = () => focus().month
+  const year = () => focus().year
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [loading, setLoading] = createSignal(true)
-  const [pillPeriod, setPillPeriod] = createSignal('month')
-  const [allTime, setAllTime] = createSignal(false)
 
   // Human-readable label for the currently selected dashboard period
-  const periodText = () =>
-    allTime()
-      ? 'all time'
-      : new Date(year(), month() - 1).toLocaleDateString('en-US', {
-          month: 'long',
-          year: 'numeric',
-        })
+  const periodText = () => helpers.label(period())
 
   // Dev-mode calculation tracer (click an instrumented metric card to see the math)
   const tracerOn = isCalcTracerEnabled()
@@ -124,9 +121,6 @@ export default function Dashboard() {
           title: 'Click to trace this calculation (dev mode)',
         }
       : {}
-  const [dataMinYear, setDataMinYear] = createSignal<number | undefined>(undefined)
-  const [dataMaxYear, setDataMaxYear] = createSignal<number | undefined>(undefined)
-  const [dataYears, setDataYears] = createSignal<number[] | undefined>(undefined)
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
   // DashboardSettings registers its reset action here so the modal header can host the button.
   const [resetViews, setResetViews] = createSignal<(() => void) | null>(null)
@@ -158,45 +152,40 @@ export default function Dashboard() {
     }
   }
 
-  onMount(() => {
-    void loadMonthlyData()
-    void loadYearRange()
-  })
-
+  // Everything follows the global focus period (and profile). Month/year modes
+  // show the full net-worth trend; range/preset windows filter the timeline.
   createEffect(() => {
+    const p = period()
     void state.profileVersion
-    void loadMonthlyData()
-    void loadYearRange()
-  })
-
-  createEffect(() => {
-    month()
-    year()
-    if (!allTime()) {
-      void loadDashboard()
+    void loadDashboard()
+    if (p.mode === 'range' && p.preset !== 'all') {
+      const r = toRange(p)
+      void loadMonthlyData(r.from, r.to)
+    } else {
+      void loadMonthlyData()
     }
   })
 
-  const loadDashboard = async (dateFrom?: string, dateTo?: string) => {
+  const loadDashboard = async () => {
     setLoading(true)
     try {
-      const data = await api.getDashboard(month(), year(), dateFrom, dateTo, allTime())
+      const p = period()
+      const isAll = p.preset === 'all'
+      // Month mode passes month/year (keeps month-over-month deltas); range/year
+      // modes pass an explicit date window.
+      let dateFrom: string | undefined
+      let dateTo: string | undefined
+      if (!isAll && p.mode !== 'month') {
+        const r = toRange(p)
+        dateFrom = r.from
+        dateTo = r.to
+      }
+      const data = await api.getDashboard(month(), year(), dateFrom, dateTo, isAll)
       setMetrics(data)
     } catch {
       toast('Failed to load dashboard', 'error')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadYearRange = async () => {
-    try {
-      const { minYear, maxYear, years } = await api.getTransactionYears()
-      setDataMinYear(minYear)
-      setDataMaxYear(maxYear)
-      setDataYears(years.length > 0 ? years : undefined)
-    } catch {
-      /* keep defaults */
     }
   }
 
@@ -238,73 +227,6 @@ export default function Dashboard() {
     } catch {
       /* optional */
     }
-  }
-
-  const handlePillChange = async (pillId: string) => {
-    setPillPeriod(pillId)
-    setAllTime(pillId === 'all')
-    const now = new Date()
-    const fmt = (d: Date) => d.toISOString().slice(0, 10)
-
-    let dateFrom = ''
-    let dateTo = ''
-    let m = now.getMonth() + 1
-    const y = now.getFullYear()
-
-    switch (pillId) {
-      case 'today':
-        dateFrom = fmt(now)
-        dateTo = fmt(now)
-        break
-      case 'week': {
-        const dayOfWeek = now.getDay()
-        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-        const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
-        const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
-        dateFrom = fmt(monday)
-        dateTo = fmt(sunday)
-        break
-      }
-      case 'month':
-        dateFrom = fmt(new Date(y, m - 1, 1))
-        dateTo = fmt(new Date(y, m, 0))
-        break
-      case 'quarter': {
-        const qStartMonth = Math.floor((m - 1) / 3) * 3
-        dateFrom = fmt(new Date(y, qStartMonth, 1))
-        dateTo = fmt(new Date(y, qStartMonth + 3, 0))
-        m = qStartMonth + 1
-        break
-      }
-      case 'year':
-        dateFrom = fmt(new Date(y, 0, 1))
-        dateTo = fmt(new Date(y, 11, 31))
-        break
-      case 'last7':
-        dateFrom = fmt(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000))
-        dateTo = fmt(now)
-        break
-      case 'last30':
-        dateFrom = fmt(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000))
-        dateTo = fmt(now)
-        break
-      case 'last90':
-        dateFrom = fmt(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000))
-        dateTo = fmt(now)
-        break
-      case 'all':
-        dateFrom = ''
-        dateTo = ''
-        m = now.getMonth() + 1
-        break
-    }
-
-    setMonth(m)
-    setYear(y)
-    await Promise.all([
-      loadDashboard(dateFrom, dateTo),
-      loadMonthlyData(dateFrom || undefined, dateTo || undefined),
-    ])
   }
 
   const showSettings = () => setShowSettingsModal(true)
@@ -608,49 +530,8 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
-        <div class={styles.headerPeriodRow}>
-          <PeriodNavigator
-            month={month}
-            year={year}
-            minYear={dataMinYear()}
-            maxYear={dataMaxYear()}
-            years={dataYears()}
-            onMonthChange={(m) => {
-              setMonth(m)
-              setAllTime(false)
-            }}
-            onYearChange={(y) => {
-              setYear(y)
-              setAllTime(false)
-            }}
-            onPrev={() => {
-              const m = month()
-              const y = year()
-              setPillPeriod('custom')
-              setAllTime(false)
-              if (m === 1) {
-                setMonth(12)
-                setYear(y - 1)
-              } else {
-                setMonth(m - 1)
-              }
-            }}
-            onNext={() => {
-              const m = month()
-              const y = year()
-              setPillPeriod('custom')
-              setAllTime(false)
-              if (m === 12) {
-                setMonth(1)
-                setYear(y + 1)
-              } else {
-                setMonth(m + 1)
-              }
-            }}
-          />
-          <div class={styles.periodPills} data-tour="dashboard-period">
-            <PeriodPills value={pillPeriod()} onChange={handlePillChange} />
-          </div>
+        <div class={styles.headerPeriodRow} data-tour="dashboard-period">
+          <PeriodBar />
         </div>
       </div>
 

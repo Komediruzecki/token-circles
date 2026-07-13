@@ -45,6 +45,7 @@ import SankeyChart from '../components/SankeyChart'
 import { api, formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { downloadBlob } from '../utils/chartExport'
 import styles from './AnalyticsPage.module.css'
@@ -91,10 +92,17 @@ interface HeatmapResponse {
 
 export default function Analytics() {
   const state = useAppState()
+  const { period } = usePeriod()
 
   // ── Signals used by resources (declared first to avoid forward references) ──
   const [categoryType, setCategoryType] = createSignal<'expense' | 'income'>('expense')
   const [stackedYear, setStackedYear] = createSignal(new Date().getFullYear())
+
+  // The page-level trends year follows the global focus period; the per-chart
+  // selectors below (heatmap, sankey, compare, monthly) keep their own local year.
+  createEffect(() => {
+    setStackedYear(period().year)
+  })
 
   // ── Resources (declarative data fetching, race-condition safe) ──────────
   const [analyticsData] = createResource(

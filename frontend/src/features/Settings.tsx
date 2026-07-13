@@ -36,9 +36,11 @@ import SupportContact from '../components/SupportContact'
 import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
+import { period } from '../core/periodStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
+import { toYYYYMM } from '../utils/period'
 import styles from './SettingsPage.module.css'
 import type { ChartExportSettings } from '../utils/chartExportSettings'
 
@@ -49,8 +51,11 @@ const ACCOUNT_DELETION_ENABLED =
   import.meta.env.MODE !== 'production' || import.meta.env.VITE_ENABLE_ACCOUNT_DELETION === 'true'
 
 function Reports() {
-  const [reportYear, setReportYear] = createSignal(new Date().getFullYear())
-  const [reportMonth, setReportMonth] = createSignal(new Date().getMonth() + 1)
+  // Seed from the global focus period so Reports opens on the period you were just
+  // viewing; the report-type + full-year (month 0) selects stay report-specific.
+  const [seedYear, seedMonth] = toYYYYMM(period()).split('-').map(Number)
+  const [reportYear, setReportYear] = createSignal(seedYear)
+  const [reportMonth, setReportMonth] = createSignal(seedMonth)
   const [reportType, setReportType] = createSignal<'monthly' | 'tax' | 'pl' | 'annual'>('monthly')
   const [reportLoading, setReportLoading] = createSignal<string | null>(null)
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])

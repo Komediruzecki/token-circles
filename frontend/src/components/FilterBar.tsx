@@ -59,6 +59,8 @@ interface FilterBarProps {
   onSearchChange?: (term: string) => void
   filterType?: string
   onFilterTypeChange?: (type: string) => void
+  /** Hide the built-in date presets/month-year/custom-range UI (the page owns date via PeriodBar). */
+  hideDateControls?: boolean
   onChange: (filters: FilterState) => void
 }
 
@@ -404,49 +406,52 @@ export default function FilterBar(props: FilterBarProps) {
           />
         )}
 
-        {/* Date presets */}
-        <div class={styles.dateFilters} data-test-id="transactions-date-presets">
-          <For each={['all', 'month', 'lastMonth', 'year']}>
-            {(p) => (
-              <button
-                class={`${styles.presetBtn} ${props.selectedPreset === p ? styles.presetBtnActive : ''}`}
-                onClick={() => {
-                  handlePresetClick(p)
+        {/* Date presets + month/year nav — hidden when the page drives date via PeriodBar */}
+        {!props.hideDateControls && (
+          <>
+            <div class={styles.dateFilters} data-test-id="transactions-date-presets">
+              <For each={['all', 'month', 'lastMonth', 'year']}>
+                {(p) => (
+                  <button
+                    class={`${styles.presetBtn} ${props.selectedPreset === p ? styles.presetBtnActive : ''}`}
+                    onClick={() => {
+                      handlePresetClick(p)
+                    }}
+                  >
+                    {p === 'all'
+                      ? 'All Time'
+                      : p === 'month'
+                        ? 'This Month'
+                        : p === 'lastMonth'
+                          ? 'Last Month'
+                          : 'This Year'}
+                  </button>
+                )}
+              </For>
+            </div>
+
+            <div class={styles.monthYearNav}>
+              <select
+                class={styles.monthYearSelect}
+                value={derivedMonth()}
+                onChange={(e) => {
+                  handleMonthYearChange(parseInt(e.currentTarget.value), derivedYear())
                 }}
               >
-                {p === 'all'
-                  ? 'All Time'
-                  : p === 'month'
-                    ? 'This Month'
-                    : p === 'lastMonth'
-                      ? 'Last Month'
-                      : 'This Year'}
-              </button>
-            )}
-          </For>
-        </div>
-
-        {/* Month/Year nav */}
-        <div class={styles.monthYearNav}>
-          <select
-            class={styles.monthYearSelect}
-            value={derivedMonth()}
-            onChange={(e) => {
-              handleMonthYearChange(parseInt(e.currentTarget.value), derivedYear())
-            }}
-          >
-            <For each={MONTH_NAMES}>{(name, i) => <option value={i()}>{name}</option>}</For>
-          </select>
-          <select
-            class={styles.monthYearSelect}
-            value={derivedYear()}
-            onChange={(e) => {
-              handleMonthYearChange(derivedMonth(), parseInt(e.currentTarget.value))
-            }}
-          >
-            <For each={years()}>{(y) => <option value={y}>{y}</option>}</For>
-          </select>
-        </div>
+                <For each={MONTH_NAMES}>{(name, i) => <option value={i()}>{name}</option>}</For>
+              </select>
+              <select
+                class={styles.monthYearSelect}
+                value={derivedYear()}
+                onChange={(e) => {
+                  handleMonthYearChange(derivedMonth(), parseInt(e.currentTarget.value))
+                }}
+              >
+                <For each={years()}>{(y) => <option value={y}>{y}</option>}</For>
+              </select>
+            </div>
+          </>
+        )}
 
         {/* Actions */}
         <div class={styles.filterActions}>
@@ -492,7 +497,7 @@ export default function FilterBar(props: FilterBarProps) {
       )}
 
       {/* Custom date inputs */}
-      {props.selectedPreset === 'custom' && (
+      {!props.hideDateControls && props.selectedPreset === 'custom' && (
         <div class={styles.customDates}>
           <div class={styles.dateInput}>
             <label class={styles.inputLabel}>From</label>

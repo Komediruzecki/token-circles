@@ -36,6 +36,7 @@ import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
 import InfoTip from '../components/InfoTip'
 import Pagination from '../components/Pagination'
+import PeriodBar from '../components/PeriodBar'
 import ReconciliationModal from '../components/ReconciliationModal'
 import RecurringSection from '../components/RecurringSection'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
@@ -45,11 +46,16 @@ import { apiPut } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
+import { usePeriod } from '../core/periodStore'
+import { toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
   const state = useAppState()
+  const { period, helpers } = usePeriod()
+  // The global focus period drives the date filter (any mode → a range; "all" → no bound).
+  const periodRange = () => (period().preset === 'all' ? null : toRange(period()))
   const [transactions, setTransactions] = createSignal<Transaction[]>([])
   const [loading, setLoading] = createSignal(true)
   const [selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
@@ -101,7 +107,6 @@ export default function Transactions() {
   const [sortField, setSortField] = createSignal<string>('date')
   const [sortOrder, setSortOrder] = createSignal<'asc' | 'desc'>('desc')
   const [filterType, setFilterType] = createSignal<string>('all')
-  const [filterMonth, _setFilterMonth] = createSignal<string | null>(null)
   const [searchTerm, setSearchTerm] = createSignal<string>('')
   const [totalIncome, setTotalIncome] = createSignal(0)
   const [totalExpenses, setTotalExpenses] = createSignal(0)
@@ -132,15 +137,8 @@ export default function Transactions() {
     setTotalAmount(total)
   })
 
-  // Period label for summary context
-  const periodLabel = createMemo(() => {
-    if (selectedPreset() === 'all' || (!dateRange().from && !dateRange().to)) return 'All Time'
-    if (selectedPreset() === 'month' || filterMonth()) return 'This Month'
-    if (selectedPreset() === 'lastMonth') return 'Last Month'
-    if (selectedPreset() === 'year') return 'This Year'
-    if (dateRange().from && dateRange().to) return `${dateRange().from} – ${dateRange().to}`
-    return 'Filtered Period'
-  })
+  // Period label for summary context — follows the global focus period.
+  const periodLabel = createMemo(() => helpers.label(period()))
 
   // Revoke a blob: object URL (no-op for data/file URLs from the picker preview)
   const revokePreviewUrl = () => {
@@ -330,8 +328,9 @@ export default function Transactions() {
         return false
       }
 
-      // Filter by month
-      if (filterMonth() && !tx.date.startsWith(filterMonth()!)) {
+      // Filter by the global focus period (replaces the old month/range controls)
+      const pr = periodRange()
+      if (pr && (tx.date < pr.from || tx.date > pr.to)) {
         return false
       }
 
@@ -366,14 +365,6 @@ export default function Transactions() {
         selectedTags().length > 0 &&
         (!tx.tags || !selectedTags().some((id) => tx.tags?.some((t) => t.id === id)))
       ) {
-        return false
-      }
-
-      // Filter by date range
-      if (dateRange().from && tx.date < dateRange().from) {
-        return false
-      }
-      if (dateRange().to && tx.date > dateRange().to) {
         return false
       }
 
@@ -779,8 +770,14 @@ export default function Transactions() {
         </div>
       </div>
 
+      {/* Global period navigator */}
+      <div style={{ 'margin-bottom': '12px' }}>
+        <PeriodBar />
+      </div>
+
       {/* Filter Bar — everything in one row */}
       <FilterBar
+        hideDateControls
         categories={categories() as any}
         tags={tags() as any}
         accounts={accounts() as any}
