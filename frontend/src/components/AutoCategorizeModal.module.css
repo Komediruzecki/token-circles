@@ -13,6 +13,8 @@
   visibility: hidden;
   transition: all 0.2s ease;
   z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .overlay.isOpen {
@@ -25,13 +27,16 @@
   border: 1px solid var(--border);
   border-radius: 16px;
   width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: min(500px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
   transform: scale(0.95);
   transition: transform 0.2s ease;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .overlay.isOpen .modal {
@@ -283,8 +288,9 @@
 
 @media (max-width: 480px) {
   .modal {
-    max-width: 95vw;
-    max-height: 95vh;
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
   }
 
   .transactionItem {

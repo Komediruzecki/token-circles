@@ -10,7 +10,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
+  overflow-y: auto;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
@@ -29,9 +30,12 @@
     0 10px 15px -3px rgba(0, 0, 0, 0.1),
     0 4px 6px -2px rgba(0, 0, 0, 0.05);
   width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
+  max-width: min(560px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
+  box-sizing: border-box;
+  margin: auto;
   transform: translateY(20px);
   transition: transform 0.2s;
 }
@@ -41,15 +45,15 @@
 }
 
 .modal-small {
-  max-width: 400px;
+  max-width: min(400px, calc(100vw - 2rem));
 }
 
 .modal-large {
-  max-width: 800px;
+  max-width: min(800px, calc(100vw - 2rem));
 }
 
 .modal-medium {
-  max-width: 560px;
+  max-width: min(560px, calc(100vw - 2rem));
 }
 
 .modal-header {
@@ -129,6 +133,8 @@
     max-width: 100%;
     border-radius: 16px 16px 0 0;
     max-height: 85vh;
+    max-height: 85dvh;
+    margin: 0;
   }
 
   .modal-header {

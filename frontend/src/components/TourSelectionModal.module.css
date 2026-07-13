@@ -6,18 +6,23 @@
   align-items: center;
   justify-content: center;
   z-index: 10000;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 85vh;
+  width: 100%;
+  max-width: min(600px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .header {

@@ -9,6 +9,8 @@
   visibility: hidden;
   transition: all 0.2s ease;
   z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .overlay.isOpen {
@@ -20,12 +22,15 @@
   background: white;
   border-radius: 16px;
   width: 100%;
-  max-width: 480px;
-  max-height: 85vh;
+  max-width: min(480px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
   transform: translateY(20px);
   transition: transform 0.2s ease;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .dark-mode .modal {

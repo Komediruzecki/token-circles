@@ -169,16 +169,21 @@
   justify-content: center;
   z-index: 1000;
   animation: fade-in 0.2s ease-out;
+  padding: 16px;
+  overflow-y: auto;
 }
 .housing-page .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: min(500px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   animation: slide-in 0.2s ease-out;
+  box-sizing: border-box;
+  margin: auto;
 }
 .housing-page .modal-header {
   display: flex;
@@ -546,8 +551,8 @@
   }
 
   .housing-page .modal {
-    max-width: 95vw;
-    margin: 10px;
+    max-width: calc(100vw - 2rem);
+    margin: auto;
   }
 
   .housing-page .header-top {

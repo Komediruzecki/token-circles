@@ -65,6 +65,8 @@
   align-items: center;
   justify-content: center;
   z-index: 9999;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal {
@@ -72,9 +74,13 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 400px;
+  max-width: min(400px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .modalHeader {

@@ -419,16 +419,21 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  width: 520px;
-  max-width: 90vw;
-  max-height: 90vh;
+  width: 100%;
+  max-width: min(520px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .modalHeader {
@@ -507,9 +512,10 @@
 
 @media (max-width: 768px) {
   .loans-page .modal {
-    max-width: 95vw;
-    margin: 10px;
-    max-height: 85vh;
+    max-width: calc(100vw - 2rem);
+    margin: auto;
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
   }
 
   .loansPage {

@@ -925,6 +925,8 @@
   align-items: center;
   justify-content: center;
   z-index: 9999;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal {
@@ -932,11 +934,14 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: min(500px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .modal-header {
@@ -1041,8 +1046,8 @@ select.form-control {
   }
 
   .modal {
-    width: 95vw;
-    max-width: 95vw;
+    width: 100%;
+    max-width: calc(100vw - 2rem);
   }
 }
 

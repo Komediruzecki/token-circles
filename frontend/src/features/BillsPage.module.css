@@ -192,9 +192,12 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: min(500px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .bills-page .modal-overlay {
@@ -208,7 +211,8 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 20px;
+  padding: 16px;
+  overflow-y: auto;
 }
 .bills-page .modal-header {
   display: flex;
@@ -427,8 +431,8 @@
   }
 
   .bills-page .modal {
-    max-width: 100%;
-    margin: 10px;
+    max-width: calc(100vw - 2rem);
+    margin: auto;
   }
 
   .bills-page .section-title {

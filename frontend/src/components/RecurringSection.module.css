@@ -193,16 +193,21 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal {
   background: var(--card-bg);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  width: 480px;
-  max-width: 90vw;
-  max-height: 90vh;
+  width: 100%;
+  max-width: min(480px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .modalHeader {

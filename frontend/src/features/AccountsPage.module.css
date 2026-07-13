@@ -366,6 +366,8 @@
   transition:
     opacity 0.2s,
     visibility 0.2s;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal-overlay.visible {
@@ -378,11 +380,14 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: min(500px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  margin: auto;
 }
 
 .modal-header {
@@ -466,9 +471,10 @@
   }
 
   .accounts-page .modal {
-    max-width: 95vw;
-    margin: 10px;
-    max-height: 85vh;
+    max-width: calc(100vw - 2rem);
+    margin: auto;
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
   }
 
   .header-top {
