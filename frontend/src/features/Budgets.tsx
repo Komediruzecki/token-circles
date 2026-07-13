@@ -384,7 +384,10 @@ export default function Budgets() {
   // Show allocate modal for a category
   const openAllocateModal = (category: CategoryAllocation) => {
     setSelectedCategory(category)
-    setAllocateAmount('')
+    // Pre-fill with the current allocation so an already-budgeted category opens ready to edit.
+    setAllocateAmount(
+      category.is_budgeted && category.allocated > 0 ? String(category.allocated) : ''
+    )
     setBudgetMessage('')
     setShowAllocateModal(true)
   }
@@ -1090,7 +1093,17 @@ export default function Budgets() {
                         )}
                       </td>
                       <td class={styles.actionsCol}>
-                        {item.can_allocate && !item.is_budgeted ? (
+                        {item.is_budgeted ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              openAllocateModal(item)
+                            }}
+                          >
+                            Change
+                          </Button>
+                        ) : item.can_allocate ? (
                           <Button
                             variant="ghost"
                             size="sm"
