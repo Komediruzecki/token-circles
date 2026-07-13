@@ -621,13 +621,19 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
         b.category_id === category_id && b.start_date === start_date && b.period === budgetPeriod
     )
 
+    // Allocate is an upsert: re-allocating a category for the same month updates the amount
+    // instead of erroring, so users can freely change an allocation from the same action.
     if (existing) {
-      return json(
-        {
-          error: `Budget already exists for ${month}. Use PUT /api/budgets/${existing.id} to update it.`,
-        },
-        400
-      )
+      await adapter.updateBudget(existing.id as number, { amount: amount as number })
+      return json({
+        id: existing.id,
+        category_id,
+        amount,
+        period: budgetPeriod,
+        start_date,
+        profile_id: pid,
+        message: 'Budget updated successfully',
+      })
     }
 
     const id = await adapter.createBudget({
