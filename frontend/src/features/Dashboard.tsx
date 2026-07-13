@@ -4,6 +4,7 @@
 
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
+import { getCategorySvg } from '../components/CategoryIcon'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
 import ChartWrapper from '../components/ChartWrapper'
 import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
@@ -20,6 +21,7 @@ import { api, apiGet, formatCurrency, formatDate, getLocalCurrency, toast } from
 import { useAppState } from '../core/appStore'
 import { theme } from '../core/theme'
 import styles from './DashboardPage.module.css'
+import { matchBrand } from './subscriptionBrands'
 import type { CalcTrace } from '../components/CalcTracer'
 import type { SankeyData } from '../types/models'
 import type * as Models from '../types/models'
@@ -440,31 +442,58 @@ export default function Dashboard() {
               </div>
               <div class={styles.transactionList}>
                 <For each={metrics()!.upcomingBills.slice(0, 5)}>
-                  {(bill: any) => (
-                    <div class={styles.transactionItem}>
-                      <div
-                        class={styles.transactionIcon}
-                        style={{ background: getIconColor('expense') }}
-                      >
-                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </div>
-                      <div class={styles.transactionDetails}>
-                        <div class={styles.transactionName}>{bill.name}</div>
-                        <div class={styles.transactionMeta}>
-                          Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
+                  {(bill: any) => {
+                    const brand = matchBrand(bill.name, bill.category_color)
+                    const isBrand = !!brand.displayName || bill.type === 'subscription'
+                    const hasCategoryIcon = !!(bill.category_icon || bill.category_color)
+                    return (
+                      <div class={styles.transactionItem}>
+                        <div
+                          class={styles.transactionIcon}
+                          style={
+                            isBrand
+                              ? { background: brand.bgColor, color: brand.color }
+                              : hasCategoryIcon
+                                ? { background: bill.category_color || getIconColor('expense') }
+                                : { background: getIconColor('expense') }
+                          }
+                        >
+                          <Show
+                            when={isBrand}
+                            fallback={
+                              hasCategoryIcon ? (
+                                getCategorySvg(bill.name, 18, bill.category_icon)
+                              ) : (
+                                <svg
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                  />
+                                </svg>
+                              )
+                            }
+                          >
+                            {brand.icon()}
+                          </Show>
+                        </div>
+                        <div class={styles.transactionDetails}>
+                          <div class={styles.transactionName}>{bill.name}</div>
+                          <div class={styles.transactionMeta}>
+                            Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
+                          </div>
+                        </div>
+                        <div class={`${styles.transactionAmount} ${styles.expense}`}>
+                          {money(bill.amount)}
                         </div>
                       </div>
-                      <div class={`${styles.transactionAmount} ${styles.expense}`}>
-                        {money(bill.amount)}
-                      </div>
-                    </div>
-                  )}
+                    )
+                  }}
                 </For>
               </div>
             </div>
