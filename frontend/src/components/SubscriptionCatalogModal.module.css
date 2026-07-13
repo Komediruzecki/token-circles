@@ -123,13 +123,11 @@
 
 .tok {
   display: flex;
-  align-items: center;
-  gap: 11px;
+  flex-direction: column;
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--budget-bar-bg, rgba(255, 255, 255, 0.03));
-  cursor: pointer;
   transition:
     border-color 0.15s,
     box-shadow 0.2s,
@@ -143,6 +141,53 @@
   border-color: var(--tc);
   box-shadow: 0 0 0 1px var(--tc);
   background: color-mix(in oklab, var(--tc) 9%, var(--card-bg));
+}
+.tokRow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+/* Plan tiers */
+.plans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px dashed color-mix(in oklab, var(--tc) 22%, var(--border));
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s,
+    color 0.14s,
+    background 0.14s;
+}
+.pill:hover {
+  border-color: color-mix(in oklab, var(--tc) 45%, var(--border));
+  color: var(--text);
+}
+.pillOn {
+  border-color: var(--tc);
+  background: color-mix(in oklab, var(--tc) 14%, transparent);
+  color: var(--tc);
+}
+.pillPrice {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 
 .badge {
