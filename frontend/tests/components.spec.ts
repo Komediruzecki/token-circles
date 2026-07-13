@@ -10,6 +10,8 @@ test.describe('UI Components', () => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
     await expect(page.getByTestId('dashboard-metrics')).toBeVisible({ timeout: 15000 })
+    // The redesigned dashboard tucks the classic charts behind a "Show more" toggle.
+    await page.getByTestId('dashboard-show-more').click()
     await expect(page.getByTestId('dashboard-charts')).toBeVisible()
   })
 
@@ -112,6 +114,8 @@ test.describe('UI Components', () => {
   test('Dashboard chart region renders', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'dashboard')
+    // Charts live below the "Show more" toggle in the redesigned dashboard.
+    await page.getByTestId('dashboard-show-more').click({ timeout: 15000 })
     await expect(page.getByTestId('dashboard-charts')).toBeVisible({ timeout: 15000 })
   })
 

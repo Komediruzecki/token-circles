@@ -841,6 +841,7 @@ export default function Dashboard() {
           <button
             type="button"
             class={styles.showMoreToggle}
+            data-test-id="dashboard-show-more"
             onClick={toggleShowMore}
             aria-expanded={showMore()}
           >
