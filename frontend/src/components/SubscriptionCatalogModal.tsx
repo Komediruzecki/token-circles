@@ -1,9 +1,13 @@
 /**
  * SubscriptionCatalogModal — direction B of the entry system: pick your
  * subscriptions from a shelf instead of filling a form ten times. Multi-select
- * tokens from the seed catalog, adjust the odd price, and add them all in one
- * batch. Each token reuses the app's brand marks via `matchBrand`, so a
- * subscription arrives looking the way it will in the list.
+ * tokens from the seed catalog, quick-pick a plan tier or type a custom price,
+ * and add them all in one batch. Each token reuses the app's brand marks via
+ * `matchBrand`, so a subscription arrives looking the way it will in the list.
+ *
+ * Prices are held as raw text while editing (so "0", an empty field, and
+ * trailing decimals all type cleanly) and parsed to a number only when the
+ * total is shown or the batch is created.
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import { apiPost, showToast } from '../core/api'
@@ -28,24 +32,36 @@ export interface SubscriptionCatalogModalProps {
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
+const priceOf = (text: string): number => {
+  const n = parseFloat((text || '').replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+}
 
 export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   const [search, setSearch] = createSignal('')
-  // name -> chosen price (present == selected)
-  const [selected, setSelected] = createSignal<Record<string, number>>({})
+  // name -> raw price text (key present == selected)
+  const [selected, setSelected] = createSignal<Record<string, string>>({})
   const [submitting, setSubmitting] = createSignal(false)
 
   const isSelected = (name: string) => Object.prototype.hasOwnProperty.call(selected(), name)
+  const priceText = (name: string) => selected()[name] ?? ''
+
   const toggle = (item: CatalogItem) => {
     setSelected((prev) => {
       const next = { ...prev }
       if (Object.prototype.hasOwnProperty.call(next, item.name)) delete next[item.name]
-      else next[item.name] = item.price
+      else next[item.name] = String(item.price)
       return next
     })
   }
-  const setPrice = (name: string, value: number) => {
-    setSelected((prev) => ({ ...prev, [name]: value }))
+  const setPriceText = (name: string, raw: string) => {
+    // Keep only digits and one decimal separator, but never fight the user
+    // mid-type (allow "", "0", "10." …). Coercion to a number happens later.
+    const cleaned = raw.replace(/[^\d.,]/g, '')
+    setSelected((prev) => ({ ...prev, [name]: cleaned }))
+  }
+  const pickPlan = (item: CatalogItem, price: number) => {
+    setSelected((prev) => ({ ...prev, [item.name]: String(price) }))
   }
 
   const groups = createMemo(() => {
@@ -57,8 +73,8 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     })).filter((g) => g.items.length > 0)
   })
 
-  const chosen = createMemo(() => Object.entries(selected()))
-  const total = createMemo(() => chosen().reduce((s, [, price]) => s + (price || 0), 0))
+  const chosen = createMemo(() => Object.keys(selected()))
+  const total = createMemo(() => chosen().reduce((s, name) => s + priceOf(selected()[name]), 0))
 
   const money = (n: number) =>
     new Intl.NumberFormat(undefined, {
@@ -84,12 +100,12 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     const due = todayIso()
     let ok = 0
     try {
-      for (const [name, price] of chosen()) {
+      for (const name of chosen()) {
         const item = CATALOG_ITEMS.find((i) => i.name === name)
         try {
           await apiPost('/api/bills', {
             name,
-            amount: price,
+            amount: priceOf(selected()[name]),
             dueDate: due,
             category_id: item ? resolveCategoryId(item) : undefined,
             frequency: 'monthly',
@@ -117,68 +133,111 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     const known = brand.displayName !== ''
     const idx = CATALOG_ITEMS.findIndex((i) => i.name === item.name)
     const tint = known ? brand.color : paletteColor(idx < 0 ? 0 : idx)
+    // Tier label follows the picked plan when one matches the current price.
+    const activeTier = () => {
+      if (!isSelected(item.name)) return item.tier
+      const p = priceOf(priceText(item.name))
+      const hit = item.plans?.find((pl) => Math.abs(pl.price - p) < 0.005)
+      return hit?.label ?? item.tier
+    }
     return (
       <div
         class={styles.tok}
         classList={{ [styles.on]: isSelected(item.name) }}
         style={{ '--tc': tint }}
-        role="button"
-        tabindex="0"
-        aria-pressed={isSelected(item.name)}
-        onClick={() => {
-          toggle(item)
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            toggle(item)
-          }
-        }}
       >
-        <span
-          class={styles.badge}
-          style={{ color: tint, background: `color-mix(in oklab, ${tint} 16%, transparent)` }}
-        >
-          <Show when={known} fallback={<b>{item.name.charAt(0)}</b>}>
-            {brand.icon()}
-          </Show>
-        </span>
-        <span class={styles.info}>
-          <span class={styles.name}>{item.name}</span>
-          <Show when={item.tier}>
-            <span class={styles.tier}>{item.tier}</span>
-          </Show>
-        </span>
-        <Show
-          when={isSelected(item.name)}
-          fallback={<span class={styles.price}>{money(item.price)}</span>}
+        <div
+          class={styles.tokRow}
+          role="button"
+          tabindex="0"
+          aria-pressed={isSelected(item.name)}
+          onClick={() => {
+            toggle(item)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              toggle(item)
+            }
+          }}
         >
           <span
-            class={styles.priceEdit}
-            onClick={(e) => {
-              e.stopPropagation()
-            }}
+            class={styles.badge}
+            style={{ color: tint, background: `color-mix(in oklab, ${tint} 16%, transparent)` }}
           >
-            <span class={styles.cur}>€</span>
-            <input
-              class={styles.priceInput}
-              type="number"
-              step="0.01"
-              min="0"
-              value={selected()[item.name]}
+            <Show when={known} fallback={<b>{item.name.charAt(0)}</b>}>
+              {brand.icon()}
+            </Show>
+          </span>
+          <span class={styles.info}>
+            <span class={styles.name}>{item.name}</span>
+            <Show when={activeTier()}>
+              <span class={styles.tier}>{activeTier()}</span>
+            </Show>
+          </span>
+          <Show
+            when={isSelected(item.name)}
+            fallback={<span class={styles.price}>{money(item.price)}</span>}
+          >
+            <span
+              class={styles.priceEdit}
               onClick={(e) => {
                 e.stopPropagation()
               }}
-              onInput={(e) => {
-                setPrice(item.name, parseFloat(e.currentTarget.value) || 0)
+              onKeyDown={(e) => {
+                e.stopPropagation()
               }}
-              aria-label={`${item.name} price`}
-            />
+            >
+              <span class={styles.cur}>€</span>
+              <input
+                class={styles.priceInput}
+                type="text"
+                inputmode="decimal"
+                value={priceText(item.name)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                }}
+                onInput={(e) => {
+                  setPriceText(item.name, e.currentTarget.value)
+                }}
+                aria-label={`${item.name} price`}
+              />
+            </span>
+          </Show>
+          <span class={styles.check} aria-hidden="true">
+            ✓
           </span>
+        </div>
+
+        <Show when={item.plans && item.plans.length > 0}>
+          <div class={styles.plans}>
+            <For each={item.plans}>
+              {(pl) => {
+                const active = () =>
+                  isSelected(item.name) &&
+                  Math.abs(priceOf(priceText(item.name)) - pl.price) < 0.005
+                return (
+                  <button
+                    type="button"
+                    class={styles.pill}
+                    classList={{ [styles.pillOn]: active() }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      pickPlan(item, pl.price)
+                    }}
+                  >
+                    {pl.label}
+                    <span class={styles.pillPrice}>{money(pl.price)}</span>
+                  </button>
+                )
+              }}
+            </For>
+          </div>
         </Show>
-        <span class={styles.check} aria-hidden="true">
-          ✓
-        </span>
       </div>
     )
   }
@@ -195,7 +254,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
         <div class={styles.head}>
           <div>
             <h2 class={styles.title}>Add subscriptions</h2>
-            <p class={styles.sub}>Tap the ones you have · prices are typical, adjust to yours</p>
+            <p class={styles.sub}>Tap the ones you have · pick a plan or type your price</p>
           </div>
           <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
             <svg
