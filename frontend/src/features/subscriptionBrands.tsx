@@ -270,6 +270,34 @@ function GenericSubscriptionIcon() {
   )
 }
 
+/** A clean monogram mark for mainstream brands without a bespoke logo. */
+function LetterMark(ch: string) {
+  return () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <text
+        x="12"
+        y="17"
+        text-anchor="middle"
+        font-family="ui-monospace, 'JetBrains Mono', monospace"
+        font-size="15"
+        font-weight="700"
+        fill="currentColor"
+      >
+        {ch}
+      </text>
+    </svg>
+  )
+}
+
+function AnthropicIcon() {
+  // A stylized radial burst (not the Anthropic wordmark) for Claude.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2.5l1.7 5.7L18.6 5l-2.9 4.9 5.9 1.1-5.9 1.1 2.9 4.9-4.9-3.1L12 21.5l-1.7-5.7L5.4 19l2.9-4.9L2.4 13l5.9-1.1L5.4 5l4.9 3.2z" />
+    </svg>
+  )
+}
+
 /* ── Brand Registry ── */
 
 const ICONS: Record<string, () => any> = {
@@ -437,7 +465,143 @@ const BRANDS: SubscriptionBrand[] = [
     color: '#10A37F',
     bgColor: 'rgba(16,163,127,0.08)',
     icon: OpenAIIcon,
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['claude', 'anthropic'],
+    displayName: 'Claude',
+    color: '#D97757',
+    bgColor: 'rgba(217,119,87,0.08)',
+    icon: AnthropicIcon,
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['midjourney'],
+    displayName: 'Midjourney',
+    color: '#8b7cf6',
+    bgColor: 'rgba(139,124,246,0.08)',
+    icon: LetterMark('M'),
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['paramount'],
+    displayName: 'Paramount+',
+    color: '#0064FF',
+    bgColor: 'rgba(0,100,255,0.08)',
+    icon: LetterMark('P'),
+    defaultCategory: 'Streaming',
+  },
+  {
+    keywords: ['tidal'],
+    displayName: 'Tidal',
+    color: '#4fb3d9',
+    bgColor: 'rgba(79,179,217,0.08)',
+    icon: LetterMark('T'),
+    defaultCategory: 'Music',
+  },
+  {
+    keywords: ['playstation', 'ps plus', 'ps5', 'psn'],
+    displayName: 'PlayStation',
+    color: '#2E6DB4',
+    bgColor: 'rgba(46,109,180,0.08)',
+    icon: LetterMark('P'),
+    defaultCategory: 'Gaming',
+  },
+  {
+    keywords: ['nintendo', 'switch online'],
+    displayName: 'Nintendo',
+    color: '#E60012',
+    bgColor: 'rgba(230,0,18,0.08)',
+    icon: LetterMark('N'),
+    defaultCategory: 'Gaming',
+  },
+  {
+    keywords: ['steam'],
+    displayName: 'Steam',
+    color: '#66C0F4',
+    bgColor: 'rgba(102,192,244,0.08)',
+    icon: LetterMark('S'),
+    defaultCategory: 'Gaming',
+  },
+  {
+    keywords: ['audible'],
+    displayName: 'Audible',
+    color: '#F8991C',
+    bgColor: 'rgba(248,153,28,0.08)',
+    icon: LetterMark('A'),
+    defaultCategory: 'Books',
+  },
+  {
+    keywords: ['kindle'],
+    displayName: 'Kindle',
+    color: '#FF9E0F',
+    bgColor: 'rgba(255,158,15,0.08)',
+    icon: LetterMark('K'),
+    defaultCategory: 'Books',
+  },
+  {
+    keywords: ['grammarly'],
+    displayName: 'Grammarly',
+    color: '#15C39A',
+    bgColor: 'rgba(21,195,154,0.08)',
+    icon: LetterMark('G'),
     defaultCategory: 'Software',
+  },
+  {
+    keywords: ['1password'],
+    displayName: '1Password',
+    color: '#4b8bf5',
+    bgColor: 'rgba(75,139,245,0.08)',
+    icon: LetterMark('1'),
+    defaultCategory: 'Software',
+  },
+  {
+    keywords: ['peloton'],
+    displayName: 'Peloton',
+    color: '#DF1C2F',
+    bgColor: 'rgba(223,28,47,0.08)',
+    icon: LetterMark('P'),
+    defaultCategory: 'Fitness',
+  },
+  {
+    keywords: ['strava'],
+    displayName: 'Strava',
+    color: '#FC4C02',
+    bgColor: 'rgba(252,76,2,0.08)',
+    icon: LetterMark('S'),
+    defaultCategory: 'Fitness',
+  },
+  {
+    keywords: ['headspace'],
+    displayName: 'Headspace',
+    color: '#F47D31',
+    bgColor: 'rgba(244,125,49,0.08)',
+    icon: LetterMark('H'),
+    defaultCategory: 'Fitness',
+  },
+  {
+    keywords: ['calm'],
+    displayName: 'Calm',
+    color: '#4c86f4',
+    bgColor: 'rgba(76,134,244,0.08)',
+    icon: LetterMark('C'),
+    defaultCategory: 'Fitness',
+  },
+  {
+    keywords: ['nytimes', 'new york times'],
+    displayName: 'NY Times',
+    color: '#9aa7cf',
+    bgColor: 'rgba(154,167,207,0.08)',
+    icon: LetterMark('T'),
+    defaultCategory: 'News',
+  },
+  {
+    keywords: ['medium'],
+    displayName: 'Medium',
+    color: '#9aa7cf',
+    bgColor: 'rgba(154,167,207,0.08)',
+    icon: LetterMark('M'),
+    defaultCategory: 'News',
   },
 ]
 
