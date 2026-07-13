@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-07-13
+
 ### Changed
 
 - The dashboard "Dashboard Views" button is now a compact "Views" button with a properly sized eye icon (the cog rendered oversized because the icon had no explicit dimensions) and a tooltip explaining it shows/hides widgets; dashboard widget cards (Budget Alerts, Savings Rate) now keep the same vertical spacing as the other cards instead of gluing to whatever follows.
@@ -15,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Budgets: changing an existing category allocation failed with a 400 ("Budget already exists"). Allocating is now an upsert — re-allocating a category for the same month updates the amount — and the per-category action stays available as a **Change** button (pre-filled with the current amount) once a budget is set, instead of disappearing.
+- Budgets: the 6-month forecast under-projected any month that fell in the next year — the inflation adjustment was derived from the month-of-year alone, so a forecast crossing a year boundary (e.g. December → February) computed a negative month offset and applied no inflation. It now accounts for the year.
+- Sign-in autofill: the login form inputs regained `name`/`id` attributes and use the `username`/`current-password` autocomplete tokens, so Android Chrome and password managers recognize and autofill saved credentials again (the redesign had dropped these; iOS still worked because it fills from `autocomplete` alone).
 - The Auto-Categorize dialog now follows the app theme; it previously rendered with a hardcoded white background in dark mode (its dark styles were behind a class that was never applied).
 
 ### Added
