@@ -1,0 +1,250 @@
+/**
+ * CommandBar — Orbit Command Bar. A top-anchored command-palette surface in
+ * the Token Circles instrument language (glass, azure caret, mono type).
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 14vh 20px 20px;
+  background: color-mix(in oklab, #05070f 62%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bar {
+  width: 100%;
+  max-width: 640px;
+  background: color-mix(in oklab, var(--card-bg) 82%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--border));
+  border-radius: 16px;
+  box-shadow:
+    0 30px 70px -30px rgba(0, 0, 0, 0.7),
+    0 0 0 1px color-mix(in oklab, var(--primary) 8%, transparent);
+  overflow: hidden;
+  transform: translateY(-8px) scale(0.99);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.overlay.open .bar {
+  transform: translateY(0) scale(1);
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.caret {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--primary);
+  line-height: 1;
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+.input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+.spin {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklab, var(--primary) 30%, transparent);
+  border-top-color: var(--primary);
+  animation: cb-spin 0.7s linear infinite;
+}
+@keyframes cb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 14px;
+  border-top: 1px solid color-mix(in oklab, var(--primary) 8%, var(--border));
+  padding-top: 14px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--budget-bar-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 11px;
+  max-width: 100%;
+}
+.chip.ghost {
+  border-style: dashed;
+  color: var(--text-secondary);
+}
+.k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.select {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  cursor: pointer;
+  max-width: 150px;
+}
+.select option {
+  color: var(--text);
+  background: var(--card-bg);
+}
+.date {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color-scheme: dark light;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    color 0.14s;
+}
+.toggle button.on {
+  background: color-mix(in oklab, var(--primary) 20%, transparent);
+  color: var(--primary);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  background: color-mix(in oklab, var(--budget-bar-bg, #000) 40%, transparent);
+  border-top: 1px solid color-mix(in oklab, var(--primary) 8%, var(--border));
+}
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.dot {
+  opacity: 0.5;
+}
+.kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: var(--text);
+}
+.add {
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 15px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--primary);
+  cursor: pointer;
+  transition:
+    filter 0.14s,
+    transform 0.1s;
+  white-space: nowrap;
+}
+.add:hover {
+  filter: brightness(1.08);
+}
+.add:active {
+  transform: translateY(1px);
+}
+.add:disabled {
+  background: var(--budget-bar-bg, var(--border));
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .bar,
+  .spin,
+  .add,
+  .toggle button {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .overlay {
+    padding-top: 8vh;
+  }
+  .input {
+    font-size: 16px;
+  }
+}
