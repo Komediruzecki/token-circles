@@ -14,6 +14,7 @@ import {
   Suspense,
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
+import CommandBar from './components/CommandBar'
 import ConfirmDialog from './components/ConfirmDialog'
 import layoutStyles from './components/Layout.module.css'
 import LoginModal from './components/LoginModal'
@@ -21,7 +22,6 @@ import LoginScreen from './components/LoginScreen'
 import { LogoMark } from './components/Logo'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
-import QuickAddModal from './components/QuickAddModal'
 import ResetPassword from './components/ResetPassword'
 import Spotlight from './components/Spotlight'
 import ToastContainer from './components/ToastContainer'
@@ -341,9 +341,12 @@ export function App() {
       }
     }
 
-    // Quick Add keyboard shortcut: Ctrl/Cmd+Shift+T
+    // Command Bar shortcut: Ctrl/Cmd+K (quick entry) or the legacy Ctrl/Cmd+Shift+T.
     const handleQuickAddKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
+      const mod = e.ctrlKey || e.metaKey
+      const openK = mod && !e.shiftKey && (e.key === 'k' || e.key === 'K')
+      const openT = mod && e.shiftKey && (e.key === 't' || e.key === 'T')
+      if (openK || openT) {
         e.preventDefault()
         setIsQuickAddOpen(true)
       }
@@ -1022,14 +1025,15 @@ export function App() {
               />
             </Show>
 
-            <QuickAddModal
+            <CommandBar
               isOpen={isQuickAddOpen}
               onClose={() => {
                 setIsQuickAddOpen(false)
               }}
               categories={() => quickAddCategories()}
-              onSave={(_transaction) => {
-                toast('Transaction added', 'success')
+              onSave={() => {
+                toast('Entry added', 'success')
+                bumpProfileVersion()
               }}
             />
 
