@@ -1,0 +1,371 @@
+/**
+ * GuidedOrbit — one-question-at-a-time entry. A bottom sheet on phones, a
+ * centered card on wider screens, in the Token Circles instrument language.
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: color-mix(in oklab, #05070f 60%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+.overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (min-width: 620px) {
+  .overlay {
+    align-items: center;
+    padding: 24px;
+  }
+}
+
+.sheet {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  background: color-mix(in oklab, var(--card-bg) 88%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border));
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -20px 60px -30px rgba(0, 0, 0, 0.7);
+  padding: 20px 20px 18px;
+  transform: translateY(16px);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.overlay.open .sheet {
+  transform: translateY(0);
+}
+@media (min-width: 620px) {
+  .sheet {
+    border-radius: 20px;
+    box-shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.7);
+    transform: translateY(8px) scale(0.99);
+  }
+  .overlay.open .sheet {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+}
+.close:hover {
+  color: var(--text);
+}
+
+.ringWrap {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin: 4px auto 14px;
+}
+.ringArc {
+  transition: stroke-dasharray 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ringCore {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.ringAmt {
+  font-family: var(--font-display, inherit);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.ringStep {
+  font-family: var(--font-mono, monospace);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.body {
+  min-height: 232px;
+}
+
+/* type toggle */
+.typeToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.typeToggle button {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  padding: 9px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    color 0.14s,
+    border-color 0.14s;
+}
+.typeToggle button.tOn {
+  background: color-mix(in oklab, var(--primary) 16%, transparent);
+  color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+}
+
+/* keypad */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.key {
+  height: 52px;
+  border: 1px solid var(--border);
+  background: var(--budget-bar-bg, rgba(255, 255, 255, 0.03));
+  color: var(--text);
+  border-radius: 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    transform 0.06s;
+}
+.key:hover {
+  background: color-mix(in oklab, var(--primary) 10%, var(--card-bg));
+}
+.key:active {
+  transform: scale(0.96);
+  background: color-mix(in oklab, var(--primary) 18%, var(--card-bg));
+}
+
+/* category grid */
+.catGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.catChip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  background: var(--budget-bar-bg, rgba(255, 255, 255, 0.03));
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.14s,
+    background 0.14s;
+}
+.catChip:hover {
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+}
+.catChip.catOn {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 10%, var(--card-bg));
+}
+.catDot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: none;
+}
+.catName {
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.empty {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 12px;
+}
+
+/* confirm summary */
+.summary {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.sumRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+}
+.sumRow:last-child {
+  border-bottom: 0;
+}
+button.sumRow {
+  cursor: pointer;
+}
+button.sumRow:disabled {
+  cursor: default;
+}
+.sumK {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  flex: none;
+}
+.sumV {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  min-width: 0;
+}
+.tapHint {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--primary);
+  opacity: 0.8;
+}
+.dateInput,
+.noteInput {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  text-align: right;
+  color-scheme: dark light;
+  min-width: 0;
+}
+.noteInput {
+  font-family: inherit;
+  flex: 1;
+}
+.noteInput::placeholder {
+  color: var(--text-secondary);
+}
+
+.addBtn {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  background: var(--primary);
+  cursor: pointer;
+  transition:
+    filter 0.14s,
+    transform 0.08s;
+}
+.addBtn:hover {
+  filter: brightness(1.08);
+}
+.addBtn:active {
+  transform: translateY(1px);
+}
+.addBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* nav */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+.navBack {
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.navBack:hover {
+  color: var(--text);
+}
+.navNext {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 22px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  background: var(--primary);
+  cursor: pointer;
+  transition:
+    filter 0.14s,
+    transform 0.08s;
+}
+.navNext:hover {
+  filter: brightness(1.08);
+}
+.navNext:active {
+  transform: translateY(1px);
+}
+.navNext:disabled {
+  background: var(--budget-bar-bg, var(--border));
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .sheet,
+  .ringArc,
+  .key,
+  .addBtn,
+  .navNext {
+    transition: none;
+  }
+}
