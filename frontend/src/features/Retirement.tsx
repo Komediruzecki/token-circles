@@ -467,7 +467,7 @@ export default function Retirement() {
           data-tour="retirement-goals"
         >
           <h2 class={styles.sectionTitle}>Retirement Goals</h2>
-          {initialLoad() && !goals() ? (
+          {initialLoad() && goals().length === 0 ? (
             <div data-test-id="loading-state" class={styles.emptyState}>
               Loading goals...
             </div>

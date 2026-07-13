@@ -107,7 +107,7 @@ export default function Counterparties() {
       </div>
 
       <div data-tour="counterparties-content">
-        {initialLoad() && !counterparties() ? (
+        {initialLoad() && counterparties().length === 0 ? (
           <div class={styles.loadingState}>Loading counterparties...</div>
         ) : counterparties().length === 0 ? (
           <div class={styles.emptyState}>
