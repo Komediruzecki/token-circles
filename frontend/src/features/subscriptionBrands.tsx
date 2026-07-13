@@ -389,8 +389,10 @@ const BRANDS: SubscriptionBrand[] = [
   {
     keywords: ['apple', 'icloud', 'apple music', 'apple tv', 'apple tv+'],
     displayName: 'Apple',
+    // The Apple mark is solid black; on a near-transparent chip it vanished in dark mode. Put it
+    // on Apple's signature light chip so the black logo stays visible in both themes.
     color: '#000000',
-    bgColor: 'rgba(0,0,0,0.06)',
+    bgColor: '#f5f5f7',
     icon: AppleIcon,
     defaultCategory: 'Cloud',
   },
