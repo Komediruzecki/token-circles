@@ -74,13 +74,17 @@
     // ── PROD  →  api.<domain>  (deploy: pnpm run deploy:prod) ────────────────────
     "prod": {
       "name": "finance-manager-api",
-      // Uncomment for the prod deploy (api.tokencircles.com). Dev is being brought up first.
-      // "routes": [{ "pattern": "api.tokencircles.com", "custom_domain": true }],
+      "routes": [{ "pattern": "api.tokencircles.com", "custom_domain": true }],
       "vars": {
         "APP_ENV": "production",
-        "GOOGLE_CLIENT_ID": "PLACEHOLDER.apps.googleusercontent.com",
-        "CORS_ORIGIN": "https://app.tokencircles.com",
-        "APP_ORIGINS": "https://app.tokencircles.com",
+        // Reuses the dev Google OAuth client. The prod redirect URI
+        // (https://api.tokencircles.com/api/auth/google/callback) and JS origin
+        // (https://tokencircles.com) must be added to this client in the Google console,
+        // or swap in a dedicated prod client id.
+        "GOOGLE_CLIENT_ID": "961447002903-p2gkcujs85svbuf4tpmvu1cj4ge1ivh3.apps.googleusercontent.com",
+        // App lives at the APEX (not app.<domain>): the SPA origin is the bare apex.
+        "CORS_ORIGIN": "https://tokencircles.com",
+        "APP_ORIGINS": "https://tokencircles.com",
         "API_PUBLIC_ORIGIN": "https://api.tokencircles.com",
         "COOKIE_DOMAIN": ".tokencircles.com",
       },
@@ -88,7 +92,7 @@
         {
           "binding": "DB",
           "database_name": "finance-manager",
-          "database_id": "PLACEHOLDER_PROD_D1_DATABASE_ID",
+          "database_id": "c70c3562-c081-4734-824c-9605537effda",
         },
       ],
       "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts" }],
