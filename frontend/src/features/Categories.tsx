@@ -30,13 +30,14 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createEffect, createResource, createSignal, For, onMount } from 'solid-js'
+import { createResource, createSignal, For } from 'solid-js'
 import CategoryIcon from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
+import { gatedSource } from '../core/pageVisibility'
 import styles from './CategoriesPage.module.css'
 
 /** Brand "constellation" swatches offered when picking a category color. */
@@ -58,7 +59,10 @@ export default function Categories() {
 
   // Categories resource — fetches categories + budget summary
   const [categoriesResource, { refetch: refetchCategories }] = createResource(
-    () => state.profileVersion,
+    // Gated on visibility: a profile switch refetches now only while this page is
+    // visible; hidden, it is marked stale and refetches once on the next show. This
+    // also drives the initial load, replacing the old onMount + profileVersion effect.
+    gatedSource('categories', () => state.profileVersion),
     async () => {
       const [allRes, budgetRes] = await Promise.all([
         apiGet<Category[]>('/api/categories'),
@@ -189,15 +193,6 @@ export default function Categories() {
       showToast('Failed to set budget', 'error')
     }
   }
-
-  // OnMount
-  onMount(() => {
-    refetchCategories()
-  })
-  createEffect(() => {
-    void state.profileVersion
-    void refetchCategories()
-  })
 
   // Tint the icon chip with the category's own color (a translucent wash of
   // the color behind a matching glyph), so every category reads in its hue.

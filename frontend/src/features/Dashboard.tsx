@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { createEffect, createSignal, For, Show } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
@@ -18,6 +18,7 @@ import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
 import { api, apiGet, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { toRange, toYYYYMM } from '../utils/period'
@@ -152,19 +153,27 @@ export default function Dashboard() {
     }
   }
 
-  // Everything follows the global focus period (and profile). Month/year modes
-  // show the full net-worth trend; range/preset windows filter the timeline.
-  createEffect(() => {
-    const p = period()
-    void state.profileVersion
-    void loadDashboard()
-    if (p.mode === 'range' && p.preset !== 'all') {
-      const r = toRange(p)
-      void loadMonthlyData(r.from, r.to)
-    } else {
-      void loadMonthlyData()
+  // Everything follows the global focus period (and profile) — but only while this
+  // page is visible. A hidden Dashboard is marked stale and refetches once when next
+  // shown, instead of fanning out alongside every other mounted keep-alive page.
+  // Month/year modes show the full net-worth trend; range/preset windows filter it.
+  refetchOnActive(
+    'dashboard',
+    () => {
+      void period()
+      void state.profileVersion
+    },
+    () => {
+      void loadDashboard()
+      const p = period()
+      if (p.mode === 'range' && p.preset !== 'all') {
+        const r = toRange(p)
+        void loadMonthlyData(r.from, r.to)
+      } else {
+        void loadMonthlyData()
+      }
     }
-  })
+  )
 
   const loadDashboard = async () => {
     try {
@@ -242,16 +251,24 @@ export default function Dashboard() {
   // Cash-flow Sankey (income → categories) for the selected month — the same
   // instrument as on Analytics, following the dashboard's period navigator.
   const [sankeyData, setSankeyData] = createSignal<SankeyData | null>(null)
-  createEffect(() => {
-    const y = year()
-    const m = month()
-    void state.profileVersion
-    apiGet<{ nodes: SankeyData['nodes']; links: SankeyData['links'] }>(
-      `/api/analytics/sankey?year=${y}&month=${m}`
-    )
-      .then((res) => setSankeyData({ nodes: res.nodes || [], links: res.links || [] }))
-      .catch(() => setSankeyData(null))
-  })
+  // Sankey follows the focus month + profile, gated on visibility like the rest.
+  refetchOnActive(
+    'dashboard',
+    () => {
+      void year()
+      void month()
+      void state.profileVersion
+    },
+    () => {
+      const y = year()
+      const m = month()
+      apiGet<{ nodes: SankeyData['nodes']; links: SankeyData['links'] }>(
+        `/api/analytics/sankey?year=${y}&month=${m}`
+      )
+        .then((res) => setSankeyData({ nodes: res.nodes || [], links: res.links || [] }))
+        .catch(() => setSankeyData(null))
+    }
+  )
 
   const renderWidget = (id: string) => {
     switch (id) {

@@ -30,7 +30,7 @@
  * Budgets Component
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
-import { createEffect, createResource, createSignal, For, onMount } from 'solid-js'
+import { createResource, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
@@ -43,6 +43,7 @@ import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
+import { gatedSource, refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { toYYYYMM } from '../utils/period'
@@ -119,7 +120,9 @@ export default function Budgets() {
   const [error, setError] = createSignal<string | null>(null)
   const [budgetMessage, setBudgetMessage] = createSignal<string>('')
   const [budgetResource, { refetch: refetchBudget }] = createResource(
-    () => ({ m: month(), pv: state.profileVersion }),
+    // Gated on visibility: focus-month and profile changes refetch now only while
+    // Budgets is visible; hidden, it is deferred and refetched once on the next show.
+    gatedSource('budgets', () => ({ m: month(), pv: state.profileVersion })),
     async ({ m }) => {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
         apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
@@ -468,24 +471,29 @@ export default function Budgets() {
     }
   }
 
-  // Load improvements and categories once on mount
-  onMount(() => {
-    loadImprovements()
-    loadCategories()
-  })
-
-  // Reload when profile selection changes
-  createEffect(() => {
-    void state.profileVersion
-    loadImprovements()
-    loadCategories()
-  })
-
-  // Reload categories when month changes (budget resource auto-refetches via source tracking)
-  createEffect(() => {
-    void month()
-    loadCategories()
-  })
+  // Improvements follow the profile; categories follow profile + focus month. Both
+  // gated on visibility — while Budgets is hidden they are deferred and flushed once
+  // on the next show. The first run also performs the initial load, so this replaces
+  // the old onMount + two effects (which triple-fetched categories on mount).
+  refetchOnActive(
+    'budgets',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      loadImprovements()
+    }
+  )
+  refetchOnActive(
+    'budgets',
+    () => {
+      void state.profileVersion
+      void month()
+    },
+    () => {
+      loadCategories()
+    }
+  )
 
   return (
     <div data-test-id="budgets-page" class={`page page-budgets page-enter ${styles.budgetsPage}`}>

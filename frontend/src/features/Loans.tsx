@@ -30,7 +30,7 @@
  * Loans Component
  * Manages loans, tracks payments, and calculates remaining balance
  */
-import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
@@ -40,6 +40,7 @@ import { api as _api, formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
+import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import styles from './LoansPage.module.css'
 import type { LoanDetail, LoanPrepayment } from '../types/models'
@@ -320,14 +321,17 @@ export default function Loans() {
     return labels[status] || status
   }
 
-  onMount(() => {
-    loadLoans()
-  })
-
-  createEffect(() => {
-    void state.profileVersion
-    loadLoans()
-  })
+  // Load on mount and reload on profile change — but only while visible. A hidden
+  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  refetchOnActive(
+    'loans',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      loadLoans()
+    }
+  )
 
   const chartColors = () => theme.getChartColors()
 

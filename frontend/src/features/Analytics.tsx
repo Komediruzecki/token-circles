@@ -46,6 +46,7 @@ import SankeyChart from '../components/SankeyChart'
 import { api, formatCurrency } from '../core/api'
 import { apiGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { downloadBlob } from '../utils/chartExport'
@@ -107,7 +108,13 @@ export default function Analytics() {
 
   // ── Resources (declarative data fetching, race-condition safe) ──────────
   const [analyticsData] = createResource(
-    () => ({ year: stackedYear(), type: categoryType(), pv: state.profileVersion }),
+    // Gated on visibility: period (→ stackedYear) and profile changes refetch now only
+    // while Analytics is visible; hidden, it is deferred and refetched once on show.
+    gatedSource('analytics', () => ({
+      year: stackedYear(),
+      type: categoryType(),
+      pv: state.profileVersion,
+    })),
     async ({ year, type }) => {
       const now = new Date()
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
@@ -276,7 +283,7 @@ export default function Analytics() {
 
   // Monthly stats resource — auto-fetches when year/month change
   const [monthlyStatsResource] = createResource(
-    () => ({ year: stackedYear(), month: monthlyMonth() }),
+    gatedSource('analytics', () => ({ year: stackedYear(), month: monthlyMonth() })),
     async ({ year, month }) => {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
       const now = new Date()
@@ -302,7 +309,7 @@ export default function Analytics() {
 
   // Available years resource — auto-fetches on profile change
   const [yearsResource] = createResource(
-    () => state.profileVersion,
+    gatedSource('analytics', () => state.profileVersion),
     async () => {
       const { years } = await api.getTransactionYears()
       if (years.length > 0) return [...years].sort((a, b) => b - a)

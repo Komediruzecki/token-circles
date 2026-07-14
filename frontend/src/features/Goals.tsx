@@ -30,7 +30,7 @@
  * Goals Component
  * Handles savings goals with progress tracking
  */
-import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import GoalRing from '../components/GoalRing'
@@ -38,6 +38,7 @@ import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
+import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import styles from './GoalsPage.module.css'
 
@@ -282,16 +283,18 @@ export default function Goals() {
     })
   }
 
-  onMount(() => {
-    loadGoals()
-    loadCategories()
-  })
-
-  createEffect(() => {
-    void state.profileVersion
-    loadGoals()
-    loadCategories()
-  })
+  // Load on mount and reload on profile change — but only while visible. A hidden
+  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  refetchOnActive(
+    'goals',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      loadGoals()
+      loadCategories()
+    }
+  )
 
   // Memoized chart data
   const projectionGoals = createMemo(() => goals().filter((g) => g.monthly_contribution > 0))

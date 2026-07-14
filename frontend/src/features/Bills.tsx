@@ -63,6 +63,7 @@ import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
 import styles from './BillsPage.module.css'
@@ -109,7 +110,9 @@ export default function Bills() {
 
   // Bills resource — fetches bills + expense categories
   const [billsResource, { refetch: refetchBills, mutate: mutateBills }] = createResource(
-    () => state.profileVersion,
+    // Gated on visibility: a profile switch refetches now only while this page is
+    // visible; hidden, it is marked stale and refetches once on the next show.
+    gatedSource('bills', () => state.profileVersion),
     async () => {
       const [allRes, categoryRes] = await Promise.all([
         apiGet<Bill[]>('/api/bills'),

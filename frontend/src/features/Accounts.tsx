@@ -38,6 +38,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { gatedSource } from '../core/pageVisibility'
 import styles from './AccountsPage.module.css'
 
 interface Account {
@@ -58,7 +59,9 @@ export default function Accounts() {
 
   // Accounts resource — fetches accounts, transactions, and profiles
   const [accountsResource, { refetch: refetchAccounts }] = createResource(
-    () => state.profileVersion,
+    // Gated on visibility: a profile switch refetches this page now only if it is
+    // visible; hidden, it is marked stale and refetches once on the next show.
+    gatedSource('accounts', () => state.profileVersion),
     async () => {
       const [accountsRes, txRes, profilesRes] = await Promise.all([
         apiGet<Account[]>('/api/accounts'),

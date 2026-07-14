@@ -21,6 +21,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Show } fro
 import PeriodBar from '../components/PeriodBar'
 import { apiGet, apiPost, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { toYYYYMM } from '../utils/period'
 import styles from './BillCalendar.module.css'
@@ -82,7 +83,13 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
   })
 
   const [calendarData, { refetch: refetchCalendar }] = createResource(
-    () => ({ year: focus().year, month: focus().month, v: state.profileVersion }),
+    // Rendered inside Bills, so gate on the 'bills' page: while Bills is hidden, a
+    // focus-month or profile change is deferred and refetched once when Bills is shown.
+    gatedSource('bills', () => ({
+      year: focus().year,
+      month: focus().month,
+      v: state.profileVersion,
+    })),
     async ({ year, month }) => {
       const data = await apiGet<CalendarData>(`/api/bills/calendar?year=${year}&month=${month}`)
       return data

@@ -46,6 +46,7 @@ import { apiPut } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
+import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
@@ -114,11 +115,18 @@ export default function Transactions() {
   const [totalAmount, setTotalAmount] = createSignal(0)
   const [showReconciled, setShowReconciled] = createSignal(true)
 
-  // Reload when profile selection changes
-  createEffect(() => {
-    void state.profileVersion
-    refreshTransactions()
-  })
+  // Reload on profile change — but only while visible; a hidden page defers its
+  // refetch until next shown (keep-alive fan-out guard). The focus period drives a
+  // client-side filter (periodRange), so it needs no refetch here.
+  refetchOnActive(
+    'transactions',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      refreshTransactions()
+    }
+  )
 
   // Calculate filtered-period totals (respects all active filters). Sum the
   // base-currency value so mixed-currency rows add up correctly (not raw amount).

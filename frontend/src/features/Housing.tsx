@@ -26,7 +26,7 @@
  * Housing Component
  * Manages housing-related expenses and property information
  */
-import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import RenewalCycle from '../components/RenewalCycle'
@@ -34,6 +34,7 @@ import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
+import { refetchOnActive } from '../core/pageVisibility'
 import styles from './HousingPage.module.css'
 
 interface Housing {
@@ -208,15 +209,18 @@ export default function HousingForm() {
     return formatCurrency(amount)
   }
 
-  onMount(() => {
-    loadHousings()
-    loadSubscriptions()
-  })
-  createEffect(() => {
-    void state.profileVersion
-    void loadHousings()
-    void loadSubscriptions()
-  })
+  // Load on mount and reload on profile change — but only while visible. A hidden
+  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  refetchOnActive(
+    'housing',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      void loadHousings()
+      void loadSubscriptions()
+    }
+  )
 
   return (
     <div class={`page page-housing page-enter ${styles.housingPage}`}>

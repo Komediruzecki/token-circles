@@ -3,7 +3,7 @@
  * Tracks stock/ETF holdings with real-time prices and gain/loss
  */
 
-import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import { createMemo, createSignal, For, Show } from 'solid-js'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import {
   apiDelete,
@@ -18,6 +18,7 @@ import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
 import { convertToBase } from '../core/currency'
+import { refetchOnActive } from '../core/pageVisibility'
 import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
 
@@ -103,13 +104,17 @@ export default function Portfolio() {
     }
   }
 
-  onMount(() => {
-    loadData()
-  })
-  createEffect(() => {
-    void state.profileVersion
-    void loadData()
-  })
+  // Load on mount and reload on profile change — but only while visible. A hidden
+  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  refetchOnActive(
+    'portfolio',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      void loadData()
+    }
+  )
 
   const openAddModal = () => {
     setEditingHolding(null)

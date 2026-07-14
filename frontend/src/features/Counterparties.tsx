@@ -2,11 +2,12 @@
  * Counterparties Page
  * Aggregates beneficiary/payor data to show "who owes who"
  */
-import { createEffect, createMemo, createSignal, For, onMount } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
 import CounterpartyMeridian from '../components/CounterpartyMeridian'
 import { formatCurrency } from '../core/api'
 import { apiGet } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { refetchOnActive } from '../core/pageVisibility'
 import styles from './CounterpartiesPage.module.css'
 
 interface Counterparty {
@@ -39,13 +40,18 @@ export default function Counterparties() {
     }
   }
 
-  onMount(() => {
-    void loadData()
-  })
-  createEffect(() => {
-    void state.profileVersion
-    void loadData()
-  })
+  // Reload on profile change — but only when this page is visible. A hidden page is
+  // marked stale and refetches once when next shown, so a profile switch no longer
+  // fans out to every mounted keep-alive page at once.
+  refetchOnActive(
+    'counterparties',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      void loadData()
+    }
+  )
 
   const handleSort = (field: SortField) => {
     if (sortField() === field) {
