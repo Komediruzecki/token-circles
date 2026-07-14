@@ -35,19 +35,24 @@
  * Handles CSV/Excel file and Google Sheets import with full 12-field column mapping, duplicate detection, and category type review
  */
 
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
 import { createStore, produce, reconcile } from 'solid-js/store'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
+import { useAppState } from '../core/appStore'
 import {
   detectBank,
   listAdapters,
   loadCategoryRules,
+  loadRuleGroup,
   loadTransferRules,
   processFiles,
   resetBankImportRules,
   resolveTargetAccount,
+  RULE_GROUPS,
+  rulesForGroup,
   saveCategoryRules,
+  saveRuleGroup,
   saveTransferRules,
   toDetectInput,
 } from '../core/bankImport'
@@ -175,6 +180,7 @@ export default function Import() {
   // Stores (not signals) so editing one row's field updates it in place — a signal
   // + .map() would replace the row object and make <For> recreate the DOM node,
   // dropping input focus on every keystroke.
+  const [ruleGroup, setRuleGroup] = createSignal(loadRuleGroup())
   const [categoryRuleDraft, setCategoryRuleDraft] = createStore<
     { category: string; keywords: string }[]
   >([])
@@ -984,6 +990,20 @@ export default function Import() {
     }
   }
 
+  const state = useAppState()
+  // Keep-alive means onMount fires once. Re-load accounts whenever the user
+  // returns to the Import page (e.g. after creating an account elsewhere), so a
+  // freshly created account appears without a full page reload.
+  let skipFirstAccountsReload = true
+  createEffect(() => {
+    const onImport = state.page === 'import'
+    if (skipFirstAccountsReload) {
+      skipFirstAccountsReload = false
+      return
+    }
+    if (onImport) void loadBankAccounts()
+  })
+
   onMount(() => {
     // Initialize default category types with discovered categories
     const categories = detectCategories()
@@ -1021,6 +1041,42 @@ export default function Import() {
             gap: '14px',
           }}
         >
+          <div>
+            <label class={styles.mappingLabel} style={{ 'margin-bottom': '6px', display: 'block' }}>
+              Mapping
+            </label>
+            <select
+              class={styles.pageSize}
+              value={ruleGroup()}
+              onChange={(e) => {
+                const id = e.currentTarget.value
+                // Switching re-seeds the rules to the group's defaults; warn first if the user
+                // has edited their rules, so a stray dropdown change can't silently wipe them.
+                const customized =
+                  JSON.stringify(loadCategoryRules()) !== JSON.stringify(rulesForGroup(ruleGroup()))
+                if (
+                  customized &&
+                  !window.confirm(
+                    "Switching the mapping replaces your edited category rules with the selected group's defaults. Your edits will be lost. Continue?"
+                  )
+                ) {
+                  e.currentTarget.value = ruleGroup()
+                  return
+                }
+                setRuleGroup(id)
+                saveRuleGroup(id)
+                saveCategoryRules(rulesForGroup(id))
+                loadBankRules()
+                opts.onRecalculate?.()
+              }}
+            >
+              <For each={RULE_GROUPS}>{(g) => <option value={g.id}>{g.label}</option>}</For>
+            </select>
+            <p class={styles.dropzoneHint} style={{ 'margin-top': '6px' }}>
+              Choose the base rules: Croatian merchants, or a general Worldwide (English) set.
+              Switching replaces the editable rules below with that set; refine them afterward.
+            </p>
+          </div>
           <div>
             <p class={styles.mappingLabel} style={{ 'margin-bottom': '6px' }}>
               Category keyword rules
@@ -1867,9 +1923,26 @@ export default function Import() {
           </div>
 
           {bankAccounts().length === 0 && (
-            <p class={styles.error} style={{ 'margin-top': '8px' }}>
-              You have no accounts yet. Create an account first so statements can be linked to it.
-            </p>
+            <div
+              style={{
+                'margin-top': '8px',
+                display: 'flex',
+                'flex-wrap': 'wrap',
+                'align-items': 'center',
+                gap: '10px',
+                'font-size': '13px',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span>You have no accounts yet — create one so statements can be linked to it.</span>
+              <a
+                href="#accounts"
+                class={`${styles.btn} ${styles.btnSecondary}`}
+                style={{ 'text-decoration': 'none' }}
+              >
+                Create an account
+              </a>
+            </div>
           )}
 
           <Show when={bankFiles().length > 0}>

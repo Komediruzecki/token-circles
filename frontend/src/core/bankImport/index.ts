@@ -24,11 +24,22 @@ export { processFiles, toDetectInput } from './process'
 export type { BankFileInput, ProcessOptions, ProcessResult, FileResult } from './process'
 export { resolveTargetAccount, statementSignature } from './accountResolver'
 export type { AccountLike } from './accountResolver'
-export { DEFAULT_CATEGORY_RULES, matchCategory, categorize } from './categoryRules'
+export {
+  DEFAULT_CATEGORY_RULES,
+  DEFAULT_CATEGORY_RULES_WORLDWIDE,
+  RULE_GROUPS,
+  DEFAULT_RULE_GROUP_ID,
+  rulesForGroup,
+  matchCategory,
+  categorize,
+} from './categoryRules'
+export type { RuleGroup } from './categoryRules'
 export { DEFAULT_TRANSFER_RULES, isTransfer, resolveCounterpart } from './transferRules'
 export {
   loadCategoryRules,
   saveCategoryRules,
+  loadRuleGroup,
+  saveRuleGroup,
   loadTransferRules,
   saveTransferRules,
   resetBankImportRules,

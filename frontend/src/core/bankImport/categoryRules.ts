@@ -152,3 +152,196 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     keywords: ['zet', 'garaža', 'garaza', 'parking', 'hak', 'enc', 'autoceste', 'badminton'],
   },
 ]
+
+/**
+ * A general, English/worldwide seed for users outside Croatia — common global
+ * merchants and generic keywords. Deliberately modest; users refine it in the
+ * rules editor. Longest-keyword-wins, so "amazon prime" → Subscriptions beats a
+ * bare "amazon" → Shopping.
+ */
+export const DEFAULT_CATEGORY_RULES_WORLDWIDE: CategoryRuleSet = [
+  {
+    category: 'Groceries',
+    keywords: [
+      'walmart',
+      'costco',
+      'aldi',
+      'lidl',
+      'tesco',
+      'sainsbury',
+      'kroger',
+      'carrefour',
+      'whole foods',
+      'trader joe',
+      'supermarket',
+      'grocery',
+      'safeway',
+    ],
+  },
+  {
+    category: 'Dining',
+    keywords: [
+      'mcdonald',
+      'burger king',
+      'kfc',
+      'starbucks',
+      'subway',
+      'domino',
+      'pizza',
+      'restaurant',
+      'cafe',
+      'coffee',
+      'uber eats',
+      'doordash',
+      'deliveroo',
+      'grubhub',
+      'chipotle',
+    ],
+  },
+  {
+    category: 'Transport',
+    keywords: ['uber', 'lyft', 'bolt', 'taxi', 'transit', 'metro', 'parking', 'toll', 'railway'],
+  },
+  {
+    category: 'Fuel',
+    keywords: ['shell', 'esso', 'exxon', 'chevron', 'texaco', 'gas station', 'petrol', 'fuel'],
+  },
+  {
+    category: 'Subscriptions',
+    keywords: [
+      'netflix',
+      'spotify',
+      'youtube premium',
+      'amazon prime',
+      'disney',
+      'hbo',
+      'hulu',
+      'audible',
+      'patreon',
+      'openai',
+      'anthropic',
+      'github',
+      'google one',
+      'icloud',
+      'dropbox',
+      'adobe',
+      'microsoft 365',
+    ],
+  },
+  {
+    category: 'Shopping',
+    keywords: [
+      'amazon',
+      'ebay',
+      'aliexpress',
+      'etsy',
+      'ikea',
+      'zara',
+      'h&m',
+      'nike',
+      'adidas',
+      'best buy',
+      'shein',
+    ],
+  },
+  {
+    category: 'Utilities',
+    keywords: [
+      'electric',
+      'electricity',
+      'water bill',
+      'gas bill',
+      'internet',
+      'broadband',
+      'vodafone',
+      'verizon',
+      't-mobile',
+      'comcast',
+      'utility',
+    ],
+  },
+  {
+    category: 'Health',
+    keywords: ['pharmacy', 'cvs', 'walgreens', 'boots', 'clinic', 'hospital', 'dental', 'doctor'],
+  },
+  {
+    category: 'Entertainment',
+    keywords: [
+      'cinema',
+      'movie',
+      'theatre',
+      'steam',
+      'playstation',
+      'xbox',
+      'nintendo',
+      'ticketmaster',
+    ],
+  },
+  {
+    category: 'Travel',
+    keywords: [
+      'airbnb',
+      'booking.com',
+      'expedia',
+      'hotel',
+      'airlines',
+      'ryanair',
+      'easyjet',
+      'flight',
+      'hertz',
+    ],
+  },
+  {
+    category: 'Bank Fees',
+    keywords: [
+      'bank fee',
+      'service charge',
+      'atm fee',
+      'overdraft',
+      'interest charge',
+      'monthly fee',
+    ],
+  },
+  {
+    category: 'Income',
+    keywords: ['salary', 'payroll', 'wages', 'direct deposit', 'refund', 'reimbursement'],
+  },
+  {
+    category: 'Transfers',
+    keywords: [
+      'transfer',
+      'zelle',
+      'venmo',
+      'paypal',
+      'wise',
+      'revolut',
+      'cash app',
+      'wire transfer',
+    ],
+  },
+  {
+    category: 'Housing',
+    // NB: avoid a bare "rent" — as a substring it false-matches "current" (e.g. "Current Account").
+    keywords: ['rent payment', 'monthly rent', 'mortgage', 'landlord', 'property management'],
+  },
+]
+
+/** A named, selectable category-rule group (mapping). */
+export interface RuleGroup {
+  id: string
+  label: string
+  rules: CategoryRuleSet
+}
+
+/** Built-in mapping groups the user can pick from in the import UI. */
+export const RULE_GROUPS: RuleGroup[] = [
+  { id: 'croatian', label: 'Croatian', rules: DEFAULT_CATEGORY_RULES },
+  { id: 'worldwide', label: 'Worldwide (English)', rules: DEFAULT_CATEGORY_RULES_WORLDWIDE },
+]
+
+export const DEFAULT_RULE_GROUP_ID = 'croatian'
+
+/** The seed ruleset for a group id (falls back to the Croatian default). */
+export function rulesForGroup(id: string | null | undefined): CategoryRuleSet {
+  return RULE_GROUPS.find((g) => g.id === id)?.rules ?? DEFAULT_CATEGORY_RULES
+}
