@@ -1,5 +1,6 @@
-import { createSignal } from 'solid-js'
+import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
+import { setSettingsTab } from '../core/settingsStore'
 import styles from './ProfileModal.module.css'
 
 export interface ProfileModalProps {
@@ -11,6 +12,15 @@ export default function ProfileModal(props: ProfileModalProps) {
   const [name, setName] = createSignal('')
   const [error, setError] = createSignal('')
   const [loading, setLoading] = createSignal(false)
+
+  // The worker rejects a create past the plan's profile cap with "…Upgrade for more." — when
+  // that happens, offer a direct jump to Settings → Billing instead of a dead-end error.
+  const isPlanCapError = (): boolean => /Upgrade for more/i.test(error())
+  const goToBilling = () => {
+    setSettingsTab('billing')
+    props.onClose()
+    window.location.hash = '#settings'
+  }
 
   const handleSubmit = async () => {
     const n = name().trim()
@@ -55,6 +65,11 @@ export default function ProfileModal(props: ProfileModalProps) {
           />
         </div>
         {error() && <div class={styles.error}>{error()}</div>}
+        <Show when={isPlanCapError()}>
+          <button class={styles.upgradeBtn} onClick={goToBilling} type="button">
+            Upgrade
+          </button>
+        </Show>
         <div class={styles.actions}>
           <button class={styles.btnCancel} onClick={props.onClose} type="button">
             Cancel

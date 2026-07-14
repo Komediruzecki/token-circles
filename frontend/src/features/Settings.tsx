@@ -33,17 +33,21 @@ import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import SupportContact from '../components/SupportContact'
+import Toggle from '../components/Toggle'
 import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { period } from '../core/periodStore'
+import { setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { toYYYYMM } from '../utils/period'
 import styles from './SettingsPage.module.css'
+import type { JSX } from 'solid-js'
+import type { SettingsTab } from '../core/settingsStore'
 import type { ChartExportSettings } from '../utils/chartExportSettings'
 
 // Account self-deletion is dev-only for now: visible on the dev domain + local builds, hidden on the
@@ -196,6 +200,144 @@ function Reports() {
   )
 }
 
+// ── Inline icon set (stroke-based, inherit currentColor; sized by container CSS) ──
+function Svg(props: { children: JSX.Element }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      {props.children}
+    </svg>
+  )
+}
+
+// Rail (navigation) icons — reuse the approved mockup's paths.
+const IconGeneral = () => (
+  <Svg>
+    <path d="M4 6h16M4 12h16M4 18h16" />
+    <circle cx="8" cy="6" r="2" fill="currentColor" stroke="none" />
+    <circle cx="16" cy="12" r="2" fill="currentColor" stroke="none" />
+    <circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
+  </Svg>
+)
+const IconExports = () => (
+  <Svg>
+    <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+  </Svg>
+)
+const IconBilling = () => (
+  <Svg>
+    <rect x="3" y="6" width="18" height="12" rx="2" />
+    <path d="M3 10h18" />
+  </Svg>
+)
+const IconAbout = () => (
+  <Svg>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 16v-4M12 8h.01" />
+  </Svg>
+)
+
+// Card-header (halo) + action icons — semantic, theme-agnostic.
+const IconSun = () => (
+  <Svg>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2" />
+  </Svg>
+)
+const IconCoin = () => (
+  <Svg>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 6.5v11" />
+    <path d="M15 9.3a3.4 3 0 00-3-1.3c-1.7 0-3 .9-3 2s1.3 2 3 2 3 .9 3 2-1.3 2-3 2a3.4 3 0 01-3-1.3" />
+  </Svg>
+)
+const IconDatabase = () => (
+  <Svg>
+    <ellipse cx="12" cy="5" rx="8" ry="3" />
+    <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+    <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+  </Svg>
+)
+const IconMail = () => (
+  <Svg>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="m3 7 9 6 9-6" />
+  </Svg>
+)
+const IconFileText = () => (
+  <Svg>
+    <path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V8z" />
+    <path d="M14 3v5h5M8 13h8M8 17h5" />
+  </Svg>
+)
+const IconImage = () => (
+  <Svg>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="m21 15-5-5L5 21" />
+  </Svg>
+)
+const IconDownload = () => (
+  <Svg>
+    <path d="M12 3v12" />
+    <path d="m7 11 5 4 5-4" />
+    <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+  </Svg>
+)
+const IconUsers = () => (
+  <Svg>
+    <circle cx="9" cy="8" r="3.2" />
+    <path d="M3.5 20a5.5 5.5 0 0111 0" />
+    <path d="M16 5.2a3.2 3.2 0 010 6M17.5 20a5.5 5.5 0 00-3-4.9" />
+  </Svg>
+)
+const IconTerminal = () => (
+  <Svg>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="m7 9 3 3-3 3M13 15h4" />
+  </Svg>
+)
+const IconCheck = () => (
+  <Svg>
+    <path d="M5 12l5 5L20 7" />
+  </Svg>
+)
+const IconSend = () => (
+  <Svg>
+    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+  </Svg>
+)
+const IconBell = () => (
+  <Svg>
+    <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M10 21a2 2 0 004 0" />
+  </Svg>
+)
+
+// Shared card header: halo icon + title + optional description / move tag.
+function CardHead(props: { icon: JSX.Element; title: string; desc?: string; tag?: string }) {
+  return (
+    <div class={styles.cardHead}>
+      <span class={styles.halo}>{props.icon}</span>
+      <div class={styles.cardHeadText}>
+        <h2 class={styles.cardHeadTitle}>{props.title}</h2>
+        <Show when={props.desc}>
+          <p class={styles.cardHeadDesc}>{props.desc}</p>
+        </Show>
+      </div>
+      <Show when={props.tag}>
+        <span class={styles.moveTag}>{props.tag}</span>
+      </Show>
+    </div>
+  )
+}
+
 export default function Settings() {
   // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
   // not a hardcoded USD that mismatches how amounts actually render.
@@ -219,11 +361,27 @@ export default function Settings() {
     username?: string
     auth_provider?: string
   } | null>(null)
-  // Settings tabs: General (settings) / Exports (data + household) / Billing (plan).
-  type SettingsTab = 'general' | 'exports' | 'billing'
+  // Settings tabs: General / Exports / Billing / About. Billing is server-mode only; About is
+  // always available. The rail renders visibleTabs(); each card group is gated by activeTab().
   const [activeTab, setActiveTab] = createSignal<SettingsTab>('general')
-  // Display value for a card belonging to tab `t` (undefined = visible, 'none' = hidden).
-  const tabSel = (t: SettingsTab): string | undefined => (activeTab() === t ? undefined : 'none')
+  const tabs: Array<{ id: SettingsTab; label: string; icon: () => JSX.Element }> = [
+    { id: 'general', label: 'General', icon: IconGeneral },
+    { id: 'exports', label: 'Exports', icon: IconExports },
+    { id: 'billing', label: 'Billing', icon: IconBilling },
+    { id: 'about', label: 'About', icon: IconAbout },
+  ]
+  const visibleTabs = (): typeof tabs =>
+    tabs.filter((t) => t.id !== 'billing' || storageMode() === 'self-hosted')
+
+  // Honor a cross-component request to open a specific tab (e.g. ProfileModal → Billing),
+  // then consume it so re-entering Settings later does not force the tab again.
+  createEffect(() => {
+    const requested = settingsTab()
+    if (requested) {
+      setActiveTab(requested)
+      setSettingsTab(null)
+    }
+  })
 
   // ── Billing (server mode only; the worker exposes /api/billing/*) ──
   const [billing, setBilling] = createSignal<{
@@ -429,14 +587,6 @@ export default function Settings() {
   const handleLocalCurrencyChange = (event: Event) => {
     const target = event.target as HTMLSelectElement
     setLocalCurrency(target.value)
-  }
-
-  // Handle dark mode toggle
-  const handleDarkModeToggle = (event: Event) => {
-    const target = event.target as HTMLInputElement
-    const checked = target.checked
-    setDarkMode(checked)
-    theme.setTheme(checked ? 'dark' : 'light')
   }
 
   // Handle storage type change
@@ -697,212 +847,99 @@ export default function Settings() {
         </h1>
       </div>
       <div class={styles.pageContent}>
-        <div
-          style={{
-            display: 'flex',
-            gap: '4px',
-            'border-bottom': '1px solid var(--border)',
-            'margin-bottom': '20px',
-          }}
-          data-tour="settings-tabs"
-        >
-          {(['general', 'exports', 'billing'] as const)
-            .filter((t) => t !== 'billing' || storageMode() === 'self-hosted')
-            .map((t) => (
-              <button
-                type="button"
-                onclick={() => setActiveTab(t)}
-                style={{
-                  padding: '10px 16px',
-                  background: 'transparent',
-                  border: 'none',
-                  'border-bottom':
-                    activeTab() === t ? '2px solid var(--primary)' : '2px solid transparent',
-                  color: activeTab() === t ? 'var(--text)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  'font-size': '14px',
-                  'font-weight': activeTab() === t ? 600 : 400,
-                  'margin-bottom': '-1px',
-                }}
-              >
-                {t === 'general' ? 'General' : t === 'exports' ? 'Exports' : 'Billing'}
-              </button>
-            ))}
-        </div>
-        <div class={styles.settingsGrid}>
-          <div class={styles.settingsCol}>
-            <Show when={activeTab() === 'billing' && storageMode() === 'self-hosted'}>
-              <div class={styles.card}>
-                <div class={styles.settingsSection}>
-                  <div class={styles.settingsSectionTitle}>Plan &amp; Billing</div>
-                  <p
-                    style={`margin: 4px 0 16px; font-size: 13px; color: ${billingStatusLine().color};`}
-                  >
-                    {billingStatusLine().text}
-                  </p>
-                  <BillingPlans
-                    currentPlan={() => billing()?.plan ?? 'free'}
-                    configured={() => billing()?.configured ?? false}
-                    availablePlans={() => billing()?.availablePlans ?? []}
-                    busyKey={billingBusyKey}
-                    onUpgrade={(plan, interval) =>
-                      redirectToStripe('/api/billing/checkout', 'Could not start checkout', plan, {
-                        plan,
-                        interval,
-                      })
-                    }
-                    onManage={() =>
-                      redirectToStripe(
-                        '/api/billing/portal',
-                        'Could not open billing portal',
-                        'manage'
-                      )
-                    }
-                  />
+        <div class={styles.layout}>
+          <nav class={styles.rail} data-tour="settings-tabs" aria-label="Settings sections">
+            <For each={visibleTabs()}>
+              {(tab) => (
+                <button
+                  type="button"
+                  class={styles.railBtn}
+                  classList={{ [styles.railBtnActive]: activeTab() === tab.id }}
+                  aria-current={activeTab() === tab.id ? 'page' : undefined}
+                  title={tab.label}
+                  onclick={() => setActiveTab(tab.id)}
+                >
+                  {tab.icon()}
+                  <small class={styles.railCaption}>{tab.label}</small>
+                </button>
+              )}
+            </For>
+          </nav>
+
+          <div class={styles.content}>
+            {/* ─────────────── GENERAL ─────────────── */}
+            <Show when={activeTab() === 'general'}>
+              <div class={styles.card} data-tour="settings-theme">
+                <CardHead icon={<IconSun />} title="Appearance" desc="Theme for the whole app." />
+                <div class={styles.row}>
+                  <span class={styles.rowLabel}>Theme</span>
+                  <span class={styles.segmented}>
+                    <span>Light</span>
+                    <Toggle
+                      id="setting-dark-mode"
+                      checked={darkMode}
+                      onChange={(v) => {
+                        setDarkMode(v)
+                        theme.setTheme(v ? 'dark' : 'light')
+                      }}
+                      aria-label="Dark mode"
+                    />
+                    <span>Dark</span>
+                  </span>
                 </div>
               </div>
-            </Show>
-            <Show
-              when={
-                activeTab() === 'billing' &&
-                storageMode() === 'self-hosted' &&
-                ACCOUNT_DELETION_ENABLED
-              }
-            >
-              <div class={styles.card}>
-                <div class={styles.settingsSection}>
-                  <AccountDeletion />
-                </div>
+
+              <div class={styles.card} data-tour="settings-currency">
+                <CardHead
+                  icon={<IconCoin />}
+                  title="Currency"
+                  desc="Your default display currency."
+                />
+                <select
+                  class={styles.formControl}
+                  value={localCurrency()}
+                  onchange={handleLocalCurrencyChange}
+                  style="max-width: 340px;"
+                >
+                  <option value="USD">USD - US Dollar</option>
+                  <option value="EUR">EUR - Euro</option>
+                  <option value="GBP">GBP - British Pound</option>
+                  <option value="JPY">JPY - Japanese Yen</option>
+                  <option value="CAD">CAD - Canadian Dollar</option>
+                  <option value="AUD">AUD - Australian Dollar</option>
+                  <option value="CHF">CHF - Swiss Franc</option>
+                  <option value="CNY">CNY - Chinese Yuan</option>
+                  <option value="INR">INR - Indian Rupee</option>
+                  <option value="BRL">BRL - Brazilian Real</option>
+                  <option value="MXN">MXN - Mexican Peso</option>
+                  <option value="SGD">SGD - Singapore Dollar</option>
+                  <option value="HKD">HKD - Hong Kong Dollar</option>
+                  <option value="KRW">KRW - South Korean Won</option>
+                  <option value="SEK">SEK - Swedish Krona</option>
+                  <option value="NOK">NOK - Norwegian Krone</option>
+                  <option value="DKK">DKK - Danish Krone</option>
+                  <option value="NZD">NZD - New Zealand Dollar</option>
+                  <option value="ZAR">ZAR - South African Rand</option>
+                  <option value="PLN">PLN - Polish Zloty</option>
+                </select>
               </div>
-            </Show>
-            <Show when={activeTab() === 'general' && storageMode() === 'self-hosted' && notif()}>
-              <div class={styles.card}>
-                <div class={styles.settingsSection}>
-                  <div class={styles.settingsSectionTitle}>Email Reminders</div>
-                  <Show
-                    when={emailAlertsLocked()}
-                    fallback={
-                      <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
-                        Budget alerts and a periodic spending report, sent to your email. Requires a
-                        paid plan.
-                      </p>
-                    }
-                  >
-                    <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
-                      Email alerts are a Premium feature.{' '}
-                      <button
-                        onclick={() => setActiveTab('billing')}
-                        style="background:none; border:none; padding:0; color:var(--accent); cursor:pointer; text-decoration:underline; font:inherit;"
-                      >
-                        See plans
-                      </button>{' '}
-                      to enable budget alerts and spending reports.
-                    </p>
-                  </Show>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>Email address</label>
-                    <input
-                      class={styles.formControl}
-                      type="email"
-                      value={notif()!.email}
-                      onInput={(e) => setNotif({ ...notif()!, email: e.currentTarget.value })}
-                      placeholder="you@example.com"
-                      style="max-width: 320px;"
-                    />
-                  </div>
-                  <label style="display:flex; align-items:center; gap:8px; margin:8px 0; cursor:pointer;">
-                    <input
-                      type="checkbox"
-                      checked={notif()!.emailNotifications}
-                      disabled={emailAlertsLocked()}
-                      onChange={(e) =>
-                        setNotif({ ...notif()!, emailNotifications: e.currentTarget.checked })
-                      }
-                    />
-                    <span>Enable email notifications</span>
-                  </label>
-                  <label
-                    style={`display:flex; align-items:center; gap:8px; margin:8px 0 8px 20px; cursor:pointer; opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={notif()!.budgetAlerts}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(e) =>
-                        setNotif({ ...notif()!, budgetAlerts: e.currentTarget.checked })
-                      }
-                    />
-                    <span>Budget alerts (weekly)</span>
-                  </label>
-                  <label
-                    style={`display:flex; align-items:center; gap:8px; margin:8px 0 8px 20px; cursor:pointer; opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={notif()!.spendingReport}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(e) =>
-                        setNotif({ ...notif()!, spendingReport: e.currentTarget.checked })
-                      }
-                    />
-                    <span>Spending report (biweekly)</span>
-                  </label>
-                  <div
-                    style={`display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; ${emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : ''}`}
-                  >
-                    <button
-                      class={styles.btnPrimary}
-                      onclick={() => void saveNotifications()}
-                      disabled={notifBusy()}
-                    >
-                      {notifBusy() ? 'Saving…' : 'Save'}
-                    </button>
-                    <button
-                      class={styles.btnSecondary}
-                      onclick={() => void sendTestEmail()}
-                      disabled={notifBusy()}
-                    >
-                      Send test email
-                    </button>
-                    <button
-                      class={styles.btnSecondary}
-                      onclick={() => void sendTestEmail('spending')}
-                      disabled={notifBusy()}
-                      title="Emails you the real spending report, built from your data, right now"
-                    >
-                      Preview spending report
-                    </button>
-                    <button
-                      class={styles.btnSecondary}
-                      onclick={() => void sendTestEmail('budget')}
-                      disabled={notifBusy()}
-                      title="Emails you the real budget alert, built from your data, right now"
-                    >
-                      Preview budget alert
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </Show>
-            <div
-              class={styles.card}
-              style={{ display: tabSel('general') }}
-              data-tour="settings-storage"
-            >
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Database Storage</div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Storage Mode</label>
-                  <select
-                    class={styles.formControl}
-                    value={storageMode()}
-                    onchange={handleStorageModeChange}
-                    style="max-width: 250px; width: 100%;"
-                  >
-                    <option value="self-hosted">Server (Backend Database)</option>
-                    <option value="serverless">Local (Browser Storage)</option>
-                  </select>
-                </div>
+
+              <div class={styles.card} data-tour="settings-storage">
+                <CardHead
+                  icon={<IconDatabase />}
+                  title="Storage"
+                  desc="Where your data lives."
+                  tag="PDF reports moved to Exports"
+                />
+                <select
+                  class={styles.formControl}
+                  value={storageMode()}
+                  onchange={handleStorageModeChange}
+                  style="max-width: 340px;"
+                >
+                  <option value="self-hosted">Server (Backend Database)</option>
+                  <option value="serverless">Local (Browser Storage)</option>
+                </select>
                 {showStorageWarning() && storageMode() === 'serverless' && (
                   <div class={styles.warningBox}>
                     <strong>Switch to Local Mode</strong>
@@ -910,17 +947,19 @@ export default function Settings() {
                       Your data will be completely offline and stored in your browser's IndexedDB.
                       You will not be able to sync across devices unless you export/import manually.
                     </p>
-                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;">
-                      <input
-                        type="checkbox"
-                        checked={migrateDataEnabled()}
-                        onchange={(e) => setMigrateDataEnabled(e.currentTarget.checked)}
-                        style="width: 16px; height: 16px; cursor: pointer;"
-                      />
-                      <span style="font-size: 13px; color: var(--text-secondary);">
+                    <div class={styles.row}>
+                      <span
+                        class={styles.rowLabel}
+                        style="font-size: 13px; color: var(--text-secondary);"
+                      >
                         Migrate existing data from the backend to browser storage
                       </span>
-                    </label>
+                      <Toggle
+                        checked={migrateDataEnabled}
+                        onChange={(v) => setMigrateDataEnabled(v)}
+                        aria-label="Migrate existing data to browser storage"
+                      />
+                    </div>
                     <button
                       class={styles.btnPrimary}
                       onclick={applyStorageMode}
@@ -942,17 +981,19 @@ export default function Settings() {
                       Your data will be stored on the backend SQLite server. You need the backend
                       server running for this mode to work.
                     </p>
-                    <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer;">
-                      <input
-                        type="checkbox"
-                        checked={migrateDataEnabled()}
-                        onchange={(e) => setMigrateDataEnabled(e.currentTarget.checked)}
-                        style="width: 16px; height: 16px; cursor: pointer;"
-                      />
-                      <span style="font-size: 13px; color: var(--text-secondary);">
+                    <div class={styles.row}>
+                      <span
+                        class={styles.rowLabel}
+                        style="font-size: 13px; color: var(--text-secondary);"
+                      >
                         Migrate existing browser data to the backend server
                       </span>
-                    </label>
+                      <Toggle
+                        checked={migrateDataEnabled}
+                        onChange={(v) => setMigrateDataEnabled(v)}
+                        aria-label="Migrate existing browser data to the backend server"
+                      />
+                    </div>
                     <button
                       class={styles.btnPrimary}
                       onclick={applyStorageMode}
@@ -978,14 +1019,223 @@ export default function Settings() {
                   </p>
                 )}
               </div>
-            </div>
 
-            <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('exports') }}>
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Household View</div>
-                <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
-                  Select multiple profiles to view combined data across your household.
-                </p>
+              <Show when={storageMode() === 'self-hosted' && notif()}>
+                <div class={styles.card}>
+                  <CardHead
+                    icon={<IconMail />}
+                    title="Email reminders"
+                    desc="Budget alerts and spending reports, sent to your email."
+                  />
+                  <Show
+                    when={emailAlertsLocked()}
+                    fallback={
+                      <p style="margin: 0 0 12px; color: var(--text-secondary); font-size: 13px;">
+                        Budget alerts and a periodic spending report, sent to your email. Requires a
+                        paid plan.
+                      </p>
+                    }
+                  >
+                    <p style="margin: 0 0 12px; color: var(--text-secondary); font-size: 13px;">
+                      Email alerts are a Premium feature.{' '}
+                      <button
+                        onclick={() => setActiveTab('billing')}
+                        style="background:none; border:none; padding:0; color:var(--primary); cursor:pointer; text-decoration:underline; font:inherit;"
+                      >
+                        See plans
+                      </button>{' '}
+                      to enable budget alerts and spending reports.
+                    </p>
+                  </Show>
+                  <div class={styles.formGroup}>
+                    <label class={styles.formLabel}>Email address</label>
+                    <input
+                      class={styles.formControl}
+                      type="email"
+                      value={notif()!.email}
+                      onInput={(e) => setNotif({ ...notif()!, email: e.currentTarget.value })}
+                      placeholder="you@example.com"
+                      style="max-width: 340px;"
+                    />
+                  </div>
+                  <div class={styles.row}>
+                    <span class={styles.rowLabel}>Enable email notifications</span>
+                    <Toggle
+                      checked={() => notif()!.emailNotifications}
+                      disabled={emailAlertsLocked()}
+                      onChange={(v) => setNotif({ ...notif()!, emailNotifications: v })}
+                      aria-label="Enable email notifications"
+                    />
+                  </div>
+                  <div
+                    class={`${styles.row} ${styles.rowSub}`}
+                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
+                  >
+                    <span class={styles.rowLabel}>Budget alerts (weekly)</span>
+                    <Toggle
+                      checked={() => notif()!.budgetAlerts}
+                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
+                      onChange={(v) => setNotif({ ...notif()!, budgetAlerts: v })}
+                      aria-label="Budget alerts (weekly)"
+                    />
+                  </div>
+                  <div
+                    class={`${styles.row} ${styles.rowSub}`}
+                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
+                  >
+                    <span class={styles.rowLabel}>Spending report (biweekly)</span>
+                    <Toggle
+                      checked={() => notif()!.spendingReport}
+                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
+                      onChange={(v) => setNotif({ ...notif()!, spendingReport: v })}
+                      aria-label="Spending report (biweekly)"
+                    />
+                  </div>
+                  <div
+                    class={styles.actions}
+                    style={emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : undefined}
+                  >
+                    <button
+                      class={`${styles.iconAction} ${styles.iconActionPrimary}`}
+                      onclick={() => void saveNotifications()}
+                      disabled={notifBusy()}
+                      title="Save notification settings"
+                      aria-label="Save notification settings"
+                    >
+                      <IconCheck />
+                      {notifBusy() ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      class={styles.iconAction}
+                      onclick={() => void sendTestEmail()}
+                      disabled={notifBusy()}
+                      title="Send a test email to check delivery"
+                      aria-label="Send a test email to check delivery"
+                    >
+                      <IconSend />
+                      Test
+                    </button>
+                    <button
+                      class={styles.iconAction}
+                      onclick={() => void sendTestEmail('spending')}
+                      disabled={notifBusy()}
+                      title="Emails you the real spending report, built from your data, right now"
+                      aria-label="Emails you the real spending report, built from your data, right now"
+                    >
+                      <IconFileText />
+                      Spending
+                    </button>
+                    <button
+                      class={styles.iconAction}
+                      onclick={() => void sendTestEmail('budget')}
+                      disabled={notifBusy()}
+                      title="Emails you the real budget alert, built from your data, right now"
+                      aria-label="Emails you the real budget alert, built from your data, right now"
+                    >
+                      <IconBell />
+                      Budget
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </Show>
+
+            {/* ─────────────── EXPORTS ─────────────── */}
+            <Show when={activeTab() === 'exports'}>
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconFileText />}
+                  title="PDF reports"
+                  desc="Generate monthly, annual, tax and P&L PDFs."
+                />
+                <Reports />
+              </div>
+
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconImage />}
+                  title="Chart export"
+                  desc="How charts are exported across the app."
+                />
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Background</label>
+                  <select
+                    class={styles.formControl}
+                    value={chartExportSettings().background}
+                    onchange={(e) => {
+                      const updated: ChartExportSettings = {
+                        ...chartExportSettings(),
+                        background: e.currentTarget.value as ChartExportSettings['background'],
+                      }
+                      setChartExportSettings(updated)
+                      saveChartExportSettings(updated)
+                    }}
+                    style="max-width: 340px;"
+                  >
+                    <option value="transparent">Transparent</option>
+                    <option value="white">White</option>
+                    <option value="dark">Dark</option>
+                    <option value="theme">Match Theme</option>
+                  </select>
+                  <p style="margin-top: 6px; color: var(--text-secondary); font-size: 12px;">
+                    Sets the background color when exporting charts as PNG. Transparent works best
+                    for light backgrounds; choose White or Dark for consistent appearance.
+                  </p>
+                </div>
+              </div>
+
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconDownload />}
+                  title="Data management"
+                  desc="Export your data or reset the workspace."
+                />
+                <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 13px; color: var(--text-secondary);">
+                    Export Format:
+                  </label>
+                  <select
+                    class={styles.formControl}
+                    value={exportFormat()}
+                    onchange={(e) => setExportFormat(e.currentTarget.value)}
+                    style="max-width: 120px;"
+                  >
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <button class={styles.btnSecondary} onclick={handleExport}>
+                    Export All (JSON)
+                  </button>
+                  {[
+                    { type: 'transactions', label: 'Transactions' },
+                    { type: 'categories', label: 'Categories' },
+                    { type: 'budgets', label: 'Budgets' },
+                    { type: 'accounts', label: 'Accounts' },
+                    { type: 'loans', label: 'Loans' },
+                    { type: 'recurring', label: 'Recurring' },
+                  ].map(({ type, label }) => (
+                    <button
+                      class={styles.btnSecondary}
+                      onclick={() => handleCsvExport(type)}
+                      disabled={csvExporting() === type}
+                    >
+                      {csvExporting() === type
+                        ? 'Exporting...'
+                        : `${label} (${exportFormat().toUpperCase()})`}
+                    </button>
+                  ))}
+                </div>
+                <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
+              </div>
+
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconUsers />}
+                  title="Household view"
+                  desc="Combine data across multiple profiles."
+                />
                 <Show
                   when={allProfiles().length > 0}
                   fallback={
@@ -1025,11 +1275,11 @@ export default function Settings() {
                         >
                           <input
                             type="checkbox"
+                            class={styles.checkbox}
                             checked={householdIds().includes(profile.id)}
                             onchange={() => {
                               toggleHouseholdProfile(profile.id)
                             }}
-                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                           />
                           <Show
                             when={renamingProfileId() === profile.id}
@@ -1161,239 +1411,121 @@ export default function Settings() {
                   </div>
                 </Show>
               </div>
-            </div>
+            </Show>
 
-            <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('exports') }}>
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Data Management</div>
-                <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                  <label style="font-size: 13px; color: var(--text-secondary);">
-                    Export Format:
-                  </label>
-                  <select
-                    class={styles.formControl}
-                    value={exportFormat()}
-                    onchange={(e) => setExportFormat(e.currentTarget.value)}
-                    style="max-width: 120px;"
-                  >
-                    <option value="csv">CSV</option>
-                    <option value="json">JSON</option>
-                  </select>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                  <button class={styles.btnSecondary} onclick={handleExport}>
-                    Export All (JSON)
-                  </button>
-                  {[
-                    { type: 'transactions', label: 'Transactions' },
-                    { type: 'categories', label: 'Categories' },
-                    { type: 'budgets', label: 'Budgets' },
-                    { type: 'accounts', label: 'Accounts' },
-                    { type: 'loans', label: 'Loans' },
-                    { type: 'recurring', label: 'Recurring' },
-                  ].map(({ type, label }) => (
-                    <button
-                      class={styles.btnSecondary}
-                      onclick={() => handleCsvExport(type)}
-                      disabled={csvExporting() === type}
-                    >
-                      {csvExporting() === type
-                        ? 'Exporting...'
-                        : `${label} (${exportFormat().toUpperCase()})`}
-                    </button>
-                  ))}
-                </div>
+            {/* ─────────────── BILLING (server mode only) ─────────────── */}
+            <Show when={activeTab() === 'billing' && storageMode() === 'self-hosted'}>
+              <div class={styles.card}>
+                <CardHead icon={<IconBilling />} title="Plan & billing" />
+                <p
+                  style={`margin: 0 0 16px; font-size: 13px; color: ${billingStatusLine().color};`}
+                >
+                  {billingStatusLine().text}
+                </p>
+                <BillingPlans
+                  currentPlan={() => billing()?.plan ?? 'free'}
+                  configured={() => billing()?.configured ?? false}
+                  availablePlans={() => billing()?.availablePlans ?? []}
+                  busyKey={billingBusyKey}
+                  onUpgrade={(plan, interval) =>
+                    redirectToStripe('/api/billing/checkout', 'Could not start checkout', plan, {
+                      plan,
+                      interval,
+                    })
+                  }
+                  onManage={() =>
+                    redirectToStripe(
+                      '/api/billing/portal',
+                      'Could not open billing portal',
+                      'manage'
+                    )
+                  }
+                />
               </div>
-              <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
-            </div>
+              <Show when={ACCOUNT_DELETION_ENABLED}>
+                <div class={styles.card}>
+                  <AccountDeletion />
+                </div>
+              </Show>
+            </Show>
 
-            <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('general') }}>
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Developer Tools</div>
+            {/* ─────────────── ABOUT (always available) ─────────────── */}
+            <Show when={activeTab() === 'about'}>
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconAbout />}
+                  title="About"
+                  desc="Version, changelog and support."
+                />
+                <p style="margin: 0 0 0; font-size: 13px; color: var(--text-secondary);">
+                  {accountInfo()?.email || accountInfo()?.username ? (
+                    <>
+                      Signed in as{' '}
+                      <span style="color: var(--text); font-weight: 600;">
+                        {accountInfo()!.email || accountInfo()!.username}
+                      </span>
+                      {accountInfo()!.auth_provider === 'google' ? ' (Google account)' : ''}
+                    </>
+                  ) : storageMode() === 'serverless' ? (
+                    'Local mode — no account; data is stored in this browser only.'
+                  ) : (
+                    'Not signed in.'
+                  )}
+                </p>
                 <div class={styles.formGroup} style="margin-top: 16px;">
+                  <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
+                    View Changelog
+                  </button>
                   <button
                     class={styles.btnSecondary}
-                    onclick={() => {
-                      window.location.hash = showLogs() ? '#settings' : '#logs'
-                    }}
+                    style="margin-left: 8px;"
+                    onclick={() => setShowShortcuts(true)}
                   >
-                    {showLogs() ? 'Hide Logs' : 'View Logs'}
+                    Keyboard shortcuts
                   </button>
                   <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                    Access log viewer to debug issues on mobile devices or when console is not
-                    available.
+                    See what&apos;s new in each version of Token Circles, or the keyboard shortcuts.
                   </p>
-                </div>
-              </div>
-            </div>
-
-            <Show when={showLogs()}>
-              <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('general') }}>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                  <div class={styles.settingsSectionTitle} style="margin-bottom: 0;">
-                    Application Logs
-                  </div>
-                  <button
-                    class={styles.btnSecondary}
-                    style="padding: 4px 10px; font-size: 12px;"
-                    onclick={() => (window.location.hash = '#settings')}
-                  >
-                    Close
-                  </button>
-                </div>
-                <div style="max-height: 500px; overflow-y: auto;">
-                  <LogViewer />
-                </div>
-              </div>
-            </Show>
-          </div>
-
-          <div class={styles.settingsCol}>
-            <div class={styles.card} style={{ display: tabSel('general') }}>
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Reports</div>
-                <Reports />
-              </div>
-            </div>
-            <div
-              class={styles.card}
-              style={{ display: tabSel('general') }}
-              data-tour="settings-currency"
-            >
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>General</div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Local Currency</label>
-                  <select
-                    class={styles.formControl}
-                    value={localCurrency()}
-                    onchange={handleLocalCurrencyChange}
-                    style="max-width: 200px;"
-                  >
-                    <option value="USD">USD - US Dollar</option>
-                    <option value="EUR">EUR - Euro</option>
-                    <option value="GBP">GBP - British Pound</option>
-                    <option value="JPY">JPY - Japanese Yen</option>
-                    <option value="CAD">CAD - Canadian Dollar</option>
-                    <option value="AUD">AUD - Australian Dollar</option>
-                    <option value="CHF">CHF - Swiss Franc</option>
-                    <option value="CNY">CNY - Chinese Yuan</option>
-                    <option value="INR">INR - Indian Rupee</option>
-                    <option value="BRL">BRL - Brazilian Real</option>
-                    <option value="MXN">MXN - Mexican Peso</option>
-                    <option value="SGD">SGD - Singapore Dollar</option>
-                    <option value="HKD">HKD - Hong Kong Dollar</option>
-                    <option value="KRW">KRW - South Korean Won</option>
-                    <option value="SEK">SEK - Swedish Krona</option>
-                    <option value="NOK">NOK - Norwegian Krone</option>
-                    <option value="DKK">DKK - Danish Krone</option>
-                    <option value="NZD">NZD - New Zealand Dollar</option>
-                    <option value="ZAR">ZAR - South African Rand</option>
-                    <option value="PLN">PLN - Polish Zloty</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div
-              class={styles.card}
-              style={{ display: tabSel('general') }}
-              data-tour="settings-theme"
-            >
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Appearance</div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Theme</label>
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 14px; color: var(--text-secondary);">Light</span>
-                    <label class={styles.toggleSwitch}>
-                      <input
-                        type="checkbox"
-                        id="setting-dark-mode"
-                        checked={darkMode()}
-                        onchange={handleDarkModeToggle}
-                      />
-                      <span class={styles.toggleSlider}></span>
-                    </label>
-                    <span style="font-size: 14px; color: var(--text-secondary);">Dark</span>
+                  <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
+                    v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
+                  </p>
+                  <div style="margin-top: 12px;">
+                    <SupportContact />
                   </div>
                 </div>
               </div>
-            </div>
-            <div class={styles.card} style={{ display: tabSel('exports') }}>
-              <div class={styles.settingsSection}>
-                <div class={styles.settingsSectionTitle}>Chart Export</div>
-                <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
-                  Configure how charts are exported across the application.
-                </p>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Background</label>
-                  <select
-                    class={styles.formControl}
-                    value={chartExportSettings().background}
-                    onchange={(e) => {
-                      const updated: ChartExportSettings = {
-                        ...chartExportSettings(),
-                        background: e.currentTarget.value as ChartExportSettings['background'],
-                      }
-                      setChartExportSettings(updated)
-                      saveChartExportSettings(updated)
-                    }}
-                    style="max-width: 250px;"
-                  >
-                    <option value="transparent">Transparent</option>
-                    <option value="white">White</option>
-                    <option value="dark">Dark</option>
-                    <option value="theme">Match Theme</option>
-                  </select>
-                  <p style="margin-top: 6px; color: var(--text-secondary); font-size: 12px;">
-                    Sets the background color when exporting charts as PNG. Transparent works best
-                    for light backgrounds; choose White or Dark for consistent appearance.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <div class={styles.card} style={{ 'margin-top': '24px', display: tabSel('general') }}>
-            <div class={styles.settingsSection}>
-              <div class={styles.settingsSectionTitle}>About</div>
-              <p style="margin-top: 12px; margin-bottom: 0; font-size: 13px; color: var(--text-secondary);">
-                {accountInfo()?.email || accountInfo()?.username ? (
-                  <>
-                    Signed in as{' '}
-                    <span style="color: var(--text); font-weight: 600;">
-                      {accountInfo()!.email || accountInfo()!.username}
-                    </span>
-                    {accountInfo()!.auth_provider === 'google' ? ' (Google account)' : ''}
-                  </>
-                ) : storageMode() === 'serverless' ? (
-                  'Local mode — no account; data is stored in this browser only.'
-                ) : (
-                  'Not signed in.'
-                )}
-              </p>
-              <div class={styles.formGroup} style="margin-top: 16px;">
-                <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
-                  View Changelog
-                </button>
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconTerminal />}
+                  title="Diagnostics"
+                  desc="Application logs for debugging on mobile or without a console."
+                />
                 <button
                   class={styles.btnSecondary}
-                  style="margin-left: 8px;"
-                  onclick={() => setShowShortcuts(true)}
+                  onclick={() => {
+                    window.location.hash = showLogs() ? '#settings' : '#logs'
+                  }}
                 >
-                  Keyboard shortcuts
+                  {showLogs() ? 'Hide Logs' : 'View Logs'}
                 </button>
-                <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                  See what&apos;s new in each version of Token Circles, or the keyboard shortcuts.
-                </p>
-                <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
-                  v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
-                </p>
-                <div style="margin-top: 12px;">
-                  <SupportContact />
-                </div>
+                <Show when={showLogs()}>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0;">
+                    <div style="font-size: 14px; font-weight: 600;">Application Logs</div>
+                    <button
+                      class={styles.btnSecondary}
+                      style="padding: 4px 10px; font-size: 12px;"
+                      onclick={() => (window.location.hash = '#settings')}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div style="max-height: 500px; overflow-y: auto;">
+                    <LogViewer />
+                  </div>
+                </Show>
               </div>
-            </div>
+            </Show>
           </div>
         </div>
       </div>

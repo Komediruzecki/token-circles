@@ -68,6 +68,29 @@
   margin-bottom: 12px;
 }
 
+.upgradeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin: -4px 0 12px;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--glow-primary);
+  transition: background 0.15s;
+}
+
+.upgradeBtn:hover {
+  background: var(--primary-hover);
+}
+
 .actions {
   display: flex;
   gap: 8px;

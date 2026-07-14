@@ -1,0 +1,56 @@
+/* Branded on/off switch — 44x26 pill, azure + glow when on, theme-aware. */
+.toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+  flex: 0 0 auto;
+  padding: 0;
+  margin: 0;
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition:
+    transform 0.2s,
+    background 0.2s;
+}
+
+.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: var(--glow-primary);
+}
+
+.on .knob {
+  transform: translateX(18px);
+  /* Fixed white knob reads correctly on the azure primary in both themes,
+     matching the app's other on-primary foregrounds (e.g. .btn-primary). */
+  background: #fff;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
