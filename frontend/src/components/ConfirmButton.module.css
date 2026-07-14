@@ -23,24 +23,24 @@
 }
 
 .btn:hover {
-  background: var(--danger);
-  color: #fff;
-  border-color: var(--danger);
+  background: color-mix(in oklab, var(--danger-outline) 14%, transparent);
+  color: var(--danger-outline);
+  border-color: color-mix(in oklab, var(--danger-outline) 45%, transparent);
 }
 
 .btnYes {
   padding: 3px 10px;
   border-radius: 6px;
-  border: 1px solid var(--danger);
-  background: var(--danger);
-  color: #fff;
+  border: 1px solid color-mix(in oklab, var(--danger-outline) 50%, transparent);
+  background: color-mix(in oklab, var(--danger-outline) 14%, transparent);
+  color: var(--danger-outline);
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .btnYes:hover {
-  filter: brightness(1.1);
+  background: color-mix(in oklab, var(--danger-outline) 24%, transparent);
 }
 
 .btnNo {

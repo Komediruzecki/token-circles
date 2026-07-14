@@ -1473,16 +1473,14 @@ export default function Settings() {
                   )}
                 </p>
                 <div class={styles.formGroup} style="margin-top: 16px;">
-                  <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
-                    View Changelog
-                  </button>
-                  <button
-                    class={styles.btnSecondary}
-                    style="margin-left: 8px;"
-                    onclick={() => setShowShortcuts(true)}
-                  >
-                    Keyboard shortcuts
-                  </button>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
+                      View Changelog
+                    </button>
+                    <button class={styles.btnSecondary} onclick={() => setShowShortcuts(true)}>
+                      Keyboard shortcuts
+                    </button>
+                  </div>
                   <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
                     See what&apos;s new in each version of Token Circles, or the keyboard shortcuts.
                   </p>

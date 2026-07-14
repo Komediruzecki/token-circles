@@ -41,7 +41,7 @@
 }
 
 .btnDanger:hover {
-  background: rgba(220, 38, 38, 0.7);
+  background: color-mix(in oklab, var(--danger) 52%, transparent);
 }
 
 .btnGhost {

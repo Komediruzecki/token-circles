@@ -337,9 +337,9 @@
 }
 
 .btn-danger {
-  background: var(--danger);
-  color: #fff;
-  border: none;
+  background: color-mix(in oklab, var(--danger-outline) 12%, transparent);
+  color: var(--danger-outline);
+  border: 1px solid color-mix(in oklab, var(--danger-outline) 45%, transparent);
   padding: 10px 20px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -352,7 +352,8 @@
 }
 
 .btn-danger:hover {
-  background: var(--danger-hover);
+  background: color-mix(in oklab, var(--danger-outline) 20%, transparent);
+  border-color: var(--danger-outline);
 }
 
 .modal-lg {

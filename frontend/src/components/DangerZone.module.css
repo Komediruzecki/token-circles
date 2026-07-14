@@ -55,9 +55,9 @@
 }
 
 .danger-zone-button {
-  background: var(--danger);
-  color: #fff;
-  border: none;
+  background: color-mix(in oklab, var(--danger-outline) 12%, transparent);
+  color: var(--danger-outline);
+  border: 1px solid color-mix(in oklab, var(--danger-outline) 45%, transparent);
   padding: 8px 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -67,7 +67,8 @@
 }
 
 .danger-zone-button:hover {
-  background: var(--btn-danger-hover);
+  background: color-mix(in oklab, var(--danger-outline) 20%, transparent);
+  border-color: var(--danger-outline);
 }
 
 .danger-zone-cancel {

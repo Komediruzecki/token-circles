@@ -241,7 +241,10 @@
   margin-left: 240px;
   padding: 24px 32px;
   min-height: 100vh;
-  overflow-x: auto;
+  /* clip (not auto): keeps the no-horizontal-page-scroll rule but, unlike auto/scroll/hidden,
+     does NOT make .main a scroll container — so position: sticky children (e.g. the Settings
+     rail) bind to the window and actually follow the scroll. */
+  overflow-x: clip;
 }
 
 .page {

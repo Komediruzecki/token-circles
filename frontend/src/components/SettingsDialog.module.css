@@ -198,9 +198,9 @@
 
 .btnDanger {
   padding: 8px 16px;
-  background: var(--danger);
-  color: #fff;
-  border: none;
+  background: color-mix(in oklab, var(--danger-outline) 12%, transparent);
+  color: var(--danger-outline);
+  border: 1px solid color-mix(in oklab, var(--danger-outline) 45%, transparent);
   border-radius: var(--radius);
   font-size: 13px;
   font-weight: 500;
@@ -209,5 +209,6 @@
 }
 
 .btnDanger:hover {
-  background: var(--btn-danger-hover);
+  background: color-mix(in oklab, var(--danger-outline) 20%, transparent);
+  border-color: var(--danger-outline);
 }
