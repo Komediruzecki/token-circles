@@ -1147,11 +1147,14 @@ export async function seedDemoProfiles(): Promise<void> {
       accountIds.push(id)
     }
 
-    // Generate transactions from 2000-01 through current month
+    // Generate transactions from 2000-01 through current month. Collect every row first, then
+    // write them all in a single IndexedDB transaction below (see the bulk insert after this
+    // loop) — the previous commit-per-row cost ~2,800 IDB transactions per profile.
     const now = new Date()
     const startYear = 2000
     const endYear = now.getFullYear()
     const endMonth = now.getMonth() // 0-indexed
+    const txRecords: Record<string, unknown>[] = []
 
     for (let year = startYear; year <= endYear; year++) {
       const lastMonth = year === endYear ? endMonth : 11
@@ -1167,7 +1170,7 @@ export async function seedDemoProfiles(): Promise<void> {
         if (salaryCat) {
           // beneficiary/payor/amount_local/exchange_rate/created_at/updated_at are required
           // by TransactionSchema — incomplete rows fail the ApiClient response validation.
-          await db.add('transactions', {
+          txRecords.push({
             description: 'Monthly Salary',
             amount: monthlyIncome,
             type: 'income',
@@ -1201,7 +1204,7 @@ export async function seedDemoProfiles(): Promise<void> {
           if (amount <= 0) continue
 
           const txDate = `${monthStr}-${String(day).padStart(2, '0')}`
-          await db.add('transactions', {
+          txRecords.push({
             description: ex.description,
             amount,
             type: 'expense',
@@ -1221,6 +1224,14 @@ export async function seedDemoProfiles(): Promise<void> {
           })
         }
       }
+    }
+
+    // Bulk-insert this profile's transactions in one IndexedDB transaction. Sharing a single
+    // transaction across all ~2,800 rows turns thousands of separate commits into one, which was
+    // the bulk of the serverless demo's first-load cost (and of every e2e context that re-seeds).
+    if (txRecords.length > 0) {
+      const txWrite = db.transaction('transactions', 'readwrite')
+      await Promise.all([...txRecords.map((r) => txWrite.store.add(r)), txWrite.done])
     }
 
     // ── Portfolio holdings (Mid and High income only) ──
