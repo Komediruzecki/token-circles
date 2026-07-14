@@ -74,7 +74,7 @@ export default function Retirement() {
   const [goals, setGoals] = createSignal<RetirementGoal[]>([])
   const [projection, setProjection] = createSignal<RetirementProjection | null>(null)
   const [projectedBalances, setProjectedBalances] = createSignal<ProjectedBalance[]>([])
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [editingGoal, setEditingGoal] = createSignal<RetirementGoal | null>(null)
@@ -91,7 +91,6 @@ export default function Retirement() {
 
   // Load retirement goals
   const loadGoals = async () => {
-    setLoading(true)
     try {
       const data = await apiGet<{ settings: any; goals: RetirementGoal[] }>('/api/retirement-goals')
       setGoals(
@@ -112,7 +111,7 @@ export default function Retirement() {
       console.error('Failed to load retirement goals', err)
       showToast('Failed to load retirement goals', 'error')
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -468,7 +467,7 @@ export default function Retirement() {
           data-tour="retirement-goals"
         >
           <h2 class={styles.sectionTitle}>Retirement Goals</h2>
-          {loading() ? (
+          {initialLoad() && goals().length === 0 ? (
             <div data-test-id="loading-state" class={styles.emptyState}>
               Loading goals...
             </div>

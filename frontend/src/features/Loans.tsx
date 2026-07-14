@@ -62,7 +62,7 @@ interface Loan {
 export default function Loans() {
   const state = useAppState()
   const [loans, setLoans] = createSignal<Loan[]>([])
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [editingLoan, setEditingLoan] = createSignal<Loan | null>(null)
   const [showAmortization, setShowAmortization] = createSignal(false)
@@ -104,7 +104,6 @@ export default function Loans() {
 
   // Load loans
   const loadLoans = async () => {
-    setLoading(true)
     try {
       const data = await apiGet<any[]>('/api/loans')
       // Transform Loan data to include missing fields
@@ -126,7 +125,7 @@ export default function Loans() {
       console.error('Failed to load loans:', err)
       showToast('Failed to load loans', 'error')
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -389,7 +388,7 @@ export default function Loans() {
       </div>
 
       <div data-test-id="loans-list" data-tour="loans-list">
-        {loading() ? (
+        {initialLoad() && loans().length === 0 ? (
           <div data-test-id="loading-state" class={styles.emptyState}>
             Loading loans...
           </div>

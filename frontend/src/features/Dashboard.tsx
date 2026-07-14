@@ -105,7 +105,7 @@ export default function Dashboard() {
   const year = () => focus().year
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
 
   // Human-readable label for the currently selected dashboard period
   const periodText = () => helpers.label(period())
@@ -167,7 +167,6 @@ export default function Dashboard() {
   })
 
   const loadDashboard = async () => {
-    setLoading(true)
     try {
       const p = period()
       const isAll = p.preset === 'all'
@@ -185,7 +184,7 @@ export default function Dashboard() {
     } catch {
       toast('Failed to load dashboard', 'error')
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -535,7 +534,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {loading() ? (
+      {initialLoad() && !metrics() ? (
         <div class={styles.emptyState}>Loading...</div>
       ) : metrics() ? (
         <>

@@ -22,7 +22,7 @@ type SortField = 'name' | 'incoming' | 'outgoing' | 'net' | 'transaction_count'
 export default function Counterparties() {
   const state = useAppState()
   const [counterparties, setCounterparties] = createSignal<Counterparty[]>([])
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const [sortField, setSortField] = createSignal<SortField>('net')
   const [sortAsc, setSortAsc] = createSignal(false)
 
@@ -35,7 +35,7 @@ export default function Counterparties() {
     } catch {
       // keep empty
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -107,7 +107,7 @@ export default function Counterparties() {
       </div>
 
       <div data-tour="counterparties-content">
-        {loading() ? (
+        {initialLoad() && counterparties().length === 0 ? (
           <div class={styles.loadingState}>Loading counterparties...</div>
         ) : counterparties().length === 0 ? (
           <div class={styles.emptyState}>

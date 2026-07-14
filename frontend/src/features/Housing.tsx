@@ -62,7 +62,7 @@ function getMonthlyAmount(h: Housing): number {
 export default function HousingForm() {
   const state = useAppState()
   const [housings, setHousings] = createSignal<Housing[]>([])
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [formData, setFormData] = createSignal({
     type: 'rent',
@@ -101,7 +101,6 @@ export default function HousingForm() {
 
   // Load housing expenses
   const loadHousings = async () => {
-    setLoading(true)
     try {
       const result = await apiGet<{ housings: Housing[] }>('/api/housing')
       setHousings(result.housings || [])
@@ -109,7 +108,7 @@ export default function HousingForm() {
       console.error('Failed to load housing expenses:', err)
       showToast('Failed to load housing expenses', 'error')
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -325,7 +324,7 @@ export default function HousingForm() {
         </div>
       )}
 
-      {loading() ? (
+      {initialLoad() && housings().length === 0 ? (
         <div class={styles.emptyState}>Loading housing expenses...</div>
       ) : housings().length === 0 ? (
         <div class={styles.emptyState} data-test-id="housing-empty">

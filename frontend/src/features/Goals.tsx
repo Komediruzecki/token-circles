@@ -66,7 +66,7 @@ export default function Goals() {
   const state = useAppState()
   const [goals, setGoals] = createSignal<Goal[]>([])
   const [categories, setCategories] = createSignal<CategoryOption[]>([])
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
@@ -87,7 +87,6 @@ export default function Goals() {
 
   // Load goals
   const loadGoals = async () => {
-    setLoading(true)
     try {
       const data = await apiGet<any[]>('/api/savings-goals')
       // Also get category names for each goal
@@ -112,7 +111,7 @@ export default function Goals() {
       console.error('Failed to load goals:', err)
       showToast('Failed to load goals', 'error')
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -337,7 +336,7 @@ export default function Goals() {
       </div>
 
       <div data-tour="goals-list">
-        {loading() ? (
+        {initialLoad() && goals().length === 0 ? (
           <div class={styles.emptyState}>Loading goals...</div>
         ) : goals().length === 0 ? (
           <div data-test-id="goals-empty" class={styles.emptyState}>
