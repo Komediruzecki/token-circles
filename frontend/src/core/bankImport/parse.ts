@@ -112,9 +112,11 @@ export function normalizeDate(value: unknown): string {
   ).trim()
   if (!s) return ''
   // ISO date, optionally with a time part (Revolut: "2026-05-01 12:58:02").
+  // eslint-disable-next-line security/detect-unsafe-regex -- anchored, fixed-length \d{n}; the trailing .* is linear, no ambiguous backtracking (no ReDoS)
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T].*)?$/)
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
   // DD.MM.YYYY or DD/MM/YYYY (optionally with a trailing time).
+  // eslint-disable-next-line security/detect-unsafe-regex -- anchored, bounded \d{1,2}/\d{4} split by a literal [./]; no ambiguous backtracking (no ReDoS)
   const dmy = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})(?:[ T].*)?$/)
   if (dmy) {
     const d = dmy[1].padStart(2, '0')

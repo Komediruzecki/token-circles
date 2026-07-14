@@ -362,6 +362,7 @@ function findIcon(categoryName: string): IconDef | null {
     // For short keywords only, verify at least one matches with word boundaries
     const shortWords = words.filter((w) => w.length <= 4 && boundaryWords.has(w))
     if (shortWords.length > 0) {
+      // eslint-disable-next-line security/detect-non-literal-regexp -- w is a short word from a controlled internal keyword list, not user input
       const boundaryOk = shortWords.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))
       if (boundaryOk) return def
       continue patternLoop
