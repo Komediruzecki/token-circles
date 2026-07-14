@@ -12,6 +12,7 @@ import {
 } from '../reminders';
 import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
+import { requireFeature } from '../plan';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
 // (email_notifications, email_budget_alerts, email_spending_report) on the active profile;
@@ -79,6 +80,13 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
 // Report/budget previews bypass prefs/quota/period-dedup so they never block (or get
 // blocked by) the scheduled sends — this exists to preview the layouts on demand.
 notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c) => {
+  // Email alerts are a paid feature (plans.ts emailReminders); the scheduled sender
+  // gates on this via canReceive(), but the manual test/preview path bypassed it.
+  await requireFeature(
+    c,
+    'emailReminders',
+    'Email alerts are a premium feature. Upgrade to send or preview them.'
+  );
   const rl = await enforce(c, `testmail:${c.get('userId')}`, 6, 3600);
   if (rl) return rl;
   const user = await db.first<{ email: string | null }>(
@@ -113,6 +121,11 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
 
 // POST — manually run a reminder for yourself (smoke-test without waiting for cron).
 notificationsRoutes.post('/api/notifications/trigger', requireAuth, async (c) => {
+  await requireFeature(
+    c,
+    'emailReminders',
+    'Email alerts are a premium feature. Upgrade to send or preview them.'
+  );
   const rl = await enforce(c, `trigger:${c.get('userId')}`, 5, 3600);
   if (rl) return rl;
   const u = await db.first<UserRow>(

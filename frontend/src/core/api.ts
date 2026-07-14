@@ -483,8 +483,11 @@ export class ApiClient {
   /**
    * Create an account
    */
-  async createAccount(data: ApiTypes.AccountCreateParams): Promise<Models.Account> {
-    return this.request<Models.Account>('/accounts', Schemas.AccountSchema, {
+  async createAccount(data: ApiTypes.AccountCreateParams): Promise<{ id: number }> {
+    // POST /accounts returns { id, message }, not a full account. Validating the
+    // response against AccountSchema threw *after* the row was created, surfacing a
+    // false "Failed to create account" error — validate the real shape instead.
+    return this.request<{ id: number }>('/accounts', z.object({ id: z.number() }), {
       method: 'POST',
       body: data,
     })
