@@ -3,11 +3,65 @@
  * Uses jsPDF + Chart.js offscreen canvas (via Web Worker) to generate reports.
  */
 import { getLocalCurrency } from '../../core/api'
+import { moneyRgb, pdfReportTheme } from '../../core/brandPalette'
 import { txBaseValue } from '../../core/currency'
+import { ensurePdfFonts, PDF_FONT } from '../../core/reportFonts'
 import { getDB } from './idb'
+import {
+  buildCashFlowLine,
+  buildCategoryDoughnut,
+  buildCategoryOrbitsSvg,
+  buildIncomeExpenseBar,
+  computeOrbitRings,
+  DOUGHNUT_CUTOUT,
+} from './reportCharts'
 import type { ChartData } from 'chart.js'
 import type { jsPDF } from 'jspdf'
+import type { PdfReportTheme, RGB } from '../../core/brandPalette'
 import type { Category, Transaction } from '../../types/models'
+import type { CategoryDatum } from './reportCharts'
+
+/**
+ * Shared drawing context: the resolved orbit/dawn theme + the jsPDF font family
+ * names (Inter/Fraunces when the brand fonts loaded, else Helvetica). Threaded
+ * through the layout helpers so every report draws on the same brand system.
+ */
+interface ReportCtx {
+  theme: PdfReportTheme
+  /** Body family — PDF_FONT.body ('Inter') or 'helvetica'. */
+  body: string
+  /** Display/title family — PDF_FONT.display ('Fraunces') or 'helvetica'. */
+  display: string
+}
+
+/** Build a doc, register brand fonts, paint the ground, and return the ctx. */
+async function initReport(dark: boolean): Promise<{ doc: jsPDF; ctx: ReportCtx }> {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'px', format: 'a4' })
+  const theme = pdfReportTheme(dark)
+  const fontsOk = await ensurePdfFonts(doc)
+  const ctx: ReportCtx = {
+    theme,
+    body: fontsOk ? PDF_FONT.body : 'helvetica',
+    display: fontsOk ? PDF_FONT.display : 'helvetica',
+  }
+  paintPage(doc, theme)
+  return { doc, ctx }
+}
+
+/** Fill the current page with the brand ground (deep night / paper blue). */
+function paintPage(doc: jsPDF, theme: PdfReportTheme) {
+  const w = doc.internal.pageSize.getWidth()
+  const h = doc.internal.pageSize.getHeight()
+  doc.setFillColor(...theme.rgb.bg)
+  doc.rect(0, 0, w, h, 'F')
+}
+
+/** Add a page and repaint the ground. */
+function addBrandPage(doc: jsPDF, theme: PdfReportTheme) {
+  doc.addPage()
+  paintPage(doc, theme)
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -121,9 +175,10 @@ function renderChartViaWorker(
   chartData: ChartData,
   width: number,
   height: number,
-  dark: boolean,
-  timeoutMs = 15000
+  theme: PdfReportTheme,
+  opts: { cutout?: string; timeoutMs?: number } = {}
 ): Promise<string> {
+  const { cutout, timeoutMs = 15000 } = opts
   return new Promise((resolve, reject) => {
     const worker = getChartWorker()
     const id = ++_workerRequestId
@@ -159,33 +214,155 @@ function renderChartViaWorker(
     }
 
     worker.addEventListener('message', handler)
-    worker.postMessage({ id, chartType, chartData, width, height, dark })
+    worker.postMessage({
+      id,
+      chartType,
+      chartData,
+      width,
+      height,
+      dark: theme.dark,
+      grid: theme.grid,
+      text: theme.textSecondary,
+      cutout,
+    })
   })
+}
+
+/**
+ * Rasterize an SVG string to a PNG data URL on the main thread. The chart worker
+ * can't decode SVG (no Image in that context), but clientPdfReports runs on the
+ * main thread where document fonts + Image decoding exist — so the orbit-ring
+ * hero is drawn here. Rejects on load failure so callers fall back to a chart.
+ */
+function rasterizeSvg(svg: string, displayW: number, displayH: number, scale = 2): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.max(1, Math.round(displayW * scale))
+        canvas.height = Math.max(1, Math.round(displayH * scale))
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          reject(new Error('no 2d context'))
+          return
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/png'))
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
+    }
+    img.onerror = () => {
+      reject(new Error('svg raster failed'))
+    }
+    img.src = svgUrl
+  })
+}
+
+/**
+ * A square PNG for the category orbit hero: the branded SVG rings when possible,
+ * else the Chart.js doughnut fallback (worker). Returns '' when there's no data.
+ * The total/label are NOT baked in — the caller overlays them with drawOrbitCore
+ * so they render in embedded Inter (rasterized SVG can't see document fonts).
+ */
+async function orbitHeroImage(
+  rows: CategoryDatum[],
+  theme: PdfReportTheme,
+  sizePx: number
+): Promise<string> {
+  if (!rows.some((r) => r.total > 0)) return ''
+  const svg = buildCategoryOrbitsSvg(rows, { theme })
+  if (svg) {
+    try {
+      return await rasterizeSvg(svg, sizePx, sizePx, 2)
+    } catch {
+      // fall back to the branded doughnut below
+    }
+  }
+  return renderChartViaWorker(
+    'doughnut',
+    buildCategoryDoughnut(rows, theme),
+    sizePx * 2,
+    sizePx * 2,
+    theme,
+    { cutout: DOUGHNUT_CUTOUT }
+  )
+}
+
+/** Draw the orbit core: total value (Inter bold) + caption, centered on (cx, cy). */
+function drawOrbitCore(
+  doc: jsPDF,
+  ctx: ReportCtx,
+  cx: number,
+  cy: number,
+  value: string,
+  label: string
+) {
+  doc.setFont(ctx.body, 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...ctx.theme.rgb.textPrimary)
+  doc.text(value, cx, cy - 1, { align: 'center' })
+  doc.setFont(ctx.body, 'normal')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...ctx.theme.rgb.textSecondary)
+  doc.text(label.toUpperCase(), cx, cy + 8, { align: 'center' })
+}
+
+/** A chart caption centered under an image (Inter, secondary text). */
+function addChartCaption(doc: jsPDF, ctx: ReportCtx, text: string, cx: number, y: number) {
+  doc.setFont(ctx.body, 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...ctx.theme.rgb.textPrimary)
+  doc.text(text, cx, y, { align: 'center' })
+}
+
+/** Footer line in Inter, brand secondary color. */
+function addFooter(doc: jsPDF, ctx: ReportCtx) {
+  doc.setFont(ctx.body, 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...ctx.theme.rgb.textSecondary)
+  doc.text(
+    `Generated by Token Circles — ${new Date().toLocaleDateString()}`,
+    doc.internal.pageSize.getWidth() / 2,
+    doc.internal.pageSize.getHeight() - 15,
+    { align: 'center' }
+  )
 }
 
 // ── jsPDF helpers ────────────────────────────────────────────────────────────
 
-function addTitle(doc: jsPDF, title: string, subtitle: string, dark: boolean) {
-  const tc = dark ? '#E5E7EB' : '#1e293b'
-  const sc = dark ? '#94a3b8' : '#64748b'
-  doc.setTextColor(tc)
+function addTitle(doc: jsPDF, ctx: ReportCtx, title: string, subtitle: string) {
+  const { theme } = ctx
+  const w = doc.internal.pageSize.getWidth()
+  // Display title in Fraunces, subtitle in Inter — the app's type pairing.
+  doc.setFont(ctx.display, 'normal')
   doc.setFontSize(20)
-  doc.text(title, doc.internal.pageSize.getWidth() / 2, 30, { align: 'center' })
+  doc.setTextColor(...theme.rgb.textPrimary)
+  doc.text(title, w / 2, 30, { align: 'center' })
+  doc.setFont(ctx.body, 'normal')
   doc.setFontSize(11)
-  doc.setTextColor(sc)
-  doc.text(subtitle, doc.internal.pageSize.getWidth() / 2, 42, { align: 'center' })
-  // Draw a separator line below the title
-  doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
-  doc.line(15, 48, doc.internal.pageSize.getWidth() - 15, 48)
+  doc.setTextColor(...theme.rgb.textSecondary)
+  doc.text(subtitle, w / 2, 42, { align: 'center' })
+  // Hairline separator with a centered azure "instrument" accent.
+  doc.setDrawColor(...theme.rgb.border)
+  doc.setLineWidth(0.5)
+  doc.line(15, 48, w - 15, 48)
+  doc.setDrawColor(...theme.rgb.net)
+  doc.setLineWidth(1.6)
+  doc.line(w / 2 - 22, 48, w / 2 + 22, 48)
+  doc.setLineWidth(0.4)
 }
 
 function addSummaryBox(
   doc: jsPDF,
-  items: { label: string; value: string; color: [number, number, number] }[],
+  ctx: ReportCtx,
+  items: { label: string; value: string; color: RGB }[],
   y: number,
-  dark: boolean,
   title?: string
 ): number {
+  const { theme } = ctx
   const pageW = doc.internal.pageSize.getWidth()
   const boxW = pageW - 30
   const colW = boxW / items.length
@@ -194,15 +371,17 @@ function addSummaryBox(
   const boxH = 32 + titleH
   const x = 15
 
-  // Background
-  doc.setFillColor(dark ? 30 : 241, dark ? 41 : 245, dark ? 59 : 249)
-  doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
+  // Panel on the ground
+  doc.setFillColor(...theme.rgb.surface)
+  doc.setDrawColor(...theme.rgb.border)
+  doc.setLineWidth(0.4)
   doc.roundedRect(x, y, boxW, boxH, 4, 4, 'FD')
 
   // Title
   if (hasTitle) {
-    doc.setFontSize(12)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
+    doc.setFont(ctx.body, 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(...theme.rgb.textSecondary)
     doc.text(title.toUpperCase(), x + boxW / 2, y + 14, { align: 'center' })
   }
 
@@ -211,14 +390,16 @@ function addSummaryBox(
     const oy = titleH
     // Divider
     if (i > 0) {
-      doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
+      doc.setDrawColor(...theme.rgb.border)
       doc.line(cx, y + oy + 4, cx, y + boxH - 4)
     }
     // Label
+    doc.setFont(ctx.body, 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(dark ? 148 : 100, dark ? 163 : 116, dark ? 184 : 139)
+    doc.setTextColor(...theme.rgb.textSecondary)
     doc.text(item.label.toUpperCase(), cx + colW / 2, y + oy + 12, { align: 'center' })
     // Value
+    doc.setFont(ctx.body, 'bold')
     doc.setFontSize(16)
     doc.setTextColor(item.color[0], item.color[1], item.color[2])
     doc.text(item.value, cx + colW / 2, y + oy + 26, { align: 'center' })
@@ -229,14 +410,15 @@ function addSummaryBox(
 
 function addSectionTable(
   doc: jsPDF,
+  ctx: ReportCtx,
   title: string,
   columns: string[],
   colWidths: number[],
   rows: string[][],
   y: number,
-  dark: boolean,
-  color?: [number, number, number]
+  color?: RGB
 ) {
+  const { theme } = ctx
   const pageW = doc.internal.pageSize.getWidth()
   const totalW = colWidths.reduce((s, w) => s + w, 0)
   const x = (pageW - totalW) / 2
@@ -244,29 +426,28 @@ function addSectionTable(
   const rowH = 10
   const headerH = 10
 
-  // Card background
+  // Card panel
   const totalH = (title ? 14 : 0) + headerH + rows.length * rowH + 6
-  doc.setFillColor(dark ? 30 : 255, dark ? 41 : 255, dark ? 59 : 255)
-  doc.setDrawColor(dark ? 51 : 203, dark ? 65 : 213, dark ? 85 : 225)
+  doc.setFillColor(...theme.rgb.surface)
+  doc.setDrawColor(...theme.rgb.border)
+  doc.setLineWidth(0.4)
   doc.roundedRect(x, y, boxW, totalH, 3, 3, 'FD')
 
-  // Section title
+  // Section title (accent color when provided, e.g. income green / expense red)
   if (title) {
+    doc.setFont(ctx.body, 'bold')
     doc.setFontSize(13)
-    doc.setTextColor(
-      color?.[0] ?? (dark ? 226 : 30),
-      color?.[1] ?? (dark ? 232 : 41),
-      color?.[2] ?? (dark ? 240 : 59)
-    )
+    doc.setTextColor(...(color ?? theme.rgb.textPrimary))
     doc.text(title, x + 10, y + 10)
     y += 14
   }
 
-  // Table header
-  doc.setFillColor(dark ? 51 : 241, dark ? 65 : 245, dark ? 85 : 249)
+  // Table header band
+  doc.setFillColor(...theme.rgb.surfaceElev)
   doc.rect(x + 1, y, boxW - 2, headerH, 'F')
+  doc.setFont(ctx.body, 'bold')
   doc.setFontSize(9)
-  doc.setTextColor(dark ? 148 : 71, dark ? 163 : 85, dark ? 184 : 95)
+  doc.setTextColor(...theme.rgb.textSecondary)
   let cx = x
   columns.forEach((col, i) => {
     const align: 'left' | 'right' = i === 0 ? 'left' : 'right'
@@ -284,25 +465,26 @@ function addSectionTable(
   // Rows
   rows.forEach((row, ri) => {
     if (ri % 2 === 0) {
-      doc.setFillColor(dark ? 26 : 248, dark ? 34 : 250, dark ? 50 : 252)
+      doc.setFillColor(...theme.rgb.zebra)
       doc.rect(x + 1, y, boxW - 2, rowH, 'F')
     }
+    doc.setFont(ctx.body, 'normal')
     doc.setFontSize(9)
     let rx = x
     row.forEach((cell, ci) => {
       const align: 'left' | 'right' = ci === 0 ? 'left' : 'right'
       const padding = align === 'left' ? 8 : -8
-      let tc: [number, number, number] = [dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59]
-      // Color money cells green (positive) / red (negative). A money cell is a value
-      // column that isn't the '-' placeholder, a bare count, or a percentage — this
-      // keeps the same columns colored as before while being currency-symbol agnostic
-      // (Intl output for non-EUR currencies no longer starts with '€').
+      let tc: RGB = theme.rgb.textPrimary
+      // Color money cells income (positive) / expense (negative). A money cell is
+      // a value column that isn't the '-' placeholder, a bare count, or a
+      // percentage — currency-symbol agnostic (Intl output for non-EUR
+      // currencies no longer starts with '€').
       const isMoney =
         ci > 0 && cell !== '-' && !cell.endsWith('%') && !/^\d+$/.test(cell) && /\d/.test(cell)
       if (isMoney && cell.trimStart().startsWith('-')) {
-        tc = dark ? [248, 113, 113] : [220, 38, 38]
+        tc = theme.rgb.expense
       } else if (isMoney) {
-        tc = dark ? [16, 185, 129] : [5, 150, 105]
+        tc = theme.rgb.income
       }
       doc.setTextColor(tc[0], tc[1], tc[2])
       doc.text(cell, rx + (align === 'left' ? padding : colWidths[ci] + padding), y + 7, { align })
@@ -348,96 +530,80 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   const incomeSorted = Object.values(incomeByCat).sort((a, b) => b.total - a.total)
   const expenseSorted = Object.values(expenseByCat).sort((a, b) => b.total - a.total)
 
-  // Render charts offscreen — 2x for retina sharpness
-  const monthlyChartScale = 2
-  const incomeChartUrl =
-    incomeSorted.length > 0
-      ? await renderChartViaWorker(
-          'doughnut',
-          {
-            labels: incomeSorted.map((c) => c.name),
-            datasets: [
-              {
-                data: incomeSorted.map((c) => c.total),
-                backgroundColor: incomeSorted.map((c) => c.color),
-                borderWidth: 0,
-              },
-            ],
-          },
-          275 * monthlyChartScale,
-          165 * monthlyChartScale,
-          dark
-        )
-      : ''
-
-  const expenseChartUrl =
-    expenseSorted.length > 0
-      ? await renderChartViaWorker(
-          'doughnut',
-          {
-            labels: expenseSorted.map((c) => c.name),
-            datasets: [
-              {
-                data: expenseSorted.map((c) => c.total),
-                backgroundColor: expenseSorted.map((c) => c.color),
-                borderWidth: 0,
-              },
-            ],
-          },
-          275 * monthlyChartScale,
-          165 * monthlyChartScale,
-          dark
-        )
-      : ''
+  const incomeRows: CategoryDatum[] = incomeSorted.map((c) => ({
+    name: c.name,
+    color: c.color,
+    total: c.total,
+  }))
+  const expenseRows: CategoryDatum[] = expenseSorted.map((c) => ({
+    name: c.name,
+    color: c.color,
+    total: c.total,
+  }))
 
   // Build PDF
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'px', format: 'a4' })
+  const { doc, ctx } = await initReport(dark)
+  const { theme } = ctx
   const pageW = doc.internal.pageSize.getWidth()
-  addTitle(doc, 'Monthly Financial Report', `${MONTHS[m - 1]} ${y}`, dark)
+  addTitle(doc, ctx, 'Monthly Financial Report', `${MONTHS[m - 1]} ${y}`)
 
   let posY = addSummaryBox(
     doc,
+    ctx,
     [
-      { label: 'Total Income', value: money(totalIncome), color: [5, 150, 105] },
-      { label: 'Total Expenses', value: money(totalExpense), color: [220, 38, 38] },
-      {
-        label: 'Net Savings',
-        value: money(net),
-        color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
-      },
+      { label: 'Total Income', value: money(totalIncome), color: theme.rgb.income },
+      { label: 'Total Expenses', value: money(totalExpense), color: theme.rgb.expense },
+      { label: 'Net Savings', value: money(net), color: moneyRgb(theme, net) },
     ],
     55,
-    dark,
     'Monthly Summary'
   )
 
-  // Charts row
-  if (incomeChartUrl || expenseChartUrl) {
-    const chartW = (pageW - 45) / 2
-    const chartH = chartW * 0.6
-    if (incomeChartUrl) {
-      doc.addImage(incomeChartUrl, 'PNG', 15, posY, chartW, chartH)
-      URL.revokeObjectURL(incomeChartUrl)
-      doc.setFontSize(10)
-      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-      doc.text('Income by Category', 15 + chartW / 2, posY + chartH + 12, { align: 'center' })
+  // Category orbit heroes (income + expense): brand rings rasterized here on the
+  // main thread, with the total + label overlaid in embedded Inter.
+  const colW = (pageW - 45) / 2
+  const heroSize = Math.min(colW, 170)
+  const [incomeHero, expenseHero] = await Promise.all([
+    orbitHeroImage(incomeRows, theme, heroSize),
+    orbitHeroImage(expenseRows, theme, heroSize),
+  ])
+  if (incomeHero || expenseHero) {
+    const leftCx = 15 + colW / 2
+    const rightCx = 15 + colW + 15 + colW / 2
+    const drawHero = (
+      url: string,
+      cx: number,
+      rows: CategoryDatum[],
+      coreLabel: string,
+      caption: string
+    ) => {
+      if (!url) return
+      doc.addImage(url, 'PNG', cx - heroSize / 2, posY, heroSize, heroSize)
+      URL.revokeObjectURL(url)
+      const total = computeOrbitRings(rows).total
+      drawOrbitCore(doc, ctx, cx, posY + heroSize / 2, money(total), coreLabel)
+      addChartCaption(doc, ctx, caption, cx, posY + heroSize + 12)
     }
-    if (expenseChartUrl) {
-      doc.addImage(expenseChartUrl, 'PNG', 15 + chartW + 15, posY, chartW, chartH)
-      URL.revokeObjectURL(expenseChartUrl)
-      doc.setFontSize(10)
-      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-      doc.text('Expenses by Category', 15 + chartW + 15 + chartW / 2, posY + chartH + 12, {
-        align: 'center',
-      })
-    }
-    posY += chartH + 22
+    drawHero(
+      incomeHero,
+      leftCx,
+      incomeRows,
+      `earned · ${MONTHS_SHORT[m - 1]}`,
+      'Income by Category'
+    )
+    drawHero(
+      expenseHero,
+      rightCx,
+      expenseRows,
+      `spent · ${MONTHS_SHORT[m - 1]}`,
+      'Expenses by Category'
+    )
+    posY += heroSize + 22
   }
 
   // Category breakdown table
   if (posY > 550) {
-    doc.addPage()
+    addBrandPage(doc, theme)
     posY = 25
   }
   const allCats = new Map<string, { income: number; expense: number }>()
@@ -454,6 +620,7 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
   if (categories.length > 0) {
     posY = addSectionTable(
       doc,
+      ctx,
       'Category Breakdown',
       ['Category', 'Income', 'Expenses', 'Net'],
       [135, 90, 90, 90],
@@ -466,21 +633,11 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
           money(net),
         ]
       }),
-      posY + 4,
-      dark
+      posY + 4
     )
   }
 
-  // Footer
-  const fc = dark ? '#64748b' : '#94a3b8'
-  doc.setFontSize(8)
-  doc.setTextColor(fc)
-  doc.text(
-    `Generated by Token Circles — ${new Date().toLocaleDateString()}`,
-    pageW / 2,
-    doc.internal.pageSize.getHeight() - 15,
-    { align: 'center' }
-  )
+  addFooter(doc, ctx)
 
   return doc.output('blob')
 }
@@ -527,69 +684,35 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     return cumulative
   })
 
+  const topRows: CategoryDatum[] = topCategories.map((c) => ({
+    name: c.name,
+    color: c.color,
+    total: c.total,
+  }))
+
   // Build PDF
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'px', format: 'a4' })
+  const { doc, ctx } = await initReport(dark)
+  const { theme } = ctx
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
 
-  // Render charts — use 2x resolution for retina sharpness.
-  // Display sizes are calculated first, then charts are rendered at 2x.
+  // 2-column layout: category orbit hero + income/expense bar side by side, the
+  // cumulative cash-flow line full-width below. Charts render at 2x for sharpness.
   const chartScale = 2
-
-  // 2-column layout: doughnut + bar side by side, line full-width below
   const colChartW = (pageW - 45) / 2
   const colChartH = 170
-  const doughnutDisplayW = colChartW
-  const doughnutDisplayH = colChartH
-  const doughnutUrl =
-    topCategories.length > 0
-      ? await renderChartViaWorker(
-          'doughnut',
-          {
-            labels: topCategories.map((c) => c.name),
-            datasets: [
-              {
-                data: topCategories.map((c) => c.total),
-                backgroundColor: topCategories.map((c) => c.color),
-                borderWidth: 0,
-              },
-            ],
-          },
-          doughnutDisplayW * chartScale,
-          doughnutDisplayH * chartScale,
-          dark
-        )
-      : ''
+  const heroSize = Math.min(colChartW, colChartH)
 
-  const barDisplayW = colChartW
-  const barDisplayH = colChartH
+  const heroUrl = await orbitHeroImage(topRows, theme, heroSize)
+
   const barUrl =
     monthly.length > 0
       ? await renderChartViaWorker(
           'bar',
-          {
-            labels: monthly.map((m) => m.month),
-            datasets: [
-              {
-                label: 'Income',
-                data: monthly.map((m) => m.income),
-                backgroundColor: dark ? 'rgba(16,185,129,0.7)' : 'rgba(5,150,105,0.7)',
-                borderColor: dark ? '#10b981' : '#059669',
-                borderWidth: 1,
-              },
-              {
-                label: 'Expenses',
-                data: monthly.map((m) => m.expense),
-                backgroundColor: dark ? 'rgba(248,113,113,0.7)' : 'rgba(220,38,38,0.7)',
-                borderColor: dark ? '#f87171' : '#dc2626',
-                borderWidth: 1,
-              },
-            ],
-          },
-          barDisplayW * chartScale,
-          barDisplayH * chartScale,
-          dark
+          buildIncomeExpenseBar(monthly, theme),
+          colChartW * chartScale,
+          colChartH * chartScale,
+          theme
         )
       : ''
 
@@ -599,104 +722,87 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     cashFlow.length > 0
       ? await renderChartViaWorker(
           'line',
-          {
-            labels: monthly.map((m) => m.month),
-            datasets: [
-              {
-                label: 'Cash Flow',
-                data: cashFlow,
-                borderColor: '#3B82F6',
-                backgroundColor: 'rgba(59,130,246,0.1)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 2,
-              },
-            ],
-          },
+          buildCashFlowLine(
+            monthly.map((m) => m.month),
+            cashFlow,
+            theme
+          ),
           lineDisplayW * chartScale,
           lineDisplayH * chartScale,
-          dark
+          theme
         )
       : ''
 
   addTitle(
     doc,
+    ctx,
     `Annual Financial Report — ${year}`,
-    `Token Circles | Generated: ${new Date().toLocaleDateString()}`,
-    dark
+    `Token Circles | Generated: ${new Date().toLocaleDateString()}`
   )
 
   let posY = addSummaryBox(
     doc,
+    ctx,
     [
-      { label: 'Total Income', value: money(totalIncome), color: [5, 150, 105] },
-      { label: 'Total Expenses', value: money(totalExpense), color: [220, 38, 38] },
-      {
-        label: 'Net Savings',
-        value: money(net),
-        color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
-      },
+      { label: 'Total Income', value: money(totalIncome), color: theme.rgb.income },
+      { label: 'Total Expenses', value: money(totalExpense), color: theme.rgb.expense },
+      { label: 'Net Savings', value: money(net), color: moneyRgb(theme, net) },
       {
         label: 'Savings Rate',
         value: `${savingsRate.toFixed(1)}%`,
-        color: savingsRate >= 0 ? [5, 150, 105] : [220, 38, 38],
+        color: moneyRgb(theme, savingsRate),
       },
     ],
     52,
-    dark,
     'Annual Summary'
   )
 
-  // Charts: 2-column grid (doughnut + bar side by side), then line full-width
-  if (doughnutUrl || barUrl) {
+  // Charts: category orbit hero + income/expense bar side by side
+  if (heroUrl || barUrl) {
     const chartLabelY = posY + colChartH + 12
-    if (doughnutUrl) {
-      doc.addImage(doughnutUrl, 'PNG', 15, posY, doughnutDisplayW, doughnutDisplayH)
-      doc.setFontSize(10)
-      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-      doc.text('Spending by Category', 15 + doughnutDisplayW / 2, chartLabelY, { align: 'center' })
+    if (heroUrl) {
+      const heroCx = 15 + colChartW / 2
+      doc.addImage(heroUrl, 'PNG', heroCx - heroSize / 2, posY, heroSize, heroSize)
+      URL.revokeObjectURL(heroUrl)
+      drawOrbitCore(
+        doc,
+        ctx,
+        heroCx,
+        posY + heroSize / 2,
+        money(computeOrbitRings(topRows).total),
+        `spent · ${year}`
+      )
+      addChartCaption(doc, ctx, 'Spending by Category', heroCx, chartLabelY)
     }
     if (barUrl) {
       const barX = 15 + colChartW + 15
-      doc.addImage(barUrl, 'PNG', barX, posY, barDisplayW, barDisplayH)
-      doc.setFontSize(10)
-      doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-      doc.text('Monthly Income vs Expenses', barX + barDisplayW / 2, chartLabelY, {
-        align: 'center',
-      })
+      doc.addImage(barUrl, 'PNG', barX, posY, colChartW, colChartH)
+      URL.revokeObjectURL(barUrl)
+      addChartCaption(doc, ctx, 'Monthly Income vs Expenses', barX + colChartW / 2, chartLabelY)
     }
     posY += colChartH + 28
   }
 
-  // Cash flow line chart (full-width)
+  // Cumulative cash-flow line (full-width)
   if (lineUrl && cashFlow.length > 0) {
     if (posY + lineDisplayH + 22 > pageH - 25) {
-      doc.addPage()
+      addBrandPage(doc, theme)
       posY = 25
     }
     doc.addImage(lineUrl, 'PNG', 15, posY, lineDisplayW, lineDisplayH)
-    doc.setFontSize(10)
-    doc.setTextColor(dark ? 226 : 30, dark ? 232 : 41, dark ? 240 : 59)
-    doc.text('Cumulative Cash Flow', pageW / 2, posY + lineDisplayH + 12, { align: 'center' })
+    URL.revokeObjectURL(lineUrl)
+    addChartCaption(doc, ctx, 'Cumulative Cash Flow', pageW / 2, posY + lineDisplayH + 12)
     posY += lineDisplayH + 22
   }
 
-  // Footer on first page
-  const fc = dark ? '#64748b' : '#94a3b8'
-  doc.setFontSize(8)
-  doc.setTextColor(fc)
-  doc.text(
-    `Generated by Token Circles — ${new Date().toLocaleDateString()}`,
-    pageW / 2,
-    doc.internal.pageSize.getHeight() - 15,
-    { align: 'center' }
-  )
+  addFooter(doc, ctx)
 
-  // Monthly breakdown table on page 2
-  doc.addPage()
+  // Monthly breakdown table on a fresh page
+  addBrandPage(doc, theme)
   posY = 25
   addSectionTable(
     doc,
+    ctx,
     'Monthly Breakdown',
     ['Month', 'Income', 'Expenses', 'Net', 'Running Balance'],
     [65, 90, 90, 90, 100],
@@ -705,19 +811,10 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
       const running = monthly.slice(0, i + 1).reduce((s, x) => s + x.income - x.expense, 0)
       return [MONTHS[i], money(m.income), money(m.expense), money(n), money(running)]
     }),
-    posY,
-    dark
+    posY
   )
 
-  // Footer on page 2
-  doc.setFontSize(8)
-  doc.setTextColor(fc)
-  doc.text(
-    `Generated by Token Circles — ${new Date().toLocaleDateString()}`,
-    pageW / 2,
-    doc.internal.pageSize.getHeight() - 15,
-    { align: 'center' }
-  )
+  addFooter(doc, ctx)
 
   return doc.output('blob')
 }
@@ -760,30 +857,26 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
   const nonTotal = nonDeductible.reduce((s, r) => s + r.total, 0)
   const totalExp = taxTotal + nonTotal
 
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'px', format: 'a4' })
+  const { doc, ctx } = await initReport(dark)
+  const { theme } = ctx
   const pageW = doc.internal.pageSize.getWidth()
 
-  addTitle(doc, `Year-End Tax Summary — ${year}`, new Date().toLocaleDateString(), dark)
+  addTitle(doc, ctx, `Year-End Tax Summary — ${year}`, new Date().toLocaleDateString())
 
   const taxPct = totalExp > 0 ? ((taxTotal / totalExp) * 100).toFixed(1) : '0.0'
   let posY = addSummaryBox(
     doc,
+    ctx,
     [
-      { label: 'Tax-Deductible', value: `${money(taxTotal)} (${taxPct}%)`, color: [5, 150, 105] },
       {
-        label: 'Non-Deductible',
-        value: money(nonTotal),
-        color: (dark ? [148, 163, 184] : [100, 116, 139]) as [number, number, number],
+        label: 'Tax-Deductible',
+        value: `${money(taxTotal)} (${taxPct}%)`,
+        color: theme.rgb.income,
       },
-      {
-        label: 'Total Expenses',
-        value: money(totalExp),
-        color: (dark ? [226, 232, 240] : [30, 41, 59]) as [number, number, number],
-      },
+      { label: 'Non-Deductible', value: money(nonTotal), color: theme.rgb.textSecondary },
+      { label: 'Total Expenses', value: money(totalExp), color: theme.rgb.textPrimary },
     ],
     55,
-    dark,
     'Tax Summary'
   )
 
@@ -791,37 +884,38 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
   if (taxDeductible.length > 0) {
     posY = addSectionTable(
       doc,
+      ctx,
       'Tax-Deductible Expenses',
       ['Category', 'Transactions', 'Amount'],
       [160, 70, 90],
       taxDeductible.map((r) => [r.catName, String(r.count), money(r.total)]),
       posY,
-      dark,
-      [5, 150, 105]
+      theme.rgb.income
     )
   }
 
   // Non-deductible section
   if (nonDeductible.length > 0) {
     if (posY > 500) {
-      doc.addPage()
+      addBrandPage(doc, theme)
       posY = 25
     }
     posY = addSectionTable(
       doc,
+      ctx,
       'Non-Deductible Expenses',
       ['Category', 'Transactions', 'Amount'],
       [160, 70, 90],
       nonDeductible.map((r) => [r.catName, String(r.count), money(r.total)]),
       posY + 6,
-      dark,
-      [220, 38, 38]
+      theme.rgb.expense
     )
   }
 
   // Disclaimer
+  doc.setFont(ctx.body, 'normal')
   doc.setFontSize(8)
-  doc.setTextColor(dark ? 148 : 100, dark ? 163 : 116, dark ? 184 : 139)
+  doc.setTextColor(...theme.rgb.textSecondary)
   doc.text(
     'This report is for informational purposes only. Consult a tax professional for official tax filing.',
     pageW / 2,
@@ -829,15 +923,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
     { align: 'center' }
   )
 
-  const fc = dark ? '#64748b' : '#94a3b8'
-  doc.setFontSize(8)
-  doc.setTextColor(fc)
-  doc.text(
-    `Generated by Token Circles — ${new Date().toLocaleDateString()}`,
-    pageW / 2,
-    doc.internal.pageSize.getHeight() - 15,
-    { align: 'center' }
-  )
+  addFooter(doc, ctx)
 
   return doc.output('blob')
 }
@@ -890,35 +976,32 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
     }))
     .sort((a, b) => b.total - a.total)
 
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'px', format: 'a4' })
+  const { doc, ctx } = await initReport(dark)
+  const { theme } = ctx
   const pageW = doc.internal.pageSize.getWidth()
 
   addTitle(
     doc,
+    ctx,
     `Year-End P&L Summary — ${year}`,
-    `Token Circles | ${new Date().toLocaleDateString()}`,
-    dark
+    `Token Circles | ${new Date().toLocaleDateString()}`
   )
 
   let posY = addSummaryBox(
     doc,
+    ctx,
     [
-      { label: 'Total Income', value: money(totalIncome), color: [5, 150, 105] },
-      { label: 'Total Expenses', value: money(totalExpense), color: [220, 38, 38] },
-      {
-        label: 'Net Savings',
-        value: money(net),
-        color: net >= 0 ? [5, 150, 105] : [220, 38, 38],
-      },
+      { label: 'Total Income', value: money(totalIncome), color: theme.rgb.income },
+      { label: 'Total Expenses', value: money(totalExpense), color: theme.rgb.expense },
+      { label: 'Net Savings', value: money(net), color: moneyRgb(theme, net) },
     ],
     55,
-    dark,
     'P&L Summary'
   )
 
+  doc.setFont(ctx.body, 'normal')
   doc.setFontSize(10)
-  doc.setTextColor(dark ? 148 : 100, dark ? 163 : 116, dark ? 184 : 139)
+  doc.setTextColor(...theme.rgb.textSecondary)
   doc.text(`Savings Rate: ${savingsRate.toFixed(1)}%`, pageW / 2, posY, { align: 'center' })
   posY += 8
 
@@ -926,6 +1009,7 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
   if (incomeRows.length > 0) {
     posY = addSectionTable(
       doc,
+      ctx,
       'Income',
       ['Category', 'Txns', 'Amount', '% of Total'],
       [150, 55, 95, 65],
@@ -939,19 +1023,19 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
         ],
       ],
       posY + 4,
-      dark,
-      [5, 150, 105]
+      theme.rgb.income
     )
   }
 
   // Expense section
   if (expenseRows.length > 0) {
     if (posY > 500) {
-      doc.addPage()
+      addBrandPage(doc, theme)
       posY = 25
     }
     posY = addSectionTable(
       doc,
+      ctx,
       'Expenses',
       ['Category', 'Txns', 'Amount', '% of Total'],
       [150, 55, 95, 65],
@@ -970,16 +1054,15 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
         ],
       ],
       posY + 6,
-      dark,
-      [220, 38, 38]
+      theme.rgb.expense
     )
   }
 
   const txnCount =
     incomeRows.reduce((s, r) => s + r.count, 0) + expenseRows.reduce((s, r) => s + r.count, 0)
-  const fc = dark ? '#64748b' : '#94a3b8'
+  doc.setFont(ctx.body, 'normal')
   doc.setFontSize(8)
-  doc.setTextColor(fc)
+  doc.setTextColor(...theme.rgb.textSecondary)
   doc.text(
     `Total: ${txnCount} transactions | Net Savings: ${money(net)} (${savingsRate.toFixed(1)}% savings rate)`,
     pageW / 2,
