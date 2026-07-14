@@ -9,6 +9,33 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Token Circles — Personal Finance</title>
+    <meta
+      name="description"
+      content="Token Circles is an open-source, local-first personal finance app — budgets, analytics, calculators, and investments, right in your browser. Your data stays yours."
+    />
+    <link rel="canonical" href="https://tokencircles.com/" />
+
+    <!-- Open Graph / Twitter -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Token Circles" />
+    <meta property="og:title" content="Token Circles — Personal Finance" />
+    <meta
+      property="og:description"
+      content="Open-source, local-first personal finance — budgets, analytics, calculators, and investments, right in your browser. Your data stays yours."
+    />
+    <meta property="og:url" content="https://tokencircles.com/" />
+    <meta property="og:image" content="https://tokencircles.com/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Token Circles — personal finance in clear orbit" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Token Circles — Personal Finance" />
+    <meta
+      name="twitter:description"
+      content="Open-source, local-first personal finance — budgets, analytics, calculators, and investments, right in your browser."
+    />
+    <meta name="twitter:image" content="https://tokencircles.com/og-image.jpg" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,7 +44,34 @@
     />
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <div
+        style="
+          max-width: 640px;
+          margin: 16vh auto;
+          padding: 0 24px;
+          font-family:
+            Inter,
+            system-ui,
+            -apple-system,
+            sans-serif;
+          color: #f1f5f9;
+          text-align: center;
+        "
+      >
+        <h1 style="font-size: 1.6rem; font-weight: 600; margin: 0 0 12px">Token Circles</h1>
+        <p style="color: #94a3b8; line-height: 1.7; margin: 0 0 16px">
+          Token Circles is an open-source, local-first personal finance app — budgets, analytics,
+          calculators, and investments, right in your browser, with your data staying on your
+          device. The app needs JavaScript to run.
+        </p>
+        <p style="margin: 0">
+          <a href="https://about.tokencircles.com" style="color: #60a5fa; text-decoration: none"
+            >Learn more at about.tokencircles.com &rarr;</a
+          >
+        </p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script src="/src/index.tsx" type="module"></script>
   </body>
