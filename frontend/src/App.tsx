@@ -17,6 +17,7 @@ import { Dynamic } from 'solid-js/web'
 import CommandBar from './components/CommandBar'
 import ConfirmDialog from './components/ConfirmDialog'
 import GuidedOrbit from './components/GuidedOrbit'
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import layoutStyles from './components/Layout.module.css'
 import LoginModal from './components/LoginModal'
 import LoginScreen from './components/LoginScreen'
@@ -45,6 +46,7 @@ import {
 } from './core/appStore'
 import { logger } from './core/logger.js'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
+import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
 import {
   setShowTourSelection,
   showTourSelection,
@@ -372,6 +374,20 @@ export function App() {
     document.addEventListener('keydown', handleQuickAddKey)
     onCleanup(() => {
       document.removeEventListener('keydown', handleQuickAddKey)
+    })
+
+    // "?" opens the keyboard-shortcuts guide (skipped while typing in a field).
+    const handleHelpKey = (e: KeyboardEvent) => {
+      if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      e.preventDefault()
+      setShowShortcuts(true)
+    }
+    document.addEventListener('keydown', handleHelpKey)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleHelpKey)
     })
 
     // Global period stepping: ←/→ moves the focus period on every page. Guarded so
@@ -1153,6 +1169,10 @@ export function App() {
 
             <Show when={spotlightActive()}>
               <Spotlight />
+            </Show>
+
+            <Show when={showShortcuts()}>
+              <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />
             </Show>
 
             <Show when={showTourSelection()}>

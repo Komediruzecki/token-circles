@@ -7,12 +7,13 @@
  * browser storage, keeping the engine (`categoryRules.ts` / `transferRules.ts`)
  * pure and testable.
  */
-import { DEFAULT_CATEGORY_RULES } from './categoryRules'
+import { DEFAULT_RULE_GROUP_ID, rulesForGroup } from './categoryRules'
 import { DEFAULT_TRANSFER_RULES } from './transferRules'
 import type { CategoryRuleSet, TransferRuleSet } from './types'
 
 const CAT_KEY = 'bankImportCategoryRules'
 const TRANSFER_KEY = 'bankImportTransferRules'
+const GROUP_KEY = 'bankImportRuleGroup'
 
 function scoped(key: string): string {
   const profile = localStorage.getItem('currentProfileId') || '1'
@@ -22,17 +23,35 @@ function scoped(key: string): string {
 export function loadCategoryRules(): CategoryRuleSet {
   try {
     const raw = localStorage.getItem(scoped(CAT_KEY))
-    if (!raw) return DEFAULT_CATEGORY_RULES
+    // No user override yet → the selected mapping group's seed (Croatian / Worldwide).
+    if (!raw) return rulesForGroup(loadRuleGroup())
     const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as CategoryRuleSet) : DEFAULT_CATEGORY_RULES
+    return Array.isArray(parsed) ? (parsed as CategoryRuleSet) : rulesForGroup(loadRuleGroup())
   } catch {
-    return DEFAULT_CATEGORY_RULES
+    return rulesForGroup(loadRuleGroup())
   }
 }
 
 export function saveCategoryRules(rules: CategoryRuleSet): void {
   try {
     localStorage.setItem(scoped(CAT_KEY), JSON.stringify(rules))
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
+/** The selected category-mapping group id (defaults to Croatian). */
+export function loadRuleGroup(): string {
+  try {
+    return localStorage.getItem(scoped(GROUP_KEY)) || DEFAULT_RULE_GROUP_ID
+  } catch {
+    return DEFAULT_RULE_GROUP_ID
+  }
+}
+
+export function saveRuleGroup(id: string): void {
+  try {
+    localStorage.setItem(scoped(GROUP_KEY), id)
   } catch {
     /* ignore quota / disabled storage */
   }

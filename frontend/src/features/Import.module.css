@@ -563,6 +563,37 @@
   flex-wrap: wrap;
 }
 
+/* Mobile: stack the action bar so the stats/checkboxes/buttons don't squish into
+   one row, and bound the preview table so it scrolls inside its own box (both
+   axes) instead of pushing the page — keeping the import buttons above it visible. */
+@media (max-width: 768px) {
+  .actionBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .previewStats {
+    flex-wrap: wrap;
+  }
+
+  .importButtons {
+    width: 100%;
+  }
+
+  .importButtons .btn {
+    flex: 1 1 auto;
+  }
+
+  .tableWrapper {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .previewTable {
+    min-width: 540px;
+  }
+}
+
 /* Result message */
 .resultMessage {
   padding: 16px;

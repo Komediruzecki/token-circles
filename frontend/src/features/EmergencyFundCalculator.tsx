@@ -20,6 +20,7 @@
  */
 import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
+import { mobileXTicks } from '../components/chartMobile'
 import ExportChartButton from '../components/ExportChartButton'
 import { apiGet, formatCurrency, showToast } from '../core/api'
 import { theme } from '../core/theme'
@@ -123,7 +124,7 @@ export default function EmergencyFundCalculator() {
                     title: { display: true, text: 'Coverage %', color: chartColors().text },
                   },
                   x: {
-                    ticks: { color: chartColors().text },
+                    ticks: mobileXTicks(chartColors().text),
                     grid: { color: chartColors().border },
                   },
                 },

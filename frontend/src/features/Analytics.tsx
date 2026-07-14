@@ -37,6 +37,7 @@ import {
 } from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import Chart from '../components/Chart'
+import { compactLegendLabels, mobileXTicks } from '../components/chartMobile'
 import D3HeatmapChart from '../components/D3HeatmapChart'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import ExportChartButton from '../components/ExportChartButton'
@@ -977,7 +978,7 @@ export default function Analytics() {
                       scales: {
                         x: {
                           stacked: true,
-                          ticks: { color: chartColors().text },
+                          ticks: mobileXTicks(chartColors().text),
                           grid: { color: chartColors().border },
                         },
                         y: {
@@ -997,13 +998,7 @@ export default function Analytics() {
                             if (legendItem.datasetIndex !== undefined)
                               handleLegendClick(legendItem.datasetIndex)
                           },
-                          labels: {
-                            usePointStyle: true,
-                            padding: 10,
-                            font: { size: 11 },
-                            boxWidth: 10,
-                            color: chartColors().text,
-                          },
+                          labels: compactLegendLabels(chartColors().text),
                         },
                         tooltip: {
                           callbacks: {
