@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { gotoServerless } from './test-helpers'
 
 /**
  * Analytics page tests.
@@ -9,7 +10,9 @@ import { expect, test } from '@playwright/test'
  * user-visible copy or CSS-module class fragments (`[class*="statLabel"]`), which change with
  * design/wording. See tests/README.md for the test-id convention. These tests run in serverless
  * mode, where the app auto-seeds demo data (transactions from 2000 to the current year) on first
- * load, so the analytics content renders with real values.
+ * load, so the analytics content renders with real values. `gotoServerless` waits for that seed
+ * to finish (gating on `analytics-header`) instead of a fixed sleep — the seed can take >10s under
+ * parallel CI load, which is what used to make these tests flake.
  */
 
 test('analytics page - loads without errors and shows header', async ({ page }) => {
@@ -18,19 +21,9 @@ test('analytics page - loads without errors and shows header', async ({ page }) 
     if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
 
-  await page.addInitScript(() => {
-    localStorage.setItem('finance_storage_mode', 'serverless')
-  })
-
-  await page.goto('http://localhost:3800/#analytics', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  })
-  await page.waitForTimeout(2000)
-
-  // Analytics page header (the H1) should be visible. It renders unconditionally, independent of
-  // whether analytics data has resolved.
-  await expect(page.getByTestId('analytics-header')).toBeVisible({ timeout: 10000 })
+  // Resolves once the seed completes and the Analytics header (which renders unconditionally,
+  // independent of whether analytics data has resolved) is visible.
+  await gotoServerless(page, 'analytics', 'analytics-header')
 
   // No console errors (filter out CORS/network errors that aren't our bugs)
   const relevantErrors = consoleErrors.filter(
@@ -43,19 +36,12 @@ test('analytics page - loads without errors and shows header', async ({ page }) 
 })
 
 test('analytics page - year change does not cause full page navigation', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('finance_storage_mode', 'serverless')
-  })
-
-  await page.goto('http://localhost:3800/#analytics', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  })
-  await page.waitForTimeout(2000)
+  await gotoServerless(page, 'analytics', 'analytics-header')
 
   // The Category Trends year picker. Demo mode seeds multiple years, so it has >1 option.
+  // It lives inside the data-resolved region, so it appears shortly after the header.
   const yearSelect = page.getByTestId('analytics-trends-year')
-  await expect(yearSelect).toBeVisible({ timeout: 10000 })
+  await expect(yearSelect).toBeVisible({ timeout: 15000 })
 
   // Switch to a different year and confirm it applied as an in-page filter change (no full
   // reload / hash navigation away from the analytics route).
@@ -65,8 +51,7 @@ test('analytics page - year change does not cause full page navigation', async (
 
   if (otherOption) {
     await yearSelect.selectOption(otherOption.trim())
-    await page.waitForTimeout(1500)
-    // The select reflects the new year — the change took effect in place.
+    // `toHaveValue` auto-retries until the change takes effect in place — no fixed sleep needed.
     await expect(yearSelect).toHaveValue(otherOption.trim())
   }
 
@@ -75,36 +60,20 @@ test('analytics page - year change does not cause full page navigation', async (
 })
 
 test('analytics page - monthly savings section present', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('finance_storage_mode', 'serverless')
-  })
-
-  await page.goto('http://localhost:3800/#analytics', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  })
-  await page.waitForTimeout(2000)
+  await gotoServerless(page, 'analytics', 'analytics-header')
 
   // The Monthly Savings card and its per-month income/expense breakdown cards. All render once
   // analytics data resolves, which demo mode guarantees.
-  await expect(page.getByTestId('analytics-monthly-savings')).toBeVisible({ timeout: 10000 })
-  await expect(page.getByTestId('analytics-monthly-income')).toBeVisible()
-  await expect(page.getByTestId('analytics-monthly-expense')).toBeVisible()
+  await expect(page.getByTestId('analytics-monthly-savings')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('analytics-monthly-income')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByTestId('analytics-monthly-expense')).toBeVisible({ timeout: 15000 })
 })
 
 test('analytics page - monthly selectors exist in monthly card', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('finance_storage_mode', 'serverless')
-  })
-
-  await page.goto('http://localhost:3800/#analytics', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  })
-  await page.waitForTimeout(2000)
+  await gotoServerless(page, 'analytics', 'analytics-header')
 
   // The monthly savings card exposes a month picker. It always renders 12 options (Jan–Dec).
   const monthSelect = page.getByTestId('analytics-monthly-month')
-  await expect(monthSelect).toBeVisible({ timeout: 10000 })
+  await expect(monthSelect).toBeVisible({ timeout: 15000 })
   await expect(monthSelect.locator('option')).toHaveCount(12)
 })

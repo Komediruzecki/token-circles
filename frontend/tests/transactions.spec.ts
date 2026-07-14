@@ -33,8 +33,11 @@ test.describe('Transactions', () => {
     await expect(page.getByTestId('transactions-search')).toBeVisible()
   })
 
-  test('should have filter bar with date range', async ({ page }) => {
-    await expect(page.getByTestId('transactions-date-presets')).toBeVisible()
+  test('should have a period (date) filter', async ({ page }) => {
+    // The Transactions page drives date filtering through the shared PeriodBar; the FilterBar's
+    // built-in date presets are intentionally hidden (the page owns the date via PeriodBar). Assert
+    // that period control is present, scoped to the transactions page.
+    await expect(page.getByTestId('page-transactions').getByTestId('period-bar')).toBeVisible()
   })
 
   test('should have filter bar with category filter', async ({ page }) => {
@@ -71,9 +74,14 @@ test.describe('Transactions', () => {
     await expect(page.getByTestId('transactions-sort-date')).toBeVisible()
   })
 
-  test('should have pagination', async ({ page }) => {
-    // The demo seed spans 2000–present — far more than one 50-row page — so pagination renders.
-    await expect(page.getByTestId('transactions-pagination').first()).toBeVisible()
+  test('should paginate when the period spans more than one page', async ({ page }) => {
+    // The default view is period-scoped (the current month → a handful of rows), so pagination is
+    // correctly absent. Switch to "All time": the demo seed spans 2000–present, far more than one
+    // 50-row page, so the pagination control renders. Scope the pill to the transactions page —
+    // keep-alive can leave other pages' PeriodBars mounted in the DOM.
+    const tx = page.getByTestId('page-transactions')
+    await tx.getByTestId('period-pill-all').click()
+    await expect(tx.getByTestId('transactions-pagination').first()).toBeVisible()
   })
 
   test('should filter transactions by category', async ({ page }) => {

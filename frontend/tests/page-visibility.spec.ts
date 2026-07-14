@@ -70,26 +70,19 @@ test.describe('Page Visibility', () => {
   test('analytics page is visible', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'analytics')
-    // Check for any visible content on the page
-    await expect(
-      page.locator('main h1, main [class*="header"], main [class*="title"]').first()
-    ).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'analytics-header')).toBeVisible({ timeout: 10000 })
   })
 
   test('settings page is visible', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'settings')
-    await expect(
-      page.locator('main h1, main [class*="header"], main [class*="title"]').first()
-    ).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'settings-header')).toBeVisible({ timeout: 10000 })
   })
 
   test('import page is visible', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'import')
-    await expect(
-      page.locator('main h1, main [class*="header"], main [class*="title"]').first()
-    ).toBeVisible({ timeout: 10000 })
+    await expect(getByTestId(page, 'import-header')).toBeVisible({ timeout: 10000 })
   })
 
   test('navigation preserves visible content', async ({ page }) => {

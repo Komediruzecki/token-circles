@@ -35,7 +35,11 @@ export default function PeriodBar(props: Props) {
   }
 
   return (
-    <div class={`${styles.bar} ${props.class ?? ''}`} data-tour={props.tourAnchor}>
+    <div
+      class={`${styles.bar} ${props.class ?? ''}`}
+      data-test-id="period-bar"
+      data-tour={props.tourAnchor}
+    >
       <div class={styles.stepperGroup}>
         <button
           type="button"
@@ -44,6 +48,7 @@ export default function PeriodBar(props: Props) {
             doStep(-1)
           }}
           aria-label="Previous period"
+          data-test-id="period-prev"
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" />
@@ -58,6 +63,7 @@ export default function PeriodBar(props: Props) {
             setOrbitOpen(true)
           }}
           aria-haspopup="dialog"
+          data-test-id="period-label"
         >
           <span class={styles.orbitDot} aria-hidden="true" />
           <span class={styles.labelText}>{helpers.label(period())}</span>
@@ -73,6 +79,7 @@ export default function PeriodBar(props: Props) {
             doStep(1)
           }}
           aria-label="Next period"
+          data-test-id="period-next"
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" />
@@ -89,6 +96,7 @@ export default function PeriodBar(props: Props) {
                 class={styles.pill}
                 classList={{ [styles.pillActive]: activePill() === pill.id }}
                 title={pill.label}
+                data-test-id={`period-pill-${pill.id}`}
                 onClick={() => {
                   setPeriod(helpers.fromPill(pill.id))
                 }}

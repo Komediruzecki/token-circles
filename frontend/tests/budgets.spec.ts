@@ -120,11 +120,11 @@ test.describe('Budgets', () => {
   })
 
   test('should filter budgets by time period', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    // The month selector is this page's time-period filter.
-    await expect(page.getByTestId('month-selector')).toBeVisible()
-    await expect(page.getByTestId('month-display')).toBeVisible()
+    // The month selector (the shared PeriodBar) is this page's time-period filter. Its period
+    // label shows the active period and opens the picker; scope it to the selector container.
+    const monthSelector = page.getByTestId('month-selector')
+    await expect(monthSelector).toBeVisible()
+    await expect(monthSelector.getByTestId('period-label')).toBeVisible()
   })
 
   test('should have add budget modal', async ({ page }) => {
