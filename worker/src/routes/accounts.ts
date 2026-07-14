@@ -93,6 +93,11 @@ accountsRoutes.get('/api/accounts/:id', requireAuth, async (c) => {
   return c.json(account);
 });
 
+// Partial update: only the fields the client actually sends are written; everything else
+// is preserved. Editing account info must never silently wipe notes/currency or clobber the
+// derived balance. `balance` is starting_balance + the ledger (see recompute-balances.ts), so
+// a durable balance correction shifts starting_balance by the same delta — the frontend sends
+// both the new starting_balance and the matching balance together.
 accountsRoutes.put('/api/accounts/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
@@ -104,21 +109,22 @@ accountsRoutes.put('/api/accounts/:id', requireAuth, async (c) => {
     pid
   );
   if (!existing) throw new HttpError(404, 'Account not found');
-  const accountType = VALID_TYPES.includes(b.type) ? b.type : 'giro';
-  const balanceVal = parseFloat(b.balance);
-  const data: Record<string, any> = {
-    name: typeof b.name === 'string' ? b.name.trim() : existing.name,
-    bank_name: b.bank_name !== undefined ? b.bank_name : (existing.bank_name ?? ''),
-    type: accountType,
-    currency: b.currency || 'USD',
-    balance: Number.isFinite(balanceVal) ? balanceVal : existing.balance,
-    notes: b.notes || '',
-  };
+  const data: Record<string, any> = {};
+  if (typeof b.name === 'string' && b.name.trim()) data.name = b.name.trim();
+  if (b.bank_name !== undefined) data.bank_name = b.bank_name ?? '';
+  if (b.type !== undefined) data.type = VALID_TYPES.includes(b.type) ? b.type : existing.type;
+  if (b.currency !== undefined && b.currency) data.currency = b.currency;
+  if (b.notes !== undefined) data.notes = b.notes ?? '';
+  if (b.balance !== undefined) {
+    const v = parseFloat(b.balance);
+    if (Number.isFinite(v)) data.balance = v;
+  }
   if (b.starting_balance !== undefined) {
-    const sb = parseFloat(b.starting_balance);
-    data.starting_balance = Number.isFinite(sb) ? sb : (existing.starting_balance ?? 0);
+    const v = parseFloat(b.starting_balance);
+    if (Number.isFinite(v)) data.starting_balance = v;
   }
   if (b.starting_date !== undefined) data.starting_date = b.starting_date || null;
+  if (Object.keys(data).length === 0) return c.json({ message: 'No changes' });
 
   await db.update(c.env.DB, 'accounts', data, 'id = ? AND profile_id = ?', id, pid);
   return c.json({ message: 'Account updated' });

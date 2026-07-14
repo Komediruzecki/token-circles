@@ -465,6 +465,13 @@
   color: var(--text-secondary);
 }
 
+.form-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 768px) {
   .accounts-summary {
     grid-template-columns: repeat(2, 1fr);
