@@ -17,7 +17,20 @@ export default defineConfig(({ mode }) => {
   const isProd = mode === 'production'
   return {
     define: {
-      __APP_VERSION__: JSON.stringify(packageJson.version),
+      __APP_VERSION__: JSON.stringify(
+        // Single source of truth for the shown version is the release tag. On a tag
+        // deploy GITHUB_REF_NAME is e.g. "v5.3.6"; otherwise fall back to the nearest
+        // tag, then package.json. Keeps the in-app version from drifting each release.
+        (() => {
+          const ref = process.env.GITHUB_REF_NAME
+          if (ref && /^v\d/.test(ref)) return ref.replace(/^v/, '')
+          try {
+            return execSync('git describe --tags --abbrev=0').toString().trim().replace(/^v/, '')
+          } catch {
+            return packageJson.version
+          }
+        })()
+      ),
       __GIT_SHA__: JSON.stringify(
         (() => {
           try {
