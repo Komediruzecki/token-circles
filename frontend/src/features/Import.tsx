@@ -2474,7 +2474,9 @@ export default function Import() {
   return (
     <div class={`${styles.container} ${styles.pageImport}`}>
       <div class={styles.pageHeader}>
-        <h1 data-tour="import-header">Import Transactions</h1>
+        <h1 data-test-id="import-header" data-tour="import-header">
+          Import Transactions
+        </h1>
         <p>Import transactions from CSV, Excel, or Google Sheets</p>
       </div>
 

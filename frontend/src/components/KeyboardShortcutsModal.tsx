@@ -87,12 +87,13 @@ export default function KeyboardShortcutsModal(props: { onClose: () => void }) {
         class={styles.modal}
         role="dialog"
         aria-label="Keyboard shortcuts"
+        data-test-id="shortcuts-modal"
         onClick={(e) => {
           e.stopPropagation()
         }}
       >
         <div class={styles.header}>
-          <h2>Keyboard shortcuts</h2>
+          <h2 data-test-id="shortcuts-title">Keyboard shortcuts</h2>
           <button class={styles.closeBtn} onClick={props.onClose} aria-label="Close">
             <svg
               width="20"

@@ -692,7 +692,9 @@ export default function Settings() {
   return (
     <div class={`page page-settings page-enter ${styles.settingsPage}`}>
       <div class={styles.pageHeader}>
-        <h1 data-tour="settings-header">Settings</h1>
+        <h1 data-test-id="settings-header" data-tour="settings-header">
+          Settings
+        </h1>
       </div>
       <div class={styles.pageContent}>
         <div

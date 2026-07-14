@@ -17,22 +17,25 @@ test.describe('Budgets CRUD Operations', () => {
   })
 
   test('should have month selector controls', async ({ page }) => {
-    await expect(page.getByTestId('month-selector')).toBeVisible()
-    await expect(page.getByTestId('month-prev-btn')).toHaveCount(1)
-    await expect(page.getByTestId('month-display')).toBeVisible()
+    // The month selector is the shared PeriodBar (steppers + a clickable period label). Scope the
+    // controls to the month-selector container — PeriodBar is reused on other pages that keep-alive
+    // may leave mounted in the DOM.
+    const monthSelector = page.getByTestId('month-selector')
+    await expect(monthSelector).toBeVisible()
+    await expect(monthSelector.getByTestId('period-prev')).toBeVisible()
+    await expect(monthSelector.getByTestId('period-label')).toBeVisible()
+    await expect(monthSelector.getByTestId('period-next')).toBeVisible()
   })
 
   test('should have summary cards', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const summaryDiv = page.getByTestId('budget-summary')
-    // CSS modules mangles className, so count direct children instead
-    const cards = summaryDiv.locator('> div')
-    expect(await cards.count()).toBeGreaterThanOrEqual(3)
-
+    // Assert each summary card by its stable test-id. Each `toBeVisible` auto-waits for the budgets
+    // page to finish loading (the container gets a generous timeout), which is robust under load —
+    // unlike a fixed sleep + counting anonymous child divs, which raced the page mount.
+    await expect(page.getByTestId('budget-summary')).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('budgets-summary-income')).toBeVisible()
     await expect(page.getByTestId('budgets-summary-allocated')).toBeVisible()
     await expect(page.getByTestId('budgets-summary-spent')).toBeVisible()
+    await expect(page.getByTestId('budgets-summary-remaining')).toBeVisible()
   })
 
   test('should have remaining summary card', async ({ page }) => {
@@ -82,16 +85,13 @@ test.describe('Budgets CRUD Operations', () => {
     expect(criticalErrors.length).toBeLessThan(3)
   })
 
-  test('should display loading or content state after navigation', async ({ page }) => {
+  test('should render content after navigation', async ({ page }) => {
     await navigateToRoute(page, 'budgets')
-    await page.waitForTimeout(1000)
 
-    // After navigating, either loading state or the actual content should be visible
-    const loadingText = page.getByTestId('loading-state')
-    const contentArea = page.getByTestId('budget-allocations')
-    const hasLoading = await loadingText.isVisible({ timeout: 2000 }).catch(() => false)
-    const hasContent = await contentArea.isVisible({ timeout: 2000 }).catch(() => false)
-
-    expect(hasLoading || hasContent).toBeTruthy()
+    // The allocations container renders as soon as the budgets page mounts — it wraps the
+    // loading / empty / table states, so it's present regardless of whether data has resolved.
+    // Waiting for it is a robust "the page loaded" check, unlike the previous racy either/or on a
+    // fixed sleep (which failed when navigation landed between states under load).
+    await expect(page.getByTestId('budget-allocations')).toBeVisible({ timeout: 15000 })
   })
 })
