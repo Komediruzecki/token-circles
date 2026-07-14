@@ -77,11 +77,10 @@
       "routes": [{ "pattern": "api.tokencircles.com", "custom_domain": true }],
       "vars": {
         "APP_ENV": "production",
-        // Reuses the dev Google OAuth client. The prod redirect URI
-        // (https://api.tokencircles.com/api/auth/google/callback) and JS origin
-        // (https://tokencircles.com) must be added to this client in the Google console,
-        // or swap in a dedicated prod client id.
-        "GOOGLE_CLIENT_ID": "961447002903-p2gkcujs85svbuf4tpmvu1cj4ge1ivh3.apps.googleusercontent.com",
+        // Dedicated prod Google OAuth client (Cloud project owned by tokencircles@tokencircles.com).
+        // Redirect URI https://api.tokencircles.com/api/auth/google/callback + JS origin
+        // https://tokencircles.com are registered on it; GOOGLE_CLIENT_SECRET is a wrangler secret.
+        "GOOGLE_CLIENT_ID": "711630541684-i5jhhvlcrvmuusuelfb1gmac2currit6.apps.googleusercontent.com",
         // App lives at the APEX (not app.<domain>): the SPA origin is the bare apex.
         "CORS_ORIGIN": "https://tokencircles.com",
         "APP_ORIGINS": "https://tokencircles.com",
