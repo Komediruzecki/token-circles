@@ -44,6 +44,7 @@ import {
   setSidebarCollapsed as setSidebarCollapsedStore,
   useAppState,
 } from './core/appStore'
+import { loadBillingPlan } from './core/billingStore'
 import { logger } from './core/logger.js'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
@@ -256,6 +257,7 @@ export function App() {
   const handleLoginSuccess = async () => {
     setIsLoginModalOpen(false)
     setIsAuthenticated(true)
+    void loadBillingPlan()
     await loadProfiles()
     if (profiles().length > 0) {
       const savedProfileId = localStorage.getItem('currentProfileId')
@@ -332,6 +334,7 @@ export function App() {
     setIsAuthenticated(loggedIn)
     if (loggedIn) {
       await loadProfiles(true)
+      void loadBillingPlan()
     } else if (!serverMode) {
       // Client-only (serverless) mode: no login required — load local/demo profiles.
       await loadProfiles(false)

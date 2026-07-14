@@ -44,6 +44,7 @@ import TransactionTable from '../components/TransactionTable'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
 import { refetchOnActive } from '../core/pageVisibility'
@@ -1196,30 +1197,60 @@ export default function Transactions() {
                     <InfoTip text="Attach a photo or PDF of the receipt/invoice for your records — viewable later from the transaction row." />
                   </label>
                   <div class={styles.receiptUploadContainer}>
-                    <label
-                      class={styles.receiptPlaceholder}
-                      for="tx-receipt"
-                      data-test-id="tx-receipt-label"
+                    <Show
+                      when={!receiptsLocked()}
+                      fallback={
+                        <a
+                          class={styles.receiptPlaceholder}
+                          href="#settings"
+                          data-test-id="tx-receipt-locked"
+                          style="text-decoration:none; cursor:pointer;"
+                        >
+                          <svg
+                            width="20"
+                            height="20"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M8 11V7a4 4 0 118 0v4m-9 0h10a2 2 0 012 2v5a2 2 0 01-2 2H7a2 2 0 01-2-2v-5a2 2 0 012-2z"
+                            />
+                          </svg>
+                          <span class={styles.receiptText}>
+                            Receipts are a Premium feature — upgrade
+                          </span>
+                        </a>
+                      }
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
+                      <label
+                        class={styles.receiptPlaceholder}
+                        for="tx-receipt"
+                        data-test-id="tx-receipt-label"
                       >
-                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                      <span class={styles.receiptText}>Click to upload receipt</span>
-                    </label>
-                    <input
-                      id="tx-receipt"
-                      type="file"
-                      class={styles.receiptInput}
-                      accept="image/*,.pdf"
-                      onChange={_handleReceiptFileSelect}
-                    />
+                        <svg
+                          width="20"
+                          height="20"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        <span class={styles.receiptText}>Click to upload receipt</span>
+                      </label>
+                      <input
+                        id="tx-receipt"
+                        type="file"
+                        class={styles.receiptInput}
+                        accept="image/*,.pdf"
+                        onChange={_handleReceiptFileSelect}
+                      />
+                    </Show>
                     {receiptPreviewUrl() && (
                       <>
                         {(selectedFile()?.type || existingReceipt()?.file_type || '').startsWith(
