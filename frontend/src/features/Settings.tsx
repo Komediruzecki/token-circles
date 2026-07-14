@@ -36,6 +36,7 @@ import SupportContact from '../components/SupportContact'
 import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
+import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { period } from '../core/periodStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
@@ -276,7 +277,9 @@ export default function Settings() {
   const loadBilling = async () => {
     try {
       const res = await apiFetch('/api/billing/status', { credentials: 'include' })
-      setBilling(res.ok ? await res.json() : null)
+      const data = res.ok ? await res.json() : null
+      setBilling(data)
+      setCurrentPlan(data?.plan ?? null)
     } catch {
       setBilling(null)
     }
@@ -774,10 +777,26 @@ export default function Settings() {
               <div class={styles.card}>
                 <div class={styles.settingsSection}>
                   <div class={styles.settingsSectionTitle}>Email Reminders</div>
-                  <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
-                    Budget alerts and a periodic spending report, sent to your email. Requires a
-                    paid plan.
-                  </p>
+                  <Show
+                    when={emailAlertsLocked()}
+                    fallback={
+                      <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
+                        Budget alerts and a periodic spending report, sent to your email. Requires a
+                        paid plan.
+                      </p>
+                    }
+                  >
+                    <p style="margin: 4px 0 12px; color: var(--text-secondary); font-size: 13px;">
+                      Email alerts are a Premium feature.{' '}
+                      <button
+                        onclick={() => setActiveTab('billing')}
+                        style="background:none; border:none; padding:0; color:var(--accent); cursor:pointer; text-decoration:underline; font:inherit;"
+                      >
+                        See plans
+                      </button>{' '}
+                      to enable budget alerts and spending reports.
+                    </p>
+                  </Show>
                   <div class={styles.formGroup}>
                     <label class={styles.formLabel}>Email address</label>
                     <input
@@ -793,6 +812,7 @@ export default function Settings() {
                     <input
                       type="checkbox"
                       checked={notif()!.emailNotifications}
+                      disabled={emailAlertsLocked()}
                       onChange={(e) =>
                         setNotif({ ...notif()!, emailNotifications: e.currentTarget.checked })
                       }
@@ -805,7 +825,7 @@ export default function Settings() {
                     <input
                       type="checkbox"
                       checked={notif()!.budgetAlerts}
-                      disabled={!notif()!.emailNotifications}
+                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
                       onChange={(e) =>
                         setNotif({ ...notif()!, budgetAlerts: e.currentTarget.checked })
                       }
@@ -818,14 +838,16 @@ export default function Settings() {
                     <input
                       type="checkbox"
                       checked={notif()!.spendingReport}
-                      disabled={!notif()!.emailNotifications}
+                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
                       onChange={(e) =>
                         setNotif({ ...notif()!, spendingReport: e.currentTarget.checked })
                       }
                     />
                     <span>Spending report (biweekly)</span>
                   </label>
-                  <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+                  <div
+                    style={`display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; ${emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : ''}`}
+                  >
                     <button
                       class={styles.btnPrimary}
                       onclick={() => void saveNotifications()}

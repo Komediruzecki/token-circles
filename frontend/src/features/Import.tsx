@@ -1442,7 +1442,7 @@ export default function Import() {
             <input
               type="file"
               id="import-file-input"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               class={styles.fileInput}
               disabled={loading()}
               onChange={handleFileSelect}
@@ -1898,7 +1898,7 @@ export default function Import() {
             <input
               type="file"
               id="bank-file-input"
-              accept=".csv,.xls,.xlsx"
+              accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               multiple
               class={styles.fileInput}
               disabled={loading()}
