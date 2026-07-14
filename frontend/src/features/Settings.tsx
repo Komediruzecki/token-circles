@@ -37,6 +37,7 @@ import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { period } from '../core/periodStore'
+import { setShowShortcuts } from '../core/shortcutsStore'
 import { migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
@@ -1351,8 +1352,15 @@ export default function Settings() {
                 <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
                   View Changelog
                 </button>
+                <button
+                  class={styles.btnSecondary}
+                  style="margin-left: 8px;"
+                  onclick={() => setShowShortcuts(true)}
+                >
+                  Keyboard shortcuts
+                </button>
                 <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                  See what&apos;s new in each version of Token Circles.
+                  See what&apos;s new in each version of Token Circles, or the keyboard shortcuts.
                 </p>
                 <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
                   v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
