@@ -113,6 +113,20 @@ export function App() {
   // Touch-friendly quick entry (Guided Orbit), opened by the floating + button.
   const [isGuidedOpen, setIsGuidedOpen] = createSignal(false)
 
+  // Keep-alive page mounting: pages stay mounted after first visit, hidden
+  // via CSS instead of destroyed. Navigation becomes instant — no re-fetch,
+  // no spinner, no lost scroll position.
+  const [mountedPages, setMountedPages] = createSignal(new Set<string>([activePage()]))
+  createEffect(() => {
+    const current = activePage()
+    setMountedPages((prev) => {
+      if (prev.has(current)) return prev
+      const next = new Set(prev)
+      next.add(current)
+      return next
+    })
+  })
+
   const loadProfiles = async (autoSelect = false) => {
     try {
       const data = await api.getProfiles()
@@ -1048,26 +1062,28 @@ export function App() {
 
             <main class={layoutStyles.main} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
               {Object.entries(allPages).map(([name, page]) => (
-                <Show when={activePage() === name && !_isLoading()}>
-                  <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>
-                    <ErrorBoundary
-                      fallback={(err) => (
-                        <div class={layoutStyles.pageError}>
-                          <h3>Page Error</h3>
-                          <p>{err.toString()}</p>
-                          <button
-                            onClick={() => {
-                              window.location.reload()
-                            }}
-                          >
-                            Reload
-                          </button>
-                        </div>
-                      )}
-                    >
-                      <Dynamic component={page} data-testid={`page-${name}`} />
-                    </ErrorBoundary>
-                  </Suspense>
+                <Show when={mountedPages().has(name)}>
+                  <div style={{ display: activePage() === name ? 'block' : 'none' }}>
+                    <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>
+                      <ErrorBoundary
+                        fallback={(err) => (
+                          <div class={layoutStyles.pageError}>
+                            <h3>Page Error</h3>
+                            <p>{err.toString()}</p>
+                            <button
+                              onClick={() => {
+                                window.location.reload()
+                              }}
+                            >
+                              Reload
+                            </button>
+                          </div>
+                        )}
+                      >
+                        <Dynamic component={page} data-testid={`page-${name}`} />
+                      </ErrorBoundary>
+                    </Suspense>
+                  </div>
                 </Show>
               ))}
             </main>

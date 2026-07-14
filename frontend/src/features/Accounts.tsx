@@ -31,7 +31,7 @@
  * Handles bank accounts, tracking balances and transaction history
  */
 
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
@@ -71,10 +71,13 @@ export default function Accounts() {
       }
     }
   )
-  const loading = () => accountsResource.loading && !accountsResource()
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const accounts = () => accountsResource()?.accounts ?? []
   const transactions = () => accountsResource()?.transactions ?? []
   const profiles = () => accountsResource()?.profiles ?? []
+  createEffect(() => {
+    if (!accountsResource.loading) setInitialLoad(false)
+  })
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [formData, setFormData] = createSignal({
     name: '',
@@ -301,7 +304,7 @@ export default function Accounts() {
         </div>
       </div>
 
-      <Show when={!loading() && accounts().length > 0}>
+      <Show when={accounts().length > 0}>
         <div class={styles.netWorthMap}>
           <h3 class={styles.netWorthMapTitle}>Net worth map</h3>
           <AccountConstellation
@@ -317,7 +320,7 @@ export default function Accounts() {
       </Show>
 
       <div data-tour="accounts-list">
-        {loading() ? (
+        {initialLoad() && accounts().length === 0 ? (
           <div class={styles.emptyState}>Loading accounts...</div>
         ) : accounts().length === 0 ? (
           <div class={styles.emptyState}>

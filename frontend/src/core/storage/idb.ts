@@ -37,7 +37,6 @@ function upgradeSchema(
   _newVersion: number | null,
   // The versionchange transaction from idb; typed loosely so the v10 data migration can
   // walk the accounts store without importing idb's deep generic cursor types.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx?: any
 ): void | Promise<void> {
   // v1: base stores

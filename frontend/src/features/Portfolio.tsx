@@ -34,7 +34,7 @@ export default function Portfolio() {
   const state = useAppState()
   const [holdings, setHoldings] = createSignal<PortfolioHolding[]>([])
   const [summary, setSummary] = createSignal<PortfolioSummary | null>(null)
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [editingHolding, setEditingHolding] = createSignal<PortfolioHolding | null>(null)
   const [formData, setFormData] = createSignal({
@@ -89,7 +89,6 @@ export default function Portfolio() {
   })
 
   const loadData = async () => {
-    setLoading(true)
     try {
       const [holdingsRes, summaryRes] = await Promise.all([
         apiGet<PortfolioHolding[]>('/api/portfolio/holdings'),
@@ -100,7 +99,7 @@ export default function Portfolio() {
     } catch (err) {
       console.error('Failed to load portfolio', err)
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -329,7 +328,7 @@ export default function Portfolio() {
       </Show>
 
       <div data-tour="portfolio-holdings">
-        {loading() ? (
+        {initialLoad() && holdings().length === 0 ? (
           <div class={styles.emptyState}>Loading portfolio...</div>
         ) : holdings().length === 0 ? (
           <div class={styles.emptyState}>

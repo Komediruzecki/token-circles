@@ -121,7 +121,7 @@ export default function Bills() {
       }
     }
   )
-  const loading = () => billsResource.loading && !billsResource()
+  const initialLoad = () => billsResource.loading && !billsResource()
   const bills = () => billsResource()?.bills ?? []
   const categories = () => billsResource()?.categories ?? []
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -454,7 +454,7 @@ export default function Bills() {
         </button>
       </div>
 
-      {loading() ? (
+      {initialLoad() && bills().length === 0 ? (
         <div data-test-id="loading-state" class={styles.emptyState}>
           Loading bills...
         </div>

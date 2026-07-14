@@ -57,7 +57,7 @@ export default function Transactions() {
   // The global focus period drives the date filter (any mode → a range; "all" → no bound).
   const periodRange = () => (period().preset === 'all' ? null : toRange(period()))
   const [transactions, setTransactions] = createSignal<Transaction[]>([])
-  const [loading, setLoading] = createSignal(true)
+  const [initialLoad, setInitialLoad] = createSignal(true)
   const [selectedTransactions, setSelectedTransactions] = createSignal<number[]>([])
   const [selectedReceipt, setSelectedReceipt] = createSignal<Receipt | null>(null)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = createSignal(false)
@@ -466,17 +466,17 @@ export default function Transactions() {
   }
 
   // Refresh transactions handler
+  // Refresh transactions handler — keeps existing data visible during background
+  // re-fetches so mutations feel instant instead of replacing content with a spinner.
   const refreshTransactions = async () => {
-    setLoading(true)
     try {
       const data = (await api.getTransactions()) as any
-      // Backend returns { rows, total, limit, offset } for paginated responses
       const transactionsData: any[] = Array.isArray(data) ? data : (data?.rows ?? [])
       setTransactions(transactionsData as unknown as Transaction[])
     } catch (error) {
       console.error('Failed to reload transactions:', error)
     } finally {
-      setLoading(false)
+      setInitialLoad(false)
     }
   }
 
@@ -1537,7 +1537,7 @@ export default function Transactions() {
         </div>
       )}
 
-      {loading() ? (
+      {initialLoad() && transactions().length === 0 ? (
         <div class={styles.loading}>Loading transactions...</div>
       ) : (
         <>
