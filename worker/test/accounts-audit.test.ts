@@ -171,3 +171,66 @@ describe('worker accounts — recompute balances repair (audit A1/D3)', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('worker accounts — edit (PUT /api/accounts/:id)', () => {
+  const put = (id: number, body: unknown) =>
+    api(`/api/accounts/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+
+  async function getAccount(id: number): Promise<Record<string, any>> {
+    const row = await env.DB.prepare('SELECT * FROM accounts WHERE id = ?')
+      .bind(id)
+      .first<Record<string, any>>();
+    return row!;
+  }
+
+  it('applies a partial update without clobbering unspecified fields', async () => {
+    // Seed some info + a non-default currency, then rename only.
+    await put(1, { name: 'Checking', bank_name: 'Chase', currency: 'EUR', notes: 'my note' });
+    const res = await put(1, { name: 'Renamed' });
+    expect(res.status).toBe(200);
+
+    const a = await getAccount(1);
+    expect(a.name).toBe('Renamed');
+    // bank_name / currency / notes / balance / starting_balance all preserved.
+    expect(a.bank_name).toBe('Chase');
+    expect(a.currency).toBe('EUR');
+    expect(a.notes).toBe('my note');
+    expect(a.balance).toBe(1000);
+    expect(a.starting_balance).toBe(1000);
+  });
+
+  it('keeps the corrected balance durable across a recompute', async () => {
+    // Ledger: -100 expense on acc1 -> balance 900 (starting 1000).
+    await post({ description: 'e', amount: 100, type: 'expense', account_id: 1, category_id: 1 });
+    expect(await balanceOf(1)).toBe(900);
+
+    // The frontend corrects the CURRENT balance to 1200 by shifting starting_balance by the
+    // delta and sending the matching balance: ledger = 900 - 1000 = -100; starting = 1200 - (-100).
+    const res = await put(1, {
+      name: 'Checking',
+      type: 'giro',
+      currency: 'USD',
+      starting_balance: 1300,
+      balance: 1200,
+    });
+    expect(res.status).toBe(200);
+    expect(await balanceOf(1)).toBe(1200);
+
+    // A recompute (starting_balance + ledger) must reproduce the corrected balance, not revert it.
+    const rc = await api('/api/accounts/recompute-balances', { method: 'POST' });
+    expect(rc.status).toBe(200);
+    expect(await balanceOf(1)).toBe(1200);
+    const a = await getAccount(1);
+    expect(a.starting_balance).toBe(1300);
+  });
+
+  it('treats an empty body as a no-op and 404s an unknown account', async () => {
+    const noop = await put(1, {});
+    expect(noop.status).toBe(200);
+    expect((await noop.json()) as { message: string }).toEqual({ message: 'No changes' });
+    expect(await balanceOf(1)).toBe(1000);
+
+    const missing = await put(99999, { name: 'Nope' });
+    expect(missing.status).toBe(404);
+  });
+});

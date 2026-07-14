@@ -36,7 +36,7 @@ import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import styles from './AccountsPage.module.css'
 
@@ -47,6 +47,8 @@ interface Account {
   balance: number
   currency: string
   bank_name?: string
+  starting_balance?: number
+  starting_date?: string | null
   last_activity?: string
   profile_id: number
 }
@@ -78,8 +80,7 @@ export default function Accounts() {
   createEffect(() => {
     if (!accountsResource.loading) setInitialLoad(false)
   })
-  const [showAddModal, setShowAddModal] = createSignal(false)
-  const [formData, setFormData] = createSignal({
+  const emptyForm = () => ({
     name: '',
     type: 'giro',
     bank_name: '',
@@ -88,6 +89,38 @@ export default function Accounts() {
     starting_balance: '',
     starting_date: '',
   })
+  // null = closed; 'add' = create; 'edit' = update the account held in editingAccount().
+  const [modalMode, setModalMode] = createSignal<'add' | 'edit' | null>(null)
+  const [editingAccount, setEditingAccount] = createSignal<Account | null>(null)
+  const [formData, setFormData] = createSignal(emptyForm())
+
+  const openAddModal = () => {
+    setEditingAccount(null)
+    setFormData(emptyForm())
+    setModalMode('add')
+  }
+
+  const openEditModal = (account: Account) => {
+    setEditingAccount(account)
+    setFormData({
+      name: account.name,
+      type: account.type,
+      bank_name: account.bank_name || '',
+      // The Current Balance field is prefilled with the derived balance; changing it
+      // adjusts the starting balance under the hood (see handleEditSubmit).
+      balance: String(account.balance ?? ''),
+      currency: account.currency || 'USD',
+      starting_balance: String(account.starting_balance ?? ''),
+      starting_date: account.starting_date || '',
+    })
+    setModalMode('edit')
+  }
+
+  const closeModal = () => {
+    setModalMode(null)
+    setEditingAccount(null)
+    setFormData(emptyForm())
+  }
 
   const profileNameMap = createMemo(() => {
     const map = new Map<number, string>()
@@ -134,20 +167,45 @@ export default function Accounts() {
     try {
       await apiPost('/api/accounts', data)
       showToast('Account created successfully', 'success')
-      setShowAddModal(false)
-      setFormData({
-        name: '',
-        type: 'giro',
-        bank_name: '',
-        balance: '',
-        currency: 'USD',
-        starting_balance: '',
-        starting_date: '',
-      })
+      closeModal()
       refetchAccounts()
     } catch (err) {
       console.error('Failed to save account', err)
       showToast('Failed to create account', 'error')
+    }
+  }
+
+  // Handle edit submit. Info fields (name/type/bank/currency/starting date) update directly.
+  // The Current Balance field is a correction: because balance is derived (starting_balance +
+  // the ledger), we shift starting_balance by the delta and send the matching balance so the
+  // fix survives a recompute and future transactions apply on top of it — rather than writing
+  // an absolute balance that the next recompute would silently revert.
+  const handleEditSubmit = async (e: Event) => {
+    e.preventDefault()
+    const acct = editingAccount()
+    if (!acct) return
+    const body: Record<string, unknown> = {
+      name: formData().name,
+      type: formData().type,
+      bank_name: formData().bank_name,
+      currency: formData().currency,
+      starting_date: formData().starting_date || null,
+    }
+    const desiredCurrent = Math.round(parseFloat(formData().balance) * 100) / 100
+    if (Number.isFinite(desiredCurrent) && Math.abs(desiredCurrent - (acct.balance ?? 0)) > 0.005) {
+      const ledger = (acct.balance ?? 0) - (acct.starting_balance ?? 0)
+      body.starting_balance = Math.round((desiredCurrent - ledger) * 100) / 100
+      body.balance = desiredCurrent
+    }
+
+    try {
+      await apiPut(`/api/accounts/${acct.id}`, body)
+      showToast('Account updated successfully', 'success')
+      closeModal()
+      refetchAccounts()
+    } catch (err) {
+      console.error('Failed to update account', err)
+      showToast('Failed to update account', 'error')
     }
   }
 
@@ -253,7 +311,7 @@ export default function Accounts() {
             data-test-id="add-account-btn"
             data-tour="accounts-add"
             class={`${styles.btn} ${styles.btnPrimary}`}
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -326,10 +384,7 @@ export default function Accounts() {
           <div class={styles.emptyState}>
             <p>No accounts yet</p>
             <p>Add your first account to start tracking your finances.</p>
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={() => setShowAddModal(true)}
-            >
+            <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={openAddModal}>
               Add Account
             </button>
           </div>
@@ -366,6 +421,25 @@ export default function Accounts() {
                                 {account.type}
                               </Badge>
                             </span>
+                            <button
+                              data-test-id="account-edit-btn"
+                              class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                              title="Edit account"
+                              aria-label="Edit account"
+                              onClick={() => {
+                                openEditModal(account)
+                              }}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
                             <span data-test-id="account-delete-btn" style={{ display: 'contents' }}>
                               <ConfirmButton
                                 class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
@@ -440,13 +514,13 @@ export default function Accounts() {
         )}
       </div>
 
-      {/* Add Account Modal */}
-      {showAddModal() && (
+      {/* Add / Edit Account Modal */}
+      {modalMode() !== null && (
         <div
-          data-test-id="add-account-modal"
+          data-test-id={modalMode() === 'edit' ? 'edit-account-modal' : 'add-account-modal'}
           class={`${styles.modalOverlay} ${styles.visible}`}
           onclick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false)
+            if (e.target === e.currentTarget) closeModal()
           }}
         >
           <div
@@ -456,14 +530,19 @@ export default function Accounts() {
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>Add Account</h3>
-              <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
+              <h3 class={styles.modalTitle}>
+                {modalMode() === 'edit' ? 'Edit Account' : 'Add Account'}
+              </h3>
+              <button class={styles.modalClose} onClick={closeModal}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
+            <form
+              class={styles.modalBody}
+              onSubmit={modalMode() === 'edit' ? handleEditSubmit : handleSubmit}
+            >
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Account Name</label>
                 <input
@@ -498,17 +577,21 @@ export default function Accounts() {
                   oninput={(e) => setFormData({ ...formData(), bank_name: e.target.value })}
                 />
               </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Starting Balance</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  class={styles.formControl}
-                  placeholder="0.00"
-                  value={formData().starting_balance || formData().balance}
-                  oninput={(e) => setFormData({ ...formData(), starting_balance: e.target.value })}
-                />
-              </div>
+              <Show when={modalMode() === 'add'}>
+                <div class={styles.formGroup}>
+                  <label class={styles.formLabel}>Starting Balance</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class={styles.formControl}
+                    placeholder="0.00"
+                    value={formData().starting_balance || formData().balance}
+                    oninput={(e) =>
+                      setFormData({ ...formData(), starting_balance: e.target.value })
+                    }
+                  />
+                </div>
+              </Show>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Starting Date</label>
                 <input
@@ -528,6 +611,12 @@ export default function Accounts() {
                   value={formData().balance}
                   oninput={(e) => setFormData({ ...formData(), balance: e.target.value })}
                 />
+                <Show when={modalMode() === 'edit'}>
+                  <p class={styles.formHint}>
+                    Correcting this adjusts the starting balance so your transaction history stays
+                    intact.
+                  </p>
+                </Show>
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Currency</label>
@@ -542,17 +631,23 @@ export default function Accounts() {
                   <option value="JPY">JPY - Japanese Yen</option>
                   <option value="CAD">CAD - Canadian Dollar</option>
                 </select>
+                <Show when={modalMode() === 'edit'}>
+                  <p class={styles.formHint}>
+                    Relabels the account only — existing balances and transactions are not
+                    converted.
+                  </p>
+                </Show>
               </div>
               <div class={styles.modalFooter}>
                 <button
                   type="button"
                   class={`${styles.btn} ${styles.btnSecondary}`}
-                  onClick={() => setShowAddModal(false)}
+                  onClick={closeModal}
                 >
                   Cancel
                 </button>
                 <button type="submit" class={`${styles.btn} ${styles.btnPrimary}`}>
-                  Add Account
+                  {modalMode() === 'edit' ? 'Save Changes' : 'Add Account'}
                 </button>
               </div>
             </form>
