@@ -86,6 +86,15 @@
         "APP_ORIGINS": "https://tokencircles.com",
         "API_PUBLIC_ORIGIN": "https://api.tokencircles.com",
         "COOKIE_DOMAIN": ".tokencircles.com",
+        // Stripe LIVE per-tier Price ids (vars, not secret; sk_live + whsec are wrangler secrets).
+        // Webhook: https://api.tokencircles.com/api/billing/webhook — set its API version to
+        // 2024-06-20 to match STRIPE_API_VERSION in src/routes/billing.ts.
+        "STRIPE_PRICE_BASIC_MONTHLY": "price_1Tt9e0D6TRtQgXNzydHkPmBL",
+        "STRIPE_PRICE_BASIC_ANNUAL": "price_1Tt9e0D6TRtQgXNz1fRfUgUg",
+        "STRIPE_PRICE_ADVANCED_MONTHLY": "price_1Tt9gZD6TRtQgXNzCkf4E3Sg",
+        "STRIPE_PRICE_ADVANCED_ANNUAL": "price_1Tt9gZD6TRtQgXNznz0zjYSi",
+        "STRIPE_PRICE_ULTIMATE_MONTHLY": "price_1Tt9iSD6TRtQgXNzYsEt5ofa",
+        "STRIPE_PRICE_ULTIMATE_ANNUAL": "price_1Tt9iSD6TRtQgXNz0lrJIjbO",
       },
       "d1_databases": [
         {
