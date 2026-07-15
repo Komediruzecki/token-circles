@@ -6,6 +6,20 @@ technical detail lives in [dev-changelog.md](dev-changelog.md).
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.5.0] — 2026-07-15
+
+### Added
+
+- Shareable demo links: open a sample profile straight from a link (`?demo=high`, `?demo=mid`, or `?demo=low`) to explore the app with example data.
+
+### Changed
+
+- The app's fonts are now served by Token Circles itself instead of loading from Google — pages render a little faster, work offline, and make no third-party requests.
+
+### Fixed
+
+- No more blank screen after an update. When a new version ships, the app now updates itself cleanly instead of occasionally getting stuck on a white page: it recovers from an out-of-date cache, quietly reloads onto the new version, and — if something still can't load — shows a clear "Reload / Reset app cache" screen instead of nothing. You no longer need to hard-refresh or clear your browser data.
+
 ## [5.4.0] — 2026-07-15
 
 ### Changed

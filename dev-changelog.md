@@ -7,15 +7,23 @@ All notable changes to Token Circles are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.5.0] — 2026-07-15
+
+### Added
+
+- Shareable demo links (`?demo=high|mid|low`): a link switches the app into client-only demo mode and seeds a sample profile before render (the entry applies it before `<App/>` reads the storage mode), then strips the `?demo=` query from the address bar once applied.
 
 ### Changed
 
+- Self-hosted the web fonts (Inter, Fraunces, JetBrains Mono) via `@fontsource` (latin + latin-ext subsets) and removed the render-blocking cross-origin Google Fonts `<link>` + preconnects. Removes the third-party dependency and its CSP violations, and lets headings render offline. Fonts are content-hashed into `/assets` and precached by the service worker.
 - The dashboard "Upcoming Bills" widget now shows each bill's real icon instead of a generic clock: known subscriptions/brands use their brand mark, other bills use their category icon, and the clock remains only as a last-resort fallback.
 - The Analytics spending heatmap now draws noticeably larger cells (and scales its height to match) so the year reads clearly, instead of the previous small/zoomed-out grid.
 
 ### Fixed
 
+- Eliminated the "white screen after a deploy" failure class (a stale service worker serving an old `index.html` + the host returning `index.html`, 200 `text/html`, for deleted hashed chunks → `Failed to load module script` MIME errors). A front Worker (`frontend/server/assets-worker.ts`, assets `not_found_handling: "none"`) now returns a real 404 for a missing `/assets/*` and falls back to `index.html` only for navigations; `_headers` cache tiers make hashed assets `immutable` and `index.html`/`sw.js`/`version.json` `no-cache`; the workbox SW gained `cleanupOutdatedCaches`, `skipWaiting`/`clientsClaim`, a navigate-fallback denylist for `/assets`, `/api`, and `version.json`, 200-only caching, and fresh cache names; a `version.json` poller reloads onto a new build at the next navigation (toast fallback); and a pre-JS boot watchdog in `index.html` plus a `vite:preloadError`/chunk-error handler (`core/bootRecovery.ts`) recover when the bundle itself can't load. The crash modal can now clear the service worker + Cache Storage without wiping user data.
+- Removed `upgrade-insecure-requests` from the report-only CSP (browsers ignore it there and log a warning); it remains in the enforcing policy. Dropped the Google Fonts origins from the policy now that fonts are self-hosted. (Known remaining report-only finding, left visible for a future CSP-enforce decision: a vendored library trips `unsafe-eval` via a benign `Function("return this")` global-object probe.)
+- CI: dev deploys now show the real build version instead of a placeholder.
 - The Apple subscription icon was a solid black mark on a near-transparent chip, so it vanished in dark mode; it now sits on Apple's light chip and stays visible in both themes.
 - Modals are now responsive on small and short screens: overlays scroll vertically and top-align tall dialogs (with a consistent 16px margin) so nothing is clipped off the top or bottom, and modal containers are capped at `calc(100vw - 2rem)` / `calc(100dvh - 2rem)` with `box-sizing: border-box` so they never force horizontal scrolling. Applied consistently across the feature-page modals (Add Transaction, Add Bill/Subscription, Accounts, Goals, Budgets, Portfolio, Housing, Loans, Retirement, Categories) and the shared modal components. Verified headlessly at 390×844 (phone) and 900×420 (landscape).
 
