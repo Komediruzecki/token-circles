@@ -3,6 +3,11 @@ import './styles/index.css'
 import { render } from 'solid-js/web'
 import { App } from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { applyDemoModeFromUrl } from './core/demoMode'
+
+// A shared demo link (?demo=high|mid|low) must switch to client-only mode before
+// <App/> reads the storage mode, so do it here — before render().
+applyDemoModeFromUrl()
 
 const root = document.getElementById('root')
 
