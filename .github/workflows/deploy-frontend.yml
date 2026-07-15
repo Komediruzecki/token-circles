@@ -34,6 +34,11 @@ jobs:
       DEPLOY_ENABLED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags so vite.config's `git describe --tags` resolves the
+          # release version on dev (branch) deploys instead of falling back to a stale
+          # package.json. Prod (tag deploy) reads GITHUB_REF_NAME and is unaffected.
+          fetch-depth: 0
 
       - name: Resolve environment
         id: env
