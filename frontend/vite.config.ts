@@ -10,6 +10,26 @@ import fs from 'fs'
 const packageJson = JSON.parse(fs.readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 
+// Single source of truth for the build identity, shared by the `define` constants and the
+// version.json the app polls to detect a new deployment. Version comes from the release tag
+// (GITHUB_REF_NAME on a tag deploy, else the nearest tag, else package.json); sha pins the commit.
+const APP_VERSION = (() => {
+  const ref = process.env.GITHUB_REF_NAME
+  if (ref && /^v\d/.test(ref)) return ref.replace(/^v/, '')
+  try {
+    return execSync('git describe --tags --abbrev=0').toString().trim().replace(/^v/, '')
+  } catch {
+    return packageJson.version
+  }
+})()
+const GIT_SHA = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'unknown'
+  }
+})()
+
 export default defineConfig(({ mode }) => {
   // Service worker / PWA only in the production build. The dev-domain build
   // (`vite build --mode dev`) and local `vite` ship NO service worker and actively
@@ -17,29 +37,8 @@ export default defineConfig(({ mode }) => {
   const isProd = mode === 'production'
   return {
     define: {
-      __APP_VERSION__: JSON.stringify(
-        // Single source of truth for the shown version is the release tag. On a tag
-        // deploy GITHUB_REF_NAME is e.g. "v5.3.6"; otherwise fall back to the nearest
-        // tag, then package.json. Keeps the in-app version from drifting each release.
-        (() => {
-          const ref = process.env.GITHUB_REF_NAME
-          if (ref && /^v\d/.test(ref)) return ref.replace(/^v/, '')
-          try {
-            return execSync('git describe --tags --abbrev=0').toString().trim().replace(/^v/, '')
-          } catch {
-            return packageJson.version
-          }
-        })()
-      ),
-      __GIT_SHA__: JSON.stringify(
-        (() => {
-          try {
-            return execSync('git rev-parse --short HEAD').toString().trim()
-          } catch {
-            return 'unknown'
-          }
-        })()
-      ),
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+      __GIT_SHA__: JSON.stringify(GIT_SHA),
     },
     base: './',
     build: {
@@ -94,6 +93,20 @@ export default defineConfig(({ mode }) => {
           }
         },
       },
+      {
+        // Emit a tiny, never-cached version.json (served no-cache via _headers). The app polls
+        // it to detect a new deployment and reload at a safe moment — see core/appVersion.ts.
+        name: 'emit-version-json',
+        apply: 'build',
+        writeBundle() {
+          const payload = JSON.stringify({
+            version: APP_VERSION,
+            gitSha: GIT_SHA,
+            builtAt: new Date().toISOString(),
+          })
+          fs.writeFileSync(resolve(__dirname, 'dist', 'version.json'), payload)
+        },
+      },
       ...(isProd
         ? [
             VitePWA({
@@ -131,22 +144,45 @@ export default defineConfig(({ mode }) => {
                 ],
               },
               workbox: {
+                // Precache the offline shell (icons, self-hosted fonts, index.html). JS/CSS are
+                // content-hashed and served NetworkFirst below, not precached.
                 globPatterns: ['**/*.{html,ico,png,svg,woff2}'],
-                // Don't precache JS/CSS - let Apache/Vite handle hashing
+                // A new SW takes over immediately and old precaches are purged, so a deploy can't
+                // leave a client pinned to a stale shell that references now-deleted chunks.
+                cleanupOutdatedCaches: true,
+                clientsClaim: true,
+                skipWaiting: true,
+                // The SPA navigation fallback must NEVER apply to hashed assets, the API, the
+                // version stamp, or the SW itself — those must resolve to real network responses
+                // (a missing chunk has to fail as a 404, never as index.html).
+                navigateFallbackDenylist: [
+                  /^\/api\//,
+                  /^\/assets\//,
+                  /\/version\.json$/,
+                  /\/sw\.js$/,
+                ],
                 runtimeCaching: [
+                  {
+                    // The version stamp is a freshness probe — always hit the network, never cache.
+                    urlPattern: ({ url }) => url.pathname === '/version.json',
+                    handler: 'NetworkOnly',
+                  },
                   {
                     urlPattern: ({ request }) =>
                       request.destination === 'script' || request.destination === 'style',
                     handler: 'NetworkFirst',
                     options: {
-                      cacheName: 'finance-manager-js-css-v3',
+                      // v4: a fresh cache name so a client carrying a pre-fix, poisoned v3 entry
+                      // (a 200 text/html cached for a script) can never replay it after this ships.
+                      cacheName: 'finance-manager-js-css-v4',
                       networkTimeoutSeconds: 10,
                       expiration: {
                         maxEntries: 30,
                         maxAgeSeconds: 5 * 60, // 5 minutes max
                       },
+                      // Cache only a genuine 200 — never an opaque/error response.
                       cacheableResponse: {
-                        statuses: [0, 200],
+                        statuses: [200],
                       },
                     },
                   },
@@ -158,24 +194,14 @@ export default defineConfig(({ mode }) => {
                     },
                     handler: 'NetworkFirst',
                     options: {
-                      cacheName: 'finance-manager-v3',
+                      cacheName: 'finance-manager-v4',
+                      networkTimeoutSeconds: 10,
                       expiration: {
                         maxEntries: 60,
                         maxAgeSeconds: 1 * 24 * 60 * 60, // 1 day
                       },
                       cacheableResponse: {
-                        statuses: [0, 200],
-                      },
-                    },
-                  },
-                  {
-                    urlPattern: /^https:\/\/fonts.googleapis\.com\/.*/i,
-                    handler: 'CacheFirst',
-                    options: {
-                      cacheName: 'finance-manager-fonts',
-                      expiration: {
-                        maxEntries: 10,
-                        maxAgeSeconds: 365 * 24 * 60 * 60,
+                        statuses: [200],
                       },
                     },
                   },

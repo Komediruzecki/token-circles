@@ -31,6 +31,9 @@ workbox-*.js
 registerSW.js
 dev-dist/
 
+# Wrangler local dev state (miniflare cache) — never commit
+.wrangler/
+
 # Local planning (public roadmap is ROADMAP.md)
 todo.md
 

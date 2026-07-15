@@ -37,12 +37,160 @@
     />
     <meta name="twitter:image" content="https://tokencircles.com/og-image.jpg" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts are self-hosted (see src/styles/index.css) — no cross-origin Google Fonts,
+         so nothing here trips CSP and headings render offline. -->
+
+    <!-- Boot watchdog: the LAST-RESORT recovery for a bad deploy. When a hashed chunk from a
+         stale index.html is gone, the entry module fails to load and the app never mounts —
+         so the in-app crash screen (which lives *inside* that bundle) can't help. This inline
+         script runs with zero dependencies: if an app asset errors before boot, or the app
+         hasn't signaled boot in time, it clears the service worker + caches and reloads ONCE
+         (a plain reload won't fix a stale SW), then falls back to a manual recovery panel. -->
+    <script>
+      ;(function () {
+        var booted = function () {
+          return window.__APP_BOOTED__ === true
+        }
+        var recovering = false
+
+        function isAppAsset(el) {
+          if (!el || !el.tagName) return false
+          var tag = el.tagName.toUpperCase()
+          if (tag !== 'SCRIPT' && tag !== 'LINK') return false
+          return /\/assets\//.test(el.src || el.href || '')
+        }
+
+        function clearCachesAndSW() {
+          var tasks = []
+          try {
+            if ('serviceWorker' in navigator) {
+              tasks.push(
+                navigator.serviceWorker
+                  .getRegistrations()
+                  .then(function (rs) {
+                    return Promise.all(
+                      rs.map(function (r) {
+                        return r.unregister()
+                      })
+                    )
+                  })
+                  .catch(function () {})
+              )
+            }
+            if (window.caches && caches.keys) {
+              tasks.push(
+                caches
+                  .keys()
+                  .then(function (ks) {
+                    return Promise.all(
+                      ks.map(function (k) {
+                        return caches.delete(k)
+                      })
+                    )
+                  })
+                  .catch(function () {})
+              )
+            }
+          } catch (e) {}
+          return Promise.all(tasks).catch(function () {})
+        }
+
+        function showPanel() {
+          if (document.getElementById('tc-recovery')) return
+          var wrap = document.createElement('div')
+          wrap.id = 'tc-recovery'
+          wrap.setAttribute(
+            'style',
+            'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;' +
+              'justify-content:center;background:#0a0e1c;color:#f1f5f9;font-family:Inter,' +
+              'system-ui,-apple-system,sans-serif;padding:24px;text-align:center'
+          )
+          var box = document.createElement('div')
+          box.setAttribute('style', 'max-width:420px')
+          var h = document.createElement('h1')
+          h.textContent = 'Update needed'
+          h.setAttribute('style', 'font-size:1.4rem;font-weight:600;margin:0 0 10px')
+          var p = document.createElement('p')
+          p.textContent =
+            'A new version was released and this page could not finish loading. ' +
+            'Reload to get the latest, or reset the app cache if that does not help.'
+          p.setAttribute('style', 'color:#94a3b8;line-height:1.6;margin:0 0 20px')
+          var reload = document.createElement('button')
+          reload.textContent = 'Reload'
+          reload.setAttribute(
+            'style',
+            'display:block;width:100%;margin:0 0 10px;padding:12px;border:none;border-radius:8px;' +
+              'background:#3b82f6;color:#fff;font-size:1rem;font-weight:600;cursor:pointer'
+          )
+          reload.addEventListener('click', function () {
+            location.reload()
+          })
+          var reset = document.createElement('button')
+          reset.textContent = 'Reset app cache & reload'
+          reset.setAttribute(
+            'style',
+            'display:block;width:100%;padding:12px;border:1px solid #334155;border-radius:8px;' +
+              'background:transparent;color:#f1f5f9;font-size:1rem;cursor:pointer'
+          )
+          reset.addEventListener('click', function () {
+            reset.textContent = 'Resetting…'
+            clearCachesAndSW().then(function () {
+              location.reload()
+            })
+          })
+          box.appendChild(h)
+          box.appendChild(p)
+          box.appendChild(reload)
+          box.appendChild(reset)
+          wrap.appendChild(box)
+          ;(document.body || document.documentElement).appendChild(wrap)
+        }
+
+        function recover() {
+          if (recovering || booted()) return
+          recovering = true
+          var alreadyTried = false
+          try {
+            alreadyTried = sessionStorage.getItem('tc-recovered') === '1'
+          } catch (e) {}
+          if (alreadyTried) {
+            // We already cleared + reloaded once this session and it still failed — hand off
+            // to the user rather than looping.
+            showPanel()
+            return
+          }
+          try {
+            sessionStorage.setItem('tc-recovered', '1')
+          } catch (e) {}
+          clearCachesAndSW().then(function () {
+            location.reload()
+          })
+        }
+
+        // Precise signal: an app asset (entry bundle, a chunk, or the stylesheet) failed to
+        // load before the app booted. Capture phase catches resource errors that don't bubble.
+        window.addEventListener(
+          'error',
+          function (e) {
+            if (!booted() && isAppAsset(e.target)) recover()
+          },
+          true
+        )
+
+        // Backstop: nothing errored loudly, but the app never mounted anything in time.
+        setTimeout(function () {
+          var root = document.getElementById('root')
+          if (
+            !booted() &&
+            root &&
+            root.childElementCount === 0 &&
+            document.visibilityState !== 'hidden'
+          ) {
+            recover()
+          }
+        }, 12000)
+      })()
+    </script>
   </head>
   <body>
     <noscript>

@@ -1,4 +1,5 @@
 import { createSignal, ErrorBoundary as SolidErrorBoundary, onCleanup, onMount } from 'solid-js'
+import { isChunkLoadError } from '../core/bootRecovery'
 import type { Component, JSX } from 'solid-js'
 
 interface Props {
@@ -23,10 +24,7 @@ function isThirdPartyError(event: ErrorEvent): boolean {
   if (!event.error && /^Script error\.?$/i.test(msg.trim())) return true
   if (event.filename) {
     if (/cdn-cgi|challenge-platform/.test(event.filename)) return true
-    if (
-      !event.filename.startsWith('/') &&
-      !event.filename.includes(window.location.host)
-    )
+    if (!event.filename.startsWith('/') && !event.filename.includes(window.location.host))
       return true
   }
   return false
@@ -92,6 +90,28 @@ export const ErrorBoundary: Component<Props> = (props) => {
     }
     window.location.reload()
   }
+  // The recovery that actually fixes a stale-cache white screen: drop the service worker and
+  // the Cache Storage (the old app shell + chunks), then reload to fetch the current build.
+  // Unlike the two handlers above, this keeps the user's local data (localStorage/IndexedDB).
+  const handleClearCaches = async () => {
+    try {
+      if ('serviceWorker' in window.navigator) {
+        const regs = await window.navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map((r) => r.unregister()))
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (window.caches) {
+        const keys = await window.caches.keys()
+        await Promise.all(keys.map((k) => window.caches.delete(k)))
+      }
+    } catch {
+      /* ignore */
+    }
+    window.location.reload()
+  }
   const handleDismiss = () => setFatalError(null)
 
   return (
@@ -104,7 +124,9 @@ export const ErrorBoundary: Component<Props> = (props) => {
           <CrashModal
             error={displayError}
             logs={logs}
+            isUpdateError={isChunkLoadError(displayError)}
             onReload={handleReload}
+            onClearCaches={handleClearCaches}
             onClearLocalStorage={handleClearLocalStorage}
             onClearIndexedDB={handleClearIndexedDB}
             onDismiss={handleDismiss}
@@ -116,7 +138,9 @@ export const ErrorBoundary: Component<Props> = (props) => {
         <CrashModal
           error={fatalError()!}
           logs={errorLog()}
+          isUpdateError={isChunkLoadError(fatalError()!)}
           onReload={handleReload}
+          onClearCaches={handleClearCaches}
           onClearLocalStorage={handleClearLocalStorage}
           onClearIndexedDB={handleClearIndexedDB}
           onDismiss={handleDismiss}
@@ -131,7 +155,9 @@ export const ErrorBoundary: Component<Props> = (props) => {
 function CrashModal(props: {
   error: Error
   logs: string[]
+  isUpdateError: boolean
   onReload: () => void
+  onClearCaches: () => void
   onClearLocalStorage: () => void
   onClearIndexedDB: () => void
   onDismiss: () => void
@@ -161,9 +187,13 @@ function CrashModal(props: {
           'box-shadow': '0 4px 6px rgba(0, 0, 0, 0.1)',
         }}
       >
-        <h2 style={{ 'margin-top': 0, color: '#ef4444' }}>App Crashed</h2>
+        <h2 style={{ 'margin-top': 0, color: props.isUpdateError ? '#3b82f6' : '#ef4444' }}>
+          {props.isUpdateError ? 'Update available' : 'App Crashed'}
+        </h2>
         <p style={{ 'margin-bottom': '1rem' }}>
-          An unexpected error occurred. You can try reloading or clearing stored data.
+          {props.isUpdateError
+            ? 'A new version was released and part of the app failed to load. Reload to get the latest — if that does not help, clear the app cache (your data is kept).'
+            : 'An unexpected error occurred. Try reloading, or clear the app cache. Clearing stored data is a last resort — it erases local accounts and transactions on this device.'}
         </p>
 
         <div
@@ -224,8 +254,33 @@ function CrashModal(props: {
               cursor: 'pointer',
             }}
           >
-            Reload App
+            {props.isUpdateError ? 'Reload' : 'Reload App'}
           </button>
+          {/* The safe recovery: drops the service worker + cached shell (the usual cause of a
+              stale-build white screen) but keeps the user's local data. */}
+          <button
+            onClick={props.onClearCaches}
+            style={{
+              padding: '0.5rem 1rem',
+              background: 'transparent',
+              color: '#3b82f6',
+              border: '1px solid #3b82f6',
+              'border-radius': '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Clear cache &amp; reload
+          </button>
+
+          <p
+            style={{
+              'font-size': '0.75rem',
+              color: 'var(--text-secondary, #6b7280)',
+              margin: '0.5rem 0 0',
+            }}
+          >
+            Still stuck? These erase local accounts &amp; transactions on this device:
+          </p>
           <button
             onClick={props.onClearLocalStorage}
             style={{
@@ -237,7 +292,7 @@ function CrashModal(props: {
               cursor: 'pointer',
             }}
           >
-            Clear Local Storage & Reload
+            Clear Local Storage &amp; Reload
           </button>
           <button
             onClick={props.onClearIndexedDB}
@@ -250,7 +305,7 @@ function CrashModal(props: {
               cursor: 'pointer',
             }}
           >
-            Clear IndexedDB & Reload
+            Clear IndexedDB &amp; Reload
           </button>
           <button
             onClick={props.onDismiss}
@@ -263,7 +318,7 @@ function CrashModal(props: {
               cursor: 'pointer',
             }}
           >
-            Dismiss & Continue
+            Dismiss &amp; Continue
           </button>
         </div>
       </div>

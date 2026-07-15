@@ -3,7 +3,12 @@ import './styles/index.css'
 import { render } from 'solid-js/web'
 import { App } from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
+
+// Install the stale-chunk recovery listeners before anything renders, so a failed dynamic
+// import after a deploy quietly reloads to the fresh build instead of surfacing a parse error.
+installBootRecovery()
 
 // A shared demo link (?demo=high|mid|low) must switch to client-only mode before
 // <App/> reads the storage mode, so do it here — before render().
@@ -29,3 +34,6 @@ render(
   ),
   root
 )
+
+// Signal a successful boot so the pre-JS watchdog in index.html stands down.
+markBooted()

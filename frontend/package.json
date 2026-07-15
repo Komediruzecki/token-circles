@@ -38,6 +38,9 @@
     "analyze-bundle": "VITE_ANALYZE_BUNDLE=true vite build"
   },
   "dependencies": {
+    "@fontsource/fraunces": "^5.2.9",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@types/d3": "^7.4.3",
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
