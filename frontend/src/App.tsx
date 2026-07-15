@@ -45,6 +45,7 @@ import {
   useAppState,
 } from './core/appStore'
 import { loadBillingPlan } from './core/billingStore'
+import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
 import { logger } from './core/logger.js'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
@@ -344,6 +345,22 @@ export function App() {
     }
     // Server mode + no session: the gate renders <LoginScreen/>, so skip the profile and
     // category loads below that would otherwise 401 against the worker.
+
+    // Shared demo link (?demo=high|mid|low): in client-only mode, open that sample
+    // income profile. Runs after the branch above regardless of the (demo) "logged
+    // in" state, which would otherwise pick a profile from a stale currentProfileId.
+    if (!serverMode) {
+      const demoTier = getDemoTier()
+      const demoProfile = demoTier
+        ? profiles().find((p) => p.name === DEMO_PROFILE_NAME[demoTier])
+        : undefined
+      if (demoProfile) {
+        localStorage.setItem('currentProfileId', String(demoProfile.id))
+        localStorage.setItem('selectedProfileIds', JSON.stringify([demoProfile.id]))
+        setSelectedProfileIds([demoProfile.id])
+        setCurrentProfile({ ...demoProfile })
+      }
+    }
 
     // Parse initial hash from URL (supports #pagename?param=value)
     const rawHash = window.location.hash.slice(1)
