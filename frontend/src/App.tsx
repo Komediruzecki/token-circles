@@ -44,6 +44,7 @@ import {
   setSidebarCollapsed as setSidebarCollapsedStore,
   useAppState,
 } from './core/appStore'
+import { initVersionWatch } from './core/appVersion'
 import { loadBillingPlan } from './core/billingStore'
 import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
 import { logger } from './core/logger.js'
@@ -434,6 +435,11 @@ export function App() {
     // Mirror the focus period into the URL hash + keep it across page navigation.
     const disposePeriodSync = initPeriodSync()
     onCleanup(disposePeriodSync)
+
+    // Watch for new deployments and reload at a safe moment (next navigation) so a mid-session
+    // deploy never strands the user on a deleted chunk.
+    const disposeVersionWatch = initVersionWatch()
+    onCleanup(disposeVersionWatch)
 
     _setIsLoading(false)
   })

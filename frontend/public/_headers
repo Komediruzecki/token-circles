@@ -1,19 +1,52 @@
-# Security headers for the static-asset (SPA) responses (audit S2/B1).
-# Vite copies this file into dist/, which the Cloudflare Worker serves as the assets root.
+# Headers for the static-asset (SPA) responses (audit S2/B1). Vite copies this into dist/,
+# which the Cloudflare Worker serves as the assets root.
 #
-# The enforcing Content-Security-Policy below stays minimal (framing/base-uri only) so it can't
-# white-screen the app. The full content policy ships in REPORT-ONLY mode: the browser reports
-# violations but blocks nothing, so it's safe to deploy and observe. Once the dev site confirms
-# no legitimate violations, promote the report-only policy to an enforcing `Content-Security-Policy`
-# (and drop the minimal one). The allow-list covers the app's own assets plus the third parties it
-# loads: Stripe (js.stripe.com + payment frames), Cloudflare Turnstile, Google sign-in, Google Fonts
-# (fonts.googleapis.com stylesheet + fonts.gstatic.com font files), the Worker API origins, and the
-# exchange-rate API. (Fonts could later be self-hosted to drop the Google origins entirely.)
+# CACHING — the core fix for "white screen / stale build after a deploy":
+#   - /assets/*  are content-hashed and immutable → cache hard, forever. A new deploy ships
+#     new filenames, so an immutable cache can never serve stale code.
+#   - index.html (entry document), sw.js, and version.json must ALWAYS revalidate (no-cache),
+#     so a deploy is picked up on the very next load and the fresh HTML points at fresh assets.
+#     (Previously EVERYTHING was served max-age=0, must-revalidate — assets needlessly
+#     revalidated on every load, and nothing was cached immutably.)
+#
+# CSP — the enforcing policy stays minimal (framing/base-uri only) so it can't white-screen the
+# app. The full content policy ships REPORT-ONLY (browser reports, blocks nothing) — safe to
+# observe. Fonts are now SELF-HOSTED, so the policy no longer needs the Google Fonts origins.
+# Note: `upgrade-insecure-requests` is intentionally NOT in the report-only policy — browsers
+# ignore it there and log a warning; it lives only in the enforcing policy above, where it works.
+# Before promoting the report-only policy to an enforcing `Content-Security-Policy`, resolve the
+# one remaining known violation: a bundled dependency trips `unsafe-eval` via a benign
+# `Function("return this")` global-object probe — either drop/patch that dep or add 'unsafe-eval'
+# (a real weakening) knowingly. The allow-list covers the app's own assets plus Stripe
+# (js.stripe.com + payment frames), Cloudflare Turnstile, Google sign-in, the Worker API origins,
+# and the exchange-rate API.
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; upgrade-insecure-requests
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://challenges.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.dev.tokencircles.com https://api.tokencircles.com https://open.er-api.com https://challenges.cloudflare.com; frame-src https://js.stripe.com https://challenges.cloudflare.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://challenges.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.dev.tokencircles.com https://api.tokencircles.com https://open.er-api.com https://challenges.cloudflare.com; frame-src https://js.stripe.com https://challenges.cloudflare.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# Content-hashed build output (JS, CSS, self-hosted fonts, images) — safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Entry document — never cache; revalidate every load so a deploy is seen immediately.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+
+# Service worker registration must revalidate so SW updates are detected promptly.
+/sw.js
+  Cache-Control: no-cache
+
+# Version stamp polled by the app for update detection — must always be fresh.
+/version.json
+  Cache-Control: no-cache
+
+# Workbox runtime is content-hashed → immutable.
+/workbox-*.js
+  Cache-Control: public, max-age=31536000, immutable

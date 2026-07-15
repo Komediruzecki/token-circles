@@ -2,9 +2,16 @@
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
   "name": "finance-manager",
   "compatibility_date": "2026-05-12",
+  // A tiny Worker runs in front of the assets so a MISS on a hashed asset returns a real 404
+  // instead of index.html (200, text/html). See server/assets-worker.ts for the full why —
+  // in short, the old "single-page-application" fallback turned a stale chunk after a deploy
+  // into a fatal "Failed to load module script: MIME type text/html" white screen.
+  "main": "server/assets-worker.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // The Worker owns the SPA fallback (navigations → index.html); asset misses stay 404s.
+    "not_found_handling": "none",
   },
   // Two deploy environments (assets + compatibility_date above are inherited by both).
   //   pnpm run deploy:dev   -> finance-manager-dev  on dev.tokencircles.com  (built with --mode dev)

@@ -7,6 +7,24 @@
  * registry entry in src/core/theme.ts.
  */
 
+/* Self-hosted brand fonts — replaces the render-blocking, CSP-tripping Google Fonts <link>.
+   Latin + Latin-Ext subsets (English + European diacritics like čćžšđ); the browser
+   lazy-loads each subset by its unicode-range. Weights match the prior Google request:
+   Inter 400/500/600, Fraunces 600 (display), JetBrains Mono 400/500 (mono). Family names
+   ('Inter', 'Fraunces', 'JetBrains Mono') match the --font-* theme tokens. */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-ext-400.css';
+@import '@fontsource/inter/latin-ext-500.css';
+@import '@fontsource/inter/latin-ext-600.css';
+@import '@fontsource/fraunces/latin-600.css';
+@import '@fontsource/fraunces/latin-ext-600.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-ext-400.css';
+@import '@fontsource/jetbrains-mono/latin-ext-500.css';
+
 @import './preflight.css';
 @import './themes/dawn-light.css';
 @import './themes/orbit-dark.css';

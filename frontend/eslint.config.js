@@ -14,6 +14,7 @@ export default defineConfig(
       '**/*.css.d.ts',
       '**/coverage',
       '**/dist',
+      '**/.wrangler', // wrangler dev/build scratch (miniflare bundles) — not source
       '**/node_modules',
       '**/.pnpm-store', // present in CI
       '**/tests/*.spec.ts',
