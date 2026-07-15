@@ -60,6 +60,46 @@ export function parseDemoTier(
 }
 
 /**
+ * Return `href` with the `demo` param removed — from the query string and/or the
+ * hash (`?demo=`, `#demo=`, `#page?demo=`). The page/route and any other params
+ * are preserved. Pure, so it's unit-testable.
+ */
+export function stripDemoParam(href: string): string {
+  const url = new URL(href)
+  url.searchParams.delete('demo')
+
+  const rawHash = url.hash.replace(/^#/, '')
+  const qi = rawHash.indexOf('?')
+  // A bare "#demo=high" carries the param in the page slot; "#page?demo=high"
+  // carries it in the ?query part.
+  const bareIsQuery = qi < 0 && new URLSearchParams(rawHash).has('demo')
+  const page = bareIsQuery ? '' : qi >= 0 ? rawHash.slice(0, qi) : rawHash
+  const query = bareIsQuery ? rawHash : qi >= 0 ? rawHash.slice(qi + 1) : ''
+  if (query) {
+    const hp = new URLSearchParams(query)
+    if (hp.has('demo')) {
+      hp.delete('demo')
+      const q = hp.toString()
+      url.hash = page || q ? `${page}${q ? `?${q}` : ''}` : ''
+    }
+  }
+  return url.pathname + url.search + url.hash
+}
+
+/** Drop `demo` from the address bar via replaceState — no reload/navigation. */
+function cleanDemoFromUrl(): void {
+  try {
+    const current = window.location.pathname + window.location.search + window.location.hash
+    const cleaned = stripDemoParam(window.location.href)
+    if (cleaned !== current) {
+      window.history.replaceState(window.history.state, '', cleaned)
+    }
+  } catch {
+    // Leave the URL untouched if the URL/History APIs misbehave.
+  }
+}
+
+/**
  * If the current URL requests a demo, force client-only (serverless) mode and
  * remember the tier. Call once before the app renders, so getStorageMode() is
  * already 'serverless' when App reads it. Returns the tier (or null).
@@ -70,6 +110,9 @@ export function applyDemoModeFromUrl(): DemoTier | null {
     // Overrides a persisted 'self-hosted' choice from a previous sign-in.
     setStorageMode('serverless')
     pendingTier = tier
+    // The tier is captured above; drop ?demo= from the address bar so it doesn't
+    // linger on every URL (demo mode + the chosen profile persist in localStorage).
+    cleanDemoFromUrl()
   }
   return tier
 }

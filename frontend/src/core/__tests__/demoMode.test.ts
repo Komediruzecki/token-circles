@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_PROFILE_NAME, parseDemoTier } from '../demoMode'
+import { DEMO_PROFILE_NAME, parseDemoTier, stripDemoParam } from '../demoMode'
 import type { DemoTier } from '../demoMode'
 
 // parseDemoTier is the pure seam: it turns a URL (?demo= or #demo=) into a tier.
@@ -58,5 +58,36 @@ describe('DEMO_PROFILE_NAME', () => {
     expect(DEMO_PROFILE_NAME.low).toBe('Example Low Income')
     expect(DEMO_PROFILE_NAME.mid).toBe('Example Mid Income')
     expect(DEMO_PROFILE_NAME.high).toBe('Example High Income')
+  })
+})
+
+describe('stripDemoParam', () => {
+  const base = 'https://app.example.com'
+
+  it('removes ?demo= from the query string', () => {
+    expect(stripDemoParam(`${base}/?demo=high`)).toBe('/')
+    expect(stripDemoParam(`${base}/?foo=1&demo=high`)).toBe('/?foo=1')
+    expect(stripDemoParam(`${base}/?demo=high&foo=1`)).toBe('/?foo=1')
+  })
+
+  it('keeps the page + other hash state, only dropping demo (the reported case)', () => {
+    expect(stripDemoParam(`${base}/?demo=high#transactions?period=ytd`)).toBe(
+      '/#transactions?period=ytd'
+    )
+    expect(stripDemoParam(`${base}/?foo=1&demo=high#dashboard`)).toBe('/?foo=1#dashboard')
+  })
+
+  it('removes demo from the hash forms', () => {
+    expect(stripDemoParam(`${base}/#demo=high`)).toBe('/')
+    expect(stripDemoParam(`${base}/#dashboard?demo=high`)).toBe('/#dashboard')
+    expect(stripDemoParam(`${base}/#analytics?period=2026-07&demo=mid`)).toBe(
+      '/#analytics?period=2026-07'
+    )
+  })
+
+  it('leaves URLs without a demo param untouched', () => {
+    expect(stripDemoParam(`${base}/#transactions?period=ytd`)).toBe('/#transactions?period=ytd')
+    expect(stripDemoParam(`${base}/?foo=1#dashboard`)).toBe('/?foo=1#dashboard')
+    expect(stripDemoParam(`${base}/`)).toBe('/')
   })
 })
