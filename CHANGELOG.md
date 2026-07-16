@@ -6,6 +6,28 @@ technical detail lives in [dev-changelog.md](dev-changelog.md).
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.0] — 2026-07-16
+
+### Added
+
+- Guided onboarding. New accounts are welcomed into a short, skippable setup wizard in the app's orbital style: name your space, create your first account, bring your history (bank statements, CSV, or Google Sheets), and adopt the subscriptions we spot for you — then land on your dashboard. Re-run it any time from Settings → About.
+- Subscription detection. When you import transactions, Token Circles now recognizes recurring charges from Netflix, Spotify, Claude and 40+ other services — with the price and billing period worked out for you — and offers to track them as subscriptions. Also available from Bills → Subscriptions → "Scan transactions".
+- In-place account creation during a bank import: assign each statement to a new account without leaving the importer, so a multi-bank import sets everything up in one pass.
+- Branded emails. Your welcome, password-reset, and (on paid plans) budget-alert, spending-report, and upcoming-bills emails now arrive in a polished Token Circles design with a subtle animated orbit, in your own currency, with one-click unsubscribe. Signing up with Google now gets a welcome email too.
+- An orbital loading animation replaces the plain "Loading…" screen.
+
+### Changed
+
+- The import preview is cleaner: your stats and the Import buttons sit together up top, with a compact "fill budgets from spending" option below.
+- Re-importing a file you've already imported now says so plainly ("everything here was already imported") instead of a confusing "Imported 0" — duplicates are always detected and skipped, so you can safely re-import.
+- The sign-in form now flags an invalid email address as you type and explains when the verification step is still loading.
+
+### Fixed
+
+- The Category Allocation and Portfolio orbit charts render correctly again for every number of categories (they could look like a broken ring before).
+- Dragging in a larger bank statement no longer occasionally does nothing on the first try.
+- Sharper app icon, and no more brief flash of the wrong theme while the app loads.
+
 ## [5.5.0] — 2026-07-15
 
 ### Added
