@@ -122,8 +122,13 @@ export class ApiClient {
         const errorMsg = (errorData.error || errorData.message) ?? `HTTP ${response.status}`
 
         // Auth/authz failures (401/403) and auth-endpoint 4xx are expected — don't spam the console.
+        // A 503 is a transient "retry shortly" (e.g. D1 briefly locked by a backup export) — also
+        // not worth an error line; the request will succeed on a later load.
         const expected =
-          response.status === 401 || response.status === 403 || endpoint.startsWith('/auth/')
+          response.status === 401 ||
+          response.status === 403 ||
+          response.status === 503 ||
+          endpoint.startsWith('/auth/')
         if (!expected) {
           logger.error(
             'API Error',
