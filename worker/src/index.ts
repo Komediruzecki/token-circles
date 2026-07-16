@@ -32,6 +32,7 @@ import { supportRoutes } from './routes/support';
 import { plansRoutes } from './routes/plans';
 import { runScheduledReminders } from './reminders';
 import { sweepRateLimits } from './ratelimit';
+import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
@@ -134,6 +135,13 @@ app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 // Mirrors the Express AppError handler: honor an attached statusCode, else 500.
 app.onError((err, c) => {
+  // A `d1 export` backup (deploy-worker.yml) or a transient blip briefly locks D1 — and the
+  // in-helper retries (db.ts) were exhausted (or the query bypassed the helpers). Return a
+  // retryable 503 instead of a hard 500, and skip persisting it to the (also-locked) error_logs.
+  if (isTransientD1Error(err)) {
+    c.header('Retry-After', '5');
+    return c.json({ error: 'Service temporarily unavailable, please retry shortly.' }, 503);
+  }
   const status = (err as { statusCode?: number }).statusCode ?? 500;
   // Log the failure (structured console.error → Workers Observability; 5xx also persisted to the
   // error_logs D1 table). Best-effort; never let logging change the response.
