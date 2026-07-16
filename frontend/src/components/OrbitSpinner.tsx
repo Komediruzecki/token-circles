@@ -75,10 +75,10 @@ export function OrbitBootScreen(props: { label?: string }) {
     <div class={styles.boot} data-test-id="boot-loader">
       <div class={styles.bootInner}>
         <span class={styles.bootBrand}>
-          <LogoMark size={30} />
+          <LogoMark size={34} />
           <span class={styles.bootName}>Token Circles</span>
         </span>
-        <OrbitSpinner size={84} label={props.label ?? 'Preparing your orbit…'} />
+        <OrbitSpinner size={172} label={props.label ?? 'Preparing your orbit…'} />
       </div>
     </div>
   )

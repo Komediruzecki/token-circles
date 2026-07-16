@@ -112,10 +112,17 @@
 
 .boot-name {
   font-family: var(--font-display, inherit);
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text);
+}
+
+/* The boot spinner is hero-sized; scale its caption to match so it doesn't
+   read like a footnote under a 172px mark. */
+.boot .label {
+  font-size: 15px;
+  letter-spacing: 0.05em;
 }
 
 @media (prefers-reduced-motion: reduce) {
