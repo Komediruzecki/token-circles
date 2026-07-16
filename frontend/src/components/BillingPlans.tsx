@@ -193,7 +193,9 @@ export default function BillingPlans(props: {
                 </div>
                 <div style={{ margin: '6px 0 12px' }}>
                   <span style={{ 'font-size': '24px', 'font-weight': 700, color: 'var(--text)' }}>
-                    {price() === 0 ? 'Free' : `$${price()}`}
+                    {/* Plans are billed in EUR (what Stripe actually charges) — the
+                        legacy *PriceUsd field names notwithstanding. */}
+                    {price() === 0 ? 'Free' : `€${price()}`}
                   </span>
                   <Show when={price() !== 0}>
                     <span style={{ 'font-size': '13px', color: 'var(--text-secondary)' }}>

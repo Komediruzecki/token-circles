@@ -26,6 +26,9 @@ export interface PlanFeatures {
 export interface PlanDef {
   id: PlanId;
   name: string;
+  // Historical field names: prices are actually charged in EUR by Stripe
+  // (the checkout prices are €3/€6 monthly). Renaming would break the public
+  // /api/plans response shape, so the names stay; render with € client-side.
   monthlyPriceUsd: number;
   annualPriceUsd: number;
   limits: PlanLimits;
