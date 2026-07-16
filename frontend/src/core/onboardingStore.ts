@@ -107,6 +107,24 @@ export function skipOnboarding() {
 }
 
 /**
+ * True when a list endpoint's response represents zero items, across the
+ * shapes the two storage modes return: a bare array (serverless
+ * /api/accounts, /api/bills, /api/transactions) OR a paginated envelope
+ * (the server's /api/transactions is `{ rows, total, limit, offset }`, NOT a
+ * bare array). An unrecognized shape returns false — "can't confirm empty" so
+ * we never trap a user with data in the wizard.
+ */
+export function collectionIsEmpty(res: unknown): boolean {
+  if (Array.isArray(res)) return res.length === 0
+  if (res && typeof res === 'object') {
+    const obj = res as { rows?: unknown; total?: unknown }
+    if (Array.isArray(obj.rows)) return obj.rows.length === 0
+    if (typeof obj.total === 'number') return obj.total === 0
+  }
+  return false
+}
+
+/**
  * Whether the wizard should auto-open: never seen it before (on this device
  * OR, per the settings KV, anywhere) AND the current profile is pristine —
  * zero accounts, zero transactions, zero bills. Any fetch error counts as
@@ -116,9 +134,9 @@ export async function shouldOfferOnboarding(): Promise<boolean> {
   if (getOnboardingStatus() !== null) return false
   try {
     const [accounts, transactions, bills, settings] = await Promise.all([
-      apiGet<unknown[]>('/api/accounts'),
-      apiGet<unknown[]>('/api/transactions'),
-      apiGet<unknown[]>('/api/bills'),
+      apiGet('/api/accounts'),
+      apiGet('/api/transactions'),
+      apiGet('/api/bills'),
       // Settings are decorative here — a failure must not veto the pristine check.
       apiGet<Record<string, unknown>>('/api/settings').catch(() => null),
     ])
@@ -129,12 +147,7 @@ export async function shouldOfferOnboarding(): Promise<boolean> {
       return false
     }
     return (
-      Array.isArray(accounts) &&
-      accounts.length === 0 &&
-      Array.isArray(transactions) &&
-      transactions.length === 0 &&
-      Array.isArray(bills) &&
-      bills.length === 0
+      collectionIsEmpty(accounts) && collectionIsEmpty(transactions) && collectionIsEmpty(bills)
     )
   } catch {
     return false

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  collectionIsEmpty,
   completeOnboarding,
   getOnboardingStatus,
   goToOnboardingStep,
@@ -50,6 +51,30 @@ describe('onboardingStore', () => {
     await onboardingMirrorSettled()
     await db.clear('settings')
     localStorage.removeItem('finance_onboarding')
+  })
+
+  describe('collectionIsEmpty (list-endpoint shape handling)', () => {
+    it('treats a bare array (serverless) as empty/non-empty by length', () => {
+      expect(collectionIsEmpty([])).toBe(true)
+      expect(collectionIsEmpty([{ id: 1 }])).toBe(false)
+    })
+
+    it('treats the server paginated envelope { rows, total } correctly', () => {
+      // /api/transactions on the worker/self-hosted backend returns this shape,
+      // NOT a bare array — the original bug: onboarding never triggered in
+      // server mode because Array.isArray({rows}) is false.
+      expect(collectionIsEmpty({ rows: [], total: 0, limit: 0, offset: 0 })).toBe(true)
+      expect(collectionIsEmpty({ rows: [{ id: 1 }], total: 1 })).toBe(false)
+      expect(collectionIsEmpty({ total: 0 })).toBe(true)
+      expect(collectionIsEmpty({ total: 5 })).toBe(false)
+    })
+
+    it('treats an unrecognized shape as NOT empty (never trap a user with data)', () => {
+      expect(collectionIsEmpty(null)).toBe(false)
+      expect(collectionIsEmpty(undefined)).toBe(false)
+      expect(collectionIsEmpty({})).toBe(false)
+      expect(collectionIsEmpty('oops')).toBe(false)
+    })
   })
 
   describe('step machine', () => {
