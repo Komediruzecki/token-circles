@@ -399,29 +399,6 @@ export default function Goals() {
                             <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        {!goal.category_id && contributingGoalId() !== goal.id && (
-                          <button
-                            data-test-id="goal-contribute-btn"
-                            class={`${styles.btnPrimary} ${styles.btnSm}`}
-                            title="Add money toward this goal"
-                            onclick={() => {
-                              startContribute(goal.id)
-                            }}
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              viewBox="0 0 24 24"
-                              style="margin-right:4px;vertical-align:middle"
-                            >
-                              <path d="M12 5v14M5 12h14" />
-                            </svg>
-                            Add Funds
-                          </button>
-                        )}
                         <span data-test-id="goal-delete-btn">
                           <ConfirmButton
                             class={styles.btnSm}
@@ -441,6 +418,33 @@ export default function Goals() {
                         </span>
                       </div>
                     </div>
+                    {/* The CTA lives on its own row — inside the header it squeezed the
+                        title/date column into vertical slivers on narrow cards. */}
+                    {!goal.category_id && contributingGoalId() !== goal.id && (
+                      <div class={styles.goalCta}>
+                        <button
+                          data-test-id="goal-contribute-btn"
+                          class={`${styles.btnPrimary} ${styles.btnSm} ${styles.goalCtaBtn}`}
+                          title="Add money toward this goal"
+                          onclick={() => {
+                            startContribute(goal.id)
+                          }}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                            style="margin-right:4px;vertical-align:middle"
+                          >
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Add Funds
+                        </button>
+                      </div>
+                    )}
                     {contributingGoalId() === goal.id && (
                       <div class={styles.contributeForm}>
                         <input

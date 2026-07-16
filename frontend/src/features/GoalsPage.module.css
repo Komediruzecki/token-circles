@@ -616,3 +616,20 @@
   border-color: var(--primary);
   color: var(--primary);
 }
+
+/* ── Goal card header fix: the actions cluster must never squeeze the title/date
+   column, and "Add Funds" lives on its own row (see Goals.tsx). Appended last. ── */
+.goal-actions {
+  flex-shrink: 0;
+}
+
+.goal-cta {
+  margin: -2px 0 12px;
+}
+
+.goal-cta-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
