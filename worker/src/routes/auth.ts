@@ -13,6 +13,7 @@ import {
   verifyPassword,
 } from '../auth';
 import { sendMail } from '../email';
+import { renderAccountExists, renderPasswordReset, renderWelcome } from '../emailTemplates';
 import { enforce, clientIp } from '../ratelimit';
 import { verifyTurnstile } from '../turnstile';
 
@@ -39,43 +40,6 @@ function randomToken(): string {
 async function sha256Hex(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-function resetEmailHtml(link: string, ttlHours: number): string {
-  const ttl = ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
-    <h2 style="margin:0 0 12px">Reset your password</h2>
-    <p>We received a request to reset the password for your Token Circles account. Click the button below to choose a new password.</p>
-    <p style="margin:24px 0">
-      <a href="${link}" style="background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Reset password</a>
-    </p>
-    <p style="color:#6b7280;font-size:13px">This link expires in ${ttl}. If you didn't request a reset, you can safely ignore this email — your password won't change.</p>
-    <p style="color:#6b7280;font-size:12px;margin-top:24px">If the button doesn't work, copy and paste this link:<br><span style="word-break:break-all">${link}</span></p>
-  </body></html>`;
-}
-
-// Sent to a brand-new account after registration. Registration no longer reveals whether an email
-// already exists (anti-enumeration), so the signal of "your account is ready" goes to the inbox.
-function welcomeEmailHtml(base: string): string {
-  const cta = base
-    ? `<p style="margin:24px 0"><a href="${base}" style="background:#4f46e5;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Sign in</a></p>`
-    : '';
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
-    <h2 style="margin:0 0 12px">Welcome to Token Circles</h2>
-    <p>Your account is ready. Sign in to start managing your finances.</p>
-    ${cta}
-    <p style="color:#6b7280;font-size:12px;margin-top:24px">If you didn't create this account, you can safely ignore this email.</p>
-  </body></html>`;
-}
-
-// Sent when someone tries to register with an email that ALREADY has an account. This tells the real
-// owner (not the prober) that the address is in use, so registration can stay enumeration-neutral.
-function accountExistsEmailHtml(base: string): string {
-  const where = base ? ` at ${base}` : '';
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
-    <h2 style="margin:0 0 12px">You already have an account</h2>
-    <p>Someone just tried to create a Token Circles account with this email address, but one already exists.</p>
-    <p>If that was you, simply sign in${where} — or reset your password if you've forgotten it. If it wasn't you, no action is needed; your account is unchanged.</p>
-  </body></html>`;
 }
 
 // Google Sign-In (server-side code flow) + session endpoints. The token is set as
@@ -138,7 +102,18 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID);
   if (!claims) return c.json({ error: 'Invalid id_token' }, 401);
 
-  const userId = await resolveGoogleUser(c.env.DB, claims);
+  const { userId, created, email: newEmail } = await resolveGoogleUser(c.env.DB, claims);
+  // Brand-new Google signups get the same welcome as email/password registrations
+  // (best-effort — a mail failure must never break the OAuth redirect).
+  if (created && newEmail) {
+    const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+    const welcome = renderWelcome({ appUrl: base });
+    await sendMail(c.env, newEmail, welcome.subject, welcome.html, { text: welcome.text }).catch(
+      (e: unknown) => {
+        console.error('Google welcome email failed:', e);
+      }
+    );
+  }
   const sessionCookie = await issueSessionCookie(userId, 'google', c.env);
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
   return new Response(null, {
@@ -178,14 +153,12 @@ authRoutes.post('/api/auth/register', async (c) => {
     .bind(email)
     .first<{ id: number }>();
   if (existing) {
-    await sendMail(
-      c.env,
-      email,
-      'You already have a Token Circles account',
-      accountExistsEmailHtml(base)
-    ).catch((e: unknown) => {
-      console.error('account-exists notice email failed to send:', e);
-    });
+    const notice = renderAccountExists({ appUrl: base });
+    await sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
+      (e: unknown) => {
+        console.error('account-exists notice email failed to send:', e);
+      }
+    );
   } else {
     const res = await c.env.DB.prepare(
       "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
@@ -196,9 +169,12 @@ authRoutes.post('/api/auth/register', async (c) => {
     await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
       .bind('Personal Profile', userId)
       .run();
-    await sendMail(c.env, email, 'Welcome to Token Circles', welcomeEmailHtml(base)).catch((e) => {
-      console.error('Welcome email failed:', e);
-    });
+    const welcome = renderWelcome({ appUrl: base });
+    await sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
+      (e) => {
+        console.error('Welcome email failed:', e);
+      }
+    );
   }
   // Identical response regardless of existence; no session cookie is set (the user signs in next).
   return c.json({ ok: true });
@@ -272,12 +248,8 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
       .run();
     const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
     const link = `${base}/#reset-password?token=${token}`;
-    await sendMail(
-      c.env,
-      email,
-      'Reset your Token Circles password',
-      resetEmailHtml(link, RESET_TOKEN_TTL_HOURS)
-    );
+    const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS });
+    await sendMail(c.env, email, reset.subject, reset.html, { text: reset.text });
   }
   return c.json({ ok: true });
 });

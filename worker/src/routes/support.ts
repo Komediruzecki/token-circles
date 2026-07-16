@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { sendMail } from '../email';
+import { renderSupportAck } from '../emailTemplates';
 import { enforce, clientIp, rateLimit } from '../ratelimit';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -66,15 +67,8 @@ supportRoutes.post('/api/support/contact', async (c) => {
   // SUPPORT_EMAIL private.
   const ackRl = await rateLimit(c.env, `support-email:${email.toLowerCase()}`, 3, 3600);
   if (r.sent && ackRl.ok) {
-    const ackHtml = `<p>Thanks for reaching out to Token Circles. We've received your message and will get back to you as soon as we can.</p>
-    <p>Your reference number is <strong>${ticketId}</strong> — please mention it if you follow up.</p>
-    <p style="color:#6b7280;font-size:12px">If you didn't contact us, you can safely ignore this email.</p>`;
-    await sendMail(
-      c.env,
-      email,
-      `We received your message (${ticketId}) — Token Circles`,
-      ackHtml
-    ).catch(() => {
+    const ack = renderSupportAck({ ticketId });
+    await sendMail(c.env, email, ack.subject, ack.html, { text: ack.text }).catch(() => {
       /* ack is best-effort; the support message already went through */
     });
   }
