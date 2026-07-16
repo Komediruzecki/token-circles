@@ -20,6 +20,7 @@ export default defineConfig(
       '**/tests/*.spec.ts',
       'workbox-*.js',
       'sw.js',
+      'public/**', // static assets served verbatim (theme-init.js, manifest) — not part of the TS project
       'vite.config.ts',
       '**/assets/**',
       '**/*.d.ts',

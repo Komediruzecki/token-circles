@@ -2,6 +2,7 @@
  * TourSelectionModal — Lets users choose which spotlight tour to take
  */
 import { createMemo, For } from 'solid-js'
+import { startOnboarding } from '../core/onboardingStore'
 import {
   getCompletedCount,
   getTotalTourCount,
@@ -53,6 +54,30 @@ export default function TourSelectionModal() {
         </div>
 
         <div class={styles.body}>
+          {/* Setup wizard relaunch */}
+          <button
+            class={styles.fullTourBtn}
+            data-test-id="tour-open-onboarding"
+            onClick={() => {
+              setShowTourSelection(false)
+              startOnboarding()
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="12" r="2.6" />
+              <circle cx="19" cy="6" r="1.3" fill="currentColor" stroke="none" />
+            </svg>
+            Run the Setup Wizard (accounts, imports, subscriptions)
+          </button>
+
           {/* Full Tour */}
           <button class={styles.fullTourBtn} onClick={startFullTour}>
             <svg

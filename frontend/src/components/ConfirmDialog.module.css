@@ -5,7 +5,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  /* A confirm must sit above whatever asked for it — including full-screen
+     surfaces like the onboarding wizard (z 3000). Toasts (10000) stay on top. */
+  z-index: 5000;
 }
 
 .dialog {

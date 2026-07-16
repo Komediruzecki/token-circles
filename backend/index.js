@@ -476,6 +476,7 @@ app.use(
   require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth })
 );
 app.use(require('./routes/settings')({ apiRateLimiter, requireAuth }));
+app.use(require('./routes/billing')({ apiRateLimiter, requireAuth }));
 app.use(require('./routes/loans')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/recurring')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/counterparties')({ apiRateLimiter, logError, requireAuth }));

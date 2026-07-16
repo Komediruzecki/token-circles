@@ -22,6 +22,7 @@ export default function ConfirmDialog() {
             <div class={styles.actions}>
               <button
                 class={styles.btnCancel}
+                data-test-id="confirm-cancel"
                 onClick={() => {
                   resolveConfirm(req.id, false)
                 }}
@@ -30,6 +31,7 @@ export default function ConfirmDialog() {
               </button>
               <button
                 class={styles.btnConfirm}
+                data-test-id="confirm-accept"
                 onClick={() => {
                   resolveConfirm(req.id, true)
                 }}

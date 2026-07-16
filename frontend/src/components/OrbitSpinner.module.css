@@ -1,0 +1,128 @@
+/**
+ * OrbitSpinner — binary planets circling a luminous core, plus the full-screen
+ * boot variant. All continuous motion is disabled under prefers-reduced-motion.
+ */
+
+.wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinner {
+  display: block;
+}
+
+.track {
+  fill: none;
+  stroke: color-mix(in oklab, var(--text-secondary) 50%, transparent);
+  stroke-width: 1.2;
+}
+
+.core {
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--primary) 70%, transparent));
+  animation: orb-sp-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes orb-sp-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px color-mix(in oklab, var(--primary) 55%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px color-mix(in oklab, var(--primary) 85%, transparent));
+  }
+}
+
+.orbit-inner,
+.orbit-outer {
+  transform-origin: 50% 50%;
+  transform-box: view-box;
+}
+
+.orbit-inner {
+  animation: orb-sp-spin 2.1s linear infinite;
+}
+
+.orbit-outer {
+  animation: orb-sp-spin 5.4s linear infinite reverse;
+}
+
+@keyframes orb-sp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.planet {
+  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--primary) 65%, transparent));
+}
+
+.partner {
+  opacity: 0.9;
+  filter: drop-shadow(0 0 4px color-mix(in oklab, var(--primary) 55%, transparent));
+}
+
+.satellite {
+  fill: var(--accent-warm);
+  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--accent-warm) 75%, transparent));
+}
+
+.label {
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+/* ---- full-screen boot variant ---- */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(1400px 800px at 50% -12%, #dbe7ff 0%, #eef2fc 45%, #f7f9ff 100%);
+}
+
+:global([data-theme='dark']) .boot {
+  background: radial-gradient(1400px 800px at 50% -12%, #14204a 0%, #0e1430 42%, #0a0e1c 100%);
+}
+
+.boot-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  animation: orb-sp-fade 0.4s ease-out;
+}
+
+@keyframes orb-sp-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.boot-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.boot-name {
+  font-family: var(--font-display, inherit);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core,
+  .orbit-inner,
+  .orbit-outer,
+  .boot-inner {
+    animation: none;
+  }
+}
