@@ -5,8 +5,10 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { sendMail } from '../email';
+import { renderTestBasic } from '../emailTemplates';
 import {
   composeReminderPreview,
+  sendBillsRemindersForUser,
   sendBudgetAlertsForUser,
   sendSpendingReportForUser,
 } from '../reminders';
@@ -40,6 +42,7 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
     emailNotifications: flag('email_notifications'),
     budgetAlerts: flag('email_budget_alerts'),
     spendingReport: flag('email_spending_report'),
+    billsReminders: flag('email_bills_reminders'),
   });
 });
 
@@ -70,6 +73,7 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('emailNotifications' in b) await set('email_notifications', b.emailNotifications);
   if ('budgetAlerts' in b) await set('email_budget_alerts', b.budgetAlerts);
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
+  if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
   return c.json({ ok: true });
 });
 
@@ -77,6 +81,7 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
 //   "basic" (default) — plain connectivity check
 //   "spending"        — the REAL periodic spending-report email, composed from your data
 //   "budget"          — the REAL budget-alert email (threshold 0 so it always has content)
+//   "bills"           — the REAL upcoming-bills email (bills due within a week)
 // Report/budget previews bypass prefs/quota/period-dedup so they never block (or get
 // blocked by) the scheduled sends — this exists to preview the layouts on demand.
 notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c) => {
@@ -97,25 +102,28 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
   if (!user?.email) throw new HttpError(400, 'No email on your account');
 
   const type = ((await c.req.json().catch(() => ({}))) as { type?: string }).type ?? 'basic';
-  let subject = 'Test email — Token Circles';
-  let html = '<p>This is a test email from Token Circles. Your notifications are working.</p>';
-  if (type === 'spending' || type === 'budget') {
+  let mail = renderTestBasic();
+  if (type === 'spending' || type === 'budget' || type === 'bills') {
     const preview = await composeReminderPreview(c.env, c.get('userId'), type);
     if (!preview) {
       throw new HttpError(
         400,
         type === 'spending'
           ? 'No spending data to build a report from yet'
-          : 'No budgets with spending to build an alert from yet'
+          : type === 'bills'
+            ? 'No bills due within the next week'
+            : 'No budgets with spending to build an alert from yet'
       );
     }
-    subject = preview.subject;
-    html = preview.html;
+    mail = preview;
   } else if (type !== 'basic') {
-    throw new HttpError(400, 'Unknown test email type (use "basic", "spending" or "budget")');
+    throw new HttpError(
+      400,
+      'Unknown test email type (use "basic", "spending", "budget" or "bills")'
+    );
   }
 
-  const r = await sendMail(c.env, user.email, subject, html);
+  const r = await sendMail(c.env, user.email, mail.subject, mail.html, { text: mail.text });
   return c.json({ ok: true, type, ...r });
 });
 
@@ -138,7 +146,8 @@ notificationsRoutes.post('/api/notifications/trigger', requireAuth, async (c) =>
   let sent = false;
   if (type === 'budget') sent = await sendBudgetAlertsForUser(c.env, u);
   else if (type === 'spending') sent = await sendSpendingReportForUser(c.env, u);
-  else throw new HttpError(400, 'Unknown reminder type (use "budget" or "spending")');
+  else if (type === 'bills') sent = await sendBillsRemindersForUser(c.env, u);
+  else throw new HttpError(400, 'Unknown reminder type (use "budget", "spending" or "bills")');
   return c.json({ ok: true, sent });
 });
 

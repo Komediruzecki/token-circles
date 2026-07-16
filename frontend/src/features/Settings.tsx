@@ -469,6 +469,7 @@ export default function Settings() {
     emailNotifications: boolean
     budgetAlerts: boolean
     spendingReport: boolean
+    billsReminders: boolean
   } | null>(null)
   const [notifBusy, setNotifBusy] = createSignal(false)
   const loadNotifications = async () => {
@@ -499,7 +500,7 @@ export default function Settings() {
       setNotifBusy(false)
     }
   }
-  const sendTestEmail = async (type: 'basic' | 'spending' | 'budget' = 'basic') => {
+  const sendTestEmail = async (type: 'basic' | 'spending' | 'budget' | 'bills' = 'basic') => {
     setNotifBusy(true)
     try {
       const res = await apiFetch('/api/notifications/test-email', {
@@ -517,7 +518,9 @@ export default function Settings() {
             ? 'Spending-report preview sent — check your inbox.'
             : type === 'budget'
               ? 'Budget-alert preview sent — check your inbox.'
-              : 'Test email sent — check your inbox.',
+              : type === 'bills'
+                ? 'Bills-reminder preview sent — check your inbox.'
+                : 'Test email sent — check your inbox.',
         data.skipped ? 'info' : 'success'
       )
     } catch (e) {
@@ -1096,6 +1099,18 @@ export default function Settings() {
                     />
                   </div>
                   <div
+                    class={`${styles.row} ${styles.rowSub}`}
+                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
+                  >
+                    <span class={styles.rowLabel}>Upcoming bills (daily)</span>
+                    <Toggle
+                      checked={() => notif()!.billsReminders}
+                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
+                      onChange={(v) => setNotif({ ...notif()!, billsReminders: v })}
+                      aria-label="Upcoming bills (daily)"
+                    />
+                  </div>
+                  <div
                     class={styles.actions}
                     style={emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : undefined}
                   >
@@ -1138,6 +1153,16 @@ export default function Settings() {
                     >
                       <IconBell />
                       Budget
+                    </button>
+                    <button
+                      class={styles.iconAction}
+                      onclick={() => void sendTestEmail('bills')}
+                      disabled={notifBusy()}
+                      title="Emails you the real upcoming-bills reminder, built from your data, right now"
+                      aria-label="Emails you the real upcoming-bills reminder, built from your data, right now"
+                    >
+                      <IconFileText />
+                      Bills
                     </button>
                   </div>
                 </div>

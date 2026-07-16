@@ -2,36 +2,39 @@ import type { Env } from './index';
 import * as db from './db';
 import { sendMail } from './email';
 import { planHasFeature, planLimit } from './plans';
+import {
+  BRAND,
+  renderBillsReminder,
+  renderBudgetAlert,
+  renderSpendingReport,
+} from './emailTemplates';
+import type { RenderedEmail, UpcomingBillRow } from './emailTemplates';
 
-// Reminder emails (budget alerts + spending report), ported from
-// backend/services/reminderService.js to async D1. Queries + HTML are faithful to the
-// originals; gating now also requires the user's PLAN to include emailReminders (plans.ts).
-// Per-type preferences live in `settings` (email_notifications + email_budget_alerts /
-// email_spending_report) on the user's primary profile, exactly as before.
+// Reminder emails (budget alerts + spending reports + upcoming bills), ported from
+// backend/services/reminderService.js to async D1. The data queries stay faithful to the
+// originals; the HTML now comes from the shared branded renderers (emailTemplates.ts).
+// Gating requires the user's PLAN to include emailReminders (plans.ts). Per-type
+// preferences live in `settings` (email_notifications + email_budget_alerts /
+// email_spending_report / email_bills_reminders) on the user's primary profile.
 
-const BRAND = 'Token Circles';
-
-function escapeHtml(str: unknown): string {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-function sanitizeColor(color: unknown): string {
-  return /^#[0-9a-fA-F]{6}$/.test(String(color ?? '')) ? String(color) : '#6b7280';
-}
-
-function footer(label: string, unsubToken: string | null, env: Env): string {
-  // The unsubscribe endpoint lives on the API worker, NOT the SPA host — a link to
-  // the app origin lands on the static-asset fallback and never unsubscribes anyone.
+// The unsubscribe endpoint lives on the API worker, NOT the SPA host — a link to
+// the app origin lands on the static-asset fallback and never unsubscribes anyone.
+function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
   const apiBase = env.API_PUBLIC_ORIGIN || env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || '';
-  const unsub =
-    unsubToken && apiBase
-      ? ` · <a href="${apiBase}/api/notifications/unsubscribe?token=${unsubToken}" style="color:#6b7280">unsubscribe</a>`
-      : '';
-  return `<p style="color:#6b7280;margin-top:24px;font-size:12px">${escapeHtml(BRAND)} — ${escapeHtml(label)}${unsub}</p>`;
+  return unsubToken && apiBase
+    ? `${apiBase}/api/notifications/unsubscribe?token=${unsubToken}`
+    : null;
+}
+
+// Reminder amounts render in the profile's display currency (settings.currency,
+// written by the app's Settings page); EUR is the app-wide default.
+async function profileCurrency(env: Env, profileId: number): Promise<string> {
+  const row = await db.first<{ value: string }>(
+    env.DB,
+    "SELECT value FROM settings WHERE key = 'currency' AND profile_id = ?",
+    profileId
+  );
+  return row?.value && /^[A-Za-z]{3}$/.test(row.value) ? row.value.toUpperCase() : 'EUR';
 }
 
 async function notifEnabled(env: Env, profileId: number, key: string): Promise<boolean> {
@@ -130,44 +133,6 @@ async function getBudgetAlerts(
   return alerts.sort((a, b) => b.percentage - a.percentage);
 }
 
-function budgetAlertHtml(
-  alerts: BudgetAlert[],
-  unsubToken: string | null,
-  env: Env
-): string | null {
-  if (alerts.length === 0) return null;
-  const rows = alerts
-    .map(
-      (a) => `<tr>
-      <td style="padding:8px;border-bottom:1px solid #eee">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${sanitizeColor(a.categoryColor)};margin-right:8px"></span>
-        ${escapeHtml(a.categoryName)}
-      </td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(a.budgetAmount || 0).toFixed(2)}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(a.spent || 0).toFixed(2)}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;color:${a.status === 'over' ? '#ef4444' : '#f59e0b'}">${a.status === 'over' ? 'OVER' : a.percentage + '%'}</td>
-    </tr>`
-    )
-    .join('');
-  const desc = alerts.some((a) => a.status === 'over')
-    ? 'The following budgets have exceeded their limit:'
-    : 'The following budgets are approaching their limit (80%+ used):';
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-    <h2 style="color:#1f2937">Budget Alert</h2>
-    <p>${desc}</p>
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr style="background:#f3f4f6">
-        <th style="padding:8px;text-align:left">Category</th>
-        <th style="padding:8px;text-align:right">Budget</th>
-        <th style="padding:8px;text-align:right">Spent</th>
-        <th style="padding:8px;text-align:right">Status</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${footer('Budget Alerts', unsubToken, env)}
-  </body></html>`;
-}
-
 // ── Spending report ──────────────────────────────────────────────────────────
 async function getSpendingReport(env: Env, profileId: number, asOf?: Date) {
   const now = asOf ?? new Date();
@@ -231,38 +196,6 @@ async function getSpendingReport(env: Env, profileId: number, asOf?: Date) {
     startDate,
     endDate,
   };
-}
-
-function spendingReportHtml(
-  report: Awaited<ReturnType<typeof getSpendingReport>>,
-  unsubToken: string | null,
-  env: Env
-): string | null {
-  if (report.transactionCount === 0) return null;
-  const categories = report.categoryBreakdown
-    .map(
-      (c) => `<tr>
-      <td style="padding:8px;border-bottom:1px solid #eee">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${sanitizeColor(c.color || '#6b7280')};margin-right:8px"></span>
-        ${escapeHtml(c.name || 'Uncategorized')}
-      </td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${(c.total || 0).toFixed(2)}</td>
-    </tr>`
-    )
-    .join('');
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-    <h2 style="color:#1f2937">Spending Report</h2>
-    <p>${escapeHtml(report.startDate)} to ${escapeHtml(report.endDate)}</p>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-      <tr><td style="padding:8px">Total Income</td><td style="padding:8px;text-align:right;color:#10b981">$${(report.totalIncome || 0).toFixed(2)}</td></tr>
-      <tr><td style="padding:8px">Total Expenses</td><td style="padding:8px;text-align:right;color:#ef4444">$${(report.totalExpenses || 0).toFixed(2)}</td></tr>
-      <tr style="font-weight:bold"><td style="padding:8px;border-top:2px solid #1f2937">Net</td><td style="padding:8px;text-align:right;border-top:2px solid #1f2937">$${(report.netBalance || 0).toFixed(2)}</td></tr>
-    </table>
-    <h3>Top Spending Categories</h3>
-    <table style="width:100%;border-collapse:collapse"><tbody>${categories || '<tr><td>No spending data</td></tr>'}</tbody></table>
-    <p style="color:#6b7280;margin-top:8px">${report.transactionCount} transactions</p>
-    ${footer('Spending Report', unsubToken, env)}
-  </body></html>`;
 }
 
 // ── Per-user senders (plan + preference gated) ───────────────────────────────
@@ -333,12 +266,11 @@ async function sendClaimed(
   userId: number,
   dedupKey: string,
   to: string,
-  subject: string,
-  html: string
+  mail: RenderedEmail
 ): Promise<boolean> {
   let sent = false;
   try {
-    sent = (await sendMail(env, to, subject, html)).sent;
+    sent = (await sendMail(env, to, mail.subject, mail.html, { text: mail.text })).sent;
   } catch {
     sent = false;
   }
@@ -359,15 +291,18 @@ export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boo
   const deduped = all
     .sort((a, b) => b.percentage - a.percentage)
     .filter((a) => (seen.has(a.categoryName) ? false : seen.add(a.categoryName) && true));
-  const html = budgetAlertHtml(deduped, await ensureUnsubToken(env, u), env);
-  if (!html) return false;
+  const mail = renderBudgetAlert({
+    alerts: deduped,
+    currency: await profileCurrency(env, pids[0]),
+    unsubUrl: unsubscribeUrl(await ensureUnsubToken(env, u), env),
+  });
+  if (!mail) return false;
   if (!(await withinQuota(env, u))) return false;
   // Idempotent per calendar day so a same-day cron re-fire can't double-send. sendClaimed rolls the
   // claim back if the send fails, so a transient error doesn't suppress today's alert.
   const dedupKey = `budget:${new Date().toISOString().slice(0, 10)}`;
   if (!(await claimReminderSlot(env, u.id, dedupKey))) return false;
-  if (!(await sendClaimed(env, u.id, dedupKey, u.email, `Budget alert — ${BRAND}`, html)))
-    return false;
+  if (!(await sendClaimed(env, u.id, dedupKey, u.email, mail))) return false;
   await recordSend(env, u.id);
   return true;
 }
@@ -379,24 +314,76 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
   if (!(await notifEnabled(env, pids[0], 'email_notifications'))) return false;
   if (!(await notifEnabled(env, pids[0], 'email_spending_report'))) return false;
 
-  const token = await ensureUnsubToken(env, u);
+  const unsubUrl = unsubscribeUrl(await ensureUnsubToken(env, u), env);
   const periodKey = reportPeriodKey();
   for (const pid of pids) {
     const report = await getSpendingReport(env, pid);
-    const html = spendingReportHtml(report, token, env);
-    if (html) {
+    const mail = renderSpendingReport({
+      report,
+      currency: await profileCurrency(env, pid),
+      unsubUrl,
+    });
+    if (mail) {
       if (!(await withinQuota(env, u))) return false;
       // Idempotent per half-month period so a re-fired cron can't email the same report twice.
       if (!(await claimReminderSlot(env, u.id, periodKey))) return false;
-      if (
-        !(await sendClaimed(env, u.id, periodKey, u.email, `Your spending report — ${BRAND}`, html))
-      )
-        return false;
+      if (!(await sendClaimed(env, u.id, periodKey, u.email, mail))) return false;
       await recordSend(env, u.id);
       return true;
     }
   }
   return false;
+}
+
+// ── Upcoming bills (ported from the legacy bills reminder that never made it to the worker) ──
+async function getUpcomingBills(
+  env: Env,
+  profileId: number,
+  asOf?: Date
+): Promise<UpcomingBillRow[]> {
+  const bills = await db.all<{ name: string; amount: number; due_date: string | null }>(
+    env.DB,
+    "SELECT name, amount, due_date FROM bills WHERE profile_id = ? AND is_active = 1 AND type = 'bill'",
+    profileId
+  );
+  const today = asOf ?? new Date();
+  const upcoming: UpcomingBillRow[] = [];
+  for (const bill of bills) {
+    if (!bill.due_date) continue;
+    const dueDate = new Date(bill.due_date);
+    if (isNaN(dueDate.getTime())) continue;
+    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) {
+      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: true });
+    } else if (diffDays <= 7) {
+      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: false });
+    }
+  }
+  return upcoming.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+}
+
+export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<boolean> {
+  if (!eligible(u)) return false;
+  const pids = await profileIdsForUser(env, u.id);
+  if (pids.length === 0) return false;
+  if (!(await notifEnabled(env, pids[0], 'email_notifications'))) return false;
+  if (!(await notifEnabled(env, pids[0], 'email_bills_reminders'))) return false;
+
+  const all: UpcomingBillRow[] = [];
+  for (const pid of pids) all.push(...(await getUpcomingBills(env, pid)));
+  const mail = renderBillsReminder({
+    bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
+    currency: await profileCurrency(env, pids[0]),
+    unsubUrl: unsubscribeUrl(await ensureUnsubToken(env, u), env),
+  });
+  if (!mail) return false;
+  if (!(await withinQuota(env, u))) return false;
+  // Idempotent per calendar day: the daily cron re-firing can't double-send.
+  const dedupKey = `bills:${new Date().toISOString().slice(0, 10)}`;
+  if (!(await claimReminderSlot(env, u.id, dedupKey))) return false;
+  if (!(await sendClaimed(env, u.id, dedupKey, u.email, mail))) return false;
+  await recordSend(env, u.id);
+  return true;
 }
 
 /**
@@ -409,8 +396,8 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
 export async function composeReminderPreview(
   env: Env,
   userId: number,
-  type: 'budget' | 'spending'
-): Promise<{ subject: string; html: string } | null> {
+  type: 'budget' | 'spending' | 'bills'
+): Promise<RenderedEmail | null> {
   const u = await db.first<UserRow>(
     env.DB,
     'SELECT id, email, plan, notifications_unsubscribed, unsubscribe_token FROM users WHERE id = ?',
@@ -419,12 +406,14 @@ export async function composeReminderPreview(
   if (!u?.email) return null;
   const pids = await profileIdsForUser(env, u.id);
   if (pids.length === 0) return null;
-  const token = await ensureUnsubToken(env, u);
+  const unsubUrl = unsubscribeUrl(await ensureUnsubToken(env, u), env);
+  const currency = await profileCurrency(env, pids[0]);
 
   // Anchor the preview to the user's LATEST transaction date (clamped to today). The
   // scheduled sends always use "now", but previews are usually fired against imported
   // history — computing the current calendar month would yield an empty report / an
-  // all-0% alert when the data ends months earlier.
+  // all-0% alert when the data ends months earlier. (Bills are forward-looking, so the
+  // bills preview always uses the real "now".)
   const inClause = pids.map(() => '?').join(',');
   const latest = await db.first<{ d: string | null }>(
     env.DB,
@@ -446,12 +435,21 @@ export async function composeReminderPreview(
   if (type === 'spending') {
     for (const pid of pids) {
       const report = await getSpendingReport(env, pid, asOf);
-      const html = spendingReportHtml(report, token, env);
-      if (html) {
-        return { subject: `[Test] Your spending report (${periodLabel}) — ${BRAND}`, html };
-      }
+      const mail = renderSpendingReport({ report, currency, unsubUrl, periodLabel, test: true });
+      if (mail) return mail;
     }
     return null;
+  }
+
+  if (type === 'bills') {
+    const all: UpcomingBillRow[] = [];
+    for (const pid of pids) all.push(...(await getUpcomingBills(env, pid)));
+    return renderBillsReminder({
+      bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
+      currency,
+      unsubUrl,
+      test: true,
+    });
   }
 
   const all: BudgetAlert[] = [];
@@ -460,8 +458,7 @@ export async function composeReminderPreview(
   const deduped = all
     .sort((a, b) => b.percentage - a.percentage)
     .filter((a) => (seen.has(a.categoryName) ? false : seen.add(a.categoryName) && true));
-  const html = budgetAlertHtml(deduped, token, env);
-  return html ? { subject: `[Test] Budget alert (${periodLabel}) — ${BRAND}`, html } : null;
+  return renderBudgetAlert({ alerts: deduped, currency, unsubUrl, periodLabel, test: true });
 }
 
 // ── Cron dispatch (scheduled handler) ────────────────────────────────────────
@@ -478,10 +475,12 @@ export async function runScheduledReminders(cron: string, env: Env): Promise<voi
   const users = await usersWithEmail(env);
   const isBudget = cron === '0 9 * * 1';
   const isReport = cron === '0 10 1,15 * *';
+  const isBills = cron === '0 8 * * *';
   for (const u of users) {
     try {
       if (isBudget) await sendBudgetAlertsForUser(env, u);
       else if (isReport) await sendSpendingReportForUser(env, u);
+      else if (isBills) await sendBillsRemindersForUser(env, u);
     } catch (e) {
       console.error(`[reminder] failed for user ${u.id}:`, (e as Error).message);
     }

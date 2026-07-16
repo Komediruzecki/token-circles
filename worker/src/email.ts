@@ -7,7 +7,7 @@ export async function sendMail(
   to: string,
   subject: string,
   html: string,
-  opts?: { replyTo?: string }
+  opts?: { replyTo?: string; text?: string }
 ): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
   if (!to) return { sent: false, skipped: true };
   if (!env.RESEND_API_KEY) {
@@ -25,6 +25,8 @@ export async function sendMail(
       to,
       subject,
       html,
+      // Plain-text twin (deliverability + text-only clients).
+      ...(opts?.text ? { text: opts.text } : {}),
       ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}),
     }),
   });

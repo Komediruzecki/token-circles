@@ -288,13 +288,21 @@ export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
   return allowed.includes(origin);
 }
 
-/** Find-or-create the user for a verified Google account; returns the integer user id. */
-export async function resolveGoogleUser(db: D1Database, claims: GoogleClaims): Promise<number> {
+/**
+ * Find-or-create the user for a verified Google account. `created` is true only
+ * for a brand-new account (the caller sends the welcome email then — matching
+ * the email/password registration path); linking Google to an existing account
+ * is not a new signup.
+ */
+export async function resolveGoogleUser(
+  db: D1Database,
+  claims: GoogleClaims
+): Promise<{ userId: number; created: boolean; email: string | null }> {
   const byProvider = await db
     .prepare("SELECT id FROM users WHERE auth_provider = 'google' AND provider_id = ?")
     .bind(claims.sub)
     .first<{ id: number }>();
-  if (byProvider) return byProvider.id;
+  if (byProvider) return { userId: byProvider.id, created: false, email: null };
 
   // Link to an existing account with the same verified email.
   if (claims.email && claims.email_verified === 'true') {
@@ -309,7 +317,7 @@ export async function resolveGoogleUser(db: D1Database, claims: GoogleClaims): P
         )
         .bind(claims.sub, byEmail.id)
         .run();
-      return byEmail.id;
+      return { userId: byEmail.id, created: false, email: null };
     }
   }
 
@@ -329,5 +337,5 @@ export async function resolveGoogleUser(db: D1Database, claims: GoogleClaims): P
     .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
     .bind('Personal Profile', userId)
     .run();
-  return userId;
+  return { userId, created: true, email: verified ? (claims.email ?? null) : null };
 }

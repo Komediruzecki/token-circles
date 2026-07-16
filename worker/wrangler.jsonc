@@ -67,7 +67,7 @@
         // NB: cron day-of-month and day-of-week are OR'd, so the old "1-7,15-21 * 4" fired on every
         // day in those ranges AND every Thursday. Day-of-week is now "*" and the report is idempotent
         // per half-month period (reminder_dedup), so a re-fire can't double-send.
-        "crons": ["0 9 * * 1", "0 10 1,15 * *"],
+        "crons": ["0 8 * * *", "0 9 * * 1", "0 10 1,15 * *"],
       },
     },
 
@@ -104,6 +104,14 @@
         },
       ],
       "r2_buckets": [{ "binding": "RECEIPTS", "bucket_name": "finance-manager-receipts" }],
+      // Scheduled reminder emails (paid feature; plan/pref/quota-gated per user in
+      // reminders.ts, idempotent via reminder_dedup so a re-fire can't double-send):
+      //   0 8 * * *    — upcoming-bills reminder, daily 08:00 UTC
+      //   0 9 * * 1    — budget alerts, Mondays 09:00 UTC
+      //   0 10 1,15 * * — spending report, 1st + 15th 10:00 UTC
+      "triggers": {
+        "crons": ["0 8 * * *", "0 9 * * 1", "0 10 1,15 * *"],
+      },
     },
   },
 
