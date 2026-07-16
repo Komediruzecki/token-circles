@@ -1,5 +1,6 @@
 import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
+import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
 import { LogoMark } from './Logo'
@@ -351,7 +352,7 @@ export default function LoginScreen() {
               opacity: 0.7,
             }}
           >
-            v{__APP_VERSION__}
+            v{displayVersion()}
           </div>
         </div>
       </div>

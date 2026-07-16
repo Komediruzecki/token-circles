@@ -5,6 +5,12 @@ import solid from 'vite-plugin-solid'
 export default defineConfig({
   // Solid JSX transform so tests can import .tsx modules (components, brand icons).
   plugins: [solid()],
+  // Build-identity constants (vite.config.ts `define`) for modules that read them
+  // (core/appVersion). Values are stable fakes so decision logic is deterministic.
+  define: {
+    __APP_VERSION__: JSON.stringify('0.0.0-test'),
+    __GIT_SHA__: JSON.stringify('testsha'),
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

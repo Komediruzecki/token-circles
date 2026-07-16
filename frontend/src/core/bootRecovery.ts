@@ -4,8 +4,9 @@
  * After a deploy deletes the previous build's hashed chunks, a still-open client that navigates
  * to a lazy-loaded route tries to import a chunk that now 404s. Vite raises `vite:preloadError`;
  * left unhandled it surfaces as a blank route or an "Unexpected token '<'" parse error. We
- * recover by reloading ONCE to pick up the fresh index.html + chunk graph — the "auto-reload at
- * a safe moment" behavior — guarded by a session flag so a genuinely broken build can't loop.
+ * recover by refreshing the service worker (bounded wait) and then reloading ONCE to pick up
+ * the fresh index.html + chunk graph — the "auto-reload at a safe moment" behavior — guarded by
+ * a session flag so a genuinely broken build can't loop.
  *
  * Ordering: install this BEFORE the app renders so it wins the race against the ErrorBoundary's
  * own unhandledrejection handler — a quiet reload beats a crash modal for a stale chunk. If we've
@@ -37,11 +38,56 @@ function markReloaded(): void {
   }
 }
 
+/**
+ * Give the (still-controlling) service worker a chance to update to the freshly-deployed one
+ * BEFORE we reload, so the reload lands on the new build in one hop instead of being re-served
+ * stale caches by the old worker. The generated SW ships skipWaiting + clientsClaim, so once
+ * the update check finds a new sw.js it installs, activates, and claims this tab on its own —
+ * we just trigger the check and wait (bounded) for the takeover. Resolves true when a new
+ * worker took control; false means "nothing to update / not controlled / timed out" — callers
+ * reload either way, this only improves the odds the single reload is enough.
+ */
+export async function activateUpdatedServiceWorker(timeoutMs = 4000): Promise<boolean> {
+  try {
+    if (!('serviceWorker' in window.navigator)) return false
+    const container = window.navigator.serviceWorker
+    const reg = await container.getRegistration()
+    if (!reg) return false
+    const withTimeout = <T>(p: Promise<T>): Promise<T | undefined> =>
+      Promise.race([
+        p.catch(() => undefined),
+        new Promise<undefined>((resolve) => window.setTimeout(resolve, timeoutMs)),
+      ])
+    await withTimeout(reg.update())
+    // No incoming worker → the registration is already current (or the check failed).
+    if (!reg.installing && !reg.waiting) return false
+    if (!container.controller) return false // uncontrolled page: no takeover event to wait for
+    const tookOver = await withTimeout(
+      new Promise<boolean>((resolve) => {
+        container.addEventListener(
+          'controllerchange',
+          () => {
+            resolve(true)
+          },
+          { once: true }
+        )
+      })
+    )
+    return tookOver === true
+  } catch {
+    return false
+  }
+}
+
 /** Reload once to pick up the new build; if we already tried this session, give up (no loop). */
 function reloadForNewBuild(): void {
   if (hasReloadedThisSession()) return
   markReloaded()
-  window.location.reload()
+  // Best-effort SW refresh first (see above); the guard is already set, so extra chunk
+  // failures arriving while we wait can't queue additional reloads.
+  void activateUpdatedServiceWorker().finally(() => {
+    window.location.reload()
+  })
 }
 
 /** True for the "a chunk/module that used to exist is now gone" family of errors. */
