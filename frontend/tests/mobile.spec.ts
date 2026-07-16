@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { E2E_BASE } from './test-helpers'
 
 /**
  * Mobile-viewport checks (iPhone 15 Pro) for the shortcut guide and for the
@@ -15,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('keyboard shortcuts modal opens with "?" and lists the command bar', async ({ page }) => {
-  await page.goto('http://localhost:3800/#dashboard', {
+  await page.goto(`${E2E_BASE}/#dashboard`, {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   })
@@ -40,7 +41,7 @@ test('keyboard shortcuts modal opens with "?" and lists the command bar', async 
 // The core pages must never push the document wider than the mobile viewport.
 for (const page_ of ['dashboard', 'transactions', 'accounts', 'analytics', 'import', 'settings']) {
   test(`#${page_} has no horizontal page overflow on mobile`, async ({ page }) => {
-    await page.goto(`http://localhost:3800/#${page_}`, {
+    await page.goto(`${E2E_BASE}/#${page_}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     })

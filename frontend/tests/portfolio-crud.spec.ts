@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToRoute, getByTestId } from './test-helpers'
+import { login, navigateToRoute, getByTestId, E2E_BASE } from './test-helpers'
 
 test.describe('Portfolio CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -102,7 +102,7 @@ test.describe('Portfolio CRUD Operations', () => {
   test('should navigate to portfolio page via hash', async ({ page }) => {
     // Use 127.0.0.1 (not localhost) so the session cookie set by login() — bound to the
     // 127.0.0.1 origin — rides along; a cross-origin hop would drop it to the login screen.
-    await page.goto('http://127.0.0.1:3800/#portfolio', { waitUntil: 'domcontentloaded' })
+    await page.goto(`${E2E_BASE}/#portfolio`, { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(1000)
     const header = page.getByTestId('portfolio-header')
     await expect(header).toBeVisible({ timeout: 10000 })

@@ -8,6 +8,7 @@ import {
   createSignal,
   ErrorBoundary,
   For,
+  lazy,
   onCleanup,
   onMount,
   Show,
@@ -22,6 +23,7 @@ import layoutStyles from './components/Layout.module.css'
 import LoginModal from './components/LoginModal'
 import LoginScreen from './components/LoginScreen'
 import { LogoMark } from './components/Logo'
+import { OrbitBootScreen } from './components/OrbitSpinner'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import ResetPassword from './components/ResetPassword'
@@ -48,6 +50,7 @@ import { initVersionWatch } from './core/appVersion'
 import { loadBillingPlan } from './core/billingStore'
 import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
 import { logger } from './core/logger.js'
+import { maybeOfferOnboarding, onboardingOpen } from './core/onboardingStore'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
 import {
@@ -61,6 +64,10 @@ import { getStorageMode, setStorageMode } from './core/storage/storageFactory'
 import { pages as allPages } from './router.tsx'
 import type { PageName } from './router.tsx'
 import type { Category, Profile } from './types/models'
+
+// Loaded on demand: only pristine first-run profiles (or an explicit relaunch
+// from the tour menu) ever open the wizard, so it stays out of the main chunk.
+const OnboardingWizard = lazy(() => import('./components/onboarding/OnboardingWizard'))
 
 export function App() {
   // Shared app store — replaces 12 inline signals
@@ -273,6 +280,8 @@ export function App() {
       }
     }
     setShowDropdown(false)
+    // Fresh signups land with a pristine profile — offer the setup wizard.
+    void maybeOfferOnboarding()
   }
 
   const handleLogout = async () => {
@@ -442,6 +451,11 @@ export function App() {
     onCleanup(disposeVersionWatch)
 
     _setIsLoading(false)
+
+    // First-run setup: offer the onboarding wizard to pristine profiles (no
+    // accounts, no transactions, never seen/skipped it). Runs after the loading
+    // gate clears so it never delays app start; the check itself is two GETs.
+    if (loggedIn || !serverMode) void maybeOfferOnboarding()
   })
 
   // Swipe left/right (mobile/tablet) steps the focus period — like 1Money, but the
@@ -703,24 +717,9 @@ export function App() {
 
   return (
     <Show when={!isResetRoute} fallback={<ResetPassword />}>
-      <Show
-        when={!_isLoading()}
-        fallback={
-          <div
-            class={layoutStyles.pageLoader}
-            style={{
-              height: '100vh',
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'center',
-            }}
-          >
-            Loading...
-          </div>
-        }
-      >
+      <Show when={!_isLoading()} fallback={<OrbitBootScreen />}>
         <Show when={!serverMode || isAuthenticated()} fallback={<LoginScreen />}>
-          <Suspense fallback={<div>Loading...</div>}>
+          <Suspense fallback={<OrbitBootScreen label="Loading…" />}>
             <div
               class={layoutStyles.sidebar}
               classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}
@@ -1048,6 +1047,7 @@ export function App() {
                 </For>
                 <button
                   class={layoutStyles.sidebarNavLink}
+                  data-test-id="whats-new-btn"
                   style={{
                     'margin-top': '8px',
                     'border-top': '1px solid rgba(255,255,255,0.08)',
@@ -1205,6 +1205,10 @@ export function App() {
 
             <Show when={showTourSelection()}>
               <TourSelectionModal />
+            </Show>
+
+            <Show when={onboardingOpen()}>
+              <OnboardingWizard />
             </Show>
 
             <ToastContainer />

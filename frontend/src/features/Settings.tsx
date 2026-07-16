@@ -39,6 +39,7 @@ import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
+import { startOnboarding } from '../core/onboardingStore'
 import { period } from '../core/periodStore'
 import { setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
@@ -858,6 +859,7 @@ export default function Settings() {
                   classList={{ [styles.railBtnActive]: activeTab() === tab.id }}
                   aria-current={activeTab() === tab.id ? 'page' : undefined}
                   title={tab.label}
+                  data-test-id={`settings-tab-${tab.id}`}
                   onclick={() => setActiveTab(tab.id)}
                 >
                   {tab.icon()}
@@ -1482,9 +1484,32 @@ export default function Settings() {
                     <button class={styles.btnSecondary} onclick={() => setShowShortcuts(true)}>
                       Keyboard shortcuts
                     </button>
+                    <button
+                      class={styles.btnSecondary}
+                      data-test-id="settings-run-onboarding"
+                      onclick={() => {
+                        startOnboarding()
+                      }}
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        style="vertical-align: -2px; margin-right: 6px;"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <circle cx="12" cy="12" r="2.6" />
+                        <circle cx="19" cy="6" r="1.3" fill="currentColor" stroke="none" />
+                      </svg>
+                      Run setup wizard
+                    </button>
                   </div>
                   <p style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;">
-                    See what&apos;s new in each version of Token Circles, or the keyboard shortcuts.
+                    See what&apos;s new in each version, the keyboard shortcuts, or re-run the
+                    guided first-run setup (accounts, imports, subscriptions) at any time.
                   </p>
                   <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
                     v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}

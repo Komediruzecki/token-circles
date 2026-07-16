@@ -61,6 +61,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import SubscriptionCard from '../components/SubscriptionCard'
 import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
+import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -132,6 +133,7 @@ export default function Bills() {
   const categories = () => billsResource.latest?.categories ?? []
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCatalog, setShowCatalog] = createSignal(false)
+  const [showScan, setShowScan] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
   const [editingId, setEditingId] = createSignal<number | null>(null)
   const [formData, setFormData] = createSignal({
@@ -358,6 +360,25 @@ export default function Bills() {
           <div class={styles.headerActions}>
             <Show when={billTab() === 'subscriptions'}>
               <button
+                data-test-id="scan-subscriptions-btn"
+                class={styles.btnSecondary}
+                onClick={() => setShowScan(true)}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 12L18 6" stroke-linecap="round" />
+                  <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+                </svg>
+                Scan transactions
+              </button>
+              <button
                 data-test-id="browse-catalog-btn"
                 class={styles.btnSecondary}
                 onClick={() => setShowCatalog(true)}
@@ -409,6 +430,7 @@ export default function Bills() {
       <div class={styles.tabs} data-tour="bills-tabs">
         <button
           class={`${styles.tabBtn} ${billTab() === 'all' ? styles.tabActive : ''}`}
+          data-test-id="bills-tab-all"
           onClick={() => setBillTab('all')}
         >
           <svg
@@ -425,6 +447,7 @@ export default function Bills() {
         </button>
         <button
           class={`${styles.tabBtn} ${billTab() === 'subscriptions' ? styles.tabActive : ''}`}
+          data-test-id="bills-tab-subscriptions"
           onClick={() => setBillTab('subscriptions')}
         >
           <svg
@@ -1054,6 +1077,14 @@ export default function Bills() {
         isOpen={showCatalog}
         onClose={() => setShowCatalog(false)}
         categories={categories}
+        onAdded={() => {
+          void refetchBills()
+        }}
+      />
+
+      <SubscriptionScanModal
+        isOpen={showScan}
+        onClose={() => setShowScan(false)}
         onAdded={() => {
           void refetchBills()
         }}

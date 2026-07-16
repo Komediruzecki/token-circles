@@ -1,6 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
 import os from 'os'
 
+// Default 3800 (what CI and the helpers expect). Override with E2E_PORT when
+// another dev server already occupies 3800 locally — the helpers read the same
+// variable, so the whole suite follows.
+const PORT = Number(process.env.E2E_PORT || 3800)
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -13,7 +18,7 @@ export default defineConfig({
   workers: os.cpus().length,
   reporter: 'list',
   use: {
-    baseURL: 'http://127.0.0.1:3800',
+    baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'retain-on-failure',
     headless: true,
     testIdAttribute: 'data-test-id',
@@ -27,8 +32,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
-    url: 'http://127.0.0.1:3800',
+    command: `npm run dev -- --port ${PORT} --strictPort`,
+    url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
     stdout: 'pipe',

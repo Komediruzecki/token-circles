@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { E2E_BASE } from './test-helpers'
 
 /**
  * Profile dropdown integration tests.
@@ -24,7 +25,7 @@ test('profile dropdown - no duplicates in the seeded demo state @smoke', async (
     route.fulfill({ status: 200, json: { ok: true } })
   )
 
-  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
   // Open the profile dropdown.
@@ -54,7 +55,7 @@ test('profile dropdown - create profile and check no duplicates @smoke', async (
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
   const dropdownBtn = page.getByTestId('profile-dropdown-btn')
@@ -93,7 +94,7 @@ test('profile dropdown - select profile and reopen shows no duplicates @smoke', 
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 
   const dropdownBtn = page.getByTestId('profile-dropdown-btn')
@@ -125,7 +126,7 @@ test('profile dropdown - IndexedDB integrity check @smoke', async ({ page }) => 
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForTimeout(2000)
 
   const dbCheck = await page.evaluate(async () => {
@@ -167,7 +168,7 @@ test('profile dropdown - no key/duplicate console errors @smoke', async ({ page 
     localStorage.setItem('finance_storage_mode', 'serverless')
   })
 
-  await page.goto('http://127.0.0.1:3800/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForTimeout(3000)
 
   const dropdownBtn = page.getByTestId('profile-dropdown-btn')
