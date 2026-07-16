@@ -64,6 +64,10 @@ export default function OverviewDeck(props: OverviewDeckProps) {
     }
   )
 
+  // `.latest` keeps the previous data rendered during refetches and never re-triggers
+  // the page-level <Suspense> (a plain resource read would flash the whole page).
+  const heat = () => heatmap.latest
+
   // ── Budget radar: total budgeted vs spent (threshold=0 → all budgets) ──
   const [budgets] = createResource(
     () => ({ pv: state.profileVersion }),
@@ -90,6 +94,10 @@ export default function OverviewDeck(props: OverviewDeckProps) {
       return { rows: rows.slice(0, 5), total }
     }
   )
+
+  // Same `.latest` treatment as the heatmap for the other two deck resources.
+  const radar = () => budgets.latest
+  const folio = () => portfolio.latest
 
   const expenseRatio = createMemo(() =>
     props.totalIncome > 0 ? (props.totalExpenses / props.totalIncome) * 100 : 0
@@ -165,17 +173,17 @@ export default function OverviewDeck(props: OverviewDeckProps) {
               {props.year} →
             </a>
           </header>
-          <Show when={heatmap()} fallback={<p class={styles.empty}>Loading…</p>}>
+          <Show when={heat()} fallback={<p class={styles.empty}>Loading…</p>}>
             <div class={styles.heatGrid}>
               <span></span>
               <For each={MONTH_LETTERS}>{(m) => <span class={styles.heatMonth}>{m}</span>}</For>
-              <For each={heatmap()!.cells}>
+              <For each={heat()!.cells}>
                 {(row, w) => (
                   <>
                     <span class={styles.heatWeek}>{w() + 1}</span>
                     <For each={row}>
                       {(v) => {
-                        const t = v / heatmap()!.max
+                        const t = v / heat()!.max
                         return (
                           <span
                             class={styles.heatCell}
@@ -254,7 +262,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
                 stroke="url(#deck-arc)"
                 stroke-width="4.5"
                 stroke-linecap="round"
-                stroke-dasharray={arc(62, budgets()?.pct ?? 0)}
+                stroke-dasharray={arc(62, radar()?.pct ?? 0)}
                 transform="rotate(-90 75 75)"
               />
               <circle
@@ -282,12 +290,12 @@ export default function OverviewDeck(props: OverviewDeckProps) {
               <circle cx="75" cy="75" r="3.5" fill="var(--primary)" />
             </svg>
             <div class={styles.radarStats}>
-              <p class={styles.radarPct}>{(budgets()?.pct ?? 0).toFixed(0)}%</p>
+              <p class={styles.radarPct}>{(radar()?.pct ?? 0).toFixed(0)}%</p>
               <p class={styles.radarPctLabel}>of budget spent</p>
               <ul class={styles.radarLegend}>
                 <li>
                   <i style={{ background: 'var(--primary)' }} />
-                  Budget · {money(budgets()?.spent ?? 0)} of {money(budgets()?.budget ?? 0)}
+                  Budget · {money(radar()?.spent ?? 0)} of {money(radar()?.budget ?? 0)}
                 </li>
                 <li>
                   <i style={{ background: 'var(--accent-warm)' }} />
@@ -341,15 +349,15 @@ export default function OverviewDeck(props: OverviewDeckProps) {
           <header class={styles.panelHeader}>
             <h3 class={styles.panelTitle}>Portfolio</h3>
             <a href="#portfolio" class={styles.panelMore}>
-              {money(portfolio()?.total ?? 0)} →
+              {money(folio()?.total ?? 0)} →
             </a>
           </header>
           <Show
-            when={portfolio()?.rows.length}
+            when={folio()?.rows.length}
             fallback={<p class={styles.empty}>No holdings yet — add one on the Portfolio page.</p>}
           >
             <ul class={styles.holdingList}>
-              <For each={portfolio()!.rows}>
+              <For each={folio()!.rows}>
                 {(h, i) => (
                   <li class={styles.holdingRow}>
                     <i

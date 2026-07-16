@@ -13,7 +13,12 @@ test.describe('Budgets CRUD Operations', () => {
 
   test('should have page subtitle', async ({ page }) => {
     // The subtitle copy is the point here (it states the zero-based budgeting model).
-    await expect(page.getByTestId('budgets-subtitle')).toHaveText(/zero-based budgeting|allocate/i)
+    // It now lives as an InfoTip tooltip next to the page title instead of a text line
+    // (the line wrapped badly on phones), so assert the tooltip copy.
+    await expect(page.getByTestId('budgets-subtitle')).toHaveAttribute(
+      'aria-label',
+      /zero-based budgeting|allocate/i
+    )
   })
 
   test('should have month selector controls', async ({ page }) => {

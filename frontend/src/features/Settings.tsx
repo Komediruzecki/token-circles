@@ -32,6 +32,7 @@ import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
+import OrbitalToggle from '../components/OrbitalToggle'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import { getLocalCurrency, toast } from '../core/api.js'
@@ -875,7 +876,8 @@ export default function Settings() {
                   <span class={styles.rowLabel}>Theme</span>
                   <span class={styles.segmented}>
                     <span>Light</span>
-                    <Toggle
+                    {/* The celestial brand switch — sun rides the orbit into a starry night. */}
+                    <OrbitalToggle
                       id="setting-dark-mode"
                       checked={darkMode}
                       onChange={(v) => {

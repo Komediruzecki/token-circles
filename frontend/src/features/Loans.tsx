@@ -36,6 +36,7 @@ import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
+import OrbitalDivider from '../components/OrbitalDivider'
 import { api as _api, formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -575,7 +576,7 @@ export default function Loans() {
       {/* Loan Charts */}
       {loans().length > 0 && (
         <div class={styles.loanAmortizationSection} data-test-id="loans-charts">
-          <h3>Loan Overview</h3>
+          <OrbitalDivider id="loans-sec-overview" label="Loan Overview" />
           <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '16px' }}>
             <div class={styles.amortizationChartWrapper}>
               <h4

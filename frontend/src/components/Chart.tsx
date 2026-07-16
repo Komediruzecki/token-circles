@@ -17,12 +17,14 @@ export interface ChartProps {
 
 export default function Chart(props: ChartProps) {
   let canvasRef: HTMLCanvasElement | null = null
+  let chart: ChartJS.Chart | undefined
+  let chartType: ChartProps['type'] | undefined
 
   createEffect(() => {
     if (canvasRef === null) return
 
     // Capture props synchronously so SolidJS tracks them as dependencies
-    const chartType = props.type
+    const type = props.type
     const chartData = props.data
     const chartOptions = props.options
     const onReady = props.onReady
@@ -31,53 +33,53 @@ export default function Chart(props: ChartProps) {
 
     // Lazy load Chart.js to avoid import issues
     import('chart.js/auto')
-      .then(({ default: ChartJS }) => {
-        if (cancelled) return
+      .then(({ default: ChartJSCtor }) => {
+        if (cancelled || canvasRef === null) return
 
-        // Destroy existing chart
-        const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart })
-          .chartInstance
-        if (existingChart !== undefined) {
-          existingChart.destroy()
+        const mergedOptions = {
+          responsive: true,
+          maintainAspectRatio: false,
+          ...chartOptions,
         }
 
-        // Create new chart
-        const ctx = canvasRef?.getContext('2d')
+        // Same chart type → update the live instance in place. Destroy/recreate blanked
+        // the canvas (plus an async-import gap) on every data change, so stepping the
+        // focus period made every chart on the page flash and re-animate from zero.
+        // 'none' skips the update tween too: rapid period-stepping reads as calm data
+        // changes instead of every chart re-animating at once (creation still animates).
+        if (chart !== undefined && chartType === type) {
+          chart.data = chartData
+          chart.options = mergedOptions
+          chart.update('none')
+          onReady?.(chart)
+          return
+        }
+
+        chart?.destroy()
+        const ctx = canvasRef.getContext('2d')
         if (!ctx) return
-        const chart = new ChartJS(ctx, {
-          type: chartType,
+        chart = new ChartJSCtor(ctx, {
+          type,
           data: chartData,
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            ...chartOptions,
-          },
+          options: mergedOptions,
         })
-        ;(canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance = chart
+        chartType = type
         onReady?.(chart)
       })
       .catch((_err: unknown) => {
         if (!cancelled) console.error('Failed to load Chart.js')
       })
 
+    // Only cancel the in-flight load on re-run; the instance itself lives until unmount.
     onCleanup(() => {
       cancelled = true
-      const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart })
-        .chartInstance
-      if (existingChart !== undefined) {
-        existingChart.destroy()
-        delete (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance
-      }
     })
+  })
 
-    onCleanup(() => {
-      const existingChart = (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart })
-        .chartInstance
-      if (existingChart !== undefined) {
-        existingChart.destroy()
-        delete (canvasRef as HTMLCanvasElement & { chartInstance?: ChartJS.Chart }).chartInstance
-      }
-    })
+  // Component disposal: tear the chart down once.
+  onCleanup(() => {
+    chart?.destroy()
+    chart = undefined
   })
 
   return (

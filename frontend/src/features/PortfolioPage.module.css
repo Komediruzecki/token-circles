@@ -144,8 +144,10 @@
   align-items: start;
 }
 
-.tableSection,
-.sidebar {
+/* Grid cells hold an OrbitalDivider + a card; the card visuals live on the inner
+   surfaces so the divider sits on the page background, not inside the glass. */
+.tableWrapper,
+.sidebarCard {
   background: color-mix(in oklab, var(--card-bg) 74%, transparent);
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
@@ -369,4 +371,19 @@
     padding: 6px 8px;
     font-size: 11px;
   }
+}
+
+/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
+   instead of the old solid fill. Appended last so it wins the cascade. ── */
+.btnPrimary {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow: var(--glow-primary, none);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 20%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
 }

@@ -58,6 +58,7 @@
 
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
+import OrbitalDivider from '../components/OrbitalDivider'
 import SubscriptionCard from '../components/SubscriptionCard'
 import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { formatCurrency } from '../core/api'
@@ -124,9 +125,11 @@ export default function Bills() {
       }
     }
   )
-  const initialLoad = () => billsResource.loading && !billsResource()
-  const bills = () => billsResource()?.bills ?? []
-  const categories = () => billsResource()?.categories ?? []
+  // `.latest` keeps the previous value during a refetch and never re-triggers the page-level
+  // <Suspense>, so period/profile changes update in place instead of flashing the fallback.
+  const initialLoad = () => billsResource.loading && !billsResource.latest
+  const bills = () => billsResource.latest?.bills ?? []
+  const categories = () => billsResource.latest?.categories ?? []
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCatalog, setShowCatalog] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
@@ -598,20 +601,11 @@ export default function Bills() {
           {/* Unpaid Bills Section */}
           {unpaidBills().length > 0 && (
             <div data-test-id="bills-upcoming-section" class={styles.billsSection}>
-              <h2 class={styles.sectionTitle}>
-                <svg
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-                </svg>{' '}
-                Unpaid Bills
-                <span class={styles.sectionSubtitle}>{unpaidBills().length} bills</span>
-              </h2>
+              <OrbitalDivider
+                id="bills-sec-unpaid"
+                label="Unpaid Bills"
+                meta={`${unpaidBills().length} bills`}
+              />
               <div data-test-id="bills-list" class={styles.billsList}>
                 <For each={unpaidBills()}>
                   {(bill) => (
@@ -696,22 +690,11 @@ export default function Bills() {
           {/* Paid Bills Section */}
           {paidBills().length > 0 && (
             <div data-test-id="bills-paid-section" class={styles.billsSection}>
-              <h2 class={styles.sectionTitle}>
-                <span>
-                  <svg
-                    width="16"
-                    height="16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                </span>{' '}
-                Paid Bills
-                <span class={styles.sectionSubtitle}>{paidBills().length} paid</span>
-              </h2>
+              <OrbitalDivider
+                id="bills-sec-paid"
+                label="Paid Bills"
+                meta={`${paidBills().length} paid`}
+              />
               <div class={styles.billsList}>
                 <For each={paidBills()}>
                   {(bill) => (

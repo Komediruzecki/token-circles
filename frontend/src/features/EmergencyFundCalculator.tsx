@@ -9,9 +9,9 @@
  * WHEN: The page loads with data
  * THEN: The coverage chart shows how many months of expenses the fund can cover
  *
- * GIVEN: A user expands details
- * WHEN: They click to show details
- * THEN: A breakdown by month displays coverage percentages and status
+ * GIVEN: A user has emergency fund data
+ * WHEN: The Coverage Levels section renders (always visible)
+ * THEN: A breakdown per fund level displays coverage percentages and status
  */
 
 /**
@@ -22,6 +22,7 @@ import { createSignal, For, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import { mobileXTicks } from '../components/chartMobile'
 import ExportChartButton from '../components/ExportChartButton'
+import OrbitalDivider from '../components/OrbitalDivider'
 import { apiGet, formatCurrency, showToast } from '../core/api'
 import { theme } from '../core/theme'
 import sharedStyles from './CalculatorShared.module.css'
@@ -34,7 +35,6 @@ export default function EmergencyFundCalculator() {
   const [monthsWithData, setMonthsWithData] = createSignal(0)
   const [coverage, setCoverage] = createSignal<any[]>([])
   const [loading, setLoading] = createSignal(false)
-  const [showDetails, setShowDetails] = createSignal(false)
 
   onMount(() => {
     loadEmergencyFund()
@@ -88,6 +88,11 @@ export default function EmergencyFundCalculator() {
           </div>
 
           {/* Coverage Visualization */}
+          <OrbitalDivider
+            id="emergency-sec-coverage-chart"
+            label="Coverage by Fund Level"
+            info="How much of each fund level (3, 6, 9 months of expenses) your current savings cover, in percent."
+          />
           <div class={styles.chartSection}>
             <Chart
               id="emergencyFundChart"
@@ -145,39 +150,31 @@ export default function EmergencyFundCalculator() {
             />
           </div>
 
-          {/* Coverage Details */}
+          {/* Coverage Details — always visible (the old Show/Hide toggle just hid content). */}
+          <OrbitalDivider id="emergency-sec-coverage-levels" label="Coverage Levels" />
           <div class={styles.detailsSection}>
-            <div class={styles.detailsHeader}>
-              <h3>Coverage Levels</h3>
-              <button class={styles.toggleBtn} onClick={() => setShowDetails(!showDetails())}>
-                {showDetails() ? 'Hide' : 'Show'} Details
-              </button>
-            </div>
-
-            {showDetails() && (
-              <div class={styles.coverageGrid}>
-                <For each={coverage()}>
-                  {(c) => (
-                    <div class={`${styles.coverageItem} ${styles[c.status] || ''}`}>
-                      <div class={styles.coverageTitle}>{c.label} Fund</div>
-                      <div class={styles.coverageBars}>
-                        <div class={styles.progressBar}>
-                          <div
-                            class={styles.progressFill}
-                            style={{ width: `${c.coveragePct}%` }}
-                          ></div>
-                        </div>
-                        <div class={styles.progressStats}>
-                          <span>{formatCurrency(c.current, 'EUR')}</span>
-                          <span>of {formatCurrency(c.required, 'EUR')}</span>
-                        </div>
+            <div class={styles.coverageGrid}>
+              <For each={coverage()}>
+                {(c) => (
+                  <div class={`${styles.coverageItem} ${styles[c.status] || ''}`}>
+                    <div class={styles.coverageTitle}>{c.label} Fund</div>
+                    <div class={styles.coverageBars}>
+                      <div class={styles.progressBar}>
+                        <div
+                          class={styles.progressFill}
+                          style={{ width: `${c.coveragePct}%` }}
+                        ></div>
                       </div>
-                      <div class={styles.coverageStatus}>{c.status}</div>
+                      <div class={styles.progressStats}>
+                        <span>{formatCurrency(c.current, 'EUR')}</span>
+                        <span>of {formatCurrency(c.required, 'EUR')}</span>
+                      </div>
                     </div>
-                  )}
-                </For>
-              </div>
-            )}
+                    <div class={styles.coverageStatus}>{c.status}</div>
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </>
       )}

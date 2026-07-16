@@ -29,6 +29,7 @@
 import { createMemo, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import OrbitalDivider from '../components/OrbitalDivider'
 import RenewalCycle from '../components/RenewalCycle'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
@@ -270,62 +271,53 @@ export default function HousingForm() {
 
       {/* Subscription Tracker */}
       {activeSubs().length > 0 && (
-        <div class={styles.subscriptionSection}>
-          <div class={styles.sectionHeader}>
-            <h3 class={styles.sectionTitle}>
-              <svg
-                width="18"
-                height="18"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              Subscription Tracker
-            </h3>
-            <span class={styles.subTotal}>{formatCurrency(totalSubsCost())}/mo</span>
-          </div>
-          <div class={styles.subscriptionBody}>
-            <RenewalCycle
-              subs={activeSubs().map((s) => ({
-                name: s.name,
-                amount: s.amount,
-                due_date: s.due_date,
-                category_color: s.category_color,
-              }))}
-              total={totalSubsCost()}
-            />
-            <div class={styles.subscriptionList}>
-              <For each={activeSubs()}>
-                {(sub, i) => (
-                  <div class={styles.subItem}>
-                    <div class={styles.subItemInfo}>
-                      <span
-                        class={styles.subDot}
-                        style={{ background: sub.category_color || paletteColor(i()) }}
-                      />
-                      <div>
-                        <div class={styles.subItemName}>{sub.name}</div>
-                        <div class={styles.subItemMeta}>
-                          {sub.frequency === 'monthly'
-                            ? 'Monthly'
-                            : sub.frequency === 'weekly'
-                              ? 'Weekly'
-                              : 'Biweekly'}
-                          {sub.due_date &&
-                            ` · Due ${new Date(sub.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+        <>
+          <OrbitalDivider
+            id="housing-sec-subs"
+            label="Subscription Tracker"
+            meta={`${formatCurrency(totalSubsCost())}/mo`}
+          />
+          <div class={styles.subscriptionSection}>
+            <div class={styles.subscriptionBody}>
+              <RenewalCycle
+                subs={activeSubs().map((s) => ({
+                  name: s.name,
+                  amount: s.amount,
+                  due_date: s.due_date,
+                  category_color: s.category_color,
+                }))}
+                total={totalSubsCost()}
+              />
+              <div class={styles.subscriptionList}>
+                <For each={activeSubs()}>
+                  {(sub, i) => (
+                    <div class={styles.subItem}>
+                      <div class={styles.subItemInfo}>
+                        <span
+                          class={styles.subDot}
+                          style={{ background: sub.category_color || paletteColor(i()) }}
+                        />
+                        <div>
+                          <div class={styles.subItemName}>{sub.name}</div>
+                          <div class={styles.subItemMeta}>
+                            {sub.frequency === 'monthly'
+                              ? 'Monthly'
+                              : sub.frequency === 'weekly'
+                                ? 'Weekly'
+                                : 'Biweekly'}
+                            {sub.due_date &&
+                              ` · Due ${new Date(sub.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                          </div>
                         </div>
                       </div>
+                      <div class={styles.subItemAmount}>{formatCurrency(sub.amount)}</div>
                     </div>
-                    <div class={styles.subItemAmount}>{formatCurrency(sub.amount)}</div>
-                  </div>
-                )}
-              </For>
+                  )}
+                </For>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {initialLoad() && housings().length === 0 ? (

@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { createSignal, For, Show } from 'solid-js'
+import { batch, createSignal, For, Show } from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
@@ -164,18 +164,27 @@ export default function Dashboard() {
       void state.profileVersion
     },
     () => {
-      void loadDashboard()
-      const p = period()
-      if (p.mode === 'range' && p.preset !== 'all') {
-        const r = toRange(p)
-        void loadMonthlyData(r.from, r.to)
-      } else {
-        void loadMonthlyData()
-      }
+      void refreshDashboard()
     }
   )
 
-  const loadDashboard = async () => {
+  // Fetch both halves, then commit the signals together — a single visual wave across
+  // the deck instead of each widget repainting whenever its own fetch happens to land.
+  const refreshDashboard = async () => {
+    const p = period()
+    const chartRange = p.mode === 'range' && p.preset !== 'all' ? toRange(p) : undefined
+    const [dash, monthly] = await Promise.all([
+      fetchDashboardMetrics(),
+      fetchMonthlyData(chartRange?.from, chartRange?.to),
+    ])
+    batch(() => {
+      if (dash) setMetrics(dash)
+      if (monthly) setMonthlyData(monthly)
+      setInitialLoad(false)
+    })
+  }
+
+  const fetchDashboardMetrics = async (): Promise<Models.DashboardMetrics | null> => {
     try {
       const p = period()
       const isAll = p.preset === 'all'
@@ -188,16 +197,17 @@ export default function Dashboard() {
         dateFrom = r.from
         dateTo = r.to
       }
-      const data = await api.getDashboard(month(), year(), dateFrom, dateTo, isAll)
-      setMetrics(data)
+      return await api.getDashboard(month(), year(), dateFrom, dateTo, isAll)
     } catch {
       toast('Failed to load dashboard', 'error')
-    } finally {
-      setInitialLoad(false)
+      return null
     }
   }
 
-  const loadMonthlyData = async (dateFrom?: string, dateTo?: string) => {
+  const fetchMonthlyData = async (
+    dateFrom?: string,
+    dateTo?: string
+  ): Promise<Models.DashboardChartData | null> => {
     try {
       const [chartsData, netWorthData] = await Promise.all([
         api.getDashboardCharts(12),
@@ -225,15 +235,15 @@ export default function Dashboard() {
       // Real monthly income/expense stats (the net-worth timeline only knows
       // net change, which zeroes out whichever side is smaller).
       const monthly = chartsData.monthly || []
-      setMonthlyData({
+      return {
         labels,
         monthlyLabels: monthly.map((m) => fmtMonth(m.month)),
         income: monthly.map((m) => m.income || 0),
         expenses: monthly.map((m) => m.expense || 0),
         netWorth,
-      })
+      }
     } catch {
-      /* optional */
+      return null /* optional */
     }
   }
 
@@ -525,7 +535,7 @@ export default function Dashboard() {
             </button>
             <button
               class={styles.btnPrimary}
-              onClick={() => loadDashboard()}
+              onClick={() => void refreshDashboard()}
               data-test-id="dashboard-refresh"
             >
               <svg

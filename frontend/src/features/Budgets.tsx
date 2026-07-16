@@ -37,7 +37,10 @@ import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
+import InfoTip from '../components/InfoTip'
+import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
+import SectionRail from '../components/SectionRail'
 import { getLocalCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -157,10 +160,13 @@ export default function Budgets() {
       }
     }
   )
-  const loading = () => budgetResource.loading && !budgetResource()
-  const allocations = () => budgetResource()?.allocations ?? []
-  const summary = () => (budgetResource()?.summary ?? null) as ZeroBasedSummary | null
-  const forecastData = () => budgetResource()?.forecastData ?? null
+  // Read `.latest`, not the resource itself: `.latest` keeps returning the previous value
+  // during a refetch and never re-triggers the page-level <Suspense>, so stepping the focus
+  // period updates in place instead of flashing the whole page to the "Loading..." fallback.
+  const loading = () => budgetResource.loading && !budgetResource.latest
+  const allocations = () => budgetResource.latest?.allocations ?? []
+  const summary = () => (budgetResource.latest?.summary ?? null) as ZeroBasedSummary | null
+  const forecastData = () => budgetResource.latest?.forecastData ?? null
 
   const [showAllocateModal, setShowAllocateModal] = createSignal(false)
   const [selectedCategory, setSelectedCategory] = createSignal<CategoryAllocation | null>(null)
@@ -501,12 +507,31 @@ export default function Budgets() {
         <div class={styles.headerTop}>
           <h1 data-test-id="budgets-header" data-tour="budgets-header">
             Budgets
+            {/* The old subtitle wrapped badly on phones — the explainer lives here now. */}
+            <InfoTip
+              testId="budgets-subtitle"
+              text="Zero-based budgeting: allocate every dollar to a category"
+            />
           </h1>
         </div>
-        <p data-test-id="budgets-subtitle" class={styles.pageSubtitle}>
-          Zero-based budgeting: allocate every dollar to a category
-        </p>
       </div>
+
+      {/* Jump-to-section orbit rail (desktop) — anchors are the OrbitalDividers below. */}
+      <SectionRail
+        sections={[
+          { id: 'budgets-sec-overview', label: 'Overview' },
+          { id: 'budgets-sec-allocation', label: 'Category Allocation' },
+          ...(allocations().length > 0
+            ? [{ id: 'budgets-sec-spending', label: 'Spending vs Budget' }]
+            : []),
+          ...(improvements().length > 0
+            ? [{ id: 'budgets-sec-adherence', label: 'Monthly Adherence' }]
+            : []),
+          { id: 'budgets-sec-forecast', label: 'Budget Forecast' },
+          { id: 'budgets-sec-table', label: 'Category Allocations' },
+          { id: 'budgets-sec-categories', label: 'Categories' },
+        ]}
+      />
 
       {/* Global period navigator */}
       <div
@@ -518,7 +543,13 @@ export default function Budgets() {
       </div>
 
       {/* Budget Summary Cards */}
-      <div data-test-id="budget-summary" class={styles.budgetSummary} data-tour="budgets-summary">
+      <div
+        id="budgets-sec-overview"
+        data-test-id="budget-summary"
+        class={styles.budgetSummary}
+        data-tour="budgets-summary"
+        style={{ 'scroll-margin-top': '18px' }}
+      >
         <div data-test-id="budgets-summary-income" class={styles.summaryCard}>
           <div class={styles.summaryLabel}>Income</div>
           <div class={styles.summaryValue}>{formatCurrency(summary()?.income ?? 0)}</div>
@@ -548,7 +579,7 @@ export default function Budgets() {
 
       {/* Category Allocation Chart */}
       <div data-test-id="budgets-chart-allocation" class={styles.categoryChartSection}>
-        <h3>Category Allocation</h3>
+        <OrbitalDivider id="budgets-sec-allocation" label="Category Allocation" />
         <div class={styles.chartWrapper}>
           {allocations().length === 0 ? (
             <div class={styles.emptyState}>No allocations for this month</div>
@@ -570,7 +601,7 @@ export default function Budgets() {
       {/* Spending vs Budget Bar Chart */}
       {allocations().length > 0 && (
         <div class={styles.categoryChartSection}>
-          <h3>Spending vs Budget</h3>
+          <OrbitalDivider id="budgets-sec-spending" label="Spending vs Budget" />
           <div class={styles.chartWrapper}>
             <Chart
               type="bar"
@@ -636,7 +667,7 @@ export default function Budgets() {
       {/* Historical Adherence Trend Chart */}
       {improvements().length > 0 && (
         <div class={styles.categoryChartSection}>
-          <h3>Monthly Adherence Trend</h3>
+          <OrbitalDivider id="budgets-sec-adherence" label="Monthly Adherence Trend" />
           <div class={styles.chartWrapper}>
             <Chart
               type="line"
@@ -696,21 +727,8 @@ export default function Budgets() {
       )}
 
       {/* Forecast Section */}
+      <OrbitalDivider id="budgets-sec-forecast" label="Budget Forecast" />
       <div data-test-id="budgets-forecast" class={styles.budgetForecast}>
-        <div class={styles.forecastHeader}>
-          <div class={styles.forecastTitle}>
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-              />
-            </svg>
-            <span>Budget Forecast</span>
-          </div>
-        </div>
-
         {forecastData() ? (
           <>
             {/* Adherence Stats */}
@@ -785,80 +803,80 @@ export default function Budgets() {
         class={styles.budgetAllocations}
         data-tour="budgets-allocations"
       >
-        <div data-test-id="table-header" class={styles.tableHeader}>
-          <h2>Category Allocations</h2>
-          <div class={styles.actions}>
-            <button
-              class={styles.btnOutline}
-              onClick={duplicateLastMonth}
-              title={`Copy the budget amounts from ${prevMonthLabel()} into the month you're viewing`}
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
-                />
-              </svg>
-              Copy {prevMonthLabel()} Budgets
-            </button>
-            <button
-              class={styles.btnOutline}
-              onClick={setFromExpenses}
-              title={`Set this month's budgets to what you actually spent in ${prevMonthLabel()}`}
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-                />
-              </svg>
-              From {prevMonthLabel()} Expenses
-            </button>
-            <button
-              class={styles.btnOutline}
-              onClick={backfillFromSpending}
-              title="Set every past month's budgets to that month's actual spending — fills historical months so the charts are complete"
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16m0 5v-5h5"
-                />
-              </svg>
-              Backfill from Spending
-            </button>
-            <button
-              data-test-id="budgets-add-allocation-btn"
-              class={styles.btnPrimary}
-              onClick={() => {
-                // Default to the first unbudgeted category; the modal has a picker so the
-                // user can change it (or pick any category when all are budgeted).
-                const target =
-                  allocations().find((a) => !a.is_budgeted && a.can_allocate) ?? allocations()[0]
-                if (target) {
-                  openAllocateModal(target)
+        {/* Section header IS the divider; the bulk tools + CTA dock in its action slot. */}
+        <OrbitalDivider
+          id="budgets-sec-table"
+          testId="table-header"
+          label="Category Allocations"
+          actions={
+            <>
+              <OrbitalAction
+                onClick={duplicateLastMonth}
+                title={`Copy the budget amounts from ${prevMonthLabel()} into the month you're viewing`}
+                icon={
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
+                    />
+                  </svg>
                 }
-              }}
-              disabled={allocations().length === 0}
-            >
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-              Add Allocation
-            </button>
-          </div>
-        </div>
+              >
+                Copy {prevMonthLabel()} Budgets
+              </OrbitalAction>
+              <OrbitalAction
+                onClick={setFromExpenses}
+                title={`Set this month's budgets to what you actually spent in ${prevMonthLabel()}`}
+                icon={
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                    />
+                  </svg>
+                }
+              >
+                From {prevMonthLabel()} Expenses
+              </OrbitalAction>
+              <OrbitalAction
+                onClick={backfillFromSpending}
+                title="Set every past month's budgets to that month's actual spending — fills historical months so the charts are complete"
+                icon={
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16m0 5v-5h5"
+                    />
+                  </svg>
+                }
+              >
+                Backfill from Spending
+              </OrbitalAction>
+              <OrbitalAction
+                testId="budgets-add-allocation-btn"
+                variant="primary"
+                onClick={() => {
+                  // Default to the first unbudgeted category; the modal has a picker so the
+                  // user can change it (or pick any category when all are budgeted).
+                  const target =
+                    allocations().find((a) => !a.is_budgeted && a.can_allocate) ?? allocations()[0]
+                  if (target) {
+                    openAllocateModal(target)
+                  }
+                }}
+                disabled={allocations().length === 0}
+              >
+                Add Allocation
+              </OrbitalAction>
+            </>
+          }
+        />
 
         {loading() ? (
           <div data-test-id="loading-state" class={styles.emptyState}>
@@ -996,22 +1014,22 @@ export default function Budgets() {
 
       {/* Categories Section */}
       <div class={styles.categoriesSection}>
-        <div class={styles.categoriesHeader}>
-          <h2>Categories</h2>
-          <button
-            class={styles.btnPrimary}
-            onClick={() => {
-              setEditingCategory(null)
-              setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-              setShowCatModal(true)
-            }}
-          >
-            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Add Category
-          </button>
-        </div>
+        <OrbitalDivider
+          id="budgets-sec-categories"
+          label="Categories"
+          actions={
+            <OrbitalAction
+              variant="primary"
+              onClick={() => {
+                setEditingCategory(null)
+                setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
+                setShowCatModal(true)
+              }}
+            >
+              Add Category
+            </OrbitalAction>
+          }
+        />
 
         <div class={styles.categoriesFilter}>
           <button

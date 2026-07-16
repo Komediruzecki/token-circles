@@ -34,6 +34,7 @@ import { createMemo, createSignal, For } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import GoalRing from '../components/GoalRing'
+import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -509,132 +510,137 @@ export default function Goals() {
 
       {/* Goals Progress — an orbital ring per goal */}
       {goals().length > 0 && (
-        <div class={styles.goalsChartSection}>
-          <h3>Goals Progress</h3>
-          <div class={styles.progressRings}>
-            <For each={goals()}>
-              {(g) => (
-                <GoalRing
-                  name={g.name}
-                  current={g.current_amount}
-                  target={g.target_amount}
-                  deadline={g.target_date}
-                />
-              )}
-            </For>
+        <>
+          <OrbitalDivider id="goals-sec-progress" label="Goals Progress" />
+          <div class={styles.goalsChartSection}>
+            <div class={styles.progressRings}>
+              <For each={goals()}>
+                {(g) => (
+                  <GoalRing
+                    name={g.name}
+                    current={g.current_amount}
+                    target={g.target_amount}
+                    deadline={g.target_date}
+                  />
+                )}
+              </For>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Goal Projection Timeline */}
       {projectionGoals().length > 0 && (
-        <div class={styles.goalsChartSection}>
-          <h3>Goal Projections</h3>
-          <div class={styles.chartWrapper}>
-            <Chart
-              id="goals-projection-chart"
-              type="line"
-              data={{
-                labels: projectionLabels(),
-                datasets: projectionGoals().map((g, idx) => {
-                  const color = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length]
-                  const monthly = g.monthly_contribution || 0
-                  const remaining = g.target_amount - g.current_amount
-                  // Already met (or over) the target: no months to project.
-                  const monthsNeeded = remaining <= 0 ? 0 : Math.ceil(remaining / monthly)
-                  const data: (number | null)[] = [g.current_amount]
-                  for (let m = 1; m <= monthsNeeded; m++) {
-                    data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
-                  }
-                  // Achievement label: "reached" when already met, else the projected month.
-                  const now = new Date()
-                  const achieveLabel =
-                    monthsNeeded <= 0
-                      ? 'reached'
-                      : new Date(
-                          now.getFullYear(),
-                          now.getMonth() + monthsNeeded,
-                          1
-                        ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                  return {
-                    label: `${g.name} — target ${achieveLabel}`,
-                    data,
-                    borderColor: color,
-                    backgroundColor: `${color}20`,
-                    fill: true,
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: data.map((_, i) => (i === monthsNeeded ? 4 : 0)),
-                    pointBackgroundColor: data.map((_, i) =>
-                      i === monthsNeeded ? color : 'transparent'
-                    ),
-                    pointBorderColor: data.map((_, i) =>
-                      i === monthsNeeded ? '#fff' : 'transparent'
-                    ),
-                    pointBorderWidth: 2,
-                  }
-                }),
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                  intersect: false,
-                  mode: 'index',
-                },
-                scales: {
-                  y: {
-                    ticks: {
-                      callback: (v: number | string) =>
-                        formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
-                      color: chartColors().text,
-                    },
-                    grid: { color: chartColors().border },
-                    title: {
-                      display: true,
-                      text: 'Balance',
-                      color: chartColors().text,
-                    },
+        <>
+          <OrbitalDivider id="goals-sec-projections" label="Goal Projections" />
+          <div class={styles.goalsChartSection}>
+            <div class={styles.chartWrapper}>
+              <Chart
+                id="goals-projection-chart"
+                type="line"
+                data={{
+                  labels: projectionLabels(),
+                  datasets: projectionGoals().map((g, idx) => {
+                    const color = CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length]
+                    const monthly = g.monthly_contribution || 0
+                    const remaining = g.target_amount - g.current_amount
+                    // Already met (or over) the target: no months to project.
+                    const monthsNeeded = remaining <= 0 ? 0 : Math.ceil(remaining / monthly)
+                    const data: (number | null)[] = [g.current_amount]
+                    for (let m = 1; m <= monthsNeeded; m++) {
+                      data.push(Math.min(g.current_amount + monthly * m, g.target_amount))
+                    }
+                    // Achievement label: "reached" when already met, else the projected month.
+                    const now = new Date()
+                    const achieveLabel =
+                      monthsNeeded <= 0
+                        ? 'reached'
+                        : new Date(
+                            now.getFullYear(),
+                            now.getMonth() + monthsNeeded,
+                            1
+                          ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                    return {
+                      label: `${g.name} — target ${achieveLabel}`,
+                      data,
+                      borderColor: color,
+                      backgroundColor: `${color}20`,
+                      fill: true,
+                      tension: 0.3,
+                      borderWidth: 2,
+                      pointRadius: data.map((_, i) => (i === monthsNeeded ? 4 : 0)),
+                      pointBackgroundColor: data.map((_, i) =>
+                        i === monthsNeeded ? color : 'transparent'
+                      ),
+                      pointBorderColor: data.map((_, i) =>
+                        i === monthsNeeded ? '#fff' : 'transparent'
+                      ),
+                      pointBorderWidth: 2,
+                    }
+                  }),
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  interaction: {
+                    intersect: false,
+                    mode: 'index',
                   },
-                  x: {
-                    ticks: { color: chartColors().text, maxTicksLimit: 12 },
-                    grid: { color: chartColors().border },
-                    title: {
-                      display: true,
-                      text: 'Projected timeline',
-                      color: chartColors().text,
+                  scales: {
+                    y: {
+                      ticks: {
+                        callback: (v: number | string) =>
+                          formatCurrency(typeof v === 'number' ? v : Number(v), 'EUR'),
+                        color: chartColors().text,
+                      },
+                      grid: { color: chartColors().border },
+                      title: {
+                        display: true,
+                        text: 'Balance',
+                        color: chartColors().text,
+                      },
                     },
-                  },
-                },
-                plugins: {
-                  legend: {
-                    position: 'top',
-                    labels: { color: chartColors().text, usePointStyle: true },
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: (ctx: any) => {
-                        const dataset = ctx.dataset
-                        const val = dataset.data[ctx.dataIndex]
-                        const isLast = ctx.dataIndex === dataset.data.length - 1
-                        const isPlateau =
-                          !isLast &&
-                          val === dataset.data[ctx.dataIndex + 1] &&
-                          val === dataset.data[Math.min(ctx.dataIndex + 2, dataset.data.length - 1)]
-                        let label = `${dataset.label?.split(' — ')[0] || dataset.label}: ${formatCurrency(val)}`
-                        if (isLast) label += ' (goal reached)'
-                        else if (isPlateau) label += ' (goal reached)'
-                        return label
+                    x: {
+                      ticks: { color: chartColors().text, maxTicksLimit: 12 },
+                      grid: { color: chartColors().border },
+                      title: {
+                        display: true,
+                        text: 'Projected timeline',
+                        color: chartColors().text,
                       },
                     },
                   },
-                },
-              }}
-              height={300}
-              width="100%"
-            />
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      labels: { color: chartColors().text, usePointStyle: true },
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx: any) => {
+                          const dataset = ctx.dataset
+                          const val = dataset.data[ctx.dataIndex]
+                          const isLast = ctx.dataIndex === dataset.data.length - 1
+                          const isPlateau =
+                            !isLast &&
+                            val === dataset.data[ctx.dataIndex + 1] &&
+                            val ===
+                              dataset.data[Math.min(ctx.dataIndex + 2, dataset.data.length - 1)]
+                          let label = `${dataset.label?.split(' — ')[0] || dataset.label}: ${formatCurrency(val)}`
+                          if (isLast) label += ' (goal reached)'
+                          else if (isPlateau) label += ' (goal reached)'
+                          return label
+                        },
+                      },
+                    },
+                  },
+                }}
+                height={300}
+                width="100%"
+              />
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Add/Edit Modal */}

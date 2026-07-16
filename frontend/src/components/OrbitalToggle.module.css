@@ -1,0 +1,157 @@
+/* OrbitalToggle — celestial on/off switch (see OrbitalToggle.tsx). 64x30 pill. */
+
+.orbital-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 64px;
+  height: 30px;
+  border-radius: 15px;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
+  /* Daylight: a warm wash at the horizon. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--accent-warm, #f0a860) 20%, var(--bg-secondary)),
+    var(--bg-secondary)
+  );
+  border: 1px solid color-mix(in oklab, var(--accent-warm, #f0a860) 35%, var(--border));
+  transition:
+    background 0.35s,
+    border-color 0.35s,
+    box-shadow 0.35s;
+}
+
+/* The orbit arc across the track. */
+.track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.track path {
+  fill: none;
+  stroke: color-mix(in oklab, var(--text-secondary) 38%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Stars appear with the night. */
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+
+.s1 {
+  width: 2px;
+  height: 2px;
+  left: 14px;
+  top: 8px;
+}
+
+.s2 {
+  width: 1.5px;
+  height: 1.5px;
+  left: 24px;
+  top: 19px;
+  transition-delay: 0.05s;
+}
+
+.s3 {
+  width: 2px;
+  height: 2px;
+  left: 38px;
+  top: 7px;
+  transition-delay: 0.1s;
+}
+
+/* The sun (off) → planet (on). Travel = 64 − 2·4 − 22 = 34px along the arc. */
+.knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-warm, #f0a860);
+  box-shadow:
+    0 0 10px color-mix(in oklab, var(--accent-warm, #f0a860) 70%, transparent),
+    0 0 0 3px color-mix(in oklab, var(--accent-warm, #f0a860) 20%, transparent);
+  transition:
+    transform 0.35s cubic-bezier(0.22, 0.9, 0.3, 1.15),
+    background 0.35s,
+    box-shadow 0.35s;
+}
+
+/* Dashed orbit ring around the planet — turns slowly while on. */
+.ring {
+  position: absolute;
+  inset: -4px;
+  border: 1px dashed color-mix(in oklab, var(--primary) 60%, transparent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.35s;
+  animation: orbital-toggle-spin 8s linear infinite;
+  animation-play-state: paused;
+  pointer-events: none;
+}
+
+/* ── Night (on) ── */
+.on {
+  background: linear-gradient(180deg, #0a0e1c, #121a3a);
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+  box-shadow: 0 0 12px color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+.on .star {
+  opacity: 0.9;
+}
+
+.on .knob {
+  transform: translateX(34px);
+  background: var(--primary);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--primary) 65%, transparent);
+}
+
+.on .ring {
+  opacity: 1;
+  animation-play-state: running;
+}
+
+@keyframes orbital-toggle-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.orbital-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.orbital-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbital-toggle,
+  .knob,
+  .star,
+  .ring {
+    transition: none;
+  }
+  .ring {
+    animation: none;
+  }
+}

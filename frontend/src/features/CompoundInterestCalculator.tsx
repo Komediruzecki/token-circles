@@ -25,6 +25,7 @@
 import { createSignal, For, onCleanup } from 'solid-js'
 import Chart from '../components/Chart'
 import ExportChartButton from '../components/ExportChartButton'
+import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiPost, showToast } from '../core/api'
 import { theme } from '../core/theme'
@@ -222,8 +223,8 @@ export default function CompoundInterestCalculator() {
       ) : results() ? (
         <>
           {/* Detailed Projection Chart */}
+          <OrbitalDivider id="compound-sec-projection" label="Detailed Projection" />
           <div class={styles.chartSection}>
-            <h3 class={styles.chartTitle}>Detailed Projection</h3>
             <Chart
               id="compoundInterestChartDetailed"
               type="line"
@@ -291,8 +292,8 @@ export default function CompoundInterestCalculator() {
           </div>
 
           {/* Scenario Comparison Chart */}
+          <OrbitalDivider id="compound-sec-comparison" label="Scenario Comparison" />
           <div class={styles.chartSection}>
-            <h3 class={styles.chartTitle}>Scenario Comparison</h3>
             <Chart
               id="compoundInterestChart"
               type="bar"
@@ -348,8 +349,8 @@ export default function CompoundInterestCalculator() {
           </div>
 
           {/* Scenario Details */}
+          <OrbitalDivider id="compound-sec-details" label="Scenario Details" />
           <div class={styles.scenariosSection}>
-            <h3 class={styles.scenariosTitle}>Scenario Details</h3>
             <div class={styles.scenariosGrid}>
               <For each={summary()?.scenarios || []}>
                 {(s) => (

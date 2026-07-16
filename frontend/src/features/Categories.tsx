@@ -85,9 +85,11 @@ export default function Categories() {
       return { categories: allRes, budgetSummary: summary }
     }
   )
-  const loading = () => categoriesResource.loading && !categoriesResource()
-  const categories = () => categoriesResource()?.categories ?? []
-  const budgetSummary = () => categoriesResource()?.budgetSummary ?? {}
+  // `.latest` keeps the previous value during a refetch and never re-triggers the page-level
+  // <Suspense>, so period/profile changes update in place instead of flashing the fallback.
+  const loading = () => categoriesResource.loading && !categoriesResource.latest
+  const categories = () => categoriesResource.latest?.categories ?? []
+  const budgetSummary = () => categoriesResource.latest?.budgetSummary ?? {}
 
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showBudgetModal, setShowBudgetModal] = createSignal(false)
