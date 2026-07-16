@@ -43,6 +43,14 @@ describe('email templates', () => {
     expect(mail.text).toContain("If you didn't create this account");
   });
 
+  it('mail assets load from the sending environment origin, defaulting to prod', () => {
+    const dev = renderWelcome({ appUrl: 'https://dev.tokencircles.com' });
+    expect(dev.html).toContain('https://dev.tokencircles.com/email/orbit.gif');
+    expect(dev.html).toContain('https://dev.tokencircles.com/icon-192.png');
+    const fallback = renderTestBasic();
+    expect(fallback.html).toContain('https://tokencircles.com/icon-192.png');
+  });
+
   it('account-exists notice never includes the animated ornament (security notice tone)', () => {
     const mail = renderAccountExists({});
     expectBrandedShell(mail);

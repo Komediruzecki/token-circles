@@ -102,7 +102,9 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
   if (!user?.email) throw new HttpError(400, 'No email on your account');
 
   const type = ((await c.req.json().catch(() => ({}))) as { type?: string }).type ?? 'basic';
-  let mail = renderTestBasic();
+  let mail = renderTestBasic({
+    assetOrigin: c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || undefined,
+  });
   if (type === 'spending' || type === 'budget' || type === 'bills') {
     const preview = await composeReminderPreview(c.env, c.get('userId'), type);
     if (!preview) {

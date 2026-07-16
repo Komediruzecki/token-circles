@@ -67,7 +67,10 @@ supportRoutes.post('/api/support/contact', async (c) => {
   // SUPPORT_EMAIL private.
   const ackRl = await rateLimit(c.env, `support-email:${email.toLowerCase()}`, 3, 3600);
   if (r.sent && ackRl.ok) {
-    const ack = renderSupportAck({ ticketId });
+    const ack = renderSupportAck({
+      ticketId,
+      assetOrigin: c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || undefined,
+    });
     await sendMail(c.env, email, ack.subject, ack.html, { text: ack.text }).catch(() => {
       /* ack is best-effort; the support message already went through */
     });

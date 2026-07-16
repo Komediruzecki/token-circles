@@ -248,7 +248,7 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
       .run();
     const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
     const link = `${base}/#reset-password?token=${token}`;
-    const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS });
+    const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS, assetOrigin: base });
     await sendMail(c.env, email, reset.subject, reset.html, { text: reset.text });
   }
   return c.json({ ok: true });
