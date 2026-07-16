@@ -9,6 +9,12 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.6.1] — 2026-07-17
+
+### Fixed
+
+- Subscription scan detected nothing in SERVER (worker/self-hosted) mode — the second instance of the 5.6.0 onboarding-trigger bug: `SubscriptionScan` fetched `/api/transactions` expecting a bare array, but the server returns the paginated envelope `{ rows, total, limit, offset }`; the defensive `Array.isArray` fallback silently scanned an empty list, so every scan (Bills, Import post-import prompt, onboarding wizard step — one shared component) reported "No known subscriptions found". Serverless returns bare arrays, which is why demo-mode testing looked fine. Fixed with a shared `listRows` normalizer in `core/api.ts` (bare array OR `{rows}` envelope → array; unknown → `[]`), now the required idiom for any `apiGet` of a list endpoint. Covered by unit tests and `subscription-scan-server.spec.ts` — a server-mode e2e that seeds recurring charges via the API, pins the envelope shape as a precondition, and asserts detections render (verified to fail against the unfixed code). Detection quality itself was validated against a real 6.5-month Revolut statement: 8 subscriptions found (harness kept out of the repo — personal data).
+
 ## [5.6.0] — 2026-07-16
 
 ### Added
