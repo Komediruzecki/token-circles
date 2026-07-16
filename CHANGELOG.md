@@ -6,6 +6,12 @@ technical detail lives in [dev-changelog.md](dev-changelog.md).
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.1] — 2026-07-17
+
+### Fixed
+
+- The subscription scan works on hosted accounts again. Scanning your transactions (from Bills, the importer, or the setup wizard) always came back with "no subscriptions found" when signed in to tokencircles.com, even with plenty of recurring charges — it now detects them as intended.
+
 ## [5.6.0] — 2026-07-16
 
 ### Added

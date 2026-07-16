@@ -43,7 +43,14 @@ test.describe('onboarding — server mode @smoke', () => {
       localStorage.setItem('darkMode', 'false')
       localStorage.setItem('currentProfileId', String(pid))
       localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-      localStorage.removeItem('finance_onboarding')
+      // Init scripts run on EVERY navigation — including the post-skip reload
+      // below. Clear the decision flag only ONCE (sessionStorage survives the
+      // reload), or the reload assertion would erase the skip it just made and
+      // ride on the settings-KV mirror winning a race (flaked on slow CI).
+      if (!sessionStorage.getItem('onb_spec_cleared')) {
+        sessionStorage.setItem('onb_spec_cleared', '1')
+        localStorage.removeItem('finance_onboarding')
+      }
     }, created.id)
     await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
 
@@ -51,9 +58,16 @@ test.describe('onboarding — server mode @smoke', () => {
     await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
 
     // And it does NOT re-open once the decision is recorded (skip persists).
+    // Deterministically await the settings-KV mirror write the skip fires
+    // before reloading, so the persistence check never races it.
+    const mirrorSettled = page.waitForResponse(
+      (r) => r.url().includes('/api/settings') && r.request().method() === 'PUT',
+      { timeout: 15000 }
+    )
     await page.getByTestId('onboarding-skip').click()
     await page.getByTestId('confirm-accept').click()
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    await mirrorSettled
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
     await page.waitForTimeout(1200)

@@ -9,7 +9,7 @@
  *   - `SubscriptionScanModal`: overlay wrapper for the Bills and Import pages.
  */
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
-import { apiGet, apiPost, getLocalCurrency, showToast } from '../core/api'
+import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
 import { detectSubscriptions } from '../features/subscriptionDetection'
@@ -63,18 +63,22 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   const scan = async () => {
     setScanning(true)
     try {
-      const [txns, bills, cats] = await Promise.all([
-        apiGet<DetectableTransaction[]>('/api/transactions'),
-        apiGet<BillRow[]>('/api/bills'),
-        apiGet<CategoryRow[]>('/api/categories'),
+      const [txnsRes, billsRes, catsRes] = await Promise.all([
+        apiGet('/api/transactions'),
+        apiGet('/api/bills'),
+        apiGet('/api/categories'),
       ])
-      setCategories(Array.isArray(cats) ? cats : [])
+      // listRows, not Array.isArray: the server-mode /api/transactions response
+      // is a { rows, total } envelope — a bare-array assumption scans nothing.
+      const txns = listRows<DetectableTransaction>(txnsRes)
+      const bills = listRows<BillRow>(billsRes)
+      setCategories(listRows<CategoryRow>(catsRes))
       const cutoff = Date.now() - SCAN_WINDOW_DAYS * 24 * 60 * 60 * 1000
-      const recent = (Array.isArray(txns) ? txns : []).filter((t) => {
+      const recent = txns.filter((t) => {
         const ms = new Date(`${(t.date || '').slice(0, 10)}T00:00:00Z`).getTime()
         return Number.isFinite(ms) && ms >= cutoff
       })
-      const found = detectSubscriptions(recent, Array.isArray(bills) ? bills : [])
+      const found = detectSubscriptions(recent, bills)
       setDetected(found)
       const next: Record<string, RowState> = {}
       for (const d of found) {

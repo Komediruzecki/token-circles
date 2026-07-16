@@ -1243,6 +1243,23 @@ export async function apiGet<T = unknown>(url: string): Promise<T> {
   return parseJsonResponse<T>(response)
 }
 
+/**
+ * Normalize a list endpoint's response to a plain array. The two storage
+ * modes disagree on shape: serverless returns bare arrays everywhere, but the
+ * worker/self-hosted `/api/transactions` returns a paginated envelope
+ * `{ rows, total, limit, offset }`. Code that does `Array.isArray(res)` on
+ * that envelope silently sees "no data" IN SERVER MODE ONLY — this exact
+ * mistake shipped twice (onboarding trigger, subscription scan), passing every
+ * serverless test. Use this on any `apiGet` of a list endpoint.
+ */
+export function listRows<T>(res: unknown): T[] {
+  if (Array.isArray(res)) return res as T[]
+  if (res && typeof res === 'object' && Array.isArray((res as { rows?: unknown }).rows)) {
+    return (res as { rows: T[] }).rows
+  }
+  return []
+}
+
 export async function apiPost<T = unknown>(
   url: string,
   body: unknown,
