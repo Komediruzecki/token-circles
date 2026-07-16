@@ -11,6 +11,12 @@ import Turnstile, { resetTurnstile, turnstileEnabled } from './Turnstile'
  * Offers email/password (register + login), Google sign-in, and a no-account demo that drops
  * into client-only mode. Client-only mode itself never renders this.
  */
+// Format check for inline feedback (matches the worker's own EMAIL_RE, so the
+// client can't pass something the server will reject). Deliberately simple —
+// exhaustive RFC-5322 validation belongs to the mail server, not a signup form.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+const isEmailValid = (value: string) => EMAIL_RE.test(value.trim())
+
 export default function LoginScreen() {
   const [mode, setMode] = createSignal<'login' | 'register' | 'forgot'>('login')
   const [email, setEmail] = createSignal('')
@@ -19,12 +25,24 @@ export default function LoginScreen() {
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
   const [turnstileToken, setTurnstileToken] = createSignal('')
+  // Show the "invalid email" hint only after the user has interacted with the
+  // field (on blur or first submit), so an untouched empty form isn't red.
+  const [emailTouched, setEmailTouched] = createSignal(false)
+  const emailInvalid = () => emailTouched() && email().trim() !== '' && !isEmailValid(email())
 
   const submit = async (e: Event) => {
     e.preventDefault()
     setError('')
     setNotice('')
+    setEmailTouched(true)
     const em = email().trim()
+
+    // Reject a malformed address up front — clearer than the server's generic 4xx,
+    // and it never burns a captcha token on a request that can't succeed.
+    if (em !== '' && !isEmailValid(em)) {
+      setError('Please enter a valid email address')
+      return
+    }
 
     // Forgot-password: ask the worker to email a reset link. The response never reveals whether
     // the account exists, so we always show the same neutral confirmation.
@@ -148,11 +166,29 @@ export default function LoginScreen() {
             placeholder="Email"
             value={email()}
             onInput={(e) => setEmail(e.currentTarget.value)}
+            onBlur={() => setEmailTouched(true)}
+            aria-invalid={emailInvalid()}
             // `username` (not `email`) is the token password managers pair with the password
             // field; combined with name/id it's what Android Chrome autofill keys off of.
             autocomplete="username"
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              'margin-bottom': emailInvalid() ? '2px' : inputStyle['margin-bottom'],
+              border: emailInvalid() ? '1px solid var(--danger, #ef4444)' : inputStyle.border,
+            }}
           />
+          <Show when={emailInvalid()}>
+            <div
+              style={{
+                color: 'var(--danger, #ef4444)',
+                'font-size': '12.5px',
+                'text-align': 'left',
+                margin: '0 0 10px',
+              }}
+            >
+              That doesn't look like a valid email address.
+            </div>
+          </Show>
           <Show when={mode() !== 'forgot'}>
             <input
               type="password"
@@ -194,6 +230,17 @@ export default function LoginScreen() {
             </div>
           </Show>
           <Turnstile onToken={setTurnstileToken} />
+          <Show when={turnstileEnabled && !turnstileToken() && !loading()}>
+            <div
+              style={{
+                color: 'var(--text-secondary)',
+                'font-size': '12px',
+                margin: '2px 0 10px',
+              }}
+            >
+              Complete the verification above to continue.
+            </div>
+          </Show>
           <button
             type="submit"
             class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}

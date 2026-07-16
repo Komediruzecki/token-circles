@@ -88,8 +88,6 @@ test.describe('Goals Progress Display', () => {
   test('should display correct progress percentage on new goal (not NaN)', async ({ page }) => {
     const goalName = `Test Savings Goal ${uniq}`
 
-    const initialCards = await page.getByTestId('goal-card').count()
-
     await page.getByTestId('add-goal-btn').click()
     await expect(page.getByTestId('goals-modal-title')).toBeVisible({ timeout: 3000 })
     await page.getByTestId('goals-form-name').fill(goalName)
@@ -98,11 +96,11 @@ test.describe('Goals Progress Display', () => {
     await page.getByTestId('goals-modal-submit').click()
     await page.waitForTimeout(1500)
 
-    const goalCards = page.getByTestId('goal-card')
-    await expect(goalCards).toHaveCount(initialCards + 1, { timeout: 5000 })
-
-    const newGoal = goalCards.filter({ hasText: goalName }).first()
-    await expect(newGoal).toBeVisible()
+    // Assert the SPECIFIC new goal appears by its unique name — not an absolute
+    // card count. goals-crud.spec.ts mutates goals in parallel against the same
+    // shared backend, so `initialCards + 1` raced and flaked (~50% on main).
+    const newGoal = page.getByTestId('goal-card').filter({ hasText: goalName }).first()
+    await expect(newGoal).toBeVisible({ timeout: 5000 })
 
     // Progress must be a real percentage, not NaN, and 0% for a brand-new goal.
     const percentEl = newGoal.getByTestId('goal-progress-percent')

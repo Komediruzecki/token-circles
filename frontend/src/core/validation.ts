@@ -2,6 +2,11 @@
  * Runtime validation schemas using Zod
  * Validates API request bodies before passing to handlers.
  */
+// Import the Zod JIT-disable config BEFORE this module's schema definitions:
+// the JIT capability probe (a CSP unsafe-eval violation) fires at schema-
+// DEFINITION time, so it must be configured first — and a module's imports
+// always evaluate before its body, making this chunk-order-independent.
+import './zodConfig'
 import { z } from 'zod/v4'
 
 // ── Transaction ────────────────────────────────────────────────────────────────
