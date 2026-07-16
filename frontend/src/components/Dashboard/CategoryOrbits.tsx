@@ -2,10 +2,10 @@
  * CategoryOrbits — spending by category as concentric orbital arcs.
  * The brand made literal: every category is a ring around the spending
  * core; its glowing arc sweep is its share of the period's spending
- * (angle ∝ share, all arcs launch from 12 o'clock). Reads better than a
- * pie — shares compare as sweep angles on separate tracks instead of
- * squeezed wedges — and it speaks the same instrument language as the
- * budget radar and the hero orbits.
+ * (angle ∝ share, launch angles staggered evenly so arcs interleave like
+ * orbits). Reads better than a pie — shares compare as sweep angles on
+ * separate tracks instead of squeezed wedges — and it speaks the same
+ * instrument language as the budget radar and the hero orbits.
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import { formatCurrency, getLocalCurrency } from '../../core/api'
@@ -27,6 +27,16 @@ const C = 130 // svg center
 const R_OUTER = 104
 const R_STEP = 13
 const STROKE = 7.5
+// With only 2-3 rows (e.g. a small portfolio's allocation) the standard tight
+// spacing reads as one broken blob — spread the few rings out and bolden them
+// so the chart looks intentional at low counts too.
+const R_STEP_SPARSE = 24
+const STROKE_SPARSE = 10
+// Dense charts (Budgets/Loans pass maxRings 7-8, plus the "Other" row) must
+// never march the rings into the core: with the fixed 13px step, 9 rows put
+// the innermost ring at r=0 and the core circle at a NEGATIVE radius. Keep
+// the innermost ring at a readable radius and shrink the step instead.
+const R_INNER_MIN = 46
 
 export default function CategoryOrbits(props: CategoryOrbitsProps) {
   const [hover, setHover] = createSignal<number | null>(null)
@@ -58,9 +68,30 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
     return { total, rows }
   })
 
+  const sparse = () => rings().rows.length <= 3
+  const ringStep = () => {
+    const rows = rings().rows.length
+    if (sparse()) return R_STEP_SPARSE
+    // Adaptive: fit every ring between R_OUTER and R_INNER_MIN.
+    return Math.min(R_STEP, (R_OUTER - R_INNER_MIN) / Math.max(1, rows - 1))
+  }
+  // Slim the arcs when rings sit closer together so tracks stay distinct.
+  const strokeW = () => (sparse() ? STROKE_SPARSE : Math.min(STROKE, Math.max(5, ringStep() - 2.5)))
+  // Launch angles stagger evenly around the circle (i-th ring starts at
+  // i/rows of a turn from 12 o'clock): shares still read as sweep angles,
+  // but big arcs interleave like orbits instead of piling onto one side —
+  // the "broken donut" look on 2-row portfolios and 8-row budget charts.
+  const launch = (i: number) => -90 + (i * 360) / Math.max(1, rings().rows.length)
+
   const dash = (r: number, share: number) => {
     const c = 2 * Math.PI * r
-    return `${Math.max(0.02, share) * c} ${c}`
+    // Floor tiny shares to a visible dot (a 6% holding must still read), and
+    // cap near-full sweeps so the round end cap never collides with its own
+    // start cap — a ~95%+ arc used to look like a glitched, notched ring.
+    const minLen = strokeW() * 1.5
+    const maxLen = c - strokeW() * 2.4
+    const len = Math.min(Math.max(share * c, minLen), maxLen)
+    return `${len} ${c}`
   }
 
   const dimmed = (i: number) => hover() !== null && hover() !== i
@@ -93,7 +124,7 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
 
           <For each={rings().rows}>
             {(row, i) => {
-              const r = R_OUTER - i() * R_STEP
+              const r = R_OUTER - i() * ringStep()
               return (
                 <g
                   class={styles.ring}
@@ -119,10 +150,10 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
                     r={r}
                     fill="none"
                     stroke={row.color}
-                    stroke-width={STROKE}
+                    stroke-width={strokeW()}
                     stroke-linecap="round"
                     stroke-dasharray={dash(r, row.share)}
-                    transform={`rotate(-90 ${C} ${C})`}
+                    transform={`rotate(${launch(i())} ${C} ${C})`}
                     filter="url(#co-glow)"
                     opacity="0.92"
                   >
@@ -139,7 +170,7 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
           <circle
             cx={C}
             cy={C}
-            r={R_OUTER - rings().rows.length * R_STEP - 4}
+            r={Math.max(30, R_OUTER - (rings().rows.length - 1) * ringStep() - strokeW() - 8)}
             fill="url(#co-core)"
           />
           <text x={C} y={C - 4} text-anchor="middle" class={styles.coreValue}>

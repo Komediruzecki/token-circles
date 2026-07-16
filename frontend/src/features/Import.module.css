@@ -545,16 +545,46 @@
   cursor: pointer;
 }
 
-/* Import action bar */
+/* Import action bar — a stacked panel: command row (stats + actions), then a
+   compact options row, then any informational blocks (duplicates, categories). */
 .actionBar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card-bg);
+}
+
+.commandRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.optionsRow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.optionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.optionLabel input {
+  accent-color: var(--primary);
 }
 
 .importButtons {
@@ -567,7 +597,7 @@
    one row, and bound the preview table so it scrolls inside its own box (both
    axes) instead of pushing the page — keeping the import buttons above it visible. */
 @media (max-width: 768px) {
-  .actionBar {
+  .commandRow {
     flex-direction: column;
     align-items: stretch;
   }

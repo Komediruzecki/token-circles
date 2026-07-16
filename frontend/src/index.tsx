@@ -1,10 +1,17 @@
 /* @refresh reload */
 import './styles/index.css'
 import { render } from 'solid-js/web'
+import { z } from 'zod'
 import { App } from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
+
+// Zod v4 probes `Function('')` once to decide whether it may JIT-compile
+// parsers — under our CSP that probe surfaces as an unsafe-eval violation in
+// the console (report-only today, and a hard block if the policy is ever
+// promoted). jitless skips the probe entirely; parsing behavior is identical.
+z.config({ jitless: true })
 
 // Install the stale-chunk recovery listeners before anything renders, so a failed dynamic
 // import after a deploy quietly reloads to the fresh build instead of surfacing a parse error.

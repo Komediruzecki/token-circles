@@ -4,6 +4,7 @@
  * Shared by the Import page and the onboarding wizard.
  */
 import { For, Show } from 'solid-js'
+import InfoTip from '../../components/InfoTip'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
 import type { ImportFlow } from './importFlow'
@@ -19,27 +20,69 @@ export function ImportPreviewStep(props: { flow: ImportFlow }) {
 
   return (
     <>
-      {/* Stats + Import actions */}
+      {/* Command panel: stats + actions on the first row, compact options below,
+          then any informational blocks (duplicates, new categories). */}
       <div class={styles.actionBar}>
-        <div class={styles.previewStats}>
-          <div class={styles.statItem}>
-            <span class={styles.statLabel}>Total Rows</span>
-            <span class={styles.statValue} data-test-id="import-preview-total">
-              {total()}
-            </span>
-          </div>
-          <div class={styles.statItem}>
-            <span class={styles.statLabel}>Selected</span>
-            <span class={styles.statValue}>{selected()}</span>
-          </div>
-          {duplicates() > 0 && (
+        <div class={styles.commandRow}>
+          <div class={styles.previewStats}>
             <div class={styles.statItem}>
-              <span class={styles.statLabel}>Duplicates</span>
-              <span class={`${styles.statValue} ${duplicates() > 0 ? styles.duplicate : ''}`}>
-                {duplicates()}
+              <span class={styles.statLabel}>Total Rows</span>
+              <span class={styles.statValue} data-test-id="import-preview-total">
+                {total()}
               </span>
             </div>
-          )}
+            <div class={styles.statItem}>
+              <span class={styles.statLabel}>Selected</span>
+              <span class={styles.statValue}>{selected()}</span>
+            </div>
+            {duplicates() > 0 && (
+              <div class={styles.statItem}>
+                <span class={styles.statLabel}>Duplicates</span>
+                <span class={`${styles.statValue} ${styles.duplicate}`}>{duplicates()}</span>
+              </div>
+            )}
+          </div>
+          <div class={styles.importButtons}>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              data-test-id="import-execute-selected"
+              onClick={() => void flow.handleImport('selected')}
+              disabled={flow.selectedRows().size === 0}
+            >
+              Import Selected ({selected()})
+            </button>
+            {duplicates() > 0 && (
+              <button
+                class={`${styles.btn} ${styles.btnSecondary}`}
+                data-test-id="import-execute-new"
+                onClick={() => void flow.handleImport('new')}
+              >
+                Import Only New
+              </button>
+            )}
+            <button
+              class={`${styles.btn} ${styles.btnOutline}`}
+              data-test-id="import-execute-all"
+              onClick={() => void flow.handleImport('all')}
+            >
+              Import All
+            </button>
+            <button class={`${styles.btn} ${styles.btnGhost}`} onClick={flow.resetForm}>
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <div class={styles.optionsRow}>
+          <label class={styles.optionLabel}>
+            <input
+              type="checkbox"
+              checked={flow.setBudgetsFromSpending()}
+              onChange={(e) => flow.setSetBudgetsFromSpending(e.currentTarget.checked)}
+            />
+            <span>Backfill budgets from spending</span>
+            <InfoTip text="Sets each month's budget to what was spent that month, so the budget-vs-spent charts aren't empty for imported history. Overwrites any budgets you already set for those months." />
+          </label>
         </div>
         {duplicates() > 0 && (
           <p style={{ margin: '0 0 12px', 'font-size': '12px', color: 'var(--text-secondary)' }}>
@@ -122,58 +165,6 @@ export function ImportPreviewStep(props: { flow: ImportFlow }) {
             </div>
           </div>
         </Show>
-
-        <label
-          style={{
-            display: 'flex',
-            'align-items': 'flex-start',
-            gap: '8px',
-            margin: '4px 0 14px',
-            'font-size': '13px',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={flow.setBudgetsFromSpending()}
-            onChange={(e) => flow.setSetBudgetsFromSpending(e.currentTarget.checked)}
-            style={{ 'margin-top': '2px' }}
-          />
-          <span>
-            Set each month's budget to what was spent that month (fills the budget charts for
-            imported history; overwrites existing budgets).
-          </span>
-        </label>
-        <div class={styles.importButtons}>
-          <button
-            class={`${styles.btn} ${styles.btnPrimary}`}
-            data-test-id="import-execute-selected"
-            onClick={() => void flow.handleImport('selected')}
-            disabled={flow.selectedRows().size === 0}
-          >
-            Import Selected ({selected()})
-          </button>
-          {duplicates() > 0 && (
-            <button
-              class={`${styles.btn} ${styles.btnSecondary}`}
-              data-test-id="import-execute-new"
-              onClick={() => void flow.handleImport('new')}
-            >
-              Import Only New (Skip {duplicates()} Duplicates)
-            </button>
-          )}
-          <button
-            class={`${styles.btn} ${styles.btnOutline}`}
-            data-test-id="import-execute-all"
-            onClick={() => void flow.handleImport('all')}
-          >
-            Import All
-          </button>
-          <button class={`${styles.btn} ${styles.btnGhost}`} onClick={flow.resetForm}>
-            Cancel
-          </button>
-        </div>
       </div>
 
       {/* Bank-statement rules: tweak categorization/transfers and recalculate in place */}
