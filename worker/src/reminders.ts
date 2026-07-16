@@ -19,6 +19,12 @@ import type { RenderedEmail, UpcomingBillRow } from './emailTemplates';
 
 // The unsubscribe endpoint lives on the API worker, NOT the SPA host — a link to
 // the app origin lands on the static-asset fallback and never unsubscribes anyone.
+// The app origin of THIS deployment — mail assets (logo, orbit GIF) load from
+// here so a dev-sent mail never depends on a prod release shipping the asset.
+function appOrigin(env: Env): string {
+  return env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || 'https://tokencircles.com';
+}
+
 function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
   const apiBase = env.API_PUBLIC_ORIGIN || env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || '';
   return unsubToken && apiBase
@@ -295,6 +301,7 @@ export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boo
     alerts: deduped,
     currency: await profileCurrency(env, pids[0]),
     unsubUrl: unsubscribeUrl(await ensureUnsubToken(env, u), env),
+    assetOrigin: appOrigin(env),
   });
   if (!mail) return false;
   if (!(await withinQuota(env, u))) return false;
@@ -322,6 +329,7 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
       report,
       currency: await profileCurrency(env, pid),
       unsubUrl,
+      assetOrigin: appOrigin(env),
     });
     if (mail) {
       if (!(await withinQuota(env, u))) return false;
@@ -375,6 +383,7 @@ export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<b
     bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
     currency: await profileCurrency(env, pids[0]),
     unsubUrl: unsubscribeUrl(await ensureUnsubToken(env, u), env),
+    assetOrigin: appOrigin(env),
   });
   if (!mail) return false;
   if (!(await withinQuota(env, u))) return false;
@@ -435,7 +444,14 @@ export async function composeReminderPreview(
   if (type === 'spending') {
     for (const pid of pids) {
       const report = await getSpendingReport(env, pid, asOf);
-      const mail = renderSpendingReport({ report, currency, unsubUrl, periodLabel, test: true });
+      const mail = renderSpendingReport({
+        report,
+        currency,
+        unsubUrl,
+        periodLabel,
+        test: true,
+        assetOrigin: appOrigin(env),
+      });
       if (mail) return mail;
     }
     return null;
@@ -449,6 +465,7 @@ export async function composeReminderPreview(
       currency,
       unsubUrl,
       test: true,
+      assetOrigin: appOrigin(env),
     });
   }
 
@@ -458,7 +475,14 @@ export async function composeReminderPreview(
   const deduped = all
     .sort((a, b) => b.percentage - a.percentage)
     .filter((a) => (seen.has(a.categoryName) ? false : seen.add(a.categoryName) && true));
-  return renderBudgetAlert({ alerts: deduped, currency, unsubUrl, periodLabel, test: true });
+  return renderBudgetAlert({
+    alerts: deduped,
+    currency,
+    unsubUrl,
+    periodLabel,
+    test: true,
+    assetOrigin: appOrigin(env),
+  });
 }
 
 // ── Cron dispatch (scheduled handler) ────────────────────────────────────────

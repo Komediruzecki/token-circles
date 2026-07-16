@@ -26,8 +26,11 @@ const REPO_URL = 'https://github.com/Komediruzecki/token-circles';
 const TERMS_URL = `${ABOUT_URL}/terms`;
 const PRIVACY_URL = `${ABOUT_URL}/privacy`;
 const CONTACT_EMAIL = 'hello@tokencircles.com';
-const LOGO_URL = `${APP_URL}/icon-192.png`;
-const ORBIT_GIF_URL = `${APP_URL}/email/orbit.gif`;
+// Mail assets load from the SENDING environment's app origin (dev mails must
+// not depend on a prod release shipping the asset); footer links stay
+// canonical. Defaults to the prod app for safety.
+const logoUrl = (origin: string) => `${origin}/icon-192.png`;
+const orbitGifUrl = (origin: string) => `${origin}/email/orbit.gif`;
 
 // Orbital Observatory palette (mirrors frontend orbit-dark.css tokens).
 const C = {
@@ -107,15 +110,18 @@ function shell(opts: {
   unsubUrl?: string | null;
   /** Show the animated orbit ornament under the masthead (default true). */
   orbit?: boolean;
+  /** Origin serving the logo/GIF assets (the sending env's app origin). */
+  assetOrigin?: string;
 }): string {
   const unsub = opts.unsubUrl
     ? ` &nbsp;&middot;&nbsp; <a href="${opts.unsubUrl}" style="color:${C.faint};text-decoration:underline">Unsubscribe</a>`
     : '';
+  const assets = opts.assetOrigin || APP_URL;
   const orbit =
     opts.orbit === false
       ? ''
       : `<tr><td align="center" style="padding:2px 0 14px">
-          <img src="${ORBIT_GIF_URL}" width="72" height="72" alt="" style="display:block;border:0;outline:none" />
+          <img src="${orbitGifUrl(assets)}" width="72" height="72" alt="" style="display:block;border:0;outline:none" />
         </td></tr>`;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -135,7 +141,7 @@ function shell(opts: {
         <!-- masthead -->
         <tr><td align="center" style="padding:6px 0 16px">
           <a href="${APP_URL}" style="text-decoration:none">
-            <img src="${LOGO_URL}" width="34" height="34" alt="${BRAND}" style="vertical-align:middle;border:0;border-radius:9px" />
+            <img src="${logoUrl(assets)}" width="34" height="34" alt="${BRAND}" style="vertical-align:middle;border:0;border-radius:9px" />
             <span style="font-family:${SERIF};font-size:22px;font-weight:700;color:${C.text};letter-spacing:0.3px;vertical-align:middle">&nbsp;Token&nbsp;Circles</span>
           </a>
         </td></tr>
@@ -197,6 +203,7 @@ export function renderWelcome(opts: { appUrl?: string }): RenderedEmail {
       preheader: 'Your account is ready — set up your first account and bring your history.',
       body,
       footerReason: 'You received this because an account was created with this address.',
+      assetOrigin: opts.appUrl,
     }),
     text: `Welcome to ${BRAND}\n\nYour account is ready. Sign in to set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nOpen the app: ${app}\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`,
   };
@@ -220,13 +227,18 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
       body,
       footerReason: 'Security notice for your existing account.',
       orbit: false,
+      assetOrigin: opts.appUrl,
     }),
     text: `You already have a ${BRAND} account\n\nSomeone tried to register with this email address, but an account already exists. If that was you, sign in at ${app} — or reset your password. If it wasn't you, no action is needed.${textFooter('Security notice for your existing account.')}`,
   };
 }
 
 /** Password reset magic link. */
-export function renderPasswordReset(opts: { link: string; ttlHours: number }): RenderedEmail {
+export function renderPasswordReset(opts: {
+  link: string;
+  ttlHours: number;
+  assetOrigin?: string;
+}): RenderedEmail {
   const ttl = opts.ttlHours === 1 ? '1 hour' : `${opts.ttlHours} hours`;
   const subject = `Reset your ${BRAND} password`;
   const body = `
@@ -244,6 +256,7 @@ export function renderPasswordReset(opts: { link: string; ttlHours: number }): R
       body,
       footerReason: 'Sent because a password reset was requested for this address.',
       orbit: false,
+      assetOrigin: opts.assetOrigin,
     }),
     text: `Reset your ${BRAND} password\n\nOpen this link to choose a new password (expires in ${ttl}):\n${opts.link}\n\nIf you didn't request a reset, ignore this email — your password won't change.${textFooter('Sent because a password reset was requested for this address.')}`,
   };
@@ -280,6 +293,7 @@ export function renderBudgetAlert(opts: {
   unsubUrl?: string | null;
   periodLabel?: string;
   test?: boolean;
+  assetOrigin?: string;
 }): RenderedEmail | null {
   if (opts.alerts.length === 0) return null;
   const anyOver = opts.alerts.some((a) => a.status === 'over');
@@ -325,6 +339,7 @@ export function renderBudgetAlert(opts: {
       footerReason:
         'You get budget alerts because email reminders are enabled in Settings → Notifications.',
       unsubUrl: opts.unsubUrl,
+      assetOrigin: opts.assetOrigin,
     }),
     text,
   };
@@ -346,6 +361,7 @@ export function renderSpendingReport(opts: {
   unsubUrl?: string | null;
   periodLabel?: string;
   test?: boolean;
+  assetOrigin?: string;
 }): RenderedEmail | null {
   const r = opts.report;
   if (r.transactionCount === 0) return null;
@@ -386,6 +402,7 @@ export function renderSpendingReport(opts: {
       footerReason:
         'You get spending reports because email reminders are enabled in Settings → Notifications.',
       unsubUrl: opts.unsubUrl,
+      assetOrigin: opts.assetOrigin,
     }),
     text,
   };
@@ -404,6 +421,7 @@ export function renderBillsReminder(opts: {
   currency?: string | null;
   unsubUrl?: string | null;
   test?: boolean;
+  assetOrigin?: string;
 }): RenderedEmail | null {
   if (opts.bills.length === 0) return null;
   const subject = `${opts.test ? '[Test] ' : ''}Upcoming bills — ${BRAND}`;
@@ -452,6 +470,7 @@ export function renderBillsReminder(opts: {
       footerReason:
         'You get bill reminders because email reminders are enabled in Settings → Notifications.',
       unsubUrl: opts.unsubUrl,
+      assetOrigin: opts.assetOrigin,
     }),
     text,
   };
@@ -460,7 +479,7 @@ export function renderBillsReminder(opts: {
 // ── Small utility mails ───────────────────────────────────────────────────────
 
 /** Settings → "Send a test email" (basic connectivity check). */
-export function renderTestBasic(): RenderedEmail {
+export function renderTestBasic(opts: { assetOrigin?: string } = {}): RenderedEmail {
   const subject = `Test email — ${BRAND}`;
   const body = `
     ${h1('Notifications are working')}
@@ -474,13 +493,14 @@ export function renderTestBasic(): RenderedEmail {
       preheader: 'Delivery works — reminders will arrive like this.',
       body,
       footerReason: 'Sent on demand from Settings → Notifications.',
+      assetOrigin: opts.assetOrigin,
     }),
     text: `Notifications are working\n\nThis is a test email from ${BRAND} — delivery to this address works.\n\nNotification settings: ${APP_URL}/#settings${textFooter('Sent on demand from Settings → Notifications.')}`,
   };
 }
 
 /** Support-request acknowledgement (no user-controlled content — see support.ts). */
-export function renderSupportAck(opts: { ticketId: string }): RenderedEmail {
+export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string }): RenderedEmail {
   const subject = `We received your message (${opts.ticketId}) — ${BRAND}`;
   const body = `
     ${h1('We got your message')}
@@ -496,6 +516,7 @@ export function renderSupportAck(opts: { ticketId: string }): RenderedEmail {
       body,
       footerReason: 'Confirmation for a message sent to our support inbox.',
       orbit: false,
+      assetOrigin: opts.assetOrigin,
     }),
     text: `We got your message\n\nThanks for reaching out to ${BRAND}. We've received your message and will reply as soon as we can.\nYour reference: ${opts.ticketId}\n\nIf you didn't contact us, you can safely ignore this email.${textFooter('Confirmation for a message sent to our support inbox.')}`,
   };
