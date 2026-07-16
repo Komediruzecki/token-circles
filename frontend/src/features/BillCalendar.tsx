@@ -96,10 +96,13 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
     }
   )
 
-  const loading = () => calendarData.loading && !calendarData()
+  // `.latest` keeps the previous month's grid during a refetch and never re-triggers the
+  // page-level <Suspense>, so stepping the focus month updates in place (no flash).
+  const cal = () => calendarData.latest
+  const loading = () => calendarData.loading && !cal()
 
   const daysArray = createMemo(() => {
-    const data = calendarData()
+    const data = cal()
     if (!data) return []
     const lastDay = new Date(data.year, data.month, 0).getDate()
     return Array.from({ length: lastDay }, (_, _i) => _i + 1)
@@ -211,22 +214,20 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       <PeriodBar class={styles.periodBar} />
 
       {/* Summary bar */}
-      <Show when={calendarData()}>
+      <Show when={cal()}>
         <div class={styles.calSummary}>
           <div class={styles.calSummaryItem}>
             <span class={styles.calSummaryLabel}>Bills</span>
-            <span class={styles.calSummaryValue}>{calendarData()!.summary.billCount}</span>
+            <span class={styles.calSummaryValue}>{cal()!.summary.billCount}</span>
           </div>
           <div class={styles.calSummaryItem}>
             <span class={styles.calSummaryLabel}>Total</span>
-            <span class={styles.calSummaryValue}>
-              {formatCurrency(calendarData()!.summary.totalAmount)}
-            </span>
+            <span class={styles.calSummaryValue}>{formatCurrency(cal()!.summary.totalAmount)}</span>
           </div>
           <div class={styles.calSummaryItem}>
             <span class={styles.calSummaryLabel}>Paid</span>
             <span class={`${styles.calSummaryValue} ${styles.calSummaryPaid}`}>
-              {formatCurrency(calendarData()!.summary.paidAmount)}
+              {formatCurrency(cal()!.summary.paidAmount)}
             </span>
           </div>
         </div>
@@ -238,20 +239,20 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       </Show>
 
       {/* Calendar grid */}
-      <Show when={calendarData()}>
+      <Show when={cal()}>
         <div class={styles.calendarGrid}>
           {/* Day headers */}
           <For each={WEEKDAYS}>{(day) => <div class={styles.dayHeader}>{day}</div>}</For>
 
           {/* Empty cells before first day of month */}
-          {Array.from({ length: calendarData()!.firstDow }, (_, _i) => (
+          {Array.from({ length: cal()!.firstDow }, (_, _i) => (
             <div class={`${styles.dayCell} ${styles.dayEmpty}`} />
           ))}
 
           {/* Day cells */}
           <For each={daysArray()}>
             {(day) => {
-              const bills: CalendarBill[] = calendarData()!.days[String(day)] || []
+              const bills: CalendarBill[] = cal()!.days[String(day)] || []
               return (
                 <div
                   class={`${styles.dayCell} ${dayStatusClass(bills)} ${
@@ -329,9 +330,9 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
         <div class={styles.popover} style={popoverStyle()}>
           <div class={styles.popoverHeader}>
             <h3 class={styles.popoverTitle}>
-              {calendarData() &&
+              {cal() &&
                 formatDate(
-                  `${calendarData()!.year}-${String(calendarData()!.month).padStart(2, '0')}-${String(selectedDay()).padStart(2, '0')}`
+                  `${cal()!.year}-${String(cal()!.month).padStart(2, '0')}-${String(selectedDay()).padStart(2, '0')}`
                 )}
             </h3>
             <button class={styles.popoverClose} onClick={closePopover}>

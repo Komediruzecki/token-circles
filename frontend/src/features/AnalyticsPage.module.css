@@ -382,6 +382,17 @@
   margin-bottom: 16px;
 }
 
+/* Header rows whose title moved into the OrbitalDivider above — controls dock right. */
+.heatmap-header-end {
+  justify-content: flex-end;
+}
+
+/* Two-col grid cell: a plain column holding an OrbitalDivider + its chart card, so the
+   divider sits on the page background instead of inside the glass. */
+.chart-col {
+  min-width: 0;
+}
+
 .heatmap-header .chart-title {
   margin-bottom: 0;
 }
@@ -650,23 +661,36 @@
   margin-bottom: 16px;
 }
 
-.rate-circle {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
+/* Hero stat for the Savings Rate instrument: big value, label subtitle, period note —
+   replaces the old 100px circle that sat the % and label side by side (label wrapped). */
+.rate-hero {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  position: relative;
+  gap: 4px;
+  min-width: 150px;
 }
 
-.rate-circle::before {
-  content: '';
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  background: var(--card-bg);
-  border-radius: 50%;
+.rate-hero-value {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-hero-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rate-hero-period {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.8;
 }
 
 .rate-value {

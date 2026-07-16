@@ -449,3 +449,18 @@
     font-size: 20px;
   }
 }
+
+/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
+   instead of the old solid fill. Appended last so it wins the cascade. ── */
+.btn-primary {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow: var(--glow-primary, none);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 20%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
+}

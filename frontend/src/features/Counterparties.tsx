@@ -4,6 +4,7 @@
  */
 import { createMemo, createSignal, For } from 'solid-js'
 import CounterpartyMeridian from '../components/CounterpartyMeridian'
+import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiGet } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -145,8 +146,8 @@ export default function Counterparties() {
               </div>
             </div>
 
+            <OrbitalDivider id="cp-sec-meridian" label="Balance Meridian" />
             <div class={styles.meridianCard}>
-              <h3 class={styles.meridianTitle}>Balance Meridian</h3>
               <p class={styles.meridianSub}>
                 Who owes who, ranked by net — nodes sized by transaction count
               </p>
@@ -160,6 +161,11 @@ export default function Counterparties() {
               />
             </div>
 
+            <OrbitalDivider
+              id="cp-sec-ledger"
+              label="By Counterparty"
+              meta={`${counterparties().length} counterparties`}
+            />
             <div class={styles.tableWrap}>
               <table class={styles.table}>
                 <thead>

@@ -7,6 +7,29 @@ All notable changes to Token Circles are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- OrbitalDivider — the brand's section separator: a thin orbit arc spanning the row with small planets resting on it (one warm, two muted, placed on the curve), the section title docked left like a station label, and an actions slot on the right. The arc draws itself in and planets drift into place when scrolled into view (rect-check based — no IntersectionObserver/rAF, so it also behaves in throttled tabs; disabled under prefers-reduced-motion). Ships with OrbitalAction, a glass pill button whose leading planet-dot orbits on hover (primary variant uses the warm accent instead of solid blue). First applied across the Budgets page; intended to roll out app-wide.
+- SectionRail — a fixed vertical orbit on the right edge (desktop ≥1280px) listing the page's sections as small planets: the one nearest the viewport focus lights up with a slowly rotating dashed orbit ring, hovering shows a label chip, clicking glides to the section. Anchors are OrbitalDivider ids; sampled on Budgets.
+
+### Added
+
+- OrbitalToggle — the brand's celestial switch: the knob is the sun riding an orbit-arc track by day; flipping it slides it across into a star-flecked night where it becomes a planet with a slowly turning dashed orbit ring. Swapped in for the light/dark theme toggle in Settings (the plain branded Toggle stays for ordinary settings).
+
+### Changed
+
+- Primary buttons across the app (Add Loan, Set Budget, Add Holding, Add Bill, Mark Paid, Add Transaction, Import, …) now use the Settings brand recipe — azure glass tint, azure text, mixed border and glow — instead of the old solid blue fill (12 page stylesheets, appended overrides).
+- Calculators joined the orbital design: Compound Interest's Detailed Projection / Scenario Comparison / Scenario Details and Emergency Fund's coverage sections now use OrbitalDividers above their cards; Emergency Fund's coverage chart gained a proper section title ("Coverage by Fund Level" with an explainer tooltip), and the pointless Show/Hide Details toggle on Coverage Levels was removed — the details always show.
+- Analytics' Savings Rate instrument: the % and its label no longer sit crammed side by side in a 100px circle (the label wrapped) — it is now a proper hero stat: large value, "Savings Rate" subtitle beneath, and a period note ("across 2026").
+- Analytics got the full orbital treatment: every instrument's title moved out of its card header into an OrbitalDivider above the card (dynamic year/period rides in the divider's meta; the Top Categories explainer in its info tooltip), header rows keep their controls right-aligned, the two-column row wraps each card in a plain column so dividers sit on the page background, a 9-stop SectionRail jumps between sections, and the page subtitle became an InfoTip next to the title.
+- Divider placement corrected wherever a divider had landed inside a glass card instead of above it (Goals progress/projections, Housing subscription tracker, Retirement projections, Portfolio holdings/allocation — Portfolio's card visuals moved onto the inner surfaces). Verified by walking every divider's ancestor chain on all ten pages: none sit inside a carded container.
+- OrbitalDividers rolled out across the app: Goals (Progress, Projections), Loans (Overview), Portfolio (Holdings, Allocation), Retirement (Projections, Goals), Bills (Unpaid/Paid with live counts in the divider's meta slot), Housing (Subscription Tracker with the monthly total as meta), Accounts (Net Worth Map), and Counterparties (Balance Meridian, By Counterparty). The divider gained an optional `meta` note (count / total after the label). Analytics is the deliberate holdout — its section titles live inside card headers together with live controls (year pickers, compare toggles, export buttons), so its migration (titles + controls into divider action slots, plus a SectionRail) is a focused follow-up.
+- Dashboard period stepping polished further: the two dashboard fetches now commit their signals together in one `batch()` (a single visual wave instead of widgets repainting as each fetch lands), Chart.js in-place updates skip the update tween (`update('none')` — rapid stepping reads as calm data changes instead of every chart re-animating), and the OverviewDeck's three internal resources (heatmap, budget radar, portfolio) read `.latest` so profile/year changes can't re-trigger the page-level Suspense.
+- Stepping the focus period no longer flashes/reloads the whole view. Two causes fixed: (1) resource-backed pages (Budgets, Bills, Accounts, Categories, Analytics, Bill calendar) read `resource.latest` instead of `resource()`, so a refetch keeps the previous data on screen rather than re-triggering the page-level Suspense fallback; (2) the shared Chart.js wrapper now updates the live chart in place (`chart.update()`) instead of destroy + async re-create, so Dashboard's charts transition smoothly between periods instead of blanking and re-animating from zero.
+- Budgets: section headers are now OrbitalDividers — the bulk allocation tools and "Add Allocation" dock in the Category Allocations divider, "Add Category" docks in the Categories divider (orbital pill style replaces the solid blue buttons), and the Budget Forecast card lost its duplicate inner title. Sections breathe again (the forecast card no longer sits glued to the chart above), the categories gallery shows ~3–4 rows before scrolling (was ~2), and the "Zero-based budgeting" subtitle moved into an info tooltip next to the page title (it wrapped badly on phones).
+
 ## [5.5.0] — 2026-07-15
 
 ### Added

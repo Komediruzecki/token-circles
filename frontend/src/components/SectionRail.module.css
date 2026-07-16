@@ -1,0 +1,126 @@
+/* SectionRail — fixed vertical orbit of section "planets" (see SectionRail.tsx) */
+
+.rail {
+  position: fixed;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card-bg) 55%, transparent);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+}
+
+/* The rail's own orbit line, fading at both ends. */
+.line {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in oklab, var(--primary) 25%, var(--border)),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.stop {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.planet {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  opacity: 0.55;
+  transition:
+    opacity 0.25s,
+    background-color 0.25s,
+    box-shadow 0.25s,
+    transform 0.25s;
+}
+
+.stop:hover .planet,
+.stop:focus-visible .planet {
+  opacity: 0.95;
+  transform: scale(1.15);
+}
+
+.stopActive .planet {
+  background: var(--accent-warm, #f0a860);
+  opacity: 1;
+  box-shadow: 0 0 10px color-mix(in oklab, var(--accent-warm, #f0a860) 70%, transparent);
+}
+
+/* Dashed orbit ring slowly circling the active planet. */
+.stopActive::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border: 1px dashed color-mix(in oklab, var(--accent-warm, #f0a860) 55%, transparent);
+  border-radius: 50%;
+  animation: rail-orbit 9s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rail-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hover label chip, floating left of the rail. */
+.tip {
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text);
+  background: color-mix(in oklab, var(--card-bg) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+
+.stop:hover .tip,
+.stop:focus-visible .tip {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stopActive::after {
+    animation: none;
+  }
+}
+
+/* Phones/tablets/mid laptops: no rail — scrolling is the navigation. */
+@media (max-width: 1279px) {
+  .rail {
+    display: none;
+  }
+}

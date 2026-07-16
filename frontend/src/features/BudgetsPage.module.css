@@ -97,7 +97,8 @@
   margin-top: 16px;
 }
 .budget-summary .category-chart-section {
-  margin-top: 24px;
+  /* The OrbitalDivider inside the section provides the vertical rhythm. */
+  margin-top: 0;
 }
 .budget-summary .chart-wrapper {
   background: var(--card-bg);
@@ -258,7 +259,8 @@
 
 /* category chart section */
 .category-chart-section {
-  margin-top: 24px;
+  /* The OrbitalDivider inside the section provides the vertical rhythm. */
+  margin-top: 0;
 }
 
 .chart-wrapper {
@@ -808,7 +810,8 @@
 
 /* category chart section */
 .category-chart-section {
-  margin-top: 24px;
+  /* The OrbitalDivider inside the section provides the vertical rhythm. */
+  margin-top: 0;
 }
 
 .chart-wrapper {
@@ -958,9 +961,8 @@
    ============================================ */
 
 .categoriesSection {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
+  /* The OrbitalDivider inside provides the separation — no hard border-top anymore. */
+  margin-top: 8px;
 }
 
 .categoriesHeader {
@@ -1005,7 +1007,8 @@
 }
 
 .categoriesGridScroll {
-  max-height: 420px;
+  /* Roomy gallery: ~3-4 card rows visible before scrolling (was 420px ≈ 2 rows). */
+  max-height: clamp(560px, 66vh, 940px);
   overflow-y: auto;
   border-radius: var(--radius);
 }
@@ -1349,4 +1352,19 @@
 .categories-section h2 {
   font-family: var(--font-display, inherit);
   letter-spacing: -0.01em;
+}
+
+/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
+   instead of the old solid fill. Appended last so it wins the cascade. ── */
+.btn-primary {
+  background: var(--primary-bg);
+  color: var(--primary);
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow: var(--glow-primary, none);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 20%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
 }

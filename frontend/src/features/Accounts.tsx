@@ -35,6 +35,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Show } fro
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -77,9 +78,11 @@ export default function Accounts() {
     }
   )
   const [initialLoad, setInitialLoad] = createSignal(true)
-  const accounts = () => accountsResource()?.accounts ?? []
-  const transactions = () => accountsResource()?.transactions ?? []
-  const profiles = () => accountsResource()?.profiles ?? []
+  // `.latest` keeps the previous value during a refetch and never re-triggers the page-level
+  // <Suspense>, so period/profile changes update in place instead of flashing the fallback.
+  const accounts = () => accountsResource.latest?.accounts ?? []
+  const transactions = () => accountsResource.latest?.transactions ?? []
+  const profiles = () => accountsResource.latest?.profiles ?? []
   createEffect(() => {
     if (!accountsResource.loading) setInitialLoad(false)
   })
@@ -366,8 +369,8 @@ export default function Accounts() {
       </div>
 
       <Show when={accounts().length > 0}>
+        <OrbitalDivider id="accounts-sec-networth" label="Net Worth Map" />
         <div class={styles.netWorthMap}>
-          <h3 class={styles.netWorthMapTitle}>Net worth map</h3>
           <AccountConstellation
             accounts={accounts().map((a) => ({
               id: a.id,
