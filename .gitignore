@@ -29,6 +29,7 @@ sw.js
 sw.js.map
 workbox-*.js
 registerSW.js
+manifest.webmanifest
 dev-dist/
 
 # Wrangler local dev state (miniflare cache) — never commit
@@ -73,6 +74,8 @@ Thumbs.db
 # Test artifacts
 test-results/
 test-output.png
+test-output.txt
+tsc_errors.txt
 
 # Symlinks (machine-specific)
 backend/db
