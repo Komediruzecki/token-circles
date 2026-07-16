@@ -9,9 +9,9 @@
  * WHEN: The page loads with data
  * THEN: The coverage chart shows how many months of expenses the fund can cover
  *
- * GIVEN: A user expands details
- * WHEN: They click to show details
- * THEN: A breakdown by month displays coverage percentages and status
+ * GIVEN: A user has emergency fund data
+ * WHEN: The Coverage Levels section renders (always visible)
+ * THEN: A breakdown per fund level displays coverage percentages and status
  */
 
 /**
