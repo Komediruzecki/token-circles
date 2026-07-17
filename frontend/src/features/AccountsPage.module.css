@@ -277,6 +277,11 @@
   text-align: center;
   padding: 48px 20px;
   color: var(--text-secondary);
+  /* Center the create button (it's display:flex, so text-align alone leaves it
+     stuck to the left). */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .empty-state svg {
