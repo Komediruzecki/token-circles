@@ -409,8 +409,8 @@
 /* Brand glass on the calendar summary tiles (they sit over the page ground, so
    translucency reads fine there). The day-detail popover is deliberately NOT
    glassy: it floats over the busy calendar grid, and a translucent background
-   let the day numbers bleed through and clash with its text. It keeps the solid
-   `--card-bg` from its base rule above. */
+   let the day numbers bleed through and clash with its text — its base rule
+   above uses a solid `--surface` instead. */
 .calSummaryItem {
   background: color-mix(in oklab, var(--card-bg) 78%, transparent);
   backdrop-filter: blur(14px) saturate(130%);
