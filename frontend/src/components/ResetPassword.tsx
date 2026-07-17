@@ -7,7 +7,8 @@ import SupportContact from './SupportContact'
 /**
  * Full-page "set a new password" screen, reached from the magic link in a reset email
  * (#reset-password?token=…). Validates the token up front, then lets the user pick a new
- * password; on success the worker signs them in, so we drop into server mode and reload.
+ * password; the worker deliberately does not sign them in, so on success we drop into
+ * server mode and reload onto the sign-in screen.
  */
 function tokenFromHash(): string {
   const hash = window.location.hash.slice(1) // e.g. "reset-password?token=abc"

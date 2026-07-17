@@ -102,8 +102,12 @@ function dateToIso(d: Date): string {
 
 /**
  * Normalize a bank date value to yyyy-mm-dd. Handles: already-ISO strings,
- * DD.MM.YYYY (Erste), DD/MM/YYYY, YYYY-MM-DD HH:MM:SS (Revolut completed date),
- * and Date objects. Returns '' when it can't be parsed (caller decides fallback).
+ * compact ISO (ING: "20241228"), DD.MM.YYYY (Erste), DD/MM/YYYY,
+ * DD-MM-YYYY (Wise), DD.MM.YY with a century pivot (Sparkasse/DKB),
+ * YYYY-MM-DD HH:MM:SS (Revolut completed date), and Date objects. Day-first is
+ * assumed when ambiguous (the European convention); an impossible month with a
+ * plausible day swaps to month-first (US-style YNAB files: "06/22/2026").
+ * Returns '' when it can't be parsed (caller decides fallback).
  */
 export function normalizeDate(value: unknown): string {
   if (value instanceof Date && !isNaN(value.getTime())) return dateToIso(value)
@@ -115,15 +119,72 @@ export function normalizeDate(value: unknown): string {
   // eslint-disable-next-line security/detect-unsafe-regex -- anchored, fixed-length \d{n}; the trailing .* is linear, no ambiguous backtracking (no ReDoS)
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T].*)?$/)
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
-  // DD.MM.YYYY or DD/MM/YYYY (optionally with a trailing time).
-  // eslint-disable-next-line security/detect-unsafe-regex -- anchored, bounded \d{1,2}/\d{4} split by a literal [./]; no ambiguous backtracking (no ReDoS)
-  const dmy = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})(?:[ T].*)?$/)
+  // Compact ISO with no separators (ING NL: "20241228"). Range-checked so an
+  // 8-digit reference number in a date position stays invalid.
+  const compact = s.match(/^(\d{4})(\d{2})(\d{2})$/)
+  if (compact) {
+    return plausibleDayMonth(parseInt(compact[3], 10), parseInt(compact[2], 10))
+      ? `${compact[1]}-${compact[2]}-${compact[3]}`
+      : ''
+  }
+  // DD.MM.YYYY, DD/MM/YYYY or DD-MM-YYYY (optionally with a trailing time).
+  // Strictly day-first: a month above 12 is a parse failure, not a hint to
+  // reinterpret — order detection for US-style files is the caller's job at
+  // file level (see the YNAB adapter), never per row.
+  // eslint-disable-next-line security/detect-unsafe-regex -- anchored, bounded \d{1,2}/\d{4} split by a literal [./-]; no ambiguous backtracking (no ReDoS)
+  const dmy = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[ T].*)?$/)
   if (dmy) {
-    const d = dmy[1].padStart(2, '0')
-    const m = dmy[2].padStart(2, '0')
-    return `${dmy[3]}-${m}-${d}`
+    const d = parseInt(dmy[1], 10)
+    const m = parseInt(dmy[2], 10)
+    if (!plausibleDayMonth(d, m)) return ''
+    return `${dmy[3]}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+  // DD.MM.YY (Sparkasse CSV-CAMT, DKB's new export: "14.07.26") — century pivot
+  // like those banks' own parsers: <70 → 20xx, else 19xx.
+  const dmy2 = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2})$/)
+  if (dmy2) {
+    const d = parseInt(dmy2[1], 10)
+    const m = parseInt(dmy2[2], 10)
+    if (!plausibleDayMonth(d, m)) return ''
+    const yy = parseInt(dmy2[3], 10)
+    const year = yy < 70 ? 2000 + yy : 1900 + yy
+    return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
   }
   return ''
+}
+
+/**
+ * Shared plausibility gate for the day-first branches. normalizeDate's non-''
+ * return is used as a row-validity test by every adapter, so it must never
+ * fabricate an impossible date ("2026-00-00", day 32) out of a stray number.
+ */
+function plausibleDayMonth(day: number, month: number): boolean {
+  return day >= 1 && day <= 31 && month >= 1 && month <= 12
+}
+
+/**
+ * Map a header row to { normalizedName → column index }: lowercased, quotes and
+ * whitespace stripped ("Betrag (€)" → "betrag(€)"). Adapters whose banks have
+ * shuffled columns between vintages (N26, Wise, ING, DKB) resolve columns by
+ * name through this instead of fixed indexes.
+ */
+export function indexHeader(header: string[]): Record<string, number> {
+  const map: Record<string, number> = {}
+  header.forEach((cell, i) => {
+    const key = cell.toLowerCase().replace(/["\s]/g, '')
+    if (key && !(key in map)) map[key] = i
+  })
+  return map
+}
+
+/**
+ * Decode statement bytes whose encoding varies by export vintage: UTF-8 (with
+ * or without BOM) when it decodes cleanly, otherwise the given legacy fallback
+ * (Sparkasse classic and DKB's pre-2023 export are Windows-1252/ISO-8859-1).
+ */
+export function decodeTextSniffed(bytes: Uint8Array, legacyEncoding = 'windows-1252'): string {
+  const utf8 = decodeText(bytes, 'utf-8')
+  return utf8.includes('�') ? decodeText(bytes, legacyEncoding) : utf8
 }
 
 /**

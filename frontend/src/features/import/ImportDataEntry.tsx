@@ -4,8 +4,10 @@
  * Import page and the onboarding wizard — pass `compact` to drop the page-sized
  * explainer table.
  */
-import { createUniqueId, For, Show } from 'solid-js'
+import { createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
 import { AccountSelect } from '../../components/AccountSelect'
+import { OrbitSpinner } from '../../components/OrbitSpinner'
+import { Pill } from '../../components/Pill'
 import { listAdapters } from '../../core/bankImport'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
@@ -31,6 +33,56 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
   const bankLabel = (bankId: BankId | null) =>
     listAdapters().find((a) => a.id === bankId)?.label ?? ''
 
+  // Drag-over highlight per dropzone. dragenter/dragleave fire for every child
+  // the cursor crosses, so track depth and only clear at zero. Only file drags
+  // count — dragging selected text across the zone shouldn't light it up.
+  const createDragState = () => {
+    const [active, setActive] = createSignal(false)
+    let depth = 0
+    const hasFiles = (e: DragEvent) => e.dataTransfer?.types?.includes('Files') ?? false
+    return {
+      active,
+      reset: () => {
+        depth = 0
+        setActive(false)
+      },
+      handlers: {
+        onDragEnter: (e: DragEvent) => {
+          if (!hasFiles(e)) return
+          e.preventDefault()
+          depth += 1
+          setActive(true)
+        },
+        onDragOver: (e: DragEvent) => {
+          e.preventDefault()
+        },
+        onDragLeave: (e: DragEvent) => {
+          if (!hasFiles(e)) return
+          depth = Math.max(0, depth - 1)
+          if (depth === 0) setActive(false)
+        },
+      },
+    }
+  }
+  const uploadDrag = createDragState()
+  const bankDrag = createDragState()
+
+  // Belt and braces: if a browser quirk swallows the final dragleave (the drag
+  // is cancelled outside the window, etc.), the end of the drag operation or a
+  // window blur still clears the highlight.
+  onMount(() => {
+    const resetAll = () => {
+      uploadDrag.reset()
+      bankDrag.reset()
+    }
+    window.addEventListener('dragend', resetAll)
+    window.addEventListener('blur', resetAll)
+    onCleanup(() => {
+      window.removeEventListener('dragend', resetAll)
+      window.removeEventListener('blur', resetAll)
+    })
+  })
+
   return (
     <div class={styles.uploadArea}>
       {/* Import method tabs */}
@@ -53,7 +105,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
         <>
           <Show when={!props.compact}>
             <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
-              <h3 class={styles.settingsCardTitle}>Expected Columns</h3>
+              <h3 class={styles.settingsCardTitle}>Expected columns</h3>
               <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
                 <table class={styles.previewTable}>
                   <thead>
@@ -184,7 +236,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               onClick={flow.goToMapping}
               style={{ 'margin-top': '16px' }}
             >
-              Continue to Mapping
+              Continue to mapping
             </button>
           )}
         </>
@@ -194,9 +246,12 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {flow.activeImportTab() === 'file-upload' && (
         <>
           <div
-            class={`${styles.dropzone} ${flow.loading() ? styles.disabled : ''}`}
-            onDragOver={flow.handleDragOver}
-            onDrop={flow.handleDrop}
+            class={`${styles.dropzone} ${uploadDrag.active() ? styles.dragOver : ''} ${flow.loading() ? styles.disabled : ''}`}
+            {...uploadDrag.handlers}
+            onDrop={(e) => {
+              uploadDrag.reset()
+              flow.handleDrop(e)
+            }}
           >
             <input
               type="file"
@@ -208,18 +263,29 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               onChange={flow.handleFileSelect}
             />
             <label for={fileInputId} class={styles.uploadLabel}>
-              <svg
-                class={styles.dropzoneIcon}
-                width="48"
-                height="48"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              <Show
+                when={!flow.dropProcessing()}
+                fallback={<OrbitSpinner size={44} label="Reading your file…" />}
               >
-                <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <p class={styles.dropzoneTitle}>Click or drag and drop your file here</p>
-              <p class={styles.dropzoneHint}>Supported formats: CSV, XLSX, XLS</p>
+                <svg
+                  class={styles.dropzoneIcon}
+                  width="48"
+                  height="48"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p class={styles.dropzoneTitle}>
+                  {uploadDrag.active() ? 'Drop to upload' : 'Click or drag and drop your file here'}
+                </p>
+                <div class={styles.formatPills}>
+                  <Pill>CSV</Pill>
+                  <Pill>XLSX</Pill>
+                  <Pill>XLS</Pill>
+                </div>
+              </Show>
             </label>
           </div>
 
@@ -247,14 +313,14 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               data-test-id="import-continue-mapping"
               onClick={flow.goToMapping}
             >
-              Continue to Mapping
+              Continue to mapping
             </button>
           )}
 
           <div class={styles.templateSection}>
             <p class={styles.dropzoneHint}>Need a template?</p>
             <button class={`${styles.btn} ${styles.btnOutline}`} onClick={downloadSampleTemplate}>
-              Download Sample Template
+              Download sample template
             </button>
           </div>
         </>
@@ -264,8 +330,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {flow.activeImportTab() === 'paste-csv' && (
         <>
           <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-            Paste tabular data directly from Excel, Google Sheets, or any spreadsheet application.
-            Works guaranteed in serverless mode — no CORS restrictions.
+            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
+            parsed right in your browser.
           </p>
           <div
             style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}
@@ -290,7 +356,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               }}
               disabled={flow.loading() || !flow.pastedText().trim()}
             >
-              Parse Pasted Data
+              Parse pasted data
             </button>
           </div>
           <textarea
@@ -309,7 +375,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               onClick={flow.goToMapping}
               style={{ 'margin-top': '12px' }}
             >
-              Continue to Mapping
+              Continue to mapping
             </button>
           )}
         </>
@@ -319,14 +385,16 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {flow.activeImportTab() === 'bank-imports' && (
         <>
           <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-            Upload bank statements (Revolut, Erste, PBZ). We detect the bank, map each statement to
-            one of your accounts and convert it into the standard import table — which you confirm
-            on the next step. CSV and XLS supported.
+            Upload bank statements and we'll detect the bank, match each one to your accounts, and
+            prepare the transactions for review.
           </p>
           <div
-            class={`${styles.dropzone} ${flow.loading() ? styles.disabled : ''}`}
-            onDragOver={flow.handleDragOver}
-            onDrop={flow.handleBankDrop}
+            class={`${styles.dropzone} ${bankDrag.active() ? styles.dragOver : ''} ${flow.loading() ? styles.disabled : ''}`}
+            {...bankDrag.handlers}
+            onDrop={(e) => {
+              bankDrag.reset()
+              flow.handleBankDrop(e)
+            }}
           >
             <input
               type="file"
@@ -339,20 +407,34 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               onChange={flow.handleBankFileSelect}
             />
             <label for={bankInputId} class={styles.uploadLabel}>
-              <svg
-                class={styles.dropzoneIcon}
-                width="48"
-                height="48"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              <Show
+                when={!flow.dropProcessing()}
+                fallback={<OrbitSpinner size={44} label="Reading statements…" />}
               >
-                <path d="M3 21h18M5 21V9l7-4 7 4v12M9 21v-6h6v6M8 12h.01M16 12h.01" />
-              </svg>
-              <p class={styles.dropzoneTitle}>Click or drag bank statements here</p>
-              <p class={styles.dropzoneHint}>
-                Revolut / Erste (CSV), PBZ (XLS) — multiple files OK
-              </p>
+                <svg
+                  class={styles.dropzoneIcon}
+                  width="48"
+                  height="48"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M3 21h18M5 21V9l7-4 7 4v12M9 21v-6h6v6M8 12h.01M16 12h.01" />
+                </svg>
+                <p class={styles.dropzoneTitle}>
+                  {bankDrag.active()
+                    ? 'Drop to add your statements'
+                    : 'Click or drag bank statements here'}
+                </p>
+                <p class={styles.dropzoneHint}>Upload one or more files</p>
+                <div class={styles.formatPills}>
+                  <For each={listAdapters()}>
+                    {(a) => (
+                      <Pill>{`${a.label} (${a.accept.map((f) => f.toUpperCase()).join('/')})`}</Pill>
+                    )}
+                  </For>
+                </div>
+              </Show>
             </label>
           </div>
 
@@ -455,7 +537,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               onClick={() => void flow.processBankFiles()}
               disabled={flow.loading()}
             >
-              Process &amp; Continue to Mapping
+              Process &amp; continue
             </button>
           </Show>
 

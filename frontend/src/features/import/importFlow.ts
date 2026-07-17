@@ -120,6 +120,31 @@ export interface ImportFlowOptions {
   onImported?: (summary: ImportSummary) => void
 }
 
+/**
+ * Resolve after the browser has committed a frame, so a spinner/overlay is
+ * actually painted before a long synchronous parse (XLSX.read) blocks the main
+ * thread. Raced against a short timeout: hidden/backgrounded documents pause
+ * rAF entirely, and a paint yield must never turn into a hang — worst case the
+ * spinner misses a frame. Falls back to a macrotask in environments without
+ * rAF. (Under fake timers, advance 120ms to release it.)
+ */
+const nextPaint = () =>
+  new Promise<void>((resolve) => {
+    let settled = false
+    const done = () => {
+      if (!settled) {
+        settled = true
+        resolve()
+      }
+    }
+    if (typeof requestAnimationFrame === 'undefined') {
+      setTimeout(done, 0)
+      return
+    }
+    requestAnimationFrame(() => requestAnimationFrame(done))
+    setTimeout(done, 120)
+  })
+
 export function createImportFlow(opts: ImportFlowOptions = {}) {
   const [activeImportTab, setActiveImportTab] = createSignal<ImportTab>(
     opts.initialTab ?? 'google-sheets'
@@ -217,6 +242,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
 
   // Loading/error
   const [loading, setLoading] = createSignal(false)
+  // True only while a dropzone is ingesting files (drop/select → read + sniff,
+  // or the upload POST) — drives the inline spinner inside the dropzone itself,
+  // as opposed to `loading`, which also covers processing/import execution.
+  const [dropProcessing, setDropProcessing] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
   // Stable id for the current import so a retry after a failed/partial /execute is idempotent
   // server-side (the worker removes rows already inserted for this id). Cleared on reset.
@@ -426,10 +455,14 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // File upload
   const handleFileUpload = async (file: File) => {
     setLoading(true)
+    setDropProcessing(true)
     setError(null)
     setResultMessage(null)
 
     try {
+      // In serverless mode this POST is routed in-process to a synchronous
+      // XLSX parse — same paint yield as the bank path so the spinner shows.
+      await nextPaint()
       const formData = new FormData()
       formData.append('file', file)
 
@@ -455,6 +488,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setLoading(false)
+      setDropProcessing(false)
     }
   }
 
@@ -538,7 +572,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // vanish into a void'ed promise, so the UI simply never reacted and only a
     // second drop "worked".
     setLoading(true)
+    setDropProcessing(true)
     try {
+      // Let the spinner paint before the synchronous XLS/CSV sniffing starts.
+      await nextPaint()
       const results = await Promise.allSettled(snapshot.map(analyzeBankFile))
       const analyzed = results
         .filter((r): r is PromiseFulfilledResult<BankFileRow> => r.status === 'fulfilled')
@@ -561,6 +598,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setError(err instanceof Error ? err.message : 'Could not read the dropped files')
     } finally {
       setLoading(false)
+      setDropProcessing(false)
     }
   }
 
@@ -592,6 +630,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     categoryRules: CategoryRuleSet
     transferRules: TransferRuleSet
   }) => {
+    // Callers set `loading` right before this; give the overlay a frame to
+    // paint before the adapters' synchronous parsing (XLSX.read) blocks.
+    await nextPaint()
     const recognized = bankFiles().filter((r) => r.bankId)
     if (recognized.length === 0) {
       setError('None of the files were recognized as a supported bank statement')
@@ -1112,6 +1153,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     approvedCategories,
     existingDuplicates,
     loading,
+    dropProcessing,
     error,
     resultMessage,
     // derived

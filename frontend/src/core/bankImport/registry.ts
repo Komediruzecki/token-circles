@@ -5,12 +5,28 @@
  * importing its adapter and appending it here; everything else (detection, the
  * UI's bank dropdown, processing) is driven off this list.
  */
+import { dkbAdapter } from './adapters/dkb'
 import { ersteAdapter } from './adapters/erste'
+import { ingAdapter } from './adapters/ing'
+import { n26Adapter } from './adapters/n26'
 import { pbzAdapter } from './adapters/pbz'
 import { revolutAdapter } from './adapters/revolut'
+import { sparkasseAdapter } from './adapters/sparkasse'
+import { wiseAdapter } from './adapters/wise'
+import { ynabAdapter } from './adapters/ynab'
 import type { BankAdapter, BankId, DetectInput } from './types'
 
-export const ADAPTERS: readonly BankAdapter[] = [revolutAdapter, ersteAdapter, pbzAdapter]
+export const ADAPTERS: readonly BankAdapter[] = [
+  revolutAdapter,
+  ersteAdapter,
+  pbzAdapter,
+  n26Adapter,
+  wiseAdapter,
+  ingAdapter,
+  sparkasseAdapter,
+  dkbAdapter,
+  ynabAdapter,
+]
 
 export function listAdapters(): readonly BankAdapter[] {
   return ADAPTERS

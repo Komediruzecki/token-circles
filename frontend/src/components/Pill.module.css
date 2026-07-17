@@ -1,0 +1,109 @@
+/**
+ * Pill — signature glass capsule with a glowing satellite dot.
+ * Tones tint the dot, hairline border, and background from theme tokens,
+ * so pills read correctly on every theme.
+ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid color-mix(in oklab, var(--pill-tint, var(--text-secondary)) 26%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--pill-tint, var(--card-bg)) 9%, transparent);
+  color: var(--text-secondary);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+
+.sm {
+  padding: 4px 11px;
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+.md {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* The satellite: a tiny warm (or tone-colored) moon with a soft glow. */
+.dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--pill-dot, var(--accent-warm, #f0a860));
+  box-shadow: 0 0 6px
+    color-mix(in oklab, var(--pill-dot, var(--accent-warm, #f0a860)) 75%, transparent);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.icon > svg {
+  width: 1em;
+  height: 1em;
+}
+
+/* Tones — neutral keeps the warm satellite over a quiet glass capsule;
+   the rest tint dot + border + wash with their semantic color. */
+.neutral {
+  --pill-dot: var(--accent-warm, #f0a860);
+  border-color: var(--border);
+  background: color-mix(in oklab, var(--card-bg) 72%, transparent);
+}
+
+.accent {
+  --pill-tint: var(--accent-warm, #f0a860);
+  --pill-dot: var(--accent-warm, #f0a860);
+  color: color-mix(in oklab, var(--accent-warm, #f0a860) 55%, var(--text));
+}
+
+.primary {
+  --pill-tint: var(--primary);
+  --pill-dot: var(--primary);
+  color: color-mix(in oklab, var(--primary) 55%, var(--text));
+}
+
+.success {
+  --pill-tint: var(--success);
+  --pill-dot: var(--success);
+  color: color-mix(in oklab, var(--success) 50%, var(--text));
+}
+
+.warning {
+  --pill-tint: var(--warning, #f0a860);
+  --pill-dot: var(--warning, #f0a860);
+  color: color-mix(in oklab, var(--warning, #f0a860) 50%, var(--text));
+}
+
+.danger {
+  --pill-tint: var(--danger, #ef4444);
+  --pill-dot: var(--danger, #ef4444);
+  color: color-mix(in oklab, var(--danger, #ef4444) 50%, var(--text));
+}
+
+.interactive {
+  cursor: pointer;
+  font: inherit;
+}
+
+.interactive:hover {
+  border-color: color-mix(in oklab, var(--pill-tint, var(--primary)) 55%, var(--border));
+  background: color-mix(in oklab, var(--pill-tint, var(--primary)) 16%, transparent);
+  color: var(--text);
+}
+
+.interactive:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--primary) 70%, transparent);
+  outline-offset: 2px;
+}

@@ -2,13 +2,21 @@ import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 import { autoDetectMapping, FIELD_NAMES } from '../../importMapping'
 import { resolveTargetAccount, statementSignature } from '../accountResolver'
+import { dkbAdapter } from '../adapters/dkb'
 import { ersteAdapter } from '../adapters/erste'
+import { ingAdapter } from '../adapters/ing'
+import { n26Adapter } from '../adapters/n26'
 import { pbzAdapter } from '../adapters/pbz'
 import { revolutAdapter } from '../adapters/revolut'
+import { sparkasseAdapter } from '../adapters/sparkasse'
+import { wiseAdapter } from '../adapters/wise'
+import { ynabAdapter } from '../adapters/ynab'
 import { CANONICAL_HEADERS } from '../canonical'
 import { matchCategory } from '../categoryRules'
 import {
   decodeText,
+  decodeTextSniffed,
+  indexHeader,
   normalizeDate,
   parseDotNumber,
   parseEuropeanNumber,
@@ -417,5 +425,365 @@ describe('canonical header auto-mapping', () => {
     for (const field of FIELD_NAMES.filter((f) => f.required)) {
       expect(m[field.key], `required field "${field.key}" must auto-map`).toBeGreaterThanOrEqual(0)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// New parse utils (added with the EU adapter batch)
+// ---------------------------------------------------------------------------
+describe('parse utils — EU adapter additions', () => {
+  it('normalizes the newly supported date shapes', () => {
+    expect(normalizeDate('20241228')).toBe('2024-12-28') // ING compact ISO
+    expect(normalizeDate('28-01-2026')).toBe('2026-01-28') // Wise day-first hyphens
+    expect(normalizeDate('14.07.26')).toBe('2026-07-14') // Sparkasse/DKB DD.MM.YY
+    expect(normalizeDate('31.12.99')).toBe('1999-12-31') // century pivot
+    expect(normalizeDate('22.13.2026')).toBe('') // impossible either way
+    expect(normalizeDate('99999999')).toBe('') // 8 digits but month 99
+  })
+
+  it('is strictly day-first and never fabricates impossible dates', () => {
+    // US-order handling is the YNAB adapter's file-level job, never per value.
+    expect(normalizeDate('06/22/2026')).toBe('')
+    // A non-'' return is used as a row-validity test by every adapter, so a
+    // stray number in a date position must stay invalid.
+    expect(normalizeDate('20251232')).toBe('') // day 32
+    expect(normalizeDate('20260000')).toBe('') // month/day 0
+    expect(normalizeDate('00000000')).toBe('')
+    expect(normalizeDate('99.01.26')).toBe('') // day 99
+    expect(normalizeDate('00.00.26')).toBe('')
+    expect(normalizeDate('0.0.2026')).toBe('')
+  })
+
+  it('indexes headers by normalized name', () => {
+    const col = indexHeader(['"Booking Date"', 'Betrag (€)', ''])
+    expect(col['bookingdate']).toBe(0)
+    expect(col['betrag(€)']).toBe(1)
+  })
+
+  it('sniffs legacy encodings when bytes are not valid UTF-8', () => {
+    expect(decodeTextSniffed(new TextEncoder().encode('Bäckerei'))).toBe('Bäckerei')
+    // 0xE4 = 'ä' in windows-1252 but an invalid UTF-8 sequence.
+    expect(decodeTextSniffed(new Uint8Array([0x42, 0xe4, 0x72]))).toBe('Bär')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// N26 (synthetic fixture per the current post-2023 export format)
+// ---------------------------------------------------------------------------
+describe('n26 adapter', () => {
+  const csv = [
+    '"Booking Date","Value Date","Partner Name","Partner Iban",Type,"Payment Reference","Account Name","Amount (EUR)","Original Amount","Original Currency","Exchange Rate"',
+    '2025-03-03,2025-03-03,"Backhaus Muster",,Presentment,,"Main Account",-4.85,4.85,EUR,1',
+    '2025-03-04,2025-03-05,"Erika Beispiel","DE02120300000000202051","Outgoing Transfer","Miete Maerz","Main Account",-850.0,,,',
+    '2025-03-05,2025-03-05,"Acme GmbH","DE02500105170137075030","Credit Transfer","Gehalt 03/2025","Main Account",2600.0,,,',
+  ].join('\n')
+
+  it('filename hint is word-bounded — month+year names are not N26', () => {
+    expect(n26Adapter.detect(toDetectInput('jan26.csv', enc('Date,Vendor,Total')))).toBe(0)
+    expect(n26Adapter.detect(toDetectInput('budget-plan26.csv', enc('')))).toBe(0)
+    expect(n26Adapter.detect(toDetectInput('n26-csv-transactions.csv', enc('')))).toBeCloseTo(0.6)
+  })
+
+  it('detects the current and legacy headers', () => {
+    expect(n26Adapter.detect(toDetectInput('x.csv', enc(csv)))).toBeGreaterThan(0.9)
+    const legacy =
+      '"Date","Payee","Account number","Transaction type","Payment reference","Amount (EUR)"'
+    expect(n26Adapter.detect(toDetectInput('x.csv', enc(legacy)))).toBeGreaterThan(0.9)
+    const legacyDe =
+      '"Datum","Empfänger","Kontonummer","Transaktionstyp","Verwendungszweck","Betrag (EUR)"'
+    expect(n26Adapter.detect(toDetectInput('x.csv', enc(legacyDe)))).toBeGreaterThan(0.9)
+  })
+
+  it('classifies signed EUR amounts and keeps the partner as counterparty', async () => {
+    const parsed = await n26Adapter.parse(enc(csv), 'x.csv')
+    const txns = n26Adapter.transform(parsed, baseCtx({ targetAccount: 'N26 Main' }))
+    expect(txns).toHaveLength(3)
+    expect(txns[0]).toMatchObject({
+      date: '2025-03-03',
+      type: 'Expense',
+      meansOfPayment: 'N26 Main',
+      amount: 4.85,
+      currency: 'EUR',
+      beneficiary: 'Backhaus Muster',
+    })
+    expect(txns[2]).toMatchObject({
+      type: 'Income',
+      amount: 2600,
+      payor: 'Acme GmbH',
+      description: 'Gehalt 03/2025',
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Wise (synthetic fixture per the current 23-column statement CSV)
+// ---------------------------------------------------------------------------
+describe('wise adapter', () => {
+  const csv = [
+    '"TransferWise ID",Date,"Date Time",Amount,Currency,Description,"Payment Reference","Running Balance","Exchange From","Exchange To","Exchange Rate","Payer Name","Payee Name","Payee Account Number",Merchant,"Card Last Four Digits","Card Holder Full Name",Attachment,Note,"Total fees","Exchange To Amount","Transaction Type","Transaction Details Type"',
+    'CARD-345678901,15-02-2026,"15-02-2026 09:12:44.120",-23.40,EUR,"Card transaction of 23.40 EUR issued by Cafe Beispiel BERLIN",,976.60,,,,,,,"Cafe Beispiel BERLIN",4321,"Max Mustermann",,,0.00,,DEBIT,CARD',
+    'TRANSFER-198765440,17-02-2026,"17-02-2026 08:30:00.000",500.00,EUR,"Topped up account",,1226.60,,,,"Max Mustermann",,,,,,,,2.10,,CREDIT,DEPOSIT',
+  ].join('\n')
+
+  it('detects by header and by statement filename', () => {
+    expect(wiseAdapter.detect(toDetectInput('x.csv', enc(csv)))).toBeGreaterThan(0.9)
+    expect(
+      wiseAdapter.detect(toDetectInput('statement_23243482_EUR_2025-01-04_2025-06-02.csv', enc('')))
+    ).toBeGreaterThan(0.6)
+    // The full export shape is required — date-fragment lookalikes are not Wise.
+    expect(wiseAdapter.detect(toDetectInput('statement_2026_jan_export.csv', enc('')))).toBe(0)
+  })
+
+  it('parses day-first hyphen dates, merchants, and flags top-ups as transfers', async () => {
+    const parsed = await wiseAdapter.parse(enc(csv), 'x.csv')
+    expect(parsed.meta.currency).toBe('EUR')
+    const txns = wiseAdapter.transform(parsed, baseCtx({ targetAccount: 'Wise EUR' }))
+    expect(txns).toHaveLength(2)
+    expect(txns[0]).toMatchObject({
+      date: '2026-02-15',
+      type: 'Expense',
+      amount: 23.4,
+      currency: 'EUR',
+      beneficiary: 'Cafe Beispiel BERLIN',
+    })
+    // Top-up: forced transfer, but no counterpart configured → signed income + note.
+    expect(txns[1].type).toBe('Income')
+    expect(txns[1].amount).toBe(500)
+    expect(txns[1].notes).toContain('possible transfer')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// ING NL (synthetic fixture per the current 11-column semicolon export)
+// ---------------------------------------------------------------------------
+describe('ing adapter', () => {
+  const csv = [
+    '"Datum";"Naam / Omschrijving";"Rekening";"Tegenrekening";"Code";"Af Bij";"Bedrag (EUR)";"Mutatiesoort";"Mededelingen";"Saldo na mutatie";"Tag"',
+    '"20260113";"Albert Heijn 1522 AMSTERDAM NLD";"NL69INGB0123456789";"";"BA";"Af";"31,25";"Betaalautomaat";"Pasvolgnr: 008 13-01-2026 18:22";"1204,71";""',
+    '"20260114";"J. Jansen";"NL69INGB0123456789";"NL44RABO0123456789";"GT";"Bij";"120,00";"Online bankieren";"Naam: J. Jansen Omschrijving: Terugbetaling etentje";"1324,71";""',
+  ].join('\n')
+
+  it('detects both delimiters and the IBAN filename', () => {
+    expect(ingAdapter.detect(toDetectInput('x.csv', enc(csv)))).toBeGreaterThan(0.9)
+    expect(
+      ingAdapter.detect(toDetectInput('NL69INGB0123456789_22-12-2024_28-12-2024.csv', enc('')))
+    ).toBeGreaterThan(0.6)
+  })
+
+  it('applies the Af/Bij direction to unsigned decimal-comma amounts', async () => {
+    const parsed = await ingAdapter.parse(enc(csv), 'x.csv')
+    expect(parsed.meta.iban).toBe('NL69INGB0123456789')
+    const txns = ingAdapter.transform(parsed, baseCtx({ targetAccount: 'ING Betaal' }))
+    expect(txns).toHaveLength(2)
+    expect(txns[0]).toMatchObject({
+      date: '2026-01-13',
+      type: 'Expense',
+      amount: 31.25,
+      currency: 'EUR',
+      beneficiary: 'Albert Heijn 1522 AMSTERDAM NLD',
+    })
+    expect(txns[1]).toMatchObject({ type: 'Income', amount: 120, payor: 'J. Jansen' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Sparkasse (synthetic fixture per the CSV-CAMT V2 export)
+// ---------------------------------------------------------------------------
+describe('sparkasse adapter', () => {
+  const csv = [
+    '"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"',
+    '"DE21500500001234567897";"14.07.26";"14.07.26";"KARTENZAHLUNG";"2026-07-13T18:44 Debitk.1 2029-12";"";"";"687572811234";"";"";"";"EDEKA MUSTERMARKT//MUSTERSTADT/DE";"DE58100500000890123456";"BELADEBEXXX";"-27,43";"EUR";"Umsatz gebucht"',
+    '"DE21500500001234567897";"15.07.26";"15.07.26";"LOHN GEHALT";"Gehalt 07/2026 Beispiel AG";"";"";"";"";"";"";"Beispiel AG";"DE02600501010002034304";"SOLADEST600";"3120,55";"EUR";"Umsatz gebucht"',
+    '"DE21500500001234567897";"16.07.26";"16.07.26";"KARTENZAHLUNG";"Pending example";"";"";"";"";"";"";"Shop";"DE58100500000890123456";"BELADEBEXXX";"-9,99";"EUR";"Umsatz vorgemerkt"',
+  ].join('\n')
+
+  it('detects, reads meta, skips pending, parses signed comma amounts', async () => {
+    const bytes = enc(csv)
+    expect(
+      sparkasseAdapter.detect(toDetectInput('20260716-1234567-umsatz.CSV', bytes))
+    ).toBeGreaterThan(0.9)
+    const parsed = await sparkasseAdapter.parse(bytes, 'x.csv')
+    expect(parsed.meta.iban).toBe('DE21500500001234567897')
+    expect(parsed.meta.currency).toBe('EUR')
+    const txns = sparkasseAdapter.transform(parsed, baseCtx({ targetAccount: 'Sparkasse Giro' }))
+    expect(txns).toHaveLength(2) // vorgemerkt dropped
+    expect(txns[0]).toMatchObject({
+      date: '2026-07-14',
+      type: 'Expense',
+      amount: 27.43,
+      currency: 'EUR',
+      beneficiary: 'EDEKA MUSTERMARKT//MUSTERSTADT/DE',
+    })
+    expect(txns[1]).toMatchObject({ type: 'Income', amount: 3120.55, payor: 'Beispiel AG' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DKB (synthetic fixture per the current post-2023 Girokonto export)
+// ---------------------------------------------------------------------------
+describe('dkb adapter', () => {
+  const csv = [
+    '"Girokonto";"DE88120300001056358037"',
+    '""',
+    '"Kontostand vom 15.07.2026:";"1.234,56 EUR"',
+    '""',
+    '"Buchungsdatum";"Wertstellung";"Status";"Zahlungspflichtige*r";"Zahlungsempfänger*in";"Verwendungszweck";"Umsatztyp";"IBAN";"Betrag (€)";"Gläubiger-ID";"Mandatsreferenz";"Kundenreferenz"',
+    '"13.07.26";"13.07.26";"Gebucht";"Max Mustermann";"REWE Markt GmbH";"2026-07-12 Debitk.55 VISA Debit";"Ausgang";"DE88120300001056358037";"-42,17 €";"";"";"908070605040302"',
+    '"14.07.26";"14.07.26";"Gebucht";"Beispiel AG";"Max Mustermann";"GEHALT 07/26";"Eingang";"DE88120300001056358037";"2.850,00 €";"";"";""',
+    '"15.07.26";"15.07.26";"Vorgemerkt";"Max Mustermann";"Telekom Deutschland GmbH";"Rechnung 07/26";"Ausgang";"DE88120300001056358037";"-39,95 €";"";"";""',
+  ].join('\n')
+
+  it('detects despite the preamble and finds the account IBAN in it', async () => {
+    const bytes = enc(csv)
+    expect(
+      dkbAdapter.detect(toDetectInput('05-05-2026_Umsatzliste_Girokonto_DE88.csv', bytes))
+    ).toBeGreaterThan(0.9)
+    const parsed = await dkbAdapter.parse(bytes, 'x.csv')
+    expect(parsed.meta.iban).toBe('DE88120300001056358037')
+    const txns = dkbAdapter.transform(parsed, baseCtx({ targetAccount: 'DKB Giro' }))
+    expect(txns).toHaveLength(2) // Vorgemerkt dropped
+    expect(txns[0]).toMatchObject({
+      date: '2026-07-13',
+      type: 'Expense',
+      amount: 42.17,
+      currency: 'EUR',
+      beneficiary: 'REWE Markt GmbH',
+    })
+    // Thousands dot + trailing € stripped; income payee = the payer column.
+    expect(txns[1]).toMatchObject({ type: 'Income', amount: 2850, payor: 'Beispiel AG' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// YNAB bridge format
+// ---------------------------------------------------------------------------
+describe('ynab adapter', () => {
+  it('detects all documented header shapes', () => {
+    for (const header of [
+      'Date,Payee,Memo,Outflow,Inflow',
+      'Date,Payee,Category,Memo,Outflow,Inflow',
+      'Date,Payee,Memo,Amount',
+    ]) {
+      expect(ynabAdapter.detect(toDetectInput('x.csv', enc(header)))).toBeGreaterThan(0.8)
+    }
+  })
+
+  it('handles Outflow/Inflow with US dates and a Category override', async () => {
+    const csv = [
+      'Date,Payee,Category,Memo,Outflow,Inflow',
+      '06/22/2026,Coffee Corner,Everyday: Eating Out,Latte,4.50,',
+      '06/23/2026,Acme Payroll,,July salary,,2500.00',
+    ].join('\n')
+    const parsed = await ynabAdapter.parse(enc(csv), 'x.csv')
+    const txns = ynabAdapter.transform(parsed, baseCtx({ targetAccount: 'Checking' }))
+    expect(txns).toHaveLength(2)
+    expect(txns[0]).toMatchObject({
+      date: '2026-06-22',
+      type: 'Expense',
+      amount: 4.5,
+      category: 'Eating Out', // file category wins, group prefix stripped
+    })
+    expect(txns[1]).toMatchObject({ date: '2026-06-23', type: 'Income', amount: 2500 })
+  })
+
+  it('handles the signed single-Amount variant', async () => {
+    const csv = ['Date,Payee,Memo,Amount', '2026-06-22,Coffee Corner,Latte,-4.50'].join('\n')
+    const parsed = await ynabAdapter.parse(enc(csv), 'x.csv')
+    const txns = ynabAdapter.transform(parsed, baseCtx())
+    expect(txns[0]).toMatchObject({ type: 'Expense', amount: 4.5 })
+  })
+
+  it('applies ONE date order to the whole file (US export stays consistent)', async () => {
+    // 06/22 proves month-first for the file, so ambiguous 06/07 must be June 7.
+    const us = [
+      'Date,Payee,Memo,Amount',
+      '06/22/2026,Shop A,,-1.00',
+      '06/07/2026,Shop B,,-2.00',
+    ].join('\n')
+    const usTxns = ynabAdapter.transform(await ynabAdapter.parse(enc(us), 'x.csv'), baseCtx())
+    expect(usTxns.map((t) => t.date)).toEqual(['2026-06-22', '2026-06-07'])
+    // 22/06 proves day-first, so ambiguous 06/07 must be July 6.
+    const eu = [
+      'Date,Payee,Memo,Amount',
+      '22/06/2026,Shop A,,-1.00',
+      '06/07/2026,Shop B,,-2.00',
+    ].join('\n')
+    const euTxns = ynabAdapter.transform(await ynabAdapter.parse(enc(eu), 'x.csv'), baseCtx())
+    expect(euTxns.map((t) => t.date)).toEqual(['2026-06-22', '2026-07-06'])
+  })
+
+  it('tolerates currency symbols and accounting negatives in amounts', async () => {
+    const csv = [
+      'Date,Payee,Memo,Outflow,Inflow',
+      '2026-06-22,Coffee Corner,Latte,$4.50,',
+      '2026-06-23,Acme Payroll,,,"2,500.00 EUR"',
+    ].join('\n')
+    const txns = ynabAdapter.transform(await ynabAdapter.parse(enc(csv), 'x.csv'), baseCtx())
+    expect(txns[0]).toMatchObject({ type: 'Expense', amount: 4.5 })
+    expect(txns[1]).toMatchObject({ type: 'Income', amount: 2500 })
+    const paren = ['Date,Payee,Memo,Amount', '2026-06-22,Shop,,(4.50)'].join('\n')
+    const parenTxns = ynabAdapter.transform(await ynabAdapter.parse(enc(paren), 'x.csv'), baseCtx())
+    expect(parenTxns[0]).toMatchObject({ type: 'Expense', amount: 4.5 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Cross-adapter detection: every fixture must route to its own adapter
+// (guards against one bank's signature shadowing another's).
+// ---------------------------------------------------------------------------
+describe('registry cross-detection', () => {
+  const fixtures: [string, string, string][] = [
+    [
+      'revolut',
+      'account-statement.csv',
+      'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance\nCard Payment,Current,2026-04-30 16:00:26,2026-05-01 12:58:02,X,-1.00,0.00,EUR,COMPLETED,1.00',
+    ],
+    [
+      'n26',
+      'n26-download.csv',
+      '"Booking Date","Value Date","Partner Name","Partner Iban",Type,"Payment Reference","Account Name","Amount (EUR)","Original Amount","Original Currency","Exchange Rate"\n2025-03-03,2025-03-03,"X",,Presentment,,"Main Account",-1.00,,,',
+    ],
+    [
+      'wise',
+      'statement_1_EUR_2026-01-01_2026-02-01.csv',
+      '"TransferWise ID",Date,"Date Time",Amount,Currency,Description,"Payment Reference","Running Balance"\nCARD-1,15-02-2026,"15-02-2026 09:00:00.000",-1.00,EUR,X,,1.00',
+    ],
+    [
+      'ing',
+      'NL69INGB0123456789_01-01-2026_31-01-2026.csv',
+      '"Datum";"Naam / Omschrijving";"Rekening";"Tegenrekening";"Code";"Af Bij";"Bedrag (EUR)";"Mutatiesoort";"Mededelingen";"Saldo na mutatie";"Tag"\n"20260113";"X";"NL69INGB0123456789";"";"BA";"Af";"1,00";"Y";"Z";"1,00";""',
+    ],
+    [
+      'sparkasse',
+      '20260716-1234567-umsatz.CSV',
+      '"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"\n"DE21500500001234567897";"14.07.26";"14.07.26";"K";"V";"";"";"";"";"";"";"B";"DE58100500000890123456";"B";"-1,00";"EUR";"Umsatz gebucht"',
+    ],
+    [
+      'dkb',
+      '05-05-2026_Umsatzliste_Girokonto_DE88.csv',
+      '"Girokonto";"DE88120300001056358037"\n""\n"Kontostand vom 15.07.2026:";"1,00 EUR"\n""\n"Buchungsdatum";"Wertstellung";"Status";"Zahlungspflichtige*r";"Zahlungsempfänger*in";"Verwendungszweck";"Umsatztyp";"IBAN";"Betrag (€)";"Gläubiger-ID";"Mandatsreferenz";"Kundenreferenz"\n"13.07.26";"13.07.26";"Gebucht";"A";"B";"C";"Ausgang";"DE88120300001056358037";"-1,00 €";"";"";""',
+    ],
+    ['ynab', 'ynab-export.csv', 'Date,Payee,Memo,Outflow,Inflow\n06/22/2026,X,Y,1.00,'],
+  ]
+
+  it.each(fixtures)('routes the %s fixture to its adapter', (id, filename, content) => {
+    const det = detectBank(toDetectInput(filename, enc(content)))
+    expect(det?.adapter.id).toBe(id)
+  })
+
+  it('leaves a generic CSV undetected, even with a month+year filename', () => {
+    const generic = 'Date,Vendor,Total\n2026-01-05,Some Shop,12.00'
+    expect(detectBank(toDetectInput('expenses-jan26.csv', enc(generic)))).toBeNull()
+  })
+
+  it('detects the DKB comma-delimited new-export variant by content', () => {
+    const commaDkb = [
+      '"Girokonto","DE88120300001056358037"',
+      '""',
+      '"Kontostand vom 15.07.2026:","1,00 EUR"',
+      '""',
+      '"Buchungsdatum","Wertstellung","Status","Zahlungspflichtige*r","Zahlungsempfänger*in","Verwendungszweck","Umsatztyp","IBAN","Betrag (€)"',
+    ].join('\n')
+    expect(dkbAdapter.detect(toDetectInput('x.csv', enc(commaDkb)))).toBeGreaterThan(0.9)
   })
 })

@@ -210,11 +210,25 @@ test.describe('onboarding wizard', () => {
     await page.getByTestId('bank-target-account').selectOption('Revolut EUR')
     await page.getByTestId('bank-process-btn').click()
 
-    // Canonical table auto-maps; continue to preview and execute
-    await expect(page.getByTestId('import-continue-preview')).toBeVisible()
-    await page.getByTestId('import-continue-preview').click()
-    await expect(page.getByTestId('import-execute-all')).toBeVisible()
-    await page.getByTestId('import-execute-all').click()
+    // Canonical table auto-maps; the wizard FOOTER now carries the flow's
+    // forward action at each sub-step (mapping → preview → import).
+    await expect(page.getByTestId('onboarding-import-to-preview')).toBeVisible()
+    await page.getByTestId('onboarding-import-to-preview').click()
+
+    // Footer Back walks import sub-steps (preview → mapping → upload), not
+    // wizard steps — and forward again re-processes from the kept file rows.
+    await expect(page.getByTestId('onboarding-import-selected')).toBeVisible()
+    await page.getByTestId('onboarding-back').click()
+    await expect(page.getByTestId('import-map-date')).toBeVisible()
+    await page.getByTestId('onboarding-back').click()
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    await page.getByTestId('bank-process-btn').click()
+    await expect(page.getByTestId('onboarding-import-to-preview')).toBeVisible()
+    await page.getByTestId('onboarding-import-to-preview').click()
+
+    // Primary shows the live selection count (fixture = 7 unique rows) and imports
+    await expect(page.getByTestId('onboarding-import-selected')).toHaveText('Import selected (7)')
+    await page.getByTestId('onboarding-import-selected').click()
     await expect(page.getByTestId('onboarding-import-summary')).toBeVisible({ timeout: 15000 })
     await page.getByTestId('onboarding-next').click()
 
@@ -242,6 +256,33 @@ test.describe('onboarding wizard', () => {
     await page.getByTestId('bills-tab-subscriptions').click()
     await expect(page.locator('.page-bills').getByText('Netflix').first()).toBeVisible()
     await expect(page.locator('.page-bills').getByText('Spotify').first()).toBeVisible()
+  })
+
+  test("'Don't import' mid-flow confirms, discards, and advances", async ({ page }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+
+    // Fast-forward to the import step (skipping the account with its confirm)
+    await page.getByTestId('onboarding-next').click()
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+    await page.getByTestId('onboarding-next').click()
+    await page.getByTestId('confirm-accept').click()
+
+    // Reach the mapping sub-step with prepared data
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    await page.getByTestId('bank-target-account').selectOption('__create-account__')
+    await page.getByTestId('account-select-name').fill('Revolut EUR')
+    await page.getByTestId('account-select-submit').click()
+    await page.getByTestId('bank-process-btn').click()
+    await expect(page.getByTestId('onboarding-import-to-preview')).toBeVisible()
+
+    // The footer ghost escape confirms the discard, then advances
+    await page.getByTestId('onboarding-import-skip').click()
+    await expect(page.getByTestId('confirm-accept')).toBeVisible()
+    await page.getByTestId('confirm-accept').click()
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible()
   })
 
   test('back navigation walks the steps in reverse', async ({ page }) => {

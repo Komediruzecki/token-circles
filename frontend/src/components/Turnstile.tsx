@@ -48,6 +48,31 @@ export function resetTurnstile(): void {
   }
 }
 
+/**
+ * Wait for the widget to auto-issue a fresh token after resetTurnstile() —
+ * used by the register → auto-sign-in flow, where the register call consumed
+ * the previous single-use token. Resolves '' immediately when the captcha is
+ * disabled; rejects when no token arrives within the timeout.
+ */
+export function waitForTurnstileToken(getToken: () => string, timeoutMs = 8000): Promise<string> {
+  if (!turnstileEnabled) return Promise.resolve('')
+  const existing = getToken()
+  if (existing) return Promise.resolve(existing)
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const poll = setInterval(() => {
+      const t = getToken()
+      if (t) {
+        clearInterval(poll)
+        resolve(t)
+      } else if (Date.now() - started > timeoutMs) {
+        clearInterval(poll)
+        reject(new Error('Verification timed out'))
+      }
+    }, 150)
+  })
+}
+
 export default function Turnstile(props: { onToken: (token: string) => void }) {
   let el: HTMLDivElement | undefined
   let widgetId: string | undefined

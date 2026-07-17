@@ -9,7 +9,13 @@ import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
 import type { ImportFlow } from './importFlow'
 
-export function ImportPreviewStep(props: { flow: ImportFlow }) {
+/**
+ * `embedded`: rendered inside the onboarding wizard, whose footer carries
+ * "Import selected (N)" — hide the in-body execute buttons so there's a single
+ * visible CTA (the table's selection checkboxes still cover the all/only-new
+ * variants). The standalone Import page omits it.
+ */
+export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean }) {
   const flow = props.flow
   const headers = () => flow.currentHeaders()
   // Getters so the stats stay reactive — e.g. after Recalculate, which refreshes
@@ -26,7 +32,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow }) {
         <div class={styles.commandRow}>
           <div class={styles.previewStats}>
             <div class={styles.statItem}>
-              <span class={styles.statLabel}>Total Rows</span>
+              <span class={styles.statLabel}>Total rows</span>
               <span class={styles.statValue} data-test-id="import-preview-total">
                 {total()}
               </span>
@@ -42,35 +48,37 @@ export function ImportPreviewStep(props: { flow: ImportFlow }) {
               </div>
             )}
           </div>
-          <div class={styles.importButtons}>
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              data-test-id="import-execute-selected"
-              onClick={() => void flow.handleImport('selected')}
-              disabled={flow.selectedRows().size === 0}
-            >
-              Import Selected ({selected()})
-            </button>
-            {duplicates() > 0 && (
+          <Show when={!props.embedded}>
+            <div class={styles.importButtons}>
               <button
-                class={`${styles.btn} ${styles.btnSecondary}`}
-                data-test-id="import-execute-new"
-                onClick={() => void flow.handleImport('new')}
+                class={`${styles.btn} ${styles.btnPrimary}`}
+                data-test-id="import-execute-selected"
+                onClick={() => void flow.handleImport('selected')}
+                disabled={flow.selectedRows().size === 0}
               >
-                Import Only New
+                Import selected ({selected()})
               </button>
-            )}
-            <button
-              class={`${styles.btn} ${styles.btnOutline}`}
-              data-test-id="import-execute-all"
-              onClick={() => void flow.handleImport('all')}
-            >
-              Import All
-            </button>
-            <button class={`${styles.btn} ${styles.btnGhost}`} onClick={flow.resetForm}>
-              Cancel
-            </button>
-          </div>
+              {duplicates() > 0 && (
+                <button
+                  class={`${styles.btn} ${styles.btnSecondary}`}
+                  data-test-id="import-execute-new"
+                  onClick={() => void flow.handleImport('new')}
+                >
+                  Import only new
+                </button>
+              )}
+              <button
+                class={`${styles.btn} ${styles.btnOutline}`}
+                data-test-id="import-execute-all"
+                onClick={() => void flow.handleImport('all')}
+              >
+                Import all
+              </button>
+              <button class={`${styles.btn} ${styles.btnGhost}`} onClick={flow.resetForm}>
+                Cancel
+              </button>
+            </div>
+          </Show>
         </div>
 
         <div class={styles.optionsRow}>
@@ -87,7 +95,8 @@ export function ImportPreviewStep(props: { flow: ImportFlow }) {
         {duplicates() > 0 && (
           <p style={{ margin: '0 0 12px', 'font-size': '12px', color: 'var(--text-secondary)' }}>
             {duplicates()} duplicate row{duplicates() === 1 ? '' : 's'} (identical to an earlier row
-            in this import) unselected by default — check a row, or use "Import All", to include it.
+            in this import) unselected by default — check a row
+            {props.embedded ? '' : ', or use "Import all",'} to include it.
           </p>
         )}
         {/* Dry-run verdict: rows the dedup pass will skip because they already

@@ -134,8 +134,9 @@ export default function Import() {
         </div>
       </Show>
 
-      {/* Loading overlay */}
-      <Show when={flow.loading()}>
+      {/* Loading overlay. dropProcessing has its own inline spinner in the
+          dropzone — don't stack the page-sized overlay on top of it. */}
+      <Show when={flow.loading() && !flow.dropProcessing()}>
         <div class={styles.loadingOverlay} data-test-id="import-loading">
           <OrbitSpinner size={72} label="Processing your data…" />
         </div>

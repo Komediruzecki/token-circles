@@ -28,6 +28,7 @@ import {
   prevOnboardingStep,
   skipOnboarding,
 } from '../../core/onboardingStore'
+import { getStorageMode, setStorageMode } from '../../core/storage/storageFactory'
 import importStyles from '../../features/Import.module.css'
 import { ImportDataEntry } from '../../features/import/ImportDataEntry'
 import { createImportFlow } from '../../features/import/importFlow'
@@ -170,7 +171,13 @@ export function OnboardingWizard() {
     { name: string; type: AccountType; currency: string; balance: number }[]
   >([])
   const [importSummary, setImportSummary] = createSignal<ImportSummary | null>(null)
+  // True between "Import more files" and the next successful import: the
+  // summary is kept (so batch totals accumulate) but the embedded importer
+  // shows instead of the summary panel.
+  const [importingMore, setImportingMore] = createSignal(false)
   const [subsAdded, setSubsAdded] = createSignal(0)
+  // The summary panel replaces the importer only when we're not mid-"more files".
+  const showingSummary = () => importSummary() !== null && !importingMore()
 
   // ---- step: your space ----
   const [spaceName, setSpaceName] = createSignal('')
@@ -210,9 +217,20 @@ export function OnboardingWizard() {
     initialTab: 'bank-imports',
     autoResetAfterImport: false,
     onImported: (summary) => {
+      // Accumulate across "Import more files" batches — the summary is kept
+      // (not nulled) while the user is back in the flow, so `prev` carries the
+      // earlier batches' totals.
       setImportSummary((prev) =>
-        prev ? { ...summary, imported: prev.imported + summary.imported } : summary
+        prev
+          ? {
+              ...summary,
+              imported: prev.imported + summary.imported,
+              duplicatesSkipped: prev.duplicatesSkipped + summary.duplicatesSkipped,
+              createdAccounts: [...new Set([...prev.createdAccounts, ...summary.createdAccounts])],
+            }
+          : summary
       )
+      setImportingMore(false)
     },
   })
   let importInitialized = false
@@ -359,7 +377,7 @@ export function OnboardingWizard() {
   }
 
   const continueFromImport = async () => {
-    if (importSummary()) {
+    if (showingSummary()) {
       nextOnboardingStep()
       return
     }
@@ -375,9 +393,64 @@ export function OnboardingWizard() {
     }
   }
 
+  // Wizard Back walks the import sub-steps in reverse (preview → mapping →
+  // upload) before leaving the step — non-destructive, and deliberately via
+  // setActiveStep rather than goToMapping(), which would re-run auto-detection
+  // and clobber a manual remap. Once the summary is showing, Back leaves the
+  // step; "Import more files" is the designed way back into the flow.
+  const backFromImport = () => {
+    if (showingSummary()) {
+      prevOnboardingStep()
+      return
+    }
+    const sub = importFlow.activeStep()
+    if (sub === 'preview') importFlow.setActiveStep('mapping')
+    else if (sub === 'mapping') importFlow.setActiveStep('upload')
+    else prevOnboardingStep()
+  }
+
   const finish = () => {
     completeOnboarding()
     window.location.hash = 'dashboard'
+  }
+
+  // Welcome-step escape hatch (server mode only): run the app local-only.
+  // Fresh browser → mirror the pristine serverless state the E2E zero-state
+  // helper uses (suppress the example-data seed, flip the mode, reload — the
+  // pristine local workspace reopens this wizard). But this browser may
+  // already hold a local IndexedDB (the demo, or earlier local use) — then the
+  // switch continues with THAT workspace and the confirm must say so instead
+  // of promising a clean start.
+  const chooseLocalOnly = async () => {
+    let hasLocalData = false
+    try {
+      const dbs = await window.indexedDB.databases()
+      hasLocalData = dbs.some((d) => d.name === 'finance-manager')
+    } catch {
+      // indexedDB.databases() unsupported/blocked — keep the generic wording.
+    }
+    const sure = await showConfirm(
+      hasLocalData
+        ? 'Use Token Circles locally on this device? This browser already has a local workspace (e.g. from the demo) — you will continue with that data, and nothing syncs to the cloud. You can switch back any time in Settings.'
+        : 'Use Token Circles locally on this device? Your data stays in this browser and never syncs to the cloud — no account needed. You can switch back any time in Settings.'
+    )
+    if (!sure) return
+    try {
+      localStorage.setItem('finance_had_profiles', '1')
+      // A relaunched wizard may carry a completed/skipped flag; a fresh local
+      // workspace should offer setup again. (Harmless when local data exists —
+      // a non-pristine profile never auto-opens the wizard.)
+      localStorage.removeItem('finance_onboarding')
+      // Server-mode profile selection is meaningless against the local DB;
+      // stale ids would make the profile picker read empty or heal onto the
+      // wrong profile (mirrors handleLogout's cleanup).
+      localStorage.removeItem('currentProfileId')
+      localStorage.removeItem('selectedProfileIds')
+    } catch {
+      // Non-fatal: worst case the first init seeds the demo profiles.
+    }
+    setStorageMode('serverless')
+    window.location.reload()
   }
 
   // ---- step bodies ----
@@ -404,8 +477,8 @@ export function OnboardingWizard() {
         <li>
           <span class={styles.featureIcon}>{icons.inbox}</span>
           <span>
-            <b>Bring your history</b> — bank statements (Revolut, Erste, PBZ), CSV, or Google
-            Sheets.
+            <b>Bring your history</b> — bank statements (Revolut, N26, Erste and more), CSV, or
+            Google Sheets.
           </span>
         </li>
         <li>
@@ -423,6 +496,21 @@ export function OnboardingWizard() {
           </span>
         </li>
       </ul>
+      <Show when={getStorageMode() === 'self-hosted'}>
+        <div class={styles.localOnly}>
+          <span class={styles.localOnlyText}>
+            <b>Prefer local-only?</b> Keep everything in this browser — your data never leaves this
+            device, and you can switch back in Settings.
+          </span>
+          <button
+            class={styles.secondaryAction}
+            data-test-id="onboarding-local-only"
+            onClick={() => void chooseLocalOnly()}
+          >
+            Use local-only
+          </button>
+        </div>
+      </Show>
     </div>
   )
 
@@ -592,7 +680,8 @@ export function OnboardingWizard() {
       </p>
       <div class={styles.comingSoon}>
         <span class={styles.comingSoonBadge}>Coming soon</span>
-        Direct migration from YNAB, Mint and other budgeting apps.
+        Direct migration from Mint and other budgeting apps — YNAB CSV exports already import right
+        here.
       </div>
 
       <Show when={importFlow.error()}>
@@ -605,24 +694,26 @@ export function OnboardingWizard() {
           {importFlow.resultMessage()!.text}
         </div>
       </Show>
-      <Show when={importFlow.loading()}>
+      {/* dropProcessing has its own inline spinner in the dropzone — don't
+          stack the page-sized overlay on top of it. */}
+      <Show when={importFlow.loading() && !importFlow.dropProcessing()}>
         <div class={importStyles.loadingOverlay} data-test-id="onboarding-import-loading">
           <OrbitSpinner size={72} label="Processing your data…" />
         </div>
       </Show>
 
       <Show
-        when={importSummary()}
+        when={showingSummary()}
         fallback={
           <div class={styles.importEmbed}>
             <Show when={importFlow.activeStep() === 'upload'}>
               <ImportDataEntry flow={importFlow} compact />
             </Show>
             <Show when={importFlow.activeStep() === 'mapping'}>
-              <ImportMappingStep flow={importFlow} />
+              <ImportMappingStep flow={importFlow} embedded />
             </Show>
             <Show when={importFlow.activeStep() === 'preview'}>
-              <ImportPreviewStep flow={importFlow} />
+              <ImportPreviewStep flow={importFlow} embedded />
             </Show>
           </div>
         }
@@ -654,7 +745,9 @@ export function OnboardingWizard() {
             class={styles.secondaryAction}
             onClick={() => {
               importFlow.resetForm()
-              setImportSummary(null)
+              // Keep the summary — totals accumulate across batches; the flag
+              // swaps the panel back to the embedded importer.
+              setImportingMore(true)
             }}
           >
             Import more files
@@ -724,8 +817,18 @@ export function OnboardingWizard() {
     </div>
   )
 
-  // Footer primary action per step.
-  const primaryAction = () => {
+  // Footer primary action per step. `testId` overrides the default
+  // onboarding-next/onboarding-finish id; `secondary` is a low-prominence
+  // escape rendered as a ghost button beside the primary.
+  interface FooterAction {
+    label: string
+    run: () => void
+    disabled: boolean
+    testId?: string
+    secondary?: { label: string; run: () => void; disabled?: boolean; testId: string }
+  }
+
+  const primaryAction = (): FooterAction | undefined => {
     switch (onboardingStep()) {
       case 'welcome':
         return {
@@ -747,12 +850,49 @@ export function OnboardingWizard() {
           run: () => void continueFromAccounts(),
           disabled: creatingAccount() || !accountsLoaded(),
         }
-      case 'import':
-        return {
-          label: importSummary() ? 'Continue' : 'Continue without importing',
+      case 'import': {
+        // The footer carries the import flow's true forward action at each
+        // sub-step, so the user never has to hunt for it mid-scroll.
+        if (showingSummary()) {
+          return {
+            label: 'Continue',
+            run: () => {
+              nextOnboardingStep()
+            },
+            disabled: false,
+          }
+        }
+        const dontImport = {
+          label: "Don't import",
           run: () => void continueFromImport(),
           disabled: importFlow.loading(),
+          testId: 'onboarding-import-skip',
         }
+        switch (importFlow.activeStep()) {
+          case 'mapping':
+            return {
+              label: 'Continue to preview',
+              run: () => void importFlow.goToPreview(),
+              disabled: importFlow.loading(),
+              testId: 'onboarding-import-to-preview',
+              secondary: dontImport,
+            }
+          case 'preview':
+            return {
+              label: `Import selected (${importFlow.selectedRows().size})`,
+              run: () => void importFlow.handleImport('selected'),
+              disabled: importFlow.loading() || importFlow.selectedRows().size === 0,
+              testId: 'onboarding-import-selected',
+              secondary: dontImport,
+            }
+          default:
+            return {
+              label: 'Continue without importing',
+              run: () => void continueFromImport(),
+              disabled: importFlow.loading(),
+            }
+        }
+      }
       case 'subscriptions':
         return {
           label: 'Continue',
@@ -822,7 +962,11 @@ export function OnboardingWizard() {
               <button
                 class={styles.ghostBtn}
                 data-test-id="onboarding-back"
-                onClick={prevOnboardingStep}
+                disabled={onboardingStep() === 'import' && importFlow.loading()}
+                onClick={() => {
+                  if (onboardingStep() === 'import') backFromImport()
+                  else prevOnboardingStep()
+                }}
               >
                 Back
               </button>
@@ -832,14 +976,30 @@ export function OnboardingWizard() {
                 <button
                   class={styles.ghostBtn}
                   data-test-id="onboarding-skip"
+                  disabled={onboardingStep() === 'import' && importFlow.loading()}
                   onClick={() => void requestSkipAll()}
                 >
                   Skip setup
                 </button>
               </Show>
+              <Show when={primaryAction()!.secondary}>
+                <button
+                  class={styles.ghostBtn}
+                  data-test-id={primaryAction()!.secondary!.testId}
+                  disabled={primaryAction()!.secondary!.disabled}
+                  onClick={() => {
+                    primaryAction()!.secondary!.run()
+                  }}
+                >
+                  {primaryAction()!.secondary!.label}
+                </button>
+              </Show>
               <button
                 class={styles.primaryBtn}
-                data-test-id={onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next'}
+                data-test-id={
+                  primaryAction()!.testId ??
+                  (onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next')
+                }
                 disabled={primaryAction()!.disabled}
                 onClick={() => {
                   primaryAction()!.run()

@@ -3,18 +3,23 @@
  * fields and review detected category types (with per-account setup for values
  * flagged as accounts). Shared by the Import page and the onboarding wizard.
  */
-import { For } from 'solid-js'
+import { For, Show } from 'solid-js'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
 import type { ImportFlow } from './importFlow'
 
-export function ImportMappingStep(props: { flow: ImportFlow }) {
+/**
+ * `embedded`: rendered inside the onboarding wizard, whose footer carries the
+ * step's forward action — hide the in-body Cancel/Continue row so there's a
+ * single visible CTA. The standalone Import page omits it.
+ */
+export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean }) {
   const flow = props.flow
   const headers = () => flow.currentHeaders()
   return (
     <>
       <div class={styles.mappingSection}>
-        <h2 class={styles.mappingTitle}>Map Columns</h2>
+        <h2 class={styles.mappingTitle}>Map columns</h2>
         <p class={styles.mappingSubtitle}>
           Map your data columns to the 12 required fields. Fields in bold are required.
         </p>
@@ -56,7 +61,7 @@ export function ImportMappingStep(props: { flow: ImportFlow }) {
           }}
         >
           <h3 class={styles.categoryReviewTitle} style={{ margin: 0 }}>
-            Category Types
+            Category types
           </h3>
           <label
             style={{
@@ -91,7 +96,7 @@ export function ImportMappingStep(props: { flow: ImportFlow }) {
               <tr>
                 <th>Category</th>
                 <th class={styles.categoryTableType}>Type</th>
-                <th class={styles.categoryTableConfig}>Account Setup</th>
+                <th class={styles.categoryTableConfig}>Account setup</th>
               </tr>
             </thead>
             <tbody>
@@ -188,24 +193,26 @@ export function ImportMappingStep(props: { flow: ImportFlow }) {
 
       <div class={styles.previewHeader}>
         <span>
-          Total Rows: {flow.currentRows().length} | Mapped:{' '}
+          Total rows: {flow.currentRows().length} | Mapped:{' '}
           {Object.keys(flow.columnMapping()).length}/12
         </span>
-        <div class={styles.previewActions}>
-          <button class={`${styles.btn} ${styles.btnOutline}`} onClick={flow.resetForm}>
-            Cancel
-          </button>
-          <button
-            class={`${styles.btn} ${styles.btnPrimary}`}
-            data-test-id="import-continue-preview"
-            onClick={() => {
-              void flow.goToPreview()
-            }}
-            disabled={flow.loading()}
-          >
-            Continue to Preview
-          </button>
-        </div>
+        <Show when={!props.embedded}>
+          <div class={styles.previewActions}>
+            <button class={`${styles.btn} ${styles.btnOutline}`} onClick={flow.resetForm}>
+              Cancel
+            </button>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              data-test-id="import-continue-preview"
+              onClick={() => {
+                void flow.goToPreview()
+              }}
+              disabled={flow.loading()}
+            >
+              Continue to preview
+            </button>
+          </div>
+        </Show>
       </div>
     </>
   )

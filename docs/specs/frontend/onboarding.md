@@ -21,10 +21,11 @@ The Onboarding module greets brand-new users with a guided, orbital-themed setup
 
 ### 2.2. Steps
 
-- **REQ-ONB-010 (Welcome):** The wizard SHALL present the app's premise and the setup outline, with a "Begin setup" primary action.
+- **REQ-ONB-010 (Welcome):** The wizard SHALL present the app's premise and the setup outline, with a "Begin setup" primary action. In server mode it SHALL additionally offer a "Use local-only" switch that (after a confirm honest about any existing local workspace) suppresses the demo seed, clears the onboarding flag and server profile selection, flips storage to serverless, and relaunches setup.
 - **REQ-ONB-011 (Your space):** The wizard SHALL offer renaming the default profile (creating one when none exists) and picking the base display currency.
 - **REQ-ONB-012 (First account):** The wizard SHALL collect name, type, currency, opening balance, and optional tracking start date, SHALL allow creating multiple accounts, and SHALL list the created accounts.
 - **REQ-ONB-013 (Bring your data):** The wizard SHALL embed the app's import flow (Google Sheets, file upload, paste CSV, bank statements) with the bank tab preselected; bank statements SHALL support in-place account creation via the account picker. A disabled "Coming soon" tile SHALL reference budgeting-app migration.
+- **REQ-ONB-013a (Footer carries the import CTA):** On the import step the wizard footer SHALL surface the flow's true forward action per sub-step — mapping → "Continue to preview", preview → a live "Import selected (N)" (disabled at 0) — with a "Don't import" ghost escape beside "Skip setup", and Back SHALL walk the import sub-steps in reverse before leaving the step. The embedded mapping/preview components SHALL hide their in-body action rows (`embedded` prop); the standalone Import page keeps them. After a successful import the footer reverts to "Continue", and "Import more files" accumulates batch totals into one session summary.
 - **REQ-ONB-014 (Subscriptions):** WHEN the step opens, THEN the system SHALL scan the profile's recent transactions against the subscription catalogue/brand registry and SHALL propose matches with detected price and cadence, each editable (amount, period) and individually selectable before batch-adding as `type: 'subscription'` bills.
 - **REQ-ONB-015 (Done):** The wizard SHALL summarize what was set up and land the user on the dashboard.
 
