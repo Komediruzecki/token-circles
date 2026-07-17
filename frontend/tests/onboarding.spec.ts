@@ -210,11 +210,20 @@ test.describe('onboarding wizard', () => {
     await page.getByTestId('bank-target-account').selectOption('Revolut EUR')
     await page.getByTestId('bank-process-btn').click()
 
-    // Canonical table auto-maps; continue to preview and execute
-    await expect(page.getByTestId('import-continue-preview')).toBeVisible()
-    await page.getByTestId('import-continue-preview').click()
-    await expect(page.getByTestId('import-execute-all')).toBeVisible()
-    await page.getByTestId('import-execute-all').click()
+    // Canonical table auto-maps; the wizard FOOTER now carries the flow's
+    // forward action at each sub-step (mapping → preview → import).
+    await expect(page.getByTestId('onboarding-import-to-preview')).toBeVisible()
+    await page.getByTestId('onboarding-import-to-preview').click()
+
+    // Footer Back walks import sub-steps (preview → mapping), not wizard steps
+    await expect(page.getByTestId('onboarding-import-selected')).toBeVisible()
+    await page.getByTestId('onboarding-back').click()
+    await expect(page.getByTestId('import-map-date')).toBeVisible()
+    await page.getByTestId('onboarding-import-to-preview').click()
+
+    // Primary shows the live selection count (fixture = 7 unique rows) and imports
+    await expect(page.getByTestId('onboarding-import-selected')).toHaveText('Import selected (7)')
+    await page.getByTestId('onboarding-import-selected').click()
     await expect(page.getByTestId('onboarding-import-summary')).toBeVisible({ timeout: 15000 })
     await page.getByTestId('onboarding-next').click()
 

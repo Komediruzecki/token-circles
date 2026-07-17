@@ -28,6 +28,7 @@ import {
   prevOnboardingStep,
   skipOnboarding,
 } from '../../core/onboardingStore'
+import { getStorageMode, setStorageMode } from '../../core/storage/storageFactory'
 import importStyles from '../../features/Import.module.css'
 import { ImportDataEntry } from '../../features/import/ImportDataEntry'
 import { createImportFlow } from '../../features/import/importFlow'
@@ -375,9 +376,43 @@ export function OnboardingWizard() {
     }
   }
 
+  // Wizard Back walks the import sub-steps in reverse (preview → mapping →
+  // upload) before leaving the step — non-destructive, and deliberately via
+  // setActiveStep rather than goToMapping(), which would re-run auto-detection
+  // and clobber a manual remap. Once the summary is showing, Back leaves the
+  // step; "Import more files" is the designed way back into the flow.
+  const backFromImport = () => {
+    if (importSummary()) {
+      prevOnboardingStep()
+      return
+    }
+    const sub = importFlow.activeStep()
+    if (sub === 'preview') importFlow.setActiveStep('mapping')
+    else if (sub === 'mapping') importFlow.setActiveStep('upload')
+    else prevOnboardingStep()
+  }
+
   const finish = () => {
     completeOnboarding()
     window.location.hash = 'dashboard'
+  }
+
+  // Welcome-step escape hatch (server mode only): run the app local-only.
+  // Mirrors the pristine serverless state the E2E zero-state helper uses:
+  // suppress the example-data seed a first serverless init would create, flip
+  // the mode, reload — the pristine local workspace reopens this wizard.
+  const chooseLocalOnly = async () => {
+    const sure = await showConfirm(
+      'Use Token Circles locally on this device? Your data stays in this browser and never syncs to the cloud — no account needed. You can switch back any time in Settings.'
+    )
+    if (!sure) return
+    try {
+      localStorage.setItem('finance_had_profiles', '1')
+    } catch {
+      // Non-fatal: worst case the first init seeds the demo profiles.
+    }
+    setStorageMode('serverless')
+    window.location.reload()
   }
 
   // ---- step bodies ----
@@ -404,8 +439,8 @@ export function OnboardingWizard() {
         <li>
           <span class={styles.featureIcon}>{icons.inbox}</span>
           <span>
-            <b>Bring your history</b> — bank statements (Revolut, Erste, PBZ), CSV, or Google
-            Sheets.
+            <b>Bring your history</b> — bank statements (Revolut, N26, Erste and more), CSV, or
+            Google Sheets.
           </span>
         </li>
         <li>
@@ -423,6 +458,21 @@ export function OnboardingWizard() {
           </span>
         </li>
       </ul>
+      <Show when={getStorageMode() === 'self-hosted'}>
+        <div class={styles.localOnly}>
+          <span class={styles.localOnlyText}>
+            <b>Prefer local-only?</b> Keep everything in this browser — your data never leaves this
+            device, and you can switch back in Settings.
+          </span>
+          <button
+            class={styles.secondaryAction}
+            data-test-id="onboarding-local-only"
+            onClick={() => void chooseLocalOnly()}
+          >
+            Use local-only
+          </button>
+        </div>
+      </Show>
     </div>
   )
 
@@ -592,7 +642,8 @@ export function OnboardingWizard() {
       </p>
       <div class={styles.comingSoon}>
         <span class={styles.comingSoonBadge}>Coming soon</span>
-        Direct migration from YNAB, Mint and other budgeting apps.
+        Direct migration from Mint and other budgeting apps — YNAB CSV exports already import right
+        here.
       </div>
 
       <Show when={importFlow.error()}>
@@ -619,10 +670,10 @@ export function OnboardingWizard() {
               <ImportDataEntry flow={importFlow} compact />
             </Show>
             <Show when={importFlow.activeStep() === 'mapping'}>
-              <ImportMappingStep flow={importFlow} />
+              <ImportMappingStep flow={importFlow} embedded />
             </Show>
             <Show when={importFlow.activeStep() === 'preview'}>
-              <ImportPreviewStep flow={importFlow} />
+              <ImportPreviewStep flow={importFlow} embedded />
             </Show>
           </div>
         }
@@ -724,8 +775,18 @@ export function OnboardingWizard() {
     </div>
   )
 
-  // Footer primary action per step.
-  const primaryAction = () => {
+  // Footer primary action per step. `testId` overrides the default
+  // onboarding-next/onboarding-finish id; `secondary` is a low-prominence
+  // escape rendered as a ghost button beside the primary.
+  interface FooterAction {
+    label: string
+    run: () => void
+    disabled: boolean
+    testId?: string
+    secondary?: { label: string; run: () => void; disabled?: boolean; testId: string }
+  }
+
+  const primaryAction = (): FooterAction | undefined => {
     switch (onboardingStep()) {
       case 'welcome':
         return {
@@ -747,12 +808,49 @@ export function OnboardingWizard() {
           run: () => void continueFromAccounts(),
           disabled: creatingAccount() || !accountsLoaded(),
         }
-      case 'import':
-        return {
-          label: importSummary() ? 'Continue' : 'Continue without importing',
+      case 'import': {
+        // The footer carries the import flow's true forward action at each
+        // sub-step, so the user never has to hunt for it mid-scroll.
+        if (importSummary()) {
+          return {
+            label: 'Continue',
+            run: () => {
+              nextOnboardingStep()
+            },
+            disabled: false,
+          }
+        }
+        const dontImport = {
+          label: "Don't import",
           run: () => void continueFromImport(),
           disabled: importFlow.loading(),
+          testId: 'onboarding-import-skip',
         }
+        switch (importFlow.activeStep()) {
+          case 'mapping':
+            return {
+              label: 'Continue to preview',
+              run: () => void importFlow.goToPreview(),
+              disabled: importFlow.loading(),
+              testId: 'onboarding-import-to-preview',
+              secondary: dontImport,
+            }
+          case 'preview':
+            return {
+              label: `Import selected (${importFlow.selectedRows().size})`,
+              run: () => void importFlow.handleImport('selected'),
+              disabled: importFlow.loading() || importFlow.selectedRows().size === 0,
+              testId: 'onboarding-import-selected',
+              secondary: dontImport,
+            }
+          default:
+            return {
+              label: 'Continue without importing',
+              run: () => void continueFromImport(),
+              disabled: importFlow.loading(),
+            }
+        }
+      }
       case 'subscriptions':
         return {
           label: 'Continue',
@@ -822,7 +920,10 @@ export function OnboardingWizard() {
               <button
                 class={styles.ghostBtn}
                 data-test-id="onboarding-back"
-                onClick={prevOnboardingStep}
+                onClick={() => {
+                  if (onboardingStep() === 'import') backFromImport()
+                  else prevOnboardingStep()
+                }}
               >
                 Back
               </button>
@@ -837,9 +938,24 @@ export function OnboardingWizard() {
                   Skip setup
                 </button>
               </Show>
+              <Show when={primaryAction()!.secondary}>
+                <button
+                  class={styles.ghostBtn}
+                  data-test-id={primaryAction()!.secondary!.testId}
+                  disabled={primaryAction()!.secondary!.disabled}
+                  onClick={() => {
+                    primaryAction()!.secondary!.run()
+                  }}
+                >
+                  {primaryAction()!.secondary!.label}
+                </button>
+              </Show>
               <button
                 class={styles.primaryBtn}
-                data-test-id={onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next'}
+                data-test-id={
+                  primaryAction()!.testId ??
+                  (onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next')
+                }
                 disabled={primaryAction()!.disabled}
                 onClick={() => {
                   primaryAction()!.run()

@@ -333,6 +333,35 @@
   cursor: default;
 }
 
+/* Welcome-step "run local-only" escape hatch (server mode only). */
+.localOnly {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--card-bg) 65%, transparent);
+}
+
+.localOnly .secondaryAction {
+  align-self: center;
+  flex: none;
+}
+
+.localOnlyText {
+  flex: 1 1 240px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.localOnlyText b {
+  color: var(--text);
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
