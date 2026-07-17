@@ -155,6 +155,9 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
         props.onClose()
         return
       }
+      // Never hijack keyboard shortcuts (⌘K, Ctrl+digit tab-switch, …) — only
+      // plain keystrokes drive the amount.
+      if (e.ctrlKey || e.metaKey || e.altKey) return
       const el = document.activeElement as HTMLElement | null
       const inField =
         !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
