@@ -254,16 +254,41 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
+/* Selected indicator + "apply price" button. Transparent and inert until the
+   token is selected; then it turns brand-tinted and becomes a real control. */
 .check {
   font-family: var(--font-mono, monospace);
   font-weight: 700;
+  font-size: 13px;
   color: transparent;
   flex: none;
-  width: 14px;
-  text-align: center;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  pointer-events: none;
 }
 .tok.on .check {
   color: var(--tc);
+  pointer-events: auto;
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    transform 0.08s;
+}
+.tok.on .check:hover {
+  background: color-mix(in oklab, var(--tc) 16%, transparent);
+}
+.tok.on .check:active {
+  transform: scale(0.86);
+}
+.tok.on .check:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--tc) 70%, transparent);
+  outline-offset: 1px;
 }
 
 .empty {

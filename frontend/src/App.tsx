@@ -9,6 +9,7 @@ import {
   ErrorBoundary,
   For,
   lazy,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -124,6 +125,32 @@ export function App() {
   }
   // Touch-friendly quick entry (Guided Orbit), opened by the floating + button.
   const [isGuidedOpen, setIsGuidedOpen] = createSignal(false)
+
+  // Quick Add categories must follow the ACTIVE profile and stay current. The ⌘K
+  // command bar and the Guided Orbit both parse against / display this list, so a
+  // stale copy meant a switched-to profile showed the PREVIOUS profile's
+  // categories — and an entry could be saved with a category_id that doesn't
+  // belong to the current profile — until a full page reload. Reload it (a) on
+  // every profile switch (profileVersion bumps then) and once the user signs in,
+  // and (b) each time a quick-add opens, so a category added meanwhile shows up.
+  const reloadQuickAddCategories = () => {
+    // Server mode needs a session before /api/categories (avoids a 401).
+    if (serverMode && !isAuthenticated()) return
+    void (async () => {
+      try {
+        const cats = await api.getCategories()
+        if (Array.isArray(cats)) setQuickAddCategories(cats as Category[])
+      } catch {
+        /* non-critical — quick add still works, just without category hints */
+      }
+    })()
+  }
+  createEffect(on([() => state.profileVersion, isAuthenticated], reloadQuickAddCategories))
+  createEffect(
+    on([isQuickAddOpen, isGuidedOpen], () => {
+      if (isQuickAddOpen() || isGuidedOpen()) reloadQuickAddCategories()
+    })
+  )
 
   // Keep-alive page mounting: pages stay mounted after first visit, hidden
   // via CSS instead of destroyed. Navigation becomes instant — no re-fetch,
@@ -381,15 +408,7 @@ export function App() {
       setActivePage('dashboard')
     }
 
-    // Load categories for Quick Add (skip when the gate will show — avoids a 401).
-    if (loggedIn || !serverMode) {
-      try {
-        const cats = await api.getCategories()
-        if (Array.isArray(cats)) setQuickAddCategories(cats as Category[])
-      } catch {
-        /* non-critical */
-      }
-    }
+    // (Quick Add categories load reactively via the profileVersion effect above.)
 
     // Command Bar shortcut: Ctrl/Cmd+K (quick entry) or the legacy Ctrl/Cmd+Shift+T.
     const handleQuickAddKey = (e: KeyboardEvent) => {
