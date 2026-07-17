@@ -8,6 +8,15 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.7.1] — 2026-07-17
+
+### Fixed
+
+- In "Browse catalog" for subscriptions, a price you type now applies when you confirm it with the checkmark (or Enter), instead of snapping back to the default.
+- The "Create" button on an empty page — Savings Goals, Housing, and the rest — is centered again instead of stuck to the left.
+- Quick Add (⌘K and the + button) now shows the current profile's categories right after you switch profiles, no reload needed.
+- The + quick-add now has an "Add transaction" title, and on desktop you can type the amount on your keyboard and press Enter to move on, instead of clicking the on-screen keypad.
+
 ## [5.7.0] — 2026-07-17
 
 ### Added
