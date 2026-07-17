@@ -14,6 +14,8 @@ export default function ConfirmDialog() {
         >
           <div
             class={styles.dialog}
+            role="alertdialog"
+            aria-modal="true"
             onClick={(e) => {
               e.stopPropagation()
             }}
@@ -27,16 +29,16 @@ export default function ConfirmDialog() {
                   resolveConfirm(req.id, false)
                 }}
               >
-                Cancel
+                {req.cancelText}
               </button>
               <button
-                class={styles.btnConfirm}
+                class={`${styles.btnConfirm} ${req.danger ? styles.btnDanger : ''}`}
                 data-test-id="confirm-accept"
                 onClick={() => {
                   resolveConfirm(req.id, true)
                 }}
               >
-                Confirm
+                {req.confirmText}
               </button>
             </div>
           </div>

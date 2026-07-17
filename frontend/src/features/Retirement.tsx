@@ -535,6 +535,8 @@ export default function Retirement() {
                             <ConfirmButton
                               class={`${styles.btnSm} ${styles.btnGhost}`}
                               onConfirm={() => deleteGoal(goal.id)}
+                              message="Delete this retirement goal? This can’t be undone."
+                              aria-label="Delete retirement goal"
                               label={
                                 <svg
                                   width="16"
