@@ -199,8 +199,10 @@ export class ApiClient {
   }
 
   /**
-   * Register an email/password account (worker: POST /api/auth/register). Sets the session
-   * cookie on success; the caller should reload so the app re-checks /auth/me.
+   * Register an email/password account (worker: POST /api/auth/register). Anti-enumeration:
+   * the worker always resolves with a neutral ok and NO session cookie, whether or not the
+   * email already existed — the caller signs in afterwards (see the auto-sign-in flow in
+   * LoginScreen/LoginModal).
    */
   async register(email: string, password: string, turnstileToken?: string): Promise<void> {
     await this.request('/auth/register', undefined, {
@@ -240,8 +242,8 @@ export class ApiClient {
   }
 
   /**
-   * Set a new password from a reset token (worker: POST /api/auth/reset-password). On success the
-   * worker sets the session cookie, so the caller can reload straight into the app.
+   * Set a new password from a reset token (worker: POST /api/auth/reset-password). The worker
+   * deliberately does NOT set a session cookie — the caller sends the user to sign in.
    */
   async resetPassword(token: string, password: string): Promise<void> {
     await this.request('/auth/reset-password', undefined, {
