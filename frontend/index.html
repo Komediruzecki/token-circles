@@ -47,8 +47,9 @@
          stale index.html is gone, the entry module fails to load and the app never mounts —
          so the in-app crash screen (which lives *inside* that bundle) can't help. This inline
          script runs with zero dependencies: if an app asset errors before boot, or the app
-         hasn't signaled boot in time, it clears the service worker + caches and reloads ONCE
-         (a plain reload won't fix a stale SW), then falls back to a manual recovery panel. -->
+         hasn't signaled boot in time, it clears the service worker + caches and reloads once
+         per cooldown window (a plain reload won't fix a stale SW), then falls back to a
+         manual recovery panel. -->
     <script>
       ;(function () {
         var booted = function () {
@@ -152,18 +153,23 @@
         function recover() {
           if (recovering || booted()) return
           recovering = true
-          var alreadyTried = false
+          // One auto-recovery per cooldown window, not per session: back-to-back releases can
+          // legitimately need this twice in one long-lived tab (each deploy gets one clean
+          // clear+reload), while a genuinely broken build still can't loop — repeats inside
+          // the window hand off to the user panel. The legacy value '1' parses as an ancient
+          // timestamp, so pre-cooldown sessions are allowed to recover again.
+          var RECOVER_COOLDOWN_MS = 2 * 60 * 1000
+          var recentlyTried = false
           try {
-            alreadyTried = sessionStorage.getItem('tc-recovered') === '1'
+            var last = Number(sessionStorage.getItem('tc-recovered') || 0)
+            recentlyTried = last > 0 && Date.now() - last < RECOVER_COOLDOWN_MS
           } catch (e) {}
-          if (alreadyTried) {
-            // We already cleared + reloaded once this session and it still failed — hand off
-            // to the user rather than looping.
+          if (recentlyTried) {
             showPanel()
             return
           }
           try {
-            sessionStorage.setItem('tc-recovered', '1')
+            sessionStorage.setItem('tc-recovered', String(Date.now()))
           } catch (e) {}
           clearCachesAndSW().then(function () {
             location.reload()

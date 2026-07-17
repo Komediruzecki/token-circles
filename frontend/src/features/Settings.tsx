@@ -38,6 +38,7 @@ import Toggle from '../components/Toggle'
 import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
+import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { startOnboarding } from '../core/onboardingStore'
 import { period } from '../core/periodStore'
@@ -1537,7 +1538,11 @@ export default function Settings() {
                     guided first-run setup (accounts, imports, subscriptions) at any time.
                   </p>
                   <p style="margin-top: 4px; color: var(--text-secondary); font-size: 11px; font-family: monospace;">
-                    v{__APP_VERSION__} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
+                    v{displayVersion()} {__GIT_SHA__ !== 'unknown' ? `(${__GIT_SHA__})` : ''}
+                    <Show when={updateAvailable() && serverVersion()}>
+                      {' '}
+                      — v{serverVersion()} available, loads on your next navigation
+                    </Show>
                   </p>
                   <div style="margin-top: 12px;">
                     <SupportContact />

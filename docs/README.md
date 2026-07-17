@@ -14,6 +14,7 @@
 
 - [Self-Hosting Guide](self-hosting.md) — Docker, reverse proxy, environment variables
 - [Docker Guide](docker.md) — Container setup and configuration
+- [Deploy-Update Pipeline](deploy-update-pipeline.md) — How open tabs cross a release: service worker, version.json, reload bounds, manual verification
 - [Docker Compose](../docker-compose.yml) — One-command production deployment
 - [Dockerfile](../Dockerfile) — Container image definition
 
