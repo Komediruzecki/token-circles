@@ -97,10 +97,27 @@
   -webkit-backdrop-filter: blur(14px) saturate(130%);
 }
 
-.dropzone:hover,
-.dropzone.dragOver {
+.dropzone:hover {
   border-color: var(--primary);
   background: color-mix(in oklab, var(--primary) 6%, var(--card-bg));
+}
+
+/* Active file drag: unmistakably "release here" — solid accent border, deeper
+   wash, and a soft outer glow. Stronger than :hover on purpose. */
+.dropzone.dragOver {
+  border-color: var(--primary);
+  border-style: solid;
+  background: color-mix(in oklab, var(--primary) 12%, var(--card-bg));
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+/* Supported banks/formats inside the dropzone. */
+.formatPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
 }
 
 .dropzone.disabled {
