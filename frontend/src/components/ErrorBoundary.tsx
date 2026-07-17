@@ -1,4 +1,5 @@
 import { createSignal, ErrorBoundary as SolidErrorBoundary, onCleanup, onMount } from 'solid-js'
+import { displayVersion } from '../core/appVersion'
 import { isChunkLoadError } from '../core/bootRecovery'
 import type { Component, JSX } from 'solid-js'
 
@@ -230,7 +231,7 @@ function CrashModal(props: {
             'margin-bottom': '1rem',
           }}
         >
-          Version: {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'}
+          Version: {displayVersion()}
           {' — '}
           <a
             href="https://github.com/Komediruzecki/finance-manager/issues/new"

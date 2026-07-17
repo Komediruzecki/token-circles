@@ -12,12 +12,18 @@ const ANALYZE_BUNDLE = process.env.VITE_ANALYZE_BUNDLE === 'true'
 
 // Single source of truth for the build identity, shared by the `define` constants and the
 // version.json the app polls to detect a new deployment. Version comes from the release tag
-// (GITHUB_REF_NAME on a tag deploy, else the nearest tag, else package.json); sha pins the commit.
+// (GITHUB_REF_NAME on a tag deploy, else git describe, else package.json); sha pins the commit.
 const APP_VERSION = (() => {
   const ref = process.env.GITHUB_REF_NAME
   if (ref && /^v\d/.test(ref)) return ref.replace(/^v/, '')
   try {
-    return execSync('git describe --tags --abbrev=0').toString().trim().replace(/^v/, '')
+    // `git describe --tags` (NOT --abbrev=0): an exact tag checkout stamps the tag itself,
+    // while any commit past the tag stamps e.g. `5.6.0-2-gf6ba930`. A non-tag build (dev
+    // deploy, workflow_dispatch from main) therefore can never impersonate a release — with
+    // --abbrev=0 a prod dispatch between a merged fix and its tag shipped NEWER code labeled
+    // with the PREVIOUS release's version, which is exactly the "label says 5.6.0 but the
+    // 5.6.1 fix works" skew observed in prod.
+    return execSync('git describe --tags').toString().trim().replace(/^v/, '')
   } catch {
     return packageJson.version
   }
@@ -29,6 +35,14 @@ const GIT_SHA = (() => {
     return 'unknown'
   }
 })()
+
+// One-time service-worker reset marker, stamped into index.html (see the sw-cleanup plugin).
+// Bump ONLY when the SW caching strategy changes so incompatibly that already-installed
+// workers must be dropped once (a normal sw.js update can't fix them). Do NOT tie this to the
+// release version: unregistering on EVERY release tore down and re-registered the SW on the
+// first load of each new version, racing the fresh registration — one ingredient of the
+// multi-reload deploy transitions this epoch replaces.
+const SW_CLEANUP_EPOCH = 'nav-network-first-1'
 
 export default defineConfig(({ mode }) => {
   // Service worker / PWA only in the production build. The dev-domain build
@@ -64,12 +78,13 @@ export default defineConfig(({ mode }) => {
         name: 'sw-cleanup',
         transformIndexHtml(html) {
           if (isProd) {
-            // Prod ships a service worker; unregister it only when the app version
-            // changes (clean recovery from a bad/old SW state).
-            const ver = packageJson.version
+            // Prod ships a service worker; unregister it only when SW_CLEANUP_EPOCH changes
+            // (a one-time strategy migration), then re-register immediately so the tab is not
+            // left without a worker until the next load. The marker is only advanced after
+            // the unregisters settle, so an interrupted cleanup retries on the next load.
             return html.replace(
               '<head>',
-              `<head><script>(function(){var k='fm-sw-ver',v='${ver}';if('serviceWorker' in navigator&&localStorage.getItem(k)!==v){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})});localStorage.setItem(k,v)}})()</script>`
+              `<head><script>(function(){var k='fm-sw-ver',v='${SW_CLEANUP_EPOCH}';if('serviceWorker' in navigator&&localStorage.getItem(k)!==v){navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}).catch(function(){}).then(function(){localStorage.setItem(k,v);navigator.serviceWorker.register('./sw.js').catch(function(){})})}})()</script>`
             )
           }
           // Dev / non-prod: no service worker. Unregister any stale one and drop its
@@ -144,28 +159,50 @@ export default defineConfig(({ mode }) => {
                 ],
               },
               workbox: {
-                // Precache the offline shell (icons, self-hosted fonts, index.html). JS/CSS are
-                // content-hashed and served NetworkFirst below, not precached.
-                globPatterns: ['**/*.{html,ico,png,svg,woff2}'],
+                // Precache only the truly-static offline shell (icons, self-hosted fonts).
+                // index.html is deliberately NOT precached and navigateFallback is OFF: every
+                // navigation resolves against the network first (the edge serves it no-cache),
+                // so an open tab can never be re-served a stale shell by its OWN service worker
+                // after a deploy. Precached-index + navigateFallback was the root cause of the
+                // multi-reload update loop: a version-mismatch reload got the OLD index.html
+                // back from the old SW, whose hashed chunks were already deleted server-side.
+                globPatterns: ['**/*.{ico,png,svg,woff2}'],
                 // A new SW takes over immediately and old precaches are purged, so a deploy can't
                 // leave a client pinned to a stale shell that references now-deleted chunks.
                 cleanupOutdatedCaches: true,
                 clientsClaim: true,
                 skipWaiting: true,
-                // The SPA navigation fallback must NEVER apply to hashed assets, the API, the
-                // version stamp, or the SW itself — those must resolve to real network responses
-                // (a missing chunk has to fail as a 404, never as index.html).
-                navigateFallbackDenylist: [
-                  /^\/api\//,
-                  /^\/assets\//,
-                  /\/version\.json$/,
-                  /\/sw\.js$/,
-                ],
+                // Explicit undefined overrides the plugin's `index.html` default (the options
+                // are merged with Object.assign, so the key must be present to win). With no
+                // navigation fallback, hashed assets / the API / version.json / sw.js all
+                // resolve to real network responses — a missing chunk fails as an honest 404
+                // (server/assets-worker.ts guarantees that edge-side).
+                navigateFallback: undefined,
                 runtimeCaching: [
                   {
                     // The version stamp is a freshness probe — always hit the network, never cache.
                     urlPattern: ({ url }) => url.pathname === '/version.json',
                     handler: 'NetworkOnly',
+                  },
+                  {
+                    // Navigations (the entry document). Online: always the fresh index.html —
+                    // the edge serves it no-cache, so a deploy is picked up on the very next
+                    // (re)load. Offline / degraded: fall back to the last good shell so the
+                    // installed PWA still boots. Registered before the catch-all so pages get
+                    // their own cache and a fast offline fallback timeout.
+                    urlPattern: ({ request }) => request.mode === 'navigate',
+                    handler: 'NetworkFirst',
+                    options: {
+                      cacheName: 'finance-manager-pages-v1',
+                      networkTimeoutSeconds: 4,
+                      expiration: {
+                        maxEntries: 10,
+                        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                      },
+                      cacheableResponse: {
+                        statuses: [200],
+                      },
+                    },
                   },
                   {
                     urlPattern: ({ request }) =>
@@ -174,11 +211,16 @@ export default defineConfig(({ mode }) => {
                     options: {
                       // v4: a fresh cache name so a client carrying a pre-fix, poisoned v3 entry
                       // (a 200 text/html cached for a script) can never replay it after this ships.
+                      // (New poisoning is impossible: asset misses are real 404s at the edge and
+                      // only 200s are cached here.)
                       cacheName: 'finance-manager-js-css-v4',
                       networkTimeoutSeconds: 10,
                       expiration: {
                         maxEntries: 30,
-                        maxAgeSeconds: 5 * 60, // 5 minutes max
+                        // 7 days: online loads are network-first anyway, so a long age only
+                        // decides how far back the OFFLINE fallback reaches. The previous 5
+                        // minutes made offline boots fail for any tab older than one poll.
+                        maxAgeSeconds: 7 * 24 * 60 * 60,
                       },
                       // Cache only a genuine 200 — never an opaque/error response.
                       cacheableResponse: {
