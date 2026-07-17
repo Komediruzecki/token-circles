@@ -63,6 +63,17 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   const pickPlan = (item: CatalogItem, price: number) => {
     setSelected((prev) => ({ ...prev, [item.name]: String(price) }))
   }
+  // Commit the typed price for a selected item: normalize the raw text to a
+  // clean number (an empty field falls back to the catalog default) and keep
+  // the item selected. This is what the row's ✓ does — it must NOT bubble up
+  // to the row toggle, which would deselect and discard the edit.
+  const applyPrice = (item: CatalogItem) => {
+    setSelected((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, item.name)) return prev
+      const raw = (prev[item.name] ?? '').trim()
+      return { ...prev, [item.name]: raw === '' ? String(item.price) : String(priceOf(raw)) }
+    })
+  }
 
   const groups = createMemo(() => {
     const q = search().trim().toLowerCase()
@@ -199,7 +210,10 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
                 }}
                 onKeyDown={(e) => {
                   e.stopPropagation()
-                  if (e.key === 'Enter') e.currentTarget.blur()
+                  if (e.key === 'Enter') {
+                    applyPrice(item)
+                    e.currentTarget.blur()
+                  }
                 }}
                 onInput={(e) => {
                   setPriceText(item.name, e.currentTarget.value)
@@ -208,9 +222,22 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
               />
             </span>
           </Show>
-          <span class={styles.check} aria-hidden="true">
+          {/* Selected-state indicator that doubles as an explicit "apply price"
+              button once selected. stopPropagation so it never bubbles to the
+              row toggle (which would deselect and throw away the typed price). */}
+          <button
+            type="button"
+            class={styles.check}
+            tabindex={isSelected(item.name) ? 0 : -1}
+            aria-label={isSelected(item.name) ? `Apply ${item.name} price` : `Add ${item.name}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (isSelected(item.name)) applyPrice(item)
+              else toggle(item)
+            }}
+          >
             ✓
-          </span>
+          </button>
         </div>
 
         <Show when={item.plans && item.plans.length > 0}>

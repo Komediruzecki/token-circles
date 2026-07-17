@@ -215,6 +215,11 @@
   padding: 48px;
   text-align: center;
   color: var(--text-secondary);
+  /* Center the create button (it's display:flex, so text-align alone leaves it
+     stuck to the left). */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .goals-page .empty-state p {
   margin: 8px 0;
