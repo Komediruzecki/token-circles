@@ -203,8 +203,9 @@ test.describe('Housing', () => {
       const first = deleteBtns.first()
       await expect(first).toBeVisible()
       await first.click()
-      // ConfirmButton swaps the trash button for an inline Confirm?/Yes/No affordance; the
-      // wrapper (and its confirm control) stay in place.
+      // The trash button opens the shared confirm modal; cancelling leaves the row intact.
+      await expect(getByTestId(page, 'confirm-accept')).toBeVisible()
+      await getByTestId(page, 'confirm-cancel').click()
       await expect(first).toBeVisible()
     } else {
       await expect(getByTestId(page, 'housing-empty')).toBeVisible()

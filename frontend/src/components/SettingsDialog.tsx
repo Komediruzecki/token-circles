@@ -337,7 +337,8 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
               onConfirm={() => {
                 void _handleReset()
               }}
-              confirmLabel="This will permanently delete all your data. Continue?"
+              message="This permanently deletes all your data on this device. Continue?"
+              confirmText="Reset everything"
               label="Reset All Data"
             />
           </div>

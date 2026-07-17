@@ -195,6 +195,9 @@ export function LogViewer() {
           <ConfirmButton
             class={css.btn}
             onConfirm={clearLogs}
+            message="Clear all debug logs?"
+            confirmText="Clear"
+            aria-label="Clear logs"
             label={
               <>
                 <svg

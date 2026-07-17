@@ -194,6 +194,8 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
           onConfirm={() => {
             props.onDelete(sub().id)
           }}
+          message="Delete this subscription? This can’t be undone."
+          aria-label="Delete subscription"
           label="Delete"
         />
       </div>

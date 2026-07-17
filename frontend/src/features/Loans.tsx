@@ -502,6 +502,8 @@ export default function Loans() {
                           <ConfirmButton
                             class={`${styles.btnSm} ${styles.btnGhost}`}
                             onConfirm={() => deleteLoan(loan.id)}
+                            message="Delete this loan? This can’t be undone."
+                            aria-label="Delete loan"
                             label={
                               <svg
                                 width="16"
