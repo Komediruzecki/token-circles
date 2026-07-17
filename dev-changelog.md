@@ -9,6 +9,15 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.7.1] — 2026-07-17
+
+### Fixed
+
+- SubscriptionCatalogModal: the price ✓ was a decorative `aria-hidden` selected-indicator with no handler — clicking it bubbled to the row toggle and deselected the item, discarding the typed price (re-selecting reset to the catalog default). Now a real apply button: `stopPropagation`, normalize the raw text (`,`→`.`, empty → catalog default) and keep the item selected; Enter in the field applies too. `.check` is inert (`pointer-events:none`) until `.tok.on`. The submitted amount always flowed through `priceOf()` at read time, so this is a display/UX fix, not a data fix.
+- Empty-state create button was left-aligned: `.empty-state` used `text-align:center`, which centers text but not the `display:flex` button. Now a centered flex column across Goals/Housing/Retirement/Budgets/Accounts/Categories (Bills already had it; Dashboard has no CTA). Loans has no empty-state styling at all — separate follow-up.
+- Quick Add categories (⌘K command bar + Guided Orbit) were loaded once at app mount and never refreshed, so after a profile switch the picker showed the previous profile's categories, the natural-language parser matched foreign ones, and an entry could be saved with a `category_id` not in the active profile (silently failing to add) until a full reload. A shared `reloadQuickAddCategories()` now runs on profile switch (`profileVersion`) + sign-in and on each quick-add open (category CRUD refetches locally without bumping `profileVersion`, so the open-trigger is needed alongside the switch-trigger). Ordering is safe: `selectProfile` writes `currentProfileId` before bumping the version, and the profile id is read from localStorage at request time.
+- Guided Orbit (the floating + quick-add) shows on desktop but had no title and forced clicking the on-screen keypad: added an "Add transaction" heading and physical-keyboard entry while open — digits / `.` / Backspace / Enter (advance, or submit on the confirm step) / Escape (close), with a modifier-key guard so `⌘K`/`Ctrl+digit` shortcuts aren't hijacked. The confirm step's text/date inputs keep their own typing; touch users keep the keypad.
+
 ## [5.7.0] — 2026-07-17
 
 ### Added
