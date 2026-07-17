@@ -62,6 +62,7 @@ import OrbitalDivider from '../components/OrbitalDivider'
 import SubscriptionCard from '../components/SubscriptionCard'
 import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
+import Toggle from '../components/Toggle'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -801,6 +802,8 @@ export default function Bills() {
                               <ConfirmButton
                                 class={`${styles.btnSm} ${styles.btnGhost}`}
                                 onConfirm={() => deleteBill(bill.id)}
+                                message="Delete this bill? This can’t be undone."
+                                aria-label="Delete bill"
                                 label={
                                   <svg
                                     width="16"
@@ -967,14 +970,11 @@ export default function Bills() {
                     Automatically pay this bill
                   </span>
                 </label>
-                <label class={styles.toggleSwitch}>
-                  <input
-                    type="checkbox"
-                    checked={formData().autopay}
-                    oninput={(e) => setFormData({ ...formData(), autopay: e.target.checked })}
-                  />
-                  <span class={styles.toggleSlider}></span>
-                </label>
+                <Toggle
+                  checked={() => formData().autopay}
+                  onChange={(v) => setFormData({ ...formData(), autopay: v })}
+                  aria-label="Automatically pay this bill"
+                />
               </div>
               <div class={styles.modalFooter}>
                 <button

@@ -31,6 +31,7 @@ import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import RenewalCycle from '../components/RenewalCycle'
+import Toggle from '../components/Toggle'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -357,6 +358,8 @@ export default function HousingForm() {
                       <ConfirmButton
                         class={`${styles.btnSm} ${styles.btnGhost}`}
                         onConfirm={() => deleteHousing(housing.id)}
+                        message="Delete this housing entry? This can’t be undone."
+                        aria-label="Delete housing entry"
                         label={
                           <svg
                             width="16"
@@ -524,15 +527,12 @@ export default function HousingForm() {
                     Automatically pay this expense
                   </span>
                 </label>
-                <label class={styles.toggleSwitch}>
-                  <input
-                    type="checkbox"
-                    data-test-id="housing-autopay-toggle"
-                    checked={formData().autopay}
-                    oninput={(e) => setFormData({ ...formData(), autopay: e.target.checked })}
-                  />
-                  <span class={styles.toggleSlider}></span>
-                </label>
+                <Toggle
+                  data-test-id="housing-autopay-toggle"
+                  checked={() => formData().autopay}
+                  onChange={(v) => setFormData({ ...formData(), autopay: v })}
+                  aria-label="Automatically pay this expense"
+                />
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Notes (optional)</label>

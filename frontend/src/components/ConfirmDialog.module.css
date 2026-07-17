@@ -64,3 +64,12 @@
 .btnConfirm:hover {
   background: var(--primary-hover, #1d4ed8);
 }
+
+/* Destructive confirm (delete / reset). */
+.btnDanger {
+  background: var(--danger, #ef4444);
+}
+
+.btnDanger:hover {
+  background: color-mix(in oklab, var(--danger, #ef4444) 85%, #000);
+}

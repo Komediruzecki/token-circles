@@ -403,6 +403,8 @@ export default function Goals() {
                           <ConfirmButton
                             class={styles.btnSm}
                             onConfirm={() => deleteGoal(goal.id)}
+                            message="Delete this savings goal? This can’t be undone."
+                            aria-label="Delete goal"
                             label={
                               <svg
                                 width="16"

@@ -176,9 +176,12 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
         </Show>
       </div>
 
-      {/* Bank-statement rules: tweak categorization/transfers and recalculate in place */}
+      {/* Bank-statement rules: tweak categorization/transfers and recalculate in place.
+          Spaced so the collapsible control isn't glued to the action bar or the table. */}
       <Show when={flow.bankFiles().length > 0}>
-        <BankRulesEditor flow={flow} onRecalculate={() => void flow.recalculateBankPreview()} />
+        <div style={{ margin: '20px 0' }}>
+          <BankRulesEditor flow={flow} onRecalculate={() => void flow.recalculateBankPreview()} />
+        </div>
       </Show>
 
       {/* Table */}

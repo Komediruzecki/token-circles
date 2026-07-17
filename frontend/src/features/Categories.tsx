@@ -333,6 +333,8 @@ export default function Categories() {
                         <ConfirmButton
                           class={`${styles.btnSm} ${styles.btnGhost}`}
                           onConfirm={() => deleteCategory(category.id)}
+                          message="Delete this category? This can’t be undone."
+                          aria-label="Delete category"
                           label={
                             <svg
                               width="16"

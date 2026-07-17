@@ -212,7 +212,9 @@
   z-index: 999;
   width: 320px;
   max-width: calc(100vw - 20px);
-  background: var(--card-bg);
+  /* Solid surface — must fully hide the calendar grid behind it (see the glass
+     note further down for why this popover is not translucent). */
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
@@ -404,9 +406,12 @@
   }
 }
 
-/* Brand glass on the calendar summary + popover. */
-.calSummaryItem,
-.popover {
+/* Brand glass on the calendar summary tiles (they sit over the page ground, so
+   translucency reads fine there). The day-detail popover is deliberately NOT
+   glassy: it floats over the busy calendar grid, and a translucent background
+   let the day numbers bleed through and clash with its text — its base rule
+   above uses a solid `--surface` instead. */
+.calSummaryItem {
   background: color-mix(in oklab, var(--card-bg) 78%, transparent);
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);

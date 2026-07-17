@@ -123,7 +123,13 @@ export default function RecurringSection(props: RecurringSectionProps) {
   }
 
   const handleDelete = async (item: RecurringTransaction) => {
-    if (!(await showConfirm(`Delete recurring "${item.description}"?`))) return
+    if (
+      !(await showConfirm(`Delete recurring "${item.description}"?`, {
+        danger: true,
+        confirmText: 'Delete',
+      }))
+    )
+      return
     try {
       await api.deleteRecurring(item.id)
       await loadItems()
@@ -391,9 +397,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
                     }}
                   >
                     <option value="">None (reminder only)</option>
-                    <For each={props.accounts}>
-                      {(a) => <option value={a.id}>{a.name}</option>}
-                    </For>
+                    <For each={props.accounts}>{(a) => <option value={a.id}>{a.name}</option>}</For>
                   </select>
                 </div>
                 <Show when={formType() === 'transfer'}>

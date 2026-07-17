@@ -217,7 +217,13 @@ export default function Transactions() {
   const deleteReceipt = async () => {
     const receipt = selectedReceipt()
     if (!receipt) return
-    if (!(await showConfirm(`Delete receipt "${receipt.original_name}"?`))) return
+    if (
+      !(await showConfirm(`Delete receipt "${receipt.original_name}"?`, {
+        danger: true,
+        confirmText: 'Delete',
+      }))
+    )
+      return
 
     try {
       await api.deleteReceipt(receipt.id)
@@ -246,7 +252,13 @@ export default function Transactions() {
   }
 
   const handleDeleteTransaction = async (transaction: Transaction) => {
-    if (!(await showConfirm(`Delete transaction "${transaction.description}"?`))) return
+    if (
+      !(await showConfirm(`Delete transaction "${transaction.description}"?`, {
+        danger: true,
+        confirmText: 'Delete',
+      }))
+    )
+      return
     try {
       await api.deleteTransaction(transaction.id)
       await refreshTransactions()
@@ -260,7 +272,8 @@ export default function Transactions() {
     if (ids.length === 0) return
     if (
       !(await showConfirm(
-        `Delete ${ids.length} selected transaction${ids.length !== 1 ? 's' : ''}?`
+        `Delete ${ids.length} selected transaction${ids.length !== 1 ? 's' : ''}?`,
+        { danger: true, confirmText: 'Delete' }
       ))
     )
       return
@@ -1310,7 +1323,8 @@ export default function Transactions() {
                                 // Removing a stored receipt deletes it server-side
                                 if (
                                   !(await showConfirm(
-                                    `Delete receipt "${existing.original_name}"?`
+                                    `Delete receipt "${existing.original_name}"?`,
+                                    { danger: true, confirmText: 'Delete' }
                                   ))
                                 )
                                   return

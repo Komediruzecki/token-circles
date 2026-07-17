@@ -450,7 +450,8 @@ export default function Accounts() {
                               <ConfirmButton
                                 class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                                 onConfirm={() => deleteAccount(account.id)}
-                                confirmLabel="Delete? This will remove all related transactions."
+                                message="Delete this account? This also removes all of its transactions."
+                                aria-label="Delete account"
                                 label={
                                   <svg
                                     width="16"

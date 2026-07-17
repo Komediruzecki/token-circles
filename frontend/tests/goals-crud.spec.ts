@@ -265,8 +265,10 @@ test.describe('Goals CRUD Operations', () => {
     const deleteBtn = page.getByTestId('goal-delete-btn').first()
     await expect(deleteBtn).toBeVisible()
     await deleteBtn.click()
-    // ConfirmButton swaps to an inline confirm prompt after the first click (no deletion yet).
-    await expect(deleteBtn).toContainText(/Confirm|Yes/i)
+    // Opens the shared confirm modal (no deletion yet); cancelling leaves the goal.
+    await expect(page.getByTestId('confirm-accept')).toBeVisible()
+    await page.getByTestId('confirm-cancel').click()
+    await expect(deleteBtn).toBeVisible()
   })
 
   test('should handle console errors gracefully', async ({ page }) => {
