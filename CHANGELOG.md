@@ -8,6 +8,20 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.7.0] — 2026-07-17
+
+### Added
+
+- More banks in the importer. Alongside Revolut, Erste and PBZ, Token Circles now reads statements from N26, Wise, ING (Netherlands), Sparkasse and DKB — plus any CSV exported in the YNAB format, which covers a long tail of other banks. It detects the bank for you and prepares the transactions for review, all in your browser.
+- A "local-only" choice at the start of setup: run entirely in this browser with no account, and switch back to a synced account any time in Settings.
+
+### Changed
+
+- Signing up drops you straight into the app. After you create an account you're signed in automatically and land in setup — no separate "now sign in" step.
+- Bringing in your history during setup is smoother. The main button now carries the real action at each stage ("Continue to preview", then "Import selected") instead of being tucked below a long form, and dropping files shows a clear "drop here" highlight and a spinner while they're read.
+- Removing things — subscriptions, accounts, goals, and everywhere else — now asks with a clear pop-up dialog instead of squeezing a yes/no into the row, so the confirmation always fits and reads well.
+- Smaller polish: the autopay switch in the bill/expense form matches the app's other switches, the bills calendar's day pop-up is no longer see-through, and supported banks show as tidy pills in the importer.
+
 ### Fixed
 
 - Updating to a new release is calm now. An open tab used to sometimes reload several times in a row around a release (occasionally landing on the "Update needed" screen), and the version shown in Settings and on the sign-in screen could lag behind what was actually running. A tab now picks up a release with a single reload at your next navigation, the displayed version always tells the truth, and two releases in quick succession are handled just as smoothly.
