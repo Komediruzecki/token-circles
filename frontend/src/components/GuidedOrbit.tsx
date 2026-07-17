@@ -5,7 +5,7 @@
  * category, then a confirm — reusing the same defaults as the command bar
  * (today, currency, last-used account). The gentle face of the same engine.
  */
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import styles from './GuidedOrbit.module.css'
 import type { Account, Category } from '../types/models'
@@ -143,6 +143,46 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     }
   }
 
+  // Desktop keyboard support: this modal shows on desktop too, so typing digits
+  // should go straight to the amount instead of forcing clicks on the on-screen
+  // keypad. Active only while open; the confirm step's text/date inputs keep
+  // their own typing. Escape closes.
+  createEffect(() => {
+    if (!props.isOpen()) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        props.onClose()
+        return
+      }
+      const el = document.activeElement as HTMLElement | null
+      const inField =
+        !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+      if (step() === 1 && !inField) {
+        if (e.key >= '0' && e.key <= '9') {
+          e.preventDefault()
+          press(e.key)
+        } else if (e.key === '.' || e.key === ',') {
+          e.preventDefault()
+          press('.')
+        } else if (e.key === 'Backspace') {
+          e.preventDefault()
+          backspace()
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          next()
+        }
+      } else if (step() === 3 && e.key === 'Enter' && !inField) {
+        e.preventDefault()
+        void submit()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    onCleanup(() => {
+      document.removeEventListener('keydown', onKey)
+    })
+  })
+
   const progress = () => (step() / STEPS) * CIRC
   const stepLabel = () => (step() === 1 ? 'HOW MUCH?' : step() === 2 ? 'CATEGORY' : 'CONFIRM')
 
@@ -154,7 +194,8 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.sheet} role="dialog" aria-modal="true" aria-label="Guided entry">
+      <div class={styles.sheet} role="dialog" aria-modal="true" aria-label="Add transaction">
+        <h2 class={styles.heading}>Add transaction</h2>
         <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
           <svg
             width="22"
