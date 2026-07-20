@@ -28,7 +28,13 @@ import {
 import { loadBankImportMemory, rememberBankImportChoice } from '../../core/bankImport/memory'
 import { classifyCategory } from '../../core/categoryClassifier'
 import { autoDetectMapping } from '../../core/importMapping'
+import {
+  isTransferToVoid as isTransferToVoidPure,
+  visibleRowIndices as visibleRowIndicesPure,
+  voidTransferDestinations,
+} from './previewFilter'
 import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../../core/bankImport'
+import type { PreviewFilter, VoidTransferContext } from './previewFilter'
 
 /**
  * Indices of rows whose full (trimmed) content is identical to an earlier row in the
@@ -70,6 +76,11 @@ export interface SheetResult {
 }
 
 export type ImportStep = 'upload' | 'mapping' | 'preview' | 'importing' | 'done'
+
+// Preview-table row filter (view-only): show everything, only within-batch
+// duplicates, or only transfers routing into a non-account. Defined with its pure
+// helpers and re-exported here so store consumers keep a single import site.
+export type { PreviewFilter } from './previewFilter'
 
 export type ImportTab = 'google-sheets' | 'file-upload' | 'paste-csv' | 'bank-imports'
 
@@ -244,6 +255,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // already exist (stored earlier, or repeated within this import). null = the
   // dry-run didn't run / failed, so the preview makes no claim.
   const [existingDuplicates, setExistingDuplicates] = createSignal<number | null>(null)
+  // Which subset of rows the preview table shows. A view-only filter — it never
+  // changes which rows import or which are selected, only what's paginated/displayed.
+  const [previewFilter, setPreviewFilter] = createSignal<PreviewFilter>('all')
 
   // Loading/error
   const [loading, setLoading] = createSignal(false)
@@ -945,8 +959,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setSelectedRows(allSelected)
   }
 
+  // Pagination runs over the filtered set (visibleRowIndices), so page counts and
+  // slicing stay correct whichever preview filter is active.
   const totalPages = () => {
-    return Math.ceil(currentRows().length / rowsPerPage())
+    return Math.max(1, Math.ceil(visibleRowIndices().length / rowsPerPage()))
   }
 
   const startRow = () => {
@@ -954,7 +970,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   }
 
   const endRow = () => {
-    return Math.min(startRow() + rowsPerPage(), currentRows().length)
+    return Math.min(startRow() + rowsPerPage(), visibleRowIndices().length)
   }
 
   // Parse a spreadsheet date cell to yyyy-mm-dd for range comparison. Handles the formats
@@ -986,25 +1002,44 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     return currentRows().reduce((n, row) => n + (isDateOutOfRange(row[dateIdx]) ? 1 : 0), 0)
   }
 
+  // Snapshot of the column mapping + account/type context the void-transfer check
+  // needs, rebuilt reactively from signals and passed to the pure helpers.
+  const voidCtx = (): VoidTransferContext => ({
+    typeIdx: columnMapping().type,
+    categoryIdx: columnMapping().category,
+    categoryTypes: categoryTypes(),
+    accountNames: bankAccounts().map((a) => a.name),
+  })
+
   // Transfer rows whose destination category is NOT (and won't become) a real account —
   // the money would route into nothing. Uses existing accounts + values marked as account.
-  const transferVoidDestinations = (): { names: string[]; count: number } => {
-    const mapping = columnMapping()
-    const typeIdx = mapping.type
-    const catIdx = mapping.category
-    if (typeIdx === undefined || catIdx === undefined) return { names: [], count: 0 }
-    const types = categoryTypes()
-    const acctNames = new Set(bankAccounts().map((a) => a.name.toLowerCase()))
-    const isAccount = (name: string) =>
-      types[name] === 'account' || acctNames.has(name.toLowerCase())
-    const bad = new Map<string, number>()
-    for (const row of currentRows()) {
-      if ((row[typeIdx] ?? '').trim().toLowerCase() !== 'transfer') continue
-      const dest = (row[catIdx] ?? '').trim()
-      if (!dest || isAccount(dest)) continue
-      bad.set(dest, (bad.get(dest) ?? 0) + 1)
+  const transferVoidDestinations = (): { names: string[]; count: number } =>
+    voidTransferDestinations(currentRows(), voidCtx())
+
+  // Indices into currentRows() shown by the active preview filter. 'all' -> every row;
+  // 'duplicates' -> within-batch dups; 'no-account-transfer' -> the void-transfer warning.
+  const visibleRowIndices = createMemo<number[]>(() =>
+    visibleRowIndicesPure(previewFilter(), currentRows(), duplicateIndices(), voidCtx())
+  )
+
+  // Row counts per filter, for the filter selector's badges.
+  const filterCounts = () => {
+    const ctx = voidCtx()
+    return {
+      all: currentRows().length,
+      duplicates: duplicateIndices().length,
+      noAccountTransfer: currentRows().reduce(
+        (n, row) => n + (isTransferToVoidPure(row, ctx) ? 1 : 0),
+        0
+      ),
     }
-    return { names: [...bad.keys()], count: [...bad.values()].reduce((a, b) => a + b, 0) }
+  }
+
+  // Switch the preview filter and jump back to page 1 (the old page may not exist
+  // in the smaller filtered set).
+  const applyPreviewFilter = (f: PreviewFilter) => {
+    setPreviewFilter(f)
+    setCurrentPage(1)
   }
 
   // Import execution
@@ -1245,6 +1280,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     detectCategories,
     dateSkippedCount,
     transferVoidDestinations,
+    previewFilter,
+    visibleRowIndices,
+    filterCounts,
+    applyPreviewFilter,
     totalPages,
     startRow,
     endRow,
