@@ -7,7 +7,7 @@
  * separate tracks instead of squeezed wedges — and it speaks the same
  * instrument language as the budget radar and the hero orbits.
  */
-import { createMemo, createSignal, For, Show } from 'solid-js'
+import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
 import { formatCurrency, getLocalCurrency } from '../../core/api'
 import { OTHER_COLOR, paletteColor } from '../../core/brandPalette'
 import styles from './CategoryOrbits.module.css'
@@ -40,6 +40,19 @@ const R_INNER_MIN = 46
 
 export default function CategoryOrbits(props: CategoryOrbitsProps) {
   const [hover, setHover] = createSignal<number | null>(null)
+
+  // Per-instance SVG ids. The keep-alive page host keeps every visited page —
+  // and thus every CategoryOrbits (Analytics, Budgets, Loans, Portfolio,
+  // Dashboard) — mounted at once, only hidden with `display:none`. Hardcoded
+  // ids made every orbit define the SAME `#co-glow`/`#co-core`, so an arc's
+  // `url(#co-glow)` resolved to the FIRST match in the document — frequently a
+  // definition inside a `display:none` page. Referencing a filter from a hidden
+  // subtree yields a degenerate filter region that clips the arc to a stub in
+  // Chrome/Firefox/Safari (the sweep angle is right, but only a sliver paints).
+  // Unique ids keep every arc pointed at its own instance's filter.
+  const uid = createUniqueId()
+  const glowId = `co-glow-${uid}`
+  const coreId = `co-core-${uid}`
 
   const rings = createMemo(() => {
     const max = props.maxRings ?? 6
@@ -109,14 +122,14 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
           aria-label={`Spending by category, total ${money(rings().total)}`}
         >
           <defs>
-            <filter id="co-glow" x="-60%" y="-60%" width="220%" height="220%">
+            <filter id={glowId} x="-60%" y="-60%" width="220%" height="220%">
               <feGaussianBlur stdDeviation="2.2" result="b" />
               <feMerge>
                 <feMergeNode in="b" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-            <radialGradient id="co-core" cx="50%" cy="44%" r="60%">
+            <radialGradient id={coreId} cx="50%" cy="44%" r="60%">
               <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.14" />
               <stop offset="100%" stop-color="var(--primary)" stop-opacity="0" />
             </radialGradient>
@@ -154,7 +167,7 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
                     stroke-linecap="round"
                     stroke-dasharray={dash(r, row.share)}
                     transform={`rotate(${launch(i())} ${C} ${C})`}
-                    filter="url(#co-glow)"
+                    filter={`url(#${glowId})`}
                     opacity="0.92"
                   >
                     <title>
@@ -171,7 +184,7 @@ export default function CategoryOrbits(props: CategoryOrbitsProps) {
             cx={C}
             cy={C}
             r={Math.max(30, R_OUTER - (rings().rows.length - 1) * ringStep() - strokeW() - 8)}
-            fill="url(#co-core)"
+            fill={`url(#${coreId})`}
           />
           <text x={C} y={C - 4} text-anchor="middle" class={styles.coreValue}>
             {money(rings().total)}
