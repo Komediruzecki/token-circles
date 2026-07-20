@@ -174,6 +174,118 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </div>
           </div>
         </Show>
+
+        {/* Date-range filter: only import transactions within the chosen period. */}
+        <div
+          style={{
+            margin: '4px 0 14px',
+            padding: '10px 12px',
+            border: '1px solid var(--border)',
+            'border-radius': '8px',
+          }}
+        >
+          <p class={styles.mappingLabel} style={{ 'margin-bottom': '4px' }}>
+            Date range <span style={{ 'font-weight': '400', opacity: '0.65' }}>(optional)</span>
+          </p>
+          <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+            Only import transactions within this period — rows outside it are skipped. Leave a side
+            blank for no bound.
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              'flex-wrap': 'wrap',
+              'align-items': 'center',
+              gap: '8px 14px',
+            }}
+          >
+            <label
+              style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'font-size': '13px' }}
+            >
+              <span style={{ opacity: '0.8' }}>From</span>
+              <input
+                type="date"
+                value={flow.importStartDate()}
+                onInput={(e) => flow.setImportStartDate(e.currentTarget.value)}
+                style={{
+                  padding: '6px 8px',
+                  border: '1px solid var(--border)',
+                  'border-radius': '6px',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                  'font-size': '13px',
+                }}
+              />
+            </label>
+            <label
+              style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'font-size': '13px' }}
+            >
+              <span style={{ opacity: '0.8' }}>To</span>
+              <input
+                type="date"
+                value={flow.importEndDate()}
+                onInput={(e) => flow.setImportEndDate(e.currentTarget.value)}
+                style={{
+                  padding: '6px 8px',
+                  border: '1px solid var(--border)',
+                  'border-radius': '6px',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                  'font-size': '13px',
+                }}
+              />
+            </label>
+            <Show when={flow.importStartDate() || flow.importEndDate()}>
+              <button
+                type="button"
+                onClick={() => {
+                  flow.setImportStartDate('')
+                  flow.setImportEndDate('')
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent, #6366f1)',
+                  cursor: 'pointer',
+                  'font-size': '13px',
+                  padding: '0',
+                }}
+              >
+                Clear
+              </button>
+            </Show>
+            <Show when={flow.dateSkippedCount() > 0}>
+              <span style={{ 'font-size': '13px', color: 'var(--warning, #f59e0b)' }}>
+                {flow.dateSkippedCount()} of {total()} rows outside this range will be skipped
+              </span>
+            </Show>
+          </div>
+        </div>
+
+        {/* Transfers whose destination isn't an account would route money into nothing. */}
+        <Show when={flow.transferVoidDestinations().count > 0}>
+          <div
+            style={{
+              margin: '4px 0 14px',
+              padding: '10px 12px',
+              border: '1px solid var(--warning, #f59e0b)',
+              'border-radius': '8px',
+              background: 'color-mix(in srgb, var(--warning, #f59e0b) 8%, transparent)',
+            }}
+          >
+            <p class={styles.mappingLabel} style={{ 'margin-bottom': '4px' }}>
+              Transfers with no destination account
+            </p>
+            <p class={styles.dropzoneHint} style={{ 'margin-bottom': '0' }}>
+              {flow.transferVoidDestinations().count} transfer row
+              {flow.transferVoidDestinations().count === 1 ? '' : 's'} point to a value that isn't
+              an account ({flow.transferVoidDestinations().names.slice(0, 6).join(', ')}
+              {flow.transferVoidDestinations().names.length > 6 ? '…' : ''}). A transfer needs a
+              real account on both sides — otherwise the money lands nowhere and balances drift.
+              Mark those as accounts, or set their type to Income/Expense.
+            </p>
+          </div>
+        </Show>
       </div>
 
       {/* Bank-statement rules: tweak categorization/transfers and recalculate in place.
