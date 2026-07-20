@@ -8,7 +8,7 @@ import { login, navigateToRoute } from './test-helpers'
 // Unique suffix to avoid collisions across test runs (data persists in DB)
 const uniq = Date.now().toString(36)
 
-test.describe('Bills Reactive CRUD', () => {
+test.describe.serial('Bills Reactive CRUD', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'bills')
@@ -78,11 +78,13 @@ test.describe('Bills Reactive CRUD', () => {
   })
 })
 
-test.describe('Goals Progress Display', () => {
+test.describe.serial('Goals Progress Display', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'goals')
-    await page.waitForTimeout(500)
+    await expect(page.getByTestId('goal-card').first())
+      .toBeVisible({ timeout: 10000 })
+      .catch(() => {})
   })
 
   test('should display correct progress percentage on new goal (not NaN)', async ({ page }) => {
@@ -149,7 +151,7 @@ test.describe('Goals Progress Display', () => {
   })
 })
 
-test.describe('Transactions CRUD', () => {
+test.describe.serial('Transactions CRUD', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'transactions')

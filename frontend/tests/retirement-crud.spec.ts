@@ -23,27 +23,18 @@ test.describe('Retirement Planning CRUD Operations', () => {
   })
 
   test('should have projection cards section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
     const projectionCards = page.getByTestId('retirement-projection-row')
-    const hasCards = await projectionCards.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasCards).toBeTruthy()
+    await expect(projectionCards).toBeVisible({ timeout: 10000 })
   })
 
   test('should have projection details section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
     const projectionDetails = page.getByTestId('retirement-projection-details')
-    const hasDetails = await projectionDetails.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasDetails).toBeTruthy()
+    await expect(projectionDetails).toBeVisible({ timeout: 10000 })
   })
 
   test('should have goals section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
     const goalsSection = page.getByTestId('retirement-goals')
-    const hasSection = await goalsSection.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasSection).toBeTruthy()
+    await expect(goalsSection).toBeVisible({ timeout: 10000 })
   })
 
   test('should have goals grid', async ({ page }) => {

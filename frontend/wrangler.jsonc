@@ -29,5 +29,8 @@
       "name": "finance-manager",
       "routes": [{ "pattern": "tokencircles.com", "custom_domain": true }],
     },
+    "preview": {
+      "name": "finance-manager-preview",
+    },
   },
 }

@@ -2,46 +2,185 @@
  * ExportImport handlers — IndexedDB-backed implementations
  */
 import { getDB, seedDefaultCategories, seedDemoProfiles } from '../idb'
-import { adapter, getAmount, json, monthEnd, monthStart, nextMonth, ok, prevMonth } from './helpers'
+import {
+  adapter,
+  getAmount,
+  json,
+  monthEnd,
+  monthStart,
+  nextMonth,
+  ok,
+  prevMonth,
+  targetProfileIdsFromHeaders,
+} from './helpers'
 
-export async function exportAll(): Promise<Response> {
-  const data = await adapter.exportData()
-  return json(data)
+export async function exportAll(query?: URLSearchParams, headers?: HeadersInit): Promise<Response> {
+  const pids = targetProfileIdsFromHeaders(headers)
+  const data = await adapter.exportData(pids)
+  const pretty = query?.get('pretty') === 'true'
+  return json(data, 200, pretty)
 }
 
 export async function exportByType(
   params: Record<string, string>,
-  query: URLSearchParams
+  query: URLSearchParams,
+  headers?: HeadersInit
 ): Promise<Response> {
   const type = params.p1
   const fmt = query.get('format') || 'json'
-  const data = await adapter.exportData()
+  const pretty = query.get('pretty') === 'true'
+  const pids = targetProfileIdsFromHeaders(headers)
+  const data = await adapter.exportData(pids)
 
-  if (fmt === 'csv' && type === 'transactions') {
+  if (fmt === 'csv') {
     const csvQuote = (s: string | null | undefined): string => `"${(s ?? '').replace(/"/g, '""')}"`
-    const csv = ['date,type,description,amount,currency,category_id,notes']
-    for (const t of data.transactions) {
-      csv.push(
-        [
-          t.date,
-          t.type,
-          csvQuote(t.description),
-          t.amount,
-          t.currency,
-          t.category_id ?? '',
-          csvQuote(t.notes),
-        ].join(',')
-      )
+
+    if (type === 'transactions') {
+      const csv = ['date,type,description,amount,currency,category_id,notes']
+      for (const t of data.transactions) {
+        csv.push(
+          [
+            t.date,
+            t.type,
+            csvQuote(t.description),
+            t.amount,
+            t.currency,
+            t.category_id ?? '',
+            csvQuote(t.notes),
+          ].join(',')
+        )
+      }
+      return new Response(csv.join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv;charset=utf-8',
+          'Content-Disposition': `attachment; filename=${type}.csv`,
+        },
+      })
     }
-    return new Response(csv.join('\n'), {
-      headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename=${type}.csv`,
-      },
-    })
+
+    if (type === 'categories') {
+      const csv = ['id,profile_id,type,name,color,tax_deductible']
+      for (const c of data.categories) {
+        csv.push(
+          [
+            c.id,
+            c.profile_id,
+            c.type,
+            csvQuote(c.name),
+            c.color,
+            c.tax_deductible ? 'true' : 'false',
+          ].join(',')
+        )
+      }
+      return new Response(csv.join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv;charset=utf-8',
+          'Content-Disposition': `attachment; filename=${type}.csv`,
+        },
+      })
+    }
+
+    if (type === 'budgets') {
+      const csv = [
+        'id,profile_id,category_id,amount,period,start_date,rollover_enabled,rollover_amount',
+      ]
+      for (const b of data.budgets) {
+        csv.push(
+          [
+            b.id,
+            b.profile_id,
+            b.category_id,
+            b.amount,
+            b.period,
+            b.start_date,
+            b.rollover_enabled ? 'true' : 'false',
+            b.rollover_amount,
+          ].join(',')
+        )
+      }
+      return new Response(csv.join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv;charset=utf-8',
+          'Content-Disposition': `attachment; filename=${type}.csv`,
+        },
+      })
+    }
+
+    if (type === 'accounts') {
+      const csv = ['id,profile_id,name,type,currency,balance,notes,starting_balance,starting_date']
+      for (const a of data.accounts) {
+        csv.push(
+          [
+            a.id,
+            a.profile_id,
+            csvQuote(a.name),
+            a.type,
+            a.currency,
+            a.balance,
+            csvQuote(a.notes),
+            a.starting_balance ?? 0,
+            a.starting_date ?? '',
+          ].join(',')
+        )
+      }
+      return new Response(csv.join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv;charset=utf-8',
+          'Content-Disposition': `attachment; filename=${type}.csv`,
+        },
+      })
+    }
+
+    if (type === 'loans') {
+      const csv = ['id,profile_id,name,principal,start_date,term_months']
+      for (const l of data.loans) {
+        csv.push(
+          [l.id, l.profile_id, csvQuote(l.name), l.principal, l.start_date, l.term_months].join(',')
+        )
+      }
+      return new Response(csv.join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv;charset=utf-8',
+          'Content-Disposition': `attachment; filename=${type}.csv`,
+        },
+      })
+    }
+
+    if (type === 'recurring') {
+      const csv = [
+        'id,profile_id,description,amount,type,frequency,category_id,account_id,start_date,end_date',
+      ]
+      const recurringList = data.recurring || []
+      for (const r of recurringList) {
+        csv.push(
+          [
+            r.id,
+            r.profile_id,
+            csvQuote(r.description as string),
+            r.amount,
+            r.type,
+            r.frequency,
+            r.category_id ?? '',
+            r.account_id ?? '',
+            r.start_date ?? '',
+            r.end_date ?? '',
+          ].join(',')
+        )
+      }
+      return new Response(csv.join('\n'), {
+        headers: {
+          'Content-Type': 'text/csv;charset=utf-8',
+          'Content-Disposition': `attachment; filename=${type}.csv`,
+        },
+      })
+    }
   }
 
-  return json(data)
+  if (type && type in data) {
+    return json({ [type]: data[type as keyof typeof data] }, 200, pretty)
+  }
+
+  return json(data, 200, pretty)
 }
 
 export async function importData(body: unknown): Promise<Response> {
@@ -55,14 +194,17 @@ export async function clearAll(): Promise<Response> {
   return ok({ message: 'All data cleared' })
 }
 
-export async function deleteAllTransactions(): Promise<Response> {
-  await adapter.deleteAllTransactions()
+export async function deleteAllTransactions(headers?: HeadersInit): Promise<Response> {
+  // Target the profile(s) named in the request header (Danger Zone can act on a
+  // non-active profile); fall back to the active profile when none is given.
+  const pids = targetProfileIdsFromHeaders(headers) ?? adapter.getCurrentProfileIds()
+  await adapter.deleteAllTransactions(pids)
   return ok({ message: 'All transactions deleted' })
 }
 
-export async function deleteAllCategories(): Promise<Response> {
+export async function deleteAllCategories(headers?: HeadersInit): Promise<Response> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
+  const pid = targetProfileIdsFromHeaders(headers)?.[0] ?? (await adapter.getCurrentProfileId())
   const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
   for (const c of cats) {
     await db.delete('categories', c.id)

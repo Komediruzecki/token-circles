@@ -642,23 +642,51 @@ export default function Settings() {
 
   const [csvExporting, setCsvExporting] = createSignal<string | null>(null)
   const [exportFormat, setExportFormat] = createSignal('csv')
+  const [prettyPrintJson, setPrettyPrintJson] = createSignal(true)
+
+  // Turn the exported profile selection into a filename-safe label so a download makes
+  // clear which profile it is for: a single profile -> its slugified name, a multi-profile
+  // household -> "household", nothing resolvable -> "profile".
+  const profileFileLabel = (): string => {
+    const names = householdIds()
+      .map((id) => allProfiles().find((p) => p.id === id)?.name)
+      .filter((n): n is string => !!n)
+    const raw = names.length === 1 ? names[0] : names.length > 1 ? 'household' : 'profile'
+    return (
+      raw
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'profile'
+    )
+  }
+
+  // Header(s) telling the server which profile(s) to export. A household sends the
+  // X-Profile-Ids JSON array (the shape backend/worker read) plus a single X-Profile-Id
+  // fallback; a single profile just sends X-Profile-Id. (Previously a comma-joined
+  // X-Profile-Id made the server export only the first profile of a household.)
+  const exportProfileHeaders = (): Record<string, string> => {
+    const ids = householdIds()
+    const headers: Record<string, string> = { 'X-Profile-Id': String(ids[0] ?? '') }
+    if (ids.length > 1) headers['X-Profile-Ids'] = JSON.stringify(ids)
+    return headers
+  }
 
   // Data Management
   const handleExport = async () => {
     try {
-      const response = await apiFetch('/api/export', {
+      const response = await apiFetch(`/api/export?pretty=${prettyPrintJson()}`, {
         method: 'GET',
         credentials: 'include',
+        headers: exportProfileHeaders(),
       })
 
       if (!response.ok) throw new Error('Export failed')
 
-      const data = await response.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `finance-export-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `finance-export-${profileFileLabel()}-${new Date().toISOString().split('T')[0]}.json`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -670,16 +698,18 @@ export default function Settings() {
     const fmt = exportFormat()
     setCsvExporting(type)
     try {
-      const response = await apiFetch(`/api/export/${type}?format=${fmt}`, {
+      const prettyParam = fmt === 'json' && prettyPrintJson() ? '&pretty=true' : ''
+      const response = await apiFetch(`/api/export/${type}?format=${fmt}${prettyParam}`, {
         method: 'GET',
         credentials: 'include',
+        headers: exportProfileHeaders(),
       })
       if (!response.ok) throw new Error('Export failed')
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${type}-${new Date().toISOString().split('T')[0]}.${fmt}`
+      a.download = `${type}-${profileFileLabel()}-${new Date().toISOString().split('T')[0]}.${fmt}`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -746,10 +776,10 @@ export default function Settings() {
     }
   }
 
-  const handleDeleteProfile = async () => {
-    const profileId = localStorage.getItem('currentProfileId') || '1'
+  const handleDeleteProfile = async (profileId?: string | number) => {
+    const pid = profileId ? profileId.toString() : localStorage.getItem('currentProfileId') || '1'
     try {
-      const res = await apiFetch(`/api/profiles/${profileId}`, {
+      const res = await apiFetch(`/api/profiles/${pid}`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -758,12 +788,30 @@ export default function Settings() {
         toast(data.error || 'Failed to delete profile', 'error')
         return
       }
-      // Switch to the next available profile
+
+      const currentProfileId = localStorage.getItem('currentProfileId') || '1'
       const profilesRes = await apiFetch('/api/profiles', { credentials: 'include' })
       const profiles = await profilesRes.json()
-      if (profiles.length > 0) {
-        localStorage.setItem('currentProfileId', profiles[0].id.toString())
-        localStorage.setItem('selectedProfileIds', JSON.stringify([profiles[0].id]))
+
+      if (currentProfileId === pid) {
+        if (profiles.length > 0) {
+          localStorage.setItem('currentProfileId', profiles[0].id.toString())
+          localStorage.setItem('selectedProfileIds', JSON.stringify([profiles[0].id]))
+        } else {
+          localStorage.removeItem('currentProfileId')
+          localStorage.removeItem('selectedProfileIds')
+        }
+      } else {
+        const selected = localStorage.getItem('selectedProfileIds')
+        if (selected) {
+          try {
+            const ids = JSON.parse(selected) as number[]
+            const filtered = ids.filter((id) => id.toString() !== pid)
+            localStorage.setItem('selectedProfileIds', JSON.stringify(filtered))
+          } catch {
+            // Ignore JSON parsing issues
+          }
+        }
       }
       window.location.reload()
     } catch {
@@ -1216,52 +1264,6 @@ export default function Settings() {
 
               <div class={styles.card}>
                 <CardHead
-                  icon={<IconDownload />}
-                  title="Data management"
-                  desc="Export your data or reset the workspace."
-                />
-                <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                  <label style="font-size: 13px; color: var(--text-secondary);">
-                    Export Format:
-                  </label>
-                  <select
-                    class={styles.formControl}
-                    value={exportFormat()}
-                    onchange={(e) => setExportFormat(e.currentTarget.value)}
-                    style="max-width: 120px;"
-                  >
-                    <option value="csv">CSV</option>
-                    <option value="json">JSON</option>
-                  </select>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                  <button class={styles.btnSecondary} onclick={handleExport}>
-                    Export All (JSON)
-                  </button>
-                  {[
-                    { type: 'transactions', label: 'Transactions' },
-                    { type: 'categories', label: 'Categories' },
-                    { type: 'budgets', label: 'Budgets' },
-                    { type: 'accounts', label: 'Accounts' },
-                    { type: 'loans', label: 'Loans' },
-                    { type: 'recurring', label: 'Recurring' },
-                  ].map(({ type, label }) => (
-                    <button
-                      class={styles.btnSecondary}
-                      onclick={() => handleCsvExport(type)}
-                      disabled={csvExporting() === type}
-                    >
-                      {csvExporting() === type
-                        ? 'Exporting...'
-                        : `${label} (${exportFormat().toUpperCase()})`}
-                    </button>
-                  ))}
-                </div>
-                <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
-              </div>
-
-              <div class={styles.card}>
-                <CardHead
                   icon={<IconUsers />}
                   title="Household view"
                   desc="Combine data across multiple profiles."
@@ -1440,7 +1442,69 @@ export default function Settings() {
                     </table>
                   </div>
                 </Show>
+                <div style="margin-top: 24px; padding-top: 20px; border-top: 1px dashed var(--border);">
+                  <div style="font-size: 14px; color: var(--text); font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <div style="width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                      <IconDownload />
+                    </div>
+                    <span>Export Household Data</span>
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                    Export combined data for the selected profiles.
+                  </div>
+                  <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <label style="font-size: 13px; color: var(--text-secondary);">
+                      Export Format:
+                    </label>
+                    <select
+                      class={styles.formControl}
+                      value={exportFormat()}
+                      onchange={(e) => setExportFormat(e.currentTarget.value)}
+                      style="max-width: 120px;"
+                    >
+                      <option value="csv">CSV</option>
+                      <option value="json">JSON</option>
+                    </select>
+
+                    <Show when={exportFormat() === 'json'}>
+                      <div style="margin-left: 16px; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 13px; color: var(--text-secondary);">
+                          Format JSON
+                        </span>
+                        <Toggle
+                          checked={prettyPrintJson}
+                          onChange={setPrettyPrintJson}
+                          aria-label="Format JSON"
+                        />
+                      </div>
+                    </Show>
+                  </div>
+                  <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <button class={styles.btnSecondary} onclick={handleExport}>
+                      Export All (JSON)
+                    </button>
+                    {[
+                      { type: 'transactions', label: 'Transactions' },
+                      { type: 'categories', label: 'Categories' },
+                      { type: 'budgets', label: 'Budgets' },
+                      { type: 'accounts', label: 'Accounts' },
+                      { type: 'loans', label: 'Loans' },
+                      { type: 'recurring', label: 'Recurring' },
+                    ].map(({ type, label }) => (
+                      <button
+                        class={styles.btnSecondary}
+                        onclick={() => handleCsvExport(type)}
+                        disabled={csvExporting() === type}
+                      >
+                        {csvExporting() === type
+                          ? 'Exporting...'
+                          : `${label} (${exportFormat().toUpperCase()})`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+              <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
             </Show>
 
             {/* ─────────────── BILLING (server mode only) ─────────────── */}

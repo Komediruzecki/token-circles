@@ -5,6 +5,9 @@ test.describe('Categories', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'categories')
+    await expect(page.getByTestId('category-card').first())
+      .toBeVisible({ timeout: 10000 })
+      .catch(() => {})
   })
 
   test('should display categories header', async ({ page }) => {
@@ -130,10 +133,8 @@ test.describe('Categories', () => {
   })
 
   test('should display total category spending', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    // Each category card shows its spending amount
     const spendingElements = getByTestId(page, 'category-spending')
+    await expect(spendingElements.first()).toBeVisible({ timeout: 10000 })
     const count = await spendingElements.count()
     expect(count).toBeGreaterThanOrEqual(1)
   })

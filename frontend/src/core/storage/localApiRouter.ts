@@ -9,6 +9,7 @@ interface RouteContext {
   params: Record<string, string>
   query: URLSearchParams
   body: unknown
+  headers?: HeadersInit
 }
 
 type Handler = (ctx: RouteContext) => Promise<Response>
@@ -116,7 +117,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/profile\/data$/,
     methods: ['DELETE'],
-    handler: dispatch({ DELETE: () => h.profileResetData() }),
+    handler: dispatch({ DELETE: (ctx) => h.profileResetData(ctx.headers) }),
   },
   {
     pattern: /^\/profiles\/reseed-demo$/,
@@ -213,7 +214,7 @@ const routes: RouteDef[] = [
     handler: dispatch({
       GET: (ctx) => h.transactionsList(ctx.query),
       POST: (ctx) => h.transactionsCreate(ctx.body),
-      DELETE: () => h.deleteAllTransactions(),
+      DELETE: (ctx) => h.deleteAllTransactions(ctx.headers),
     }),
   },
   {
@@ -258,7 +259,7 @@ const routes: RouteDef[] = [
     handler: dispatch({
       GET: (ctx) => h.categoriesList(ctx.query),
       POST: (ctx) => h.categoriesCreate(ctx.body),
-      DELETE: () => h.deleteAllCategories(),
+      DELETE: (ctx) => h.deleteAllCategories(ctx.headers),
     }),
   },
   {
@@ -478,11 +479,15 @@ const routes: RouteDef[] = [
   },
 
   // ── Export / Import / Clear ──
-  { pattern: /^\/export$/, methods: ['GET'], handler: dispatch({ GET: () => h.exportAll() }) },
+  {
+    pattern: /^\/export$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.exportAll(ctx.query, ctx.headers) }),
+  },
   {
     pattern: /^\/export\/([a-z-]+)$/,
     methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.exportByType(ctx.params, ctx.query) }),
+    handler: dispatch({ GET: (ctx) => h.exportByType(ctx.params, ctx.query, ctx.headers) }),
   },
   {
     pattern: /^\/import$/,
@@ -940,7 +945,18 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
       }
     }
 
-    return route.handler({ method, path: `/api${path}`, params, query, body })
+    // The target profile is resolved per-request from the request's headers inside each
+    // handler (see targetProfileIdsFromHeaders) — there is deliberately NO shared mutable
+    // profile state on the adapter, so concurrent requests can never clobber one another's
+    // target and a Danger Zone delete always hits the profile it was issued for.
+    return route.handler({
+      method,
+      path: `/api${path}`,
+      params,
+      query,
+      body,
+      headers: init?.headers,
+    })
   }
 
   return notFound(`/api${path}`)

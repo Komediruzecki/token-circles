@@ -8,6 +8,11 @@ test.describe('Accounts CRUD Operations', () => {
 
     // Navigate to accounts page
     await navigateToRoute(page, 'accounts')
+
+    // Wait for the account cards to be loaded and visible
+    await expect(page.getByTestId('account-card').first())
+      .toBeVisible({ timeout: 10000 })
+      .catch(() => {})
   })
 
   test('should display accounts header', async ({ page }) => {

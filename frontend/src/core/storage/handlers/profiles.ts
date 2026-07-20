@@ -2,7 +2,7 @@
  * Profiles handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import { adapter, idParam, json, notFound, ok, targetProfileIdsFromHeaders } from './helpers'
 
 export async function profilesList(): Promise<Response> {
   const db = await getDB()
@@ -141,9 +141,11 @@ export async function profilesDelete(params: Record<string, string>): Promise<Re
   return ok()
 }
 
-export async function profileResetData(): Promise<Response> {
+export async function profileResetData(headers?: HeadersInit): Promise<Response> {
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
+  // Reset the profile(s) named in the request header (Danger Zone can target a
+  // non-active profile); fall back to the active profile when none is given.
+  const pids = targetProfileIdsFromHeaders(headers) ?? adapter.getCurrentProfileIds()
   const stores = [
     'transactions',
     'categories',

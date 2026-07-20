@@ -1,11 +1,11 @@
-import { createSignal, Show } from 'solid-js'
+import { createSignal, For, onMount, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import styles from './DangerZone.module.css'
 
 export interface DangerZoneProps {
   onReset: () => Promise<void>
-  onDeleteProfile: () => Promise<void>
+  onDeleteProfile: (profileId: string | number) => Promise<void>
 }
 
 type ConfirmAction =
@@ -20,11 +20,52 @@ type ConfirmAction =
 export default function DangerZone(props: DangerZoneProps) {
   const [confirming, setConfirming] = createSignal<ConfirmAction>(null)
   const [loading, setLoading] = createSignal(false)
+  const [profiles, setProfiles] = createSignal<Array<{ id: number; name: string }>>([])
+  const [selectedProfileId, setSelectedProfileId] = createSignal<number>(
+    parseInt(localStorage.getItem('currentProfileId') || '1', 10)
+  )
+
+  const loadProfiles = async () => {
+    try {
+      const res = await apiFetch('/api/profiles', { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        setProfiles(data)
+        const stored = parseInt(localStorage.getItem('currentProfileId') || '1', 10)
+        if (data.length > 0 && !data.some((p: any) => p.id === stored)) {
+          setSelectedProfileId(data[0].id)
+        } else {
+          setSelectedProfileId(stored)
+        }
+      }
+    } catch {
+      /* non-critical */
+    }
+  }
+
+  onMount(() => {
+    void loadProfiles()
+  })
+
+  const selectedProfileName = () => {
+    const p = profiles().find((prof) => prof.id === selectedProfileId())
+    return p ? p.name : 'Selected Profile'
+  }
+
+  const isDeleteProfileDisabled = () => {
+    return selectedProfileId() === 1 || profiles().length <= 1
+  }
 
   const executeDelete = async (endpoint: string, successMsg: string) => {
     setLoading(true)
     try {
-      const res = await apiFetch(endpoint, { method: 'DELETE', credentials: 'include' })
+      const res = await apiFetch(endpoint, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'X-Profile-Id': selectedProfileId().toString(),
+        },
+      })
       if (!res.ok) throw new Error('Operation failed')
       toast(successMsg, 'success')
       window.location.reload()
@@ -50,272 +91,336 @@ export default function DangerZone(props: DangerZoneProps) {
         Danger Zone
       </div>
 
-      {/* Delete All Transactions */}
-      <div class={styles['danger-zone-item']}>
-        <div>
-          <div class={styles['danger-zone-item-title']}>Delete All Transactions</div>
-          <div class={styles['danger-zone-item-desc']}>
-            Permanently delete all transactions for the current profile. Budgets, categories, and
-            accounts will be preserved.
-          </div>
+      {/* Target Profile Selector */}
+      <div class={styles['danger-zone-selector-card']}>
+        <div class={styles['danger-zone-selector-header']}>
+          <label class={styles['danger-zone-selector-label']} for="danger-profile-select">
+            Target Profile for Destructive Actions:
+          </label>
         </div>
-        <Show when={confirming() !== 'transactions'}>
-          <button
-            class={styles['danger-zone-button']}
-            onClick={() => setConfirming('transactions')}
-            disabled={loading()}
+        <div class={styles['select-wrapper']}>
+          <select
+            id="danger-profile-select"
+            class={styles['profile-select']}
+            value={selectedProfileId()}
+            onchange={(e) => setSelectedProfileId(parseInt(e.currentTarget.value, 10))}
           >
-            Delete Transactions
-          </button>
-        </Show>
+            <For each={profiles()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
+          </select>
+        </div>
+        <p class={styles['danger-zone-selector-hint']}>
+          Profile-specific actions below will only target the profile selected here.
+        </p>
       </div>
 
-      <Show when={confirming() === 'transactions'}>
+      <div class={styles['danger-zone-items']}>
+        {/* Delete All Transactions */}
         <div class={styles['danger-zone-item']}>
-          <div>
-            <div class={styles['danger-zone-item-title']}>Delete all transactions?</div>
-            <div class={styles['danger-zone-item-desc']}>
-              This will permanently remove every transaction. This cannot be undone.
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-              Cancel
-            </button>
-            <button
-              class={styles['danger-zone-button']}
-              onClick={() => executeDelete('/api/transactions', 'All transactions deleted')}
-              disabled={loading()}
-            >
-              {loading() ? 'Deleting...' : 'Yes, Delete Transactions'}
-            </button>
-          </div>
-        </div>
-      </Show>
-
-      {/* Delete All Categories */}
-      <div class={styles['danger-zone-item']}>
-        <div>
-          <div class={styles['danger-zone-item-title']}>Delete All Categories</div>
-          <div class={styles['danger-zone-item-desc']}>
-            Delete all custom categories and restore default categories. Transactions will be
-            preserved.
-          </div>
-        </div>
-        <Show when={confirming() !== 'categories'}>
-          <button
-            class={styles['danger-zone-button']}
-            onClick={() => setConfirming('categories')}
-            disabled={loading()}
+          <Show
+            when={confirming() !== 'transactions'}
+            fallback={
+              <div class={styles['danger-confirm-box']}>
+                <div class={styles['danger-confirm-info']}>
+                  <div class={styles['danger-confirm-title']}>
+                    Delete all transactions for "{selectedProfileName()}"?
+                  </div>
+                  <div class={styles['danger-confirm-desc']}>
+                    This will permanently remove every transaction. This cannot be undone.
+                  </div>
+                </div>
+                <div class={styles['danger-confirm-actions']}>
+                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    class={styles['danger-zone-confirm-button']}
+                    onClick={() => executeDelete('/api/transactions', 'All transactions deleted')}
+                    disabled={loading()}
+                  >
+                    {loading() ? 'Deleting...' : 'Yes, Delete Transactions'}
+                  </button>
+                </div>
+              </div>
+            }
           >
-            Delete Categories
-          </button>
-        </Show>
-      </div>
-
-      <Show when={confirming() === 'categories'}>
-        <div class={styles['danger-zone-item']}>
-          <div>
-            <div class={styles['danger-zone-item-title']}>Delete all categories?</div>
-            <div class={styles['danger-zone-item-desc']}>
-              This will replace all categories with defaults. Custom categories will be lost.
+            <div class={styles['danger-zone-item-content']}>
+              <div class={styles['danger-zone-item-title']}>Delete All Transactions</div>
+              <div class={styles['danger-zone-item-desc']}>
+                Permanently delete all transactions for the profile{' '}
+                <strong>{selectedProfileName()}</strong>. Budgets, categories, and accounts will be
+                preserved.
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-              Cancel
-            </button>
             <button
               class={styles['danger-zone-button']}
-              onClick={() => executeDelete('/api/categories', 'Categories reset to defaults')}
+              onClick={() => setConfirming('transactions')}
               disabled={loading()}
             >
-              {loading() ? 'Deleting...' : 'Yes, Reset Categories'}
+              Delete Transactions
             </button>
-          </div>
+          </Show>
         </div>
-      </Show>
 
-      {/* Delete Profile Data */}
-      <div class={styles['danger-zone-item']}>
-        <div>
-          <div class={styles['danger-zone-item-title']}>Clear Profile Data</div>
-          <div class={styles['danger-zone-item-desc']}>
-            Delete all transactions, budgets, loans, and categories for this profile. The profile
-            itself will be kept.
-          </div>
-        </div>
-        <Show when={confirming() !== 'profile'}>
-          <button
-            class={styles['danger-zone-button']}
-            onClick={() => setConfirming('profile')}
-            disabled={loading()}
+        {/* Delete All Categories */}
+        <div class={styles['danger-zone-item']}>
+          <Show
+            when={confirming() !== 'categories'}
+            fallback={
+              <div class={styles['danger-confirm-box']}>
+                <div class={styles['danger-confirm-info']}>
+                  <div class={styles['danger-confirm-title']}>
+                    Delete all categories for "{selectedProfileName()}"?
+                  </div>
+                  <div class={styles['danger-confirm-desc']}>
+                    This will replace all categories with defaults. Custom categories will be lost.
+                  </div>
+                </div>
+                <div class={styles['danger-confirm-actions']}>
+                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    class={styles['danger-zone-confirm-button']}
+                    onClick={() => executeDelete('/api/categories', 'Categories reset to defaults')}
+                    disabled={loading()}
+                  >
+                    {loading() ? 'Deleting...' : 'Yes, Reset Categories'}
+                  </button>
+                </div>
+              </div>
+            }
           >
-            Clear Profile Data
-          </button>
-        </Show>
-      </div>
-
-      <Show when={confirming() === 'profile'}>
-        <div class={styles['danger-zone-item']}>
-          <div>
-            <div class={styles['danger-zone-item-title']}>Clear all profile data?</div>
-            <div class={styles['danger-zone-item-desc']}>
-              This will delete all data for this profile while keeping the profile itself. Cannot be
-              undone.
+            <div class={styles['danger-zone-item-content']}>
+              <div class={styles['danger-zone-item-title']}>Delete All Categories</div>
+              <div class={styles['danger-zone-item-desc']}>
+                Delete all custom categories and restore default categories for the profile{' '}
+                <strong>{selectedProfileName()}</strong>. Transactions will be preserved.
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-              Cancel
-            </button>
             <button
               class={styles['danger-zone-button']}
-              onClick={() => executeDelete('/api/profile/data', 'Profile data cleared')}
+              onClick={() => setConfirming('categories')}
               disabled={loading()}
             >
-              {loading() ? 'Clearing...' : 'Yes, Clear Profile Data'}
+              Delete Categories
             </button>
-          </div>
+          </Show>
         </div>
-      </Show>
 
-      {/* Delete Current Profile */}
-      <div class={styles['danger-zone-item']}>
-        <div>
-          <div class={styles['danger-zone-item-title']}>Delete Current Profile</div>
-          <div class={styles['danger-zone-item-desc']}>
-            Permanently delete the current profile and all its data. You will be switched to another
-            profile if one exists. The default profile cannot be deleted.
-          </div>
-        </div>
-        <Show when={confirming() !== 'profile-delete'}>
-          <button
-            class={styles['danger-zone-button']}
-            onClick={() => setConfirming('profile-delete')}
-            disabled={loading()}
+        {/* Clear Profile Data */}
+        <div class={styles['danger-zone-item']}>
+          <Show
+            when={confirming() !== 'profile'}
+            fallback={
+              <div class={styles['danger-confirm-box']}>
+                <div class={styles['danger-confirm-info']}>
+                  <div class={styles['danger-confirm-title']}>
+                    Clear all data for "{selectedProfileName()}"?
+                  </div>
+                  <div class={styles['danger-confirm-desc']}>
+                    This will delete all transactions, budgets, categories, and accounts for this
+                    profile. This cannot be undone.
+                  </div>
+                </div>
+                <div class={styles['danger-confirm-actions']}>
+                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    class={styles['danger-zone-confirm-button']}
+                    onClick={() => executeDelete('/api/profile/data', 'Profile data cleared')}
+                    disabled={loading()}
+                  >
+                    {loading() ? 'Clearing...' : 'Yes, Clear Profile Data'}
+                  </button>
+                </div>
+              </div>
+            }
           >
-            Delete Profile
-          </button>
-        </Show>
-      </div>
-
-      <Show when={confirming() === 'profile-delete'}>
-        <div class={styles['danger-zone-item']}>
-          <div>
-            <div class={styles['danger-zone-item-title']}>Delete this profile?</div>
-            <div class={styles['danger-zone-item-desc']}>
-              This will permanently delete the current profile and all its data. This cannot be
-              undone.
+            <div class={styles['danger-zone-item-content']}>
+              <div class={styles['danger-zone-item-title']}>Clear Profile Data</div>
+              <div class={styles['danger-zone-item-desc']}>
+                Delete all transactions, budgets, loans, and categories for the profile{' '}
+                <strong>{selectedProfileName()}</strong>. The profile itself will be kept.
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-              Cancel
-            </button>
             <button
               class={styles['danger-zone-button']}
-              onClick={() => {
-                setConfirming(null)
-                void props.onDeleteProfile()
-              }}
+              onClick={() => setConfirming('profile')}
               disabled={loading()}
             >
-              {loading() ? 'Deleting...' : 'Yes, Delete Profile'}
+              Clear Profile Data
             </button>
-          </div>
+          </Show>
         </div>
-      </Show>
 
-      {/* Reseed Demo Data */}
-      <div class={styles['danger-zone-item']}>
-        <div>
-          <div class={styles['danger-zone-item-title']}>Reseed Demo Data</div>
-          <div class={styles['danger-zone-item-desc']}>
-            Delete all data and restore the three example profiles (Low/Mid/High Income) with sample
-            transactions. All your current data will be lost.
-          </div>
-        </div>
-        <Show when={confirming() !== 'reseed-demo'}>
-          <button class={styles['danger-zone-button']} onClick={() => setConfirming('reseed-demo')}>
-            Reseed Demo Data
-          </button>
-        </Show>
-      </div>
-
-      <Show when={confirming() === 'reseed-demo'}>
+        {/* Delete Target Profile */}
         <div class={styles['danger-zone-item']}>
-          <div>
-            <div class={styles['danger-zone-item-title']}>Reseed demo data?</div>
-            <div class={styles['danger-zone-item-desc']}>
-              This will delete everything and recreate the example profiles. This cannot be undone.
+          <Show
+            when={confirming() !== 'profile-delete'}
+            fallback={
+              <div class={styles['danger-confirm-box']}>
+                <div class={styles['danger-confirm-info']}>
+                  <div class={styles['danger-confirm-title']}>
+                    Delete profile "{selectedProfileName()}"?
+                  </div>
+                  <div class={styles['danger-confirm-desc']}>
+                    This will permanently delete the profile and all of its associated transactions,
+                    accounts, and settings. This action is absolute and cannot be undone.
+                  </div>
+                </div>
+                <div class={styles['danger-confirm-actions']}>
+                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    class={styles['danger-zone-confirm-button']}
+                    onClick={async () => {
+                      setConfirming(null)
+                      void props.onDeleteProfile(selectedProfileId())
+                    }}
+                    disabled={loading()}
+                  >
+                    {loading() ? 'Deleting...' : 'Yes, Delete Profile'}
+                  </button>
+                </div>
+              </div>
+            }
+          >
+            <div class={styles['danger-zone-item-content']}>
+              <div class={styles['danger-zone-item-title']}>Delete Profile</div>
+              <div class={styles['danger-zone-item-desc']}>
+                Permanently delete the profile <strong>{selectedProfileName()}</strong> and all its
+                data. You will be switched to another profile if one exists.
+                <Show when={isDeleteProfileDisabled()}>
+                  <span class={styles['danger-zone-note']}>
+                    {' '}
+                    {selectedProfileId() === 1
+                      ? '(The default profile cannot be deleted)'
+                      : '(Cannot delete the last remaining profile)'}
+                  </span>
+                </Show>
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-              Cancel
-            </button>
             <button
               class={styles['danger-zone-button']}
-              onClick={async () => {
-                setLoading(true)
-                try {
-                  const res = await apiFetch('/api/profiles/reseed-demo', {
-                    method: 'POST',
-                    credentials: 'include',
-                  })
-                  if (!res.ok) throw new Error('Reseed failed')
-                  toast('Demo data has been restored', 'success')
-                  window.location.reload()
-                } catch {
-                  toast('Failed to reseed demo data', 'error')
-                } finally {
-                  setLoading(false)
-                  setConfirming(null)
-                }
-              }}
+              onClick={() => setConfirming('profile-delete')}
+              disabled={loading() || isDeleteProfileDisabled()}
+            >
+              Delete Profile
+            </button>
+          </Show>
+        </div>
+
+        {/* Reseed Demo Data */}
+        <div class={styles['danger-zone-item']}>
+          <Show
+            when={confirming() !== 'reseed-demo'}
+            fallback={
+              <div class={styles['danger-confirm-box']}>
+                <div class={styles['danger-confirm-info']}>
+                  <div class={styles['danger-confirm-title']}>Reseed demo data?</div>
+                  <div class={styles['danger-confirm-desc']}>
+                    This will delete all current data and restore the three example profiles. This
+                    cannot be undone.
+                  </div>
+                </div>
+                <div class={styles['danger-confirm-actions']}>
+                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    class={styles['danger-zone-confirm-button']}
+                    onClick={async () => {
+                      setLoading(true)
+                      try {
+                        const res = await apiFetch('/api/profiles/reseed-demo', {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: {
+                            'X-Profile-Id': selectedProfileId().toString(),
+                          },
+                        })
+                        if (!res.ok) throw new Error('Reseed failed')
+                        toast('Demo data has been restored', 'success')
+                        window.location.reload()
+                      } catch {
+                        toast('Failed to reseed demo data', 'error')
+                      } finally {
+                        setLoading(false)
+                        setConfirming(null)
+                      }
+                    }}
+                    disabled={loading()}
+                  >
+                    {loading() ? 'Reseeding...' : 'Yes, Reseed Demo Data'}
+                  </button>
+                </div>
+              </div>
+            }
+          >
+            <div class={styles['danger-zone-item-content']}>
+              <div class={styles['danger-zone-item-title']}>Reseed Demo Data</div>
+              <div class={styles['danger-zone-item-desc']}>
+                Delete all data and restore the three example profiles (Low/Mid/High Income) with
+                sample transactions. All your current data will be lost.
+              </div>
+            </div>
+            <button
+              class={styles['danger-zone-button']}
+              onClick={() => setConfirming('reseed-demo')}
               disabled={loading()}
             >
-              {loading() ? 'Reseeding...' : 'Yes, Reseed Demo Data'}
+              Reseed Demo Data
             </button>
-          </div>
+          </Show>
         </div>
-      </Show>
 
-      {/* Reset All Data */}
-      <div class={styles['danger-zone-item']}>
-        <div>
-          <div class={styles['danger-zone-item-title']}>Reset All Data</div>
-          <div class={styles['danger-zone-item-desc']}>
-            Permanently delete all transactions, budgets, goals, loans, bills, housing expenses, and
-            accounts. This action cannot be undone.
-          </div>
-        </div>
-        <Show when={confirming() !== 'reset'}>
-          <button class={styles['danger-zone-button']} onClick={() => setConfirming('reset')}>
-            Reset All Data
-          </button>
-        </Show>
-      </div>
-
-      <Show when={confirming() === 'reset'}>
+        {/* Reset All Data */}
         <div class={styles['danger-zone-item']}>
-          <div>
-            <div class={styles['danger-zone-item-title']}>Are you absolutely sure?</div>
-            <div class={styles['danger-zone-item-desc']}>
-              This will permanently erase everything. There is no recovery.
+          <Show
+            when={confirming() !== 'reset'}
+            fallback={
+              <div class={styles['danger-confirm-box']}>
+                <div class={styles['danger-confirm-info']}>
+                  <div class={styles['danger-confirm-title']}>Are you absolutely sure?</div>
+                  <div class={styles['danger-confirm-desc']}>
+                    This will permanently erase everything across all profiles. There is no
+                    recovery.
+                  </div>
+                </div>
+                <div class={styles['danger-confirm-actions']}>
+                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    class={styles['danger-zone-confirm-button']}
+                    onClick={handleReset}
+                    disabled={loading()}
+                  >
+                    Yes, Delete Everything
+                  </button>
+                </div>
+              </div>
+            }
+          >
+            <div class={styles['danger-zone-item-content']}>
+              <div class={styles['danger-zone-item-title']}>Reset All Data</div>
+              <div class={styles['danger-zone-item-desc']}>
+                Permanently delete all transactions, budgets, goals, loans, bills, housing expenses,
+                and accounts across all profiles. This action cannot be undone.
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-              Cancel
+            <button
+              class={styles['danger-zone-button']}
+              onClick={() => setConfirming('reset')}
+              disabled={loading()}
+            >
+              Reset All Data
             </button>
-            <button class={styles['danger-zone-button']} onClick={handleReset}>
-              Yes, Delete Everything
-            </button>
-          </div>
+          </Show>
         </div>
-      </Show>
+      </div>
     </div>
   )
 }

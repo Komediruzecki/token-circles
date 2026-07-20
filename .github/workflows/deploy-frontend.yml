@@ -3,6 +3,7 @@ name: Deploy Frontend
 # Frontend vite app -> Cloudflare Worker (static assets, SPA).
 #   push main          -> dev   (dev.tokencircles.com, built with --mode dev / .env.dev)
 #   tag  v*            -> prod  (app.tokencircles.com)
+#   pull_request       -> preview (versioned wrangler upload)
 #   workflow_dispatch  -> choose dev | prod
 #
 # IMPORTANT: disable Cloudflare "Workers Builds" for this project. The prod deploy here
@@ -14,6 +15,8 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  pull_request:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       environment:
@@ -25,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   deploy-frontend:
@@ -47,6 +51,8 @@ jobs:
             ENV="${{ github.event.inputs.environment }}"
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             ENV="prod"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            ENV="preview"
           else
             ENV="dev"
           fi
@@ -79,7 +85,7 @@ jobs:
         run: test -f frontend/dist/index.html
 
       - name: Deploy (${{ steps.env.outputs.env }})
-        if: env.DEPLOY_ENABLED == 'true'
+        if: env.DEPLOY_ENABLED == 'true' && steps.env.outputs.env != 'preview'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -90,3 +96,95 @@ jobs:
           # wrangler-action@v3 installs an old default wrangler that errors "Missing entry-point"
           # on this assets-only Worker (no `main`). Pin a current 4.x that supports it.
           wranglerVersion: '4.106.0'
+
+      # Uploads a new *version* of the finance-manager-preview Worker and captures
+      # its unique, immutable preview URL. Unlike `deploy` (which always
+      # publishes to the Worker's single fixed URL, so every PR overwrote the
+      # last), `versions upload` gives each PR/commit its own URL — concurrent
+      # PRs never clobber each other. It does NOT change the active deployment.
+      - name: Deploy PR Preview (versioned)
+        id: deploy-preview
+        if: env.DEPLOY_ENABLED == 'true' && steps.env.outputs.env == 'preview'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: frontend
+        run: |
+          set -o pipefail
+          
+          # Attempt version upload
+          UPLOAD_SUCCESS=true
+          npx wrangler@4.106.0 versions upload --env preview 2>&1 | tee upload.log || UPLOAD_SUCCESS=false
+          
+          if [ "$UPLOAD_SUCCESS" = "false" ]; then
+            if grep -qE "does not yet exist|deploy command first" upload.log; then
+              echo "Worker finance-manager-preview does not exist yet. Running deploy first to initialize it..."
+              npx wrangler@4.106.0 deploy --env preview
+              echo "Retrying version upload..."
+              npx wrangler@4.106.0 versions upload --env preview 2>&1 | tee upload.log
+            else
+              echo "Wrangler upload failed with an unrelated error."
+              exit 1
+            fi
+          fi
+          
+          # Prefer the explicit "Version Preview URL" line; fall back to any
+          # workers.dev URL in the output.
+          url=$(grep -iE 'preview url' upload.log \
+                  | grep -oiE 'https://[a-z0-9.-]+\.workers\.dev' | head -1)
+          if [ -z "$url" ]; then
+            url=$(grep -oiE 'https://[a-z0-9.-]+\.workers\.dev' upload.log | head -1)
+          fi
+          echo "deployment-url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview URL: ${url:-<none — enable Preview URLs on the Worker>}"
+
+      # Post or update PR comment with preview link from template
+      - name: Post Preview Link
+        if: env.DEPLOY_ENABLED == 'true' && steps.env.outputs.env == 'preview' && steps.deploy-preview.outputs.deployment-url != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const templatePath = path.join(process.env.GITHUB_WORKSPACE, '.github/workflows/pr-deployment-table.md');
+            let body = fs.readFileSync(templatePath, 'utf8');
+            
+            const url = '${{ steps.deploy-preview.outputs.deployment-url }}';
+            const commit = context.sha.substring(0, 7);
+            const commitUrl = `${context.server_url}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`;
+            const logsUrl = `${context.server_url}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const updated = new Date().toUTCString();
+            
+            body = body
+              .replace('LOGS_URL', logsUrl)
+              .replace('COMMIT_SHA', commit)
+              .replace('COMMIT_URL', commitUrl)
+              .replace('PREVIEW_URL', url)
+              .replace('UPDATED_TIME', updated);
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('Deploying with Cloudflare Workers')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

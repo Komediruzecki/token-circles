@@ -180,3 +180,20 @@ describe('localApiRouter - body parsing', () => {
     expect(res.status).toBe(201)
   })
 })
+
+describe('targetProfileIdsFromHeaders (per-request profile target)', () => {
+  it('parses X-Profile-Id (single + comma) and X-Profile-Ids (JSON, preferred)', async () => {
+    const { targetProfileIdsFromHeaders } = await import('../handlers/helpers.js')
+    expect(targetProfileIdsFromHeaders({ 'X-Profile-Id': '42' })).toEqual([42])
+    expect(targetProfileIdsFromHeaders({ 'x-profile-id': '2,3' })).toEqual([2, 3])
+    // JSON household header wins over the single-id fallback
+    expect(targetProfileIdsFromHeaders({ 'X-Profile-Ids': '[2,3]', 'X-Profile-Id': '2' })).toEqual([
+      2, 3,
+    ])
+    expect(targetProfileIdsFromHeaders(new Headers({ 'x-profile-id': '7' }))).toEqual([7])
+    expect(targetProfileIdsFromHeaders([['x-profile-id', '9']])).toEqual([9])
+    // No header -> undefined so callers fall back to the active profile (never "all")
+    expect(targetProfileIdsFromHeaders(undefined)).toBeUndefined()
+    expect(targetProfileIdsFromHeaders({})).toBeUndefined()
+  })
+})
