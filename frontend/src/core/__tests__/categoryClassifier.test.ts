@@ -70,6 +70,11 @@ describe('classifyCategory', () => {
     expect(classifyCategory('Savings')).toBe('account')
   })
 
+  it('classifies "Investments" as account (asset that counts toward net worth)', () => {
+    expect(classifyCategory('Investments')).toBe('account')
+    expect(classifyCategory('Investment')).toBe('account')
+  })
+
   it('classifies "Wallet" as account', () => {
     expect(classifyCategory('Wallet')).toBe('account')
   })
