@@ -538,6 +538,22 @@
   font-weight: 600;
 }
 
+/* Preview row filter — a segmented control above the table for switching the view
+   between all rows, within-batch duplicates, and the no-account-transfer warning. */
+.filterBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.filterBarLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
 /* Pagination */
 .pagination {
   display: flex;

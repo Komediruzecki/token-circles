@@ -296,6 +296,52 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
         </div>
       </Show>
 
+      {/* Preview filter — narrow the table to only duplicates or only the
+          no-account-transfer warning rows. View-only: selection/import unaffected.
+          The duplicate/warning chips appear only when there's something to show. */}
+      <Show when={flow.filterCounts().duplicates > 0 || flow.filterCounts().noAccountTransfer > 0}>
+        <div class={styles.filterBar}>
+          <span class={styles.filterBarLabel}>Show:</span>
+          <button
+            type="button"
+            class={`${styles.btn} ${styles.btnSm} ${
+              flow.previewFilter() === 'all' ? styles.btnPrimary : styles.btnGhost
+            }`}
+            onClick={() => {
+              flow.applyPreviewFilter('all')
+            }}
+          >
+            All ({flow.filterCounts().all})
+          </button>
+          <Show when={flow.filterCounts().duplicates > 0}>
+            <button
+              type="button"
+              class={`${styles.btn} ${styles.btnSm} ${
+                flow.previewFilter() === 'duplicates' ? styles.btnPrimary : styles.btnGhost
+              }`}
+              onClick={() => {
+                flow.applyPreviewFilter('duplicates')
+              }}
+            >
+              Duplicates ({flow.filterCounts().duplicates})
+            </button>
+          </Show>
+          <Show when={flow.filterCounts().noAccountTransfer > 0}>
+            <button
+              type="button"
+              class={`${styles.btn} ${styles.btnSm} ${
+                flow.previewFilter() === 'no-account-transfer' ? styles.btnPrimary : styles.btnGhost
+              }`}
+              onClick={() => {
+                flow.applyPreviewFilter('no-account-transfer')
+              }}
+            >
+              No-account transfers ({flow.filterCounts().noAccountTransfer})
+            </button>
+          </Show>
+        </div>
+      </Show>
+
       {/* Table */}
       <div class={styles.tableWrapper}>
         <table class={styles.previewTable}>
@@ -314,10 +360,10 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </tr>
           </thead>
           <tbody>
-            <For each={flow.currentRows().slice(flow.startRow(), flow.endRow())}>
-              {(row, idx) => {
-                const actualIndex = () => flow.startRow() + idx()
-                const isDuplicate = () => flow.duplicateSet().has(actualIndex())
+            <For each={flow.visibleRowIndices().slice(flow.startRow(), flow.endRow())}>
+              {(actualIndex) => {
+                const row = () => flow.currentRows()[actualIndex]
+                const isDuplicate = () => flow.duplicateSet().has(actualIndex)
                 return (
                   <tr
                     classList={{ [styles.duplicate]: isDuplicate() }}
@@ -326,16 +372,16 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                     <td class={styles.selectCol}>
                       <input
                         type="checkbox"
-                        checked={flow.selectedRows().has(actualIndex())}
+                        checked={flow.selectedRows().has(actualIndex)}
                         onChange={() => {
-                          flow.toggleRow(actualIndex())
+                          flow.toggleRow(actualIndex)
                         }}
                       />
                       <Show when={isDuplicate()}>
                         <span class={styles.dupBadge}>dup</span>
                       </Show>
                     </td>
-                    <For each={row}>{(cell) => <td>{cell ?? ''}</td>}</For>
+                    <For each={row()}>{(cell) => <td>{cell ?? ''}</td>}</For>
                   </tr>
                 )
               }}
@@ -345,7 +391,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
       </div>
 
       {/* Pagination */}
-      {total() > flow.rowsPerPage() && (
+      {flow.visibleRowIndices().length > flow.rowsPerPage() && (
         <div class={styles.pagination}>
           <button
             class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
