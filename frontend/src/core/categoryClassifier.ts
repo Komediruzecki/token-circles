@@ -33,6 +33,10 @@ const accountKeywords = [
   'interactive',
   'broker',
   'trading',
+  // Bare stem so a category literally named "Investments" (or "Investment") is
+  // treated as an asset account — it holds value and should count toward net
+  // worth, which only accounts do. Users can still override in the mapping step.
+  'investment',
   'account',
   'checking',
   'savings',
