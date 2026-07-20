@@ -5,6 +5,7 @@
 import { For } from 'solid-js'
 import { formatCurrency } from '../core/api'
 import { isEstimatedBaseValue, originalAmountLabel, txBaseValue } from '../core/currency'
+import { fromToLabels } from '../core/transactionFlow'
 import styles from './TransactionTable.module.css'
 import type { Transaction } from '../types/models'
 
@@ -208,11 +209,16 @@ export default function TransactionTable(props: TransactionTableProps) {
                   </div>
                 </td>
                 <td class={styles.counterPartyCol}>
-                  <span>
-                    <span class={styles.fromTo}>{transaction.means_of_payment || '—'}</span>
-                    <span class={styles.fromToArrow}> → </span>
-                    <span class={styles.fromTo}>{transaction.category_name || '—'}</span>
-                  </span>
+                  {(() => {
+                    const ft = fromToLabels(transaction)
+                    return (
+                      <span>
+                        <span class={styles.fromTo}>{ft.from}</span>
+                        <span class={styles.fromToArrow}> → </span>
+                        <span class={styles.fromTo}>{ft.to}</span>
+                      </span>
+                    )
+                  })()}
                 </td>
                 <td class={styles.amountCol} data-test-id="transactions-cell-amount">
                   <div
