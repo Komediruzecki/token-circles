@@ -224,6 +224,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const [accountBalanceDates, setAccountBalanceDates] = createSignal<Record<string, string>>({})
   const [universalStartDate, setUniversalStartDate] = createSignal('')
 
+  // Date-range filter for the import: rows whose date falls outside [start, end] are
+  // skipped at import time. Empty string = unbounded on that side.
+  const [importStartDate, setImportStartDate] = createSignal('')
+  const [importEndDate, setImportEndDate] = createSignal('')
+
   // Preview state
   const [_rows, setRows] = createSignal<string[][]>([])
   const [_headers, setHeaders] = createSignal<string[]>([])
@@ -406,7 +411,18 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         }),
       })
       const data = await res.json()
-      const list: string[] = Array.isArray(data?.new_categories) ? data.new_categories : []
+      const rawList: string[] = Array.isArray(data?.new_categories) ? data.new_categories : []
+      // A value the user marked as an account must never be offered as a "category to
+      // create" — it becomes an account, not a category, and creating a same-named category
+      // is a confusing duplicate. Some backends don't filter these out of the preview, so
+      // drop them client-side (by name, case-insensitively).
+      const types = categoryTypes()
+      const accountNames = new Set(
+        Object.keys(types)
+          .filter((k) => types[k] === 'account')
+          .map((k) => k.toLowerCase())
+      )
+      const list = rawList.filter((c) => !accountNames.has(c.toLowerCase()))
       setNewCategories(list)
       setApprovedCategories(new Set(list))
       setExistingDuplicates(typeof data?.duplicates === 'number' ? data.duplicates : null)
@@ -941,6 +957,56 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     return Math.min(startRow() + rowsPerPage(), currentRows().length)
   }
 
+  // Parse a spreadsheet date cell to yyyy-mm-dd for range comparison. Handles the formats
+  // the importer sees (yyyy-mm-dd, and day-first dd/mm/yyyy | dd.mm.yyyy | dd-mm-yyyy).
+  // Returns '' when unrecognized — such a row is never skipped by the date filter.
+  const toYmd = (v: string | undefined): string => {
+    const s = (v ?? '').trim()
+    if (!s) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/)
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+    return ''
+  }
+
+  // A parseable date outside the active [start, end] window is out of range.
+  const isDateOutOfRange = (dateCell: string | undefined): boolean => {
+    const start = importStartDate()
+    const end = importEndDate()
+    if (!start && !end) return false
+    const ymd = toYmd(dateCell)
+    if (!ymd) return false // unrecognized date — keep it (the importer handles it)
+    return (!!start && ymd < start) || (!!end && ymd > end)
+  }
+
+  // Live count of rows the date filter would skip (for the preview note).
+  const dateSkippedCount = (): number => {
+    const dateIdx = columnMapping().date
+    if (dateIdx === undefined || (!importStartDate() && !importEndDate())) return 0
+    return currentRows().reduce((n, row) => n + (isDateOutOfRange(row[dateIdx]) ? 1 : 0), 0)
+  }
+
+  // Transfer rows whose destination category is NOT (and won't become) a real account —
+  // the money would route into nothing. Uses existing accounts + values marked as account.
+  const transferVoidDestinations = (): { names: string[]; count: number } => {
+    const mapping = columnMapping()
+    const typeIdx = mapping.type
+    const catIdx = mapping.category
+    if (typeIdx === undefined || catIdx === undefined) return { names: [], count: 0 }
+    const types = categoryTypes()
+    const acctNames = new Set(bankAccounts().map((a) => a.name.toLowerCase()))
+    const isAccount = (name: string) =>
+      types[name] === 'account' || acctNames.has(name.toLowerCase())
+    const bad = new Map<string, number>()
+    for (const row of currentRows()) {
+      if ((row[typeIdx] ?? '').trim().toLowerCase() !== 'transfer') continue
+      const dest = (row[catIdx] ?? '').trim()
+      if (!dest || isAccount(dest)) continue
+      bad.set(dest, (bad.get(dest) ?? 0) + 1)
+    }
+    return { names: [...bad.keys()], count: [...bad.values()].reduce((a, b) => a + b, 0) }
+  }
+
   // Import execution
   const handleImport = async (mode: 'all' | 'new' | 'selected') => {
     setLoading(true)
@@ -964,6 +1030,17 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       if (mode === 'new' && dupCount > 0) {
         const dupSet = duplicateSet()
         rowsToImport = rowsToImport.filter((_, i) => !dupSet.has(i))
+      }
+
+      // Date-range filter: drop rows whose date falls outside the selected window.
+      let dateSkipped = 0
+      const dateIdx = mapping.date
+      if (dateIdx !== undefined && (importStartDate() || importEndDate())) {
+        rowsToImport = rowsToImport.filter((row) => {
+          const out = isDateOutOfRange(row[dateIdx])
+          if (out) dateSkipped++
+          return !out
+        })
       }
 
       // Reuse a stable id across retries so the worker can de-dupe a re-run of the same import.
@@ -1007,6 +1084,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         const parts: string[] = []
         if (alreadyExisted > 0) parts.push(`${alreadyExisted} already imported, skipped`)
         if (invalidSkipped > 0) parts.push(`${invalidSkipped} invalid`)
+        if (dateSkipped > 0) parts.push(`${dateSkipped} outside date range`)
         text = `Imported ${importedCount} transactions${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
       }
       setResultMessage({ type: 'success', text })
@@ -1143,6 +1221,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     accountBalanceDates,
     setAccountBalanceDates,
     universalStartDate,
+    importStartDate,
+    setImportStartDate,
+    importEndDate,
+    setImportEndDate,
     selectedRows,
     currentPage,
     setCurrentPage,
@@ -1161,6 +1243,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     currentRows,
     duplicateSet,
     detectCategories,
+    dateSkippedCount,
+    transferVoidDestinations,
     totalPages,
     startRow,
     endRow,
