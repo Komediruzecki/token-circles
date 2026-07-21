@@ -298,6 +298,70 @@ function AnthropicIcon() {
   )
 }
 
+function ElevenLabsIcon() {
+  // Two vertical bars — the ElevenLabs "II" mark.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <rect x="8" y="5" width="3" height="14" rx="1.4" fill="currentColor" />
+      <rect x="13" y="5" width="3" height="14" rx="1.4" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ResendIcon() {
+  // An envelope — Resend is a transactional-email API.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <rect
+        x="3"
+        y="5.5"
+        width="18"
+        height="13"
+        rx="2.5"
+        stroke="currentColor"
+        stroke-width="1.8"
+      />
+      <path
+        d="M4.5 8 12 13.5 19.5 8"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  )
+}
+
+function VercelIcon() {
+  // The Vercel triangle.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M12 4 21 19.5H3L12 4z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CloudflareIcon() {
+  // A cloud silhouette (Cloudflare's mark is a stylized cloud).
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M7.5 18h9.25a3.75 3.75 0 0 0 .57-7.46 5.5 5.5 0 0 0-10.6-1.16A4.25 4.25 0 0 0 7.5 18z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function SupabaseIcon() {
+  // A downward lightning bolt — the Supabase mark.
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <path d="M13 2.5 5.5 13.5H11l-1 8 7.5-11H12l1-7.5z" fill="currentColor" />
+    </svg>
+  )
+}
+
 /* ── Brand Registry ── */
 
 const ICONS: Record<string, () => any> = {
@@ -319,6 +383,11 @@ const ICONS: Record<string, () => any> = {
   adobe: AdobeIcon,
   notion: NotionIcon,
   openai: OpenAIIcon,
+  elevenlabs: ElevenLabsIcon,
+  resend: ResendIcon,
+  vercel: VercelIcon,
+  cloudflare: CloudflareIcon,
+  supabase: SupabaseIcon,
 }
 
 const BRANDS: SubscriptionBrand[] = [
@@ -604,6 +673,168 @@ const BRANDS: SubscriptionBrand[] = [
     bgColor: 'rgba(154,167,207,0.08)',
     icon: LetterMark('M'),
     defaultCategory: 'News',
+  },
+
+  /* ── AI, developer & privacy tools ── */
+  {
+    keywords: ['perplexity'],
+    displayName: 'Perplexity',
+    color: '#20808D',
+    bgColor: 'rgba(32,128,141,0.08)',
+    icon: LetterMark('P'),
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['cursor'],
+    displayName: 'Cursor',
+    color: '#3B82F6',
+    bgColor: 'rgba(59,130,246,0.08)',
+    icon: LetterMark('C'),
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['suno'],
+    displayName: 'Suno',
+    color: '#F04E23',
+    bgColor: 'rgba(240,78,35,0.08)',
+    icon: LetterMark('S'),
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['soundverse'],
+    displayName: 'SoundVerse',
+    color: '#8B5CF6',
+    bgColor: 'rgba(139,92,246,0.08)',
+    icon: LetterMark('SV'),
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['elevenlabs', 'eleven labs', '11labs', '11 labs'],
+    displayName: 'ElevenLabs',
+    color: '#5D5FEF',
+    bgColor: 'rgba(93,95,239,0.08)',
+    icon: ElevenLabsIcon,
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['runway'],
+    displayName: 'Runway',
+    color: '#E5484D',
+    bgColor: 'rgba(229,72,77,0.08)',
+    icon: LetterMark('R'),
+    defaultCategory: 'AI',
+  },
+  {
+    keywords: ['runpod', 'run pod'],
+    displayName: 'RunPod',
+    color: '#7C3AED',
+    bgColor: 'rgba(124,58,237,0.08)',
+    icon: LetterMark('RP'),
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['resend'],
+    displayName: 'Resend',
+    color: '#4B5563',
+    bgColor: 'rgba(75,85,99,0.08)',
+    icon: ResendIcon,
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['vercel'],
+    displayName: 'Vercel',
+    color: '#3F3F46',
+    bgColor: 'rgba(63,63,70,0.08)',
+    icon: VercelIcon,
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['cloudflare'],
+    displayName: 'Cloudflare',
+    color: '#F38020',
+    bgColor: 'rgba(243,128,32,0.08)',
+    icon: CloudflareIcon,
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['supabase'],
+    displayName: 'Supabase',
+    color: '#3ECF8E',
+    bgColor: 'rgba(62,207,142,0.08)',
+    icon: SupabaseIcon,
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['linear'],
+    displayName: 'Linear',
+    color: '#5E6AD2',
+    bgColor: 'rgba(94,106,210,0.08)',
+    icon: LetterMark('L'),
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['sentry'],
+    displayName: 'Sentry',
+    color: '#6E56CF',
+    bgColor: 'rgba(110,86,207,0.08)',
+    icon: LetterMark('S'),
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['render'],
+    displayName: 'Render',
+    color: '#5A6AF0',
+    bgColor: 'rgba(90,106,240,0.08)',
+    icon: LetterMark('R'),
+    defaultCategory: 'Development',
+  },
+  {
+    keywords: ['proton', 'protonmail', 'proton mail', 'protonvpn', 'proton vpn'],
+    displayName: 'Proton',
+    color: '#6D4AFF',
+    bgColor: 'rgba(109,74,255,0.08)',
+    icon: LetterMark('P'),
+    defaultCategory: 'Security',
+  },
+  {
+    keywords: ['nordvpn', 'nord vpn'],
+    displayName: 'NordVPN',
+    color: '#4687FF',
+    bgColor: 'rgba(70,135,255,0.08)',
+    icon: LetterMark('N'),
+    defaultCategory: 'Security',
+  },
+  {
+    keywords: ['bitwarden'],
+    displayName: 'Bitwarden',
+    color: '#175DDC',
+    bgColor: 'rgba(23,93,220,0.08)',
+    icon: LetterMark('B'),
+    defaultCategory: 'Security',
+  },
+  {
+    keywords: ['canva'],
+    displayName: 'Canva',
+    color: '#00C4CC',
+    bgColor: 'rgba(0,196,204,0.08)',
+    icon: LetterMark('C'),
+    defaultCategory: 'Software',
+  },
+  {
+    keywords: ['figma'],
+    displayName: 'Figma',
+    color: '#A259FF',
+    bgColor: 'rgba(162,89,255,0.08)',
+    icon: LetterMark('F'),
+    defaultCategory: 'Software',
+  },
+  {
+    keywords: ['crunchyroll', 'crunchy roll'],
+    displayName: 'Crunchyroll',
+    color: '#F47521',
+    bgColor: 'rgba(244,117,33,0.08)',
+    icon: LetterMark('C'),
+    defaultCategory: 'Streaming',
   },
 ]
 

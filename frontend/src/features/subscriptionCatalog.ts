@@ -36,6 +36,8 @@ const SUBS = ['Subscriptions', 'Subscription', 'Entertainment']
 const ENT = ['Entertainment', 'Subscriptions']
 const HEALTH = ['Health', 'Fitness', 'Subscriptions']
 const UTIL = ['Utilities', 'Subscriptions']
+const DEV = ['Software', 'Subscriptions']
+const SEC = ['Security', 'Software', 'Subscriptions']
 
 export const SUBSCRIPTION_CATALOG: CatalogGroup[] = [
   {
@@ -87,6 +89,16 @@ export const SUBSCRIPTION_CATALOG: CatalogGroup[] = [
       { name: 'Apple TV+', price: 9.99, categoryHints: ENT },
       { name: 'Paramount+', price: 8.99, categoryHints: ENT },
       { name: 'Twitch', price: 8.99, categoryHints: ENT },
+      {
+        name: 'Crunchyroll',
+        price: 7.99,
+        tier: 'Fan',
+        plans: [
+          { label: 'Fan', price: 7.99 },
+          { label: 'Mega Fan', price: 9.99 },
+        ],
+        categoryHints: ENT,
+      },
     ],
   },
   {
@@ -180,6 +192,8 @@ export const SUBSCRIPTION_CATALOG: CatalogGroup[] = [
       { name: 'Google Workspace', price: 6.0, categoryHints: SUBS },
       { name: '1Password', price: 2.99, categoryHints: SUBS },
       { name: 'Grammarly', price: 12.0, categoryHints: SUBS },
+      { name: 'Canva', price: 12.99, tier: 'Pro', categoryHints: SUBS },
+      { name: 'Figma', price: 15.0, tier: 'Professional', categoryHints: SUBS },
     ],
   },
   {
@@ -208,6 +222,97 @@ export const SUBSCRIPTION_CATALOG: CatalogGroup[] = [
       },
       { name: 'GitHub Copilot', price: 10.0, categoryHints: SUBS },
       { name: 'Midjourney', price: 10.0, categoryHints: SUBS },
+      { name: 'Perplexity', price: 20.0, tier: 'Pro', categoryHints: SUBS },
+      {
+        name: 'Cursor',
+        price: 20.0,
+        tier: 'Pro',
+        plans: [
+          { label: 'Pro', price: 20.0 },
+          { label: 'Business', price: 40.0 },
+        ],
+        categoryHints: SUBS,
+      },
+      {
+        name: 'Suno',
+        price: 10.0,
+        tier: 'Pro',
+        plans: [
+          { label: 'Pro', price: 10.0 },
+          { label: 'Premier', price: 30.0 },
+        ],
+        categoryHints: SUBS,
+      },
+      { name: 'SoundVerse', price: 15.0, categoryHints: SUBS },
+      {
+        name: 'ElevenLabs',
+        price: 5.0,
+        tier: 'Starter',
+        plans: [
+          { label: 'Starter', price: 5.0 },
+          { label: 'Creator', price: 22.0 },
+          { label: 'Pro', price: 99.0 },
+        ],
+        categoryHints: SUBS,
+      },
+      {
+        name: 'Runway',
+        price: 15.0,
+        tier: 'Standard',
+        plans: [
+          { label: 'Standard', price: 15.0 },
+          { label: 'Pro', price: 35.0 },
+        ],
+        categoryHints: SUBS,
+      },
+    ],
+  },
+  {
+    label: 'Developer',
+    items: [
+      { name: 'RunPod', price: 10.0, categoryHints: DEV },
+      {
+        name: 'Resend',
+        price: 20.0,
+        tier: 'Pro',
+        plans: [
+          { label: 'Pro', price: 20.0 },
+          { label: 'Scale', price: 90.0 },
+        ],
+        categoryHints: DEV,
+      },
+      { name: 'Vercel', price: 20.0, tier: 'Pro', categoryHints: DEV },
+      { name: 'Cloudflare', price: 5.0, tier: 'Workers Paid', categoryHints: DEV },
+      { name: 'Supabase', price: 25.0, tier: 'Pro', categoryHints: DEV },
+      { name: 'Linear', price: 8.0, tier: 'Standard', categoryHints: DEV },
+      { name: 'Sentry', price: 26.0, tier: 'Team', categoryHints: DEV },
+      { name: 'Render', price: 19.0, tier: 'Professional', categoryHints: DEV },
+    ],
+  },
+  {
+    label: 'Privacy & Security',
+    items: [
+      {
+        name: 'Proton',
+        price: 9.99,
+        tier: 'Unlimited',
+        plans: [
+          { label: 'Mail Plus', price: 3.99 },
+          { label: 'Unlimited', price: 9.99 },
+        ],
+        categoryHints: SEC,
+      },
+      { name: 'NordVPN', price: 11.99, categoryHints: SEC },
+      {
+        name: 'Bitwarden',
+        price: 0.83,
+        tier: 'Premium',
+        plans: [
+          { label: 'Premium', price: 0.83 },
+          { label: 'Families', price: 3.33 },
+        ],
+        categoryHints: SEC,
+      },
     ],
   },
   {
