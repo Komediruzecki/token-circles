@@ -41,6 +41,8 @@ import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
+import { showConfirm } from '../core/confirmStore'
+import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
 import { ImportDataEntry } from './import/ImportDataEntry'
 import { createImportFlow } from './import/importFlow'
@@ -230,6 +232,41 @@ export default function Import() {
                       {(details?.rows_skipped_invalid ?? 0) > 0 && (
                         <span>Rows skipped as invalid: {details!.rows_skipped_invalid}</span>
                       )}
+                    </div>
+                    <div style={{ 'margin-top': '10px', 'text-align': 'right' }}>
+                      <button
+                        type="button"
+                        style={{
+                          'font-size': '12px',
+                          padding: '4px 10px',
+                          border: '1px solid var(--danger, #ef4444)',
+                          color: 'var(--danger, #ef4444)',
+                          background: 'transparent',
+                          'border-radius': '6px',
+                          cursor: 'pointer',
+                        }}
+                        onClick={async () => {
+                          const ok = await showConfirm(
+                            `Delete this import — "${log.source || 'Import'}" (${log.imported} transaction${log.imported === 1 ? '' : 's'})? This removes the transactions it created and recomputes balances.`,
+                            { danger: true, confirmText: 'Delete import' }
+                          )
+                          if (!ok) return
+                          const deleted = await flow.deleteImportLog(log.id)
+                          if (deleted === null) addToast('Could not delete import', 'error')
+                          else if (deleted === 0)
+                            addToast(
+                              'No linked transactions to remove (older import); log entry cleared',
+                              'info'
+                            )
+                          else
+                            addToast(
+                              `Removed ${deleted} transaction${deleted === 1 ? '' : 's'} from this import`,
+                              'success'
+                            )
+                        }}
+                      >
+                        Delete import
+                      </button>
                     </div>
                   </details>
                 )

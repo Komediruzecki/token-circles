@@ -962,6 +962,13 @@ export async function importExecute(body: unknown): Promise<Response> {
         account_id:
           accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null,
         transfer_account_id: transferAccountId || undefined,
+        // Stamp the batch id so a whole import can be undone later (delete-recent-import).
+        import_id:
+          typeof data.importId === 'string'
+            ? data.importId
+            : typeof data.import_id === 'string'
+              ? data.import_id
+              : null,
         created_at: new Date().toISOString(),
       }
 

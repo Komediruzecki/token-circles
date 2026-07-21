@@ -727,6 +727,13 @@ const routes: RouteDef[] = [
     }),
   },
   {
+    pattern: /^\/import-logs\/(\d+)$/,
+    methods: ['DELETE'],
+    handler: dispatch({
+      DELETE: (ctx) => h.importLogsDelete(ctx.params),
+    }),
+  },
+  {
     pattern: /^\/import\/preview$/,
     methods: ['POST'],
     handler: dispatch({ POST: (ctx) => h.importBulk(ctx.body) }),

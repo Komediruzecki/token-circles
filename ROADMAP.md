@@ -68,6 +68,7 @@ Contributions toward any of these are welcome — please open an issue to discus
 - [ ] **Background job system** — PDF generation, email dispatch, bank imports via Bull/BullMQ + Redis
 - [ ] **GraphQL endpoint** — Alternative to REST for complex dashboard queries
 - [ ] **Server-sent events for progress** — Stream report generation, import progress
+- [ ] **Express import parity (deferred — self-hosted/Apache backend only)** — The primary runtimes are the frontend serverless (IndexedDB) handlers and the Cloudflare worker; both got the multiplicity-aware import dedup and the transfer/account resolution. The Express backend (`backend/routes/importRoutes.js`) was intentionally left out because it isn't a supported deployment target right now. If it ever becomes one, bring it to parity: (1) add execute-side duplicate detection — it currently inserts every row unconditionally, so re-imports duplicate; use the same multiplicity-aware key `(date, description, account_id, type, currency)` + `±0.01` amount that consumes one pre-existing match per row and never collapses genuine same-day repeats; (2) return `new_accounts` in the preview response; (3) stamp `import_id` on inserted transactions and add the `DELETE /api/import-logs/:id` batch-undo endpoint. It already seeds all existing accounts by name, so transfer resolution is already correct there.
 
 ## Frontend
 

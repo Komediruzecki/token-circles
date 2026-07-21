@@ -195,6 +195,23 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
+  // Undo an import: delete its transactions (server recomputes balances) and the log row.
+  // Returns the number of transactions deleted, or null on failure.
+  const deleteImportLog = async (id: number): Promise<number | null> => {
+    try {
+      const res = await apiFetch(`/api/import-logs/${id}`, {
+        method: 'DELETE',
+        headers: profileHeaders(),
+      })
+      if (!res.ok) return null
+      const data = (await res.json()) as { deleted?: number }
+      await loadImportLogs()
+      return typeof data.deleted === 'number' ? data.deleted : 0
+    } catch {
+      return null
+    }
+  }
+
   // File upload state
   const [uploadResult, setUploadResult] = createSignal<UploadResult | null>(null)
   const [selectedSheet, setSelectedSheet] = createSignal<string>('')
@@ -1324,6 +1341,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // actions
     init,
     loadImportLogs,
+    deleteImportLog,
     applyUniversalStartDate,
     parsePastedData,
     goToMapping,
