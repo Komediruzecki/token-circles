@@ -86,6 +86,12 @@ const AMBIGUOUS_TOKENS = new Set([
   'internet',
   'mobile',
   'gym',
+  // Common English words that are also service names: only propose them when the
+  // charge repeats with a stable amount, never off a single ambiguous line.
+  'resend',
+  'render',
+  'linear',
+  'runway',
 ])
 
 // Catalogue entries with no brand keywords of their own get minimal aliases so
