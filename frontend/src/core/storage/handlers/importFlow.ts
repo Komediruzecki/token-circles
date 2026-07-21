@@ -678,9 +678,14 @@ export async function importExecute(body: unknown): Promise<Response> {
     const newlyCreatedCategories: string[] = []
 
     // Normalize keys to lowercase so lookups are case-insensitive
+    // Trim as well as lowercase: the row-side resolution trims the category /
+    // means_of_payment value, so the account-map key must be trimmed too — otherwise a
+    // category like "Revolut " (stray trailing space from the sheet) creates an account
+    // keyed "revolut " that the trimmed lookup "revolut" never matches, and the transfer
+    // silently loses its destination leg.
     const normalizeKeys = (obj: Record<string, string>) => {
       const out: Record<string, string> = {}
-      for (const [k, v] of Object.entries(obj)) out[k.toLowerCase()] = v
+      for (const [k, v] of Object.entries(obj)) out[k.toLowerCase().trim()] = v
       return out
     }
     const catTypes = normalizeKeys(categoryTypes)

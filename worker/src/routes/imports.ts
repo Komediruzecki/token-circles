@@ -422,7 +422,11 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       `SELECT id, name FROM accounts WHERE profile_id IN (${inClause})`,
       ...pids
     );
-    for (const a of accs) accountIdMap.set(a.name.toLowerCase(), a.id);
+    // Trim as well as lowercase: the row-side resolution trims the category /
+    // means_of_payment value, so a stored account name with stray whitespace (e.g.
+    // "Revolut ") must key on the trimmed form or the transfer's destination leg never
+    // resolves and shows "Erste Current -> —".
+    for (const a of accs) accountIdMap.set(a.name.trim().toLowerCase(), a.id);
   };
   await loadAccounts();
 
@@ -436,7 +440,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         ([name, t]) => t === 'account' && !accountIdMap.has(String(name).trim().toLowerCase())
       )
       .map(([name]) => ({
-        name,
+        name: name.trim(),
         accType: (accountTypes && accountTypes[name]) || 'giro',
         balance: parseFloat((accountBalances && accountBalances[name]) || '0') || 0,
         balanceDate: (accountBalanceDates && accountBalanceDates[name]) || today(),

@@ -59,6 +59,29 @@ describe('importExecute — transfer resolves against existing accounts', () => 
     expect(tx.account_id).toBe(erste) // source leg
     expect(tx.transfer_account_id).toBe(revolut) // destination leg — the fix
   })
+
+  it('resolves a transfer whose destination category has stray trailing whitespace', async () => {
+    const db = await getDB()
+    // "Revolut " (trailing space, as a sheet cell can carry) previously created an account
+    // keyed "revolut " that the trimmed row-side lookup "revolut" never matched, so the
+    // destination leg dropped (transfer_account_id null → "Erste Current → —").
+    const rows = [['2026-07-20', 'Top-up', '200', 'Revolut ', 'Erste Current', 'Transfer']]
+    const res = await importExecute({
+      rows,
+      mapping: { date: 0, description: 1, amount: 2, category: 3, means_of_payment: 4, type: 5 },
+      categoryTypes: { 'Revolut ': 'account', 'Erste Current': 'account' },
+      dry_run: false,
+    })
+    expect(((await res.json()) as { imported: number }).imported).toBe(1)
+    const tx = (await db.getAllFromIndex('transactions', 'by_profile', 1)).find(
+      (t) => t.description === 'Top-up'
+    )!
+    const accts = await db.getAllFromIndex('accounts', 'by_profile', 1)
+    const erste = accts.find((a) => String(a.name).trim().toLowerCase() === 'erste current')!
+    const revolut = accts.find((a) => String(a.name).trim().toLowerCase() === 'revolut')!
+    expect(tx.account_id).toBe(erste.id)
+    expect(tx.transfer_account_id).toBe(revolut.id)
+  })
 })
 
 describe('importExecute — dry run reports accounts to be created', () => {
