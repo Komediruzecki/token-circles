@@ -212,6 +212,35 @@ async function detectNewCategories(
   return out
 }
 
+/** Distinct account-typed category values in `rows` that do NOT already name an existing
+ *  account (case-insensitive) — the accounts an import would CREATE. The counterpart to
+ *  detectNewCategories: values flagged 'account' become accounts, not categories, and
+ *  weren't surfaced anywhere before, so the preview couldn't show which accounts a run
+ *  would add (or whether a transfer's destination was even recognised as an account). */
+async function detectNewAccounts(
+  rows: Record<string, unknown>[],
+  categoryTypes: Record<string, string> = {}
+): Promise<string[]> {
+  const db = await getDB()
+  const profileId = await adapter.getCurrentProfileId()
+  const accounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
+  const existingAcct = new Set(accounts.map((a) => toStr(a.name).toLowerCase().trim()))
+  const catTypeLower: Record<string, string> = {}
+  for (const [k, v] of Object.entries(categoryTypes)) catTypeLower[k.toLowerCase().trim()] = v
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const raw = toStr(row.category).trim()
+    if (!raw) continue
+    const lower = raw.toLowerCase()
+    if (catTypeLower[lower] !== 'account') continue
+    if (existingAcct.has(lower) || seen.has(lower)) continue
+    seen.add(lower)
+    out.push(raw)
+  }
+  return out
+}
+
 async function detectDuplicates(
   rows: Record<string, unknown>[]
 ): Promise<{ duplicates: number[]; clean: Record<string, unknown>[] }> {
@@ -256,13 +285,18 @@ async function detectDuplicates(
     // value instead of being read as 1.234 and missing the duplicate (audit I1/I4).
     const amount = parseAmount(row.amount)
 
+    // Multiplicity-aware: consume one matching existing amount per row, so N identical
+    // import rows are flagged only up to the number that already exist in the data — the
+    // rest are genuine repeats and count as new.
     const bucket = existingByKey.get(keyOf(date, desc))
-    const isDup =
+    const matchAt =
       bucket && Number.isFinite(amount)
-        ? bucket.some((amt) => Math.abs(amt - amount) < 0.01)
-        : false
-    if (isDup) duplicates.push(i)
-    else clean.push(row)
+        ? bucket.findIndex((amt) => Math.abs(amt - amount) < 0.01)
+        : -1
+    if (matchAt !== -1) {
+      bucket!.splice(matchAt, 1)
+      duplicates.push(i)
+    } else clean.push(row)
   }
 
   return { duplicates, clean }
@@ -613,11 +647,15 @@ export async function importExecute(body: unknown): Promise<Response> {
     const db = await getDB()
     const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
 
-    // Resolution-aware duplicate detection (audit A2): bucket existing stored
-    // transactions by the RESOLVED key (date, lowercased description, account_id,
-    // type, currency); the per-row check below matches within a ±0.01 amount
-    // tolerance inside a bucket. Accepted rows push their amount into the same map,
-    // so a later identical row in THIS import is caught as an in-file duplicate.
+    // Resolution-aware, MULTIPLICITY-aware duplicate detection (audit A2): bucket
+    // existing stored transactions by the RESOLVED key (date, lowercased description,
+    // account_id, type, currency) into a consumable multiset of amounts; the per-row
+    // check below skips a row only when it matches a transaction that ALREADY EXISTED
+    // before this import, consuming one match per row. Rows are NOT added back into the
+    // bucket, so several identical rows in THIS import all import (genuine same-day
+    // repeats — multiple bank fees, repeated top-ups — which the source records
+    // identically because it has date but no time). A re-import still dedupes: the
+    // existing copies consume the incoming ones one-for-one.
     const existingTxns = await db.getAllFromIndex('transactions', 'by_profile', profileId)
     const dedupBuckets = new Map<string, number[]>()
     for (const t of existingTxns) {
@@ -654,9 +692,20 @@ export async function importExecute(body: unknown): Promise<Response> {
     const accountIdMap = new Map<string, number>()
     // Also track accounts from means_of_payment column values
     const mopAccountMap = new Map<string, number>()
+    // Seed with ALL existing accounts by name so a transfer whose destination (category)
+    // or source (means_of_payment) names an account that already exists resolves on BOTH
+    // legs — even when that value wasn't flagged 'account' in this import. Without this a
+    // transfer to an existing account (e.g. "Revolut") one-sided (transfer_account_id was
+    // null) and silently drained the source account. Mirrors the worker / Express backend.
+    const existingAccounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
+    for (const a of existingAccounts) {
+      const nm = toStr((a as Record<string, unknown>).name)
+        .toLowerCase()
+        .trim()
+      if (nm && !accountIdMap.has(nm))
+        accountIdMap.set(nm, (a as Record<string, unknown>).id as number)
+    }
     if (!dryRun) {
-      // Check for existing accounts by name to avoid duplicates on re-import
-      const existingAccounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
       // Track created account names (lowercase) to prevent duplicates from
       // case-variant keys like "IB" + "ib" both mapping to 'account'.
       const createdAccountNames = new Set<string>()
@@ -665,12 +714,8 @@ export async function importExecute(body: unknown): Promise<Response> {
         const catLower = catName.toLowerCase()
         // Skip if already processed in this batch (case-insensitive duplicate)
         if (createdAccountNames.has(catLower)) continue
-        // Reuse existing account if already present
-        const existing = existingAccounts.find(
-          (a: Record<string, unknown>) => ((a.name as string) || '').toLowerCase() === catLower
-        )
-        if (existing) {
-          accountIdMap.set(catLower, existing.id as number)
+        // Reuse an existing account (already seeded into accountIdMap above).
+        if (accountIdMap.has(catLower)) {
           createdAccountNames.add(catLower)
           continue
         }
@@ -836,7 +881,10 @@ export async function importExecute(body: unknown): Promise<Response> {
       // names already in accountIdMap — without this fallback the source stays unlinked
       // and the self-transfer would one-sided-credit instead of netting to zero.
       let mopId = mopValue ? mopAccountMap.get(mopValue) : undefined
-      if (mopId === undefined && mopValue && type === 'transfer') {
+      if (mopId === undefined && mopValue) {
+        // Fall back to an existing account named by means_of_payment (any type). The mop
+        // seeding above deliberately skips names already in accountIdMap, so without this
+        // fallback an income/expense whose account already exists would not link.
         mopId = accountIdMap.get(mopValue)
       }
       if (mopId !== undefined) {
@@ -876,8 +924,10 @@ export async function importExecute(body: unknown): Promise<Response> {
       // Resolution-aware duplicate check (audit A2). Key on the SAME resolved
       // account_id that is stored below, plus type + currency, so only a row that
       // matches ALL of (date, description, account_id, type, currency) within the
-      // amount tolerance is flagged. A match is reported (not silently dropped) and
-      // skipped from the insert; a legitimately-different same-day/-amount row imports.
+      // amount tolerance is flagged. Multiplicity-aware: a row is skipped only when it
+      // matches a PRE-EXISTING stored transaction, consuming one match per row; rows are
+      // never added back into the bucket, so genuine same-day repeats in this import all
+      // import instead of collapsing to one. A match is reported (not silently dropped).
       const resolvedAccountId =
         accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null
       const dedupKey = resolvedDedupKey(
@@ -889,13 +939,12 @@ export async function importExecute(body: unknown): Promise<Response> {
       )
       const absAmount = Math.abs(amount)
       const dupBucket = dedupBuckets.get(dedupKey)
-      const isDuplicate = dupBucket ? dupBucket.some((a) => Math.abs(a - absAmount) < 0.01) : false
-      if (isDuplicate) {
+      const matchAt = dupBucket ? dupBucket.findIndex((a) => Math.abs(a - absAmount) < 0.01) : -1
+      if (matchAt !== -1) {
+        dupBucket!.splice(matchAt, 1)
         duplicates.push(i)
         continue
       }
-      if (dupBucket) dupBucket.push(absAmount)
-      else dedupBuckets.set(dedupKey, [absAmount])
 
       const transaction = {
         profile_id: profileId,
@@ -987,6 +1036,10 @@ export async function importExecute(body: unknown): Promise<Response> {
     // Category-column values with no matching existing category — reported so a
     // preview (dry-run) can confirm before creation (audit B5).
     const newCategories = await detectNewCategories(clean, categoryTypes)
+    // Account-typed values that would be newly created — surfaced so the preview shows
+    // the accounts a run will add (and, by omission, that a transfer destination matched
+    // an existing account rather than silently failing to resolve).
+    const newAccounts = await detectNewAccounts(clean, categoryTypes)
 
     return json({
       imported: imported.length,
@@ -999,6 +1052,8 @@ export async function importExecute(body: unknown): Promise<Response> {
       duplicate_indices: duplicates,
       // Distinct category-column values that would be newly created (audit B5).
       new_categories: newCategories,
+      // Distinct account-typed values that would be newly created.
+      new_accounts: newAccounts,
       // Count what this run actually created (accountIdMap also holds reused accounts)
       accounts_created: dryRun ? 0 : newlyCreatedAccounts.length,
       categories_created: dryRun ? 0 : newlyCreatedCategories.length,

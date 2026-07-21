@@ -43,7 +43,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </div>
             {duplicates() > 0 && (
               <div class={styles.statItem}>
-                <span class={styles.statLabel}>Duplicates</span>
+                <span class={styles.statLabel}>Potential duplicates</span>
                 <span class={`${styles.statValue} ${styles.duplicate}`}>{duplicates()}</span>
               </div>
             )}
@@ -94,9 +94,12 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
         </div>
         {duplicates() > 0 && (
           <p style={{ margin: '0 0 12px', 'font-size': '12px', color: 'var(--text-secondary)' }}>
-            {duplicates()} duplicate row{duplicates() === 1 ? '' : 's'} (identical to an earlier row
-            in this import) unselected by default — check a row
-            {props.embedded ? '' : ', or use "Import all",'} to include it.
+            {duplicates()} potential duplicate row{duplicates() === 1 ? '' : 's'} (identical to an
+            earlier row in this import).{' '}
+            {flow.bankFiles().length > 0
+              ? `Deselected by default — check a row${props.embedded ? '' : ', or use "Import all",'} to include it.`
+              : 'Kept and imported by default so genuine same-day repeats (e.g. duplicate bank fees) are not dropped — deselect any row that is actually a duplicate.'}{' '}
+            "Import only new" skips them all.
           </p>
         )}
         {/* Dry-run verdict: rows the dedup pass will skip because they already
@@ -169,6 +172,42 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                     />
                     <span>{name}</span>
                   </label>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+
+        <Show when={flow.newAccounts().length > 0}>
+          <div
+            style={{
+              margin: '4px 0 14px',
+              padding: '10px 12px',
+              border: '1px solid var(--border)',
+              'border-radius': '8px',
+            }}
+          >
+            <p class={styles.mappingLabel} style={{ 'margin-bottom': '4px' }}>
+              New accounts to create
+            </p>
+            <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
+              These values are treated as accounts (transfer destinations and account-typed
+              categories). They'll be created so both legs of a transfer resolve — a value NOT
+              listed here already matches an account you have.
+            </p>
+            <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '8px' }}>
+              <For each={flow.newAccounts()}>
+                {(name) => (
+                  <span
+                    style={{
+                      'font-size': '13px',
+                      padding: '2px 8px',
+                      border: '1px solid var(--border)',
+                      'border-radius': '6px',
+                    }}
+                  >
+                    {name}
+                  </span>
                 )}
               </For>
             </div>
@@ -364,11 +403,29 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               {(actualIndex) => {
                 const row = () => flow.currentRows()[actualIndex]
                 const isDuplicate = () => flow.duplicateSet().has(actualIndex)
+                // The earlier row this one duplicates, summarised (date · description · amount)
+                // from the mapped columns, so the user can see WHY it's flagged.
+                const counterpart = () => {
+                  const mi = flow.duplicateMatches().get(actualIndex) ?? -1
+                  if (mi < 0) return null
+                  const r = flow.currentRows()[mi]
+                  const m = flow.columnMapping()
+                  const summary = [m.date, m.description, m.amount]
+                    .map((ci) => (ci !== undefined ? r?.[ci] : undefined))
+                    .filter((v): v is string => v !== undefined && v.trim() !== '')
+                    .join(' · ')
+                  return { rowNo: mi + 1, summary }
+                }
+                const dupTitle = () => {
+                  if (!isDuplicate()) return undefined
+                  const c = counterpart()
+                  const base = c
+                    ? `Potential duplicate of row ${c.rowNo}${c.summary ? `: ${c.summary}` : ''}`
+                    : 'Potential duplicate of an earlier row in this import'
+                  return `${base} — imported by default; deselect if it is actually a duplicate.`
+                }
                 return (
-                  <tr
-                    classList={{ [styles.duplicate]: isDuplicate() }}
-                    title={isDuplicate() ? 'Duplicate of an earlier row in this import' : undefined}
-                  >
+                  <tr classList={{ [styles.duplicate]: isDuplicate() }} title={dupTitle()}>
                     <td class={styles.selectCol}>
                       <input
                         type="checkbox"
@@ -379,6 +436,18 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                       />
                       <Show when={isDuplicate()}>
                         <span class={styles.dupBadge}>dup</span>
+                        <Show when={counterpart()}>
+                          <span
+                            style={{
+                              'font-size': '10px',
+                              color: 'var(--text-secondary)',
+                              'margin-left': '4px',
+                              'white-space': 'nowrap',
+                            }}
+                          >
+                            = row {counterpart()!.rowNo}
+                          </span>
+                        </Show>
                       </Show>
                     </td>
                     <For each={row()}>{(cell) => <td>{cell ?? ''}</td>}</For>
