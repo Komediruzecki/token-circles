@@ -492,6 +492,23 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     seenNew.add(lower);
     newCats.push(name);
   }
+  // Account-typed values that don't already name an existing account — the accounts a run
+  // would CREATE. Surfaced so the preview can show new accounts (parity with the serverless
+  // detectNewAccounts). accountIdMap holds the existing accounts, so "not in it" == new.
+  const newAccts: string[] = [];
+  const seenAcct = new Set<string>();
+  const ctLower: Record<string, string> = {};
+  if (categoryTypes)
+    for (const [k, v] of Object.entries(categoryTypes)) ctLower[k.toLowerCase().trim()] = String(v);
+  for (const row of rows as Array<Record<string, any>>) {
+    const raw = pick(row, mapping, 'category');
+    if (!raw || !String(raw).trim()) continue;
+    const name = String(raw).trim();
+    const lower = name.toLowerCase();
+    if (ctLower[lower] !== 'account' || accountIdMap.has(lower) || seenAcct.has(lower)) continue;
+    seenAcct.add(lower);
+    newAccts.push(name);
+  }
   // Only create approved names when gating is on; unapproved values import uncategorized
   // (category_id resolves to null below). Absent → create every new name (backward-compat).
   const catsToCreate = gateCategories
@@ -618,8 +635,11 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
 
     const description = pick(row, mapping, 'description') || '';
     const parsedDate = parseDateString(dateRaw);
-    // Duplicate check on the resolved fields; a match is reported (not silently dropped) and
-    // skipped from the insert, while a legitimately-different same-day/-amount row imports.
+    // Multiplicity-aware duplicate check on the resolved fields: skip a row only when it
+    // matches a transaction that ALREADY EXISTED before this import, consuming one match per
+    // row. Accepted rows are never added back into the bucket, so genuine same-day repeats in
+    // this import all import (multiple bank fees, repeated top-ups) instead of collapsing to
+    // one. A re-import still dedupes: the existing copies consume the incoming ones one-for-one.
     const dedupKey = dedupKeyOf(
       parsedDate,
       String(description).toLowerCase().trim(),
@@ -628,13 +648,12 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       currency
     );
     const dupBucket = dedupBuckets.get(dedupKey);
-    const isDup = dupBucket ? dupBucket.some((a) => Math.abs(a - amount) < 0.01) : false;
-    if (isDup) {
+    const matchAt = dupBucket ? dupBucket.findIndex((a) => Math.abs(a - amount) < 0.01) : -1;
+    if (matchAt !== -1) {
+      dupBucket!.splice(matchAt, 1);
       duplicateIndices.push(ri);
       continue;
     }
-    if (dupBucket) dupBucket.push(amount);
-    else dedupBuckets.set(dedupKey, [amount]);
 
     txStmts.push(
       DB.prepare(TX_SQL).bind(
@@ -666,6 +685,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       duplicates: duplicateIndices.length,
       duplicate_indices: duplicateIndices,
       new_categories: newCats,
+      new_accounts: newAccts,
       accounts_created: 0,
       categories_created: 0,
       created_accounts: [],
@@ -700,6 +720,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     duplicates: duplicateIndices.length,
     duplicate_indices: duplicateIndices,
     new_categories: newCats,
+    new_accounts: newAccts,
     accounts_created: accountsCreated,
     categories_created: catsToCreate.length,
     created_accounts: createdAccountNames,

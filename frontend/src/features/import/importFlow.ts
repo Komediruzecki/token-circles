@@ -36,20 +36,30 @@ import {
 import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../../core/bankImport'
 import type { PreviewFilter, VoidTransferContext } from './previewFilter'
 
+/** A within-batch potential duplicate: `index` is identical to the earlier row `matchIndex`. */
+export interface RowDuplicate {
+  index: number
+  matchIndex: number
+}
+
 /**
- * Indices of rows whose full (trimmed) content is identical to an earlier row in the
- * same import — within-batch duplicates, e.g. the same transaction appearing in two
- * overlapping statement periods uploaded together. The first occurrence is kept; every
- * later identical copy is returned. (Duplicates against already-imported data are
- * handled separately by the server on execute.)
+ * Within-batch potential duplicates: rows whose full (trimmed) content is identical to an
+ * EARLIER row in the same import. That covers both the same transaction appearing in two
+ * overlapping statement periods AND a genuine same-day repeat the source records identically
+ * (multiple same-day bank fees, repeated top-ups — bank data has a date but no time). The
+ * first occurrence is kept; every later identical copy is paired with the earlier row it
+ * matches so the UI can show the counterpart. These are advisory: the import keeps them by
+ * default and the execute-side dedup only skips rows that already exist in the data, so the
+ * user just deselects a genuinely accidental copy on review.
  */
-export function computeRowDuplicates(rows: string[][]): number[] {
-  const seen = new Set<string>()
-  const dups: number[] = []
+export function computeRowDuplicates(rows: string[][]): RowDuplicate[] {
+  const seen = new Map<string, number>()
+  const dups: RowDuplicate[] = []
   for (let i = 0; i < rows.length; i++) {
     const key = rows[i].map((c) => (c ?? '').trim()).join('\x01')
-    if (seen.has(key)) dups.push(i)
-    else seen.add(key)
+    const first = seen.get(key)
+    if (first !== undefined) dups.push({ index: i, matchIndex: first })
+    else seen.set(key, i)
   }
   return dups
 }
@@ -247,9 +257,17 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const [currentPage, setCurrentPage] = createSignal(1)
   const [rowsPerPage, setRowsPerPage] = createSignal(50)
   const [duplicateIndices, setDuplicateIndices] = createSignal<number[]>([])
+  // Flagged row index -> the earlier row it duplicates (for the "duplicate of row N"
+  // counterpart shown in the preview). -1 when the source doesn't expose a counterpart
+  // (bank uploads, whose duplicates are precomputed server-side).
+  const [duplicateMatches, setDuplicateMatches] = createSignal<Map<number, number>>(new Map())
   // Category-column values with no matching existing category (from the preview's
   // dry-run). The user confirms which to create; unchecked names import uncategorized (B5).
   const [newCategories, setNewCategories] = createSignal<string[]>([])
+  // Account-typed values the import would create as new accounts (shown in the preview
+  // next to new categories, so it's visible whether e.g. a transfer destination is a new
+  // account or matched an existing one).
+  const [newAccounts, setNewAccounts] = createSignal<string[]>([])
   const [approvedCategories, setApprovedCategories] = createSignal<Set<string>>(new Set())
   // From the same dry-run: how many rows the dedup pass would skip because they
   // already exist (stored earlier, or repeated within this import). null = the
@@ -396,13 +414,24 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // Bank imports precompute duplicates from the RAW statement rows (per-second
     // timestamps / balance intact), so two distinct same-day transactions aren't
     // flagged; other sources fall back to a full canonical-row hash.
-    const dups =
-      bankFiles().length > 0 ? (uploadResult()?.duplicateIndices ?? []) : computeRowDuplicates(rows)
-    setDuplicateIndices(dups)
-    const dupSet = new Set(dups)
-    // Skip duplicates by default: select every row except the duplicate copies. The
-    // user can re-check a duplicate row (or use "Import All") to include it anyway.
-    setSelectedRows(new Set<number>(rows.map((_, i) => i).filter((i) => !dupSet.has(i))))
+    const isBank = bankFiles().length > 0
+    const dupPairs: RowDuplicate[] = isBank
+      ? (uploadResult()?.duplicateIndices ?? []).map((i) => ({ index: i, matchIndex: -1 }))
+      : computeRowDuplicates(rows)
+    setDuplicateIndices(dupPairs.map((d) => d.index))
+    setDuplicateMatches(new Map(dupPairs.map((d) => [d.index, d.matchIndex])))
+    const dupSet = new Set(dupPairs.map((d) => d.index))
+    // Bank uploads dedupe on a per-second timestamp, so a flagged row is almost certainly a
+    // real re-export of the same charge from an overlapping statement — leave it DESELECTED.
+    // Other sources only have date granularity, so an identical-looking row may be a genuine
+    // repeat (e.g. two same-day bank fees, repeated top-ups); flag it as a POTENTIAL duplicate
+    // but keep it SELECTED so it isn't silently dropped — the execute-side dedup only skips
+    // rows that already exist in the data, and the user can deselect a true copy on review.
+    setSelectedRows(
+      new Set<number>(
+        isBank ? rows.map((_, i) => i).filter((i) => !dupSet.has(i)) : rows.map((_, i) => i)
+      )
+    )
     setCurrentPage(1)
     await fetchDryRunPreview()
   }
@@ -439,12 +468,14 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const list = rawList.filter((c) => !accountNames.has(c.toLowerCase()))
       setNewCategories(list)
       setApprovedCategories(new Set(list))
+      setNewAccounts(Array.isArray(data?.new_accounts) ? data.new_accounts : [])
       setExistingDuplicates(typeof data?.duplicates === 'number' ? data.duplicates : null)
     } catch {
       // Non-fatal: fall back to auto-create-all (no approvedCategories sent on
       // import) and no duplicate claim.
       setNewCategories([])
       setApprovedCategories(new Set<string>())
+      setNewAccounts([])
       setExistingDuplicates(null)
     }
   }
@@ -466,6 +497,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setColumnMapping({})
     setCategoryTypes({})
     setNewCategories([])
+    setNewAccounts([])
     setApprovedCategories(new Set<string>())
     setExistingDuplicates(null)
     setRows([])
@@ -1266,7 +1298,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     rowsPerPage,
     setRowsPerPage,
     duplicateIndices,
+    duplicateMatches,
     newCategories,
+    newAccounts,
     approvedCategories,
     existingDuplicates,
     loading,

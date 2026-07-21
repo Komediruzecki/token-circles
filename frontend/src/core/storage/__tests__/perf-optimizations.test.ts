@@ -33,14 +33,19 @@ describe('perf: import duplicate detection (O(N+M) rewrite)', () => {
 
   it('flags exactly the rows that duplicate an existing transaction', async () => {
     const db = await getDB()
-    // Existing transactions in the store.
-    await db.add('transactions', {
-      profile_id: 1,
-      type: 'expense',
-      description: 'Coffee',
-      date: '2026-05-01',
-      amount: 3.5,
-    })
+    // Existing transactions in the store. Three identical "Coffee" rows already exist so
+    // that — under multiplicity-aware dedup — the exact import row and the tolerance/case
+    // import row below each consume a pre-existing copy, while the 0.02-off row still finds
+    // a remaining copy and is correctly NOT flagged (exercising the amount tolerance).
+    for (let n = 0; n < 3; n++) {
+      await db.add('transactions', {
+        profile_id: 1,
+        type: 'expense',
+        description: 'Coffee',
+        date: '2026-05-01',
+        amount: 3.5,
+      })
+    }
     await db.add('transactions', {
       profile_id: 1,
       type: 'expense',

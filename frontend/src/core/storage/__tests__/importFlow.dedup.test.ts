@@ -95,8 +95,11 @@ describe('importExecute — resolution-aware duplicate detection (A2)', () => {
     expect(txns).toHaveLength(1) // not double-inserted
   })
 
-  it('flags the second of two identical rows within one file (in-file dedup)', async () => {
+  it('imports genuine same-day repeats within one file (no in-file collapse)', async () => {
     const db = await getDB()
+    // Two identical rows with NOTHING pre-existing are genuine same-day repeats (the
+    // source records them identically because it has a date but no time — multiple bank
+    // fees, repeated top-ups), so both import rather than collapsing to one.
     const rows = [
       ['2026-06-04', 'Bill', '-30'],
       ['2026-06-04', 'Bill', '-30'],
@@ -111,12 +114,45 @@ describe('importExecute — resolution-aware duplicate detection (A2)', () => {
       duplicates: number
       duplicate_indices: number[]
     }
-    expect(body.imported).toBe(1)
-    expect(body.duplicates).toBe(1)
-    expect(body.duplicate_indices).toEqual([1])
+    expect(body.imported).toBe(2)
+    expect(body.duplicates).toBe(0)
+    expect(body.duplicate_indices).toEqual([])
 
     const txns = await db.getAllFromIndex('transactions', 'by_profile', 1)
-    expect(txns).toHaveLength(1)
+    expect(txns).toHaveLength(2)
+  })
+
+  it('is multiplicity-aware: skips only as many copies as already exist, imports the rest', async () => {
+    const db = await getDB()
+    await db.add('transactions', {
+      profile_id: 1,
+      type: 'expense',
+      description: 'Bill',
+      date: '2026-06-05',
+      amount: 30,
+      currency: 'EUR',
+      account_id: null,
+    })
+    // One copy already exists; the file has three. Exactly one is consumed as a
+    // duplicate of the existing row, the other two import as genuine repeats.
+    const rows = [
+      ['2026-06-05', 'Bill', '-30'],
+      ['2026-06-05', 'Bill', '-30'],
+      ['2026-06-05', 'Bill', '-30'],
+    ]
+    const res = await importExecute({
+      rows,
+      mapping: { date: 0, description: 1, amount: 2 },
+      dry_run: false,
+    })
+    const body = (await res.json()) as { imported: number; duplicates: number }
+    expect(body.imported).toBe(2)
+    expect(body.duplicates).toBe(1)
+
+    const bills = (await db.getAllFromIndex('transactions', 'by_profile', 1)).filter(
+      (t) => t.description === 'Bill'
+    )
+    expect(bills).toHaveLength(3) // 1 existing + 2 newly imported
   })
 })
 
