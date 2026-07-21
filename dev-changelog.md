@@ -9,6 +9,23 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.8.0] — 2026-07-21
+
+### Added
+
+- Delete-a-recent-import (undo a batch). Serverless now stamps `import_id` on inserted transactions (the worker already did); a new `DELETE /api/import-logs/:id` on both runtimes deletes the batch's transactions by `import_id`, recomputes account balances, and drops the log row. Imports predating batch stamping (no `import_id`) delete 0 transactions and just clear the log entry. Frontend: a confirm-guarded "Delete import" button on each Recent Imports entry (toast feedback). (#369)
+- `new_accounts` in the import dry-run response — serverless `detectNewAccounts`, worker `newAccts` — surfaced as a "New accounts to create" list in the preview (the account-typed counterpart to the existing new-categories list, which excludes account values). (#368)
+
+### Changed
+
+- Import dedup is multiplicity-aware. A row is skipped only when it matches a transaction that already existed before this import, consuming one matching amount per row from a per-key multiset; identical rows within a single import all import instead of collapsing to one. Bank/1money rows carry a date but no time, so genuine same-day repeats (multiple `UPLATA NAKNADE` fees, repeated same-amount top-ups) were being silently dropped and balances understated. A re-import still dedupes (existing copies consume the incoming ones one-for-one). Preview: within-batch identical rows are "potential duplicates", selected and imported by default (bank-file uploads, which dedupe on a per-second timestamp, stay deselected), each showing the counterpart row it matches (`date · description · amount` / `= row N`). Applied to the serverless (IndexedDB) and Cloudflare worker execute paths + `detectDuplicates`; the Express backend is intentionally out of scope (see ROADMAP). (#368)
+
+### Fixed
+
+- Serverless import now seeds its account map with all existing accounts by name (matching the worker/Express) and falls back to it for the source (means_of_payment) leg of any transaction type — so a transfer whose destination names an existing account resolves both legs instead of one-siding (`transfer_account_id` null) and draining the source. Also adds a `detectNewAccounts` preview list. (#368)
+- Account-map keys are trimmed as well as lowercased on both creation/seed and per-row resolution (worker `loadAccounts` key + created account name, serverless `normalizeKeys`), so stray whitespace in a category/account value (e.g. `Revolut ` from a sheet cell) no longer stores the account under `revolut ` while the trimmed lookup `revolut` misses it. On the worker — which resolves the two legs independently — that mismatch dropped only the destination and showed `Erste Current → —` on a fresh import; gviz strips trailing whitespace, so the sheet looked clean. (#370)
+- `fromToLabels` now renders an account-to-account transfer's destination from the resolved `transfer_account_id` account name. The destination of such a transfer lives in `transfer_account_id` (not a category), so `category_name` is null and the "to" collapsed to `—` even though the leg was linked and the balance correct. `TransactionTable` builds an id→name map from the accounts it is now passed and hands the resolved from/to names to `fromToLabels` (falling back to the stored `means_of_payment` / `category` text). Display-only; no data change. (#372)
+
 ## [5.7.1] — 2026-07-17
 
 ### Fixed
