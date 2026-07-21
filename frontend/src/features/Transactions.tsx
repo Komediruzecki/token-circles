@@ -1619,6 +1619,7 @@ export default function Transactions() {
           )}
           <TransactionTable
             transactions={paginatedTransactions()}
+            accounts={accounts()}
             selectedTransactions={selectedTransactions()}
             onSelectionChange={handleSelectionChange}
             onSort={handleSortChange}

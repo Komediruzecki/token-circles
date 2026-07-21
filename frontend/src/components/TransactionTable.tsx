@@ -2,7 +2,7 @@
  * TransactionTable Component
  * Renders transaction list with sorting, filtering, and pagination
  */
-import { For } from 'solid-js'
+import { createMemo, For } from 'solid-js'
 import { formatCurrency } from '../core/api'
 import { isEstimatedBaseValue, originalAmountLabel, txBaseValue } from '../core/currency'
 import { fromToLabels } from '../core/transactionFlow'
@@ -21,12 +21,20 @@ interface TransactionTableProps {
   onCopy?: (transaction: Transaction) => void
   onDelete?: (transaction: Transaction) => void
   onViewReceipt?: (transaction: Transaction) => void
+  // Accounts for the current profile, used to resolve a transfer's destination account
+  // name (transfer_account_id) for the From → To column.
+  accounts?: { id: number; name: string }[]
 }
 
 export default function TransactionTable(props: TransactionTableProps) {
   const handleSort = (field: string) => {
     props.onSort?.(field)
   }
+  const accountsById = createMemo(() => {
+    const m = new Map<number, string>()
+    for (const a of props.accounts ?? []) m.set(a.id, a.name)
+    return m
+  })
 
   return (
     <div
@@ -210,7 +218,12 @@ export default function TransactionTable(props: TransactionTableProps) {
                 </td>
                 <td class={styles.counterPartyCol}>
                   {(() => {
-                    const ft = fromToLabels(transaction)
+                    const ft = fromToLabels(transaction, {
+                      accountName: accountsById().get(transaction.account_id ?? -1),
+                      transferAccountName: accountsById().get(
+                        transaction.transfer_account_id ?? -1
+                      ),
+                    })
                     return (
                       <span>
                         <span class={styles.fromTo}>{ft.from}</span>

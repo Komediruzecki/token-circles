@@ -116,4 +116,30 @@ describe('fromToLabels', () => {
       ).toEqual({ from: 'ACME', to: 'Erste Current' })
     })
   })
+
+  describe('account-to-account transfer (destination is an account, not a category)', () => {
+    it('shows the resolved transfer account name when category_name is null', () => {
+      expect(
+        fromToLabels(
+          { type: 'transfer', means_of_payment: 'Erste Current', category_name: null },
+          { accountName: 'Erste Current', transferAccountName: 'Revolut' }
+        )
+      ).toEqual({ from: 'Erste Current', to: 'Revolut' })
+    })
+
+    it('still shows "—" when no name resolves (destination account missing/deleted)', () => {
+      expect(
+        fromToLabels({ type: 'transfer', means_of_payment: 'Erste Current', category_name: null })
+      ).toEqual({ from: 'Erste Current', to: '—' })
+    })
+
+    it('falls back to the category_name text when no resolved transfer name is given', () => {
+      expect(
+        fromToLabels(
+          { type: 'transfer', means_of_payment: 'Erste Current', category_name: 'Revolut' },
+          {}
+        )
+      ).toEqual({ from: 'Erste Current', to: 'Revolut' })
+    })
+  })
 })
