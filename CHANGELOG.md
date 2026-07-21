@@ -19,6 +19,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Imports no longer drop genuine same-day repeats. When your bank records identical transactions on the same day (several small fees, or repeated top-ups of the same amount), they're all kept — flagged as "potential duplicates" you can review, each showing the row it matches — instead of being silently merged into one.
 - Transfers between your own accounts reliably link both sides again. A transfer whose destination is an account you have (or one the import creates) no longer loses its second leg and drains the source account — including when the source sheet has stray spaces around a name.
+- The transactions list shows a transfer's destination account (e.g. "Erste Current → Revolut") instead of a dash, for transfers between two of your own accounts.
 
 ## [5.7.1] — 2026-07-17
 
