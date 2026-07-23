@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
@@ -183,14 +184,23 @@ recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
       throw new HttpError(403, 'Account does not belong to this profile');
     }
   }
+  const normalizedType = type || 'expense';
+  const normalizedTransferAccountId = normalizedType === 'transfer' ? transfer_account_id : null;
+  const invariantError = transactionInvariantError({
+    type: normalizedType,
+    amount,
+    account_id,
+    transfer_account_id: normalizedTransferAccountId,
+  });
+  if (invariantError) throw new HttpError(400, invariantError);
   const res = await db.insert(c.env.DB, 'recurring_transactions', {
     profile_id: pid,
     description: description || '',
     amount,
-    type: type || 'expense',
+    type: normalizedType,
     category_id: category_id || null,
     account_id: account_id || null,
-    transfer_account_id: transfer_account_id || null,
+    transfer_account_id: normalizedTransferAccountId || null,
     frequency: frequency || 'monthly',
     day_of_month: day_of_month || null,
     next_date: next_date || null,
@@ -210,40 +220,44 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
   );
   if (!existing) throw new HttpError(404, 'Not found');
   const b = (await c.req.json()) as Record<string, any>;
-  const {
-    description,
-    amount,
-    type,
-    category_id,
-    account_id,
-    transfer_account_id,
-    frequency,
-    day_of_month,
-    next_date,
-    notes,
-    active,
-  } = b;
+  const effective = {
+    description: b.description ?? existing.description,
+    amount: b.amount ?? existing.amount,
+    type: b.type ?? existing.type,
+    category_id: b.category_id === undefined ? existing.category_id : b.category_id,
+    account_id: b.account_id === undefined ? existing.account_id : b.account_id,
+    transfer_account_id:
+      b.transfer_account_id === undefined ? existing.transfer_account_id : b.transfer_account_id,
+    frequency: b.frequency ?? existing.frequency,
+    day_of_month: b.day_of_month === undefined ? existing.day_of_month : b.day_of_month,
+    next_date: b.next_date === undefined ? existing.next_date : b.next_date,
+    notes: b.notes === undefined ? existing.notes : b.notes,
+    active: b.active ?? existing.active,
+  };
+  if (effective.type !== 'transfer') effective.transfer_account_id = null;
   // Validate ownership of any client-supplied account id (source or transfer dest).
-  for (const acc of [account_id, transfer_account_id]) {
+  for (const acc of [effective.account_id, effective.transfer_account_id]) {
     if (acc != null && !(await db.accountBelongsToProfile(c.env.DB, Number(acc), pid))) {
       throw new HttpError(403, 'Account does not belong to this profile');
     }
   }
+  const invariantError = transactionInvariantError(effective);
+  if (invariantError) throw new HttpError(400, invariantError);
   await db.update(
     c.env.DB,
     'recurring_transactions',
     {
-      description: description ?? '',
-      amount: amount ?? 0,
-      type: type ?? 'expense',
-      category_id: category_id ?? null,
-      account_id: account_id ?? null,
-      transfer_account_id: transfer_account_id ?? null,
-      frequency: frequency ?? 'monthly',
-      day_of_month: day_of_month ?? null,
-      next_date: next_date ?? null,
-      notes: notes ?? '',
-      active: active ?? 1,
+      description: effective.description,
+      amount: effective.amount,
+      type: effective.type,
+      category_id: effective.category_id,
+      account_id: effective.account_id,
+      transfer_account_id: effective.transfer_account_id,
+      frequency: effective.frequency,
+      day_of_month: effective.day_of_month,
+      next_date: effective.next_date,
+      notes: effective.notes ?? '',
+      active: effective.active,
     },
     'id = ? AND profile_id = ?',
     id,
@@ -278,6 +292,8 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
     pid
   );
   if (!r) throw new HttpError(404, 'Not found');
+  const invariantError = transactionInvariantError(r);
+  if (invariantError) throw new HttpError(400, invariantError);
 
   const todayStr = new Date().toISOString().split('T')[0];
 

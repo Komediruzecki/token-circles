@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
@@ -478,6 +479,9 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
               'Invalid type. Must be income, expense, transfer, or deduction'
             );
           }
+          if (data.type === 'transfer') {
+            throw new HttpError(400, 'Bulk conversion to transfer requires choosing two accounts');
+          }
           updates.push('type = ?');
           setParams.push(data.type);
         } else {
@@ -499,6 +503,9 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     const typeChanging = Object.prototype.hasOwnProperty.call(data, 'type');
     const categoryChanging = Object.prototype.hasOwnProperty.call(data, 'category_id');
     const newType = typeChanging ? String(data.type) : null;
+    if (typeChanging) {
+      updates.push('transfer_account_id = NULL');
+    }
     const affectedCategories = new Set<number>();
 
     let updated = 0;
@@ -685,11 +692,14 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     }
   }
 
-  // A transfer must land somewhere. Without a resolved destination the source-debit branch
-  // below removes money from the balance that is credited nowhere — a silent loss (audit D2).
-  if (type === 'transfer' && !resolvedTransferAccountId) {
-    throw new HttpError(400, 'A transfer must have a destination account');
-  }
+  const invariantError = transactionInvariantError({
+    type,
+    amount,
+    amount_local,
+    account_id: resolvedAccountId,
+    transfer_account_id: resolvedTransferAccountId,
+  });
+  if (invariantError) throw new HttpError(400, invariantError);
 
   // Persist the row and its balance side effects atomically. The INSERT is first in the batch so
   // its generated id can be read back from the batch result.
@@ -832,6 +842,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     id,
     pid
   );
+  if (!oldTx) throw new HttpError(404, 'Not found');
 
   // Validate account ownership if account_id or transfer_account_id are being changed.
   if (
@@ -936,6 +947,10 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     params.push(transfer_account_id || null);
     hasUpdate = true;
   }
+  if (type !== undefined && type !== 'transfer' && transfer_account_id === undefined) {
+    updates.push('transfer_account_id = NULL');
+    hasUpdate = true;
+  }
 
   if (!hasUpdate) throw new HttpError(400, 'No valid fields provided for update');
 
@@ -943,8 +958,6 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // up front so the reverse / row-update / re-apply run as one atomic batch. Previously these were
   // separate awaited writes with a hand-rolled "undo on 0 changes" compensation; a failure or
   // eviction between them permanently drifted account balances.
-  if (!oldTx) throw new HttpError(404, 'Not found');
-
   // Use base-currency value for all balance math (matches create + delete paths).
   const oldV = baseAmount(oldTx);
 
@@ -998,7 +1011,11 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // Apply new transaction effect on account(s).
   const newAccountId = account_id !== undefined ? account_id || null : oldTx.account_id;
   const newTransferAccountId =
-    transfer_account_id !== undefined ? transfer_account_id || null : oldTx.transfer_account_id;
+    transfer_account_id !== undefined
+      ? transfer_account_id || null
+      : type !== undefined && type !== 'transfer'
+        ? null
+        : oldTx.transfer_account_id;
   const newType = type !== undefined ? type : oldTx.type;
   const newAmount = amount !== undefined ? amount : oldTx.amount;
   // Compute the base-currency amount for the new balance effect, matching the reversal
@@ -1011,11 +1028,14 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
       : amount !== undefined
         ? newAmount
         : baseAmount(oldTx);
-  // A transfer must keep a destination in the merged post-update state (audit D2), otherwise
-  // the apply branch below debits the source and credits nothing.
-  if (newType === 'transfer' && !newTransferAccountId) {
-    throw new HttpError(400, 'A transfer must have a destination account');
-  }
+  const invariantError = transactionInvariantError({
+    type: newType,
+    amount: newAmount,
+    amount_local: newAmountLocal,
+    account_id: newAccountId,
+    transfer_account_id: newTransferAccountId,
+  });
+  if (invariantError) throw new HttpError(400, invariantError);
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
       stmts.push(

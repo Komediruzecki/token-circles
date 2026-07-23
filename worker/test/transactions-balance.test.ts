@@ -132,15 +132,15 @@ describe('worker transactions — account balance integrity (D1 batch)', () => {
     expect(await balanceOf(2)).toBe(800);
   });
 
-  it('credits a transfer with only a destination account (account_id null)', async () => {
+  it('rejects a transfer with only a destination account', async () => {
     const res = await post({
       description: 'Incoming',
       amount: 250,
       type: 'transfer',
       transfer_account_id: 2,
     });
-    expect(res.status).toBe(200);
-    expect(await balanceOf(2)).toBe(750);
+    expect(res.status).toBe(400);
+    expect(await balanceOf(2)).toBe(500);
   });
 
   it('create succeeds with multiple selected profiles (X-Profile-Ids)', async () => {
@@ -198,10 +198,14 @@ describe('worker transactions — account balance integrity (D1 batch)', () => {
     expect(await txCount()).toBe(0);
   });
 
-  it('deleting a destination-only transfer reverses the credit', async () => {
-    const id = await createdId(
-      await post({ description: 'Incoming', amount: 250, type: 'transfer', transfer_account_id: 2 })
-    );
+  it('deleting a legacy destination-only transfer reverses its historical credit', async () => {
+    const inserted = await env.DB.prepare(
+      `INSERT INTO transactions
+         (profile_id, description, amount, type, transfer_account_id, date)
+       VALUES (1, 'Legacy incoming', 250, 'transfer', 2, '2026-01-01')`
+    ).run();
+    const id = Number(inserted.meta.last_row_id);
+    await env.DB.prepare('UPDATE accounts SET balance = 750 WHERE id = 2').run();
     expect(await balanceOf(2)).toBe(750);
     const res = await api(`/api/transactions/${id}`, { method: 'DELETE' });
     expect(res.status).toBe(200);
