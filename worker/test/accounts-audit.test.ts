@@ -16,6 +16,7 @@ async function reset(): Promise<void> {
     'account_balance_history',
     'accounts',
     'categories',
+    'settings',
     'profiles',
     'users',
   ]) {

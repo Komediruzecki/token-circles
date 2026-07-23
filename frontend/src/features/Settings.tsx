@@ -35,7 +35,7 @@ import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
-import { getLocalCurrency, toast } from '../core/api.js'
+import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
@@ -346,6 +346,7 @@ export default function Settings() {
   // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
   // not a hardcoded USD that mismatches how amounts actually render.
   const [localCurrency, setLocalCurrency] = createSignal(getLocalCurrency())
+  const [currencyBusy, setCurrencyBusy] = createSignal(false)
   const [darkMode, setDarkMode] = createSignal(false)
   const [chartExportSettings, setChartExportSettings] =
     createSignal<ChartExportSettings>(loadChartExportSettings())
@@ -534,10 +535,19 @@ export default function Settings() {
 
   // Load saved settings
   onMount(() => {
-    const savedCurrency = localStorage.getItem('localCurrency')
-    if (savedCurrency) {
-      setLocalCurrency(savedCurrency)
-    }
+    const savedCurrency = getLocalCurrency()
+    setLocalCurrency(savedCurrency)
+    // localStorage was the historical source of truth. Establish that value in the
+    // active storage engine once; if the profile already has a locked base currency,
+    // use the persisted value instead of silently relabelling historical amounts.
+    void apiPut('/api/settings', { currency: savedCurrency }).catch(async () => {
+      try {
+        const settings = await apiGet<{ currency?: string }>('/api/settings')
+        if (settings.currency) setLocalCurrency(settings.currency)
+      } catch {
+        // Keep the local value when settings are temporarily unavailable.
+      }
+    })
 
     const isDark = theme.isDark()
     setDarkMode(isDark)
@@ -591,9 +601,21 @@ export default function Settings() {
   })
 
   // Handle local currency change
-  const handleLocalCurrencyChange = (event: Event) => {
+  const handleLocalCurrencyChange = async (event: Event) => {
     const target = event.target as HTMLSelectElement
-    setLocalCurrency(target.value)
+    const next = target.value
+    if (next === localCurrency() || currencyBusy()) return
+    setCurrencyBusy(true)
+    try {
+      await apiPut('/api/settings', { currency: next })
+      setLocalCurrency(next)
+      toast(`Base currency set to ${next}`, 'success')
+    } catch {
+      target.value = localCurrency()
+      toast(`Base currency is locked to ${localCurrency()} after financial data is added.`, 'error')
+    } finally {
+      setCurrencyBusy(false)
+    }
   }
 
   // Handle storage type change
@@ -949,13 +971,14 @@ export default function Settings() {
               <div class={styles.card} data-tour="settings-currency">
                 <CardHead
                   icon={<IconCoin />}
-                  title="Currency"
-                  desc="Your default display currency."
+                  title="Base Currency"
+                  desc="The unit used by balances, budgets, and reports."
                 />
                 <select
                   class={styles.formControl}
                   value={localCurrency()}
-                  onchange={handleLocalCurrencyChange}
+                  onchange={(event) => void handleLocalCurrencyChange(event)}
+                  disabled={currencyBusy()}
                   style="max-width: 340px;"
                 >
                   <For each={CURRENCY_OPTIONS}>
