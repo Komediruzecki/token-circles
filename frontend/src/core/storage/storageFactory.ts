@@ -616,9 +616,23 @@ class SelfHostedAdapter implements StorageAdapter {
 
   // Export/Import
   async exportData(): Promise<ExportData> {
-    const response = await fetch('/api/export', {
+    const profilesResponse = await fetch('/api/profiles', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!profilesResponse.ok) throw new Error('Failed to list profiles for backup')
+    const profiles = (await profilesResponse.json()) as Array<{ id: number }>
+    const profileIds = profiles.map((profile) => profile.id)
+    if (profileIds.length === 0) throw new Error('No profiles available to export')
+
+    const response = await fetch('/api/export', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Profile-Id': String(profileIds[0]),
+        ...(profileIds.length > 1 ? { 'X-Profile-Ids': JSON.stringify(profileIds) } : {}),
+      },
       credentials: 'include',
     })
 
@@ -638,7 +652,13 @@ class SelfHostedAdapter implements StorageAdapter {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to import data')
+      const result = (await response.json().catch(() => ({}))) as { error?: string }
+      throw new Error(result.error || 'Failed to import data')
+    }
+    const result = (await response.json()) as { first_profile_id?: number }
+    if (result.first_profile_id) {
+      localStorage.setItem('currentProfileId', String(result.first_profile_id))
+      localStorage.setItem('selectedProfileIds', JSON.stringify([result.first_profile_id]))
     }
   }
 
