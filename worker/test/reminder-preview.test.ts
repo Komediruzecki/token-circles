@@ -38,6 +38,16 @@ describe('composeReminderPreview', () => {
     expect(preview!.html).toContain('Food');
   });
 
+  it('uses base-currency values in the spending report', async () => {
+    await env.DB.prepare('UPDATE transactions SET amount = 120, amount_local = 12, currency = ?')
+      .bind('HRK')
+      .run();
+    const preview = await composeReminderPreview(env, 50, 'spending');
+    expect(preview).not.toBeNull();
+    expect(preview!.html).toContain('12.00');
+    expect(preview!.html).not.toContain('120.00');
+  });
+
   it('builds a budget alert even below the normal 80% threshold', async () => {
     // 120 / 400 = 30% spent — the scheduled sender would skip this; the preview must not.
     const preview = await composeReminderPreview(env, 50, 'budget');
