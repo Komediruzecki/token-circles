@@ -239,6 +239,9 @@
   padding: 3px 7px;
   flex: none;
 }
+.priceEditError {
+  border-color: var(--danger, #ef4444);
+}
 .cur {
   font-family: var(--font-mono, monospace);
   font-size: 12px;
@@ -253,6 +256,12 @@
   font-family: var(--font-mono, monospace);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
+}
+.priceError {
+  margin: 6px 31px 0 43px;
+  color: var(--danger, #ef4444);
+  font-size: 11px;
+  line-height: 1.35;
 }
 /* Selected indicator + "apply price" button. Transparent and inert until the
    token is selected; then it turns brand-tinted and becomes a real control. */
@@ -279,6 +288,12 @@
   transition:
     background 0.14s,
     transform 0.08s;
+}
+.tok.on .checkDirty {
+  background: color-mix(in oklab, var(--tc) 18%, transparent);
+}
+.tok.on .checkApplied {
+  opacity: 0.72;
 }
 .tok.on .check:hover {
   background: color-mix(in oklab, var(--tc) 16%, transparent);

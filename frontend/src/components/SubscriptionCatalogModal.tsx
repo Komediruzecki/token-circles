@@ -6,12 +6,13 @@
  * `matchBrand`, so a subscription arrives looking the way it will in the list.
  *
  * Prices are held as raw text while editing (so "0", an empty field, and
- * trailing decimals all type cleanly) and parsed to a number only when the
- * total is shown or the batch is created.
+ * trailing decimals all type cleanly), then validated when the checkmark or
+ * batch-add button commits them.
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import { apiPost, showToast } from '../core/api'
 import { paletteColor } from '../core/brandPalette'
+import { parseDecimalInput } from '../core/decimalInput'
 import { matchBrand } from '../features/subscriptionBrands'
 import { CATALOG_ITEMS, SUBSCRIPTION_CATALOG } from '../features/subscriptionCatalog'
 import styles from './SubscriptionCatalogModal.module.css'
@@ -33,46 +34,76 @@ export interface SubscriptionCatalogModalProps {
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
 const priceOf = (text: string): number => {
-  const n = parseFloat((text || '').replace(',', '.'))
-  return Number.isFinite(n) ? n : 0
+  return parseDecimalInput(text) ?? 0
 }
 
 export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   const [search, setSearch] = createSignal('')
-  // name -> raw price text (key present == selected)
+  // `selected` holds committed prices; `draftPrices` preserves exactly what is
+  // in each input until the user applies it with the checkmark.
   const [selected, setSelected] = createSignal<Record<string, string>>({})
+  const [draftPrices, setDraftPrices] = createSignal<Record<string, string>>({})
+  const [priceErrors, setPriceErrors] = createSignal<Record<string, string>>({})
   const [submitting, setSubmitting] = createSignal(false)
 
   const isSelected = (name: string) => Object.prototype.hasOwnProperty.call(selected(), name)
-  const priceText = (name: string) => selected()[name] ?? ''
-
-  const toggle = (item: CatalogItem) => {
-    setSelected((prev) => {
+  const priceText = (name: string) => draftPrices()[name] ?? selected()[name] ?? ''
+  const priceError = (name: string) => priceErrors()[name]
+  const clearRecordValue = (
+    setter: (update: (prev: Record<string, string>) => Record<string, string>) => void,
+    name: string
+  ) => {
+    setter((prev) => {
       const next = { ...prev }
-      if (Object.prototype.hasOwnProperty.call(next, item.name)) delete next[item.name]
-      else next[item.name] = String(item.price)
+      delete next[name]
       return next
     })
   }
+
+  const toggle = (item: CatalogItem) => {
+    if (isSelected(item.name)) {
+      clearRecordValue(setSelected, item.name)
+      clearRecordValue(setDraftPrices, item.name)
+      clearRecordValue(setPriceErrors, item.name)
+      return
+    }
+    const initialPrice = String(item.price)
+    setSelected((prev) => ({ ...prev, [item.name]: initialPrice }))
+    setDraftPrices((prev) => ({ ...prev, [item.name]: initialPrice }))
+    clearRecordValue(setPriceErrors, item.name)
+  }
   const setPriceText = (name: string, raw: string) => {
-    // Keep only digits and one decimal separator, but never fight the user
-    // mid-type (allow "", "0", "10." …). Coercion to a number happens later.
-    const cleaned = raw.replace(/[^\d.,]/g, '')
-    setSelected((prev) => ({ ...prev, [name]: cleaned }))
+    // Preserve the exact text so Solid never rewrites the input under the caret.
+    // Validation and normalization happen only when the value is applied/submitted.
+    setDraftPrices((prev) => ({ ...prev, [name]: raw }))
+    clearRecordValue(setPriceErrors, name)
   }
   const pickPlan = (item: CatalogItem, price: number) => {
-    setSelected((prev) => ({ ...prev, [item.name]: String(price) }))
+    const text = String(price)
+    setSelected((prev) => ({ ...prev, [item.name]: text }))
+    setDraftPrices((prev) => ({ ...prev, [item.name]: text }))
+    clearRecordValue(setPriceErrors, item.name)
   }
-  // Commit the typed price for a selected item: normalize the raw text to a
-  // clean number (an empty field falls back to the catalog default) and keep
-  // the item selected. This is what the row's ✓ does — it must NOT bubble up
-  // to the row toggle, which would deselect and discard the edit.
-  const applyPrice = (item: CatalogItem) => {
-    setSelected((prev) => {
-      if (!Object.prototype.hasOwnProperty.call(prev, item.name)) return prev
-      const raw = (prev[item.name] ?? '').trim()
-      return { ...prev, [item.name]: raw === '' ? String(item.price) : String(priceOf(raw)) }
-    })
+  const validatedPrice = (item: CatalogItem): number | null => {
+    const raw = priceText(item.name).trim()
+    const parsed = raw === '' ? item.price : parseDecimalInput(raw)
+    return parsed !== null && parsed > 0 ? parsed : null
+  }
+  const applyPrice = (item: CatalogItem): boolean => {
+    if (!isSelected(item.name)) return false
+    const parsed = validatedPrice(item)
+    if (parsed === null) {
+      setPriceErrors((prev) => ({
+        ...prev,
+        [item.name]: 'Enter a positive price using a comma or dot for cents',
+      }))
+      return false
+    }
+    const normalized = String(parsed)
+    setSelected((prev) => ({ ...prev, [item.name]: normalized }))
+    setDraftPrices((prev) => ({ ...prev, [item.name]: normalized }))
+    clearRecordValue(setPriceErrors, item.name)
+    return true
   }
 
   const groups = createMemo(() => {
@@ -85,7 +116,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   })
 
   const chosen = createMemo(() => Object.keys(selected()))
-  const total = createMemo(() => chosen().reduce((s, name) => s + priceOf(selected()[name]), 0))
+  const total = createMemo(() => chosen().reduce((sum, name) => sum + priceOf(selected()[name]), 0))
 
   const money = (n: number) =>
     new Intl.NumberFormat(undefined, {
@@ -107,32 +138,65 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
 
   const addAll = async () => {
     if (submitting() || chosen().length === 0) return
+
+    const pending: Array<{ item: CatalogItem; amount: number }> = []
+    const errors: Record<string, string> = {}
+    for (const name of chosen()) {
+      const item = CATALOG_ITEMS.find((candidate) => candidate.name === name)
+      if (!item) continue
+      const amount = validatedPrice(item)
+      if (amount === null) {
+        errors[name] = 'Enter a positive price using a comma or dot for cents'
+      } else {
+        pending.push({ item, amount })
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setPriceErrors(errors)
+      showToast('Fix the highlighted subscription prices', 'error')
+      return
+    }
+
+    // Clicking Add is also an explicit commit, so a valid draft is never ignored
+    // merely because the user skipped the per-row checkmark.
+    setSelected((prev) => {
+      const next = { ...prev }
+      for (const { item, amount } of pending) next[item.name] = String(amount)
+      return next
+    })
+    setDraftPrices((prev) => {
+      const next = { ...prev }
+      for (const { item, amount } of pending) next[item.name] = String(amount)
+      return next
+    })
+
     setSubmitting(true)
     const due = todayIso()
     let ok = 0
     try {
-      for (const name of chosen()) {
-        const item = CATALOG_ITEMS.find((i) => i.name === name)
+      for (const { item, amount } of pending) {
         try {
           await apiPost('/api/bills', {
-            name,
-            amount: priceOf(selected()[name]),
+            name: item.name,
+            amount,
             dueDate: due,
-            category_id: item ? resolveCategoryId(item) : undefined,
+            category_id: resolveCategoryId(item),
             frequency: 'monthly',
             type: 'subscription',
           })
           ok += 1
         } catch (err) {
-          console.error('Failed to add subscription', name, err)
+          console.error('Failed to add subscription', item.name, err)
         }
       }
       if (ok > 0) {
         showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
         props.onAdded()
       }
-      if (ok < chosen().length) showToast('Some subscriptions could not be added', 'error')
+      if (ok < pending.length) showToast('Some subscriptions could not be added', 'error')
       setSelected({})
+      setDraftPrices({})
+      setPriceErrors({})
       props.onClose()
     } finally {
       setSubmitting(false)
@@ -144,10 +208,12 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     const known = brand.displayName !== ''
     const idx = CATALOG_ITEMS.findIndex((i) => i.name === item.name)
     const tint = known ? brand.color : paletteColor(idx < 0 ? 0 : idx)
-    // Tier label follows the picked plan when one matches the current price.
+    const priceDirty = () => isSelected(item.name) && priceText(item.name) !== selected()[item.name]
+    // Tier label follows the committed plan; a custom draft becomes active only
+    // after the checkmark (or Add) validates it.
     const activeTier = () => {
       if (!isSelected(item.name)) return item.tier
-      const p = priceOf(priceText(item.name))
+      const p = priceOf(selected()[item.name])
       const hit = item.plans?.find((pl) => Math.abs(pl.price - p) < 0.005)
       return hit?.label ?? item.tier
     }
@@ -192,6 +258,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
           >
             <span
               class={styles.priceEdit}
+              classList={{ [styles.priceEditError]: Boolean(priceError(item.name)) }}
               onClick={(e) => {
                 e.stopPropagation()
               }}
@@ -210,24 +277,23 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
                 }}
                 onKeyDown={(e) => {
                   e.stopPropagation()
-                  if (e.key === 'Enter') {
-                    applyPrice(item)
-                    e.currentTarget.blur()
-                  }
+                  if (e.key === 'Enter' && applyPrice(item)) e.currentTarget.blur()
                 }}
                 onInput={(e) => {
                   setPriceText(item.name, e.currentTarget.value)
                 }}
                 aria-label={`${item.name} price`}
+                aria-invalid={Boolean(priceError(item.name))}
               />
             </span>
           </Show>
-          {/* Selected-state indicator that doubles as an explicit "apply price"
-              button once selected. stopPropagation so it never bubbles to the
-              row toggle (which would deselect and throw away the typed price). */}
           <button
             type="button"
             class={styles.check}
+            classList={{
+              [styles.checkDirty]: priceDirty(),
+              [styles.checkApplied]: isSelected(item.name) && !priceDirty(),
+            }}
             tabindex={isSelected(item.name) ? 0 : -1}
             aria-label={isSelected(item.name) ? `Apply ${item.name} price` : `Add ${item.name}`}
             onClick={(e) => {
@@ -236,9 +302,16 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
               else toggle(item)
             }}
           >
-            ✓
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path d="m3 8.2 3.1 3.1L13 4.7" fill="none" stroke="currentColor" stroke-width="2" />
+            </svg>
           </button>
         </div>
+        <Show when={priceError(item.name)}>
+          <span class={styles.priceError} role="alert">
+            {priceError(item.name)}
+          </span>
+        </Show>
 
         <Show when={item.plans && item.plans.length > 0}>
           <div class={styles.plans}>
@@ -246,7 +319,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
               {(pl) => {
                 const active = () =>
                   isSelected(item.name) &&
-                  Math.abs(priceOf(priceText(item.name)) - pl.price) < 0.005
+                  Math.abs(priceOf(selected()[item.name]) - pl.price) < 0.005
                 return (
                   <button
                     type="button"
