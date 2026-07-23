@@ -2,7 +2,16 @@
  * Goals handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, getAmount, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  currentProfileRecord,
+  getAmount,
+  idParam,
+  json,
+  notFound,
+  ok,
+} from './helpers'
 
 // Category-linked goal progress = base-currency sum of that category's transactions
 // dated on/after the goal's tracking_start_date (falling back to its creation day).
@@ -61,6 +70,9 @@ export async function goalsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
   const goal = body as Record<string, unknown>
   goal.profile_id = await adapter.getCurrentProfileId()
+  if (!(await currentProfileOwns('categories', goal.category_id))) {
+    return json({ error: 'Category does not belong to this profile' }, 400)
+  }
   const id = await adapter.createGoal(goal as unknown as Parameters<typeof adapter.createGoal>[0])
   if (goal.category_id) await recalcGoalsByCategory(Number(goal.category_id))
   const refreshed = await (await getDB()).get('goals', id)
@@ -68,8 +80,7 @@ export async function goalsCreate(body: unknown): Promise<Response> {
 }
 
 export async function goalsGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const goal = await db.get('goals', idParam(params))
+  const goal = await currentProfileRecord('goals', idParam(params))
   if (!goal) return notFound('Goal')
   return json(goal)
 }
@@ -80,9 +91,13 @@ export async function goalsUpdate(
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  const db = await getDB()
-  const before = await db.get('goals', id)
-  await adapter.updateGoal(id, body as Record<string, unknown>)
+  const before = await currentProfileRecord('goals', id)
+  if (!before) return notFound('Goal')
+  const patch = body as Record<string, unknown>
+  if ('category_id' in patch && !(await currentProfileOwns('categories', patch.category_id))) {
+    return json({ error: 'Category does not belong to this profile' }, 400)
+  }
+  await adapter.updateGoal(id, patch)
   // Recompute for both the old and new category (the link or tracking date may change).
   const b = body as Record<string, unknown>
   const oldCat = before?.category_id as number | undefined
@@ -93,7 +108,9 @@ export async function goalsUpdate(
 }
 
 export async function goalsDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteGoal(idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('goals', id))) return notFound('Goal')
+  await adapter.deleteGoal(id)
   return ok()
 }
 
@@ -102,7 +119,7 @@ export async function goalsContribute(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const goal = await db.get('goals', idParam(params))
+  const goal = await currentProfileRecord('goals', idParam(params))
   if (!goal) return notFound('Goal')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const amount = (body as Record<string, unknown>).amount as number

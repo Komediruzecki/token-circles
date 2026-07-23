@@ -3,7 +3,15 @@
  */
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  currentProfileRecord,
+  idParam,
+  json,
+  notFound,
+  ok,
+} from './helpers'
 
 export async function recurringList(): Promise<Response> {
   const db = await getDB()
@@ -21,8 +29,7 @@ export async function recurringList(): Promise<Response> {
 }
 
 export async function recurringGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const item = await db.get('recurring', idParam(params))
+  const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
   return json(item)
 }
@@ -32,6 +39,15 @@ export async function recurringCreate(body: unknown): Promise<Response> {
   const b = body as Record<string, unknown>
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
+  for (const [store, id, label] of [
+    ['categories', b.category_id, 'Category'],
+    ['accounts', b.account_id, 'Account'],
+    ['accounts', b.transfer_account_id, 'Transfer account'],
+  ] as const) {
+    if (!(await currentProfileOwns(store, id))) {
+      return json({ error: `${label} does not belong to this profile` }, 400)
+    }
+  }
   const item = {
     profile_id: pid,
     description: (b.description as string) || '',
@@ -58,10 +74,19 @@ export async function recurringUpdate(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const item = await db.get('recurring', idParam(params))
+  const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>
+    for (const [store, field, label] of [
+      ['categories', 'category_id', 'Category'],
+      ['accounts', 'account_id', 'Account'],
+      ['accounts', 'transfer_account_id', 'Transfer account'],
+    ] as const) {
+      if (field in b && !(await currentProfileOwns(store, b[field]))) {
+        return json({ error: `${label} does not belong to this profile` }, 400)
+      }
+    }
     if (b.description !== undefined) item.description = b.description
     if (b.amount !== undefined) item.amount = parseFloat(String((b.amount as string | number) || 0))
     if (b.type !== undefined) item.type = b.type
@@ -76,7 +101,9 @@ export async function recurringUpdate(
     if (b.is_active !== undefined) item.is_active = b.is_active ? 1 : 0
   }
   if (item.type !== 'transfer') item.transfer_account_id = null
-  const invariantError = transactionInvariantError(item)
+  const invariantError = transactionInvariantError(
+    item as Parameters<typeof transactionInvariantError>[0]
+  )
   if (invariantError) return json({ error: invariantError }, 400)
   await db.put('recurring', item)
   return ok()
@@ -84,7 +111,9 @@ export async function recurringUpdate(
 
 export async function recurringDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  await db.delete('recurring', idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('recurring', id))) return notFound('Recurring transaction')
+  await db.delete('recurring', id)
   return ok()
 }
 
@@ -102,9 +131,11 @@ export async function recurringUpcoming(): Promise<Response> {
 
 export async function recurringPopulate(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  const item = await db.get('recurring', idParam(params))
+  const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
-  const invariantError = transactionInvariantError(item)
+  const invariantError = transactionInvariantError(
+    item as Parameters<typeof transactionInvariantError>[0]
+  )
   if (invariantError) return json({ error: invariantError }, 400)
 
   const todayStr = new Date().toISOString().substring(0, 10)

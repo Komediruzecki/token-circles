@@ -2,7 +2,7 @@
  * Receipts handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
 
 export async function receiptsUpload(body: unknown): Promise<Response> {
   try {
@@ -22,12 +22,15 @@ export async function receiptsUpload(body: unknown): Promise<Response> {
     const profileId = await adapter.getCurrentProfileId()
     const filename = `${Date.now()}-${file.name}`
     const db = await getDB()
+    if (transactionId !== null && !(await currentProfileRecord('transactions', transactionId))) {
+      return notFound('Transaction')
+    }
 
     // One receipt per transaction (mirrors the worker): re-upload replaces the old one
     if (transactionId !== null) {
       const previous = await db.getAllFromIndex('receipts', 'by_transaction', transactionId)
       for (const prev of previous) {
-        await db.delete('receipts', prev.id)
+        if (prev.profile_id === profileId) await db.delete('receipts', prev.id)
       }
     }
 
@@ -59,8 +62,7 @@ export async function receiptsUpload(body: unknown): Promise<Response> {
 }
 
 export async function receiptsGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const receipt = await db.get('receipts', idParam(params))
+  const receipt = await currentProfileRecord('receipts', idParam(params))
   if (!receipt) return notFound('Receipt')
   return json(receipt)
 }
@@ -68,15 +70,14 @@ export async function receiptsGet(params: Record<string, string>): Promise<Respo
 export async function receiptsDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
   const id = idParam(params)
-  const receipt = await db.get('receipts', id)
+  const receipt = await currentProfileRecord('receipts', id)
   if (!receipt) return notFound('Receipt')
   await db.delete('receipts', id)
   return ok()
 }
 
 export async function receiptsGetFile(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const receipt = await db.get('receipts', idParam(params))
+  const receipt = await currentProfileRecord('receipts', idParam(params))
   if (!receipt || !receipt.file_data) return notFound('Receipt file')
 
   const ext = receipt.original_name?.split('.').pop()?.toLowerCase()
@@ -104,8 +105,12 @@ export async function receiptsGetFile(params: Record<string, string>): Promise<R
 export async function receiptsGetByTransaction(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
   const transactionId = idParam(params)
+  if (!(await currentProfileRecord('transactions', transactionId))) {
+    return notFound('Transaction')
+  }
   const receipts = await db.getAllFromIndex('receipts', 'by_transaction', transactionId)
-  return json(receipts)
+  const pid = await adapter.getCurrentProfileId()
+  return json(receipts.filter((receipt) => receipt.profile_id === pid))
 }
 
 export async function receiptsGetFileByName(params: Record<string, string>): Promise<Response> {

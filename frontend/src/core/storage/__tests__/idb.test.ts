@@ -12,6 +12,16 @@ function resetMockStores() {
   mockStores['profiles'].set(1, { id: 1, name: 'Test Profile', created_at: '2026-01-01' })
 }
 
+function seedCategoryFixture(profileId = 1, id = profileId) {
+  if (!mockStores['categories']) mockStores['categories'] = new Map()
+  mockStores['categories'].set(id, {
+    id,
+    profile_id: profileId,
+    name: `Test category ${profileId}`,
+    type: 'expense',
+  })
+}
+
 function getMockDB() {
   return {
     createObjectStore: (name: string) => {
@@ -115,6 +125,7 @@ describe('IndexedDBAdapter', () => {
 
   it('createTransaction adds and lists a transaction', async () => {
     const adapter = new IndexedDBAdapter()
+    seedCategoryFixture()
     await adapter.createTransaction({
       type: 'expense',
       amount: 100,
@@ -153,6 +164,7 @@ describe('IndexedDBAdapter', () => {
 
   it('deleteTransaction removes a transaction', async () => {
     const adapter = new IndexedDBAdapter()
+    seedCategoryFixture()
     const id = await adapter.createTransaction({
       type: 'expense',
       amount: 50,
@@ -169,6 +181,7 @@ describe('IndexedDBAdapter', () => {
 
   it('updateTransaction modifies a transaction', async () => {
     const adapter = new IndexedDBAdapter()
+    seedCategoryFixture()
     const id = await adapter.createTransaction({
       type: 'expense',
       amount: 100,
@@ -186,6 +199,7 @@ describe('IndexedDBAdapter', () => {
 
   it('updateTransaction preserves amount_local on a partial update that omits it', async () => {
     const adapter = new IndexedDBAdapter()
+    seedCategoryFixture()
     // Foreign-currency row: amount is HRK, amount_local is the base (EUR) value.
     const id = await adapter.createTransaction({
       type: 'expense',
@@ -212,6 +226,7 @@ describe('IndexedDBAdapter', () => {
 
   it('listTransactions date range stays scoped to the current profile (no cross-profile leak)', async () => {
     const adapter = new IndexedDBAdapter()
+    seedCategoryFixture()
     await adapter.createTransaction({
       type: 'expense',
       amount: 10,
@@ -223,12 +238,13 @@ describe('IndexedDBAdapter', () => {
     // Same date, different profile — the by_date index spans profiles, so the
     // handler must filter these out.
     localStorage.setItem('currentProfileId', '2')
+    seedCategoryFixture(2, 2)
     await adapter.createTransaction({
       type: 'expense',
       amount: 99,
       description: 'p2',
       date: '2026-04-10',
-      category_id: 1,
+      category_id: 2,
       profile_id: 2,
     } as any)
 
@@ -239,6 +255,7 @@ describe('IndexedDBAdapter', () => {
 
   it('deleteAllTransactions clears all transactions', async () => {
     const adapter = new IndexedDBAdapter()
+    seedCategoryFixture()
     await adapter.createTransaction({
       type: 'expense',
       amount: 10,

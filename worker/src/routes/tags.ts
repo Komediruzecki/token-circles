@@ -124,6 +124,9 @@ async function replaceTransactionTags(c: Context<AppEnv>): Promise<Response> {
       pid,
       ...ids
     );
+    if (owned.length !== ids.length) {
+      throw new HttpError(403, 'One or more tags do not belong to this profile');
+    }
   }
   const stmts = [
     c.env.DB.prepare('DELETE FROM transaction_tags WHERE transaction_id = ?').bind(txId),

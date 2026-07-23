@@ -2,7 +2,15 @@
  * Tags handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  currentProfileRecord,
+  idParam,
+  json,
+  notFound,
+  ok,
+} from './helpers'
 
 export async function tagsList(): Promise<Response> {
   const db = await getDB()
@@ -40,6 +48,7 @@ export async function tagsGetTransactions(params: Record<string, string>): Promi
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
   const tagId = idParam(params)
+  if (!(await currentProfileRecord('tags', tagId))) return notFound('Tag')
   const allTxns = await db.getAllFromIndex('transactions', 'by_profile', pid)
   const filtered = allTxns.filter((t: Record<string, unknown>) => {
     const tagIds = (t.tag_ids as number[]) || []
@@ -50,7 +59,7 @@ export async function tagsGetTransactions(params: Record<string, string>): Promi
 
 export async function tagsUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
   const db = await getDB()
-  const tag = await db.get('tags', idParam(params))
+  const tag = await currentProfileRecord('tags', idParam(params))
   if (!tag) return notFound('Tag')
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>
@@ -63,20 +72,18 @@ export async function tagsUpdate(params: Record<string, string>, body: unknown):
 
 export async function tagsDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  const tag = await db.get('tags', idParam(params))
+  const tag = await currentProfileRecord('tags', idParam(params))
   if (!tag) return notFound('Tag')
   // Remove tag from all transactions that reference it
-  const pids = adapter.getCurrentProfileIds()
-  for (const pid of pids) {
-    const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
-    for (const t of txns) {
-      const tagIds = (t.tag_ids as number[]) || []
-      const idx = tagIds.indexOf(idParam(params))
-      if (idx !== -1) {
-        tagIds.splice(idx, 1)
-        t.tag_ids = tagIds
-        await db.put('transactions', t)
-      }
+  const pid = await adapter.getCurrentProfileId()
+  const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
+  for (const t of txns) {
+    const tagIds = (t.tag_ids as number[]) || []
+    const idx = tagIds.indexOf(idParam(params))
+    if (idx !== -1) {
+      tagIds.splice(idx, 1)
+      t.tag_ids = tagIds
+      await db.put('transactions', t)
     }
   }
   await db.delete('tags', idParam(params))
@@ -115,6 +122,11 @@ export async function transactionTagsSet(
     const data = body as Record<string, unknown>
     const tagIds = data.tagIds as number[] | undefined
     if (!Array.isArray(tagIds)) return json({ error: 'tagIds must be an array' }, 400)
+    for (const tagId of tagIds) {
+      if (!(await currentProfileOwns('tags', tagId))) {
+        return json({ error: 'Tag does not belong to this profile' }, 400)
+      }
+    }
     const updated = {
       ...tx,
       tag_ids: tagIds,

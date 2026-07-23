@@ -342,6 +342,12 @@ billsRoutes.post('/api/bills', requireAuth, async (c) => {
   ) {
     throw new HttpError(403, 'Account does not belong to this profile');
   }
+  if (
+    category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
+  ) {
+    throw new HttpError(403, 'Category does not belong to this profile');
+  }
   const res = await db.insert(c.env.DB, 'bills', {
     profile_id: pid,
     name,
@@ -396,6 +402,12 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
     !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
   ) {
     throw new HttpError(403, 'Account does not belong to this profile');
+  }
+  if (
+    category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
+  ) {
+    throw new HttpError(403, 'Category does not belong to this profile');
   }
   await db.update(
     c.env.DB,

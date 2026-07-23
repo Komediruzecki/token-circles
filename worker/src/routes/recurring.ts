@@ -184,6 +184,12 @@ recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
       throw new HttpError(403, 'Account does not belong to this profile');
     }
   }
+  if (
+    category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
+  ) {
+    throw new HttpError(403, 'Category does not belong to this profile');
+  }
   const normalizedType = type || 'expense';
   const normalizedTransferAccountId = normalizedType === 'transfer' ? transfer_account_id : null;
   const invariantError = transactionInvariantError({
@@ -240,6 +246,12 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
     if (acc != null && !(await db.accountBelongsToProfile(c.env.DB, Number(acc), pid))) {
       throw new HttpError(403, 'Account does not belong to this profile');
     }
+  }
+  if (
+    effective.category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, Number(effective.category_id), pid))
+  ) {
+    throw new HttpError(403, 'Category does not belong to this profile');
   }
   const invariantError = transactionInvariantError(effective);
   if (invariantError) throw new HttpError(400, invariantError);

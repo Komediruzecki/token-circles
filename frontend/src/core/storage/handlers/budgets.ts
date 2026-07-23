@@ -4,6 +4,8 @@
 import { getDB } from '../idb'
 import {
   adapter,
+  currentProfileOwns,
+  currentProfileRecord,
   endOfNextMonth,
   getAllForProfiles,
   getAmount,
@@ -25,6 +27,9 @@ export async function budgetsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid budget data' }, 400)
   const budget = body as Record<string, unknown>
   budget.profile_id = await adapter.getCurrentProfileId()
+  if (!(await currentProfileOwns('categories', budget.category_id))) {
+    return json({ error: 'Category does not belong to this profile' }, 400)
+  }
   const id = await adapter.createBudget(
     budget as unknown as Parameters<typeof adapter.createBudget>[0]
   )
@@ -32,8 +37,7 @@ export async function budgetsCreate(body: unknown): Promise<Response> {
 }
 
 export async function budgetsGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const budget = await db.get('budgets', idParam(params))
+  const budget = await currentProfileRecord('budgets', idParam(params))
   if (!budget) return notFound('Budget')
   return json(budget)
 }
@@ -43,12 +47,20 @@ export async function budgetsUpdate(
   body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  await adapter.updateBudget(idParam(params), body as Record<string, unknown>)
+  const id = idParam(params)
+  if (!(await currentProfileRecord('budgets', id))) return notFound('Budget')
+  const patch = body as Record<string, unknown>
+  if ('category_id' in patch && !(await currentProfileOwns('categories', patch.category_id))) {
+    return json({ error: 'Category does not belong to this profile' }, 400)
+  }
+  await adapter.updateBudget(id, patch)
   return ok()
 }
 
 export async function budgetsDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteBudget(idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('budgets', id))) return notFound('Budget')
+  await adapter.deleteBudget(id)
   return ok()
 }
 

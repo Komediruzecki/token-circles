@@ -35,6 +35,9 @@ budgetsRoutes.get('/api/budgets', requireAuth, async (c) => {
 budgetsRoutes.post('/api/budgets', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;
+  if (!(await db.categoryBelongsToProfile(c.env.DB, Number(b.category_id), pid))) {
+    throw new HttpError(403, 'Category does not belong to this profile');
+  }
   const res = await db.insert(c.env.DB, 'budgets', {
     category_id: b.category_id,
     amount: b.amount,
@@ -741,6 +744,9 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
   if (!category_id || amount == null) {
     throw new HttpError(400, 'Category ID and amount are required');
   }
+  if (!(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))) {
+    throw new HttpError(403, 'Category does not belong to this profile');
+  }
 
   const budgetPeriod = period || 'monthly';
 
@@ -991,6 +997,12 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
 budgetsRoutes.put('/api/budgets/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;
+  if (
+    b.category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, Number(b.category_id), pid))
+  ) {
+    throw new HttpError(403, 'Category does not belong to this profile');
+  }
   const res = await db.update(
     c.env.DB,
     'budgets',

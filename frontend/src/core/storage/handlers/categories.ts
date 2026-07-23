@@ -2,7 +2,15 @@
  * Categories handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  currentProfileRecord,
+  idParam,
+  json,
+  notFound,
+  ok,
+} from './helpers'
 import { normalizeCategory } from './normalize'
 
 export async function categoriesList(query: URLSearchParams): Promise<Response> {
@@ -19,6 +27,9 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
 
   const pid = await adapter.getCurrentProfileId()
   cat.profile_id = pid
+  if (!(await currentProfileOwns('categories', cat.parent_id ?? cat.parentId))) {
+    return json({ error: 'Parent category does not belong to this profile' }, 400)
+  }
 
   // Check for duplicate name within the same profile
   const db = await getDB()
@@ -34,8 +45,7 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
 }
 
 export async function categoriesGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const cat = await db.get('categories', idParam(params))
+  const cat = await currentProfileRecord('categories', idParam(params))
   if (!cat) return notFound('Category')
   return json(cat)
 }
@@ -45,12 +55,23 @@ export async function categoriesUpdate(
   body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  await adapter.updateCategory(idParam(params), body as Record<string, unknown>)
+  const id = idParam(params)
+  if (!(await currentProfileRecord('categories', id))) return notFound('Category')
+  const patch = body as Record<string, unknown>
+  if (
+    ('parent_id' in patch || 'parentId' in patch) &&
+    !(await currentProfileOwns('categories', patch.parent_id ?? patch.parentId))
+  ) {
+    return json({ error: 'Parent category does not belong to this profile' }, 400)
+  }
+  await adapter.updateCategory(id, patch)
   return ok()
 }
 
 export async function categoriesDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteCategory(idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('categories', id))) return notFound('Category')
+  await adapter.deleteCategory(id)
   return ok()
 }
 
