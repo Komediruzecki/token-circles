@@ -9,23 +9,24 @@ export const accountRoutes = new Hono<AppEnv>();
 
 // Tables scoped by profile_id — every row for the user's profiles is removed.
 const PROFILE_TABLES = [
-  'transactions',
-  'accounts',
-  'categories',
+  'receipts',
+  'category_mappings',
   'budgets',
   'budgets_zero_based',
   'savings_goals',
   'retirement_goals',
   'emergency_fund_config',
-  'loans',
-  'settings',
   'recurring_transactions',
   'bills',
+  'transactions',
+  'categories',
+  'accounts',
+  'loans',
+  'settings',
   'housings',
   'tags',
-  'category_mappings',
-  'receipts',
   'portfolio_holdings',
+  'import_logs',
 ];
 
 // Best-effort: delete the Stripe customer (which also cancels their subscriptions). No-op unless
@@ -50,8 +51,8 @@ async function deleteStripeCustomer(
 
 // DELETE /api/account — permanently delete the signed-in user's account and ALL of their data.
 // Confirm by sending { confirm } equal to the account email (case-insensitive) or the word "delete".
-// Dev = hard delete (immediate). Prod will use a soft delete (deactivate now, purge later) — until
-// that exists we refuse to hard-delete in production so data can't be destroyed there by accident.
+// The typed confirmation is the final guard; this route must work in production so a user can
+// exercise their right to delete their account and financial data.
 accountRoutes.delete('/api/account', requireAuth, async (c) => {
   const userId = c.get('userId');
   const body = (await c.req.json().catch(() => ({}))) as { confirm?: string };
@@ -69,10 +70,6 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
     (!!user.email && confirm.toLowerCase() === user.email.toLowerCase());
   if (!matches) {
     throw new HttpError(400, 'Confirmation does not match. Type your account email or "delete".');
-  }
-
-  if (c.env.APP_ENV === 'production') {
-    throw new HttpError(501, 'Account deletion is not enabled in production yet');
   }
 
   // Cancel/remove billing first (outside the DB batch; best-effort, never blocks).
@@ -96,9 +93,7 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
     const keys = receipts.map((r) => r.storage_path).filter(Boolean);
     const bucket = c.env.RECEIPTS;
     for (let i = 0; i < keys.length; i += 1000) {
-      await bucket.delete(keys.slice(i, i + 1000)).catch((e: unknown) => {
-        console.error('R2 receipt batch delete during account deletion failed:', e);
-      });
+      await bucket.delete(keys.slice(i, i + 1000));
     }
   }
 
@@ -129,6 +124,8 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
   P('DELETE FROM reminder_sends WHERE user_id = ?', userId);
   P('DELETE FROM reminder_dedup WHERE user_id = ?', userId);
   P('DELETE FROM password_resets WHERE user_id = ?', userId);
+  P('DELETE FROM custom_reports WHERE user_id = ?', userId);
+  P('DELETE FROM error_logs WHERE user_id = ?', userId);
   P('DELETE FROM profiles WHERE user_id = ?', userId);
   P('DELETE FROM users WHERE id = ?', userId);
   await c.env.DB.batch(stmts);
