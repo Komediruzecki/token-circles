@@ -16,7 +16,14 @@ import Sparkline from '../components/Dashboard/Sparkline'
 import { DashboardSettings } from '../components/DashboardSettings'
 import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
-import { api, apiGet, formatCurrency, formatDate, getLocalCurrency, toast } from '../core/api'
+import {
+  api,
+  apiHouseholdGet,
+  formatCurrency,
+  formatDate,
+  getLocalCurrency,
+  toast,
+} from '../core/api'
 import { useAppState } from '../core/appStore'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
@@ -272,7 +279,7 @@ export default function Dashboard() {
     () => {
       const y = year()
       const m = month()
-      apiGet<{ nodes: SankeyData['nodes']; links: SankeyData['links'] }>(
+      apiHouseholdGet<{ nodes: SankeyData['nodes']; links: SankeyData['links'] }>(
         `/api/analytics/sankey?year=${y}&month=${m}`
       )
         .then((res) => setSankeyData({ nodes: res.nodes || [], links: res.links || [] }))

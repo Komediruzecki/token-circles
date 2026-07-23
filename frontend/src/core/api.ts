@@ -5,74 +5,22 @@
 import { z } from 'zod'
 import * as Schemas from '../schemas/models.js'
 import { apiFetch } from './apiFetch'
+import { profileRequestHeaders } from './apiProfileScope'
 import { normalizeCurrencyCode } from './currencies'
 import { logger } from './logger.js'
 import type * as ApiTypes from '../types/api.js'
 import type * as Models from '../types/models.js'
+import type { ApiProfileScope } from './apiProfileScope'
 
 // API base URL. Empty/unset (local dev + client-only builds) => same-origin '/api', which the
 // vite proxy forwards to the local worker. Set VITE_API_URL (e.g. https://api.dev.<domain>) for
 // deployed server-mode builds where the API lives on a sibling subdomain.
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`
 
-// Local storage keys
-const CURRENT_PROFILE_ID_KEY = 'currentProfileId'
-const SELECTED_PROFILE_IDS_KEY = 'selectedProfileIds'
-
 /**
  * API Client class for making authenticated requests
  */
 export class ApiClient {
-  private headers: Record<string, string> = {}
-
-  constructor() {
-    this.updateHeaders()
-    // Watch for changes to localStorage
-    window.addEventListener('storage', () => {
-      this.updateHeaders()
-    })
-  }
-
-  private updateHeaders() {
-    const currentProfileId = this.getCurrentProfileId()
-    const selectedProfileIds = this.getSelectedProfileIds()
-
-    this.headers = {
-      'Content-Type': 'application/json',
-      'X-Profile-Id': currentProfileId.toString(),
-    }
-
-    if (selectedProfileIds.length > 1) {
-      this.headers['X-Profile-Ids'] = JSON.stringify(selectedProfileIds)
-    }
-  }
-
-  private getCurrentProfileId(): number {
-    const stored = localStorage.getItem(CURRENT_PROFILE_ID_KEY)
-    if (stored !== null) {
-      const parsed = parseInt(stored, 10)
-      if (!isNaN(parsed)) {
-        return parsed
-      }
-    }
-    return 1
-  }
-
-  private getSelectedProfileIds(): number[] {
-    const ids = localStorage.getItem(SELECTED_PROFILE_IDS_KEY)
-    if (ids !== null) {
-      try {
-        const parsed = JSON.parse(ids)
-        if (Array.isArray(parsed)) {
-          return parsed
-        }
-      } catch {
-        // ignore parse error
-      }
-    }
-    return [this.getCurrentProfileId()]
-  }
-
   /**
    * Make an HTTP request to the API
    */
@@ -84,19 +32,23 @@ export class ApiClient {
     const url = API_BASE + endpoint
     const method = options.method || 'GET'
 
-    // Update headers before request
-    this.updateHeaders()
-
     // Handle body - serialize JsonObject to string
     let body: string | undefined
     if (options.body) {
       body = JSON.stringify(options.body)
     }
 
+    const profileScope = options.profileScope ?? 'active'
+    const headers: Record<string, string> = {
+      ...options.headers,
+      ...profileRequestHeaders(profileScope),
+      'Content-Type': 'application/json',
+    }
+
     // Prepare request options with explicit body type
     const requestOptions: RequestInit = {
       method,
-      headers: this.headers,
+      headers,
       credentials: 'include',
     }
 
@@ -107,7 +59,7 @@ export class ApiClient {
 
     // For DELETE without body, don't set Content-Type
     if (method === 'DELETE' && body === undefined) {
-      delete (requestOptions.headers as Record<string, string>)['Content-Type']
+      delete headers['Content-Type']
     }
 
     try {
@@ -331,7 +283,8 @@ export class ApiClient {
       z.union([
         z.array(Schemas.TransactionSchema),
         z.object({ rows: z.array(Schemas.TransactionSchema) }).loose(),
-      ])
+      ]),
+      { profileScope: 'household' }
     )
     return Array.isArray(res) ? res : res.rows || []
   }
@@ -390,7 +343,9 @@ export class ApiClient {
    * Get all categories
    */
   async getCategories(): Promise<Models.Category[]> {
-    return this.request<Models.Category[]>('/categories', z.array(Schemas.CategorySchema))
+    return this.request<Models.Category[]>('/categories', z.array(Schemas.CategorySchema), {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -478,7 +433,9 @@ export class ApiClient {
    * Get all accounts
    */
   async getAccounts(): Promise<Models.Account[]> {
-    return this.request<Models.Account[]>('/accounts', z.array(Schemas.AccountSchema))
+    return this.request<Models.Account[]>('/accounts', z.array(Schemas.AccountSchema), {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -550,7 +507,9 @@ export class ApiClient {
    * Get all budgets
    */
   async getBudgets(): Promise<Models.Budget[]> {
-    return this.request<Models.Budget[]>('/budgets', z.array(Schemas.BudgetSchema))
+    return this.request<Models.Budget[]>('/budgets', z.array(Schemas.BudgetSchema), {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -593,7 +552,13 @@ export class ApiClient {
    * Get all savings goals
    */
   async getGoals(): Promise<Models.SavingsGoal[]> {
-    return this.request<Models.SavingsGoal[]>('/savings-goals', z.array(Schemas.SavingsGoalSchema))
+    return this.request<Models.SavingsGoal[]>(
+      '/savings-goals',
+      z.array(Schemas.SavingsGoalSchema),
+      {
+        profileScope: 'household',
+      }
+    )
   }
 
   /**
@@ -646,7 +611,9 @@ export class ApiClient {
    * Get all loans
    */
   async getLoans(): Promise<Models.Loan[]> {
-    return this.request<Models.Loan[]>('/loans', z.array(Schemas.LoanSchema))
+    return this.request<Models.Loan[]>('/loans', z.array(Schemas.LoanSchema), {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -721,7 +688,9 @@ export class ApiClient {
    * Get all bills
    */
   async getBills(): Promise<Models.Bill[]> {
-    return this.request<Models.Bill[]>('/bills', z.array(Schemas.BillSchema))
+    return this.request<Models.Bill[]>('/bills', z.array(Schemas.BillSchema), {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -803,7 +772,8 @@ export class ApiClient {
   async getTransactionYears(): Promise<{ minYear: number; maxYear: number; years: number[] }> {
     const res = await this.request<{ years: number[] }>(
       '/analytics/distinct-years',
-      Schemas.GenericSchema
+      Schemas.GenericSchema,
+      { profileScope: 'household' }
     )
     const years = res.years || []
     return {
@@ -834,14 +804,18 @@ export class ApiClient {
       qs.set('year', String(year))
     }
     const params = qs.toString() ? `?${qs.toString()}` : ''
-    return this.request<Models.DashboardMetrics>(`/dashboard${params}`, Schemas.GenericSchema)
+    return this.request<Models.DashboardMetrics>(`/dashboard${params}`, Schemas.GenericSchema, {
+      profileScope: 'household',
+    })
   }
 
   /**
    * Get analytics summary
    */
   async getAnalytics(): Promise<Models.AnalyticsSummary> {
-    return this.request<Models.AnalyticsSummary>('/analytics', Schemas.GenericSchema)
+    return this.request<Models.AnalyticsSummary>('/analytics', Schemas.GenericSchema, {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -851,7 +825,8 @@ export class ApiClient {
     const params = months ? `?months=${months}` : ''
     return this.request<Models.DashboardChartsResponse>(
       `/dashboard/charts${params}`,
-      Schemas.GenericSchema
+      Schemas.GenericSchema,
+      { profileScope: 'household' }
     )
   }
 
@@ -859,7 +834,9 @@ export class ApiClient {
    * Get net worth timeline data
    */
   async getNetWorth(): Promise<Models.NetWorthResponse> {
-    return this.request<Models.NetWorthResponse>('/dashboard/net-worth', Schemas.GenericSchema)
+    return this.request<Models.NetWorthResponse>('/dashboard/net-worth', Schemas.GenericSchema, {
+      profileScope: 'household',
+    })
   }
 
   /**
@@ -871,7 +848,7 @@ export class ApiClient {
     if (params?.date_to !== undefined) queryParams.append('date_to', params.date_to)
 
     const response = await apiFetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
-      headers: this.headers,
+      headers: profileRequestHeaders('household'),
       credentials: 'include',
     })
 
@@ -891,6 +868,7 @@ export class ApiClient {
 
     const response = await apiFetch(`${API_BASE}/import`, {
       method: 'POST',
+      headers: profileRequestHeaders('active'),
       body: formData,
       credentials: 'include',
     })
@@ -995,7 +973,7 @@ export class ApiClient {
 
     const response = await apiFetch(`${API_BASE}/receipts/upload`, {
       method: 'POST',
-      headers: { 'X-Profile-Id': this.getCurrentProfileId().toString() },
+      headers: profileRequestHeaders('active'),
       body: formData,
       credentials: 'include',
     })
@@ -1032,7 +1010,7 @@ export class ApiClient {
   async getReceiptFile(id: number): Promise<Blob> {
     const url = `${API_BASE}/receipts/${id}/file`
     const response = await apiFetch(url, {
-      headers: this.headers,
+      headers: profileRequestHeaders('active'),
       credentials: 'include',
     })
 
@@ -1081,7 +1059,9 @@ export class ApiClient {
     reconciled_total: number
     unreconciled_total: number
   }> {
-    return this.request(`/transactions/reconcile/summary`, undefined)
+    return this.request(`/transactions/reconcile/summary`, undefined, {
+      profileScope: 'active',
+    })
   }
 
   /**
@@ -1095,7 +1075,7 @@ export class ApiClient {
   }
 
   async getTags(): Promise<{ id: number; name: string; color: string }[]> {
-    return this.request('/tags', undefined)
+    return this.request('/tags', undefined, { profileScope: 'household' })
   }
 
   /**
@@ -1114,7 +1094,9 @@ export class ApiClient {
   // ============ RECURRING TRANSACTIONS ============
 
   getRecurring(): Promise<Models.RecurringTransaction[]> {
-    return this.request<Models.RecurringTransaction[]>('/recurring', Schemas.GenericSchema)
+    return this.request<Models.RecurringTransaction[]>('/recurring', Schemas.GenericSchema, {
+      profileScope: 'household',
+    })
   }
 
   getRecurringById(id: number): Promise<Models.RecurringTransaction> {
@@ -1211,16 +1193,14 @@ export const showToast = toast
 
 // ── HTTP verb helpers ─────────────────────────────────────────────────────────
 
-function getProfileIdForHeaders(): string {
-  const id = localStorage.getItem('currentProfileId')
-  return (id !== null ? parseInt(id, 10) : 1).toString()
-}
-
-function getHeaders(): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    'X-Profile-Id': getProfileIdForHeaders(),
+function jsonHeaders(scope: ApiProfileScope, additional?: HeadersInit): Headers {
+  const headers = new Headers(additional)
+  headers.set('Content-Type', 'application/json')
+  for (const [name, value] of Object.entries(profileRequestHeaders(scope))) {
+    headers.set(name, value)
   }
+  if (scope !== 'household') headers.delete('X-Profile-Ids')
+  return headers
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -1236,14 +1216,21 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   throw new Error('Invalid response format')
 }
 
-export async function apiGet<T = unknown>(url: string): Promise<T> {
+export async function apiGet<T = unknown>(
+  url: string,
+  profileScope: ApiProfileScope = 'active'
+): Promise<T> {
   const response = await apiFetch(url, {
     credentials: 'include',
     method: 'GET',
-    headers: getHeaders(),
+    headers: jsonHeaders(profileScope),
   })
   if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
+}
+
+export function apiHouseholdGet<T = unknown>(url: string): Promise<T> {
+  return apiGet<T>(url, 'household')
 }
 
 /**
@@ -1269,11 +1256,11 @@ export async function apiPost<T = unknown>(
   options?: RequestInit
 ): Promise<T> {
   const response = await apiFetch(url, {
+    ...options,
     credentials: 'include',
     method: 'POST',
-    headers: getHeaders(),
+    headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
-    ...options,
   })
   if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
@@ -1285,11 +1272,11 @@ export async function apiPut<T = unknown>(
   options?: RequestInit
 ): Promise<T> {
   const response = await apiFetch(url, {
+    ...options,
     credentials: 'include',
     method: 'PUT',
-    headers: getHeaders(),
+    headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
-    ...options,
   })
   if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
@@ -1299,7 +1286,7 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
   const response = await apiFetch(url, {
     credentials: 'include',
     method: 'DELETE',
-    headers: { 'X-Profile-Id': getProfileIdForHeaders() },
+    headers: profileRequestHeaders('active'),
   })
   if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)

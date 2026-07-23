@@ -7,7 +7,7 @@
  * widget settings; everything not in the deck lives below the fold.
  */
 import { createMemo, createResource, For, Show } from 'solid-js'
-import { apiGet, formatCurrency, formatDate, getLocalCurrency } from '../../core/api'
+import { apiHouseholdGet, formatCurrency, formatDate, getLocalCurrency } from '../../core/api'
 import { useAppState } from '../../core/appStore'
 import SankeyChart from '../SankeyChart'
 import styles from './OverviewDeck.module.css'
@@ -50,7 +50,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
   const [heatmap] = createResource(
     () => ({ year: props.year, pv: state.profileVersion }),
     async ({ year }) => {
-      const res = await apiGet<{ dates: Record<string, number> }>(
+      const res = await apiHouseholdGet<{ dates: Record<string, number> }>(
         `/api/analytics/daily-heatmap?year=${year}&type=expense`
       )
       const cells: number[][] = Array.from({ length: 5 }, () => Array(12).fill(0))
@@ -72,7 +72,9 @@ export default function OverviewDeck(props: OverviewDeckProps) {
   const [budgets] = createResource(
     () => ({ pv: state.profileVersion }),
     async () => {
-      const data = (await apiGet<{ alerts: BudgetAlert[] }>('/api/budgets/alerts?threshold=0')) as {
+      const data = (await apiHouseholdGet<{ alerts: BudgetAlert[] }>(
+        '/api/budgets/alerts?threshold=0'
+      )) as {
         alerts?: BudgetAlert[]
       }
       const alerts = Array.isArray(data?.alerts) ? data.alerts : []
@@ -86,7 +88,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
   const [portfolio] = createResource(
     () => ({ pv: state.profileVersion }),
     async () => {
-      const holdings = await apiGet<Holding[]>('/api/portfolio/holdings')
+      const holdings = await apiHouseholdGet<Holding[]>('/api/portfolio/holdings')
       const rows = (Array.isArray(holdings) ? holdings : [])
         .map((h) => ({ ...h, value: h.shares * h.purchase_price }))
         .sort((a, b) => b.value - a.value)

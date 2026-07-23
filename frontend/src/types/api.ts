@@ -3,6 +3,7 @@
  * Type-safe wrapper for API calls
  */
 
+import type { ApiProfileScope } from '../core/apiProfileScope.js'
 import type * as Models from './models.js'
 
 // ============ API CLIENT TYPES ============
@@ -13,6 +14,7 @@ export interface ApiClientOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   headers?: Record<string, string>
   body?: JsonObject | null
+  profileScope?: ApiProfileScope
 }
 
 export interface ApiClientError {
@@ -90,7 +92,10 @@ export type TransactionListParams = {
   category_name?: string
 }
 
-export type TransactionCreateParams = Omit<Models.Transaction, 'id' | 'created_at' | 'updated_at' | 'profile_id'> & {
+export type TransactionCreateParams = Omit<
+  Models.Transaction,
+  'id' | 'created_at' | 'updated_at' | 'profile_id'
+> & {
   profile_id?: Models.ProfileId
 }
 

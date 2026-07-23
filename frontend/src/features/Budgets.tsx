@@ -42,7 +42,7 @@ import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
 import SectionRail from '../components/SectionRail'
 import { getLocalCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
@@ -128,9 +128,9 @@ export default function Budgets() {
     gatedSource('budgets', () => ({ m: month(), pv: state.profileVersion })),
     async ({ m }) => {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
-        apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
-        apiGet<any>(`/api/budgets/zero-based/summary?month=${m}`),
-        apiGet<ForecastData>(`/api/budgets/forecast?month=${m}`).catch(() => null),
+        apiHouseholdGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
+        apiHouseholdGet<any>(`/api/budgets/zero-based/summary?month=${m}`),
+        apiHouseholdGet<ForecastData>(`/api/budgets/forecast?month=${m}`).catch(() => null),
       ])
 
       const allocationsList = (allocationsRes?.allocations || allocationsRes?.categories || []).map(
@@ -205,7 +205,7 @@ export default function Budgets() {
   // Load historical improvements data for trend chart
   const loadImprovements = async () => {
     try {
-      const data = await apiGet<BudgetImprovement[]>(`/api/budgets/improvements?months=6`)
+      const data = await apiHouseholdGet<BudgetImprovement[]>(`/api/budgets/improvements?months=6`)
       setImprovements(data || [])
     } catch {
       // History loading is best-effort
@@ -359,8 +359,8 @@ export default function Budgets() {
   const loadCategories = async () => {
     try {
       const [allRes, budgetRes] = await Promise.all([
-        apiGet<Category[]>('/api/categories'),
-        apiGet<any[]>(
+        apiHouseholdGet<Category[]>('/api/categories'),
+        apiHouseholdGet<any[]>(
           `/api/budgets/summary?year=${currentYearNum()}&month=${currentMonthNum()}`
         ).catch((): any[] => []),
       ])
