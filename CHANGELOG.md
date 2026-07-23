@@ -8,6 +8,11 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Account balance fields now accept either a comma or dot for cents without moving the cursor while you type.
+- New accounts use your configured local currency, including accounts created during an import; EUR is used when no valid preference is available.
+
 ## [5.8.0] — 2026-07-21
 
 ### Added

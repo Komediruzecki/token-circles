@@ -83,6 +83,26 @@ describe('validation - validateBody', () => {
     expect(result).toBeNull()
   })
 
+  it('accepts any three-letter ISO-style account currency', () => {
+    expect(
+      validateBody('POST', '/api/accounts', {
+        name: 'Swiss account',
+        type: 'giro',
+        currency: 'CHF',
+      })
+    ).toBeNull()
+  })
+
+  it('rejects a malformed account currency', () => {
+    expect(
+      validateBody('POST', '/api/accounts', {
+        name: 'Broken account',
+        type: 'giro',
+        currency: 'EURO',
+      })
+    ).not.toBeNull()
+  })
+
   it('validates bill create body', () => {
     const result = validateBody('POST', '/api/bills', {
       name: 'Netflix',

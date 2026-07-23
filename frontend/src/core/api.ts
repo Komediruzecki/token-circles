@@ -5,6 +5,7 @@
 import { z } from 'zod'
 import * as Schemas from '../schemas/models.js'
 import { apiFetch } from './apiFetch'
+import { normalizeCurrencyCode } from './currencies'
 import { logger } from './logger.js'
 import type * as ApiTypes from '../types/api.js'
 import type * as Models from '../types/models.js'
@@ -1155,7 +1156,7 @@ export const api = new ApiClient()
 // Export utility functions
 export const getLocalCurrency = (): string => {
   try {
-    return localStorage.getItem('localCurrency') || 'EUR'
+    return normalizeCurrencyCode(localStorage.getItem('localCurrency'), 'EUR')
   } catch {
     return 'EUR'
   }

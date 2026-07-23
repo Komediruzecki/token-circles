@@ -6,6 +6,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
+import { normalizeCurrencyCode } from '../currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 
 // Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
@@ -430,6 +431,10 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   };
   await loadAccounts();
 
+  // Currency for accounts this import creates — the client's base currency (Settings; EUR by
+  // default), falling back to EUR when the request does not contain a valid code.
+  const defaultCurrency = normalizeCurrencyCode(b.defaultCurrency, 'EUR');
+
   // Batch-create accounts for the category names the user flagged as 'account' type (+ history).
   // Skipped in dry-run (preview must not mutate).
   let accountsCreated = 0;
@@ -450,7 +455,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         toCreate.map((a) =>
           DB.prepare(
             'INSERT INTO accounts (name, type, currency, balance, notes, profile_id, starting_balance, starting_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-          ).bind(a.name, a.accType, 'USD', a.balance, '', pid, a.balance, a.balanceDate)
+          ).bind(a.name, a.accType, defaultCurrency, a.balance, '', pid, a.balance, a.balanceDate)
         )
       );
       await loadAccounts(); // pick up the new ids
@@ -577,7 +582,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         .trim(),
       t.account_id ?? null,
       String(t.type ?? ''),
-      String(t.currency ?? '') || 'USD'
+      normalizeCurrencyCode(t.currency, defaultCurrency)
     );
     const amt = Math.abs(Number(t.amount));
     const bucket = dedupBuckets.get(k);
@@ -597,7 +602,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     const amountRaw = parseFlexibleAmount(pick(row, mapping, 'amount'));
     const amount = Math.abs(amountRaw);
     const dateRaw = pick(row, mapping, 'date') ?? today();
-    const currency = pick(row, mapping, 'currency') || 'USD';
+    const currency = normalizeCurrencyCode(pick(row, mapping, 'currency'), defaultCurrency);
     const catType = catName ? categoryTypes && categoryTypes[catName] : null;
 
     // Determine transaction type (mirrors the Express precedence exactly).

@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { normalizeCurrencyCode } from '../currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 
 // Port of backend/routes/accounts.js + backend/repositories/accountsRepo.js.
@@ -38,7 +39,7 @@ accountsRoutes.post('/api/accounts', requireAuth, async (c) => {
     name: String(b.name).trim(),
     bank_name: b.bank_name || '',
     type: accountType,
-    currency: b.currency || 'USD',
+    currency: normalizeCurrencyCode(b.currency, 'EUR'),
     balance: startBalance,
     notes: b.notes || '',
     profile_id: pid,

@@ -9,6 +9,8 @@
 import './zodConfig'
 import { z } from 'zod/v4'
 
+const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/)
+
 // ── Transaction ────────────────────────────────────────────────────────────────
 
 const transactionBaseSchema = z.object({
@@ -17,7 +19,7 @@ const transactionBaseSchema = z.object({
   description: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   category_id: z.number().int().positive().nullable(),
-  currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']).optional(),
+  currency: currencyCodeSchema.optional(),
   amount_local: z.number().nullable().optional(),
   exchange_rate: z.number().optional(),
   notes: z.string().optional(),
@@ -54,7 +56,7 @@ export const categoryUpdateSchema = categoryCreateSchema.partial()
 export const accountCreateSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['giro', 'savings', 'ib', 'cash']),
-  currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']).optional(),
+  currency: currencyCodeSchema.optional(),
   balance: z.number().optional(),
   bank_name: z.string().optional(),
   notes: z.string().optional(),
@@ -169,9 +171,9 @@ export const portfolioHoldingCreateSchema = z.object({
 
 export const settingsUpdateSchema = z
   .object({
-    local_currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']).optional(),
+    local_currency: currencyCodeSchema.optional(),
     theme: z.enum(['light', 'dark']).optional(),
-    primary_currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY']).optional(),
+    primary_currency: currencyCodeSchema.optional(),
     language: z.enum(['en', 'de', 'fr', 'es']).optional(),
   })
   .loose()

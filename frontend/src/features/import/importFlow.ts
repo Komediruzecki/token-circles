@@ -11,7 +11,7 @@
 
 import { createMemo, createSignal } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { toast } from '../../core/api'
+import { getLocalCurrency, toast } from '../../core/api'
 import { apiFetch } from '../../core/apiFetch'
 import {
   detectBank,
@@ -1143,6 +1143,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
           accountTypes: accountTypes(),
           accountBalances: accountBalances(),
           accountBalanceDates: accountBalanceDates(),
+          // Currency for any accounts this import creates — the user's base currency
+          // (Settings; EUR by default) instead of a hard-coded USD.
+          defaultCurrency: getLocalCurrency(),
           importId: iid,
           // Only gate category creation when the preview surfaced new categories to
           // confirm; otherwise omit the field to keep auto-create-all (B5 backward-compat).

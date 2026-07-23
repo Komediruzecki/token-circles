@@ -15,7 +15,7 @@ settingsRoutes.get('/api/settings', requireAuth, async (c) => {
     'SELECT key, value FROM settings WHERE profile_id = ? OR profile_id IS NULL',
     pid
   );
-  const settings: Record<string, any> = { currency: 'USD', locale: 'en-US' };
+  const settings: Record<string, any> = { currency: 'EUR', locale: 'en-US' };
   for (const r of rows) settings[r.key] = r.value;
   settings.preferences = {
     theme: settings.theme || 'light',
