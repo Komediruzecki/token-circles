@@ -58,6 +58,7 @@
 
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
+import OrbitalAccent from '../components/OrbitalAccent'
 import OrbitalDivider from '../components/OrbitalDivider'
 import SubscriptionCard from '../components/SubscriptionCard'
 import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
@@ -852,6 +853,7 @@ export default function Bills() {
                 {editingId() ? 'Edit' : 'Add'}{' '}
                 {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
               </h3>
+              <OrbitalAccent />
               <button
                 class={styles.modalClose}
                 onClick={() => {

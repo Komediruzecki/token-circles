@@ -29,6 +29,7 @@
 import { createMemo, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import OrbitalAccent from '../components/OrbitalAccent'
 import OrbitalDivider from '../components/OrbitalDivider'
 import RenewalCycle from '../components/RenewalCycle'
 import ToggleField from '../components/ToggleField'
@@ -424,6 +425,7 @@ export default function HousingForm() {
           >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Add Housing Expense</h3>
+              <OrbitalAccent />
               <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />

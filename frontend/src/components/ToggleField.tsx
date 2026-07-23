@@ -21,31 +21,21 @@ export default function ToggleField(props: ToggleFieldProps) {
 
   return (
     <div class={styles.row}>
-      <div class={styles.heading}>
+      <div class={styles.copy}>
         <span class={styles.title} id={titleId}>
           {props.title}
         </span>
-        <span class={styles.orbit} aria-hidden="true">
-          <svg class={styles.arc} viewBox="0 0 100 18" preserveAspectRatio="none">
-            <path d="M0,13 Q50,2 100,13" />
-          </svg>
-          <span class={`${styles.planet} ${styles.planetWarm}`} />
-          <span class={`${styles.planet} ${styles.planetPrimary}`} />
-          <span class={`${styles.planet} ${styles.planetMuted}`} />
-        </span>
-      </div>
-      <div class={styles.control}>
         <span class={styles.description} id={descriptionId}>
           {props.description}
         </span>
-        <Toggle
-          checked={props.checked}
-          onChange={props.onChange}
-          aria-labelledby={titleId}
-          aria-describedby={descriptionId}
-          data-test-id={props['data-test-id']}
-        />
       </div>
+      <Toggle
+        checked={props.checked}
+        onChange={props.onChange}
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        data-test-id={props['data-test-id']}
+      />
     </div>
   )
 }
