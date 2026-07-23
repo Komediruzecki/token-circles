@@ -4,8 +4,9 @@
  */
 
 import { createSignal, For } from 'solid-js'
-import { toast } from '../core/api.js'
+import { getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
+import { CURRENCY_OPTIONS } from '../core/currencies'
 import { setStorageMode } from '../core/storage/storageFactory.js'
 import ConfirmButton from './ConfirmButton.js'
 import { Modal } from './Modal.js'
@@ -25,8 +26,8 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
 
   // Settings state
   const [language, setLanguage] = createSignal('en')
-  const [currency, setCurrency] = createSignal('USD')
-  const [primaryCurrency, setPrimaryCurrency] = createSignal('USD')
+  const [currency, setCurrency] = createSignal(getLocalCurrency())
+  const [primaryCurrency, setPrimaryCurrency] = createSignal(getLocalCurrency())
 
   // Storage mode state
   const [currentMode, setCurrentMode] = createSignal<StorageMode>('serverless')
@@ -38,9 +39,9 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
       if (response.ok) {
         const settings = await response.json()
         setLanguage(settings.language !== undefined ? settings.language : 'en')
-        setCurrency(settings.currency !== undefined ? settings.currency : 'USD')
+        setCurrency(settings.currency !== undefined ? settings.currency : getLocalCurrency())
         setPrimaryCurrency(
-          settings.primary_currency !== undefined ? settings.primary_currency : 'USD'
+          settings.primary_currency !== undefined ? settings.primary_currency : getLocalCurrency()
         )
       }
     } catch (_error: unknown) {
@@ -174,15 +175,6 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
     { code: 'es', name: 'Español' },
   ]
 
-  const currencies = [
-    { code: 'USD', name: 'USD - US Dollar' },
-    { code: 'EUR', name: 'EUR - Euro' },
-    { code: 'GBP', name: 'GBP - British Pound' },
-    { code: 'PLN', name: 'PLN - Polish Zloty' },
-    { code: 'CZK', name: 'CZK - Czech Koruna' },
-    { code: 'SEK', name: 'SEK - Swedish Krona' },
-  ]
-
   return (
     <div class={styles.settingsDialog}>
       <Modal isOpen={props.isOpen} onClose={props.onClose} title="Settings">
@@ -232,7 +224,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
                 setCurrency(e.currentTarget.value)
               }}
             >
-              <For each={currencies}>
+              <For each={CURRENCY_OPTIONS}>
                 {(curr) => <option value={curr.code}>{curr.name}</option>}
               </For>
             </select>
@@ -247,7 +239,7 @@ export const SettingsDialog: Component<SettingsDialogProps> = (props) => {
                 setPrimaryCurrency(e.currentTarget.value)
               }}
             >
-              <For each={currencies}>
+              <For each={CURRENCY_OPTIONS}>
                 {(curr) => <option value={curr.code}>{curr.name}</option>}
               </For>
             </select>

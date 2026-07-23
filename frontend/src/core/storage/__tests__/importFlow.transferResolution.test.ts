@@ -109,3 +109,44 @@ describe('importExecute — dry run reports accounts to be created', () => {
     expect(body.new_accounts).not.toContain('Revolut')
   })
 })
+
+describe('importExecute — configured account currency', () => {
+  it('uses the normalized configured currency for new accounts and rows without a currency', async () => {
+    const db = await getDB()
+    const res = await importExecute({
+      rows: [['2026-07-20', 'Opening deposit', '200', 'Savings']],
+      mapping: { date: 0, description: 1, amount: 2, category: 3 },
+      categoryTypes: { Savings: 'account' },
+      defaultCurrency: ' chf ',
+      dry_run: false,
+    })
+    expect(((await res.json()) as { imported: number }).imported).toBe(1)
+
+    const account = (await db.getAllFromIndex('accounts', 'by_profile', 1)).find(
+      (item) => item.name === 'savings'
+    )
+    const transaction = (await db.getAllFromIndex('transactions', 'by_profile', 1)).find(
+      (item) => item.description === 'Opening deposit'
+    )
+    expect(account?.currency).toBe('CHF')
+    expect(transaction?.currency).toBe('CHF')
+  })
+
+  it('falls back to the local EUR setting when the request currency is invalid', async () => {
+    localStorage.setItem('localCurrency', 'EUR')
+    const db = await getDB()
+    const res = await importExecute({
+      rows: [['2026-07-20', 'Opening deposit', '200', 'Savings']],
+      mapping: { date: 0, description: 1, amount: 2, category: 3 },
+      categoryTypes: { Savings: 'account' },
+      defaultCurrency: 'not-a-currency',
+      dry_run: false,
+    })
+    expect(((await res.json()) as { imported: number }).imported).toBe(1)
+
+    const account = (await db.getAllFromIndex('accounts', 'by_profile', 1)).find(
+      (item) => item.name === 'savings'
+    )
+    expect(account?.currency).toBe('EUR')
+  })
+})

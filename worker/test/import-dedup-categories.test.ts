@@ -134,7 +134,7 @@ describe('worker import — resolution-aware duplicate detection (A2)', () => {
     expect(await allTxns()).toHaveLength(1); // not double-inserted
   });
 
-  it('flags the second of two identical rows within one file (in-file dedup)', async () => {
+  it('keeps identical rows within one file because they may be genuine same-day repeats', async () => {
     const res = await execute({
       rows: [
         ['2026-06-04', 'Bill', '-30'],
@@ -147,10 +147,10 @@ describe('worker import — resolution-aware duplicate detection (A2)', () => {
       duplicates: number;
       duplicate_indices: number[];
     };
-    expect(body.imported).toBe(1);
-    expect(body.duplicates).toBe(1);
-    expect(body.duplicate_indices).toEqual([1]);
-    expect(await allTxns()).toHaveLength(1);
+    expect(body.imported).toBe(2);
+    expect(body.duplicates).toBe(0);
+    expect(body.duplicate_indices).toEqual([]);
+    expect(await allTxns()).toHaveLength(2);
   });
 });
 
@@ -213,5 +213,49 @@ describe('worker import — confirm before creating categories (B5)', () => {
     // Nothing inserted in dry-run.
     expect(await allTxns()).toHaveLength(0);
     expect(await categoryNames()).toEqual(['Groceries']);
+  });
+});
+
+describe('worker import — configured account currency', () => {
+  const accountCurrency = async (name: string): Promise<string | null> => {
+    const account = await env.DB.prepare(
+      'SELECT currency FROM accounts WHERE profile_id = ? AND name = ?'
+    )
+      .bind(PROFILE, name)
+      .first<{ currency: string }>();
+    return account?.currency ?? null;
+  };
+
+  const transactionCurrency = async (description: string): Promise<string | null> => {
+    const transaction = await env.DB.prepare(
+      'SELECT currency FROM transactions WHERE profile_id = ? AND description = ?'
+    )
+      .bind(PROFILE, description)
+      .first<{ currency: string }>();
+    return transaction?.currency ?? null;
+  };
+
+  it('normalizes the configured currency for imported accounts and currency-less rows', async () => {
+    const res = await execute({
+      rows: [['2026-07-20', 'Opening deposit', '200', 'Savings']],
+      mapping: { date: 0, description: 1, amount: 2, category: 3 },
+      categoryTypes: { Savings: 'account' },
+      defaultCurrency: ' chf ',
+    });
+    expect(res.status).toBe(200);
+    expect(await accountCurrency('Savings')).toBe('CHF');
+    expect(await transactionCurrency('Opening deposit')).toBe('CHF');
+  });
+
+  it('falls back to EUR when the configured currency is malformed', async () => {
+    const res = await execute({
+      rows: [['2026-07-20', 'Opening deposit', '200', 'Savings']],
+      mapping: { date: 0, description: 1, amount: 2, category: 3 },
+      categoryTypes: { Savings: 'account' },
+      defaultCurrency: 'not-a-currency',
+    });
+    expect(res.status).toBe(200);
+    expect(await accountCurrency('Savings')).toBe('EUR');
+    expect(await transactionCurrency('Opening deposit')).toBe('EUR');
   });
 });

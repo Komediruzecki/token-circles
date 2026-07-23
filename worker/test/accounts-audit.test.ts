@@ -132,6 +132,21 @@ describe('worker accounts — deletion blocked while referenced (audit A6)', () 
   });
 });
 
+describe('worker accounts — currency defaults', () => {
+  it('defaults a direct account creation to EUR when no currency is supplied', async () => {
+    const res = await api('/api/accounts', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'New account', type: 'giro', balance: 0 }),
+    });
+    expect(res.status).toBe(200);
+
+    const account = await env.DB.prepare(
+      "SELECT currency FROM accounts WHERE profile_id = 1 AND name = 'New account'"
+    ).first<{ currency: string }>();
+    expect(account?.currency).toBe('EUR');
+  });
+});
+
 describe('worker accounts — recompute balances repair (audit A1/D3)', () => {
   it('repairs corrupted balances to starting_balance + ledger', async () => {
     await post({ description: 'e', amount: 100, type: 'expense', account_id: 1, category_id: 1 });

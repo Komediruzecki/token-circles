@@ -40,6 +40,7 @@ import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
+import { CURRENCY_OPTIONS } from '../core/currencies'
 import { startOnboarding } from '../core/onboardingStore'
 import { period } from '../core/periodStore'
 import { setSettingsTab, settingsTab } from '../core/settingsStore'
@@ -957,26 +958,9 @@ export default function Settings() {
                   onchange={handleLocalCurrencyChange}
                   style="max-width: 340px;"
                 >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                  <option value="JPY">JPY - Japanese Yen</option>
-                  <option value="CAD">CAD - Canadian Dollar</option>
-                  <option value="AUD">AUD - Australian Dollar</option>
-                  <option value="CHF">CHF - Swiss Franc</option>
-                  <option value="CNY">CNY - Chinese Yuan</option>
-                  <option value="INR">INR - Indian Rupee</option>
-                  <option value="BRL">BRL - Brazilian Real</option>
-                  <option value="MXN">MXN - Mexican Peso</option>
-                  <option value="SGD">SGD - Singapore Dollar</option>
-                  <option value="HKD">HKD - Hong Kong Dollar</option>
-                  <option value="KRW">KRW - South Korean Won</option>
-                  <option value="SEK">SEK - Swedish Krona</option>
-                  <option value="NOK">NOK - Norwegian Krone</option>
-                  <option value="DKK">DKK - Danish Krone</option>
-                  <option value="NZD">NZD - New Zealand Dollar</option>
-                  <option value="ZAR">ZAR - South African Rand</option>
-                  <option value="PLN">PLN - Polish Zloty</option>
+                  <For each={CURRENCY_OPTIONS}>
+                    {(currency) => <option value={currency.code}>{currency.name}</option>}
+                  </For>
                 </select>
               </div>
 

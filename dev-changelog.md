@@ -9,6 +9,16 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Account and Settings currency selectors now share one complete currency list. Currency inputs are normalized to uppercase three-letter codes instead of being limited by the old six-code frontend validation list.
+
+### Fixed
+
+- Account starting/current-balance fields are locale-safe text inputs: the raw value is preserved while typing so the caret does not jump, and submission accepts either comma or dot decimals while rejecting ambiguous thousands-separated values.
+- Manual account creation and import-created accounts now use the configured local currency in both the IndexedDB/serverless and Cloudflare Worker paths. Missing or malformed currency preferences fall back to EUR; currency-less imported transactions use the same fallback so their account and ledger currency cannot diverge. Worker account/settings defaults were aligned to EUR.
+- Subscription catalogue custom prices now have separate draft and committed state: typing preserves raw comma/dot input and caret position, the row checkmark validates and visibly commits the normalized price/total, and batch Add validates and commits any remaining drafts. Invalid, zero, or ambiguous values stay highlighted and never reach `/api/bills`; component tests cover checkmark commit, API payload, malformed input, and caret preservation.
+
 ## [5.8.0] — 2026-07-21
 
 ### Added

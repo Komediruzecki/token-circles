@@ -26,6 +26,7 @@ describe('localHandlers - accounts', () => {
   })
 
   it('creates, lists, and gets an account', async () => {
+    localStorage.setItem('localCurrency', 'CHF')
     const createRes = await accountsCreate({
       name: 'Main Checking',
       type: 'checking',
@@ -35,6 +36,7 @@ describe('localHandlers - accounts', () => {
     const created = await createRes.json()
     expect(created.id).toBeDefined()
     expect(created.name).toBe('Main Checking')
+    expect(created.currency).toBe('CHF')
 
     // List
     const listRes = await accountsList()
@@ -49,6 +51,7 @@ describe('localHandlers - accounts', () => {
     expect(getRes.status).toBe(200)
     const fetched = await getRes.json()
     expect(fetched.id).toBe(created.id)
+    expect(fetched.currency).toBe('CHF')
   })
 
   it('updates an account', async () => {

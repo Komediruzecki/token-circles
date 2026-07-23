@@ -3,6 +3,7 @@
  */
 import { getLocalCurrency } from '../../api'
 import { parseFlexibleNumber } from '../../bankImport/parse'
+import { normalizeCurrencyCode } from '../../currencies'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
@@ -587,6 +588,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     const accountTypes = (data.accountTypes as Record<string, string>) || {}
     const accountBalances = (data.accountBalances as Record<string, string>) || {}
     const accountBalanceDates = (data.accountBalanceDates as Record<string, string>) || {}
+    const defaultCurrency = normalizeCurrencyCode(data.defaultCurrency, getLocalCurrency())
 
     // Accept rows directly (from paste/Google Sheets) or via session_id (from file upload)
     let rows: Record<string, unknown>[]
@@ -664,7 +666,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         toStr(t.description).toLowerCase().trim(),
         (t.account_id as number | null | undefined) ?? null,
         toStr(t.type),
-        toStr(t.currency).trim() || getLocalCurrency()
+        normalizeCurrencyCode(t.currency, defaultCurrency)
       )
       const amt = Math.abs(Number(t.amount))
       const bucket = dedupBuckets.get(k)
@@ -733,6 +735,7 @@ export async function importExecute(body: unknown): Promise<Response> {
           balance,
           starting_balance: balance,
           starting_date: balanceDate,
+          currency: defaultCurrency,
           profile_id: profileId,
           created_at: new Date().toISOString(),
         }
@@ -920,7 +923,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       // currency" column becomes amount_local — the value in the user's base
       // currency, which the app reports as the transaction's value. Without that
       // column the amount is already in the base currency, so amount_local = amount.
-      const currency = toStr(row.currency).trim() || getLocalCurrency()
+      const currency = normalizeCurrencyCode(row.currency, defaultCurrency)
       const amountLocalRaw = toStr(row.amount_local).trim()
       const amountLocal = amountLocalRaw ? Math.abs(parseFloat(amountLocalRaw)) : Math.abs(amount)
       const exchangeRateRaw = toStr(row.exchange_rate).trim()

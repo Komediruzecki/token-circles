@@ -36,9 +36,18 @@ import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
-import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import {
+  apiDelete,
+  apiGet,
+  apiPost,
+  apiPut,
+  formatCurrency,
+  getLocalCurrency,
+  showToast,
+} from '../core/api'
 import { useAppState } from '../core/appStore'
+import { CURRENCY_OPTIONS } from '../core/currencies'
+import { parseDecimalInput } from '../core/decimalInput'
 import { gatedSource } from '../core/pageVisibility'
 import styles from './AccountsPage.module.css'
 
@@ -91,7 +100,8 @@ export default function Accounts() {
     type: 'giro',
     bank_name: '',
     balance: '',
-    currency: 'USD',
+    // Default to the user's base currency (Settings; EUR by default), not USD.
+    currency: getLocalCurrency(),
     starting_balance: '',
     starting_date: '',
   })
@@ -115,7 +125,7 @@ export default function Accounts() {
       // The Current Balance field is prefilled with the derived balance; changing it
       // adjusts the starting balance under the hood (see handleEditSubmit).
       balance: String(account.balance ?? ''),
-      currency: account.currency || 'USD',
+      currency: account.currency || getLocalCurrency(),
       starting_balance: String(account.starting_balance ?? ''),
       starting_date: account.starting_date || '',
     })
@@ -158,15 +168,21 @@ export default function Accounts() {
   // Handle form submit
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
+    const balance = formData().balance.trim() ? parseDecimalInput(formData().balance) : 0
+    const startingBalance = formData().starting_balance.trim()
+      ? parseDecimalInput(formData().starting_balance)
+      : balance
+    if (balance === null || startingBalance === null) {
+      showToast('Enter a valid balance using a comma or dot for cents', 'error')
+      return
+    }
     const data: Record<string, unknown> = {
       name: formData().name,
       type: formData().type,
       bank_name: formData().bank_name,
-      balance: parseFloat(formData().balance) || 0,
+      balance,
       currency: formData().currency,
-      starting_balance: formData().starting_balance
-        ? parseFloat(formData().starting_balance)
-        : parseFloat(formData().balance) || 0,
+      starting_balance: startingBalance,
       starting_date: formData().starting_date || null,
     }
 
@@ -197,8 +213,13 @@ export default function Accounts() {
       currency: formData().currency,
       starting_date: formData().starting_date || null,
     }
-    const desiredCurrent = Math.round(parseFloat(formData().balance) * 100) / 100
-    if (Number.isFinite(desiredCurrent) && Math.abs(desiredCurrent - (acct.balance ?? 0)) > 0.005) {
+    const parsedCurrent = parseDecimalInput(formData().balance)
+    if (parsedCurrent === null) {
+      showToast('Enter a valid balance using a comma or dot for cents', 'error')
+      return
+    }
+    const desiredCurrent = Math.round(parsedCurrent * 100) / 100
+    if (Math.abs(desiredCurrent - (acct.balance ?? 0)) > 0.005) {
       const ledger = (acct.balance ?? 0) - (acct.starting_balance ?? 0)
       body.starting_balance = Math.round((desiredCurrent - ledger) * 100) / 100
       body.balance = desiredCurrent
@@ -588,13 +609,16 @@ export default function Accounts() {
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>Starting Balance</label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputmode="decimal"
                     class={styles.formControl}
                     placeholder="0.00"
-                    value={formData().starting_balance || formData().balance}
+                    value={formData().starting_balance}
                     oninput={(e) =>
-                      setFormData({ ...formData(), starting_balance: e.target.value })
+                      setFormData({
+                        ...formData(),
+                        starting_balance: e.currentTarget.value,
+                      })
                     }
                   />
                 </div>
@@ -611,12 +635,12 @@ export default function Accounts() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Current Balance</label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputmode="decimal"
                   class={styles.formControl}
                   placeholder="0.00"
                   value={formData().balance}
-                  oninput={(e) => setFormData({ ...formData(), balance: e.target.value })}
+                  oninput={(e) => setFormData({ ...formData(), balance: e.currentTarget.value })}
                 />
                 <Show when={modalMode() === 'edit'}>
                   <p class={styles.formHint}>
@@ -632,11 +656,9 @@ export default function Accounts() {
                   value={formData().currency}
                   oninput={(e) => setFormData({ ...formData(), currency: e.target.value })}
                 >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                  <option value="JPY">JPY - Japanese Yen</option>
-                  <option value="CAD">CAD - Canadian Dollar</option>
+                  <For each={CURRENCY_OPTIONS}>
+                    {(currency) => <option value={currency.code}>{currency.name}</option>}
+                  </For>
                 </select>
                 <Show when={modalMode() === 'edit'}>
                   <p class={styles.formHint}>
