@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
+import { normalizedTransactionAmountSql } from '../transaction-amount';
 import * as db from '../db';
 
 // Port of backend/routes/calculators.js. Every endpoint here is pure math except
@@ -438,9 +439,10 @@ calculatorsRoutes.get('/api/calculator/emergency-fund', requireAuth, async (c) =
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
   const dateStr = twelveMonthsAgo.toISOString().split('T')[0];
 
+  const amountSql = normalizedTransactionAmountSql();
   const expenseRows = await db.all<{ amount: number; date: string }>(
     c.env.DB,
-    `SELECT amount, date FROM transactions
+    `SELECT ${amountSql} AS amount, date FROM transactions
      WHERE profile_id = ? AND type = 'expense' AND date >= ?`,
     pid,
     dateStr

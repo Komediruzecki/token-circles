@@ -9,6 +9,7 @@
  * base-currency value; the original is shown only as secondary context.
  */
 import { getLocalCurrency } from './api'
+import { normalizedTransactionAmount } from './transactionAmount'
 
 export interface AmountFields {
   amount: number
@@ -65,10 +66,13 @@ export function convertToBase(amount: number, from: string, base: string): numbe
  * amount. Rows that fall through to an estimate are flagged (isEstimatedBaseValue).
  */
 export function txBaseValue(tx: AmountFields): number {
-  if (typeof tx.amount_local === 'number') return tx.amount_local
+  if (typeof tx.amount_local === 'number' && Number.isFinite(tx.amount_local)) {
+    return normalizedTransactionAmount(tx)
+  }
+  const amount = normalizedTransactionAmount(tx)
   const base = getLocalCurrency()
-  if (!tx.currency || tx.currency === base) return tx.amount
-  return convertToBase(tx.amount, tx.currency, base) ?? tx.amount
+  if (!tx.currency || tx.currency === base) return amount
+  return convertToBase(amount, tx.currency, base) ?? amount
 }
 
 /**
@@ -85,9 +89,7 @@ export function isEstimatedBaseValue(tx: AmountFields): boolean {
  * i.e. there is a meaningful "original amount" worth surfacing (e.g. as a tooltip).
  */
 export function hasForeignOriginal(tx: AmountFields): boolean {
-  return (
-    typeof tx.amount_local === 'number' && !!tx.currency && tx.currency !== getLocalCurrency()
-  )
+  return typeof tx.amount_local === 'number' && !!tx.currency && tx.currency !== getLocalCurrency()
 }
 
 /**

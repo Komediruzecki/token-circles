@@ -50,6 +50,7 @@ import { useAppState } from '../core/appStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
 import { parseDecimalInput } from '../core/decimalInput'
 import { gatedSource } from '../core/pageVisibility'
+import { normalizedTransactionAmount } from '../core/transactionAmount'
 import styles from './AccountsPage.module.css'
 
 interface Account {
@@ -315,7 +316,7 @@ export default function Accounts() {
     if (!Array.isArray(txs)) return 0
     return txs
       .filter((t) => t.date?.startsWith(monthStr) && t.type === 'income')
-      .reduce((s, t) => s + (t.amount || 0), 0)
+      .reduce((s, t) => s + normalizedTransactionAmount(t), 0)
   })
 
   const monthlyExpenses = createMemo(() => {
@@ -325,7 +326,7 @@ export default function Accounts() {
     if (!Array.isArray(txs)) return 0
     return txs
       .filter((t) => t.date?.startsWith(monthStr) && t.type === 'expense')
-      .reduce((s, t) => s + (t.amount || 0), 0)
+      .reduce((s, t) => s + normalizedTransactionAmount(t), 0)
   })
 
   return (
@@ -528,7 +529,7 @@ export default function Accounts() {
                                       class={`${styles.activityAmount} ${styles[presentation.tone]}`}
                                     >
                                       {presentation.prefix}
-                                      {formatAmount(tx.amount)}
+                                      {formatAmount(normalizedTransactionAmount(tx))}
                                     </div>
                                   </div>
                                 )

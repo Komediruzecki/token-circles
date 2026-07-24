@@ -2,6 +2,7 @@ import type { Env } from './index';
 import * as db from './db';
 import { sendMail } from './email';
 import { planHasFeature, planLimit } from './plans';
+import { normalizedTransactionAmountSql } from './transaction-amount';
 import {
   BRAND,
   renderBillsReminder,
@@ -148,12 +149,14 @@ async function getSpendingReport(env: Env, profileId: number, asOf?: Date) {
   const startDate = new Date(now.getFullYear(), now.getMonth() - 1, day)
     .toISOString()
     .split('T')[0];
+  const amountSql = normalizedTransactionAmountSql();
+  const aliasedAmountSql = normalizedTransactionAmountSql('t');
 
   const income =
     (
       await db.first<{ total: number }>(
         env.DB,
-        `SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE profile_id = ? AND type='income' AND date >= ? AND date <= ?`,
+        `SELECT COALESCE(SUM(${amountSql}),0) as total FROM transactions WHERE profile_id = ? AND type='income' AND date >= ? AND date <= ?`,
         profileId,
         startDate,
         endDate
@@ -163,7 +166,7 @@ async function getSpendingReport(env: Env, profileId: number, asOf?: Date) {
     (
       await db.first<{ total: number }>(
         env.DB,
-        `SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE profile_id = ? AND type='expense' AND date >= ? AND date <= ?`,
+        `SELECT COALESCE(SUM(${amountSql}),0) as total FROM transactions WHERE profile_id = ? AND type='expense' AND date >= ? AND date <= ?`,
         profileId,
         startDate,
         endDate
@@ -175,7 +178,7 @@ async function getSpendingReport(env: Env, profileId: number, asOf?: Date) {
     total: number;
   }>(
     env.DB,
-    `SELECT c.name, c.color, SUM(t.amount) as total FROM transactions t
+    `SELECT c.name, c.color, SUM(${aliasedAmountSql}) as total FROM transactions t
      LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
      WHERE t.profile_id = ? AND t.type='expense' AND t.date >= ? AND t.date <= ?
      GROUP BY c.id ORDER BY total DESC LIMIT 5`,
