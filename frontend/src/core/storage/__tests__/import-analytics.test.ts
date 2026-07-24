@@ -7,9 +7,26 @@ let mockNextId = 1
 
 function resetMockStores() {
   Object.keys(mockStores).forEach((k) => delete mockStores[k])
-  mockNextId = 1
+  mockNextId = 3
   mockStores['profiles'] = new Map()
   mockStores['profiles'].set(1, { id: 1, name: 'Test Profile', created_at: '2026-01-01' })
+  mockStores['categories'] = new Map([
+    [1, { id: 1, profile_id: 1, name: 'Expense', type: 'expense', color: '#FF0000' }],
+    [2, { id: 2, profile_id: 1, name: 'Income', type: 'income', color: '#00FF00' }],
+  ])
+  mockStores['accounts'] = new Map([
+    [
+      1,
+      {
+        id: 1,
+        profile_id: 1,
+        name: 'Checking',
+        type: 'checking',
+        balance: 0,
+        starting_balance: 0,
+      },
+    ],
+  ])
 }
 
 function getMockDB() {
@@ -86,20 +103,21 @@ vi.mock('../handlers/helpers', async () => {
 })
 
 async function seedCategory(name: string, type: 'income' | 'expense', color: string) {
-  const cat = { name, type, color, profile_id: 1 }
-  const id = mockNextId++
-  const record = { ...cat, id }
-  mockStores['categories'] = mockStores['categories'] || new Map()
-  mockStores['categories'].set(id, record)
+  const id = type === 'expense' ? 1 : 2
+  mockStores['categories'].set(id, { id, name, type, color, profile_id: 1 })
   return id as number
 }
 
 async function seedAccount(name: string, balance: number) {
-  const acct = { name, type: 'checking', balance, profile_id: 1 }
-  const id = mockNextId++
-  const record = { ...acct, id }
-  mockStores['accounts'] = mockStores['accounts'] || new Map()
-  mockStores['accounts'].set(id, record)
+  const id = 1
+  mockStores['accounts'].set(id, {
+    id,
+    name,
+    type: 'checking',
+    balance,
+    starting_balance: balance,
+    profile_id: 1,
+  })
   return id as number
 }
 

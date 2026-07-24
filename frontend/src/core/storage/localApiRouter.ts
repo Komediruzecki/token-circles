@@ -213,7 +213,7 @@ const routes: RouteDef[] = [
     methods: ['GET', 'POST', 'DELETE'],
     handler: dispatch({
       GET: (ctx) => h.transactionsList(ctx.query),
-      POST: (ctx) => h.transactionsCreate(ctx.body),
+      POST: (ctx) => h.transactionsCreate(ctx.body, ctx.headers),
       DELETE: (ctx) => h.deleteAllTransactions(ctx.headers),
     }),
   },
@@ -222,19 +222,19 @@ const routes: RouteDef[] = [
     methods: ['GET', 'PUT', 'DELETE'],
     handler: dispatch({
       GET: (ctx) => h.transactionsGet(ctx.params),
-      PUT: (ctx) => h.transactionsUpdate(ctx.params, ctx.body),
-      DELETE: (ctx) => h.transactionsDelete(ctx.params),
+      PUT: (ctx) => h.transactionsUpdate(ctx.params, ctx.body, ctx.headers),
+      DELETE: (ctx) => h.transactionsDelete(ctx.params, ctx.headers),
     }),
   },
   {
     pattern: /^\/transactions\/(\d+)\/reconcile$/,
     methods: ['PATCH'],
-    handler: dispatch({ PATCH: (ctx) => h.reconcileToggle(ctx.params) }),
+    handler: dispatch({ PATCH: (ctx) => h.reconcileToggle(ctx.params, ctx.headers) }),
   },
   {
     pattern: /^\/transactions\/reconcile\/bulk$/,
     methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.reconcileBulk(ctx.body) }),
+    handler: dispatch({ POST: (ctx) => h.reconcileBulk(ctx.body, ctx.headers) }),
   },
   {
     pattern: /^\/transactions\/reconcile\/summary$/,
@@ -244,7 +244,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/transactions\/reconcile-batch$/,
     methods: ['PUT'],
-    handler: dispatch({ PUT: (ctx) => h.reconcileBatch(ctx.body) }),
+    handler: dispatch({ PUT: (ctx) => h.reconcileBatch(ctx.body, ctx.headers) }),
   },
   {
     pattern: /^\/transactions\/export$/,
@@ -525,7 +525,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/transactions\/bulk$/,
     methods: ['PUT'],
-    handler: dispatch({ PUT: (ctx) => h.transactionsBulk(ctx.body) }),
+    handler: dispatch({ PUT: (ctx) => h.transactionsBulk(ctx.body, ctx.headers) }),
   },
 
   // Categories: mappings, auto-map

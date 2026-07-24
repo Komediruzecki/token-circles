@@ -34,6 +34,13 @@ describe('localHandlers - transactions', () => {
       type: 'expense',
       color: '#ff0000',
     })
+    await db.add('categories', {
+      id: 2,
+      profile_id: 1,
+      name: 'Other',
+      type: 'expense',
+      color: '#00ff00',
+    })
   })
 
   it('creates, lists, and gets a transaction', async () => {

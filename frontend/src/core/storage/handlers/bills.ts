@@ -2,7 +2,15 @@
  * Bills handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  currentProfileRecord,
+  idParam,
+  json,
+  notFound,
+  ok,
+} from './helpers'
 
 // Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
 function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
@@ -157,6 +165,9 @@ export async function billsCreate(body: unknown): Promise<Response> {
     }
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
+    if (!(await currentProfileOwns('categories', b.category_id))) {
+      return json({ error: 'Category does not belong to this profile' }, 400)
+    }
     const record = {
       profile_id: pid,
       name,
@@ -182,8 +193,7 @@ export async function billsCreate(body: unknown): Promise<Response> {
 }
 
 export async function billsGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const b = await db.get('bills', idParam(params))
+  const b = await currentProfileRecord('bills', idParam(params))
   return b ? json({ ...b, autopay: b.autopay === 1 || b.autopay === true }) : notFound('Bill')
 }
 
@@ -192,10 +202,13 @@ export async function billsUpdate(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const bill = await db.get('bills', idParam(params))
+  const bill = await currentProfileRecord('bills', idParam(params))
   if (!bill) return notFound('Bill')
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>
+    if ('category_id' in b && !(await currentProfileOwns('categories', b.category_id))) {
+      return json({ error: 'Category does not belong to this profile' }, 400)
+    }
     if (b.name !== undefined) bill.name = b.name
     if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
     if (b.frequency !== undefined) bill.frequency = b.frequency
@@ -215,7 +228,9 @@ export async function billsUpdate(
 
 export async function billsDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  await db.delete('bills', idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('bills', id))) return notFound('Bill')
+  await db.delete('bills', id)
   return ok()
 }
 
@@ -253,7 +268,7 @@ export async function billsUpcoming(): Promise<Response> {
 
 export async function billsPayOrMarkPaid(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  const bill = await db.get('bills', idParam(params))
+  const bill = await currentProfileRecord('bills', idParam(params))
   if (!bill) return notFound('Bill')
   const now = new Date().toISOString().substring(0, 10)
   bill.last_paid_date = now

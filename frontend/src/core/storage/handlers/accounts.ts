@@ -4,7 +4,7 @@
 import { getLocalCurrency } from '../../api'
 import { normalizeCurrencyCode } from '../../currencies'
 import { AccountInUseError, getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
 import { normalizeAccount } from './normalize'
 
 export async function accountsList(): Promise<Response> {
@@ -24,8 +24,7 @@ export async function accountsCreate(body: unknown): Promise<Response> {
 }
 
 export async function accountsGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const acct = await db.get('accounts', idParam(params))
+  const acct = await currentProfileRecord('accounts', idParam(params))
   if (!acct) return notFound('Account')
   return json(acct)
 }
@@ -35,13 +34,17 @@ export async function accountsUpdate(
   body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  await adapter.updateAccount(idParam(params), body as Record<string, unknown>)
+  const id = idParam(params)
+  if (!(await currentProfileRecord('accounts', id))) return notFound('Account')
+  await adapter.updateAccount(id, body as Record<string, unknown>)
   return ok()
 }
 
 export async function accountsDelete(params: Record<string, string>): Promise<Response> {
   try {
-    await adapter.deleteAccount(idParam(params))
+    const id = idParam(params)
+    if (!(await currentProfileRecord('accounts', id))) return notFound('Account')
+    await adapter.deleteAccount(id)
   } catch (err) {
     // Referenced accounts are rejected (audit A6) with a 409 so the UI can prompt the user
     // to reassign/delete the transactions first.
@@ -61,7 +64,9 @@ export async function accountsRecomputeBalances(): Promise<Response> {
 }
 
 export async function accountsHistory(params: Record<string, string>): Promise<Response> {
-  const history = await adapter.getBalanceHistory(idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('accounts', id))) return notFound('Account')
+  const history = await adapter.getBalanceHistory(id)
   return json(history)
 }
 
@@ -72,13 +77,20 @@ export async function accountsHistoryRecord(
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const balance = (body as Record<string, unknown>).balance as number
   if (typeof balance !== 'number') return json({ error: 'Balance required' }, 400)
-  const id = await adapter.recordBalance(idParam(params), balance)
-  return json({ id, account_id: idParam(params), balance, date: new Date().toISOString() }, 201)
+  const accountId = idParam(params)
+  if (!(await currentProfileRecord('accounts', accountId))) return notFound('Account')
+  const id = await adapter.recordBalance(accountId, balance)
+  return json({ id, account_id: accountId, balance, date: new Date().toISOString() }, 201)
 }
 
 export async function accountsHistoryDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  await db.delete('balanceHistory', idParam(params, 'p2'))
+  const accountId = idParam(params)
+  if (!(await currentProfileRecord('accounts', accountId))) return notFound('Account')
+  const historyId = idParam(params, 'p2')
+  const entry = await db.get('balanceHistory', historyId)
+  if (!entry || entry.account_id !== accountId) return notFound('Balance history')
+  await db.delete('balanceHistory', historyId)
   return ok()
 }
 

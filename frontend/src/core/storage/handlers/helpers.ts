@@ -23,6 +23,47 @@ export function idParam(params: Record<string, string>, key = 'p1'): number {
   return parseInt(params[key], 10)
 }
 
+/** Return a row only when it belongs to the active write profile. */
+export async function currentProfileRecord(
+  storeName: string,
+  id: number,
+  profileId?: number
+): Promise<Record<string, any> | null> {
+  const db = await getDB()
+  const row = (await (db as any).get(storeName, id)) as Record<string, any> | undefined
+  if (!row) return null
+  const ownerId = profileId ?? (await adapter.getCurrentProfileId())
+  return row.profile_id === ownerId ? row : null
+}
+
+/** Validate a nullable foreign key against the active write profile. */
+export async function currentProfileOwns(
+  storeName: string,
+  id: unknown,
+  profileId?: number
+): Promise<boolean> {
+  if (id === null || id === undefined || id === '') return true
+  const parsed = Number(id)
+  if (!Number.isInteger(parsed) || parsed <= 0) return false
+  return (await currentProfileRecord(storeName, parsed, profileId)) !== null
+}
+
+/** Resolve the immutable write profile carried by one local API request. */
+export async function writeProfileIdFromHeaders(headers?: HeadersInit): Promise<number> {
+  if (headers) {
+    const normalized = new Headers(headers)
+    const raw = normalized.get('x-profile-id')
+    if (raw) {
+      const id = Number(raw.split(',')[0]?.trim())
+      if (Number.isInteger(id) && id > 0) {
+        const db = await getDB()
+        if (await db.get('profiles', id)) return id
+      }
+    }
+  }
+  return adapter.getCurrentProfileId()
+}
+
 /**
  * Resolve the requested target profile ids from a request's headers, per-request.
  *
