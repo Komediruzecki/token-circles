@@ -752,7 +752,58 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async deleteCategory(id: number): Promise<void> {
     const db = await getDB()
-    await db.delete('categories', id)
+    const category = await db.get('categories', id)
+    if (!category) return
+    const profileId = category.profile_id as number
+    // Repoint dependents so nothing is orphaned (audit M-07), matching the bulk
+    // reset policy: nullable references become uncategorized; budgets and
+    // mappings that require a category are removed; child categories are
+    // re-parented to the top level. One atomic IndexedDB transaction.
+    const stores = [
+      'categories',
+      'transactions',
+      'goals',
+      'bills',
+      'recurring',
+      'budgets',
+      'categoryMappings',
+    ].filter((store) => db.objectStoreNames.contains(store))
+    const tx = db.transaction(stores, 'readwrite')
+    const rowsByStore = new Map<string, Array<Record<string, unknown>>>()
+    for (const storeName of stores) {
+      rowsByStore.set(
+        storeName,
+        (await tx.objectStore(storeName).getAll()) as Array<Record<string, unknown>>
+      )
+    }
+    for (const storeName of ['transactions', 'goals', 'bills', 'recurring']) {
+      if (!stores.includes(storeName)) continue
+      const store = tx.objectStore(storeName)
+      for (const row of rowsByStore.get(storeName) ?? []) {
+        if (row.profile_id === profileId && row.category_id === id) {
+          row.category_id = null
+          await store.put(row)
+        }
+      }
+    }
+    for (const storeName of ['budgets', 'categoryMappings']) {
+      if (!stores.includes(storeName)) continue
+      const store = tx.objectStore(storeName)
+      for (const row of rowsByStore.get(storeName) ?? []) {
+        if (row.profile_id === profileId && row.category_id === id) {
+          await store.delete(row.id as number)
+        }
+      }
+    }
+    const categoryStore = tx.objectStore('categories')
+    for (const row of rowsByStore.get('categories') ?? []) {
+      if (row.profile_id === profileId && row.parent_id === id) {
+        row.parent_id = null
+        await categoryStore.put(row)
+      }
+    }
+    await categoryStore.delete(id)
+    await tx.done
   }
 
   async deleteAllCategories(): Promise<void> {
