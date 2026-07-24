@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { resetProfileCategories } from '../profileData';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
 // Tables: categories, category_mappings. The backend's toCamelCase() is an identity
@@ -509,8 +510,8 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
 // ── Category CRUD by id (registered after the literal routes above) ───────────
 categoriesRoutes.delete('/api/categories', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  await db.del(c.env.DB, 'categories', 'profile_id = ?', pid);
-  return c.json({ ok: true, message: 'All categories deleted' });
+  await resetProfileCategories(c.env.DB, pid);
+  return c.json({ ok: true, message: 'Categories reset to defaults' });
 });
 
 categoriesRoutes.get('/api/categories/:id', requireAuth, async (c) => {

@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
-import { getProfileId, getProfileIds } from '../profile';
+import { getProfileIds } from '../profile';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
+import { clearProfileData } from '../profileData';
 
 // Data export + wipe — port of backend/routes/exportRoutes.js (the GET routes + clear-all).
 // POST /api/import is intentionally not ported: its only caller (SettingsDialog) is dead code.
@@ -163,23 +164,19 @@ exportRoutes.get('/api/export', requireAuth, async (c) => {
   });
 });
 
-// DELETE /api/clear-all — wipe the active profile's data (mirrors the Express backend).
+// DELETE /api/clear-all — wipe data for every profile owned by the signed-in user.
 exportRoutes.delete('/api/clear-all', requireAuth, async (c) => {
   const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
   if (rl) return rl;
-  const pid = await getProfileId(c);
-  await db.run(
+  const profiles = await db.all<{ id: number }>(
     c.env.DB,
-    'DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)',
-    pid
+    'SELECT id FROM profiles WHERE user_id = ? ORDER BY id',
+    c.get('userId')
   );
-  await db.run(
-    c.env.DB,
-    'DELETE FROM loan_rate_periods WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)',
-    pid
+  await clearProfileData(
+    c.env,
+    profiles.map((profile) => profile.id),
+    { includeSettings: true }
   );
-  for (const t of ['transactions', 'budgets', 'loans', 'categories', 'accounts', 'settings']) {
-    await db.del(c.env.DB, t, 'profile_id = ?', pid);
-  }
   return c.json({ ok: true, message: 'All data cleared' });
 });

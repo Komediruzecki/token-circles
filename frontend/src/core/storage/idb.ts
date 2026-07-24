@@ -163,7 +163,7 @@ export function getDB() {
 
 // ---- Seed Data ----
 
-const DEFAULT_CATEGORIES = [
+export const DEFAULT_CATEGORIES = [
   { type: 'income', name: 'Salary', color: '#22C55E', tax_deductible: false },
   { type: 'income', name: 'Freelance', color: '#16A34A', tax_deductible: false },
   { type: 'income', name: 'Investments', color: '#15803D', tax_deductible: false },
@@ -292,6 +292,182 @@ export class IndexedDBAdapter implements StorageAdapter {
   async deleteProfile(id: number): Promise<void> {
     const db = await getDB()
     await db.delete('profiles', id)
+  }
+
+  async clearProfileData(
+    profileIds: number[],
+    options: { deleteProfiles?: boolean; seedDefaults?: boolean } = {}
+  ): Promise<void> {
+    const db = await getDB()
+    const pidSet = new Set(profileIds)
+    if (pidSet.size === 0) return
+
+    const profileStores = [
+      'transactions',
+      'categories',
+      'accounts',
+      'budgets',
+      'goals',
+      'loans',
+      'receipts',
+      'portfolioHoldings',
+      'bills',
+      'housings',
+      'recurring',
+      'tags',
+      'categoryMappings',
+      'import_logs',
+    ].filter((store) => db.objectStoreNames.contains(store))
+    const transactionStores = [
+      ...profileStores,
+      ...(db.objectStoreNames.contains('balanceHistory') ? ['balanceHistory'] : []),
+      ...(options.deleteProfiles && db.objectStoreNames.contains('profiles') ? ['profiles'] : []),
+    ]
+    const tx = db.transaction(transactionStores, 'readwrite')
+
+    const accountIds = new Set<number>()
+    if (profileStores.includes('accounts')) {
+      const accounts = (await tx.objectStore('accounts').getAll()) as Array<Record<string, unknown>>
+      for (const account of accounts) {
+        if (pidSet.has(account.profile_id as number) && typeof account.id === 'number') {
+          accountIds.add(account.id)
+        }
+      }
+    }
+
+    for (const storeName of profileStores) {
+      const store = tx.objectStore(storeName)
+      const rows = (await store.getAll()) as Array<Record<string, unknown>>
+      for (const row of rows) {
+        if (pidSet.has(row.profile_id as number)) await store.delete(row.id as number)
+      }
+    }
+
+    if (transactionStores.includes('balanceHistory')) {
+      const historyStore = tx.objectStore('balanceHistory')
+      const rows = (await historyStore.getAll()) as Array<Record<string, unknown>>
+      for (const row of rows) {
+        if (accountIds.has(row.account_id as number)) await historyStore.delete(row.id as number)
+      }
+    }
+
+    if (options.seedDefaults && profileStores.includes('categories')) {
+      const categoryStore = tx.objectStore('categories')
+      for (const profileId of pidSet) {
+        for (const category of DEFAULT_CATEGORIES) {
+          await categoryStore.add({ ...category, profile_id: profileId })
+        }
+      }
+    }
+
+    if (options.deleteProfiles && transactionStores.includes('profiles')) {
+      const profileStore = tx.objectStore('profiles')
+      for (const profileId of pidSet) await profileStore.delete(profileId)
+    }
+
+    await tx.done
+  }
+
+  async resetProfileCategories(profileId: number): Promise<void> {
+    const db = await getDB()
+    const stores = [
+      'categories',
+      'transactions',
+      'budgets',
+      'goals',
+      'bills',
+      'recurring',
+      'categoryMappings',
+    ].filter((store) => db.objectStoreNames.contains(store))
+    const tx = db.transaction(stores, 'readwrite')
+    const categoryStore = tx.objectStore('categories')
+    const existing = (await categoryStore.getAll()) as Array<Record<string, unknown>>
+    const profileCategories = existing
+      .filter((category) => category.profile_id === profileId)
+      .sort((a, b) => Number(a.id) - Number(b.id))
+    const defaultsByName = new Map(
+      DEFAULT_CATEGORIES.map((category) => [category.name.toLocaleLowerCase(), category])
+    )
+    const canonicalIds = new Map<string, number>()
+    const rowsByStore = new Map<string, Array<Record<string, unknown>>>()
+    for (const storeName of stores) {
+      if (storeName !== 'categories') {
+        rowsByStore.set(
+          storeName,
+          (await tx.objectStore(storeName).getAll()) as Array<Record<string, unknown>>
+        )
+      }
+    }
+
+    const replaceCategoryReferences = async (categoryId: number, replacementId: number | null) => {
+      for (const storeName of ['transactions', 'goals', 'bills', 'recurring']) {
+        if (!stores.includes(storeName)) continue
+        const store = tx.objectStore(storeName)
+        const rows = rowsByStore.get(storeName) ?? []
+        for (const row of rows) {
+          if (row.profile_id === profileId && row.category_id === categoryId) {
+            row.category_id = replacementId
+            await store.put(row)
+          }
+        }
+      }
+
+      if (stores.includes('budgets')) {
+        const store = tx.objectStore('budgets')
+        const rows = rowsByStore.get('budgets') ?? []
+        for (const row of rows) {
+          if (row.profile_id !== profileId || row.category_id !== categoryId) continue
+          if (replacementId === null) {
+            await store.delete(row.id as number)
+          } else {
+            row.category_id = replacementId
+            await store.put(row)
+          }
+        }
+      }
+
+      if (stores.includes('categoryMappings')) {
+        const store = tx.objectStore('categoryMappings')
+        const rows = rowsByStore.get('categoryMappings') ?? []
+        for (const row of rows) {
+          if (row.profile_id !== profileId || row.category_id !== categoryId) continue
+          if (replacementId === null) {
+            await store.delete(row.id as number)
+          } else {
+            row.category_id = replacementId
+            await store.put(row)
+          }
+        }
+      }
+    }
+
+    for (const category of profileCategories) {
+      const name = typeof category.name === 'string' ? category.name.trim().toLocaleLowerCase() : ''
+      const defaultCategory = defaultsByName.get(name)
+      const canonicalId = canonicalIds.get(name)
+
+      if (defaultCategory && canonicalId === undefined) {
+        canonicalIds.set(name, category.id as number)
+        await categoryStore.put({
+          ...category,
+          ...defaultCategory,
+          parent_id: null,
+          profile_id: profileId,
+        })
+        continue
+      }
+
+      await replaceCategoryReferences(category.id as number, canonicalId ?? null)
+      await categoryStore.delete(category.id as number)
+    }
+
+    for (const category of DEFAULT_CATEGORIES) {
+      if (!canonicalIds.has(category.name.toLocaleLowerCase())) {
+        await categoryStore.add({ ...category, profile_id: profileId })
+      }
+    }
+
+    await tx.done
   }
 
   // ---- Transactions ----
@@ -942,7 +1118,7 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   // ---- Cleanup ----
 
-  async clearAllData(): Promise<void> {
+  async clearAllData(options: { includeProfiles?: boolean } = {}): Promise<void> {
     const db = await getDB()
     const stores = [
       'transactions',
@@ -953,7 +1129,6 @@ export class IndexedDBAdapter implements StorageAdapter {
       'loans',
       'balanceHistory',
       'receipts',
-      'profiles',
       'portfolioHoldings',
       'settings',
       'bills',
@@ -961,21 +1136,21 @@ export class IndexedDBAdapter implements StorageAdapter {
       'recurring',
       'tags',
       'logs',
+      'categoryMappings',
+      'import_logs',
     ]
-    for (const store of stores) {
-      try {
-        if (db.objectStoreNames.contains(store)) {
-          await db.clear(store)
-        }
-      } catch {
-        // Skip stores that don't exist (schema mismatch)
-      }
+    if (options.includeProfiles) stores.push('profiles')
+    const existingStores = stores.filter((store) => db.objectStoreNames.contains(store))
+    if (existingStores.length > 0) {
+      const tx = db.transaction(existingStores, 'readwrite')
+      for (const store of existingStores) await tx.objectStore(store).clear()
+      await tx.done
     }
-    // Clear profile-related localStorage so the app doesn't reference stale IDs
-    localStorage.removeItem('currentProfileId')
-    localStorage.removeItem('selectedProfileIds')
-    // Also clear init flag so demo profiles re-seed on next init
-    localStorage.removeItem('finance_had_profiles')
+    if (options.includeProfiles) {
+      localStorage.removeItem('currentProfileId')
+      localStorage.removeItem('selectedProfileIds')
+      localStorage.removeItem('finance_had_profiles')
+    }
   }
 
   // ---- Logs ----

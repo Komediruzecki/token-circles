@@ -1,7 +1,7 @@
 /**
  * ExportImport handlers — IndexedDB-backed implementations
  */
-import { getDB, seedDefaultCategories, seedDemoProfiles } from '../idb'
+import { seedDemoProfiles } from '../idb'
 import {
   adapter,
   getAmount,
@@ -203,19 +203,13 @@ export async function deleteAllTransactions(headers?: HeadersInit): Promise<Resp
 }
 
 export async function deleteAllCategories(headers?: HeadersInit): Promise<Response> {
-  const db = await getDB()
   const pid = targetProfileIdsFromHeaders(headers)?.[0] ?? (await adapter.getCurrentProfileId())
-  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
-  for (const c of cats) {
-    await db.delete('categories', c.id)
-  }
-  await seedDefaultCategories(pid)
+  await adapter.resetProfileCategories(pid)
   return ok({ message: 'Categories reset to defaults' })
 }
 
 export async function reseedDemoData(): Promise<Response> {
-  // Only seeds demo profiles if none exist — does NOT clear existing data.
-  // Use clearAll() for full data deletion.
+  await adapter.clearAllData({ includeProfiles: true })
   await seedDemoProfiles()
   return ok({ message: 'Demo data reseeded' })
 }

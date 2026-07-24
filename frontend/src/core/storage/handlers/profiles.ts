@@ -91,32 +91,7 @@ export async function profilesDelete(params: Record<string, string>): Promise<Re
   if (!pids.includes(profileId))
     return json({ error: 'Cannot delete a profile you do not own' }, 403)
 
-  // Cascade delete all data belonging to this profile
-  const stores = [
-    'transactions',
-    'categories',
-    'accounts',
-    'budgets',
-    'goals',
-    'loans',
-    'balanceHistory',
-    'bills',
-    'housings',
-    'recurring',
-    'tags',
-    'portfolioHoldings',
-    'receipts',
-  ]
-  for (const store of stores) {
-    if (!db.objectStoreNames.contains(store)) continue
-    const all = await db.getAll(store)
-    for (const item of all) {
-      if (item.profile_id === profileId) {
-        await db.delete(store, item.id as number)
-      }
-    }
-  }
-  await adapter.deleteProfile(profileId)
+  await adapter.clearProfileData([profileId], { deleteProfiles: true })
 
   // If the deleted profile was the current one, clear the selection
   const stored = localStorage.getItem('currentProfileId')
@@ -142,27 +117,9 @@ export async function profilesDelete(params: Record<string, string>): Promise<Re
 }
 
 export async function profileResetData(headers?: HeadersInit): Promise<Response> {
-  const db = await getDB()
   // Reset the profile(s) named in the request header (Danger Zone can target a
   // non-active profile); fall back to the active profile when none is given.
   const pids = targetProfileIdsFromHeaders(headers) ?? adapter.getCurrentProfileIds()
-  const stores = [
-    'transactions',
-    'categories',
-    'accounts',
-    'budgets',
-    'goals',
-    'loans',
-    'balanceHistory',
-  ]
-  for (const store of stores) {
-    if (!db.objectStoreNames.contains(store)) continue
-    const all = await db.getAll(store)
-    for (const item of all) {
-      if (pids.includes(item.profile_id as number)) {
-        await db.delete(store, item.id as number)
-      }
-    }
-  }
+  await adapter.clearProfileData(pids)
   return ok({ message: 'Profile data reset successfully' })
 }
