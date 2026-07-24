@@ -330,13 +330,27 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   else next.setMonth(next.getMonth() + 1); // monthly + safe default: always advance.
   const nextStr = next.toISOString().split('T')[0];
 
+  // The generated transaction inherits the profile's base currency and carries
+  // amount_local = amount, matching the create handler (amount_local ?? amount) and the
+  // serverless populate. Without this the INSERT omitted currency (defaulting to the
+  // schema's 'USD') and amount_local (NULL), so the same rule produced a USD row here but a
+  // base-currency row on the client (audit M-02). The recurring amount is already in the
+  // base currency (the rule has no currency/rate), so amount_local == amount.
+  const currencyRow = await db.first<{ value: string }>(
+    c.env.DB,
+    'SELECT value FROM settings WHERE key = ? AND profile_id = ?',
+    'local_currency',
+    pid
+  );
+  const baseCurrency = currencyRow?.value || 'EUR';
+
   const stmts: D1PreparedStatement[] = [];
 
   // 1. Insert the transaction, including account_id / transfer_account_id if set.
   stmts.push(
     c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor, currency, amount_local)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       pid,
       r.description,
@@ -348,7 +362,9 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
       date,
       r.notes || '',
       '',
-      ''
+      '',
+      baseCurrency,
+      r.amount
     )
   );
 

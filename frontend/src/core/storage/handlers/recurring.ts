@@ -2,6 +2,8 @@
  * Recurring handlers — IndexedDB-backed implementations
  */
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
+import { isoDate } from '../../../utils/period'
+import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -138,7 +140,10 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   )
   if (invariantError) return json({ error: invariantError }, 400)
 
-  const todayStr = new Date().toISOString().substring(0, 10)
+  // Local-calendar today (isoDate uses getFullYear/Month/Date), NOT toISOString which
+  // shifts to UTC and can roll the date to the previous day/month near midnight for a
+  // user in a negative-offset timezone (audit M-02).
+  const todayStr = isoDate(new Date())
   // Idempotency guard — mirrors the worker: once next_date is in the future the
   // current period is already populated, so a repeat call must not create another
   // transaction (and, now that balances move, must not double-count).
@@ -153,6 +158,12 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   // worker/backend populate (income/expense move one account; a transfer moves
   // From -> To; an account-less recurring stays a pure reminder).
   const pid = await adapter.getCurrentProfileId()
+  // The recurring rule's amount is denominated in the user's base currency (the recurring
+  // form has no currency picker), so the generated transaction inherits that base currency
+  // and carries amount_local = amount. This keeps the row identical to the worker's populate
+  // for the same rule (was hard-coded 'EUR' here vs the schema-default 'USD' on the worker,
+  // audit M-02) and keeps balances/reports in one currency via computeBalanceDeltas.
+  const baseCurrency = getLocalCurrency()
   await adapter.createTransaction({
     profile_id: pid,
     description: item.description,
@@ -160,22 +171,25 @@ export async function recurringPopulate(params: Record<string, string>): Promise
     type: item.type,
     category_id: item.category_id,
     date,
-    currency: 'EUR',
+    currency: baseCurrency,
+    amount_local: item.amount,
     reconciled: 0,
     notes: item.notes || '',
     account_id: item.account_id ?? null,
     transfer_account_id: item.transfer_account_id ?? null,
-  } as Parameters<typeof adapter.createTransaction>[0])
+  } as unknown as Parameters<typeof adapter.createTransaction>[0])
 
   // Advance next_date past the populated period — every frequency must move
-  // forward so the guard above can engage on the next call.
-  const next = new Date(date)
+  // forward so the guard above can engage on the next call. Parse and format on the
+  // local calendar (T00:00:00 = local midnight, isoDate = local) so the setDate/setMonth
+  // math and the stored string stay in the same timezone as todayStr (audit M-02).
+  const next = new Date(`${date}T00:00:00`)
   if (item.frequency === 'daily') next.setDate(next.getDate() + 1)
   else if (item.frequency === 'weekly') next.setDate(next.getDate() + 7)
   else if (item.frequency === 'biweekly') next.setDate(next.getDate() + 14)
   else if (item.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1)
   else next.setMonth(next.getMonth() + 1)
-  item.next_date = next.toISOString().substring(0, 10)
+  item.next_date = isoDate(next)
   await db.put('recurring', item)
 
   return json({ ok: true })

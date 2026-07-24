@@ -93,6 +93,27 @@ describe('localHandlers - recurring balance integrity', () => {
     expect(await balanceOf(acc)).toBe(1000)
   })
 
+  // Audit M-02 — the generated transaction must inherit the user's base currency and set
+  // amount_local, so the same rule produces an equivalent row on the client and the Worker
+  // (worker/test/recurring-bills-balance.test.ts has the matching cross-runtime assertion).
+  // Previously this path hard-coded currency: 'EUR' and left amount_local unset.
+  it('generated transaction inherits the base currency and sets amount_local (audit M-02)', async () => {
+    localStorage.setItem('localCurrency', 'GBP') // non-default, non-'EUR' base currency
+    const acc = await createAccount(1000)
+    const id = await createRecurring({
+      description: 'Salary',
+      amount: 50,
+      type: 'income',
+      account_id: acc,
+    })
+    expect((await recurringPopulate({ p1: String(id) })).status).toBe(200)
+    const db = await getDB()
+    const txns = await db.getAll('transactions')
+    expect(txns).toHaveLength(1)
+    expect(txns[0].currency).toBe('GBP') // base currency, not the old hard-coded 'EUR'
+    expect(txns[0].amount_local).toBe(50) // set = amount, so reports/balances stay in base currency
+  })
+
   it('rejects one-legged and self-transfer recurring rules before population', async () => {
     const from = await createAccount(1000)
     const to = await createAccount(500)

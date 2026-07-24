@@ -24,6 +24,7 @@ beforeEach(async () => {
     'accounts',
     'profiles',
     'users',
+    'settings',
   ]) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
   }
@@ -82,6 +83,25 @@ describe('recurring populate + bill mark-paid balance integrity', () => {
     const pop = await api(`/api/recurring/${id}/populate`);
     expect(pop.status).toBe(200);
     expect(await balance()).toBeCloseTo(950, 2);
+  });
+
+  // Audit M-02 — the generated transaction must inherit the profile's base currency (the
+  // local_currency setting) and set amount_local, matching the serverless populate
+  // (frontend .../localHandlers.recurring.test.ts). Previously the INSERT omitted both, so the
+  // row defaulted to the schema's 'USD' with a NULL amount_local — diverging from the client.
+  it('generated transaction inherits the base currency and sets amount_local (audit M-02)', async () => {
+    // Non-default base currency so a pass proves the row read the setting, not the 'USD' default.
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value, profile_id) VALUES ('local_currency', 'GBP', 500)"
+    ).run();
+    const id = await createRecurring('expense', 50, 'monthly');
+    const pop = await api(`/api/recurring/${id}/populate`);
+    expect(pop.status).toBe(200);
+    const row = await env.DB.prepare(
+      'SELECT currency, amount_local FROM transactions WHERE profile_id = 500'
+    ).first<{ currency: string; amount_local: number }>();
+    expect(row?.currency).toBe('GBP');
+    expect(row?.amount_local).toBeCloseTo(50, 2);
   });
 
   it('rejects a transfer recurring with no destination', async () => {
