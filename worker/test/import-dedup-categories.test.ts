@@ -20,6 +20,7 @@ beforeEach(async () => {
     'account_balance_history',
     'accounts',
     'categories',
+    'settings',
     'profiles',
     'users',
   ]) {

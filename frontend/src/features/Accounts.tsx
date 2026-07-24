@@ -47,7 +47,6 @@ import {
   showToast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { CURRENCY_OPTIONS } from '../core/currencies'
 import { parseDecimalInput } from '../core/decimalInput'
 import { gatedSource } from '../core/pageVisibility'
 import { normalizedTransactionAmount } from '../core/transactionAmount'
@@ -127,7 +126,7 @@ export default function Accounts() {
       // The Current Balance field is prefilled with the derived balance; changing it
       // adjusts the starting balance under the hood (see handleEditSubmit).
       balance: String(account.balance ?? ''),
-      currency: account.currency || getLocalCurrency(),
+      currency: getLocalCurrency(),
       starting_balance: String(account.starting_balance ?? ''),
       starting_date: account.starting_date || '',
     })
@@ -612,7 +611,7 @@ export default function Accounts() {
               </div>
               <Show when={modalMode() === 'add'}>
                 <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Starting Balance</label>
+                  <label class={styles.formLabel}>Starting Balance ({getLocalCurrency()})</label>
                   <input
                     type="text"
                     inputmode="decimal"
@@ -638,7 +637,7 @@ export default function Accounts() {
                 />
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Current Balance</label>
+                <label class={styles.formLabel}>Current Balance ({getLocalCurrency()})</label>
                 <input
                   type="text"
                   inputmode="decimal"
@@ -655,22 +654,17 @@ export default function Accounts() {
                 </Show>
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Currency</label>
-                <select
+                <label class={styles.formLabel}>Balance Currency</label>
+                <input
+                  type="text"
                   class={styles.formControl}
-                  value={formData().currency}
-                  oninput={(e) => setFormData({ ...formData(), currency: e.target.value })}
-                >
-                  <For each={CURRENCY_OPTIONS}>
-                    {(currency) => <option value={currency.code}>{currency.name}</option>}
-                  </For>
-                </select>
-                <Show when={modalMode() === 'edit'}>
-                  <p class={styles.formHint}>
-                    Relabels the account only — existing balances and transactions are not
-                    converted.
-                  </p>
-                </Show>
+                  value={getLocalCurrency()}
+                  readOnly
+                  aria-label="Balance currency"
+                />
+                <p class={styles.formHint}>
+                  Account balances use the base currency selected in Settings.
+                </p>
               </div>
               <div class={styles.modalFooter}>
                 <button

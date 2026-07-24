@@ -8,6 +8,7 @@ import { HttpError } from '../http';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
+import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 
 // Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
@@ -434,7 +435,8 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
 
   // Currency for accounts this import creates — the client's base currency (Settings; EUR by
   // default), falling back to EUR when the request does not contain a valid code.
-  const defaultCurrency = normalizeCurrencyCode(b.defaultCurrency, 'EUR');
+  const requestedCurrency = b.defaultCurrency;
+  const defaultCurrency = await resolveProfileBaseCurrency(DB, pid, requestedCurrency, !dryRun);
 
   // Batch-create accounts for the category names the user flagged as 'account' type (+ history).
   // Skipped in dry-run (preview must not mutate).

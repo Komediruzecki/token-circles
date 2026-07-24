@@ -1,6 +1,7 @@
 /**
  * Settings handlers — IndexedDB-backed implementations
  */
+import { BaseCurrencyConflictError, setBaseCurrency } from '../baseCurrency'
 import { getStorageMode, setStorageMode } from '../storageFactory'
 import { adapter, json, ok } from './helpers'
 import type { StorageMode } from '../storageFactory'
@@ -12,7 +13,19 @@ export async function settingsGet(): Promise<Response> {
 
 export async function settingsUpdate(body: unknown): Promise<Response> {
   if (body && typeof body === 'object') {
-    await adapter.updateSettings(body as Record<string, unknown>)
+    const settings = { ...(body as Record<string, unknown>) }
+    if (settings.currency !== undefined) {
+      try {
+        settings.currency = await setBaseCurrency(settings.currency)
+        settings.primary_currency = settings.currency
+      } catch (error) {
+        if (error instanceof BaseCurrencyConflictError) {
+          return json({ error: error.message }, 409)
+        }
+        throw error
+      }
+    }
+    await adapter.updateSettings(settings)
     return ok()
   }
   return json({ error: 'Invalid settings body' }, 400)
