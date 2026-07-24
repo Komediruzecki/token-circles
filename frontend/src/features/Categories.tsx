@@ -34,7 +34,7 @@ import { createResource, createSignal, For } from 'solid-js'
 import CategoryIcon from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { gatedSource } from '../core/pageVisibility'
@@ -65,8 +65,8 @@ export default function Categories() {
     gatedSource('categories', () => state.profileVersion),
     async () => {
       const [allRes, budgetRes] = await Promise.all([
-        apiGet<Category[]>('/api/categories'),
-        apiGet<any[]>('/api/budgets/summary').catch(() => [] as any[]),
+        apiHouseholdGet<Category[]>('/api/categories'),
+        apiHouseholdGet<any[]>('/api/budgets/summary').catch(() => [] as any[]),
       ])
       const summary: Record<
         number,

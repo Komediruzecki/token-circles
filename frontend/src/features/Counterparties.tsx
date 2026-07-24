@@ -6,7 +6,7 @@ import { createMemo, createSignal, For } from 'solid-js'
 import CounterpartyMeridian from '../components/CounterpartyMeridian'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
-import { apiGet } from '../core/api'
+import { apiHouseholdGet } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { refetchOnActive } from '../core/pageVisibility'
 import styles from './CounterpartiesPage.module.css'
@@ -30,7 +30,7 @@ export default function Counterparties() {
 
   const loadData = async () => {
     try {
-      const data = await apiGet<Counterparty[]>('/api/counterparties')
+      const data = await apiHouseholdGet<Counterparty[]>('/api/counterparties')
       if (Array.isArray(data)) {
         setCounterparties(data)
       }

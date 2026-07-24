@@ -19,7 +19,7 @@
  */
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import PeriodBar from '../components/PeriodBar'
-import { apiGet, apiPost, formatCurrency, showToast } from '../core/api'
+import { apiHouseholdGet, apiPost, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
@@ -91,7 +91,9 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       v: state.profileVersion,
     })),
     async ({ year, month }) => {
-      const data = await apiGet<CalendarData>(`/api/bills/calendar?year=${year}&month=${month}`)
+      const data = await apiHouseholdGet<CalendarData>(
+        `/api/bills/calendar?year=${year}&month=${month}`
+      )
       return data
     }
   )

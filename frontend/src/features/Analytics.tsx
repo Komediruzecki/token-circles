@@ -46,7 +46,7 @@ import OrbitalDivider from '../components/OrbitalDivider'
 import SankeyChart from '../components/SankeyChart'
 import SectionRail from '../components/SectionRail'
 import { api, formatCurrency } from '../core/api'
-import { apiGet, showToast } from '../core/api'
+import { apiHouseholdGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
@@ -122,11 +122,11 @@ export default function Analytics() {
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
       const months = Math.max(24, monthsNeeded)
       const [categoryRes, , monthlyRes] = await Promise.all([
-        apiGet<{ datasets: CategoryTrendsRow[] }>(
+        apiHouseholdGet<{ datasets: CategoryTrendsRow[] }>(
           `/api/analytics/category-trends?type=${type}&year=${year}`
         ),
-        apiGet<Record<string, unknown>>('/api/transactions/summary'),
-        apiGet<MonthlyStatsRow[]>(`/api/stats/monthly?months=${months}`),
+        apiHouseholdGet<Record<string, unknown>>('/api/transactions/summary'),
+        apiHouseholdGet<MonthlyStatsRow[]>(`/api/stats/monthly?months=${months}`),
       ])
 
       const byCategory = (categoryRes.datasets || []).slice(0, 10).map((d, i) => {
@@ -292,7 +292,7 @@ export default function Analytics() {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
       const now = new Date()
       const monthsNeeded = (now.getFullYear() - year) * 12 + now.getMonth() + 1
-      const monthlyRes = await apiGet<MonthlyStatsRow[]>(
+      const monthlyRes = await apiHouseholdGet<MonthlyStatsRow[]>(
         `/api/stats/monthly?months=${Math.max(24, monthsNeeded)}`
       )
       const months = Array.isArray(monthlyRes) ? monthlyRes : []
@@ -340,7 +340,7 @@ export default function Analytics() {
       return
     }
     try {
-      const res = await apiGet<{ weeks: WeekData[] }>(
+      const res = await apiHouseholdGet<{ weeks: WeekData[] }>(
         `/api/analytics/weeks?year=${year}&month=${month}`
       )
       setWeeks(res.weeks || [])
@@ -355,7 +355,7 @@ export default function Analytics() {
     setHeatmapModal({ dateStr, amount, transactions: [], loading: true })
     try {
       const type = heatmapType()
-      const res = await apiGet<{ transactions?: Transaction[]; rows?: Transaction[] }>(
+      const res = await apiHouseholdGet<{ transactions?: Transaction[]; rows?: Transaction[] }>(
         `/api/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`
       )
       const list = Array.isArray(res?.transactions)
@@ -375,7 +375,7 @@ export default function Analytics() {
   // Load heatmap data
   const loadHeatmapData = async () => {
     try {
-      const res = await apiGet<HeatmapResponse>(
+      const res = await apiHouseholdGet<HeatmapResponse>(
         `/api/analytics/daily-heatmap?year=${heatmapYear()}&type=${heatmapType()}`
       )
       const dataMap = new Map<string, number>()
@@ -408,7 +408,7 @@ export default function Analytics() {
   // Load sankey data
   const loadSankeyData = async () => {
     try {
-      const res = await apiGet<SankeyResponse>(
+      const res = await apiHouseholdGet<SankeyResponse>(
         `/api/analytics/sankey?year=${sankeyYear()}&month=${sankeyMonth()}`
       )
       setSankeyData({ nodes: res.nodes || [], links: res.links || [] })
@@ -436,7 +436,7 @@ export default function Analytics() {
       }
       const week = selectedWeek()
       if (week) params.set('week', week)
-      const res = await apiGet<CategoryTrendsResponse>(
+      const res = await apiHouseholdGet<CategoryTrendsResponse>(
         `/api/analytics/category-trends?${params.toString()}`
       )
       setStackedData({
@@ -456,7 +456,7 @@ export default function Analytics() {
         const cmpWeek = selectedWeek()
         if (cmpWeek) cmpParams.set('week', cmpWeek)
         try {
-          const cmpRes = await apiGet<CategoryTrendsResponse>(
+          const cmpRes = await apiHouseholdGet<CategoryTrendsResponse>(
             `/api/analytics/category-trends?${cmpParams.toString()}`
           )
           setCompareData({

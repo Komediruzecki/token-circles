@@ -8,7 +8,7 @@ import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import OrbitalDivider from '../components/OrbitalDivider'
 import {
   apiDelete,
-  apiGet,
+  apiHouseholdGet,
   apiPost,
   apiPut,
   formatCurrency,
@@ -93,8 +93,8 @@ export default function Portfolio() {
   const loadData = async () => {
     try {
       const [holdingsRes, summaryRes] = await Promise.all([
-        apiGet<PortfolioHolding[]>('/api/portfolio/holdings'),
-        apiGet<PortfolioSummary>('/api/portfolio/summary'),
+        apiHouseholdGet<PortfolioHolding[]>('/api/portfolio/holdings'),
+        apiHouseholdGet<PortfolioSummary>('/api/portfolio/summary'),
       ])
       setHoldings(Array.isArray(holdingsRes) ? holdingsRes : [])
       setSummary(summaryRes)
