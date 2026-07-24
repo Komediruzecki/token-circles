@@ -13,7 +13,14 @@ import { importExecute } from '../localHandlers.js'
 
 async function resetDb() {
   const db = await getDB()
-  for (const store of ['profiles', 'transactions', 'categories', 'accounts', 'budgets']) {
+  for (const store of [
+    'profiles',
+    'transactions',
+    'categories',
+    'accounts',
+    'budgets',
+    'settings',
+  ]) {
     await db.clear(store)
   }
   await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })

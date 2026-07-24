@@ -4,6 +4,7 @@
  * flagged as accounts). Shared by the Import page and the onboarding wizard.
  */
 import { For, Show } from 'solid-js'
+import { getLocalCurrency } from '../../core/api'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
 import type { ImportFlow } from './importFlow'
@@ -156,8 +157,8 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
                               type="text"
                               inputmode="decimal"
                               class={styles.accountBalanceInput}
-                              placeholder="Starting balance"
-                              title="Account starting balance"
+                              placeholder={`Starting balance (${getLocalCurrency()})`}
+                              title={`Account starting balance in ${getLocalCurrency()}`}
                               value={flow.accountBalances()[category] || ''}
                               oninput={(e) => {
                                 const v = { ...flow.accountBalances() }

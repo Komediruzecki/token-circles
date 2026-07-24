@@ -20,6 +20,7 @@ describe('localHandlers - accounts', () => {
     await db.clear('profiles')
     await db.clear('accounts')
     await db.clear('balanceHistory')
+    await db.clear('settings')
 
     // Seed initial data
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })

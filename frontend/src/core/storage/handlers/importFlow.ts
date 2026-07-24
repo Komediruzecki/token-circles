@@ -5,6 +5,7 @@ import { transactionInvariantError } from '../../../../../shared/transactionInva
 import { getLocalCurrency } from '../../api'
 import { parseFlexibleNumber } from '../../bankImport/parse'
 import { normalizeCurrencyCode } from '../../currencies'
+import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
@@ -589,7 +590,18 @@ export async function importExecute(body: unknown): Promise<Response> {
     const accountTypes = (data.accountTypes as Record<string, string>) || {}
     const accountBalances = (data.accountBalances as Record<string, string>) || {}
     const accountBalanceDates = (data.accountBalanceDates as Record<string, string>) || {}
-    const defaultCurrency = normalizeCurrencyCode(data.defaultCurrency, getLocalCurrency())
+    let defaultCurrency: string
+    try {
+      defaultCurrency = await ensureBaseCurrency(
+        normalizeCurrencyCode(data.defaultCurrency, getLocalCurrency()),
+        !dryRun
+      )
+    } catch (error) {
+      if (error instanceof BaseCurrencyConflictError) {
+        return json({ error: error.message }, 409)
+      }
+      throw error
+    }
 
     // Accept rows directly (from paste/Google Sheets) or via session_id (from file upload)
     let rows: Record<string, unknown>[]

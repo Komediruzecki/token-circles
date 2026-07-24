@@ -4,15 +4,19 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { setProfileBaseCurrency } from '../base-currency';
 
 // Port of backend/routes/settings.js — key/value settings per profile.
 export const settingsRoutes = new Hono<AppEnv>();
 
 settingsRoutes.get('/api/settings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const rows = await db.all<{ key: string; value: string }>(
+  const rows = await db.all<{ key: string; value: string; profile_id: number | null }>(
     c.env.DB,
-    'SELECT key, value FROM settings WHERE profile_id = ? OR profile_id IS NULL',
+    `SELECT key, value, profile_id
+       FROM settings
+      WHERE profile_id = ? OR profile_id IS NULL
+      ORDER BY CASE WHEN profile_id IS NULL THEN 0 ELSE 1 END`,
     pid
   );
   const settings: Record<string, any> = { currency: 'EUR', locale: 'en-US' };
@@ -42,6 +46,9 @@ settingsRoutes.put('/api/settings', requireAuth, async (c) => {
         'Invalid locale code. Use valid BCP 47 language tags (e.g., en-US, fr-FR).'
       );
     }
+  }
+  if (b.currency) {
+    b.currency = await setProfileBaseCurrency(c.env.DB, pid, b.currency);
   }
   for (const [k, v] of Object.entries(b)) {
     await db.run(

@@ -105,10 +105,13 @@ export interface Account {
   name: string
   bank_name?: string | null
   type: AccountType
+  /** Profile base currency. Account balances never mix native currency units. */
   currency: Currency
+  /** Current balance in the profile base currency. */
   balance: number
   notes?: string | null
   profile_id: ProfileId
+  /** Opening balance in the profile base currency. */
   starting_balance?: number | null
   starting_date?: string | null
 }
