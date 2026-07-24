@@ -40,18 +40,20 @@ import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
+import { showConfirm } from '../core/confirmStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
 import { startOnboarding } from '../core/onboardingStore'
 import { period } from '../core/periodStore'
 import { setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
-import { migrateData, setStorageMode } from '../core/storage/storageFactory'
+import { getStorageAdapter, migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { toYYYYMM } from '../utils/period'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
 import type { SettingsTab } from '../core/settingsStore'
+import type { ExportData } from '../types/storage'
 import type { ChartExportSettings } from '../utils/chartExportSettings'
 
 // Account self-deletion is dev-only for now: visible on the dev domain + local builds, hidden on the
@@ -651,7 +653,7 @@ export default function Settings() {
 
       setShowStorageWarning(false)
       toast(
-        `Database switched to ${storageMode() === 'serverless' ? 'Browser LocalStorage' : 'Backend SQLite'} successfully.`,
+        `Database switched to ${storageMode() === 'serverless' ? 'browser storage' : 'cloud storage'} successfully.`,
         'success'
       )
       window.location.reload()
@@ -666,6 +668,8 @@ export default function Settings() {
   const [csvExporting, setCsvExporting] = createSignal<string | null>(null)
   const [exportFormat, setExportFormat] = createSignal('csv')
   const [prettyPrintJson, setPrettyPrintJson] = createSignal(true)
+  const [restoringBackup, setRestoringBackup] = createSignal(false)
+  let restoreBackupInput: HTMLInputElement | undefined
 
   // Turn the exported profile selection into a filename-safe label so a download makes
   // clear which profile it is for: a single profile -> its slugified name, a multi-profile
@@ -687,8 +691,7 @@ export default function Settings() {
   // X-Profile-Ids JSON array (the shape backend/worker read) plus a single X-Profile-Id
   // fallback; a single profile just sends X-Profile-Id. (Previously a comma-joined
   // X-Profile-Id made the server export only the first profile of a household.)
-  const exportProfileHeaders = (): Record<string, string> => {
-    const ids = householdIds()
+  const exportProfileHeaders = (ids = householdIds()): Record<string, string> => {
     const headers: Record<string, string> = { 'X-Profile-Id': String(ids[0] ?? '') }
     if (ids.length > 1) headers['X-Profile-Ids'] = JSON.stringify(ids)
     return headers
@@ -700,7 +703,7 @@ export default function Settings() {
       const response = await apiFetch(`/api/export?pretty=${prettyPrintJson()}`, {
         method: 'GET',
         credentials: 'include',
-        headers: exportProfileHeaders(),
+        headers: exportProfileHeaders(allProfiles().map((profile) => profile.id)),
       })
 
       if (!response.ok) throw new Error('Export failed')
@@ -709,7 +712,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `finance-export-${profileFileLabel()}-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `finance-backup-all-profiles-${new Date().toISOString().split('T')[0]}.json`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -739,6 +742,38 @@ export default function Settings() {
       toast(`Failed to export ${type}`, 'error')
     } finally {
       setCsvExporting(null)
+    }
+  }
+
+  const handleRestoreBackup = async (file: File) => {
+    let data: ExportData
+    try {
+      data = JSON.parse(await file.text()) as ExportData
+    } catch {
+      toast('That file is not valid JSON.', 'error')
+      return
+    }
+
+    const confirmed = await showConfirm(
+      'Restore this backup? Every profile and all financial data in the current storage location will be replaced. Existing data remains unchanged if validation or restore fails.',
+      { confirmText: 'Restore Backup', danger: true }
+    )
+    if (!confirmed) return
+
+    setRestoringBackup(true)
+    try {
+      const adapter = await getStorageAdapter()
+      await adapter.importData(data)
+      toast('Backup restored successfully.', 'success')
+      window.location.reload()
+    } catch (error) {
+      console.error('Backup restore failed:', error)
+      toast(
+        `Backup restore failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'error'
+      )
+    } finally {
+      setRestoringBackup(false)
     }
   }
 
@@ -1000,7 +1035,7 @@ export default function Settings() {
                   onchange={handleStorageModeChange}
                   style="max-width: 340px;"
                 >
-                  <option value="self-hosted">Server (Backend Database)</option>
+                  <option value="self-hosted">Server (Cloud Database)</option>
                   <option value="serverless">Local (Browser Storage)</option>
                 </select>
                 {showStorageWarning() && storageMode() === 'serverless' && (
@@ -1015,7 +1050,7 @@ export default function Settings() {
                         class={styles.rowLabel}
                         style="font-size: 13px; color: var(--text-secondary);"
                       >
-                        Migrate existing data from the backend to browser storage
+                        Migrate all profiles from cloud storage to this browser
                       </span>
                       <Toggle
                         checked={migrateDataEnabled}
@@ -1041,20 +1076,20 @@ export default function Settings() {
                   <div class={styles.warningBox}>
                     <strong>Switch to Server Mode</strong>
                     <p style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
-                      Your data will be stored on the backend SQLite server. You need the backend
-                      server running for this mode to work.
+                      Your data will be stored in your signed-in cloud account and can sync across
+                      devices.
                     </p>
                     <div class={styles.row}>
                       <span
                         class={styles.rowLabel}
                         style="font-size: 13px; color: var(--text-secondary);"
                       >
-                        Migrate existing browser data to the backend server
+                        Migrate all browser profiles to your cloud account
                       </span>
                       <Toggle
                         checked={migrateDataEnabled}
                         onChange={(v) => setMigrateDataEnabled(v)}
-                        aria-label="Migrate existing browser data to the backend server"
+                        aria-label="Migrate existing browser data to cloud storage"
                       />
                     </div>
                     <button
@@ -1078,7 +1113,7 @@ export default function Settings() {
                 )}
                 {!showStorageWarning() && storageMode() === 'self-hosted' && (
                   <p style="margin-top: 12px; color: var(--text-secondary); font-size: 13px;">
-                    Currently connected to Backend Server storage.
+                    Currently connected to cloud storage.
                   </p>
                 )}
               </div>
@@ -1457,7 +1492,8 @@ export default function Settings() {
                     <span>Export Household Data</span>
                   </div>
                   <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                    Export combined data for the selected profiles.
+                    A full backup includes every profile. Resource exports use the selected
+                    household. Restore replaces every profile in the current storage location.
                   </div>
                   <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                     <label style="font-size: 13px; color: var(--text-secondary);">
@@ -1488,7 +1524,25 @@ export default function Settings() {
                   </div>
                   <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                     <button class={styles.btnSecondary} onclick={handleExport}>
-                      Export All (JSON)
+                      Export Full Backup (JSON)
+                    </button>
+                    <input
+                      ref={restoreBackupInput}
+                      type="file"
+                      accept=".json,application/json"
+                      style="display: none;"
+                      onchange={(event) => {
+                        const file = event.currentTarget.files?.[0]
+                        event.currentTarget.value = ''
+                        if (file) void handleRestoreBackup(file)
+                      }}
+                    />
+                    <button
+                      class={styles.btnSecondary}
+                      onclick={() => restoreBackupInput?.click()}
+                      disabled={restoringBackup()}
+                    >
+                      {restoringBackup() ? 'Restoring...' : 'Restore Backup'}
                     </button>
                     {[
                       { type: 'transactions', label: 'Transactions' },

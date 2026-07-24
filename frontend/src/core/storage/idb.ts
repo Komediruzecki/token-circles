@@ -3,6 +3,16 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import {
+  BACKUP_EXTENSION_SETTINGS_KEY,
+  BACKUP_VERSION,
+  backupExtensionsFrom,
+  decodeBase64,
+  exportReceiptFiles,
+  readBackupExtensions,
+  receiptBytesFrom,
+  validateBackupForLocalRestore,
+} from './backup'
 import type { IDBPDatabase } from 'idb'
 import type {
   Account,
@@ -970,6 +980,7 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
     for (const s of all) {
       if (typeof s.key === 'string' && s.key.startsWith('__cache__')) continue
+      if (s.key === BACKUP_EXTENSION_SETTINGS_KEY) continue
       result[s.key] = s.value
     }
     return result as unknown as Settings
@@ -1007,7 +1018,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       categoryMappings,
       receipts,
       balanceHistoryRows,
+      importLogs,
       profiles,
+      rawSettings,
       settings,
     ] = await Promise.all([
       db.getAll('transactions'),
@@ -1024,7 +1037,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       db.getAll('categoryMappings'),
       db.getAll('receipts'),
       db.getAll('balanceHistory'),
+      db.getAll('import_logs'),
       db.getAll('profiles'),
+      db.getAll('settings'),
       this.getSettings(),
     ])
 
@@ -1036,42 +1051,121 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
 
     const exportedAccounts = filterByProfile(accounts)
+    const exportedProfiles = pids ? profiles.filter((p) => pids.has(p.id)) : profiles
+    const exportedTransactions = filterByProfile(transactions)
+    const exportedLoans = filterByProfile(loans)
+    const exportedReceipts = filterByProfile(receipts)
     const exportedAccountIds = new Set(exportedAccounts.map((a) => a.id))
     const exportedBalanceHistory = pids
       ? balanceHistoryRows.filter((r) => exportedAccountIds.has(r.account_id))
       : balanceHistoryRows
+    const { metadata: receiptMetadata, files: receiptFiles } = exportReceiptFiles(exportedReceipts)
+
+    const extensions = readBackupExtensions(
+      rawSettings.find((row) => row.key === BACKUP_EXTENSION_SETTINGS_KEY)?.value
+    )
+    const filterExtensionByProfile = (source: Record<string, unknown>[]) =>
+      pids ? source.filter((row) => pids.has(Number(row.profile_id))) : source
+    const extensionSettingsRows = filterExtensionByProfile(extensions.settingsRows)
+    const publicSettings = Object.entries(settings)
+    const settingsRows =
+      extensionSettingsRows.length > 0
+        ? extensionSettingsRows
+        : exportedProfiles.flatMap((profile) =>
+            publicSettings.map(([key, value]) => ({
+              key,
+              value: typeof value === 'string' ? value : JSON.stringify(value),
+              profile_id: profile.id,
+            }))
+          )
+    const loanRatePeriods = exportedLoans.flatMap((loan) =>
+      Array.isArray(loan.rate_periods)
+        ? loan.rate_periods.map((period: Record<string, unknown>) => ({
+            ...period,
+            loan_id: loan.id,
+          }))
+        : []
+    )
+    const loanPrepayments = exportedLoans.flatMap((loan) =>
+      Array.isArray(loan.prepayments)
+        ? loan.prepayments.map((prepayment: Record<string, unknown>) => ({
+            ...prepayment,
+            loan_id: loan.id,
+          }))
+        : []
+    )
+    const transactionTags = exportedTransactions.flatMap((transaction) =>
+      Array.isArray(transaction.tag_ids)
+        ? transaction.tag_ids.map((tagId: unknown) => ({
+            transaction_id: transaction.id,
+            tag_id: tagId,
+          }))
+        : []
+    )
 
     return {
-      version: '2.0.0',
+      version: BACKUP_VERSION,
       export_date: new Date().toISOString(),
       storage_mode: 'serverless',
-      profiles: pids ? profiles.filter((p) => pids.has(p.id)) : profiles,
+      profiles: exportedProfiles,
       categories: filterByProfile(categories),
-      transactions: filterByProfile(transactions),
+      transactions: exportedTransactions,
       accounts: exportedAccounts,
       budgets: filterByProfile(budgets),
       goals: filterByProfile(goals),
-      loans: filterByProfile(loans),
+      loans: exportedLoans,
+      loanRatePeriods,
+      loanPrepayments,
       portfolioHoldings: filterByProfile(portfolioHoldings),
       bills: filterByProfile(bills),
       recurring: filterByProfile(recurring),
       tags: filterByProfile(tags),
+      transactionTags,
       housings: filterByProfile(housings),
       categoryMappings: filterByProfile(categoryMappings),
-      receipts: filterByProfile(receipts),
+      receipts: receiptMetadata,
+      receiptFiles,
       balanceHistoryRows: exportedBalanceHistory,
+      importLogs: filterByProfile(importLogs),
+      budgetsZeroBased: filterExtensionByProfile(extensions.budgetsZeroBased),
+      retirementGoals: filterExtensionByProfile(extensions.retirementGoals),
+      emergencyFundConfig: filterExtensionByProfile(extensions.emergencyFundConfig),
+      customReports: extensions.customReports,
+      settingsRows,
       settings,
     }
   }
 
   async importData(data: ExportData): Promise<void> {
+    validateBackupForLocalRestore(data)
     const db = await getDB()
-    // Clear existing data. Includes every user-created store so a restore fully
-    // replaces state and doesn't leave stale rows from the previous dataset.
-    // Previously bills/recurring/tags/housings/categoryMappings were neither
-    // cleared nor exported, so backups were incomplete and restores could orphan
-    // or drop data (audit D11).
-    const stores = [
+    const receiptFiles = new Map(
+      (data.receiptFiles ?? []).map((file) => [file.receipt_id, decodeBase64(file.data_base64)])
+    )
+    const ratePeriodsByLoan = new Map<number, Record<string, unknown>[]>()
+    for (const period of data.loanRatePeriods ?? []) {
+      const loanId = Number(period.loan_id)
+      const current = ratePeriodsByLoan.get(loanId) ?? []
+      current.push(period)
+      ratePeriodsByLoan.set(loanId, current)
+    }
+    const prepaymentsByLoan = new Map<number, Record<string, unknown>[]>()
+    for (const prepayment of data.loanPrepayments ?? []) {
+      const loanId = Number(prepayment.loan_id)
+      const current = prepaymentsByLoan.get(loanId) ?? []
+      current.push(prepayment)
+      prepaymentsByLoan.set(loanId, current)
+    }
+    const tagsByTransaction = new Map<number, number[]>()
+    for (const relation of data.transactionTags ?? []) {
+      const transactionId = Number(relation.transaction_id)
+      const tagId = Number(relation.tag_id)
+      const current = tagsByTransaction.get(transactionId) ?? []
+      current.push(tagId)
+      tagsByTransaction.set(transactionId, current)
+    }
+
+    const requestedStores = [
       'transactions',
       'categories',
       'accounts',
@@ -1087,85 +1181,141 @@ export class IndexedDBAdapter implements StorageAdapter {
       'tags',
       'housings',
       'categoryMappings',
+      'import_logs',
+      'settings',
     ]
-    for (const store of stores) {
-      if (db.objectStoreNames.contains(store)) await db.clear(store)
-    }
+    const stores = requestedStores.filter((store) => db.objectStoreNames.contains(store))
+    const tx = db.transaction(stores, 'readwrite')
+    let firstProfileId: number | undefined
+    try {
+      for (const store of stores) await tx.objectStore(store).clear()
 
-    // Import profiles and build ID mapping (old SQLite ID → new IndexedDB ID)
-    const profileIdMap = new Map<number, number>()
-    if (data.profiles && data.profiles.length > 0) {
-      for (const p of data.profiles) {
-        const oldId = p.id
-        const newId = (await db.add('profiles', {
-          name: p.name,
-          created_at: p.created_at || new Date().toISOString(),
-        })) as number
-        profileIdMap.set(oldId, newId)
-      }
-    }
-
-    // If no profiles in export, create a default one
-    if (profileIdMap.size === 0) {
-      const defaultId = (await db.add('profiles', {
-        name: 'Main Profile',
-        created_at: new Date().toISOString(),
-      })) as number
-      // Map old profile_id=1 (common default) to the new default profile
-      profileIdMap.set(1, defaultId)
-    }
-
-    // Set current profile to the first imported/new profile
-    const firstProfileId = profileIdMap.values().next().value
-    if (firstProfileId) {
-      localStorage.setItem('currentProfileId', String(firstProfileId))
-    }
-
-    // Helper: remap profile_id on imported records
-    const remap = <T extends { profile_id?: number }>(record: T): T => {
-      if (record.profile_id && typeof record.profile_id === 'number') {
-        const mapped = profileIdMap.get(record.profile_id)
-        if (mapped !== undefined) {
-          record = { ...record, profile_id: mapped }
-        } else {
-          record = { ...record, profile_id: firstProfileId ?? 1 }
+      const profileIdMap = new Map<number, number>()
+      if (data.profiles && data.profiles.length > 0) {
+        for (const p of data.profiles) {
+          const oldId = p.id
+          const newId = (await tx.objectStore('profiles').add({
+            name: p.name,
+            created_at: p.created_at || new Date().toISOString(),
+          })) as number
+          profileIdMap.set(oldId, newId)
         }
       }
-      return record
-    }
 
-    // Import data with profile_id remapping. Records keep their original inline
-    // `id` (add() honours it), so account_id / transaction_id references survive.
-    if (data.categories) for (const c of data.categories) await db.add('categories', remap(c))
-    if (data.accounts) for (const a of data.accounts) await db.add('accounts', remap(a))
-    if (data.budgets) for (const b of data.budgets) await db.add('budgets', remap(b))
-    if (data.goals) for (const g of data.goals) await db.add('goals', remap(g))
-    if (data.loans) for (const l of data.loans) await db.add('loans', remap(l))
-    if (data.transactions) for (const t of data.transactions) await db.add('transactions', remap(t))
-    if (data.portfolioHoldings)
-      for (const h of data.portfolioHoldings) await db.add('portfolioHoldings', remap(h))
+      firstProfileId = profileIdMap.values().next().value
 
-    // User-created stores that were previously dropped from backups (audit D11).
-    // Guarded by objectStore presence so an older DB without a store doesn't throw.
-    const addAll = async (store: string, rows?: Record<string, unknown>[]) => {
-      if (!rows || !db.objectStoreNames.contains(store)) return
-      for (const row of rows) await db.add(store, remap(row as { profile_id?: number }))
-    }
-    await addAll('bills', data.bills)
-    await addAll('recurring', data.recurring)
-    await addAll('tags', data.tags)
-    await addAll('housings', data.housings)
-    await addAll('categoryMappings', data.categoryMappings)
-    await addAll('receipts', data.receipts)
-    // balanceHistory rows key off account_id (preserved above), not profile_id.
-    if (data.balanceHistoryRows && db.objectStoreNames.contains('balanceHistory')) {
-      for (const row of data.balanceHistoryRows) await db.add('balanceHistory', row)
-    }
+      // Helper: remap profile_id on imported records
+      const remap = <T extends { profile_id?: unknown }>(record: T): T => {
+        const oldProfileId = Number(record.profile_id)
+        if (Number.isSafeInteger(oldProfileId) && oldProfileId > 0) {
+          const mapped = profileIdMap.get(oldProfileId)
+          if (mapped === undefined)
+            throw new Error(`Backup row references missing profile ${oldProfileId}`)
+          record = { ...record, profile_id: mapped }
+        }
+        return record
+      }
 
-    // Import settings
-    for (const [key, value] of Object.entries(data.settings)) {
-      await db.put('settings', { key, value })
+      if (data.categories)
+        for (const category of data.categories)
+          await tx.objectStore('categories').add(remap(category))
+      if (data.accounts)
+        for (const account of data.accounts) await tx.objectStore('accounts').add(remap(account))
+      if (data.budgets)
+        for (const budget of data.budgets) await tx.objectStore('budgets').add(remap(budget))
+      if (data.goals) for (const goal of data.goals) await tx.objectStore('goals').add(remap(goal))
+      if (data.loans) {
+        for (const loan of data.loans) {
+          const id = loan.id
+          await tx.objectStore('loans').add(
+            remap({
+              ...loan,
+              rate_periods: ratePeriodsByLoan.get(id) ?? loan.rate_periods ?? [],
+              prepayments: prepaymentsByLoan.get(id) ?? loan.prepayments ?? [],
+            })
+          )
+        }
+      }
+      if (data.transactions) {
+        for (const transaction of data.transactions) {
+          const id = transaction.id
+          await tx.objectStore('transactions').add(
+            remap({
+              ...transaction,
+              tag_ids: tagsByTransaction.get(id) ?? transaction.tag_ids ?? [],
+            })
+          )
+        }
+      }
+      if (data.portfolioHoldings)
+        for (const holding of data.portfolioHoldings)
+          await tx.objectStore('portfolioHoldings').add(remap(holding))
+
+      const addAll = async (store: string, rows?: Record<string, unknown>[]) => {
+        if (!rows || !stores.includes(store)) return
+        for (const row of rows) await tx.objectStore(store).add(remap(row))
+      }
+      await addAll('bills', data.bills)
+      await addAll('recurring', data.recurring)
+      await addAll('tags', data.tags)
+      await addAll('housings', data.housings)
+      await addAll('categoryMappings', data.categoryMappings)
+      await addAll('import_logs', data.importLogs)
+      if (data.receipts && stores.includes('receipts')) {
+        for (const receipt of data.receipts) {
+          const id = Number(receipt.id)
+          const existingBytes = receiptBytesFrom(receipt.file_data)
+          const fileData = existingBytes?.buffer ?? receiptFiles.get(id)
+          if (fileData === undefined) {
+            const label =
+              typeof receipt.original_name === 'string'
+                ? receipt.original_name
+                : typeof receipt.filename === 'string'
+                  ? receipt.filename
+                  : id.toString()
+            throw new Error(`Receipt "${label}" has no file bytes`)
+          }
+          const restoredReceipt: Record<string, unknown> = { ...receipt, file_data: fileData }
+          await tx.objectStore('receipts').add(remap(restoredReceipt))
+        }
+      }
+      if (data.balanceHistoryRows && stores.includes('balanceHistory')) {
+        for (const row of data.balanceHistoryRows) {
+          await tx.objectStore('balanceHistory').add({
+            ...row,
+            date: row.date ?? row.recorded_at,
+          })
+        }
+      }
+      for (const [key, value] of Object.entries(data.settings)) {
+        await tx.objectStore('settings').put({ key, value })
+      }
+
+      const remapExtensionRows = (source: Record<string, unknown>[]) =>
+        source.map((row) => remap(row))
+      const extensions = backupExtensionsFrom(data)
+      await tx.objectStore('settings').put({
+        key: BACKUP_EXTENSION_SETTINGS_KEY,
+        value: {
+          budgetsZeroBased: remapExtensionRows(extensions.budgetsZeroBased),
+          retirementGoals: remapExtensionRows(extensions.retirementGoals),
+          emergencyFundConfig: remapExtensionRows(extensions.emergencyFundConfig),
+          customReports: extensions.customReports,
+          settingsRows: remapExtensionRows(extensions.settingsRows),
+        },
+      })
+
+      await tx.done
+    } catch (error) {
+      try {
+        tx.abort()
+      } catch {
+        // The failing IndexedDB request may already have aborted the transaction.
+      }
+      await tx.done.catch(() => undefined)
+      throw error
     }
+    if (firstProfileId) localStorage.setItem('currentProfileId', String(firstProfileId))
   }
 
   // ---- Cleanup ----
