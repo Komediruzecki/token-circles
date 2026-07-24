@@ -273,6 +273,10 @@
   color: var(--expense);
 }
 
+.activity-amount.transfer {
+  color: var(--transfer);
+}
+
 .empty-state {
   text-align: center;
   padding: 48px 20px;

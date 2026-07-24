@@ -29,7 +29,7 @@ describe('localHandlers - bills', () => {
       amount: 50,
       due_date: '2026-05-15',
       frequency: 'monthly',
-      auto_pay: false,
+      autopay: true,
     })
     expect(createRes.status).toBe(201)
     const created = await createRes.json()
@@ -42,12 +42,14 @@ describe('localHandlers - bills', () => {
     expect(list).toHaveLength(1)
     expect(list[0].id).toBe(created.id)
     expect(list[0].name).toBe('Internet')
+    expect(list[0].autopay).toBe(true)
 
     // Get
     const getRes = await billsGet({ p1: created.id.toString() })
     expect(getRes.status).toBe(200)
     const fetched = await getRes.json()
     expect(fetched.id).toBe(created.id)
+    expect(fetched.autopay).toBe(true)
   })
 
   it('updates a bill', async () => {
@@ -56,7 +58,7 @@ describe('localHandlers - bills', () => {
       amount: 100,
       due_date: '2026-05-20',
       frequency: 'monthly',
-      auto_pay: false,
+      autopay: false,
     })
     const created = await createRes.json()
 
@@ -65,6 +67,7 @@ describe('localHandlers - bills', () => {
       {
         ...created,
         amount: 120,
+        autopay: true,
       }
     )
     expect(updateRes.status).toBe(200)
@@ -72,6 +75,7 @@ describe('localHandlers - bills', () => {
     const getRes = await billsGet({ p1: created.id.toString() })
     const fetched = await getRes.json()
     expect(fetched.amount).toBe(120)
+    expect(fetched.autopay).toBe(true)
   })
 
   it('deletes a bill', async () => {
@@ -80,7 +84,7 @@ describe('localHandlers - bills', () => {
       amount: 10,
       due_date: '2026-05-01',
       frequency: 'monthly',
-      auto_pay: false,
+      autopay: false,
     })
     const created = await createRes.json()
 
@@ -98,7 +102,7 @@ describe('localHandlers - bills', () => {
       amount: 40,
       due_date: '2026-05-10',
       frequency: 'monthly',
-      auto_pay: false,
+      autopay: false,
     })
     const created = await createRes.json()
 
@@ -123,7 +127,7 @@ describe('localHandlers - bills', () => {
       amount: 60,
       due_date: nextMonth,
       frequency: 'monthly',
-      auto_pay: false,
+      autopay: false,
     })
 
     const upcomingRes = await billsUpcoming()

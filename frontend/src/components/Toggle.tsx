@@ -8,6 +8,8 @@ export interface ToggleProps {
   disabled?: boolean
   id?: string
   'aria-label'?: string
+  'aria-labelledby'?: string
+  'aria-describedby'?: string
   'data-test-id'?: string
   /** Fallback accessible label if `aria-label` is not provided. */
   label?: string
@@ -28,6 +30,8 @@ export default function Toggle(props: ToggleProps) {
       id={props.id}
       aria-checked={isChecked()}
       aria-label={props['aria-label'] ?? props.label}
+      aria-labelledby={props['aria-labelledby']}
+      aria-describedby={props['aria-describedby']}
       data-test-id={props['data-test-id']}
       disabled={props.disabled}
       class={styles.toggle}

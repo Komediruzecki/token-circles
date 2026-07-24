@@ -1,0 +1,55 @@
+.orbit {
+  position: relative;
+  flex: 1 1 90px;
+  min-width: 54px;
+  height: 18px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 9%, #000 95%, transparent);
+}
+
+.arc {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.arc path {
+  fill: none;
+  stroke: color-mix(in oklab, var(--primary) 25%, var(--border));
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.planet {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.planetWarm {
+  left: 24%;
+  top: 9.9px;
+  width: 5px;
+  height: 5px;
+  background: var(--accent-warm, #f0a860);
+  box-shadow: 0 0 7px color-mix(in oklab, var(--accent-warm, #f0a860) 52%, transparent);
+}
+
+.planetPrimary {
+  left: 61%;
+  top: 7.6px;
+  width: 4px;
+  height: 4px;
+  background: color-mix(in oklab, var(--primary) 78%, transparent);
+}
+
+.planetMuted {
+  left: 86%;
+  top: 10.3px;
+  width: 3px;
+  height: 3px;
+  background: var(--text-secondary);
+  opacity: 0.65;
+}

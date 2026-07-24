@@ -36,6 +36,7 @@ import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
+import { accountActivityPresentation } from '../core/accountActivity'
 import {
   apiDelete,
   apiGet,
@@ -507,28 +508,31 @@ export default function Accounts() {
                           </div>
                           <div data-test-id="activity-list" class={styles.activityList}>
                             <For each={getAccountTransactions(account.id).slice(0, 3)}>
-                              {(tx: any) => (
-                                <div data-test-id="activity-item" class={styles.activityItem}>
-                                  <div
-                                    data-test-id="activity-content"
-                                    class={styles.activityContent}
-                                  >
-                                    <div data-test-id="activity-desc" class={styles.activityDesc}>
-                                      {tx.description}
+                              {(tx: any) => {
+                                const presentation = accountActivityPresentation(tx.type)
+                                return (
+                                  <div data-test-id="activity-item" class={styles.activityItem}>
+                                    <div
+                                      data-test-id="activity-content"
+                                      class={styles.activityContent}
+                                    >
+                                      <div data-test-id="activity-desc" class={styles.activityDesc}>
+                                        {tx.description}
+                                      </div>
+                                      <div data-test-id="activity-date" class={styles.activityDate}>
+                                        {new Date(tx.date).toLocaleDateString()}
+                                      </div>
                                     </div>
-                                    <div data-test-id="activity-date" class={styles.activityDate}>
-                                      {new Date(tx.date).toLocaleDateString()}
+                                    <div
+                                      data-test-id="activity-amount"
+                                      class={`${styles.activityAmount} ${styles[presentation.tone]}`}
+                                    >
+                                      {presentation.prefix}
+                                      {formatAmount(tx.amount)}
                                     </div>
                                   </div>
-                                  <div
-                                    data-test-id="activity-amount"
-                                    class={`${styles.activityAmount} ${tx.type === 'expense' ? styles.expense : styles.income}`}
-                                  >
-                                    {tx.type === 'expense' ? '-' : '+'}
-                                    {formatAmount(tx.amount)}
-                                  </div>
-                                </div>
-                              )}
+                                )
+                              }}
                             </For>
                           </div>
                         </div>
