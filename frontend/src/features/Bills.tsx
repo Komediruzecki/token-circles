@@ -58,17 +58,19 @@
 
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
+import OrbitalAccent from '../components/OrbitalAccent'
 import OrbitalDivider from '../components/OrbitalDivider'
 import SubscriptionCard from '../components/SubscriptionCard'
 import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
-import Toggle from '../components/Toggle'
+import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
+import { buildBillMutationPayload } from './billForm'
 import styles from './BillsPage.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { SubscriptionCardBill } from '../components/SubscriptionCard'
@@ -222,14 +224,7 @@ export default function Bills() {
   // Handle form submit
   const handleSubmit = async (e: Event) => {
     e.preventDefault()
-    const data = {
-      name: formData().name,
-      amount: parseFloat(formData().amount),
-      dueDate: formData().due_date,
-      category_id: formData().category ? parseInt(formData().category, 10) : undefined,
-      frequency: formData().frequency,
-      type: formData().type,
-    }
+    const data = buildBillMutationPayload(formData())
 
     try {
       const id = editingId()
@@ -852,6 +847,7 @@ export default function Bills() {
                 {editingId() ? 'Edit' : 'Add'}{' '}
                 {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
               </h3>
+              <OrbitalAccent />
               <button
                 class={styles.modalClose}
                 onClick={() => {
@@ -952,28 +948,11 @@ export default function Bills() {
                 </select>
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>
-                  <span>
-                    <svg
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>{' '}
-                    Autopay
-                  </span>
-                  <span style="font-size: 14px; color: var(--text-secondary)">
-                    Automatically pay this bill
-                  </span>
-                </label>
-                <Toggle
+                <ToggleField
+                  title="Autopay"
+                  description="Indicate that this bill is handled automatically."
                   checked={() => formData().autopay}
                   onChange={(v) => setFormData({ ...formData(), autopay: v })}
-                  aria-label="Automatically pay this bill"
                 />
               </div>
               <div class={styles.modalFooter}>

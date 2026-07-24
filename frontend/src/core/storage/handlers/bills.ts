@@ -43,6 +43,7 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
     const now = new Date()
     const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
       ...b,
+      autopay: b.autopay === 1 || b.autopay === true,
       paid: isBillPaidForCurrentPeriod(b, now),
     }))
 
@@ -183,7 +184,7 @@ export async function billsCreate(body: unknown): Promise<Response> {
 export async function billsGet(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
   const b = await db.get('bills', idParam(params))
-  return b ? json(b) : notFound('Bill')
+  return b ? json({ ...b, autopay: b.autopay === 1 || b.autopay === true }) : notFound('Bill')
 }
 
 export async function billsUpdate(
@@ -203,6 +204,7 @@ export async function billsUpdate(
     if (b.category_id !== undefined)
       bill.category_id = b.category_id !== null ? Number(b.category_id) : null
     if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
+    if (b.autopay !== undefined) bill.autopay = b.autopay ? 1 : 0
     if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0
     if (b.notes !== undefined) bill.notes = b.notes
     if (b.type !== undefined) bill.type = b.type

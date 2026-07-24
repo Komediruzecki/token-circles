@@ -192,10 +192,9 @@
 }
 .housing-page .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
 }
 .housing-page .modal-title {
   font-size: 18px;
@@ -203,6 +202,7 @@
   margin: 0;
 }
 .housing-page .modal-close {
+  flex: 0 0 auto;
   background: transparent;
   border: none;
   cursor: pointer;

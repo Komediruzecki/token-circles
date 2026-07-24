@@ -24,8 +24,13 @@ interface BillRow {
   last_paid_date: string | null;
   notes: string | null;
   type: string | null;
+  autopay: number;
   category_name?: string | null;
   category_color?: string | null;
+}
+
+function billResponse(bill: BillRow) {
+  return { ...bill, autopay: bill.autopay === 1 };
 }
 
 // Copied faithfully from backend/routes/bills.js.
@@ -73,7 +78,10 @@ billsRoutes.get('/api/bills', requireAuth, async (c) => {
 
   const now = new Date();
 
-  const billsWithStatus = rows.map((b) => ({ ...b, paid: isBillPaidForCurrentPeriod(b, now) }));
+  const billsWithStatus = rows.map((b) => ({
+    ...billResponse(b),
+    paid: isBillPaidForCurrentPeriod(b, now),
+  }));
 
   // Filter by paid status if requested
   let result = billsWithStatus;
@@ -311,8 +319,18 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
 billsRoutes.post('/api/bills', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;
-  const { name, amount, frequency, day_of_month, category_id, account_id, notes, type, dueDate } =
-    b;
+  const {
+    name,
+    amount,
+    frequency,
+    day_of_month,
+    category_id,
+    account_id,
+    notes,
+    type,
+    dueDate,
+    autopay,
+  } = b;
   if (!name || amount === undefined) throw new HttpError(400, 'Name and amount are required');
   if (!dueDate) throw new HttpError(400, 'Due date is required');
   if (isNaN(Date.parse(dueDate))) throw new HttpError(400, 'Invalid due date format');
@@ -335,6 +353,7 @@ billsRoutes.post('/api/bills', requireAuth, async (c) => {
     notes: notes || '',
     type: type || 'bill',
     due_date: dueDate,
+    autopay: autopay ? 1 : 0,
   });
   return c.json({ id: res.meta.last_row_id });
 });
@@ -350,8 +369,27 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
   );
   if (!existing) throw new HttpError(404, 'Not found');
   const b = (await c.req.json()) as Record<string, any>;
-  const { name, amount, frequency, day_of_month, category_id, account_id, is_active, notes, type } =
-    b;
+  const {
+    name,
+    amount,
+    frequency,
+    day_of_month,
+    category_id,
+    account_id,
+    is_active,
+    notes,
+    type,
+    dueDate,
+    due_date,
+    autopay,
+  } = b;
+  const nextDueDate = dueDate ?? due_date ?? existing.due_date;
+  if (nextDueDate && isNaN(Date.parse(nextDueDate))) {
+    throw new HttpError(400, 'Invalid due date format');
+  }
+  if (amount !== undefined && parseFloat(amount) <= 0) {
+    throw new HttpError(400, 'Amount must be positive');
+  }
   // Validate account ownership if account_id is being changed.
   if (
     account_id != null &&
@@ -363,15 +401,17 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
     c.env.DB,
     'bills',
     {
-      name: name ?? '',
-      amount: amount ?? 0,
-      frequency: frequency ?? 'monthly',
-      day_of_month: day_of_month ?? null,
-      category_id: category_id ?? null,
-      account_id: account_id ?? null,
-      is_active: is_active ?? 1,
-      notes: notes ?? '',
-      type: type ?? 'bill',
+      name: name ?? existing.name,
+      amount: amount ?? existing.amount,
+      frequency: frequency ?? existing.frequency,
+      day_of_month: day_of_month === undefined ? existing.day_of_month : day_of_month,
+      category_id: category_id === undefined ? existing.category_id : category_id,
+      account_id: account_id === undefined ? existing.account_id : account_id,
+      is_active: is_active ?? existing.is_active,
+      notes: notes ?? existing.notes,
+      type: type ?? existing.type,
+      due_date: nextDueDate,
+      autopay: autopay === undefined ? existing.autopay : autopay ? 1 : 0,
     },
     'id = ? AND profile_id = ?',
     id,
@@ -457,5 +497,5 @@ billsRoutes.get('/api/bills/:id', requireAuth, async (c) => {
     pid
   );
   if (!bill) throw new HttpError(404, 'Bill not found');
-  return c.json(bill);
+  return c.json(billResponse(bill));
 });
