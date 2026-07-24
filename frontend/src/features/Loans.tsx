@@ -38,7 +38,7 @@ import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import LoanAmortizationTable from '../components/LoanAmortizationTable'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { api as _api, formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
 import { refetchOnActive } from '../core/pageVisibility'
@@ -107,7 +107,7 @@ export default function Loans() {
   // Load loans
   const loadLoans = async () => {
     try {
-      const data = await apiGet<any[]>('/api/loans')
+      const data = await apiHouseholdGet<any[]>('/api/loans')
       // Transform Loan data to include missing fields
       setLoans(
         data.map((l) => ({

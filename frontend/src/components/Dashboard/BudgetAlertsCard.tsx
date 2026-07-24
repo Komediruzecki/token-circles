@@ -3,7 +3,7 @@
  * Shows budget alerts for the current period — fetches from API
  */
 import { createResource, For } from 'solid-js'
-import { apiGet, formatCurrency, getLocalCurrency } from '../../core/api'
+import { apiHouseholdGet, formatCurrency, getLocalCurrency } from '../../core/api'
 import { useAppState } from '../../core/appStore'
 import styles from './BudgetAlertsCard.module.css'
 
@@ -26,7 +26,7 @@ export default function BudgetAlertsCard() {
   const [alertsResource] = createResource(
     () => state.profileVersion,
     async () => {
-      const data = (await apiGet<{ alerts: BudgetAlert[] }>(
+      const data = (await apiHouseholdGet<{ alerts: BudgetAlert[] }>(
         '/api/budgets/alerts?threshold=80'
       )) as any
       return data?.alerts && Array.isArray(data.alerts) ? data.alerts : []

@@ -36,7 +36,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import GoalRing from '../components/GoalRing'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { refetchOnActive } from '../core/pageVisibility'
@@ -90,9 +90,9 @@ export default function Goals() {
   // Load goals
   const loadGoals = async () => {
     try {
-      const data = await apiGet<any[]>('/api/savings-goals')
+      const data = await apiHouseholdGet<any[]>('/api/savings-goals')
       // Also get category names for each goal
-      const cats = await apiGet<any[]>('/api/categories')
+      const cats = await apiHouseholdGet<any[]>('/api/categories')
       const catMap = new Map<number, string>(cats.map((c: any) => [c.id, c.name]))
       setGoals(
         data.map((s) => ({
@@ -120,7 +120,7 @@ export default function Goals() {
   // Load categories for selector
   const loadCategories = async () => {
     try {
-      const cats = await apiGet<any[]>('/api/categories')
+      const cats = await apiHouseholdGet<any[]>('/api/categories')
       setCategories(cats)
     } catch {
       // categories remain empty
