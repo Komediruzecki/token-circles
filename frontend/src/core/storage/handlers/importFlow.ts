@@ -1,6 +1,7 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
+import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getLocalCurrency } from '../../api'
 import { parseFlexibleNumber } from '../../bankImport/parse'
 import { normalizeCurrencyCode } from '../../currencies'
@@ -903,14 +904,10 @@ export async function importExecute(body: unknown): Promise<Response> {
           // account, so means_of_payment is the SOURCE — link it as account_id so
           // the balance moves on both sides (matches the worker import, which sets
           // account_id from means_of_payment and transfer_account_id from category).
-          // When source and destination are the SAME account, both sides still get
-          // linked so the deltas cancel (a self-transfer nets to zero) rather than
-          // one-sided crediting. When no destination was resolved, fall back to
-          // treating means_of_payment as the transfer account.
+          // A transfer's category must resolve its destination. If it does not,
+          // the invariant check below reports and skips the row.
           if (transferAccountId && !accountId) {
             accountId = mopId
-          } else if (!transferAccountId) {
-            transferAccountId = mopId
           }
         }
         // For expense: money leaves the means_of_payment account
@@ -928,6 +925,19 @@ export async function importExecute(body: unknown): Promise<Response> {
       const amountLocal = amountLocalRaw ? Math.abs(parseFloat(amountLocalRaw)) : Math.abs(amount)
       const exchangeRateRaw = toStr(row.exchange_rate).trim()
       const exchangeRate = exchangeRateRaw ? parseFloat(exchangeRateRaw) : 1
+      const resolvedAccountId =
+        accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null
+      const invariantError = transactionInvariantError({
+        type,
+        amount: Math.abs(amount),
+        amount_local: amountLocal,
+        account_id: resolvedAccountId,
+        transfer_account_id: transferAccountId,
+      })
+      if (invariantError) {
+        skipped.push({ index: i, reason: invariantError })
+        continue
+      }
 
       // Resolution-aware duplicate check (audit A2). Key on the SAME resolved
       // account_id that is stored below, plus type + currency, so only a row that
@@ -936,8 +946,6 @@ export async function importExecute(body: unknown): Promise<Response> {
       // matches a PRE-EXISTING stored transaction, consuming one match per row; rows are
       // never added back into the bucket, so genuine same-day repeats in this import all
       // import instead of collapsing to one. A match is reported (not silently dropped).
-      const resolvedAccountId =
-        accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null
       const dedupKey = resolvedDedupKey(
         date,
         description.toLowerCase().trim(),
@@ -967,8 +975,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         notes: toStr(row.notes),
         beneficiary: toStr(row.beneficiary),
         payor: toStr(row.payor),
-        account_id:
-          accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null,
+        account_id: resolvedAccountId,
         transfer_account_id: transferAccountId || undefined,
         // Stamp the batch id so a whole import can be undone later (delete-recent-import).
         import_id:

@@ -1,6 +1,7 @@
 /**
  * Transactions handlers — IndexedDB-backed implementations
  */
+import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getDB } from '../idb'
 import { recalcGoalsByCategory } from './goals'
 import { adapter, idParam, json, notFound, ok } from './helpers'
@@ -52,8 +53,16 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
 
 export async function transactionsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid transaction data' }, 400)
-  const tx = body as Record<string, unknown>
+  const tx = { ...(body as Record<string, unknown>) }
   tx.profile_id = await adapter.getCurrentProfileId()
+  const invariantError = transactionInvariantError({
+    type: tx.type,
+    amount: tx.amount,
+    amount_local: tx.amount_local,
+    account_id: tx.account_id,
+    transfer_account_id: tx.transfer_account_id,
+  })
+  if (invariantError) return json({ error: invariantError }, 400)
   const id = await adapter.createTransaction(
     tx as unknown as Parameters<typeof adapter.createTransaction>[0]
   )
@@ -86,16 +95,23 @@ export async function transactionsUpdate(
   // merged old+new state so a partial update that flips type to transfer, or clears the
   // destination, is rejected rather than silently producing an inert/unbalanced row.
   const patch = body as Record<string, unknown>
-  const mergedType = 'type' in patch ? patch.type : before?.type
-  const mergedDest =
-    'transfer_account_id' in patch ? patch.transfer_account_id : before?.transfer_account_id
-  if (mergedType === 'transfer' && (mergedDest === null || mergedDest === undefined)) {
-    return json({ error: 'A transfer must have a destination account' }, 400)
+  if (!before) return notFound('Transaction')
+  const normalizedPatch = { ...patch }
+  const mergedType = 'type' in patch ? patch.type : before.type
+  if (
+    mergedType !== 'transfer' &&
+    before.type === 'transfer' &&
+    !('transfer_account_id' in patch)
+  ) {
+    normalizedPatch.transfer_account_id = null
   }
-  await adapter.updateTransaction(id, body as Record<string, unknown>)
+  const merged = { ...before, ...normalizedPatch }
+  const invariantError = transactionInvariantError(merged)
+  if (invariantError) return json({ error: invariantError }, 400)
+  await adapter.updateTransaction(id, normalizedPatch)
   // Recompute both the previous and new category (an edit may re-categorize the tx).
   const oldCat = toCat(before?.category_id)
-  const newCat = toCat((body as Record<string, unknown>).category_id) ?? oldCat
+  const newCat = toCat(normalizedPatch.category_id) ?? oldCat
   await recalcGoalsByCategory(oldCat)
   if (newCat !== oldCat) await recalcGoalsByCategory(newCat)
   return ok()
@@ -254,7 +270,13 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
               patch.reconciled = updateData.reconciled ? 1 : 0
             } else if (field === 'type') {
               const t = updateData.type as string
-              if (!['income', 'expense', 'transfer'].includes(t)) continue
+              if (t === 'transfer') {
+                return json(
+                  { error: 'Bulk conversion to transfer requires choosing two accounts' },
+                  400
+                )
+              }
+              if (!['income', 'expense', 'deduction'].includes(t)) continue
               patch.type = t
             } else {
               patch[field] = updateData[field]
@@ -262,6 +284,11 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
           }
         }
         if (Object.keys(patch).length > 0) {
+          if (patch.type !== undefined && tx.type === 'transfer') {
+            patch.transfer_account_id = null
+          }
+          const invariantError = transactionInvariantError({ ...tx, ...patch })
+          if (invariantError) return json({ error: invariantError }, 400)
           await adapter.updateTransaction(id, patch)
           updated++
         }

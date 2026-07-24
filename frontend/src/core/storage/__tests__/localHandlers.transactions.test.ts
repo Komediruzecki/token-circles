@@ -188,11 +188,9 @@ describe('localHandlers - transactions', () => {
     expect(res.status).toBe(400)
   })
 
-  it('handles transaction body validation in router (Zod)', async () => {
-    // The handler itself accepts any body — validation is done in localApiRouter.
-    // Verify the handler creates with partial data (router validation happens upstream)
+  it('rejects a non-positive amount at the storage boundary', async () => {
     const res = await transactionsCreate({ type: 'expense', amount: 0, description: '', date: '' })
-    expect(res.status).toBe(201)
+    expect(res.status).toBe(400)
   })
 
   it('creates transaction with all fields', async () => {
@@ -340,6 +338,24 @@ describe('localHandlers - transactions', () => {
     expect(res.status).toBe(400)
   })
 
+  it('bulk rejects conversion to a transfer without account selection', async () => {
+    const created = await (
+      await transactionsCreate({
+        amount: 10,
+        type: 'expense',
+        date: '2026-06-01',
+        description: 'Cannot become a one-legged transfer',
+      })
+    ).json()
+    const res = await transactionsBulk({
+      ids: [created.id],
+      action: 'update',
+      data: { type: 'transfer' },
+    })
+    expect(res.status).toBe(400)
+    expect((await (await getDB()).get('transactions', created.id))?.type).toBe('expense')
+  })
+
   // ── Export ──
   it('exports transactions as CSV', async () => {
     await transactionsCreate({
@@ -389,13 +405,8 @@ describe('localHandlers - transactions', () => {
   })
 
   it('updates transaction not found returns 404', async () => {
-    // The local handler uses adapter.updateTransaction which calls db.get
-    // for the IndexedDB adapter — if the record doesn't exist, it returns early
-    // but the handler itself returns ok() unconditionally.
-    // In practice, the sub-handler (transactionsUpdate) wraps adapter.updateTransaction
-    // which is a fire-and-forget for non-existent records (idempotent).
     const res = await transactionsUpdate({ p1: '99999' }, { amount: 500, description: 'Ghost' })
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(404)
   })
 
   it('CSV export escapes embedded double-quotes and commas', async () => {

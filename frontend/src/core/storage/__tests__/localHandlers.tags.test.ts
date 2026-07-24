@@ -65,6 +65,7 @@ describe('localHandlers - tags', () => {
     // Create a transaction with this tag
     await transactionsCreate({
       amount: 100,
+      type: 'expense',
       description: 'Flight',
       tags: ['Trip'],
       tag_ids: [tag.id],

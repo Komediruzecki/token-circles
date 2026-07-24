@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { accountsCreate, accountsGet, recurringCreate, recurringPopulate } from '../localHandlers.js'
+import {
+  accountsCreate,
+  accountsGet,
+  recurringCreate,
+  recurringPopulate,
+} from '../localHandlers.js'
 
 // Serverless (IndexedDB) recurring populate must move account balances the same
 // way the worker/backend do: income/expense move one account, a transfer moves
@@ -80,11 +85,37 @@ describe('localHandlers - recurring balance integrity', () => {
     expect(await balanceOf(acc)).toBe(970)
   })
 
-  it('an account-less recurring is a pure reminder (no balance change)', async () => {
+  it('an account-less expense recurring stays a pure reminder', async () => {
     const acc = await createAccount(1000)
     const id = await createRecurring({ description: 'Note', amount: 99, type: 'expense' })
     const pop = await recurringPopulate({ p1: String(id) })
     expect(pop.status).toBe(200)
     expect(await balanceOf(acc)).toBe(1000)
+  })
+
+  it('rejects one-legged and self-transfer recurring rules before population', async () => {
+    const from = await createAccount(1000)
+    const to = await createAccount(500)
+    const oneLeg = await recurringCreate({
+      description: 'Malformed',
+      amount: 50,
+      type: 'transfer',
+      account_id: from,
+      frequency: 'monthly',
+      next_date: today,
+    })
+    expect(oneLeg.status).toBe(400)
+    const self = await recurringCreate({
+      description: 'Self',
+      amount: 50,
+      type: 'transfer',
+      account_id: to,
+      transfer_account_id: to,
+      frequency: 'monthly',
+      next_date: today,
+    })
+    expect(self.status).toBe(400)
+    expect(await balanceOf(from)).toBe(1000)
+    expect(await balanceOf(to)).toBe(500)
   })
 })

@@ -54,6 +54,52 @@ describe('client transactions — transfer needs a destination (audit D2)', () =
     expect(await balanceOf(1)).toBe(1000)
   })
 
+  it('rejects a transfer created without a source account', async () => {
+    const res = await routeApiRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'transfer',
+        amount: 200,
+        description: 'From nowhere',
+        date: '2026-05-12',
+        transfer_account_id: 2,
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect(await balanceOf(2)).toBe(500)
+  })
+
+  it('rejects a transfer between the same account', async () => {
+    const res = await routeApiRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'transfer',
+        amount: 200,
+        description: 'Self transfer',
+        date: '2026-05-12',
+        account_id: 1,
+        transfer_account_id: 1,
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect(await balanceOf(1)).toBe(1000)
+  })
+
+  it('rejects negative expense amounts before they can credit an account', async () => {
+    const res = await routeApiRequest('http://localhost/api/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'expense',
+        amount: -25,
+        description: 'Wrong sign',
+        date: '2026-05-12',
+        account_id: 1,
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect(await balanceOf(1)).toBe(1000)
+  })
+
   it('accepts a transfer with a destination and moves both balances', async () => {
     const res = await routeApiRequest('http://localhost/api/transactions', {
       method: 'POST',
@@ -92,6 +138,29 @@ describe('client transactions — transfer needs a destination (audit D2)', () =
     // Unchanged from the valid transfer's state.
     expect(await balanceOf(1)).toBe(900)
     expect(await balanceOf(2)).toBe(600)
+  })
+
+  it('clears the destination when a transfer becomes an expense', async () => {
+    const adapter = new IndexedDBAdapter()
+    const id = await adapter.createTransaction({
+      type: 'transfer',
+      amount: 100,
+      account_id: 1,
+      transfer_account_id: 2,
+      description: 'Move',
+      date: '2026-05-12',
+      category_id: null,
+      profile_id: 1,
+    } as never)
+    const res = await routeApiRequest(`http://localhost/api/transactions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: 'expense' }),
+    })
+    expect(res.status).toBe(200)
+    const row = await (await getDB()).get('transactions', id)
+    expect(row?.transfer_account_id).toBeNull()
+    expect(await balanceOf(1)).toBe(900)
+    expect(await balanceOf(2)).toBe(500)
   })
 })
 

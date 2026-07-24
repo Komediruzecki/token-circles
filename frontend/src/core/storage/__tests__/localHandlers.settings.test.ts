@@ -240,13 +240,13 @@ describe('localHandlers - recurring', () => {
     expect(res.status).toBe(400)
   })
 
-  it('uses default values for optional fields during create', async () => {
-    const createRes = await recurringCreate({ description: 'Minimal' })
+  it('uses default values for non-financial optional fields during create', async () => {
+    const createRes = await recurringCreate({ description: 'Minimal', amount: 1 })
     const created = await createRes.json()
 
     const getRes = await recurringGet({ p1: created.id.toString() })
     const item = await getRes.json()
-    expect(item.amount).toBe(0)
+    expect(item.amount).toBe(1)
     expect(item.type).toBe('expense')
     expect(item.frequency).toBe('monthly')
     expect(item.day_of_month).toBe(1)

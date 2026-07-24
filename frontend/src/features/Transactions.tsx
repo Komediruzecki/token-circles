@@ -1391,8 +1391,8 @@ export default function Transactions() {
                   toast('Please enter a description', 'warning')
                   return
                 }
-                if (!amtStr || isNaN(amt) || amt === 0) {
-                  toast('Please enter a valid amount', 'warning')
+                if (!amtStr || !Number.isFinite(amt) || amt <= 0) {
+                  toast('Please enter a positive amount', 'warning')
                   return
                 }
                 if (!formDate()) {
@@ -1412,6 +1412,10 @@ export default function Transactions() {
                   (formAccountId() === null || formTransferAccountId() === null)
                 ) {
                   toast('A transfer needs both a From and a To account', 'warning')
+                  return
+                }
+                if (type() === 'transfer' && formAccountId() === formTransferAccountId()) {
+                  toast('Transfer accounts must be different', 'warning')
                   return
                 }
 

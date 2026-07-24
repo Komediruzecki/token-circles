@@ -5,8 +5,8 @@
  * source account, category = destination account, type = Transfer. Execute must
  * link account_id (source) AND transfer_account_id (destination) so the balance
  * moves on both sides — matching the worker import. These tests pin that, and
- * guard that transfers whose category is NOT an account keep their prior
- * (one-sided) behavior.
+ * guard that unresolved and self transfers are rejected instead of producing
+ * one-sided or misleading balance effects.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
@@ -102,7 +102,7 @@ describe('importExecute — two-sided transfers (bank imports)', () => {
     expect((await db.get('accounts', erste)).balance).toBe(1050) // 1000 + 50
   })
 
-  it('leaves category-not-an-account transfers one-sided (no behavior change)', async () => {
+  it('skips a transfer whose category is not an account', async () => {
     const db = await getDB()
     const erste = (await db.add('accounts', {
       name: 'Erste Current',
@@ -110,20 +110,25 @@ describe('importExecute — two-sided transfers (bank imports)', () => {
       profile_id: 1,
     })) as number
 
-    // Category "Other" is not an account → destination unresolved. Prior behavior:
-    // means_of_payment becomes the transfer account (credited).
     const rows = [
       ['2026-05-22', 'Transfer', 'Erste Current', 'Other', '100', 'EUR', 'Legacy style'],
     ]
-    await importExecute({ rows, mapping: MAPPING, categoryTypes: {}, dry_run: false })
+    const result = await importExecute({
+      rows,
+      mapping: MAPPING,
+      categoryTypes: {},
+      dry_run: false,
+    })
+    const body = await result.json()
 
     const txns = await db.getAllFromIndex('transactions', 'by_profile', 1)
-    expect(txns[0].account_id ?? null).toBeNull()
-    expect(txns[0].transfer_account_id).toBe(erste)
-    expect((await db.get('accounts', erste)).balance).toBe(1100) // unchanged prior behavior
+    expect(body.imported).toBe(0)
+    expect(body.skipped).toBe(1)
+    expect(txns).toHaveLength(0)
+    expect((await db.get('accounts', erste)).balance).toBe(1000)
   })
 
-  it('nets a same-account (self) transfer to zero', async () => {
+  it('skips a same-account transfer', async () => {
     const db = await getDB()
     const revolut = (await db.add('accounts', {
       name: 'Revolut',
@@ -132,15 +137,17 @@ describe('importExecute — two-sided transfers (bank imports)', () => {
     })) as number
     // means_of_payment and category both resolve to the SAME account.
     const rows = [['2026-05-23', 'Transfer', 'Revolut', 'Revolut', '40', 'EUR', 'Self move']]
-    await importExecute({
+    const result = await importExecute({
       rows,
       mapping: MAPPING,
       categoryTypes: { Revolut: 'account' },
       dry_run: false,
     })
+    const body = await result.json()
     const txns = await db.getAllFromIndex('transactions', 'by_profile', 1)
-    expect(txns[0].account_id).toBe(revolut)
-    expect(txns[0].transfer_account_id).toBe(revolut)
-    expect((await db.get('accounts', revolut)).balance).toBe(100) // -40 then +40 = net 0
+    expect(body.imported).toBe(0)
+    expect(body.skipped).toBe(1)
+    expect(txns).toHaveLength(0)
+    expect((await db.get('accounts', revolut)).balance).toBe(100)
   })
 })

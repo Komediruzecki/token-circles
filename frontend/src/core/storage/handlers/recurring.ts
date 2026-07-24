@@ -1,6 +1,7 @@
 /**
  * Recurring handlers — IndexedDB-backed implementations
  */
+import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getDB } from '../idb'
 import { adapter, idParam, json, notFound, ok } from './helpers'
 
@@ -31,7 +32,7 @@ export async function recurringCreate(body: unknown): Promise<Response> {
   const b = body as Record<string, unknown>
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
-  const id = await db.add('recurring', {
+  const item = {
     profile_id: pid,
     description: (b.description as string) || '',
     amount: parseFloat(String((b.amount as string | number) || 0)),
@@ -45,7 +46,10 @@ export async function recurringCreate(body: unknown): Promise<Response> {
     notes: (b.notes as string) || '',
     is_active: 1,
     created_at: new Date().toISOString(),
-  })
+  }
+  const invariantError = transactionInvariantError(item)
+  if (invariantError) return json({ error: invariantError }, 400)
+  const id = await db.add('recurring', item)
   return json({ id, profile_id: pid }, 201)
 }
 
@@ -71,6 +75,9 @@ export async function recurringUpdate(
     if (b.notes !== undefined) item.notes = b.notes
     if (b.is_active !== undefined) item.is_active = b.is_active ? 1 : 0
   }
+  if (item.type !== 'transfer') item.transfer_account_id = null
+  const invariantError = transactionInvariantError(item)
+  if (invariantError) return json({ error: invariantError }, 400)
   await db.put('recurring', item)
   return ok()
 }
@@ -97,6 +104,8 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   const db = await getDB()
   const item = await db.get('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
+  const invariantError = transactionInvariantError(item)
+  if (invariantError) return json({ error: invariantError }, 400)
 
   const todayStr = new Date().toISOString().substring(0, 10)
   // Idempotency guard — mirrors the worker: once next_date is in the future the

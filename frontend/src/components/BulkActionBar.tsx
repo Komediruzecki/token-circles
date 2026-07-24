@@ -195,7 +195,6 @@ export default function BulkActionBar(props: BulkActionBarProps) {
                   <option value="">Select type...</option>
                   <option value="income">Income</option>
                   <option value="expense">Expense</option>
-                  <option value="transfer">Transfer</option>
                 </select>
               </div>
             </div>
