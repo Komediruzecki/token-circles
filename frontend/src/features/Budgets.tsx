@@ -42,7 +42,7 @@ import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
 import SectionRail from '../components/SectionRail'
 import { getLocalCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
@@ -128,9 +128,9 @@ export default function Budgets() {
     gatedSource('budgets', () => ({ m: month(), pv: state.profileVersion })),
     async ({ m }) => {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
-        apiHouseholdGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
-        apiHouseholdGet<any>(`/api/budgets/zero-based/summary?month=${m}`),
-        apiHouseholdGet<ForecastData>(`/api/budgets/forecast?month=${m}`).catch(() => null),
+        apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
+        apiGet<any>(`/api/budgets/zero-based/summary?month=${m}`),
+        apiGet<ForecastData>(`/api/budgets/forecast?month=${m}`).catch(() => null),
       ])
 
       const allocationsList = (allocationsRes?.allocations || allocationsRes?.categories || []).map(
