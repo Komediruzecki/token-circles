@@ -8,42 +8,11 @@ import { enforce } from '../ratelimit';
 import { getUserPlan } from '../plan';
 import { planLimit } from '../plans';
 import * as db from '../db';
+import { clearProfileData } from '../profileData';
 
 // Profile management — full port of backend/routes/profiles.js. Profiles belong to the
 // authenticated user (UNIQUE(user_id, name)); data is scoped by profile_id.
 export const profilesRoutes = new Hono<AppEnv>();
-
-// Every table carrying a profile_id — cascade targets for delete / data reset.
-const PROFILE_TABLES = [
-  'transactions',
-  'categories',
-  'category_mappings',
-  'accounts',
-  'budgets',
-  'budgets_zero_based',
-  'savings_goals',
-  'loans',
-  'bills',
-  'housings',
-  'recurring_transactions',
-  'tags',
-  'portfolio_holdings',
-  'receipts',
-  'retirement_goals',
-  'emergency_fund_config',
-] as const;
-
-const DEFAULT_CATEGORIES = [
-  { name: 'Housing', color: '#ef4444', icon: 'home', type: 'expense' },
-  { name: 'Food & Dining', color: '#f97316', icon: 'utensils', type: 'expense' },
-  { name: 'Transportation', color: '#eab308', icon: 'car', type: 'expense' },
-  { name: 'Healthcare', color: '#22c55e', icon: 'heart', type: 'expense' },
-  { name: 'Entertainment', color: '#06b6d4', icon: 'film', type: 'expense' },
-  { name: 'Shopping', color: '#8b5cf6', icon: 'shopping-bag', type: 'expense' },
-  { name: 'Utilities', color: '#64748b', icon: 'zap', type: 'expense' },
-  { name: 'Education', color: '#ec4899', icon: 'book', type: 'expense' },
-  { name: 'Salary', color: '#22c55e', icon: 'briefcase', type: 'income' },
-];
 
 async function assertOwned(c: Context<AppEnv>, pid: number): Promise<void> {
   const userId = c.get('userId');
@@ -54,24 +23,6 @@ async function assertOwned(c: Context<AppEnv>, pid: number): Promise<void> {
     userId
   );
   if (!owned) throw new HttpError(404, 'Profile not found');
-}
-
-async function clearProfileData(DB: D1Database, pid: number): Promise<void> {
-  for (const t of PROFILE_TABLES) await db.del(DB, t, 'profile_id = ?', pid);
-}
-
-async function seedDefaultCategories(DB: D1Database, pid: number): Promise<void> {
-  for (const cat of DEFAULT_CATEGORIES) {
-    await db.run(
-      DB,
-      'INSERT INTO categories (name, color, icon, type, tax_deductible, profile_id) VALUES (?, ?, ?, ?, 0, ?)',
-      cat.name,
-      cat.color,
-      cat.icon,
-      cat.type,
-      pid
-    );
-  }
 }
 
 // GET — the user's profiles with per-profile counts (Settings household view reads the counts).
@@ -181,9 +132,10 @@ profilesRoutes.delete('/api/profiles/:id', requireAuth, async (c) => {
     userId
   );
   if ((count?.n ?? 0) <= 1) throw new HttpError(400, 'Cannot delete your only profile');
-  await clearProfileData(c.env.DB, pid);
-  await db.del(c.env.DB, 'settings', 'profile_id = ?', pid);
-  await db.del(c.env.DB, 'profiles', 'id = ? AND user_id = ?', pid, userId);
+  await clearProfileData(c.env, [pid], {
+    includeSettings: true,
+    deleteProfilesForUserId: userId,
+  });
   return c.json({ ok: true });
 });
 
@@ -192,18 +144,16 @@ profilesRoutes.delete('/api/profile/data', requireAuth, async (c) => {
   const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
   if (rl) return rl;
   const pid = await getProfileId(c);
-  await clearProfileData(c.env.DB, pid);
-  await seedDefaultCategories(c.env.DB, pid);
+  await clearProfileData(c.env, [pid]);
   return c.json({ ok: true, message: 'Profile data reset successfully' });
 });
 
-// POST — "reseed demo": the worker has no 3-tier demo dataset, so this is a data reset with
-// default categories (the rich demo lives in client-only mode's IndexedDB seed).
+// The rich three-profile demo is client-only. Keep this endpoint as a safe
+// profile-default reset for older clients, while the current UI hides it in Worker mode.
 profilesRoutes.post('/api/profiles/reseed-demo', requireAuth, async (c) => {
   const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
   if (rl) return rl;
   const pid = await getProfileId(c);
-  await clearProfileData(c.env.DB, pid);
-  await seedDefaultCategories(c.env.DB, pid);
+  await clearProfileData(c.env, [pid], { seedDefaults: true });
   return c.json({ ok: true, message: 'Profile reset with default categories' });
 });

@@ -1,6 +1,7 @@
 import { createSignal, For, onMount, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
+import { getStorageMode } from '../core/storage/storageFactory'
 import styles from './DangerZone.module.css'
 
 export interface DangerZoneProps {
@@ -312,69 +313,74 @@ export default function DangerZone(props: DangerZoneProps) {
           </Show>
         </div>
 
-        {/* Reseed Demo Data */}
-        <div class={styles['danger-zone-item']}>
-          <Show
-            when={confirming() !== 'reseed-demo'}
-            fallback={
-              <div class={styles['danger-confirm-box']}>
-                <div class={styles['danger-confirm-info']}>
-                  <div class={styles['danger-confirm-title']}>Reseed demo data?</div>
-                  <div class={styles['danger-confirm-desc']}>
-                    This will delete all current data and restore the three example profiles. This
-                    cannot be undone.
+        {/* The rich demo dataset only exists in browser-only storage. */}
+        <Show when={getStorageMode() === 'serverless'}>
+          <div class={styles['danger-zone-item']}>
+            <Show
+              when={confirming() !== 'reseed-demo'}
+              fallback={
+                <div class={styles['danger-confirm-box']}>
+                  <div class={styles['danger-confirm-info']}>
+                    <div class={styles['danger-confirm-title']}>Reseed demo data?</div>
+                    <div class={styles['danger-confirm-desc']}>
+                      This will delete all current data and restore the three example profiles. This
+                      cannot be undone.
+                    </div>
+                  </div>
+                  <div class={styles['danger-confirm-actions']}>
+                    <button
+                      class={styles['danger-zone-cancel']}
+                      onClick={() => setConfirming(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      class={styles['danger-zone-confirm-button']}
+                      onClick={async () => {
+                        setLoading(true)
+                        try {
+                          const res = await apiFetch('/api/profiles/reseed-demo', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: {
+                              'X-Profile-Id': selectedProfileId().toString(),
+                            },
+                          })
+                          if (!res.ok) throw new Error('Reseed failed')
+                          toast('Demo data has been restored', 'success')
+                          window.location.reload()
+                        } catch {
+                          toast('Failed to reseed demo data', 'error')
+                        } finally {
+                          setLoading(false)
+                          setConfirming(null)
+                        }
+                      }}
+                      disabled={loading()}
+                    >
+                      {loading() ? 'Reseeding...' : 'Yes, Reseed Demo Data'}
+                    </button>
                   </div>
                 </div>
-                <div class={styles['danger-confirm-actions']}>
-                  <button class={styles['danger-zone-cancel']} onClick={() => setConfirming(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    class={styles['danger-zone-confirm-button']}
-                    onClick={async () => {
-                      setLoading(true)
-                      try {
-                        const res = await apiFetch('/api/profiles/reseed-demo', {
-                          method: 'POST',
-                          credentials: 'include',
-                          headers: {
-                            'X-Profile-Id': selectedProfileId().toString(),
-                          },
-                        })
-                        if (!res.ok) throw new Error('Reseed failed')
-                        toast('Demo data has been restored', 'success')
-                        window.location.reload()
-                      } catch {
-                        toast('Failed to reseed demo data', 'error')
-                      } finally {
-                        setLoading(false)
-                        setConfirming(null)
-                      }
-                    }}
-                    disabled={loading()}
-                  >
-                    {loading() ? 'Reseeding...' : 'Yes, Reseed Demo Data'}
-                  </button>
+              }
+            >
+              <div class={styles['danger-zone-item-content']}>
+                <div class={styles['danger-zone-item-title']}>Reseed Demo Data</div>
+                <div class={styles['danger-zone-item-desc']}>
+                  Delete all data and restore the three example profiles (Low/Mid/High Income) with
+                  sample transactions. All your current data will be lost.
                 </div>
               </div>
-            }
-          >
-            <div class={styles['danger-zone-item-content']}>
-              <div class={styles['danger-zone-item-title']}>Reseed Demo Data</div>
-              <div class={styles['danger-zone-item-desc']}>
-                Delete all data and restore the three example profiles (Low/Mid/High Income) with
-                sample transactions. All your current data will be lost.
-              </div>
-            </div>
-            <button
-              class={styles['danger-zone-button']}
-              onClick={() => setConfirming('reseed-demo')}
-              disabled={loading()}
-            >
-              Reseed Demo Data
-            </button>
-          </Show>
-        </div>
+              <button
+                class={styles['danger-zone-button']}
+                onClick={() => setConfirming('reseed-demo')}
+                disabled={loading()}
+              >
+                Reseed Demo Data
+              </button>
+            </Show>
+          </div>
+        </Show>
 
         {/* Reset All Data */}
         <div class={styles['danger-zone-item']}>
