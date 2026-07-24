@@ -390,4 +390,98 @@ describe('category reset referential integrity', () => {
       await env.DB.prepare('SELECT id FROM category_mappings WHERE id = 7110').first()
     ).toBeNull();
   });
+
+  it('detaches or removes every dependent when a single category is deleted (M-07)', async () => {
+    await env.DB.batch([
+      // Target category with a full set of dependents.
+      env.DB.prepare(
+        "INSERT INTO categories (id, profile_id, name, color, type) VALUES (7202, 701, 'Custom', '#111111', 'expense')"
+      ),
+      // A child category whose parent is the target.
+      env.DB.prepare(
+        "INSERT INTO categories (id, profile_id, name, color, type, parent_id) VALUES (7203, 701, 'Child', '#222222', 'expense', 7202)"
+      ),
+      // A second, unrelated category that must be left untouched.
+      env.DB.prepare(
+        "INSERT INTO categories (id, profile_id, name, color, type) VALUES (7201, 701, 'Keep', '#333333', 'expense')"
+      ),
+      env.DB.prepare(
+        "INSERT INTO transactions (id, profile_id, description, amount, date, category_id) VALUES (7210, 701, 'Target tx', 1, '2026-07-01', 7202)"
+      ),
+      env.DB.prepare(
+        "INSERT INTO transactions (id, profile_id, description, amount, date, category_id) VALUES (7211, 701, 'Keep tx', 1, '2026-07-01', 7201)"
+      ),
+      env.DB.prepare(
+        "INSERT INTO budgets (id, profile_id, category_id, amount, start_date) VALUES (7212, 701, 7202, 1, '2026-07-01')"
+      ),
+      env.DB.prepare(
+        "INSERT INTO budgets (id, profile_id, category_id, amount, start_date) VALUES (7213, 701, 7201, 1, '2026-07-01')"
+      ),
+      env.DB.prepare(
+        "INSERT INTO budgets_zero_based (id, profile_id, category_id, amount, month) VALUES (7214, 701, 7202, 1, '2026-07')"
+      ),
+      env.DB.prepare(
+        "INSERT INTO savings_goals (id, profile_id, name, target_amount, category_id) VALUES (7215, 701, 'Goal', 1, 7202)"
+      ),
+      env.DB.prepare(
+        "INSERT INTO bills (id, profile_id, name, amount, due_date, category_id) VALUES (7216, 701, 'Bill', 1, '2026-07-01', 7202)"
+      ),
+      env.DB.prepare(
+        "INSERT INTO recurring_transactions (id, profile_id, description, amount, category_id) VALUES (7217, 701, 'Recurring', 1, 7202)"
+      ),
+      env.DB.prepare(
+        "INSERT INTO category_mappings (id, profile_id, pattern, category_id, confidence) VALUES (7218, 701, 'custom', 7202, 1)"
+      ),
+    ]);
+
+    const response = await api('/api/categories/7202', 'DELETE', 701);
+    expect(response.status).toBe(200);
+
+    // Target category is gone; child is re-parented to top level; unrelated category survives.
+    expect(await env.DB.prepare('SELECT id FROM categories WHERE id = 7202').first()).toBeNull();
+    expect(
+      await env.DB.prepare('SELECT parent_id FROM categories WHERE id = 7203').first()
+    ).toMatchObject({ parent_id: null });
+    expect(
+      await env.DB.prepare('SELECT id FROM categories WHERE id = 7201').first()
+    ).not.toBeNull();
+
+    // Nullable references become uncategorized but survive.
+    expect(
+      await env.DB.prepare('SELECT category_id FROM transactions WHERE id = 7210').first()
+    ).toMatchObject({ category_id: null });
+    expect(
+      await env.DB.prepare('SELECT category_id FROM savings_goals WHERE id = 7215').first()
+    ).toMatchObject({ category_id: null });
+    expect(
+      await env.DB.prepare('SELECT category_id FROM bills WHERE id = 7216').first()
+    ).toMatchObject({ category_id: null });
+    expect(
+      await env.DB.prepare('SELECT category_id FROM recurring_transactions WHERE id = 7217').first()
+    ).toMatchObject({ category_id: null });
+
+    // Category-required rows and the mapping are removed (no orphaned/hidden budget).
+    expect(await env.DB.prepare('SELECT id FROM budgets WHERE id = 7212').first()).toBeNull();
+    expect(
+      await env.DB.prepare('SELECT id FROM budgets_zero_based WHERE id = 7214').first()
+    ).toBeNull();
+    expect(
+      await env.DB.prepare('SELECT id FROM category_mappings WHERE id = 7218').first()
+    ).toBeNull();
+
+    // The unrelated category's references are untouched.
+    expect(
+      await env.DB.prepare('SELECT category_id FROM transactions WHERE id = 7211').first()
+    ).toMatchObject({ category_id: 7201 });
+    expect(await env.DB.prepare('SELECT id FROM budgets WHERE id = 7213').first()).not.toBeNull();
+
+    // The surviving budget still lists — the inner JOIN in GET /api/budgets does not hide it.
+    const budgetsRes = await SELF.fetch('https://example.com/api/budgets', {
+      headers: { Cookie: cookie, 'X-Profile-Id': '701' },
+    });
+    expect(budgetsRes.status).toBe(200);
+    const budgets = (await budgetsRes.json()) as Array<{ id: number }>;
+    expect(budgets.map((b) => b.id)).toContain(7213);
+    expect(budgets.map((b) => b.id)).not.toContain(7212);
+  });
 });
