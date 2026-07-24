@@ -3,11 +3,14 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileIds } from '../profile';
 import { enforce } from '../ratelimit';
+import { exportBackup, restoreBackup } from '../backup';
+import { HttpError } from '../http';
+import { getUserPlan } from '../plan';
+import { planLimit } from '../plans';
 import * as db from '../db';
 import { clearProfileData } from '../profileData';
 
-// Data export + wipe — port of backend/routes/exportRoutes.js (the GET routes + clear-all).
-// POST /api/import is intentionally not ported: its only caller (SettingsDialog) is dead code.
+// Data export, versioned restore, and wipe.
 export const exportRoutes = new Hono<AppEnv>();
 
 // CSV serialization with a formula-injection guard, mirroring the Express backend.
@@ -114,54 +117,40 @@ exportRoutes.get('/api/export', requireAuth, async (c) => {
   const rl = await enforce(c, `export:${c.get('userId')}`, 10, 300);
   if (rl) return rl;
   const pids = await getProfileIds(c);
-  const userId = c.get('userId');
-  const inClause = pids.map(() => '?').join(',');
-  const scoped = (table: string, order = '') =>
-    db.all(c.env.DB, `SELECT * FROM ${table} WHERE profile_id IN (${inClause}) ${order}`, ...pids);
+  return c.json(await exportBackup(c.env, c.get('userId'), pids));
+});
 
-  const transactions = await scoped('transactions', 'ORDER BY date DESC');
-  const categories = await scoped('categories');
-  const accounts = await scoped('accounts');
-  const budgets = await scoped('budgets');
-  const loans = await scoped('loans');
-  const goals = await scoped('savings_goals');
-  const retirementGoals = await scoped('retirement_goals');
-  const portfolioHoldings = await scoped('portfolio_holdings');
-  const profiles = await db.all(
-    c.env.DB,
-    'SELECT id, name, user_id, created_at FROM profiles WHERE user_id = ?',
-    userId
-  );
-  const balanceHistory = await db.all(
-    c.env.DB,
-    `SELECT abh.* FROM account_balance_history abh
-     JOIN accounts a ON a.id = abh.account_id WHERE a.profile_id IN (${inClause})`,
-    ...pids
-  );
-  const settingsRows = await db.all<{ key: string; value: string }>(
-    c.env.DB,
-    `SELECT key, value FROM settings WHERE profile_id IN (${inClause})`,
-    ...pids
-  );
-  const settings: Record<string, string> = {};
-  for (const s of settingsRows) settings[s.key] = s.value;
-
-  return c.json({
-    version: '2.0',
-    export_date: new Date().toISOString(),
-    storage_mode: 'self-hosted',
-    profiles,
-    categories,
-    transactions,
-    accounts,
-    budgets,
-    goals,
-    retirementGoals,
-    portfolioHoldings,
-    loans,
-    balanceHistory,
-    settings,
+// POST /api/import — restore a complete v3 backup for the signed-in user.
+// restoreBackup validates and stages the full graph first; existing profiles are
+// replaced only by the final atomic D1 cutover batch.
+exportRoutes.post('/api/import', requireAuth, async (c) => {
+  const rl = await enforce(c, `restore:${c.get('userId')}`, 3, 3600);
+  if (rl) return rl;
+  const contentLength = Number(c.req.header('content-length') || 0);
+  if (Number.isFinite(contentLength) && contentLength > 128 * 1024 * 1024) {
+    throw new HttpError(413, 'Backup is too large (maximum request size is 128 MB)');
+  }
+  const contentType = c.req.header('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new HttpError(415, 'Backup restore requires application/json');
+  }
+  const payload = await c.req.json().catch(() => {
+    throw new HttpError(400, 'Invalid backup JSON');
   });
+  const profileLimit = planLimit(await getUserPlan(c), 'profiles');
+  const profileCount =
+    payload &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as Record<string, unknown>).profiles)
+      ? ((payload as Record<string, unknown>).profiles as unknown[]).length
+      : 0;
+  if (profileLimit !== null && profileCount > profileLimit) {
+    throw new HttpError(
+      403,
+      `Your plan allows up to ${profileLimit} profile${profileLimit === 1 ? '' : 's'}`
+    );
+  }
+  return c.json(await restoreBackup(c.env, c.get('userId'), payload));
 });
 
 // DELETE /api/clear-all — wipe data for every profile owned by the signed-in user.

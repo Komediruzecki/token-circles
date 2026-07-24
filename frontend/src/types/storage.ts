@@ -197,7 +197,7 @@ export interface ExportData {
   budgets: ExportBudget[]
   goals: ExportGoal[]
   loans: ExportLoan[]
-  retirementGoals?: ExportGoal[]
+  retirementGoals?: Record<string, unknown>[]
   portfolioHoldings?: ExportPortfolioHolding[]
 
   // User-created stores that were previously omitted from backups, causing silent
@@ -209,11 +209,29 @@ export interface ExportData {
   housings?: Record<string, unknown>[]
   categoryMappings?: Record<string, unknown>[]
   receipts?: Record<string, unknown>[]
+  receiptFiles?: ExportReceiptFile[]
   balanceHistoryRows?: Record<string, unknown>[]
+  importLogs?: Record<string, unknown>[]
+
+  // Canonical v3 backup domains. Some are Worker-native and are preserved as
+  // opaque extension data while a backup is held in browser-only mode.
+  budgetsZeroBased?: Record<string, unknown>[]
+  emergencyFundConfig?: Record<string, unknown>[]
+  loanRatePeriods?: Record<string, unknown>[]
+  loanPrepayments?: Record<string, unknown>[]
+  transactionTags?: Record<string, unknown>[]
+  customReports?: Record<string, unknown>[]
+  settingsRows?: Record<string, unknown>[]
 
   settings: ExportSettings
 
   balanceHistory?: Record<number, BalanceEntryData>
+}
+
+export interface ExportReceiptFile {
+  receipt_id: number
+  content_type: string
+  data_base64: string
 }
 
 export interface ExportProfile {

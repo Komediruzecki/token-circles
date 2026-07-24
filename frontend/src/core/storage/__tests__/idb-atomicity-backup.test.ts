@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { BACKUP_EXTENSION_SETTINGS_KEY } from '../backup'
 import { getDB, IndexedDBAdapter } from '../idb.js'
 import type { ExportData } from '../../../types/storage'
 
@@ -21,6 +22,7 @@ const ALL_STORES = [
   'recurring',
   'tags',
   'categoryMappings',
+  'import_logs',
   'settings',
 ]
 
@@ -152,8 +154,27 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     await db.add('housings', { id: 1, profile_id: 1, name: 'Flat' })
     await db.add('categoryMappings', { id: 1, profile_id: 1, pattern: 'ACME', category_id: 1 })
     await db.add('portfolioHoldings', { id: 1, profile_id: 1, ticker: 'VWCE', shares: 3 })
-    await db.add('receipts', { id: 1, profile_id: 1, transaction_id: 1, filename: 'r.png' })
+    await db.add('receipts', {
+      id: 1,
+      profile_id: 1,
+      transaction_id: 1,
+      filename: 'r.png',
+      original_name: 'r.png',
+      file_type: 'image/png',
+      file_data: new Uint8Array([1, 2, 3, 4]).buffer,
+    })
     await db.add('balanceHistory', { id: 1, account_id: 1, balance: 123, date: '2026-05-01' })
+    await db.add('import_logs', { id: 1, profile_id: 1, source: 'sheet', imported: 1 })
+    await db.put('settings', {
+      key: BACKUP_EXTENSION_SETTINGS_KEY,
+      value: {
+        budgetsZeroBased: [{ id: 1, profile_id: 1, category_id: 1, amount: 50 }],
+        retirementGoals: [{ id: 1, profile_id: 1, name: 'Retire' }],
+        emergencyFundConfig: [{ id: 1, profile_id: 1, monthly_expenses: 1000 }],
+        customReports: [{ id: 1, name: 'Tax' }],
+        settingsRows: [{ profile_id: 1, key: 'currency', value: 'EUR' }],
+      },
+    })
   })
 
   it('exports every user-created store', async () => {
@@ -165,7 +186,20 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     expect(data.categoryMappings).toHaveLength(1)
     expect(data.portfolioHoldings).toHaveLength(1)
     expect(data.receipts).toHaveLength(1)
+    expect(data.receiptFiles).toEqual([
+      {
+        receipt_id: 1,
+        content_type: 'image/png',
+        data_base64: 'AQIDBA==',
+      },
+    ])
     expect(data.balanceHistoryRows).toHaveLength(1)
+    expect(data.importLogs).toHaveLength(1)
+    expect(data.budgetsZeroBased).toHaveLength(1)
+    expect(data.retirementGoals).toHaveLength(1)
+    expect(data.emergencyFundConfig).toHaveLength(1)
+    expect(data.customReports).toHaveLength(1)
+    expect(data.settingsRows).toHaveLength(1)
   })
 
   it('round-trips every store through export → import without loss', async () => {
@@ -184,9 +218,18 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     expect(await db.getAll('portfolioHoldings')).toHaveLength(1)
     expect(await db.getAll('receipts')).toHaveLength(1)
     expect(await db.getAll('balanceHistory')).toHaveLength(1)
+    expect(await db.getAll('import_logs')).toHaveLength(1)
     // Account balance history keeps its account linkage.
     const bh = (await db.getAll('balanceHistory'))[0] as { account_id: number }
     expect(bh.account_id).toBe(1)
+    const receipt = (await db.getAll('receipts'))[0] as { file_data: ArrayBuffer }
+    expect(Array.from(new Uint8Array(receipt.file_data))).toEqual([1, 2, 3, 4])
+    const roundTrip = await adapter.exportData()
+    expect(roundTrip.budgetsZeroBased).toHaveLength(1)
+    expect(roundTrip.retirementGoals).toHaveLength(1)
+    expect(roundTrip.emergencyFundConfig).toHaveLength(1)
+    expect(roundTrip.customReports).toHaveLength(1)
+    expect(roundTrip.settingsRows).toHaveLength(1)
   })
 
   it('a restore does not delete receipts/holdings/history that the backup contains', async () => {
@@ -197,5 +240,48 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     expect((await db.getAll('receipts')).length).toBeGreaterThan(0)
     expect((await db.getAll('portfolioHoldings')).length).toBeGreaterThan(0)
     expect((await db.getAll('balanceHistory')).length).toBeGreaterThan(0)
+  })
+
+  it('rolls back the entire restore when any store write fails', async () => {
+    const data = await adapter.exportData()
+    const duplicate = { ...data.categories[0] }
+    const broken = { ...data, categories: [...data.categories, duplicate] }
+
+    await expect(adapter.importData(broken)).rejects.toBeTruthy()
+
+    const db = await getDB()
+    expect(await db.getAll('profiles')).toHaveLength(1)
+    expect(await db.getAll('categories')).toHaveLength(1)
+    expect(await db.getAll('accounts')).toHaveLength(1)
+    const receipt = (await db.getAll('receipts'))[0] as { file_data: ArrayBuffer }
+    expect(Array.from(new Uint8Array(receipt.file_data))).toEqual([1, 2, 3, 4])
+  })
+
+  it('rejects an unknown profile reference before clearing any existing data', async () => {
+    const data = await adapter.exportData()
+    const broken = {
+      ...data,
+      categories: [{ ...data.categories[0], profile_id: 999 }],
+    }
+
+    await expect(adapter.importData(broken)).rejects.toThrow(
+      'categories[0].profile_id references missing profile 999'
+    )
+
+    const db = await getDB()
+    expect(await db.getAll('profiles')).toHaveLength(1)
+    expect(await db.getAll('categories')).toHaveLength(1)
+    expect(await db.getAll('receipts')).toHaveLength(1)
+  })
+
+  it('round-trips a valid zero-byte receipt attachment', async () => {
+    const data = await adapter.exportData()
+    data.receiptFiles![0]!.data_base64 = ''
+
+    await adapter.importData(data)
+
+    const db = await getDB()
+    const receipt = (await db.getAll('receipts'))[0] as { file_data: ArrayBuffer }
+    expect(new Uint8Array(receipt.file_data)).toHaveLength(0)
   })
 })
