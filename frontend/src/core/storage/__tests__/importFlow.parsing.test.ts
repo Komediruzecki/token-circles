@@ -6,10 +6,8 @@ describe('import number parsing (audit I1)', () => {
     expect(parseAmount('1.234,56')).toBeCloseTo(1234.56, 2)
     expect(parseAmount('1234,56')).toBeCloseTo(1234.56, 2)
     expect(parseAmount('1.234.567,89')).toBeCloseTo(1234567.89, 2) // dot thousands + comma decimal
-    // A lone dot is treated as the decimal separator (the common case: "12.50"), so an
-    // ambiguous dot-thousands value like "1.000" resolves to 1 — bank amounts include cents,
-    // so this ambiguity is rare in practice.
     expect(parseAmount('12.50')).toBeCloseTo(12.5, 2)
+    expect(parseAmount('1.000')).toBeNaN()
   })
 
   it('parses US-formatted amounts', () => {

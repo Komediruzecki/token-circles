@@ -61,7 +61,7 @@ describe('perf: import duplicate detection (O(N+M) rewrite)', () => {
     // tests below).
     const rows = [
       ['2026-05-01', 'Coffee', '-3.5'], // dup of existing (exact)
-      ['2026-05-01', 'coffee', '-3.504'], // dup: desc case-insensitive + amount within 0.01
+      ['2026-05-01', 'coffee', '-3.5040'], // dup: desc case-insensitive + amount within 0.01
       ['2026-05-02', 'Rent', '-900'], // dup of existing
       ['2026-05-03', 'Groceries', '-42.10'], // NEW
       ['2026-05-01', 'Coffee', '-3.52'], // NEW: amount differs by > 0.01 (0.02)

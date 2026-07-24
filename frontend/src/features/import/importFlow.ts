@@ -129,6 +129,12 @@ export interface ImportSummary {
   source: string
 }
 
+export interface ImportValidationIssue {
+  index?: number
+  field?: string
+  reason: string
+}
+
 export interface ImportFlowOptions {
   /** Tab preselected on the data-entry step (page default: google-sheets). */
   initialTab?: ImportTab
@@ -290,6 +296,17 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // already exist (stored earlier, or repeated within this import). null = the
   // dry-run didn't run / failed, so the preview makes no claim.
   const [existingDuplicates, setExistingDuplicates] = createSignal<number | null>(null)
+  const [previewValidationIssues, setPreviewValidationIssues] = createSignal<
+    ImportValidationIssue[]
+  >([])
+  const invalidRowSet = createMemo(
+    () =>
+      new Set(
+        previewValidationIssues()
+          .map((issue) => issue.index)
+          .filter((index): index is number => typeof index === 'number')
+      )
+  )
   // Which subset of rows the preview table shows. A view-only filter — it never
   // changes which rows import or which are selected, only what's paginated/displayed.
   const [previewFilter, setPreviewFilter] = createSignal<PreviewFilter>('all')
@@ -467,10 +484,36 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
           rows: currentRows(),
           mapping: columnMapping(),
           categoryTypes: categoryTypes(),
+          accountTypes: accountTypes(),
+          accountBalances: accountBalances(),
+          accountBalanceDates: accountBalanceDates(),
+          defaultCurrency: getLocalCurrency(),
           dry_run: true,
         }),
       })
       const data = await res.json()
+      const issues: ImportValidationIssue[] = [
+        ...(Array.isArray(data?.skipped_items) ? data.skipped_items : []),
+        ...(Array.isArray(data?.validation_errors) ? data.validation_errors : []),
+      ]
+      setPreviewValidationIssues(issues)
+      const invalidIndices = new Set(
+        issues
+          .map((issue) => issue.index)
+          .filter((index): index is number => typeof index === 'number')
+      )
+      if (invalidIndices.size > 0) {
+        setSelectedRows(
+          new Set([...selectedRows()].filter((rowIndex) => !invalidIndices.has(rowIndex)))
+        )
+      }
+      if (!res.ok) {
+        setNewCategories([])
+        setApprovedCategories(new Set<string>())
+        setNewAccounts([])
+        setExistingDuplicates(null)
+        return
+      }
       const rawList: string[] = Array.isArray(data?.new_categories) ? data.new_categories : []
       // A value the user marked as an account must never be offered as a "category to
       // create" — it becomes an account, not a category, and creating a same-named category
@@ -494,6 +537,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setApprovedCategories(new Set<string>())
       setNewAccounts([])
       setExistingDuplicates(null)
+      setPreviewValidationIssues([])
     }
   }
 
@@ -517,6 +561,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setNewAccounts([])
     setApprovedCategories(new Set<string>())
     setExistingDuplicates(null)
+    setPreviewValidationIssues([])
     setRows([])
     setHeaders([])
     setSelectedRows(new Set<number>())
@@ -991,6 +1036,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
 
   // Preview actions
   const toggleRow = (index: number) => {
+    if (invalidRowSet().has(index)) return
     const selected: Set<number> = new Set(selectedRows())
     if (selected.has(index)) {
       selected.delete(index)
@@ -1003,7 +1049,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const toggleAll = (select: boolean) => {
     const allSelected = new Set<number>()
     if (select) {
-      currentRows().forEach((_, i) => allSelected.add(i))
+      currentRows().forEach((_, i) => {
+        if (!invalidRowSet().has(i)) allSelected.add(i)
+      })
     }
     setSelectedRows(allSelected)
   }
@@ -1323,6 +1371,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     newAccounts,
     approvedCategories,
     existingDuplicates,
+    previewValidationIssues,
+    invalidRowSet,
     loading,
     dropProcessing,
     error,

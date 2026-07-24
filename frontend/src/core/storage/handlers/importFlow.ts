@@ -3,8 +3,8 @@
  */
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getLocalCurrency } from '../../api'
-import { parseFlexibleNumber } from '../../bankImport/parse'
 import { normalizeCurrencyCode } from '../../currencies'
+import { parseImportNumber } from '../../importNumber'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
@@ -17,12 +17,7 @@ const pad2 = (n: number): string => String(n).padStart(2, '0')
  *  corruption for European statements (audit I1). Returns NaN for blank/garbage.
  *  Exported for tests. */
 export function parseAmount(v: unknown): number {
-  if (typeof v === 'number') return v
-  const s = toStr(v).trim()
-  if (!s) return NaN
-  const n = parseFlexibleNumber(s)
-  // parseFlexibleNumber returns 0 for unparseable input; distinguish a real 0 from garbage.
-  return n === 0 && !/\d/.test(s) ? NaN : n
+  return parseImportNumber(v) ?? NaN
 }
 
 function toStr(v: unknown): string {
@@ -631,6 +626,45 @@ export async function importExecute(body: unknown): Promise<Response> {
     // row loop below (audit A2) — so `clean` here is just all rows, not the
     // pre-resolution deduped subset.
     const clean = rows
+    const skipped: { index: number; reason: string }[] = []
+    const validatedRows: Array<{
+      index: number
+      row: Record<string, unknown>
+      amount: number
+      amountLocal: number
+      exchangeRate: number
+    }> = []
+    for (let index = 0; index < clean.length; index++) {
+      const row = clean[index]
+      const description = toStr(row.description)
+      const date = normalizeDate(row.date) || toStr(row.date)
+      const amount = parseImportNumber(row.amount)
+      const amountLocalRaw = toStr(row.amount_local).trim()
+      const amountLocal = amountLocalRaw ? parseImportNumber(amountLocalRaw) : amount
+      const exchangeRateRaw = toStr(row.exchange_rate).trim()
+      const exchangeRate = exchangeRateRaw ? parseImportNumber(exchangeRateRaw) : 1
+      const invalidFields: string[] = []
+      if (!description) invalidFields.push('description')
+      if (!date) invalidFields.push('date')
+      if (amount === null) invalidFields.push('amount')
+      if (amountLocal === null) invalidFields.push('amount_local')
+      if (exchangeRate === null || exchangeRate <= 0) invalidFields.push('exchange_rate')
+      if (
+        invalidFields.length > 0 ||
+        amount === null ||
+        amountLocal === null ||
+        exchangeRate === null ||
+        exchangeRate <= 0
+      ) {
+        skipped.push({
+          index,
+          reason: `Invalid ${invalidFields.join(', ')} on row ${index + 1}`,
+        })
+        continue
+      }
+      validatedRows.push({ index, row, amount, amountLocal, exchangeRate })
+    }
+    const validRows = validatedRows.map(({ row }) => row)
 
     // Category-creation gating (audit B5): when `approvedCategories` (alias
     // `createCategories`) is present — even as an empty array — a category is only
@@ -646,7 +680,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     // Auto-detect "IB" / "Interactive Brokers" categories as account type.
     // Use case-insensitive check to avoid duplicates like "IB" + "ib".
     const ibPattern = /^(ib|interactive\s*brokers)$/i
-    for (const row of clean) {
+    for (const row of validRows) {
       const rawCat = toStr(row.category).trim()
       if (ibPattern.test(rawCat)) {
         const key = rawCat.toLowerCase()
@@ -725,37 +759,75 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (nm && !accountIdMap.has(nm))
         accountIdMap.set(nm, (a as Record<string, unknown>).id as number)
     }
+    // Validate account opening balances before any write. A malformed localized
+    // value must not silently become zero.
+    const accountConfigs: Array<{
+      name: string
+      lower: string
+      type: 'giro' | 'savings' | 'ib'
+      balance: number
+      balanceDate: string
+    }> = []
+    const configuredAccounts = new Set<string>()
+    const validAccountNames = new Set(
+      validRows
+        .flatMap((row) => [toStr(row.category), toStr(row.means_of_payment)])
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean)
+    )
+    for (const [catName, catType] of Object.entries(catTypes)) {
+      if (catType !== 'account') continue
+      const catLower = catName.toLowerCase()
+      if (
+        configuredAccounts.has(catLower) ||
+        accountIdMap.has(catLower) ||
+        (clean.length > 0 && !validAccountNames.has(catLower))
+      ) {
+        configuredAccounts.add(catLower)
+        continue
+      }
+      const rawBalance = toStr(acctBalances[catName]).trim()
+      const balance = rawBalance ? parseImportNumber(rawBalance) : 0
+      if (balance === null) {
+        return json(
+          {
+            error: `Invalid or ambiguous starting balance for account "${catName}"`,
+            validation_errors: [
+              {
+                field: `accountBalances.${catName}`,
+                reason: 'Use an unambiguous number such as 1234.56 or 1.234,56.',
+              },
+            ],
+            skipped_items: skipped,
+          },
+          422
+        )
+      }
+      accountConfigs.push({
+        name: catName,
+        lower: catLower,
+        type: (acctTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib',
+        balance,
+        balanceDate: acctBalanceDates[catName] || new Date().toISOString().split('T')[0],
+      })
+      configuredAccounts.add(catLower)
+    }
+
     if (!dryRun) {
-      // Track created account names (lowercase) to prevent duplicates from
-      // case-variant keys like "IB" + "ib" both mapping to 'account'.
-      const createdAccountNames = new Set<string>()
-      for (const [catName, catType] of Object.entries(catTypes)) {
-        if (catType !== 'account') continue
-        const catLower = catName.toLowerCase()
-        // Skip if already processed in this batch (case-insensitive duplicate)
-        if (createdAccountNames.has(catLower)) continue
-        // Reuse an existing account (already seeded into accountIdMap above).
-        if (accountIdMap.has(catLower)) {
-          createdAccountNames.add(catLower)
-          continue
-        }
-        const accType = (acctTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib'
-        const balance = parseFloat(acctBalances[catName]) || 0
-        const balanceDate = acctBalanceDates[catName] || new Date().toISOString().split('T')[0]
+      for (const config of accountConfigs) {
         const account = {
-          name: catName,
-          type: accType,
-          balance,
-          starting_balance: balance,
-          starting_date: balanceDate,
+          name: config.name,
+          type: config.type,
+          balance: config.balance,
+          starting_balance: config.balance,
+          starting_date: config.balanceDate,
           currency: defaultCurrency,
           profile_id: profileId,
           created_at: new Date().toISOString(),
         }
         const id = await db.add('accounts', account)
-        accountIdMap.set(catLower, id as number)
-        createdAccountNames.add(catLower)
-        newlyCreatedAccounts.push(catName)
+        accountIdMap.set(config.lower, id as number)
+        newlyCreatedAccounts.push(config.name)
       }
 
       // Also build account map from means_of_payment column values.
@@ -763,7 +835,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       // Means of payment values may contain category names (e.g. "Salary Eur")
       // that should not become accounts.
       const existingAccounts2 = await db.getAllFromIndex('accounts', 'by_profile', profileId)
-      for (const row of clean) {
+      for (const row of validRows) {
         const mop = toStr(row.means_of_payment).trim()
         if (!mop) continue
         const mopLower = mop.toLowerCase()
@@ -779,18 +851,16 @@ export async function importExecute(body: unknown): Promise<Response> {
     }
 
     const imported: number[] = []
-    const skipped: { index: number; reason: string }[] = []
     // Collected transaction objects to insert in a single batched IndexedDB
     // transaction (see below). One-by-one inserts with an awaited read-modify-
     // write balance update per row are O(N) sequential round-trips; batching
     // makes it O(N) inserts + O(A) account updates in one atomic transaction.
     const toInsert: Record<string, unknown>[] = []
 
-    for (let i = 0; i < clean.length; i++) {
-      const row = clean[i]
+    for (const validated of validatedRows) {
+      const { index: i, row, amount, amountLocal, exchangeRate } = validated
       const description = toStr(row.description)
       const date = normalizeDate(row.date) || toStr(row.date)
-      const amount = parseAmount(row.amount)
       // Determine transaction type.
       // An explicit "transfer" always wins — a transfer between two accounts is a
       // transfer regardless of sign, and the category names the destination account
@@ -814,14 +884,6 @@ export async function importExecute(body: unknown): Promise<Response> {
         type = catType
       } else {
         type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
-      }
-
-      if (!description || !date || isNaN(amount)) {
-        skipped.push({
-          index: i,
-          reason: `Missing required fields (description, date, amount) for row ${i + 1}`,
-        })
-        continue
       }
 
       let categoryId: number | null = null
@@ -933,16 +995,12 @@ export async function importExecute(body: unknown): Promise<Response> {
       // currency, which the app reports as the transaction's value. Without that
       // column the amount is already in the base currency, so amount_local = amount.
       const currency = normalizeCurrencyCode(row.currency, defaultCurrency)
-      const amountLocalRaw = toStr(row.amount_local).trim()
-      const amountLocal = amountLocalRaw ? Math.abs(parseFloat(amountLocalRaw)) : Math.abs(amount)
-      const exchangeRateRaw = toStr(row.exchange_rate).trim()
-      const exchangeRate = exchangeRateRaw ? parseFloat(exchangeRateRaw) : 1
       const resolvedAccountId =
         accountId !== null ? accountId : data.account_id ? Number(data.account_id) : null
       const invariantError = transactionInvariantError({
         type,
         amount: Math.abs(amount),
-        amount_local: amountLocal,
+        amount_local: Math.abs(amountLocal),
         account_id: resolvedAccountId,
         transfer_account_id: transferAccountId,
       })
@@ -980,9 +1038,9 @@ export async function importExecute(body: unknown): Promise<Response> {
         description,
         date,
         amount: Math.abs(amount),
-        amount_local: Number.isFinite(amountLocal) ? amountLocal : Math.abs(amount),
+        amount_local: Math.abs(amountLocal),
         currency,
-        exchange_rate: Number.isFinite(exchangeRate) ? exchangeRate : 1,
+        exchange_rate: exchangeRate,
         category_id: categoryId,
         notes: toStr(row.notes),
         beneficiary: toStr(row.beneficiary),
@@ -1069,11 +1127,11 @@ export async function importExecute(body: unknown): Promise<Response> {
 
     // Category-column values with no matching existing category — reported so a
     // preview (dry-run) can confirm before creation (audit B5).
-    const newCategories = await detectNewCategories(clean, categoryTypes)
+    const newCategories = await detectNewCategories(validRows, categoryTypes)
     // Account-typed values that would be newly created — surfaced so the preview shows
     // the accounts a run will add (and, by omission, that a transfer destination matched
     // an existing account rather than silently failing to resolve).
-    const newAccounts = await detectNewAccounts(clean, categoryTypes)
+    const newAccounts = await detectNewAccounts(validRows, categoryTypes)
 
     return json({
       imported: imported.length,
@@ -1109,14 +1167,38 @@ export async function importBulk(body: unknown): Promise<Response> {
 
     const profileId = await adapter.getCurrentProfileId()
     const imported: number[] = []
+    const validatedItems: Array<{ item: Record<string, unknown>; amount: number }> = []
+    const validationErrors: Array<{ field: string; reason: string }> = []
 
-    for (const item of items) {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index]
+      const amount = parseImportNumber(item.amount)
+      if (amount === null) {
+        validationErrors.push({
+          field: `items.${index}.amount`,
+          reason: 'Use an unambiguous number such as 1234.56 or 1.234,56.',
+        })
+      } else {
+        validatedItems.push({ item, amount: Math.abs(amount) })
+      }
+    }
+    if (validationErrors.length > 0) {
+      return json(
+        {
+          error: 'One or more transaction amounts are invalid or ambiguous.',
+          validation_errors: validationErrors,
+        },
+        422
+      )
+    }
+
+    for (const { item, amount } of validatedItems) {
       const transaction = {
         profile_id: profileId,
         type: toStr(item.type) || 'expense',
         description: toStr(item.description),
         date: toStr(item.date) || new Date().toISOString().slice(0, 10),
-        amount: Math.abs(Number(item.amount) || 0),
+        amount,
         category_id: item.category_id ? Number(item.category_id) : null,
         notes: toStr(item.notes),
         beneficiary: toStr(item.beneficiary),

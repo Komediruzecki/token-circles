@@ -23,6 +23,9 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
   const total = () => flow.currentRows().length
   const selected = () => flow.selectedRows().size
   const duplicates = () => flow.duplicateIndices().length
+  const invalidRows = () => flow.invalidRowSet().size
+  const validationIssues = () => flow.previewValidationIssues()
+  const selectableTotal = () => total() - invalidRows()
 
   return (
     <>
@@ -45,6 +48,14 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               <div class={styles.statItem}>
                 <span class={styles.statLabel}>Potential duplicates</span>
                 <span class={`${styles.statValue} ${styles.duplicate}`}>{duplicates()}</span>
+              </div>
+            )}
+            {validationIssues().length > 0 && (
+              <div class={styles.statItem}>
+                <span class={styles.statLabel}>Invalid</span>
+                <span class={`${styles.statValue} ${styles.invalid}`}>
+                  {validationIssues().length}
+                </span>
               </div>
             )}
           </div>
@@ -102,6 +113,26 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             "Import only new" skips them all.
           </p>
         )}
+        <Show when={validationIssues().length > 0}>
+          <div class={styles.validationWarning} data-test-id="import-validation-errors">
+            <strong>Fix invalid import values</strong>
+            <For each={validationIssues().slice(0, 8)}>
+              {(issue) => (
+                <div>
+                  {typeof issue.index === 'number'
+                    ? `Row ${issue.index + 1}: `
+                    : issue.field
+                      ? `${issue.field}: `
+                      : ''}
+                  {issue.reason}
+                </div>
+              )}
+            </For>
+            <Show when={validationIssues().length > 8}>
+              <div>And {validationIssues().length - 8} more.</div>
+            </Show>
+          </div>
+        </Show>
         {/* Dry-run verdict: rows the dedup pass will skip because they already
             exist. A full-duplicate re-import gets called out as "nothing new"
             up front instead of surprising the user with "Imported 0". */}
@@ -389,7 +420,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               <th class={styles.selectCol}>
                 <input
                   type="checkbox"
-                  checked={selected() === total()}
+                  checked={selectableTotal() > 0 && selected() === selectableTotal()}
                   onChange={(e) => {
                     flow.toggleAll(e.currentTarget.checked)
                   }}
@@ -403,6 +434,8 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               {(actualIndex) => {
                 const row = () => flow.currentRows()[actualIndex]
                 const isDuplicate = () => flow.duplicateSet().has(actualIndex)
+                const validationIssue = () =>
+                  flow.previewValidationIssues().find((issue) => issue.index === actualIndex)
                 // The earlier row this one duplicates, summarised (date · description · amount)
                 // from the mapped columns, so the user can see WHY it's flagged.
                 const counterpart = () => {
@@ -425,11 +458,18 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                   return `${base} — imported by default; deselect if it is actually a duplicate.`
                 }
                 return (
-                  <tr classList={{ [styles.duplicate]: isDuplicate() }} title={dupTitle()}>
+                  <tr
+                    classList={{
+                      [styles.duplicate]: isDuplicate(),
+                      [styles.invalidRow]: Boolean(validationIssue()),
+                    }}
+                    title={validationIssue()?.reason || dupTitle()}
+                  >
                     <td class={styles.selectCol}>
                       <input
                         type="checkbox"
                         checked={flow.selectedRows().has(actualIndex)}
+                        disabled={Boolean(validationIssue())}
                         onChange={() => {
                           flow.toggleRow(actualIndex)
                         }}
@@ -448,6 +488,9 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                             = row {counterpart()!.rowNo}
                           </span>
                         </Show>
+                      </Show>
+                      <Show when={validationIssue()}>
+                        <span class={styles.errorBadge}>err</span>
                       </Show>
                     </td>
                     <For each={row()}>{(cell) => <td>{cell ?? ''}</td>}</For>

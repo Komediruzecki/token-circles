@@ -470,6 +470,10 @@
   color: var(--warning);
 }
 
+.statValue.invalid {
+  color: var(--danger);
+}
+
 .previewActions {
   display: flex;
   gap: 6px;
@@ -519,6 +523,10 @@
   background: rgba(245, 158, 11, 0.08);
 }
 
+.previewTable tr.invalidRow td {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
 .previewTable .selectCol {
   width: 40px;
   text-align: center;
@@ -536,6 +544,29 @@
   background: var(--warning);
   color: #fff;
   font-weight: 600;
+}
+
+.errorBadge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.validationWarning {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  color: var(--text);
+  font-size: 12px;
 }
 
 /* Preview row filter — a segmented control above the table for switching the view
