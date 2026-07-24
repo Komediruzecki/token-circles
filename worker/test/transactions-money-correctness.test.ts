@@ -254,3 +254,62 @@ describe('worker transactions — bulk type change corrects balances (audit D1)'
     expect(await balanceOf(1)).toBe(960);
   });
 });
+
+// Audit H-02 — the Worker bulk path must enforce the transaction invariant like the single-update
+// handler and the client bulk path, atomically. Before the fix, a benign bulk notes/reconciled
+// update ran a blind UPDATE and silently succeeded even when the selection contained a legacy
+// malformed row, while the client rejected the same request. The matching client-side assertion is
+// in frontend/src/core/storage/__tests__/localHandlers.transactions.test.ts.
+describe('worker transactions — bulk update enforces the invariant (audit H-02)', () => {
+  it('rejects a bulk notes update that sweeps in a legacy malformed row, without partial apply', async () => {
+    const valid = await idOf(
+      await post({
+        description: 'Valid',
+        amount: 40,
+        type: 'expense',
+        account_id: 1,
+        notes: 'original',
+      })
+    );
+    // Legacy malformed row written directly, bypassing the create invariant (amount <= 0) — as an
+    // older build could have persisted before the invariant existed.
+    await env.DB.prepare(
+      "INSERT INTO transactions (id, profile_id, description, amount, type, date, notes) VALUES (9001, 1, 'Legacy', 0, 'expense', '2026-06-02', 'legacy-note')"
+    ).run();
+
+    const res = await api('/api/transactions/bulk', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: [valid, 9001], action: 'update', data: { notes: 'tagged' } }),
+    });
+    expect(res.status).toBe(400);
+    // Atomic + parity with the client: neither row was updated.
+    const validRow = await env.DB.prepare('SELECT notes FROM transactions WHERE id = ?')
+      .bind(valid)
+      .first<{ notes: string }>();
+    expect(validRow?.notes).toBe('original');
+    const legacyRow = await env.DB.prepare('SELECT notes FROM transactions WHERE id = 9001').first<{
+      notes: string;
+    }>();
+    expect(legacyRow?.notes).toBe('legacy-note');
+  });
+
+  it('allows a bulk notes update when every selected row satisfies the invariant', async () => {
+    const a = await idOf(
+      await post({ description: 'A', amount: 10, type: 'expense', account_id: 1, notes: 'a0' })
+    );
+    const b = await idOf(
+      await post({ description: 'B', amount: 20, type: 'expense', account_id: 1, notes: 'b0' })
+    );
+    const res = await api('/api/transactions/bulk', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: [a, b], action: 'update', data: { notes: 'tagged' } }),
+    });
+    expect(res.status).toBe(200);
+    const rows = await env.DB.prepare(
+      'SELECT notes FROM transactions WHERE id IN (?, ?) ORDER BY id'
+    )
+      .bind(a, b)
+      .all<{ notes: string }>();
+    expect(rows.results.map((r) => r.notes)).toEqual(['tagged', 'tagged']);
+  });
+});
