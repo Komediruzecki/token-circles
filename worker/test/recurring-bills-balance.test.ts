@@ -17,7 +17,14 @@ let cookie = '';
 const today = new Date().toISOString().split('T')[0];
 
 beforeEach(async () => {
-  for (const t of ['transactions', 'recurring_transactions', 'bills', 'accounts', 'profiles', 'users']) {
+  for (const t of [
+    'transactions',
+    'recurring_transactions',
+    'bills',
+    'accounts',
+    'profiles',
+    'users',
+  ]) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
   }
   await env.DB.batch([
@@ -77,11 +84,16 @@ describe('recurring populate + bill mark-paid balance integrity', () => {
     expect(await balance()).toBeCloseTo(950, 2);
   });
 
-  it('a transfer recurring with no destination leaves the balance untouched', async () => {
-    const id = await createRecurring('transfer', 50, 'monthly');
-    const pop = await api(`/api/recurring/${id}/populate`);
-    expect(pop.status).toBe(200);
-    // account_id set but no transfer_account_id → no leg to credit, so no change.
+  it('rejects a transfer recurring with no destination', async () => {
+    const created = await api('/api/recurring', {
+      description: 'Malformed transfer',
+      amount: 50,
+      type: 'transfer',
+      account_id: 5000,
+      frequency: 'monthly',
+      next_date: today,
+    });
+    expect(created.status).toBe(400);
     expect(await balance()).toBeCloseTo(1000, 2);
   });
 

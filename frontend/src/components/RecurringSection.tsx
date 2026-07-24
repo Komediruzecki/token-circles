@@ -3,7 +3,8 @@
  * Manages recurring transactions — list, create, edit, delete, populate
  */
 import { createSignal, For, onMount, Show } from 'solid-js'
-import { api } from '../core/api'
+import { transactionInvariantError } from '../../../shared/transactionInvariant'
+import { api, toast } from '../core/api'
 import { showConfirm } from '../core/confirmStore'
 import styles from './RecurringSection.module.css'
 import type { Category, RecurringTransaction } from '../types/models'
@@ -107,6 +108,11 @@ export default function RecurringSection(props: RecurringSectionProps) {
       transfer_account_id: formType() === 'transfer' ? formTransferAccountId() : null,
       notes: formNotes() || null,
     } satisfies RecurringFormData
+    const invariantError = transactionInvariantError(data)
+    if (invariantError) {
+      toast(invariantError, 'warning')
+      return
+    }
 
     try {
       const id = editingId()
@@ -119,6 +125,10 @@ export default function RecurringSection(props: RecurringSectionProps) {
       await loadItems()
     } catch (error) {
       console.error('Failed to save recurring transaction:', error)
+      toast(
+        error instanceof Error ? error.message : 'Failed to save recurring transaction',
+        'error'
+      )
     }
   }
 

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
+import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
@@ -590,6 +591,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     else dedupBuckets.set(k, [amt]);
   }
   const duplicateIndices: number[] = [];
+  const skippedItems: Array<{ index: number; reason: string }> = [];
 
   const rowsArr = rows as Array<Record<string, any>>;
   for (let ri = 0; ri < rowsArr.length; ri++) {
@@ -644,6 +646,18 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
 
     const description = pick(row, mapping, 'description') || '';
     const parsedDate = parseDateString(dateRaw);
+    const amountLocal = parseFlexibleAmount(pick(row, mapping, 'amount_local') ?? amount) || amount;
+    const invariantError = transactionInvariantError({
+      type: validatedType,
+      amount,
+      amount_local: amountLocal,
+      account_id: accountId,
+      transfer_account_id: transferAccountId,
+    });
+    if (invariantError) {
+      skippedItems.push({ index: ri, reason: invariantError });
+      continue;
+    }
     // Multiplicity-aware duplicate check on the resolved fields: skip a row only when it
     // matches a transaction that ALREADY EXISTED before this import, consuming one match per
     // row. Accepted rows are never added back into the bucket, so genuine same-day repeats in
@@ -673,7 +687,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
         pick(row, mapping, 'payor') || '',
         categoryId,
         currency,
-        parseFlexibleAmount(pick(row, mapping, 'amount_local') ?? amount) || amount,
+        amountLocal,
         mopName,
         parseFloat(pick(row, mapping, 'exchange_rate') ?? 1.0) || 1.0,
         validatedType,
@@ -693,6 +707,8 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       dry_run: true,
       duplicates: duplicateIndices.length,
       duplicate_indices: duplicateIndices,
+      skipped: skippedItems.length,
+      skipped_items: skippedItems,
       new_categories: newCats,
       new_accounts: newAccts,
       accounts_created: 0,
@@ -728,6 +744,8 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     imported,
     duplicates: duplicateIndices.length,
     duplicate_indices: duplicateIndices,
+    skipped: skippedItems.length,
+    skipped_items: skippedItems,
     new_categories: newCats,
     new_accounts: newAccts,
     accounts_created: accountsCreated,

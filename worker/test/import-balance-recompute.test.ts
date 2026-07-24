@@ -36,7 +36,9 @@ beforeEach(async () => {
 });
 
 async function balanceOf(name: string): Promise<number> {
-  const row = await env.DB.prepare('SELECT balance FROM accounts WHERE name = ? AND profile_id = 900')
+  const row = await env.DB.prepare(
+    'SELECT balance FROM accounts WHERE name = ? AND profile_id = 900'
+  )
     .bind(name)
     .first<{ balance: number }>();
   return row?.balance ?? NaN;
@@ -81,5 +83,35 @@ describe('import balance recompute — no double-credit', () => {
     // Transfer moves money: Checking (source) 1000 - 100, Savings (dest) 500 + 100.
     expect(await balanceOf('Checking')).toBeCloseTo(900, 2);
     expect(await balanceOf('Savings')).toBeCloseTo(600, 2);
+  });
+
+  it('reports and skips unresolved and self transfers without changing balances', async () => {
+    const res = await SELF.fetch('https://example.com/api/import/execute', {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Profile-Id': '900' },
+      body: JSON.stringify({
+        rows: [
+          ['Checking', 'Other', 'transfer', '100'],
+          ['Checking', 'Checking', 'transfer', '50'],
+        ],
+        mapping: { means_of_payment: 0, category: 1, type: 2, amount: 3 },
+        categoryTypes: { Checking: 'account' },
+        accountBalances: { Checking: '1000' },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      imported: number;
+      skipped: number;
+      skipped_items: Array<{ index: number; reason: string }>;
+    };
+    expect(body.imported).toBe(0);
+    expect(body.skipped).toBe(2);
+    expect(body.skipped_items.map((item) => item.index)).toEqual([0, 1]);
+    expect(await balanceOf('Checking')).toBeCloseTo(1000, 2);
+    const count = await env.DB.prepare(
+      'SELECT COUNT(*) AS count FROM transactions WHERE profile_id = 900'
+    ).first<{ count: number }>();
+    expect(count?.count).toBe(0);
   });
 });

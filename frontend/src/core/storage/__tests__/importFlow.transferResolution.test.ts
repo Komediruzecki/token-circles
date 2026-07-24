@@ -60,6 +60,44 @@ describe('importExecute — transfer resolves against existing accounts', () => 
     expect(tx.transfer_account_id).toBe(revolut) // destination leg — the fix
   })
 
+  it('reports and skips missing-leg and self transfers without changing balances', async () => {
+    const db = await getDB()
+    const erste = (await db.add('accounts', {
+      name: 'Erste Current',
+      type: 'giro',
+      balance: 1000,
+      starting_balance: 1000,
+      profile_id: 1,
+    })) as number
+    const revolut = (await db.add('accounts', {
+      name: 'Revolut',
+      type: 'giro',
+      balance: 500,
+      starting_balance: 500,
+      profile_id: 1,
+    })) as number
+    const rows = [
+      ['2026-07-20', 'Missing destination', '200', 'Unknown', 'Erste Current', 'Transfer'],
+      ['2026-07-21', 'Self transfer', '100', 'Revolut', 'Revolut', 'Transfer'],
+    ]
+    const res = await importExecute({
+      rows,
+      mapping: { date: 0, description: 1, amount: 2, category: 3, means_of_payment: 4, type: 5 },
+      dry_run: false,
+    })
+    const body = (await res.json()) as {
+      imported: number
+      skipped: number
+      skipped_items: Array<{ index: number; reason: string }>
+    }
+    expect(body.imported).toBe(0)
+    expect(body.skipped).toBe(2)
+    expect(body.skipped_items.map((item) => item.index)).toEqual([0, 1])
+    expect((await db.get('accounts', erste))?.balance).toBe(1000)
+    expect((await db.get('accounts', revolut))?.balance).toBe(500)
+    expect(await db.getAllFromIndex('transactions', 'by_profile', 1)).toHaveLength(0)
+  })
+
   it('resolves a transfer whose destination category has stray trailing whitespace', async () => {
     const db = await getDB()
     // "Revolut " (trailing space, as a sheet cell can carry) previously created an account

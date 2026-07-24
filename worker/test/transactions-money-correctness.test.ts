@@ -82,6 +82,37 @@ describe('worker transactions — transfer destination required (audit D2)', () 
     expect(await balanceOf(1)).toBe(1000);
   });
 
+  it('rejects destination-only and same-account transfers', async () => {
+    const destinationOnly = await post({
+      description: 'From nowhere',
+      amount: 250,
+      type: 'transfer',
+      transfer_account_id: 2,
+    });
+    expect(destinationOnly.status).toBe(400);
+    const self = await post({
+      description: 'Self transfer',
+      amount: 250,
+      type: 'transfer',
+      account_id: 1,
+      transfer_account_id: 1,
+    });
+    expect(self.status).toBe(400);
+    expect(await balanceOf(1)).toBe(1000);
+    expect(await balanceOf(2)).toBe(500);
+  });
+
+  it('rejects a negative expense before it can credit the source account', async () => {
+    const res = await post({
+      description: 'Wrong sign',
+      amount: -25,
+      type: 'expense',
+      account_id: 1,
+    });
+    expect(res.status).toBe(400);
+    expect(await balanceOf(1)).toBe(1000);
+  });
+
   it('accepts a transfer with a destination and moves both balances', async () => {
     const res = await post({
       description: 'Move to savings',
@@ -131,9 +162,46 @@ describe('worker transactions — transfer destination required (audit D2)', () 
     });
     expect(res.status).toBe(400);
   });
+
+  it('clears a stale destination when a transfer becomes an expense', async () => {
+    const id = await idOf(
+      await post({
+        description: 'Move',
+        amount: 100,
+        type: 'transfer',
+        account_id: 1,
+        transfer_account_id: 2,
+      })
+    );
+    const res = await api(`/api/transactions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: 'expense' }),
+    });
+    expect(res.status).toBe(200);
+    const row = await env.DB.prepare(
+      'SELECT type, transfer_account_id FROM transactions WHERE id = ?'
+    )
+      .bind(id)
+      .first<{ type: string; transfer_account_id: number | null }>();
+    expect(row).toEqual({ type: 'expense', transfer_account_id: null });
+    expect(await balanceOf(1)).toBe(900);
+    expect(await balanceOf(2)).toBe(500);
+  });
 });
 
 describe('worker transactions — bulk type change corrects balances (audit D1)', () => {
+  it('rejects bulk conversion to transfer because no account pair is supplied', async () => {
+    const id = await idOf(
+      await post({ description: 'Lunch', amount: 20, type: 'expense', account_id: 1 })
+    );
+    const res = await api('/api/transactions/bulk', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: [id], action: 'update', data: { type: 'transfer' } }),
+    });
+    expect(res.status).toBe(400);
+    expect(await balanceOf(1)).toBe(980);
+  });
+
   it('reverses the old effect and applies the new on a bulk income→expense flip', async () => {
     const id = await idOf(
       await post({ description: 'Paycheck', amount: 100, type: 'income', account_id: 1 })
