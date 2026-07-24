@@ -24,7 +24,16 @@ interface TransactionTableProps {
   // Accounts for the current profile, used to resolve a transfer's destination account
   // name (transfer_account_id) for the From → To column.
   accounts?: { id: number; name: string }[]
+  // The active write profile. Rows belonging to another (selected household) profile are gated:
+  // their edit/copy/delete controls and selection checkbox are disabled, because writes are
+  // scoped to the active profile and would otherwise fail with "Transaction not found". When
+  // omitted (e.g. single-profile callers), nothing is gated.
+  activeProfileId?: number
 }
+
+// Shown on the disabled controls of a row owned by a different profile.
+const FOREIGN_ROW_HINT =
+  'This transaction belongs to another profile. Switch to that profile to edit it.'
 
 export default function TransactionTable(props: TransactionTableProps) {
   const handleSort = (field: string) => {
@@ -35,6 +44,14 @@ export default function TransactionTable(props: TransactionTableProps) {
     for (const a of props.accounts ?? []) m.set(a.id, a.name)
     return m
   })
+  // A row is gated when an active profile is known and the row is owned by a different profile.
+  const isForeignRow = (t: Transaction): boolean =>
+    props.activeProfileId !== undefined && t.profile_id !== props.activeProfileId
+  // Only rows the active profile owns can be (de)selected for bulk actions, so a bulk write can
+  // never target a foreign-profile row.
+  const selectableTransactions = createMemo(() =>
+    props.transactions.filter((t) => !isForeignRow(t))
+  )
 
   return (
     <div
@@ -50,13 +67,13 @@ export default function TransactionTable(props: TransactionTableProps) {
                 type="checkbox"
                 class={styles.checkbox}
                 checked={
-                  props.selectedTransactions.length === props.transactions.length &&
-                  props.transactions.length > 0
+                  props.selectedTransactions.length === selectableTransactions().length &&
+                  selectableTransactions().length > 0
                 }
                 onChange={(e) => {
                   const checked = e.currentTarget.checked
                   if (checked) {
-                    props.onSelectionChange(props.transactions.map((t) => t.id))
+                    props.onSelectionChange(selectableTransactions().map((t) => t.id))
                   } else {
                     props.onSelectionChange([])
                   }
@@ -132,6 +149,8 @@ export default function TransactionTable(props: TransactionTableProps) {
                   <input
                     type="checkbox"
                     class={styles.checkbox}
+                    disabled={isForeignRow(transaction)}
+                    title={isForeignRow(transaction) ? FOREIGN_ROW_HINT : undefined}
                     checked={props.selectedTransactions.includes(transaction.id)}
                     onChange={(e) => {
                       const checked = e.currentTarget.checked
@@ -284,7 +303,13 @@ export default function TransactionTable(props: TransactionTableProps) {
                   </span>
                 </td>
                 <td class={styles.actionsCol}>
-                  <button class={styles.actionBtn} onClick={() => props.onEdit?.(transaction)}>
+                  <button
+                    class={styles.actionBtn}
+                    disabled={isForeignRow(transaction)}
+                    title={isForeignRow(transaction) ? FOREIGN_ROW_HINT : 'Edit'}
+                    aria-label={isForeignRow(transaction) ? FOREIGN_ROW_HINT : 'Edit transaction'}
+                    onClick={() => props.onEdit?.(transaction)}
+                  >
                     <svg
                       width="14"
                       height="14"
@@ -302,8 +327,11 @@ export default function TransactionTable(props: TransactionTableProps) {
                   </button>
                   <button
                     class={styles.actionBtn}
-                    title="Duplicate"
-                    aria-label="Duplicate transaction"
+                    disabled={isForeignRow(transaction)}
+                    title={isForeignRow(transaction) ? FOREIGN_ROW_HINT : 'Duplicate'}
+                    aria-label={
+                      isForeignRow(transaction) ? FOREIGN_ROW_HINT : 'Duplicate transaction'
+                    }
                     onClick={() => props.onCopy?.(transaction)}
                   >
                     <svg
@@ -322,7 +350,13 @@ export default function TransactionTable(props: TransactionTableProps) {
                       />
                     </svg>
                   </button>
-                  <button class={styles.actionBtn} onClick={() => props.onDelete?.(transaction)}>
+                  <button
+                    class={styles.actionBtn}
+                    disabled={isForeignRow(transaction)}
+                    title={isForeignRow(transaction) ? FOREIGN_ROW_HINT : 'Delete'}
+                    aria-label={isForeignRow(transaction) ? FOREIGN_ROW_HINT : 'Delete transaction'}
+                    onClick={() => props.onDelete?.(transaction)}
+                  >
                     <svg
                       width="14"
                       height="14"

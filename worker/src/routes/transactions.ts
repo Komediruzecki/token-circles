@@ -629,8 +629,10 @@ transactionsRoutes.put('/api/transactions/reconcile-batch', requireAuth, async (
 // ── POST /api/transactions — create ───────────────────────────────────────────
 transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   const pid = await getProfileId(c);
+  // `pids` (the full selected set) still scopes the multi-profile goal recalc below, matching
+  // local's getCurrentProfileIds(); balance mutations, by contrast, are scoped to the single
+  // write profile `pid` (see below).
   const pids = await getProfileIds(c);
-  const inClause = pids.map(() => '?').join(',');
   const b = (await c.req.json()) as Record<string, any>;
   validateTransactionCreate(b);
   const {
@@ -745,27 +747,32 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   // Auto-update linked account balances using the base-currency value so balances
   // stay in one currency even for foreign-currency transactions.
   const balanceValue = amount_local ?? amount;
+  // Scope balance mutations to the single active write profile (`pid`), NOT the full selected
+  // set — the row itself is written to `pid`, its account was validated to belong to `pid`, and
+  // the local/IndexedDB runtime scopes its balance deltas the same way. Using `IN (pids)` let a
+  // household selection move a DIFFERENT profile's account balance on legacy cross-linked data
+  // (audit #3 / H-03), diverging from local.
   if (resolvedAccountId && type === 'transfer' && resolvedTransferAccountId) {
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(balanceValue, resolvedAccountId, ...pids),
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+      ).bind(balanceValue, resolvedAccountId, pid),
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(balanceValue, resolvedTransferAccountId, ...pids)
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+      ).bind(balanceValue, resolvedTransferAccountId, pid)
     );
   } else if (resolvedAccountId && type === 'transfer') {
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(balanceValue, resolvedAccountId, ...pids)
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+      ).bind(balanceValue, resolvedAccountId, pid)
     );
   } else if (resolvedAccountId && (type === 'income' || type === 'expense')) {
     const delta = type === 'income' ? balanceValue : -balanceValue;
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(delta, resolvedAccountId, ...pids)
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+      ).bind(delta, resolvedAccountId, pid)
     );
   }
   // If account_id is null but transfer_account_id is set, money flows TO that account.
@@ -776,8 +783,8 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   ) {
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(balanceValue, resolvedTransferAccountId, ...pids)
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+      ).bind(balanceValue, resolvedTransferAccountId, pid)
     );
   }
   const [insertResult] = await c.env.DB.batch(stmts);
@@ -827,8 +834,9 @@ transactionsRoutes.get('/api/transactions/:id', requireAuth, async (c) => {
 // ── PUT /api/transactions/:id — update ────────────────────────────────────────
 transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
+  // `pids` still scopes the multi-profile goal recalc below (matches local's
+  // getCurrentProfileIds()); balance mutations are scoped to the single write profile `pid`.
   const pids = await getProfileIds(c);
-  const inClause = pids.map(() => '?').join(',');
   const id = c.req.param('id');
   const b = (await c.req.json()) as Record<string, any>;
   validateTransactionUpdate(b);
@@ -987,29 +995,31 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
 
   const stmts: D1PreparedStatement[] = [];
 
-  // Reverse old transaction effect on old account(s).
+  // Reverse old transaction effect on old account(s). Balance mutations are scoped to the single
+  // write profile `pid` (the row lives in `pid`; local scopes deltas the same way) — NOT the full
+  // selected set, which on legacy cross-linked data could move another profile's balance (#3).
   if (oldTx.account_id) {
     if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldV, oldTx.account_id, ...pids),
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(oldV, oldTx.account_id, pid),
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldV, oldTx.transfer_account_id, ...pids)
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+        ).bind(oldV, oldTx.transfer_account_id, pid)
       );
     } else if (oldTx.type === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldV, oldTx.account_id, ...pids)
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(oldV, oldTx.account_id, pid)
       );
     } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
       const oldDelta = oldTx.type === 'income' ? -oldV : oldV;
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(oldDelta, oldTx.account_id, ...pids)
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(oldDelta, oldTx.account_id, pid)
       );
     }
   }
@@ -1017,8 +1027,8 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   if (oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(oldV, oldTx.transfer_account_id, ...pids)
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+      ).bind(oldV, oldTx.transfer_account_id, pid)
     );
   }
 
@@ -1061,32 +1071,32 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     if (newType === 'transfer' && newTransferAccountId) {
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmountLocal, newAccountId, ...pids),
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+        ).bind(newAmountLocal, newAccountId, pid),
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmountLocal, newTransferAccountId, ...pids)
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(newAmountLocal, newTransferAccountId, pid)
       );
     } else if (newType === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newAmountLocal, newAccountId, ...pids)
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+        ).bind(newAmountLocal, newAccountId, pid)
       );
     } else if (newType === 'income' || newType === 'expense') {
       const newDelta = newType === 'income' ? newAmountLocal : -newAmountLocal;
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(newDelta, newAccountId, ...pids)
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(newDelta, newAccountId, pid)
       );
     }
   }
   if (!newAccountId && newTransferAccountId && newType === 'transfer') {
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(newAmountLocal, newTransferAccountId, ...pids)
+        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+      ).bind(newAmountLocal, newTransferAccountId, pid)
     );
   }
 
@@ -1101,8 +1111,9 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
 // ── DELETE /api/transactions/:id ──────────────────────────────────────────────
 transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
+  // `pids` still scopes the multi-profile goal recalc below (matches local's
+  // getCurrentProfileIds()); the balance reversal is scoped to the single write profile `pid`.
   const pids = await getProfileIds(c);
-  const inClause = pids.map(() => '?').join(',');
   const id = c.req.param('id');
 
   // Fetch full tx before delete for account reversal and goal recalc.
@@ -1121,29 +1132,31 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
   const stmts: D1PreparedStatement[] = [
     c.env.DB.prepare('DELETE FROM transactions WHERE id = ? AND profile_id = ?').bind(id, pid),
   ];
-  // Reverse transaction effect on linked account(s).
+  // Reverse transaction effect on linked account(s). Scoped to the single write profile `pid`
+  // (the row was fetched WHERE profile_id = pid; local reverses deltas the same way) — NOT the
+  // full selected set, which on legacy cross-linked data could move another profile's balance (#3).
   if (tx.account_id) {
     if (tx.type === 'transfer' && tx.transfer_account_id) {
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(v, tx.account_id, ...pids),
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(v, tx.account_id, pid),
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(v, tx.transfer_account_id, ...pids)
+          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+        ).bind(v, tx.transfer_account_id, pid)
       );
     } else if (tx.type === 'transfer') {
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(v, tx.account_id, ...pids)
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(v, tx.account_id, pid)
       );
     } else if (tx.type === 'income' || tx.type === 'expense') {
       const delta = tx.type === 'income' ? -v : v;
       stmts.push(
         c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id IN (${inClause})`
-        ).bind(delta, tx.account_id, ...pids)
+          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
+        ).bind(delta, tx.account_id, pid)
       );
     }
   }
@@ -1151,8 +1164,8 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
   if (tx.transfer_account_id && tx.type === 'transfer' && !tx.account_id) {
     stmts.push(
       c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id IN (${inClause})`
-      ).bind(v, tx.transfer_account_id, ...pids)
+        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
+      ).bind(v, tx.transfer_account_id, pid)
     );
   }
 
