@@ -8,7 +8,7 @@ import {
   generateTaxSummaryPdf,
 } from '../clientPdfReports'
 import { getDB } from '../idb'
-import { adapter, json } from './helpers'
+import { adapter, getAmount, json } from './helpers'
 
 export async function reportHandler(ctx: {
   path: string
@@ -78,10 +78,11 @@ export async function reportHandler(ctx: {
       const nonDeductible: { category_name: string; amount: number }[] = []
       for (const t of rows) {
         const cat = catMap.get(t.category_id)
+        const amount = getAmount(t)
         if (cat?.tax_deductible) {
-          taxDeductible.push({ category_name: cat.name, amount: t.amount })
+          taxDeductible.push({ category_name: cat.name, amount })
         } else {
-          nonDeductible.push({ category_name: cat?.name || 'Unknown', amount: t.amount })
+          nonDeductible.push({ category_name: cat?.name || 'Unknown', amount })
         }
       }
 
@@ -98,7 +99,7 @@ export async function reportHandler(ctx: {
         year,
         taxDeductibleTotal: taxDeductible.reduce((s, r) => s + r.amount, 0),
         nonDeductibleTotal: nonDeductible.reduce((s, r) => s + r.amount, 0),
-        totalExpenses: rows.reduce((s, r) => s + r.amount, 0),
+        totalExpenses: rows.reduce((s, r) => s + getAmount(r), 0),
         taxDeductibleCategories: byCategory(taxDeductible),
         nonDeductibleCategories: byCategory(nonDeductible),
         transactionCount: rows.length,
@@ -120,8 +121,13 @@ export async function reportHandler(ctx: {
       const rows = txns.filter((t) => t.date >= startStr && t.date <= endStr)
       const catMap = new Map(cats.map((c) => [c.id, c]))
 
-      const income = rows.filter((r) => r.type === 'income')
-      const expenses = rows.filter((r) => r.type === 'expense')
+      const normalizedRows = rows.map((r) => ({
+        ...r,
+        amount: getAmount(r),
+        category_name: catMap.get(r.category_id)?.name || 'Unknown',
+      }))
+      const income = normalizedRows.filter((r) => r.type === 'income')
+      const expenses = normalizedRows.filter((r) => r.type === 'expense')
 
       const byCategory = (txs: typeof rows) => {
         const map: Record<string, { total: number; count: number }> = {}
@@ -133,12 +139,8 @@ export async function reportHandler(ctx: {
         return map
       }
 
-      const incomeByCat = byCategory(
-        income.map((r) => ({ ...r, category_name: catMap.get(r.category_id)?.name || 'Unknown' }))
-      )
-      const expenseByCat = byCategory(
-        expenses.map((r) => ({ ...r, category_name: catMap.get(r.category_id)?.name || 'Unknown' }))
-      )
+      const incomeByCat = byCategory(income)
+      const expenseByCat = byCategory(expenses)
 
       const incomeTotal = income.reduce((s, r) => s + r.amount, 0)
       const expenseTotal = expenses.reduce((s, r) => s + r.amount, 0)
@@ -174,8 +176,10 @@ export async function reportsCustom(body: unknown): Promise<Response> {
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
   const txns: Record<string, unknown>[] = []
+  const categories: Record<string, unknown>[] = []
   for (const pid of pids) {
     txns.push(...(await db.getAllFromIndex('transactions', 'by_profile', pid)))
+    categories.push(...(await db.getAllFromIndex('categories', 'by_profile', pid)))
   }
 
   let filtered = txns
@@ -185,18 +189,21 @@ export async function reportsCustom(body: unknown): Promise<Response> {
 
   const totalIncome = filtered
     .filter((t) => t.type === 'income')
-    .reduce((s, t) => s + (t.amount as number), 0)
+    .reduce((s, t) => s + getAmount(t), 0)
   const totalExpenses = filtered
     .filter((t) => t.type === 'expense')
-    .reduce((s, t) => s + (t.amount as number), 0)
+    .reduce((s, t) => s + getAmount(t), 0)
   const netTotal = totalIncome - totalExpenses
 
+  const categoryNames = new Map(
+    categories.map((category) => [category.id, (category.name as string) || 'Uncategorized'])
+  )
   const byCategory: Record<string, { count: number; total: number }> = {}
   for (const t of filtered) {
-    const catName = (t.category_name as string) || 'Uncategorized'
+    const catName = categoryNames.get(t.category_id) || 'Uncategorized'
     if (!byCategory[catName]) byCategory[catName] = { count: 0, total: 0 }
     byCategory[catName].count++
-    byCategory[catName].total += t.amount as number
+    byCategory[catName].total += getAmount(t)
   }
 
   return json({

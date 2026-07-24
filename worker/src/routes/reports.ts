@@ -5,6 +5,7 @@ import { requireAdvancedReports } from '../plan';
 import { getProfileId, getProfileIds } from '../profile';
 import { buildReportPdf } from '../pdf';
 import { enforce } from '../ratelimit';
+import { normalizedTransactionAmountSql } from '../transaction-amount';
 import * as db from '../db';
 
 // Port of backend/routes/reports.js. The JSON/data endpoints (tax-summary,
@@ -163,6 +164,7 @@ reportsRoutes.get('/api/reports/tax-summary', requireAuth, requireAdvancedReport
 
   const startStr = `${year}-01-01`;
   const endStr = `${year}-12-31`;
+  const amountSql = normalizedTransactionAmountSql('t');
 
   const rows = await db.all<{
     id: number;
@@ -174,7 +176,7 @@ reportsRoutes.get('/api/reports/tax-summary', requireAuth, requireAdvancedReport
     tax_deductible: number;
   }>(
     c.env.DB,
-    `SELECT t.id, t.date, t.description, t.amount, t.currency, c.name as category_name, c.tax_deductible
+    `SELECT t.id, t.date, t.description, ${amountSql} AS amount, t.currency, c.name as category_name, c.tax_deductible
        FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
@@ -224,9 +226,10 @@ reportsRoutes.get(
     const inClause = pids.map(() => '?').join(',');
     const year = c.req.query('year');
     if (!year) return c.json({ error: 'year is required' }, 400);
+    const amountSql = normalizedTransactionAmountSql('t');
     const rows = await db.all<{ amount: number; category_name: string; tax_deductible: number }>(
       c.env.DB,
-      `SELECT t.amount, c.name as category_name, c.tax_deductible FROM transactions t
+      `SELECT ${amountSql} AS amount, c.name as category_name, c.tax_deductible FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'`,
       ...pids,
@@ -270,6 +273,7 @@ reportsRoutes.get('/api/reports/pl-summary', requireAuth, requireAdvancedReports
 
   const startStr = `${year}-01-01`;
   const endStr = `${year}-12-31`;
+  const amountSql = normalizedTransactionAmountSql('t');
 
   const rows = await db.all<{
     id: number;
@@ -281,7 +285,7 @@ reportsRoutes.get('/api/reports/pl-summary', requireAuth, requireAdvancedReports
     category_name: string;
   }>(
     c.env.DB,
-    `SELECT t.id, t.date, t.description, t.amount, t.currency, t.type, c.name as category_name
+    `SELECT t.id, t.date, t.description, ${amountSql} AS amount, t.currency, t.type, c.name as category_name
        FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?
@@ -328,9 +332,10 @@ reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, requireAdvancedRep
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');
   if (!year) return c.json({ error: 'year is required' }, 400);
+  const amountSql = normalizedTransactionAmountSql('t');
   const rows = await db.all<{ amount: number; type: string; category_name: string }>(
     c.env.DB,
-    `SELECT t.amount, t.type, c.name as category_name FROM transactions t
+    `SELECT ${amountSql} AS amount, t.type, c.name as category_name FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?`,
     ...pids,

@@ -6,6 +6,7 @@ import { HttpError } from '../http';
 import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
+import { normalizedTransactionAmountSql } from '../transaction-amount';
 
 // Port of backend/routes/accounts.js + backend/repositories/accountsRepo.js.
 // Accounts are profile-scoped; balance history is keyed by account_id and only
@@ -229,9 +230,10 @@ accountsRoutes.get('/api/accounts/:id/reconciliation-summary', requireAuth, asyn
     pid
   );
   if (!account) throw new HttpError(404, 'Account not found');
+  const amountSql = normalizedTransactionAmountSql();
   const unreconciled = await db.first<{ count: number; total: number }>(
     c.env.DB,
-    `SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+    `SELECT COUNT(*) as count, COALESCE(SUM(${amountSql}), 0) as total
      FROM transactions
      WHERE profile_id = ? AND (reconciled = 0 OR reconciled IS NULL)`,
     pid

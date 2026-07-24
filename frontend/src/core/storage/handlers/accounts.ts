@@ -4,7 +4,7 @@
 import { getLocalCurrency } from '../../api'
 import { normalizeCurrencyCode } from '../../currencies'
 import { AccountInUseError, getDB } from '../idb'
-import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
+import { adapter, currentProfileRecord, getAmount, idParam, json, notFound, ok } from './helpers'
 import { normalizeAccount } from './normalize'
 
 export async function accountsList(): Promise<Response> {
@@ -141,7 +141,10 @@ export async function accountsReconciliationSummary(
       account_id: accountId,
       account_name: account.name,
       unreconciled_count: unreconciled.length,
-      unreconciled_total: unreconciled.reduce((s, t) => s + ((t.amount as number) || 0), 0),
+      unreconciled_total: unreconciled.reduce(
+        (s, t) => s + getAmount(t as Record<string, unknown>),
+        0
+      ),
       reconciled_count: reconciled.length,
       total_transactions: txns.length,
     })

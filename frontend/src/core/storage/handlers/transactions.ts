@@ -8,6 +8,7 @@ import {
   adapter,
   currentProfileOwns,
   currentProfileRecord,
+  getAmount,
   idParam,
   json,
   notFound,
@@ -200,8 +201,12 @@ export async function transactionsExport(query: URLSearchParams): Promise<Respon
 
 export async function transactionsSummary(): Promise<Response> {
   const txns = await adapter.listTransactions()
-  const totalIncome = txns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const totalExpenses = txns.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const totalIncome = txns
+    .filter((t) => t.type === 'income')
+    .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
+  const totalExpenses = txns
+    .filter((t) => t.type === 'expense')
+    .reduce((s, t) => s + getAmount(t as unknown as Record<string, unknown>), 0)
   return json({ totalIncome, totalExpenses, count: txns.length })
 }
 
@@ -252,8 +257,14 @@ export async function reconcileSummary(): Promise<Response> {
   return json({
     reconciled_count: reconciled.length,
     unreconciled_count: unreconciled.length,
-    reconciled_total: reconciled.reduce((s, t) => s + t.amount, 0),
-    unreconciled_total: unreconciled.reduce((s, t) => s + t.amount, 0),
+    reconciled_total: reconciled.reduce(
+      (s, t) => s + getAmount(t as unknown as Record<string, unknown>),
+      0
+    ),
+    unreconciled_total: unreconciled.reduce(
+      (s, t) => s + getAmount(t as unknown as Record<string, unknown>),
+      0
+    ),
   })
 }
 

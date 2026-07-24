@@ -6,6 +6,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import { validateTransactionCreate, validateTransactionUpdate } from '../validation';
 import { recalcGoalsByCategory } from '../recalc-goals';
+import { normalizedTransactionAmountSql } from '../transaction-amount';
 import * as db from '../db';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
@@ -283,6 +284,7 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
 transactionsRoutes.get('/api/transactions/summary', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
+  const amountSql = normalizedTransactionAmountSql('t');
 
   const startDate = c.req.query('startDate');
   const endDate = c.req.query('endDate');
@@ -292,9 +294,9 @@ transactionsRoutes.get('/api/transactions/summary', requireAuth, async (c) => {
 
   let sql = `
     SELECT
-      SUM(t.amount) as total_amount,
-      SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END) as total_expense,
-      SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END) as total_income,
+      SUM(${amountSql}) as total_amount,
+      SUM(CASE WHEN t.type = 'expense' THEN ${amountSql} ELSE 0 END) as total_expense,
+      SUM(CASE WHEN t.type = 'income' THEN ${amountSql} ELSE 0 END) as total_income,
       COUNT(*) as count
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
@@ -588,13 +590,14 @@ transactionsRoutes.post('/api/transactions/reconcile/bulk', requireAuth, async (
 transactionsRoutes.get('/api/transactions/reconcile/summary', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
+  const amountSql = normalizedTransactionAmountSql();
   const summary = await db.first(
     c.env.DB,
     `SELECT
       COUNT(*) as total,
       SUM(CASE WHEN reconciled = 1 THEN 1 ELSE 0 END) as reconciled_count,
       SUM(CASE WHEN COALESCE(reconciled, 0) = 0 THEN 1 ELSE 0 END) as unreconciled_count,
-      SUM(CASE WHEN COALESCE(reconciled, 0) = 0 THEN amount ELSE 0 END) as unreconciled_total
+      SUM(CASE WHEN COALESCE(reconciled, 0) = 0 THEN ${amountSql} ELSE 0 END) as unreconciled_total
      FROM transactions WHERE profile_id IN (${inClause})`,
     ...pids
   );

@@ -1,6 +1,7 @@
 /**
  * Shared helpers for local API handlers.
  */
+import { normalizedTransactionAmount } from '../../transactionAmount'
 import { getDB, IndexedDBAdapter } from '../idb'
 
 // Singleton: do NOT create additional IndexedDBAdapter instances.
@@ -119,7 +120,7 @@ export function targetProfileIdsFromHeaders(headers?: HeadersInit): number[] | u
 // ── Date / amount helpers ─────────────────────────────────────────────────────
 
 export function getAmount(t: Record<string, unknown>): number {
-  return (t.amount_local as number) ?? (t.amount as number) ?? 0
+  return normalizedTransactionAmount(t)
 }
 
 export function monthStart(y: number, m: number): string {

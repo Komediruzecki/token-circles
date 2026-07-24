@@ -2,7 +2,7 @@
  * Counterparties handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, json } from './helpers'
+import { adapter, getAmount, json } from './helpers'
 
 function toStr(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -22,7 +22,7 @@ export async function getCounterparties(): Promise<Response> {
     const map = new Map<string, { incoming: number; outgoing: number; count: number }>()
 
     for (const tx of txs) {
-      const txAmount = typeof tx.amount === 'number' ? tx.amount : parseFloat(toStr(tx.amount)) || 0
+      const txAmount = getAmount(tx)
       if (tx.type === 'expense') {
         const beneficiary = toStr(tx.beneficiary).trim() || toStr(tx.description).trim()
         if (beneficiary) {
