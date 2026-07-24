@@ -31,6 +31,13 @@ export class AccountInUseError extends Error {
   }
 }
 
+export class ProfileOwnershipError extends Error {
+  constructor(message = 'Linked record does not belong to this profile.') {
+    super(message)
+    this.name = 'ProfileOwnershipError'
+  }
+}
+
 function upgradeSchema(
   db: IDBPDatabase,
   oldVersion: number,
@@ -534,16 +541,17 @@ export class IndexedDBAdapter implements StorageAdapter {
     // Row insert + balance adjustment share one transaction so the read-modify-write
     // on accounts is atomic and IndexedDB serializes concurrent balance mutations
     // (otherwise interleaved create/update calls lost-update the balance — see audit D4).
-    const t = db.transaction(['transactions', 'accounts'], 'readwrite')
+    const t = db.transaction(['transactions', 'accounts', 'categories'], 'readwrite')
+    await this._assertTransactionLinks(t, data)
     const id = (await t.objectStore('transactions').add(data)) as number
-    await this._applyDeltasInTx(t, computeBalanceDeltas(data))
+    await this._applyDeltasInTx(t, computeBalanceDeltas(data), data.profile_id)
     await t.done
     return id
   }
 
   async updateTransaction(id: number, tx: Partial<Transaction>): Promise<void> {
     const db = await getDB()
-    const t = db.transaction(['transactions', 'accounts'], 'readwrite')
+    const t = db.transaction(['transactions', 'accounts', 'categories'], 'readwrite')
     const txStore = t.objectStore('transactions')
     const existing = await txStore.get(id)
     if (!existing) {
@@ -562,6 +570,7 @@ export class IndexedDBAdapter implements StorageAdapter {
     //    foreign-currency amount left the balance unchanged and the row inconsistent (audit D8);
     //  - else preserve the existing amount_local (an unrelated-field edit must not wipe it).
     const preserved: Record<string, unknown> = { ...tx }
+    delete preserved.profile_id
     if (!('amount_local' in tx) && typeof (existing as any).amount_local === 'number') {
       const amountChanging = 'amount' in tx && typeof tx.amount === 'number'
       if (amountChanging) {
@@ -580,9 +589,10 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
     Object.assign(existing, preserved)
+    await this._assertTransactionLinks(t, existing)
     await txStore.put(existing)
     deltas.push(...computeBalanceDeltas(existing))
-    await this._applyDeltasInTx(t, deltas)
+    await this._applyDeltasInTx(t, deltas, existing.profile_id)
     await t.done
   }
 
@@ -597,7 +607,7 @@ export class IndexedDBAdapter implements StorageAdapter {
         delta: -adj.delta,
       }))
       await txStore.delete(id)
-      await this._applyDeltasInTx(t, deltas)
+      await this._applyDeltasInTx(t, deltas, old.profile_id)
     }
     await t.done
   }
@@ -606,17 +616,21 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const t = db.transaction(['transactions', 'accounts'], 'readwrite')
     const txStore = t.objectStore('transactions')
-    const deltas: { accountId: number; delta: number }[] = []
+    const deltasByProfile = new Map<number, { accountId: number; delta: number }[]>()
     for (const id of ids) {
       const old = await txStore.get(id)
       if (old) {
+        const deltas = deltasByProfile.get(old.profile_id) ?? []
         for (const adj of computeBalanceDeltas(old)) {
           deltas.push({ accountId: adj.accountId, delta: -adj.delta })
         }
+        deltasByProfile.set(old.profile_id, deltas)
         await txStore.delete(id)
       }
     }
-    await this._applyDeltasInTx(t, deltas)
+    for (const [profileId, deltas] of deltasByProfile) {
+      await this._applyDeltasInTx(t, deltas, profileId)
+    }
     await t.done
   }
 
@@ -649,7 +663,8 @@ export class IndexedDBAdapter implements StorageAdapter {
         put(value: any): Promise<unknown>
       }
     },
-    deltas: { accountId: number; delta: number }[]
+    deltas: { accountId: number; delta: number }[],
+    profileId?: number
   ): Promise<void> {
     if (deltas.length === 0) return
     const byAccount = new Map<number, number>()
@@ -659,9 +674,36 @@ export class IndexedDBAdapter implements StorageAdapter {
     const store = t.objectStore('accounts')
     for (const [accountId, delta] of byAccount) {
       const acct = await store.get(accountId)
-      if (acct) {
+      if (acct && (profileId === undefined || acct.profile_id === profileId)) {
         acct.balance = (acct.balance ?? 0) + delta
         await store.put(acct)
+      }
+    }
+  }
+
+  private async _assertTransactionLinks(
+    t: {
+      objectStore(name: 'accounts' | 'categories'): {
+        get(key: number): Promise<any>
+      }
+    },
+    transaction: Transaction
+  ): Promise<void> {
+    const profileId = transaction.profile_id
+    for (const [field, value] of [
+      ['source account', transaction.account_id],
+      ['destination account', transaction.transfer_account_id],
+    ] as const) {
+      if (value === null || value === undefined) continue
+      const account = await t.objectStore('accounts').get(value)
+      if (!account || account.profile_id !== profileId) {
+        throw new ProfileOwnershipError(`The ${field} does not belong to this profile.`)
+      }
+    }
+    if (transaction.category_id !== null && transaction.category_id !== undefined) {
+      const category = await t.objectStore('categories').get(transaction.category_id)
+      if (!category || category.profile_id !== profileId) {
+        throw new ProfileOwnershipError('The category does not belong to this profile.')
       }
     }
   }
@@ -691,7 +733,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const existing = await db.get('categories', id)
     if (existing) {
-      Object.assign(existing, category)
+      const patch = { ...category }
+      delete patch.profile_id
+      Object.assign(existing, patch)
       await db.put('categories', existing)
     }
   }
@@ -736,7 +780,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const existing = await db.get('accounts', id)
     if (existing) {
-      Object.assign(existing, account)
+      const patch = { ...account }
+      delete patch.profile_id
+      Object.assign(existing, patch)
       await db.put('accounts', existing)
     }
   }
@@ -810,7 +856,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const existing = await db.get('budgets', id)
     if (existing) {
-      Object.assign(existing, budget)
+      const patch = { ...budget }
+      delete patch.profile_id
+      Object.assign(existing, patch)
       await db.put('budgets', existing)
     }
   }
@@ -844,7 +892,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const existing = await db.get('goals', id)
     if (existing) {
-      Object.assign(existing, goal)
+      const patch = { ...goal }
+      delete patch.profile_id
+      Object.assign(existing, patch)
       await db.put('goals', existing)
     }
   }
@@ -878,7 +928,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     const db = await getDB()
     const existing = await db.get('loans', id)
     if (existing) {
-      Object.assign(existing, loan)
+      const patch = { ...loan }
+      delete patch.profile_id
+      Object.assign(existing, patch)
       await db.put('loans', existing)
     }
   }

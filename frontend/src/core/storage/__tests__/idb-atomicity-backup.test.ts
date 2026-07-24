@@ -47,6 +47,13 @@ describe('IndexedDBAdapter — balance atomicity (audit D4)', () => {
       balance: 0,
       starting_balance: 0,
     })
+    await db.add('categories', {
+      id: 1,
+      profile_id: 1,
+      name: 'Test category',
+      type: 'expense',
+      color: '#000000',
+    })
     adapter = new IndexedDBAdapter()
   })
 

@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
-import { getProfileId, getProfileIds } from '../profile';
+import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
@@ -392,7 +392,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
   if (rl) return rl;
   const pid = await getProfileId(c);
-  const pids = await getProfileIds(c);
+  const pids = [pid];
   const inClause = pids.map(() => '?').join(',');
   const b = (await c.req.json()) as Record<string, any>;
   const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } = b;

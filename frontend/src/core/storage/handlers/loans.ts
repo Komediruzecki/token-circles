@@ -3,7 +3,7 @@
  */
 import { calculateSchedule, getSummary } from '../../loanCalculator'
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
 
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
@@ -27,8 +27,7 @@ export async function loansCreate(body: unknown): Promise<Response> {
 }
 
 export async function loansGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   return json(loan)
 }
@@ -38,19 +37,22 @@ export async function loansUpdate(
   body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  await adapter.updateLoan(idParam(params), body as Record<string, unknown>)
+  const id = idParam(params)
+  if (!(await currentProfileRecord('loans', id))) return notFound('Loan')
+  await adapter.updateLoan(id, body as Record<string, unknown>)
   return ok()
 }
 
 export async function loansDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteLoan(idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('loans', id))) return notFound('Loan')
+  await adapter.deleteLoan(id)
   return ok()
 }
 
 // Loan rate periods
 export async function loanRates(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   return json(loan.rate_periods || [])
 }
@@ -60,7 +62,7 @@ export async function loanRatesAdd(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const rates = loan.rate_periods || []
@@ -75,7 +77,7 @@ export async function loanRateUpdate(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const rateId = idParam(params, 'p2') // p2 is the rateId
@@ -91,7 +93,7 @@ export async function loanRateUpdate(
 
 export async function loanRateDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   const rateId = idParam(params, 'p2')
   const rates = loan.rate_periods || []
@@ -106,8 +108,7 @@ export async function loanRateDelete(params: Record<string, string>): Promise<Re
 
 // Loan prepayments
 export async function loanPrepayments(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   return json(loan.prepayments || [])
 }
@@ -117,7 +118,7 @@ export async function loanPrepaymentAdd(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const prepayments = loan.prepayments || []
@@ -129,7 +130,7 @@ export async function loanPrepaymentAdd(
 
 export async function loanPrepaymentsDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  const loan = await db.get('loans', idParam(params))
+  const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   const prepayId = idParam(params, 'p2')
   const prepayments = loan.prepayments || []
@@ -145,8 +146,7 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
 // Loan amortization calculate (ported from backend/models/loanCalculator.js)
 export async function loansCalculate(params: Record<string, string>): Promise<Response> {
   try {
-    const db = await getDB()
-    const loan = await db.get('loans', idParam(params))
+    const loan = await currentProfileRecord('loans', idParam(params))
     if (!loan) return notFound('Loan')
 
     const ratePeriods = (loan.rate_periods || []) as Array<{

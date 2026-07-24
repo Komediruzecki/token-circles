@@ -115,6 +115,21 @@ export async function accountBelongsToProfile(
   return row !== null;
 }
 
+export async function categoryBelongsToProfile(
+  db: D1Database,
+  categoryId: number,
+  profileId: number
+): Promise<boolean> {
+  if (!Number.isInteger(categoryId) || categoryId <= 0) return false;
+  const row = await first<{ id: number }>(
+    db,
+    'SELECT id FROM categories WHERE id = ? AND profile_id = ?',
+    categoryId,
+    profileId
+  );
+  return row !== null;
+}
+
 export async function run(db: D1Database, sql: string, ...params: unknown[]): Promise<D1Result> {
   // Writes retry ONLY the export lock (rejected before commit) — see isRetriableWriteError.
   return withD1Retry(

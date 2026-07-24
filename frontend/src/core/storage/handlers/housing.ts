@@ -2,7 +2,7 @@
  * Housing handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
 
 export async function housingList(): Promise<Response> {
   const db = await getDB()
@@ -55,8 +55,7 @@ export async function housingCreate(body: unknown): Promise<Response> {
 }
 
 export async function housingGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const h = await db.get('housings', idParam(params))
+  const h = await currentProfileRecord('housings', idParam(params))
   if (h) h.autopay = h.autopay === 1 || h.autopay === true
   return h ? json(h) : notFound('Housing expense')
 }
@@ -66,7 +65,7 @@ export async function housingUpdate(
   body: unknown
 ): Promise<Response> {
   const db = await getDB()
-  const h = await db.get('housings', idParam(params))
+  const h = await currentProfileRecord('housings', idParam(params))
   if (!h) return notFound('Housing expense')
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>
@@ -89,7 +88,9 @@ export async function housingUpdate(
 
 export async function housingDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  await db.delete('housings', idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('housings', id))) return notFound('Housing expense')
+  await db.delete('housings', id)
   return ok()
 }
 

@@ -4,7 +4,16 @@
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getDB } from '../idb'
 import { recalcGoalsByCategory } from './goals'
-import { adapter, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  currentProfileRecord,
+  idParam,
+  json,
+  notFound,
+  ok,
+  writeProfileIdFromHeaders,
+} from './helpers'
 import { normalizeTransaction } from './normalize'
 
 const toCat = (v: unknown): number | null =>
@@ -51,10 +60,20 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
   return json(enriched)
 }
 
-export async function transactionsCreate(body: unknown): Promise<Response> {
+export async function transactionsCreate(body: unknown, headers?: HeadersInit): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid transaction data' }, 400)
   const tx = { ...(body as Record<string, unknown>) }
-  tx.profile_id = await adapter.getCurrentProfileId()
+  const profileId = await writeProfileIdFromHeaders(headers)
+  tx.profile_id = profileId
+  if (!(await currentProfileOwns('accounts', tx.account_id, profileId))) {
+    return json({ error: 'Account does not belong to this profile' }, 400)
+  }
+  if (!(await currentProfileOwns('accounts', tx.transfer_account_id, profileId))) {
+    return json({ error: 'Transfer account does not belong to this profile' }, 400)
+  }
+  if (!(await currentProfileOwns('categories', tx.category_id, profileId))) {
+    return json({ error: 'Category does not belong to this profile' }, 400)
+  }
   const invariantError = transactionInvariantError({
     type: tx.type,
     amount: tx.amount,
@@ -73,30 +92,44 @@ export async function transactionsCreate(body: unknown): Promise<Response> {
 }
 
 export async function transactionsGet(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const txn = await db.get('transactions', idParam(params))
+  const txn = await currentProfileRecord('transactions', idParam(params))
   if (!txn) return notFound('Transaction')
   return json(normalizeTransaction(txn))
 }
 
 export async function transactionsUpdate(
   params: Record<string, string>,
-  body: unknown
+  body: unknown,
+  headers?: HeadersInit
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  const db = await getDB()
-  const before = await db.get('transactions', id)
-  // Only act on a row belonging to a selected profile (audit B2) — mirrors the bulk guard.
-  if (before && !adapter.getCurrentProfileIds().includes(before.profile_id)) {
-    return notFound('Transaction')
-  }
+  const profileId = await writeProfileIdFromHeaders(headers)
+  const before = await currentProfileRecord('transactions', id, profileId)
+  if (!before) return notFound('Transaction')
   // A transfer must keep a destination account across the edit (audit D2). Check the
   // merged old+new state so a partial update that flips type to transfer, or clears the
   // destination, is rejected rather than silently producing an inert/unbalanced row.
   const patch = body as Record<string, unknown>
-  if (!before) return notFound('Transaction')
   const normalizedPatch = { ...patch }
+  if (
+    'account_id' in patch &&
+    !(await currentProfileOwns('accounts', patch.account_id, profileId))
+  ) {
+    return json({ error: 'Account does not belong to this profile' }, 400)
+  }
+  if (
+    'transfer_account_id' in patch &&
+    !(await currentProfileOwns('accounts', patch.transfer_account_id, profileId))
+  ) {
+    return json({ error: 'Transfer account does not belong to this profile' }, 400)
+  }
+  if (
+    'category_id' in patch &&
+    !(await currentProfileOwns('categories', patch.category_id, profileId))
+  ) {
+    return json({ error: 'Category does not belong to this profile' }, 400)
+  }
   const mergedType = 'type' in patch ? patch.type : before.type
   if (
     mergedType !== 'transfer' &&
@@ -106,7 +139,9 @@ export async function transactionsUpdate(
     normalizedPatch.transfer_account_id = null
   }
   const merged = { ...before, ...normalizedPatch }
-  const invariantError = transactionInvariantError(merged)
+  const invariantError = transactionInvariantError(
+    merged as Parameters<typeof transactionInvariantError>[0]
+  )
   if (invariantError) return json({ error: invariantError }, 400)
   await adapter.updateTransaction(id, normalizedPatch)
   // Recompute both the previous and new category (an edit may re-categorize the tx).
@@ -117,14 +152,14 @@ export async function transactionsUpdate(
   return ok()
 }
 
-export async function transactionsDelete(params: Record<string, string>): Promise<Response> {
+export async function transactionsDelete(
+  params: Record<string, string>,
+  headers?: HeadersInit
+): Promise<Response> {
   const id = idParam(params)
-  const db = await getDB()
-  const before = await db.get('transactions', id)
-  // Only delete a row belonging to a selected profile (audit B2).
-  if (before && !adapter.getCurrentProfileIds().includes(before.profile_id)) {
-    return notFound('Transaction')
-  }
+  const profileId = await writeProfileIdFromHeaders(headers)
+  const before = await currentProfileRecord('transactions', id, profileId)
+  if (!before) return notFound('Transaction')
   await adapter.deleteTransaction(id)
   await recalcGoalsByCategory(toCat(before?.category_id))
   return ok()
@@ -172,12 +207,14 @@ export async function transactionsSummary(): Promise<Response> {
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
 
-export async function reconcileToggle(params: Record<string, string>): Promise<Response> {
+export async function reconcileToggle(
+  params: Record<string, string>,
+  headers?: HeadersInit
+): Promise<Response> {
   const db = await getDB()
-  const txn = await db.get('transactions', idParam(params))
-  // Treat a row outside the selected profiles as not found (audit B2).
-  if (!txn || !adapter.getCurrentProfileIds().includes(txn.profile_id))
-    return notFound('Transaction')
+  const profileId = await writeProfileIdFromHeaders(headers)
+  const txn = await currentProfileRecord('transactions', idParam(params), profileId)
+  if (!txn) return notFound('Transaction')
   const now = new Date().toISOString()
   txn.reconciled = txn.reconciled ? 0 : 1
   txn.reconciled_at = txn.reconciled ? now : null
@@ -185,7 +222,7 @@ export async function reconcileToggle(params: Record<string, string>): Promise<R
   return json({ reconciled: txn.reconciled, reconciled_at: txn.reconciled_at })
 }
 
-export async function reconcileBulk(body: unknown): Promise<Response> {
+export async function reconcileBulk(body: unknown, headers?: HeadersInit): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const { date_from, date_to } = body as Record<string, unknown>
   const txns = await adapter.listTransactions({
@@ -193,9 +230,11 @@ export async function reconcileBulk(body: unknown): Promise<Response> {
     date_to: date_to as string | undefined,
   })
   const db = await getDB()
+  const pid = await writeProfileIdFromHeaders(headers)
   const now = new Date().toISOString()
   let count = 0
   for (const t of txns) {
+    if (t.profile_id !== pid) continue
     if (!t.reconciled) {
       t.reconciled = 1
       t.reconciled_at = now
@@ -218,10 +257,10 @@ export async function reconcileSummary(): Promise<Response> {
   })
 }
 
-export async function transactionsBulk(body: unknown): Promise<Response> {
+export async function transactionsBulk(body: unknown, headers?: HeadersInit): Promise<Response> {
   try {
     const db = await getDB()
-    const pids = adapter.getCurrentProfileIds()
+    const pid = await writeProfileIdFromHeaders(headers)
     const data = body as Record<string, unknown>
     const ids = (data.ids || data.transactionIds) as number[] | undefined
     const action = ((data.action || data._method || 'update') as string).toLowerCase()
@@ -238,7 +277,7 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
       let deleted = 0
       for (const id of ids) {
         const tx = await db.get('transactions', id)
-        if (tx && pids.includes(tx.profile_id)) {
+        if (tx && tx.profile_id === pid) {
           await adapter.deleteTransaction(id)
           deleted++
         }
@@ -262,7 +301,13 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
       let updated = 0
       for (const id of ids) {
         const tx = await db.get('transactions', id)
-        if (!tx || !pids.includes(tx.profile_id)) continue
+        if (!tx || tx.profile_id !== pid) continue
+        if (
+          'category_id' in updateData &&
+          !(await currentProfileOwns('categories', updateData.category_id, pid))
+        ) {
+          return json({ error: 'Category does not belong to this profile' }, 400)
+        }
         const patch: Record<string, unknown> = {}
         for (const field of allowedFields) {
           if (field in updateData) {
@@ -302,18 +347,17 @@ export async function transactionsBulk(body: unknown): Promise<Response> {
   }
 }
 
-export async function reconcileBatch(body: unknown): Promise<Response> {
+export async function reconcileBatch(body: unknown, headers?: HeadersInit): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const ids = (body as Record<string, unknown>).transaction_ids as number[]
   if (!Array.isArray(ids)) return json({ error: 'transaction_ids array required' }, 400)
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
+  const pid = await writeProfileIdFromHeaders(headers)
   const now = new Date().toISOString()
   let updated = 0
   for (const id of ids) {
     const txn = await db.get('transactions', id)
-    // Skip rows outside the selected profiles (audit B2).
-    if (txn && pids.includes(txn.profile_id) && !txn.reconciled) {
+    if (txn && txn.profile_id === pid && !txn.reconciled) {
       txn.reconciled = 1
       txn.reconciled_at = now
       await db.put('transactions', txn)

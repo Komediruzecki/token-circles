@@ -103,7 +103,12 @@ describe('localApiRouter - category mappings', () => {
 
   it('DELETE returns ok', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/categories/mappings/1', {
+    const created = await routeApiRequest('http://localhost/api/categories/mappings', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'delete-me', mapping: 'delete-me' }),
+    })
+    const { id } = await created.json()
+    const res = await routeApiRequest(`http://localhost/api/categories/mappings/${id}`, {
       method: 'DELETE',
     })
     expect(res.status).toBe(200)
@@ -153,7 +158,12 @@ describe('localApiRouter - loan calculate', () => {
 describe('localApiRouter - path with params', () => {
   it('matches paths with numeric IDs', async () => {
     const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/categories/mappings/42', {
+    const created = await routeApiRequest('http://localhost/api/categories/mappings', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'numeric-id', mapping: 'numeric-id' }),
+    })
+    const { id } = await created.json()
+    const res = await routeApiRequest(`http://localhost/api/categories/mappings/${id}`, {
       method: 'DELETE',
     })
     expect(res.status).toBe(200)
