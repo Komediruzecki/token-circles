@@ -30,7 +30,7 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 10
+const DB_VERSION = 11
 
 /** Thrown by deleteAccount when transactions still reference the account.
  *  The accounts handler maps this to a 409 JSON response. */
@@ -48,14 +48,49 @@ export class ProfileOwnershipError extends Error {
   }
 }
 
-function upgradeSchema(
+/**
+ * Repair one transaction row's foreign keys in place (audit H-03): null any account / transfer
+ * account / category FK that points at a record the row's own profile does NOT own, or at a
+ * record that no longer exists. `acctProfile` / `catProfile` map record id → owning profile_id.
+ * Returns true when at least one key was nulled. Pure and exported so the v11 migration and its
+ * test share exactly the same decision logic.
+ */
+export function repairTransactionProfileLinks(
+  row: {
+    profile_id: number
+    account_id?: number | null
+    transfer_account_id?: number | null
+    category_id?: number | null
+  },
+  acctProfile: Map<number, number>,
+  catProfile: Map<number, number>
+): boolean {
+  let changed = false
+  for (const key of ['account_id', 'transfer_account_id'] as const) {
+    const fk = row[key]
+    if (fk !== null && fk !== undefined && acctProfile.get(fk) !== row.profile_id) {
+      row[key] = null
+      changed = true
+    }
+  }
+  const cat = row.category_id
+  if (cat !== null && cat !== undefined && catProfile.get(cat) !== row.profile_id) {
+    row.category_id = null
+    changed = true
+  }
+  return changed
+}
+
+async function upgradeSchema(
   db: IDBPDatabase,
   oldVersion: number,
   _newVersion: number | null,
-  // The versionchange transaction from idb; typed loosely so the v10 data migration can
-  // walk the accounts store without importing idb's deep generic cursor types.
+  // The versionchange transaction from idb; typed loosely so the v10/v11 data migrations can
+  // walk the object stores without importing idb's deep generic cursor types. All store/index
+  // creation (v1–v9) runs synchronously above the first `await` so IndexedDB still sees the
+  // schema changes before the versionchange transaction starts committing.
   tx?: any
-): void | Promise<void> {
+): Promise<void> {
   // v1: base stores
   if (oldVersion < 1) {
     db.createObjectStore('profiles', { keyPath: 'id', autoIncrement: true })
@@ -151,21 +186,48 @@ function upgradeSchema(
     const store = tx.objectStore('accounts')
     // Cursor walk is awaited request-by-request within the upgrade transaction (idb keeps
     // it alive as long as each awaited op belongs to that transaction).
-    const migrate = async (): Promise<void> => {
-      let cursor = await store.openCursor()
-      while (cursor) {
-        const a = cursor.value as Record<string, unknown>
-        if (a && (a.starting_date === null || a.starting_date === undefined)) {
-          const legacy = a.starting_balance_date ?? a.balance_date
-          if (legacy !== null && legacy !== undefined) {
-            a.starting_date = legacy
-            await cursor.update(a)
-          }
+    let cursor = await store.openCursor()
+    while (cursor) {
+      const a = cursor.value as Record<string, unknown>
+      if (a && (a.starting_date === null || a.starting_date === undefined)) {
+        const legacy = a.starting_balance_date ?? a.balance_date
+        if (legacy !== null && legacy !== undefined) {
+          a.starting_date = legacy
+          await cursor.update(a)
         }
-        cursor = await cursor.continue()
       }
+      cursor = await cursor.continue()
     }
-    return migrate()
+  }
+
+  // v11: repair cross-profile foreign keys on existing transactions (audit H-03). PR #377
+  // began rejecting NEW transactions whose account/category belongs to another profile, but
+  // rows corrupted before that (e.g. a household import that linked a profile-A transaction to
+  // profile-B's account) still exist. Because the adapter used to re-validate the whole row on
+  // every edit, those rows became un-editable — ANY edit (even description-only) threw
+  // ProfileOwnershipError. Null out each foreign key that points at a record the row's own
+  // profile doesn't own (or a record that no longer exists) so the row is consistent and
+  // editable again. Account balances that drifted from the old worker mis-scoping are healed
+  // separately by recomputeBalances (accounts > recompute-balances).
+  if (oldVersion < 11 && oldVersion >= 1 && tx) {
+    const accounts = (await tx.objectStore('accounts').getAll()) as Record<string, any>[]
+    const categories = (await tx.objectStore('categories').getAll()) as Record<string, any>[]
+    const acctProfile = new Map<number, number>(accounts.map((a) => [a.id, a.profile_id]))
+    const catProfile = new Map<number, number>(categories.map((cat) => [cat.id, cat.profile_id]))
+    const store = tx.objectStore('transactions')
+    let cursor = await store.openCursor()
+    while (cursor) {
+      const row = cursor.value as {
+        profile_id: number
+        account_id?: number | null
+        transfer_account_id?: number | null
+        category_id?: number | null
+      }
+      if (repairTransactionProfileLinks(row, acctProfile, catProfile)) {
+        await cursor.update(row)
+      }
+      cursor = await cursor.continue()
+    }
   }
 }
 
@@ -599,7 +661,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
     Object.assign(existing, preserved)
-    await this._assertTransactionLinks(t, existing)
+    // Only re-validate the links this patch actually changes — an unchanged cross-profile link
+    // on a legacy row must not block an unrelated edit (audit H-03).
+    await this._assertTransactionLinks(t, existing, new Set(Object.keys(tx)))
     await txStore.put(existing)
     deltas.push(...computeBalanceDeltas(existing))
     await this._applyDeltasInTx(t, deltas, existing.profile_id)
@@ -691,26 +755,43 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
   }
 
+  /**
+   * Assert a transaction's foreign keys (source account, transfer account, category) belong to
+   * the transaction's own profile.
+   *
+   * On CREATE, omit `changedKeys` to validate every link. On UPDATE, pass the set of keys the
+   * caller is actually changing so ONLY those links are re-checked: re-validating an UNCHANGED
+   * link would reject every edit — even a description-only one — of a pre-existing cross-profile
+   * row (audit H-03), turning legacy data corruption into a row the user can never fix. Links
+   * the caller does change are still validated, so no new cross-profile link can be introduced.
+   */
   private async _assertTransactionLinks(
     t: {
       objectStore(name: 'accounts' | 'categories'): {
         get(key: number): Promise<any>
       }
     },
-    transaction: Transaction
+    transaction: Transaction,
+    changedKeys?: Set<string>
   ): Promise<void> {
+    const isChanged = (key: string): boolean => changedKeys === undefined || changedKeys.has(key)
     const profileId = transaction.profile_id
-    for (const [field, value] of [
-      ['source account', transaction.account_id],
-      ['destination account', transaction.transfer_account_id],
+    for (const [field, key, value] of [
+      ['source account', 'account_id', transaction.account_id],
+      ['destination account', 'transfer_account_id', transaction.transfer_account_id],
     ] as const) {
+      if (!isChanged(key)) continue
       if (value === null || value === undefined) continue
       const account = await t.objectStore('accounts').get(value)
       if (!account || account.profile_id !== profileId) {
         throw new ProfileOwnershipError(`The ${field} does not belong to this profile.`)
       }
     }
-    if (transaction.category_id !== null && transaction.category_id !== undefined) {
+    if (
+      isChanged('category_id') &&
+      transaction.category_id !== null &&
+      transaction.category_id !== undefined
+    ) {
       const category = await t.objectStore('categories').get(transaction.category_id)
       if (!category || category.profile_id !== profileId) {
         throw new ProfileOwnershipError('The category does not belong to this profile.')

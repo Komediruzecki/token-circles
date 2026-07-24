@@ -1,4 +1,5 @@
 import { validateBody } from '../validation'
+import { AccountInUseError, ProfileOwnershipError } from './idb'
 import * as h from './localHandlers'
 
 // ── Route types ──────────────────────────────────────────────────────────────
@@ -956,14 +957,30 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
     // handler (see targetProfileIdsFromHeaders) — there is deliberately NO shared mutable
     // profile state on the adapter, so concurrent requests can never clobber one another's
     // target and a Danger Zone delete always hits the profile it was issued for.
-    return route.handler({
-      method,
-      path: `/api${path}`,
-      params,
-      query,
-      body,
-      headers: init?.headers,
-    })
+    try {
+      return await route.handler({
+        method,
+        path: `/api${path}`,
+        params,
+        query,
+        body,
+        headers: init?.headers,
+      })
+    } catch (err) {
+      // A handler (or the adapter beneath it) threw instead of returning a Response. Map known
+      // domain errors to a clean status and everything else to 500 — without this the rejection
+      // escapes routeApiRequest and apiFetch as an unhandled promise rejection the UI reads as a
+      // generic failure. Notably a ProfileOwnershipError on a legacy cross-linked row used to
+      // surface as an unhandled 500 instead of a 400 (audit H-03).
+      if (err instanceof ProfileOwnershipError) return json({ error: err.message }, 400)
+      if (err instanceof AccountInUseError) return json({ error: err.message }, 409)
+      console.error(
+        '[routeApiRequest] Unhandled handler error',
+        { method, path: `/api${path}` },
+        err
+      )
+      return json({ error: (err as Error)?.message ?? 'Internal error' }, 500)
+    }
   }
 
   return notFound(`/api${path}`)

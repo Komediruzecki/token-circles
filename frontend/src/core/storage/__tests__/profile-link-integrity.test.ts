@@ -227,4 +227,53 @@ describe('IndexedDB profile-link integrity', () => {
       ).status
     ).toBe(400)
   })
+
+  it('lets a pre-existing cross-profile row be edited without a 500 or moving balances (H-03)', async () => {
+    const db = await getDB()
+    // Simulate pre-#377 corruption: a profile-1 transaction that references profile 2's account
+    // (22) and category (222). Inserted directly to bypass the create-time ownership guard.
+    await db.add('transactions', {
+      id: 3003,
+      profile_id: 1,
+      description: 'Legacy cross-linked',
+      type: 'expense',
+      amount: 30,
+      account_id: 22,
+      category_id: 222,
+      date: '2026-01-01',
+    })
+
+    // A description-only edit must succeed: it used to throw ProfileOwnershipError inside the
+    // adapter (re-validating the whole merged row) and surface as an unhandled 500. Only the
+    // links the patch actually changes are re-validated now.
+    const res = await transactionsUpdate({ p1: '3003' }, { description: 'Renamed' })
+    expect(res.status).toBe(200)
+    expect((await db.get('transactions', 3003))?.description).toBe('Renamed')
+    // Editing the mis-linked row leaves both profiles' account balances untouched.
+    expect((await db.get('accounts', 11))?.balance).toBe(1000)
+    expect((await db.get('accounts', 22))?.balance).toBe(500)
+  })
+
+  it('surfaces a handler/adapter throw as a mapped status, not an unhandled rejection', async () => {
+    const db = await getDB()
+    await db.add('transactions', {
+      id: 4004,
+      profile_id: 1,
+      description: 'Legacy row 2',
+      type: 'expense',
+      amount: 40,
+      account_id: 22, // foreign account, own category
+      category_id: 111,
+      date: '2026-01-01',
+    })
+    // Full trip through routeApiRequest (which now wraps handlers in try/catch): a legacy-row
+    // edit resolves to a 200 Response rather than rejecting the promise apiFetch awaits.
+    const res = await routeApiRequest('http://localhost/api/transactions/4004', {
+      method: 'PUT',
+      headers: { 'X-Profile-Id': '1', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'Renamed via router' }),
+    })
+    expect(res.status).toBe(200)
+    expect((await db.get('transactions', 4004))?.description).toBe('Renamed via router')
+  })
 })
