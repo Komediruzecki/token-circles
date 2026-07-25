@@ -246,6 +246,32 @@ function categoryReferenceStatements(
   return statements;
 }
 
+/**
+ * Delete a single category and repoint its dependents so nothing is orphaned
+ * (audit M-07). Uses the same reference policy as the bulk reset: nullable
+ * references (transactions, savings goals, bills, recurring rules) become
+ * uncategorized; category-required rows (budgets, zero-based budgets) and
+ * mappings are removed; child categories are re-parented to the top level.
+ * Runs as one atomic D1 batch.
+ */
+export async function deleteProfileCategory(
+  DB: D1Database,
+  profileId: number,
+  categoryId: number
+): Promise<void> {
+  const statements: D1PreparedStatement[] = [
+    ...categoryReferenceStatements(DB, profileId, categoryId, null),
+    DB.prepare(
+      'UPDATE categories SET parent_id = NULL WHERE profile_id = ? AND parent_id = ?'
+    ).bind(profileId, categoryId),
+    DB.prepare('DELETE FROM categories WHERE id = ? AND profile_id = ?').bind(
+      categoryId,
+      profileId
+    ),
+  ];
+  await DB.batch(statements);
+}
+
 export async function resetProfileCategories(DB: D1Database, profileId: number): Promise<void> {
   const existing = await db.all<CategoryRow>(
     DB,

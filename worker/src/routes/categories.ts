@@ -4,7 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
-import { resetProfileCategories } from '../profileData';
+import { deleteProfileCategory, resetProfileCategories } from '../profileData';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
 // Tables: categories, category_mappings. The backend's toCamelCase() is an identity
@@ -580,13 +580,14 @@ categoriesRoutes.put('/api/categories/:id', requireAuth, async (c) => {
 
 categoriesRoutes.delete('/api/categories/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const res = await db.del(
+  const id = Number(c.req.param('id'));
+  const existing = await db.first(
     c.env.DB,
-    'categories',
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
+    'SELECT id FROM categories WHERE id = ? AND profile_id = ?',
+    id,
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Not found');
+  await deleteProfileCategory(c.env.DB, pid, id);
   return c.json({ ok: true });
 });
