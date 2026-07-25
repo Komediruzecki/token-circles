@@ -1624,6 +1624,7 @@ export default function Transactions() {
           <TransactionTable
             transactions={paginatedTransactions()}
             accounts={accounts()}
+            activeProfileId={state.currentProfile?.id}
             selectedTransactions={selectedTransactions()}
             onSelectionChange={handleSelectionChange}
             onSort={handleSortChange}

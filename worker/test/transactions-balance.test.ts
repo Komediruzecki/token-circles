@@ -152,6 +152,47 @@ describe('worker transactions — account balance integrity (D1 batch)', () => {
     expect(await balanceOf(1)).toBe(850);
   });
 
+  // ── #3: a write is scoped to the single active profile; with a household selection its balance
+  // side effects must NOT reach another selected profile's accounts (matches local/IndexedDB).
+  // Regression for the old `WHERE id = ? AND profile_id IN (pids)` scoping, which moved a foreign
+  // profile's balance on legacy cross-linked rows.
+  it('deleting a legacy cross-profile row leaves the foreign profile balance untouched', async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO accounts (id, name, type, balance, starting_balance, profile_id) VALUES (3, 'P2 Wallet', 'giro', 777, 777, 2)"
+      ),
+      // Owned by profile 1 but pointing at profile 2's account 3 — inserted directly to bypass the
+      // create-time ownership guard, simulating a pre-#377 cross-linked row.
+      env.DB.prepare(
+        "INSERT INTO transactions (id, description, amount, type, account_id, profile_id, date) VALUES (500, 'Legacy', 50, 'expense', 3, 1, '2026-01-01')"
+      ),
+    ]);
+    const res = await api('/api/transactions/500', { method: 'DELETE' }, { profileIds: [1, 2] });
+    expect(res.status).toBe(200);
+    expect(await balanceOf(3)).toBe(777); // foreign profile's account is NOT reversed
+    expect(await balanceOf(1)).toBe(1000); // active profile's own accounts unaffected
+  });
+
+  it('updating a legacy cross-profile row leaves the foreign profile balance untouched', async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO accounts (id, name, type, balance, starting_balance, profile_id) VALUES (3, 'P2 Wallet', 'giro', 777, 777, 2)"
+      ),
+      env.DB.prepare(
+        "INSERT INTO transactions (id, description, amount, type, account_id, profile_id, date) VALUES (501, 'Legacy', 50, 'expense', 3, 1, '2026-01-01')"
+      ),
+    ]);
+    // Change the amount (not the link) so both the reversal and the re-apply run — with the old
+    // scoping they netted -30 on account 3; scoped to `pid` they never touch it.
+    const res = await api(
+      '/api/transactions/501',
+      { method: 'PUT', body: JSON.stringify({ amount: 80 }) },
+      { profileIds: [1, 2] }
+    );
+    expect(res.status).toBe(200);
+    expect(await balanceOf(3)).toBe(777);
+  });
+
   it('updating the amount reverses the old effect and applies the new one', async () => {
     const id = await createdId(
       await post({ description: 'Groceries', amount: 100, type: 'expense', account_id: 1 })
