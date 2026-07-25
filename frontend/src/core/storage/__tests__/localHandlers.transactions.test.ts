@@ -345,6 +345,45 @@ describe('localHandlers - transactions', () => {
     expect(res.status).toBe(400)
   })
 
+  // Audit H-02 — a bulk update is all-or-nothing. A legacy malformed row (written before the
+  // invariant existed) swept into the selection rejects the WHOLE batch before any write, so an
+  // earlier valid row in the same request is never partially mutated. The Worker enforces the
+  // same rule (worker/test/transactions-money-correctness.test.ts) so the runtimes agree.
+  it('bulk update is atomic: a legacy malformed row rejects the batch, leaving earlier rows untouched (audit H-02)', async () => {
+    const db = await getDB()
+    const valid = await (
+      await transactionsCreate({
+        amount: 40,
+        type: 'expense',
+        date: '2026-06-01',
+        description: 'Valid',
+        notes: 'original',
+        category_id: 1,
+      })
+    ).json()
+    // Legacy malformed row written straight to storage, bypassing the create invariant
+    // (amount <= 0) — as an older build could have persisted.
+    const malformedId = await db.add('transactions', {
+      profile_id: 1,
+      description: 'Legacy',
+      amount: 0,
+      type: 'expense',
+      date: '2026-06-02',
+      notes: 'legacy-note',
+      category_id: 1,
+    })
+    // `valid` is listed first, so the pre-fix code would already have written it before
+    // reaching the malformed row and returning 400 (the non-atomic partial apply).
+    const res = await transactionsBulk({
+      ids: [valid.id, malformedId],
+      action: 'update',
+      data: { notes: 'tagged' },
+    })
+    expect(res.status).toBe(400)
+    expect((await db.get('transactions', valid.id))?.notes).toBe('original')
+    expect((await db.get('transactions', malformedId))?.notes).toBe('legacy-note')
+  })
+
   it('bulk rejects conversion to a transfer without account selection', async () => {
     const created = await (
       await transactionsCreate({

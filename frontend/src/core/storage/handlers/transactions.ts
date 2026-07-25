@@ -300,6 +300,13 @@ export async function transactionsBulk(body: unknown, headers?: HeadersInit): Pr
       if (!updateData || typeof updateData !== 'object') {
         return json({ error: 'No update data provided' }, 400)
       }
+      // Category ownership is the same for the whole batch — check it once, before any write.
+      if (
+        'category_id' in updateData &&
+        !(await currentProfileOwns('categories', updateData.category_id, pid))
+      ) {
+        return json({ error: 'Category does not belong to this profile' }, 400)
+      }
       const allowedFields = [
         'category_id',
         'type',
@@ -309,16 +316,15 @@ export async function transactionsBulk(body: unknown, headers?: HeadersInit): Pr
         'notes',
         'reconciled',
       ]
-      let updated = 0
+      // Pass 1 — validate every affected row against the shared invariant and stage its patch.
+      // The bulk is all-or-nothing: one invariant-violating row (e.g. a legacy malformed row
+      // swept into the selection) rejects the WHOLE request before any write, so we never
+      // partially apply and leave earlier rows mutated (audit H-02). Mirrors the Worker bulk
+      // path and the single-update handler, which validate the resulting row too.
+      const staged: { id: number; patch: Record<string, unknown> }[] = []
       for (const id of ids) {
         const tx = await db.get('transactions', id)
         if (!tx || tx.profile_id !== pid) continue
-        if (
-          'category_id' in updateData &&
-          !(await currentProfileOwns('categories', updateData.category_id, pid))
-        ) {
-          return json({ error: 'Category does not belong to this profile' }, 400)
-        }
         const patch: Record<string, unknown> = {}
         for (const field of allowedFields) {
           if (field in updateData) {
@@ -345,9 +351,14 @@ export async function transactionsBulk(body: unknown, headers?: HeadersInit): Pr
           }
           const invariantError = transactionInvariantError({ ...tx, ...patch })
           if (invariantError) return json({ error: invariantError }, 400)
-          await adapter.updateTransaction(id, patch)
-          updated++
+          staged.push({ id, patch })
         }
+      }
+      // Pass 2 — every staged row passed validation, so apply them.
+      let updated = 0
+      for (const { id, patch } of staged) {
+        await adapter.updateTransaction(id, patch)
+        updated++
       }
       return json({ ok: true, updated })
     }

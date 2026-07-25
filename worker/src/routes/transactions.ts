@@ -507,8 +507,8 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     updates.push("updated_at = datetime('now')");
 
     // A bulk `type` change alters balance semantics (e.g. income→expense), and a `category_id`
-    // change moves goal contributions. When either is present we fetch the affected rows to
-    // correct account balances (audit D1) and recompute the touched category goals.
+    // change moves goal contributions. We fetch the affected rows below to correct account
+    // balances (audit D1), recompute the touched category goals, and enforce the invariant.
     const typeChanging = Object.prototype.hasOwnProperty.call(data, 'type');
     const categoryChanging = Object.prototype.hasOwnProperty.call(data, 'category_id');
     const newType = typeChanging ? String(data.type) : null;
@@ -517,23 +517,42 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     }
     const affectedCategories = new Set<number>();
 
-    let updated = 0;
+    // Pass 1 — validate every affected row against the shared transaction invariant and stage
+    // its per-chunk statements. The whole request is all-or-nothing across every chunk: if ANY
+    // resulting row would violate the invariant (e.g. a legacy malformed row swept into a
+    // notes/reconciled update), we throw here BEFORE executing a single batch, so we never
+    // partially apply. This gives the Worker the same guarantee as the local bulk path and the
+    // single-update handler, which validate the resulting row too (audit H-02). We always fetch
+    // the rows — not just on type/category changes — so a benign metadata edit can't silently
+    // pass over an invariant-violating row on the Worker while the client rejects it.
+    const chunkBatches: D1PreparedStatement[][] = [];
     for (const chunk of idChunks) {
       const placeholders = chunk.map(() => '?').join(',');
       const stmts: D1PreparedStatement[] = [];
-      if (typeChanging || categoryChanging) {
-        const rows = await db.all<TxRow>(
-          c.env.DB,
-          `SELECT id, category_id, account_id, transfer_account_id, type, amount, amount_local
-             FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
-          ...pids,
-          ...chunk
-        );
-        for (const row of rows) {
-          if (row.category_id) affectedCategories.add(row.category_id);
-          if (typeChanging && newType && row.type !== newType) {
-            stmts.push(...typeChangeBalanceStmts(c.env.DB, inClause, pids, row, newType));
-          }
+      const rows = await db.all<TxRow>(
+        c.env.DB,
+        `SELECT id, category_id, account_id, transfer_account_id, type, amount, amount_local
+           FROM transactions WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`,
+        ...pids,
+        ...chunk
+      );
+      for (const row of rows) {
+        // Validate the row AS IT WILL BE after this update. Among invariant-relevant fields
+        // only `type` is bulk-editable (amount/account ids are not), and a type change clears
+        // transfer_account_id (the SET above), so the resulting state is derivable per row.
+        const resultingType = typeChanging && newType ? newType : row.type;
+        const resultingTransferAccountId = typeChanging ? null : row.transfer_account_id;
+        const invariantError = transactionInvariantError({
+          type: resultingType,
+          amount: row.amount,
+          amount_local: row.amount_local,
+          account_id: row.account_id,
+          transfer_account_id: resultingTransferAccountId,
+        });
+        if (invariantError) throw new HttpError(400, invariantError);
+        if (row.category_id) affectedCategories.add(row.category_id);
+        if (typeChanging && newType && row.type !== newType) {
+          stmts.push(...typeChangeBalanceStmts(c.env.DB, inClause, pids, row, newType));
         }
       }
       // Balance corrections and the row UPDATE for this chunk commit atomically; the UPDATE is
@@ -543,6 +562,12 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
           `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
         ).bind(...setParams, ...pids, ...chunk)
       );
+      chunkBatches.push(stmts);
+    }
+
+    // Pass 2 — every row across every chunk passed validation, so apply them.
+    let updated = 0;
+    for (const stmts of chunkBatches) {
       const results = await c.env.DB.batch(stmts);
       updated += results[results.length - 1].meta.changes ?? 0;
     }
