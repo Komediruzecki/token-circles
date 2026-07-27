@@ -27,7 +27,7 @@ import {
 } from '../../core/bankImport'
 import { loadBankImportMemory, rememberBankImportChoice } from '../../core/bankImport/memory'
 import { classifyCategory } from '../../core/categoryClassifier'
-import { autoDetectMapping } from '../../core/importMapping'
+import { autoDetectMapping, resolveHeaderMapping } from '../../core/importMapping'
 import {
   isTransferToVoid as isTransferToVoidPure,
   visibleRowIndices as visibleRowIndicesPure,
@@ -437,6 +437,30 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       categories.forEach((cat) => {
         types[cat] = classifyCategory(cat)
       })
+      setCategoryTypes(types)
+    }
+  }
+
+  // Apply a saved source's column mapping (persisted BY HEADER NAME) to the freshly fetched
+  // headers, resolving names → indices; fall back to auto-detect when there's no saved mapping or
+  // a header vanished. Then restore the saved income/expense/account decisions, or classify
+  // afresh. No step navigation — the caller (auto-sync / fetch-&-preview) decides what's next.
+  const applySavedMapping = (
+    headerMapping?: Record<string, string> | null,
+    savedCategoryTypes?: Record<string, 'income' | 'expense' | 'account'> | null
+  ) => {
+    const headers = currentHeaders()
+    if (headers.length === 0) return
+    const resolved =
+      headerMapping && Object.keys(headerMapping).length > 0
+        ? resolveHeaderMapping(headerMapping, headers)
+        : autoDetectMapping(headers)
+    setColumnMapping(resolved)
+    if (savedCategoryTypes && Object.keys(savedCategoryTypes).length > 0) {
+      setCategoryTypes({ ...savedCategoryTypes })
+    } else if (resolved['category'] !== undefined) {
+      const types: Record<string, 'income' | 'expense' | 'account'> = {}
+      for (const cat of detectCategories()) types[cat] = classifyCategory(cat)
       setCategoryTypes(types)
     }
   }
@@ -957,12 +981,16 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
-  // Google Sheets fetch
-  const fetchGoogleSheet = async () => {
+  // Google Sheets fetch. By default (interactive Data-Entry use) it advances the step machine to
+  // mapping/upload. A background "auto sync" / "fetch & preview" passes { navigate: false } to
+  // fetch WITHOUT touching the active step, then drives mapping/preview/import itself. Returns
+  // whether usable headers came back, so a headless caller can bail on a failed fetch.
+  const fetchGoogleSheet = async (options?: { navigate?: boolean }): Promise<boolean> => {
+    const navigate = options?.navigate ?? true
     const url = sheetUrl()
     if (!url) {
       setError('Please enter a Google Sheets URL')
-      return
+      return false
     }
 
     setLoading(true)
@@ -991,14 +1019,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setHeaders(data.headers || [])
       setRows(data.rows || [])
 
-      // If returning with specific sheet and we have headers, go to mapping
-      if (selectedSheet() && data.headers && data.headers.length > 0) {
-        goToMapping()
-      } else {
-        setActiveStep('upload')
+      const hasHeaders = Array.isArray(data.headers) && data.headers.length > 0
+      if (navigate) {
+        // If returning with specific sheet and we have headers, go to mapping
+        if (selectedSheet() && hasHeaders) {
+          goToMapping()
+        } else {
+          setActiveStep('upload')
+        }
       }
+      return hasHeaders
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch Google Sheet')
+      return false
     } finally {
       setLoading(false)
     }
@@ -1399,6 +1432,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     parsePastedData,
     goToMapping,
     goToPreview,
+    applySavedMapping,
     toggleApprovedCategory,
     resetForm,
     handleFileSelect,

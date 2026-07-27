@@ -13,7 +13,7 @@ import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 
 // Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
-function parseCsv(text: string): { headers: string[]; rows: string[][] } {
+export function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   const all: string[][] = [];
   for (const line of text.trim().split('\n')) {
     const cols: string[] = [];
@@ -273,113 +273,110 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
   );
 });
 
+// ── fetchGoogleSheetRows — fetch + parse a published sheet as CSV (Workers-safe) ──
+// Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
+// it. Returns a { status, body } pair. Pure-JS CSV path only; the XLSX fallback (multi-tab
+// enumeration) needs a spreadsheet parser and still surfaces as a 501-style error.
+export async function fetchGoogleSheetRows(
+  url: unknown,
+  sheetName?: string
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  if (!url) return { status: 400, body: { error: 'URL is required' } };
+  const idMatch = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!idMatch) return { status: 400, body: { error: 'Invalid Google Sheets URL or ID' } };
+  const sheetId = idMatch[1];
+  const gidMatch = String(url).match(/[?&#]gid=([0-9]+)/);
+  const gid = gidMatch ? gidMatch[1] : null;
+  try {
+    const csvUrl = gid
+      ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
+      : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+    const r = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text();
+    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+      throw new Error('Sheet is not publicly accessible (got HTML instead of CSV)');
+    }
+    const { headers, rows } = parseCsv(text);
+    if (headers.length > 0) {
+      return {
+        status: 200,
+        body: {
+          headers,
+          rows,
+          selectedSheet: sheetName || 'Sheet1',
+          sheetNames: [sheetName || 'Sheet1'],
+        },
+      };
+    }
+    throw new Error('No rows found');
+  } catch (err) {
+    // CSV export failed / returned nothing. The Express fallback parses the XLSX export to
+    // enumerate tabs, which the spreadsheet parser can't do on Workers yet.
+    return {
+      status: 501,
+      body: {
+        error:
+          'Could not import this Google Sheet via CSV export: ' +
+          (err as Error).message +
+          ". Make sure the sheet is shared as 'Anyone with link can view'. " +
+          'The XLSX fallback is not available on this deployment yet.',
+      },
+    };
+  }
+}
+
 // ── POST /api/import/googlesheet — fetch + parse a published sheet as CSV ──────
-// Pure-JS CSV path is ported (handles quoted fields). The XLSX fallback (used when
-// the sheet can't be exported as CSV, or to enumerate multiple tab names) needs the
-// spreadsheet parser and is reported as a 501-style error.
 importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
   const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
   if (rl) return rl;
   const b = (await c.req.json()) as Record<string, any>;
-  const { url, sheetName } = b;
-  if (!url) throw new HttpError(400, 'URL is required');
-
-  const idMatch = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!idMatch) throw new HttpError(400, 'Invalid Google Sheets URL or ID');
-  const sheetId = idMatch[1];
-  const gidMatch = String(url).match(/[?&#]gid=([0-9]+)/);
-  const gid = gidMatch ? gidMatch[1] : null;
-
-  // CSV export (respects a specific tab via gid). Pure JS — Workers-safe.
-  async function tryCsvExport(): Promise<
-    | {
-        headers: string[];
-        rows: string[][];
-        sheetName: string;
-      }
-    | { error: string }
-  > {
-    try {
-      const csvUrl = gid
-        ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
-        : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
-      const r = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const text = await r.text();
-      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-        throw new Error('Sheet is not publicly accessible (got HTML instead of CSV)');
-      }
-      const rows: string[][] = [];
-      const lines = text.trim().split('\n');
-      for (const line of lines) {
-        const cols: string[] = [];
-        let cur = '';
-        let inQuotes = false;
-        for (const ch of line) {
-          if (ch === '"') inQuotes = !inQuotes;
-          else if (ch === ',' && !inQuotes) {
-            cols.push(cur.trim().replace(/^"|"$/g, ''));
-            cur = '';
-          } else cur += ch;
-        }
-        cols.push(cur.trim().replace(/^"|"$/g, ''));
-        rows.push(cols);
-      }
-      const headers = rows[0] || [];
-      const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell));
-      return { headers, rows: dataRows, sheetName: sheetName || 'Sheet1' };
-    } catch (err) {
-      return { error: (err as Error).message };
-    }
-  }
-
-  const csvResult = await tryCsvExport();
-  if (!('error' in csvResult) && csvResult.headers.length > 0) {
-    return c.json({
-      headers: csvResult.headers,
-      rows: csvResult.rows,
-      selectedSheet: csvResult.sheetName,
-      sheetNames: [csvResult.sheetName],
-    });
-  }
-
-  // CSV export failed / returned nothing. The Express fallback parses the XLSX
-  // export to enumerate tabs, which the spreadsheet parser can't do on Workers.
-  // TODO: needs a Workers-compatible spreadsheet parser + R2/upload handling
-  return c.json(
-    {
-      error:
-        'Could not import this Google Sheet via CSV export' +
-        ('error' in csvResult && csvResult.error ? ': ' + csvResult.error : '') +
-        ". Make sure the sheet is shared as 'Anyone with link can view'. " +
-        'The XLSX fallback is not available on this deployment yet.',
-    },
-    501
-  );
+  const { status, body } = await fetchGoogleSheetRows(b.url, b.sheetName);
+  return c.json(body, status as 200);
 });
 
-// ── POST /api/import/execute — insert transactions from a parsed JSON `rows` ──
-// Faithful port of the Express handler: creates accounts for category names typed
-// as 'account', creates missing categories, inserts each transaction scoped to the
-// active profile, then recomputes affected account balances. All pure DB work.
-importRoutes.post('/api/import/execute', requireAuth, async (c) => {
-  const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
-  if (rl) return rl;
-  const pid = await getProfileId(c);
+// ── Import core: executeImport ────────────────────────────────────────────────
+// The insert+dedup engine, extracted from the HTTP handler so the route, the daily cron sheet
+// sync and email-in share ONE implementation (no Hono context). Returns a { status, body } pair
+// the route turns into a JSON response. Creates accounts for category names typed as 'account',
+// creates missing categories, inserts each transaction scoped to `pid`, then recomputes affected
+// account balances. `mapping` is field→column-index and `rows` are arrays, as the client sends.
+export interface ExecuteImportInput {
+  rows: any;
+  mapping: any;
+  categoryTypes?: any;
+  accountTypes?: any;
+  accountBalances?: any;
+  accountBalanceDates?: any;
+  importId?: string | null;
+  dryRun?: boolean;
+  approvedCategories?: any;
+  defaultCurrency?: any;
+}
+
+export async function executeImport(
+  DB: D1Database,
+  pid: number,
+  input: ExecuteImportInput
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const rows = input.rows;
+  const mapping = input.mapping;
+  if (!rows || !mapping) return { status: 400, body: { error: 'Missing data' } };
   const pids = [pid];
   const inClause = pids.map(() => '?').join(',');
-  const b = (await c.req.json()) as Record<string, any>;
-  const { rows, mapping, categoryTypes, accountTypes, accountBalances, accountBalanceDates } = b;
-  if (!rows || !mapping) throw new HttpError(400, 'Missing data');
+  const categoryTypes = input.categoryTypes;
+  const accountTypes = input.accountTypes;
+  const accountBalances = input.accountBalances;
+  const accountBalanceDates = input.accountBalanceDates;
   // Stable client-supplied id for this import; stamped on every row so a retry is idempotent
-  // (the prior attempt's rows are deleted first). Null for old clients → unchanged behaviour.
-  const importId = typeof b.importId === 'string' && b.importId ? b.importId : null;
+  // (the prior attempt's rows are deleted first). Null → unchanged behaviour.
+  const importId = input.importId ?? null;
   // Preview mode: compute new_categories + duplicate estimate WITHOUT mutating (B5/A2).
-  const dryRun = Boolean(b.dry_run ?? b.dryRun);
-  // Category-creation gating (audit B5): when `approvedCategories` (alias `createCategories`)
-  // is present — even as an empty array — a new category is only created when its name is in
-  // the approved list; unapproved rows import uncategorized. Absent → auto-create-all (compat).
-  const approvedRaw = b.approvedCategories ?? b.createCategories;
+  const dryRun = Boolean(input.dryRun);
+  // Category-creation gating (audit B5): when `approvedCategories` is present — even as an empty
+  // array — a new category is only created when its name is in the approved list; unapproved rows
+  // import uncategorized. Absent (undefined) → auto-create-all (backward-compat).
+  const approvedRaw = input.approvedCategories;
   const gateCategories = approvedRaw !== undefined;
   const approvedCats = new Set(
     (Array.isArray(approvedRaw) ? approvedRaw : []).map((s: unknown) =>
@@ -387,7 +384,6 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     )
   );
 
-  const DB = c.env.DB;
   const today = () => new Date().toISOString().split('T')[0];
 
   // name(lowercased) -> accountId, seeded with the profile(s)' existing accounts.
@@ -408,7 +404,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
 
   // Currency for accounts this import creates — the client's base currency (Settings; EUR by
   // default), falling back to EUR when the request does not contain a valid code.
-  const requestedCurrency = b.defaultCurrency;
+  const requestedCurrency = input.defaultCurrency;
   const defaultCurrency = await resolveProfileBaseCurrency(DB, pid, requestedCurrency, !dryRun);
   const rowsArr = rows as Array<Record<string, any>>;
   const skippedItems: Array<{ index: number; reason: string }> = [];
@@ -504,14 +500,14 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
       };
     });
   if (accountValidationErrors.length > 0) {
-    return c.json(
-      {
+    return {
+      status: 422,
+      body: {
         error: 'One or more account starting balances are invalid or ambiguous.',
         validation_errors: accountValidationErrors,
         skipped_items: skippedItems,
       },
-      422
-    );
+    };
   }
   if (!dryRun && toCreate.length > 0) {
     if (toCreate.length) {
@@ -760,21 +756,24 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
 
   // Preview mode: report what WOULD be created without mutating anything (B5/A2).
   if (dryRun) {
-    return c.json({
-      imported: txStmts.length,
-      skipped: skippedItems.length,
-      skipped_items: skippedItems,
-      dry_run: true,
-      duplicates: duplicateIndices.length,
-      duplicate_indices: duplicateIndices,
-      new_categories: newCats,
-      new_accounts: newAccts,
-      accounts_created: 0,
-      categories_created: 0,
-      created_accounts: [],
-      created_categories: [],
-      message: 'Dry run — no changes made',
-    });
+    return {
+      status: 200,
+      body: {
+        imported: txStmts.length,
+        skipped: skippedItems.length,
+        skipped_items: skippedItems,
+        dry_run: true,
+        duplicates: duplicateIndices.length,
+        duplicate_indices: duplicateIndices,
+        new_categories: newCats,
+        new_accounts: newAccts,
+        accounts_created: 0,
+        categories_created: 0,
+        created_accounts: [],
+        created_categories: [],
+        message: 'Dry run — no changes made',
+      },
+    };
   }
 
   // Idempotent retry: drop any rows a prior (partial) run of THIS import created before re-inserting,
@@ -798,18 +797,43 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   // two never diverge.
   await recomputeBalancesForAccounts(DB, [...accountIdMap.values()]);
 
-  return c.json({
-    imported,
-    skipped: skippedItems.length,
-    skipped_items: skippedItems,
-    duplicates: duplicateIndices.length,
-    duplicate_indices: duplicateIndices,
-    new_categories: newCats,
-    new_accounts: newAccts,
-    accounts_created: accountsCreated,
-    categories_created: catsToCreate.length,
-    created_accounts: createdAccountNames,
-    created_categories: catsToCreate,
-    message: `Successfully imported ${imported} transactions`,
+  return {
+    status: 200,
+    body: {
+      imported,
+      skipped: skippedItems.length,
+      skipped_items: skippedItems,
+      duplicates: duplicateIndices.length,
+      duplicate_indices: duplicateIndices,
+      new_categories: newCats,
+      new_accounts: newAccts,
+      accounts_created: accountsCreated,
+      categories_created: catsToCreate.length,
+      created_accounts: createdAccountNames,
+      created_categories: catsToCreate,
+      message: `Successfully imported ${imported} transactions`,
+    },
+  };
+}
+
+// ── POST /api/import/execute — insert transactions from a parsed JSON `rows` ──
+importRoutes.post('/api/import/execute', requireAuth, async (c) => {
+  const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
+  if (rl) return rl;
+  const pid = await getProfileId(c);
+  const b = (await c.req.json()) as Record<string, any>;
+  const importId = typeof b.importId === 'string' && b.importId ? b.importId : null;
+  const { status, body } = await executeImport(c.env.DB, pid, {
+    rows: b.rows,
+    mapping: b.mapping,
+    categoryTypes: b.categoryTypes,
+    accountTypes: b.accountTypes,
+    accountBalances: b.accountBalances,
+    accountBalanceDates: b.accountBalanceDates,
+    importId,
+    dryRun: Boolean(b.dry_run ?? b.dryRun),
+    approvedCategories: b.approvedCategories ?? b.createCategories,
+    defaultCurrency: b.defaultCurrency,
   });
+  return c.json(body, status as 200);
 });

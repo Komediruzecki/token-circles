@@ -30,7 +30,7 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 11
+const DB_VERSION = 12
 
 /** Thrown by deleteAccount when transactions still reference the account.
  *  The accounts handler maps this to a 409 JSON response. */
@@ -174,6 +174,14 @@ async function upgradeSchema(
   if (oldVersion < 9) {
     const il = db.createObjectStore('import_logs', { keyPath: 'id', autoIncrement: true })
     il.createIndex('by_profile', 'profile_id')
+  }
+
+  // v12: saved import sources ("Connected Sources", mirrors worker migration 0020). Store
+  // creation stays here — synchronous, above the first `await` in this function — so the
+  // schema change lands before the v10/v11 data migrations start awaiting on `tx`.
+  if (oldVersion < 12) {
+    const is = db.createObjectStore('import_sources', { keyPath: 'id', autoIncrement: true })
+    is.createIndex('by_profile', 'profile_id')
   }
 
   // v10: unify the account starting-date field name (audit D7). The same concept was
@@ -396,6 +404,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'tags',
       'categoryMappings',
       'import_logs',
+      'import_sources',
     ].filter((store) => db.objectStoreNames.contains(store))
     const transactionStores = [
       ...profileStores,
@@ -1472,6 +1481,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'logs',
       'categoryMappings',
       'import_logs',
+      'import_sources',
     ]
     if (options.includeProfiles) stores.push('profiles')
     const existingStores = stores.filter((store) => db.objectStoreNames.contains(store))

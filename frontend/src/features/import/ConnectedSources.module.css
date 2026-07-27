@@ -1,0 +1,345 @@
+/* Connected Sources — saved import origins with the paired "instrument" action capsule.
+   Brand: Orbital Observatory (orbit-dark tokens). Azure action, mint = live, one warm accent.
+   Money colors are never used decoratively here. SVG icons only (no emoji). */
+
+.section {
+  margin-top: 24px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+.title .kickerDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-warm);
+  box-shadow: 0 0 10px var(--accent-warm);
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  background: var(--primary-bg);
+  border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--border));
+  border-radius: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.addBtn:hover {
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+}
+
+/* ── source row ─────────────────────────────────────────────── */
+.list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+}
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+.glyph {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  background: var(--primary-bg);
+  border: 1px solid color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+.meta {
+  min-width: 0;
+  flex: 1;
+}
+.name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--income);
+  box-shadow: 0 0 8px var(--income);
+}
+.sub {
+  margin-top: 3px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.sub b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.rowDelete {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+.rowDelete:hover {
+  color: var(--danger-outline, #ff9d9d);
+  border-color: color-mix(in oklab, var(--danger-outline, #ff9d9d) 40%, var(--border));
+}
+
+/* Daily auto-sync toggle (self-hosted / cloud only — the Worker cron drives it). */
+.schedulePill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 7px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+.schedulePill:hover:not(:disabled) {
+  color: var(--text);
+}
+.schedulePill:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.schedulePill.on {
+  color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+  background: var(--primary-bg);
+}
+.schedulePill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.schedulePill.on .dot {
+  box-shadow: 0 0 8px var(--primary);
+}
+
+/* ── the paired instrument capsule ──────────────────────────── */
+.capsule {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.divide {
+  width: 1px;
+  background: var(--border);
+}
+
+.btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  height: 44px;
+  transition:
+    filter 0.16s ease,
+    background 0.16s ease;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.btn svg {
+  display: block;
+}
+
+/* Auto sync — filled azure with the brand glow */
+.sync {
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-strong) 100%);
+  color: #eef4ff;
+  box-shadow: var(--glow-primary);
+}
+.sync:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.sync:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.sync .ring {
+  transform-origin: center;
+  transition: transform 0.9s cubic-bezier(0.5, 0.1, 0.2, 1);
+}
+.sync.spin .ring {
+  animation: cs-spin 1.15s linear infinite;
+}
+@keyframes cs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Fetch & preview — glass, azure edge on hover */
+.prev {
+  color: var(--transfer);
+}
+.prev:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.prev .scan {
+  transform: translateY(-5px);
+  opacity: 0;
+}
+.prev:hover:not(:disabled) .scan {
+  animation: cs-scan 1.1s ease-in-out infinite;
+}
+@keyframes cs-scan {
+  0% {
+    transform: translateY(-5px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(5px);
+    opacity: 0;
+  }
+}
+
+/* ── add-source form ────────────────────────────────────────── */
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.input {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-secondary);
+  color: var(--text);
+  font-size: 13.5px;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+}
+.addActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.empty {
+  padding: 22px 18px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+}
+
+@media (max-width: 640px) {
+  .row {
+    flex-wrap: wrap;
+  }
+  .capsule {
+    width: 100%;
+  }
+  .capsule .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync.spin .ring,
+  .prev:hover .scan {
+    animation: none;
+  }
+}

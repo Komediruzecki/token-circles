@@ -735,6 +735,22 @@ const routes: RouteDef[] = [
     }),
   },
   {
+    pattern: /^\/import-sources$/,
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: () => h.importSourcesList(),
+      POST: (ctx) => h.importSourcesCreate(ctx.body, ctx.headers),
+    }),
+  },
+  {
+    pattern: /^\/import-sources\/(\d+)$/,
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.importSourcesUpdate(ctx.params, ctx.body, ctx.headers),
+      DELETE: (ctx) => h.importSourcesDelete(ctx.params, ctx.headers),
+    }),
+  },
+  {
     pattern: /^\/import\/preview$/,
     methods: ['POST'],
     handler: dispatch({ POST: (ctx) => h.importBulk(ctx.body) }),

@@ -204,6 +204,12 @@ export {
 
 // Import session logs
 export { importLogsCreate, importLogsDelete, importLogsList } from './handlers/importLogs'
+export {
+  importSourcesCreate,
+  importSourcesDelete,
+  importSourcesList,
+  importSourcesUpdate,
+} from './handlers/importSources'
 
 // Exchange Rates
 export { exchangeRates, exchangeRateSingle } from './handlers/exchangeRates'

@@ -44,6 +44,7 @@ import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
+import { ConnectedSources } from './import/ConnectedSources'
 import { ImportDataEntry } from './import/ImportDataEntry'
 import { createImportFlow } from './import/importFlow'
 import { ImportMappingStep } from './import/ImportMappingStep'
@@ -147,6 +148,9 @@ export default function Import() {
       {/* Form content */}
       <Show when={flow.activeStep() === 'upload'}>
         <ImportDataEntry flow={flow} />
+      </Show>
+      <Show when={flow.activeStep() === 'upload'}>
+        <ConnectedSources />
       </Show>
       <Show when={flow.activeStep() === 'mapping'}>
         <ImportMappingStep flow={flow} />

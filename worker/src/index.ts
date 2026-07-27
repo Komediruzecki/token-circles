@@ -25,12 +25,15 @@ import { reportsRoutes } from './routes/reports';
 import { receiptsRoutes } from './routes/receipts';
 import { importRoutes } from './routes/imports';
 import { importLogsRoutes } from './routes/import-logs';
+import { importSourcesRoutes } from './routes/import-sources';
 import { exportRoutes } from './routes/exports';
 import { billingRoutes } from './routes/billing';
 import { notificationsRoutes } from './routes/notifications';
 import { supportRoutes } from './routes/support';
 import { plansRoutes } from './routes/plans';
 import { runScheduledReminders } from './reminders';
+import { runScheduledSheetSyncs } from './import-sync';
+import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
 import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
@@ -60,6 +63,9 @@ export interface Env {
   EMAIL_FROM?: string; // var — From address, e.g. "Token Circles <hello@tokencircles.com>" (repliable, not no-reply)
   SUPPORT_EMAIL?: string; // secret — private inbox the contact form relays to (unset → disabled)
   TURNSTILE_SECRET?: string; // secret — Cloudflare Turnstile secret; unset → captcha gate disabled
+  EMAIL_INGEST_SECRET?: string; // secret — token in the ingest address +tag (ingest+<secret>@…); unset → email-in disabled
+  EMAIL_INGEST_PROFILE_ID?: string; // var — profile id that emailed statements import into
+  EMAIL_INGEST_ALLOWED_SENDERS?: string; // var — optional comma-separated sender allowlist
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
@@ -125,6 +131,7 @@ app.route('/', reportsRoutes);
 app.route('/', receiptsRoutes);
 app.route('/', importRoutes);
 app.route('/', importLogsRoutes);
+app.route('/', importSourcesRoutes);
 app.route('/', exportRoutes);
 app.route('/', billingRoutes);
 app.route('/', notificationsRoutes);
@@ -154,6 +161,17 @@ app.onError((err, c) => {
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
-    ctx.waitUntil(Promise.all([runScheduledReminders(event.cron, env), sweepRateLimits(env)]));
+    ctx.waitUntil(
+      Promise.all([
+        runScheduledReminders(event.cron, env),
+        sweepRateLimits(env),
+        runScheduledSheetSyncs(event.cron, env),
+      ])
+    );
+  },
+  // Cloudflare Email Routing → email-in (Ask 3). Configured via EMAIL_INGEST_* (see import-email.ts);
+  // a no-op reject when unset. Awaited directly so setReject lands before the runtime finalizes.
+  email: async (message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext) => {
+    await handleIngestEmail(message, env);
   },
 };
