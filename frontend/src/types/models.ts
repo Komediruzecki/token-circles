@@ -38,6 +38,7 @@ export type PageName =
   | 'rentBuy'
   | 'counterparties'
   | 'portfolio'
+  | 'tags'
 
 // ============ PROFILE ============
 export interface Profile {
@@ -72,6 +73,93 @@ export interface Transaction {
   tags?: Array<{ id: number; name: string; color: string }>
   receipt_id?: number | null
   receipt_name?: string | null
+}
+
+// ============ TAGS ============
+
+export interface Tag {
+  id: number
+  name: string
+  color: string
+  created_at?: string
+}
+
+/** Per-type totals a tag accumulates over the selected period. */
+export interface TagTypeTotals {
+  income: number
+  expense: number
+  transfer: number
+  deduction: number
+  count: number
+}
+
+/** A tag plus its totals — the Tags page list row. */
+export interface TagSummary extends Tag, TagTypeTotals {
+  net: number
+  rule_count: number
+}
+
+export interface TagCategoryBreakdown {
+  category_id: number | null
+  name: string
+  color: string
+  type: string
+  total: number
+  count: number
+}
+
+export interface TagDetailSummary {
+  tag: Tag
+  totals: TagTypeTotals & { net: number }
+  monthly: Array<TagTypeTotals & { month: string }>
+  categories: TagCategoryBreakdown[]
+}
+
+export type TagRuleMatchMode = 'all' | 'any'
+export type TagRuleTextMode = 'contains' | 'equals' | 'starts_with' | 'ends_with'
+
+/** Mirrors shared/tagRules.ts — the single definition both runtimes evaluate. */
+export interface TagRuleCriteria {
+  match: TagRuleMatchMode
+  types: TransactionType[]
+  categoryIds: number[]
+  accountIds: number[]
+  description: string
+  descriptionMode: TagRuleTextMode
+  counterparty: string
+  counterpartyMode: TagRuleTextMode
+  notes: string
+  notesMode: TagRuleTextMode
+  meansOfPayment: string
+  meansOfPaymentMode: TagRuleTextMode
+  amountMin: number | null
+  amountMax: number | null
+  dateFrom: string | null
+  dateTo: string | null
+}
+
+export interface TagRule {
+  id: number
+  tag_id: number
+  name: string
+  auto_apply: boolean
+  criteria: TagRuleCriteria
+}
+
+/** Dry-run result for a rule, shown before any bulk write happens. */
+export interface TagRulePreview {
+  matched: number
+  already_tagged: number
+  new_matches: number
+  scanned: number
+  truncated: boolean
+  sample: Array<{
+    id: number
+    description: string
+    amount: number
+    date: string
+    type: string
+  }>
 }
 
 // ============ CATEGORIES ============

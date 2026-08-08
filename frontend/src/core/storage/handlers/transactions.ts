@@ -16,6 +16,7 @@ import {
   writeProfileIdFromHeaders,
 } from './helpers'
 import { normalizeTransaction } from './normalize'
+import { autoApplyTagRules } from './tagRules'
 
 const toCat = (v: unknown): number | null =>
   typeof v === 'number' ? v : typeof v === 'string' && v ? Number(v) : null
@@ -46,11 +47,24 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
   const receiptByTx = new Map(
     receipts.filter((r) => typeof r.transaction_id === 'number').map((r) => [r.transaction_id, r])
   )
+  // Resolve tags from `tag_ids` rather than trusting each row's denormalized `tags` copy, so a
+  // renamed or recolored tag renders correctly everywhere without a data migration. Rows written
+  // before tag_ids existed fall back to whatever copy they carry.
+  const tagRows = (await db.getAllFromIndex('tags', 'by_profile', pid)) as Record<string, any>[]
+  const tagMap = new Map(tagRows.map((tag) => [tag.id as number, tag]))
   const enriched = txns.map((t) => {
     const cat = catMap.get(t.category_id)
     const receipt = receiptByTx.get(t.id)
+    const tagIds = t.tag_ids as number[] | undefined
+    const tags = Array.isArray(tagIds)
+      ? tagIds
+          .map((tagId) => tagMap.get(tagId))
+          .filter((tag): tag is Record<string, any> => Boolean(tag))
+          .map((tag) => ({ id: tag.id as number, name: tag.name, color: tag.color }))
+      : t.tags
     return normalizeTransaction({
       ...t,
+      tags,
       category_name: cat?.name || null,
       category_color: cat?.color || null,
       receipt_id: receipt?.id ?? null,
@@ -86,10 +100,16 @@ export async function transactionsCreate(body: unknown, headers?: HeadersInit): 
   const id = await adapter.createTransaction(
     tx as unknown as Parameters<typeof adapter.createTransaction>[0]
   )
+  // Apply auto-apply tag rules to the new row (mirrors the Worker's create path). Fail-soft
+  // inside the helper — the transaction is already stored, so tagging must never fail the create.
+  const autoTags = await autoApplyTagRules(id, profileId)
   await recalcGoalsByCategory(toCat(tx.category_id))
   // Normalize like the list endpoint: the client validates this response against the
   // full TransactionSchema, and callers omit optional fields (beneficiary, notes, ...).
-  return json(normalizeTransaction({ id, ...tx }), 201)
+  return json(
+    normalizeTransaction({ id, ...tx, ...(autoTags.length ? { tags: autoTags } : {}) }),
+    201
+  )
 }
 
 export async function transactionsGet(params: Record<string, string>): Promise<Response> {

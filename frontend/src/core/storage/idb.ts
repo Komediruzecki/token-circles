@@ -237,6 +237,14 @@ async function upgradeSchema(
       cursor = await cursor.continue()
     }
   }
+
+  // v12: tagRules store — saved filters that attach a tag to matching transactions
+  // (mirrors worker migration 0020_tag_rules).
+  if (oldVersion < 12) {
+    const tagRules = db.createObjectStore('tagRules', { keyPath: 'id', autoIncrement: true })
+    tagRules.createIndex('by_profile', 'profile_id')
+    tagRules.createIndex('by_tag', 'tag_id')
+  }
 }
 
 let dbPromise: ReturnType<typeof openDB> | null = null
@@ -402,6 +410,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'housings',
       'recurring',
       'tags',
+      'tagRules',
       'categoryMappings',
       'import_logs',
       'import_sources',
@@ -1155,6 +1164,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       bills,
       recurring,
       tags,
+      tagRules,
       housings,
       categoryMappings,
       receipts,
@@ -1174,6 +1184,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       db.getAll('bills'),
       db.getAll('recurring'),
       db.getAll('tags'),
+      db.getAll('tagRules'),
       db.getAll('housings'),
       db.getAll('categoryMappings'),
       db.getAll('receipts'),
@@ -1261,6 +1272,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       bills: filterByProfile(bills),
       recurring: filterByProfile(recurring),
       tags: filterByProfile(tags),
+      tagRules: filterByProfile(tagRules),
       transactionTags,
       housings: filterByProfile(housings),
       categoryMappings: filterByProfile(categoryMappings),
@@ -1320,6 +1332,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'bills',
       'recurring',
       'tags',
+      'tagRules',
       'housings',
       'categoryMappings',
       'import_logs',
@@ -1399,6 +1412,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       await addAll('bills', data.bills)
       await addAll('recurring', data.recurring)
       await addAll('tags', data.tags)
+      await addAll('tagRules', data.tagRules)
       await addAll('housings', data.housings)
       await addAll('categoryMappings', data.categoryMappings)
       await addAll('import_logs', data.importLogs)
@@ -1478,6 +1492,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'housings',
       'recurring',
       'tags',
+      'tagRules',
       'logs',
       'categoryMappings',
       'import_logs',

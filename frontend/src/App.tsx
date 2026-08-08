@@ -645,6 +645,15 @@ export function App() {
       ),
     },
     {
+      name: 'tags' as PageName,
+      label: 'Tags',
+      icon: (
+        <>
+          <path d="M7 7h.01M3 5v6.586a1 1 0 00.293.707l8.414 8.414a2 2 0 002.828 0l5.586-5.586a2 2 0 000-2.828l-8.414-8.414A1 1 0 0010.586 3H5a2 2 0 00-2 2z" />
+        </>
+      ),
+    },
+    {
       name: 'retirement' as PageName,
       label: 'Retirement',
       icon: <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />,
@@ -684,7 +693,7 @@ export function App() {
     { items: pick('dashboard', 'transactions', 'accounts', 'bills') },
     { group: 'Planning', items: pick('budgets', 'goals', 'loans', 'retirement') },
     { group: 'Calculators', items: pick('compound', 'emergency', 'rentBuy') },
-    { group: 'Analytics', items: pick('analytics', 'portfolio') },
+    { group: 'Analytics', items: pick('analytics', 'portfolio', 'tags') },
     { items: pick('housing', 'counterparties', 'import', 'settings') },
   ]
 

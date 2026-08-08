@@ -21,6 +21,7 @@ const ALL_STORES = [
   'housings',
   'recurring',
   'tags',
+  'tagRules',
   'categoryMappings',
   'import_logs',
   'settings',
@@ -151,6 +152,14 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     await db.add('bills', { id: 1, profile_id: 1, name: 'Rent', amount: 500 })
     await db.add('recurring', { id: 1, profile_id: 1, description: 'Salary', amount: 3000 })
     await db.add('tags', { id: 1, profile_id: 1, name: 'work' })
+    await db.add('tagRules', {
+      id: 1,
+      profile_id: 1,
+      tag_id: 1,
+      name: 'Work spend',
+      criteria: { match: 'all', description: 'acme' },
+      auto_apply: true,
+    })
     await db.add('housings', { id: 1, profile_id: 1, name: 'Flat' })
     await db.add('categoryMappings', { id: 1, profile_id: 1, pattern: 'ACME', category_id: 1 })
     await db.add('portfolioHoldings', { id: 1, profile_id: 1, ticker: 'VWCE', shares: 3 })
@@ -182,6 +191,7 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     expect(data.bills).toHaveLength(1)
     expect(data.recurring).toHaveLength(1)
     expect(data.tags).toHaveLength(1)
+    expect(data.tagRules).toHaveLength(1)
     expect(data.housings).toHaveLength(1)
     expect(data.categoryMappings).toHaveLength(1)
     expect(data.portfolioHoldings).toHaveLength(1)
@@ -213,6 +223,9 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     expect(await db.getAll('bills')).toHaveLength(1)
     expect(await db.getAll('recurring')).toHaveLength(1)
     expect(await db.getAll('tags')).toHaveLength(1)
+    expect(await db.getAll('tagRules')).toHaveLength(1)
+    // A restored rule still points at its tag, so it keeps auto-tagging after a restore.
+    expect((await db.getAll('tagRules'))[0]).toMatchObject({ tag_id: 1, name: 'Work spend' })
     expect(await db.getAll('housings')).toHaveLength(1)
     expect(await db.getAll('categoryMappings')).toHaveLength(1)
     expect(await db.getAll('portfolioHoldings')).toHaveLength(1)

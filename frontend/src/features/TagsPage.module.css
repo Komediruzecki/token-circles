@@ -1,0 +1,599 @@
+.page {
+  padding: 0;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.pageHeader h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.pageHeader p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 2px 0 0 0;
+  max-width: 62ch;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.dangerButton {
+  border-radius: var(--radius-sm, 8px);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.primaryButton {
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+}
+
+.primaryButton:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.secondaryButton {
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 34%, transparent);
+  color: var(--text);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+.ghostButton {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+  padding: 6px 10px;
+}
+
+.ghostButton:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+}
+
+.dangerButton {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--danger, #e0708a) 40%, var(--border));
+  color: var(--danger, #e0708a);
+  padding: 6px 10px;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--danger, #e0708a) 12%, transparent);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.ghostButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Tag create / edit form ──────────────────────────────────────────────── */
+
+.tagForm {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--border));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+
+.tagFormRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.swatchActive {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 40%, transparent);
+}
+
+/* ── Summary cards ───────────────────────────────────────────────────────── */
+
+.summaryRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.summaryCard {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.summaryLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.summaryValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.positive {
+  color: var(--success, #59d2a2);
+}
+
+.negative {
+  color: var(--danger, #e0708a);
+}
+
+/* ── Tag grid ────────────────────────────────────────────────────────────── */
+
+.tagGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.tagCard {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tagCardActive {
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+.tagCardMain {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 14px 16px 10px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+}
+
+.tagHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tagDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.tagName {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rulePill,
+.autoPill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  color: var(--text-secondary);
+}
+
+.tagStats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.statLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.statValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tagCardActions {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 12px;
+  justify-content: flex-end;
+}
+
+/* ── Detail ──────────────────────────────────────────────────────────────── */
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chartCard,
+.breakdownCard,
+.rulesCard {
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.rulesCard {
+  margin-top: 12px;
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.chartBox {
+  height: 280px;
+}
+
+.breakdownList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.breakdownRow {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto 34px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.breakdownName {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdownType {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+}
+
+.breakdownTotal {
+  font-weight: 600;
+}
+
+.breakdownCount {
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ── Rules ───────────────────────────────────────────────────────────────── */
+
+.ruleList {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ruleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in oklab, var(--card-bg) 40%, transparent);
+}
+
+.ruleInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ruleName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ruleDesc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ruleActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.ruleEditor {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.editorRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  align-self: end;
+  padding-bottom: 8px;
+}
+
+.inlineGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.inlineGroup > * {
+  min-width: 0;
+  flex: 1;
+}
+
+.input,
+.select,
+.selectSmall {
+  background: var(--input-bg, var(--card-bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.selectSmall {
+  flex: 0 0 120px;
+  width: auto;
+}
+
+.input:focus,
+.select:focus,
+.selectSmall:focus {
+  outline: none;
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.chipActive {
+  background: color-mix(in oklab, var(--primary) 20%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 50%, var(--border));
+  color: var(--text);
+}
+
+.chipDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ruleSummary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.previewBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 25%, var(--border));
+  font-size: 13px;
+  color: var(--text);
+}
+
+.warning {
+  color: var(--warning, #f0a860);
+  font-size: 12px;
+}
+
+.sampleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sampleList li {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.sampleDesc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sampleAmount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.editorActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+
+.loadingState,
+.emptyState {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.emptyState p:first-child {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+
+.emptyState p {
+  margin: 0 auto;
+  max-width: 56ch;
+}
+
+.muted {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0 0 8px;
+}

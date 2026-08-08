@@ -25,6 +25,7 @@ const DATA_TABLES = [
   'emergency_fund_config',
   'portfolio_holdings',
   'transactions',
+  'tag_rules',
   'tags',
   'loans',
   'categories',
@@ -138,6 +139,10 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO tags (id, name, profile_id) VALUES (2900, 'essential', 2000)"),
     env.DB.prepare('INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (2300, 2900)'),
     env.DB.prepare(
+      `INSERT INTO tag_rules (id, profile_id, tag_id, name, criteria, auto_apply)
+       VALUES (2950, 2000, 2900, 'Essentials', '{"description":"market","match":"all"}', 1)`
+    ),
+    env.DB.prepare(
       "INSERT INTO category_mappings (id, profile_id, pattern, category_id, confidence) VALUES (3000, 2000, 'MARKET', 2100, 1)"
     ),
     env.DB.prepare(
@@ -209,6 +214,7 @@ describe('Worker full backup and staged restore', () => {
       'recurring',
       'housings',
       'tags',
+      'tagRules',
       'transactionTags',
       'categoryMappings',
       'receipts',
@@ -332,6 +338,7 @@ describe('Worker full backup and staged restore', () => {
       'recurring',
       'housings',
       'tags',
+      'tagRules',
       'transactionTags',
       'categoryMappings',
       'receipts',

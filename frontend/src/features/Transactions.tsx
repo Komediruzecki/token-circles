@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -315,6 +315,48 @@ export default function Transactions() {
       await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk change type:', error)
+    }
+  }
+
+  // Add or remove tags across the current selection. Additive per tag (other tags on each row are
+  // left alone); one request per tag keeps the endpoint per-tag and idempotent.
+  const handleBulkApplyTags = async (tagIds: number[], mode: 'add' | 'remove') => {
+    const ids = selectedTransactions()
+    if (ids.length === 0 || tagIds.length === 0) return
+    try {
+      for (const tagId of tagIds) {
+        await api.bulkTagTransactions(tagId, ids, mode)
+      }
+      const tagWord = tagIds.length === 1 ? 'tag' : 'tags'
+      const txWord = ids.length === 1 ? 'transaction' : 'transactions'
+      toast(
+        mode === 'add'
+          ? `Added ${tagIds.length} ${tagWord} to ${ids.length} ${txWord}`
+          : `Removed ${tagIds.length} ${tagWord} from ${ids.length} ${txWord}`,
+        'success'
+      )
+      setSelectedTransactions([])
+      await refreshTransactions()
+    } catch (error) {
+      console.error('Failed to bulk tag transactions:', error)
+      toast('Failed to update tags', 'error')
+    }
+  }
+
+  // Create a tag inline from the bulk-tag modal, reflecting it in the local list so its chip
+  // renders and it's immediately selectable.
+  const handleBulkCreateTag = async (
+    name: string
+  ): Promise<{ id: number; name: string; color: string } | null> => {
+    try {
+      const created = await api.createTag(name, '#6e9bff')
+      const tag = { id: created.id, name: created.name ?? name, color: created.color ?? '#6e9bff' }
+      if (!tags().some((t) => t.id === tag.id)) setTags([...tags(), tag])
+      return tag
+    } catch (error) {
+      console.error('Failed to create tag:', error)
+      toast('Failed to create tag', 'error')
+      return null
     }
   }
 
@@ -668,6 +710,33 @@ export default function Transactions() {
     setTransactionModalOpen(true)
   }
 
+  /**
+   * Adopt a `?tag=<id>` filter from the URL hash. The Tags page links here with a tag
+   * preselected; pages stay mounted once visited, so this runs on `hashchange` too, not only
+   * at mount. Unknown ids are ignored rather than producing an empty, unexplained list.
+   */
+  const applyTagFromHash = (known?: Array<{ id: number }>) => {
+    const hash = window.location.hash.slice(1)
+    const queryIdx = hash.indexOf('?')
+    if (queryIdx < 0) return
+    const raw = new URLSearchParams(hash.slice(queryIdx + 1)).get('tag')
+    if (!raw) return
+    const knownIds = new Set((known ?? tags()).map((t) => t.id))
+    const ids = raw
+      .split(',')
+      .map((v) => parseInt(v, 10))
+      .filter((id) => !isNaN(id) && knownIds.has(id))
+    if (ids.length > 0) setSelectedTags(ids)
+  }
+
+  const handleTagHashChange = () => {
+    applyTagFromHash()
+  }
+  window.addEventListener('hashchange', handleTagHashChange)
+  onCleanup(() => {
+    window.removeEventListener('hashchange', handleTagHashChange)
+  })
+
   onMount(async () => {
     // (transactions load via the profileVersion effect above — no redundant fetch here)
     try {
@@ -696,6 +765,8 @@ export default function Transactions() {
     try {
       const tagData = await api.getTags()
       if (Array.isArray(tagData)) setTags(tagData as any[])
+      // Check hash for a tag filter (e.g. #transactions?tag=3 from the Tags page).
+      applyTagFromHash(tagData as Array<{ id: number }>)
     } catch {
       // Tags will remain empty
     }
@@ -845,11 +916,14 @@ export default function Transactions() {
       <BulkActionBar
         selectedCount={selectedTransactions().length}
         categories={categories()}
+        tags={tags()}
         onClearSelection={() => setSelectedTransactions([])}
         onDeleteSelected={handleBulkDelete}
         onReconcileSelected={handleBulkReconcile}
         onChangeCategory={handleBulkChangeCategory}
         onChangeType={handleBulkChangeType}
+        onApplyTags={handleBulkApplyTags}
+        onCreateTag={handleBulkCreateTag}
       />
 
       {/* Recurring Transactions */}

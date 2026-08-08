@@ -193,3 +193,91 @@
 .btnSecondary:hover {
   background: var(--bg);
 }
+
+/* Tag bulk-apply modal */
+.tagModeToggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.tagModeBtn {
+  padding: 7px 16px;
+  border: none;
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.tagModeBtn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.tagModeBtnActive {
+  background: var(--primary);
+  color: #fff;
+}
+
+.tagChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.tagChip:hover {
+  border-color: var(--primary);
+}
+
+.tagChipActive {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  font-weight: 600;
+}
+
+.tagChipDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.newTagRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.newTagRow .formControl {
+  flex: 1;
+}
+
+.emptyHint {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0;
+}

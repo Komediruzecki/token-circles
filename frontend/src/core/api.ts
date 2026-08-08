@@ -17,6 +17,15 @@ import type { ApiProfileScope } from './apiProfileScope'
 // deployed server-mode builds where the API lives on a sibling subdomain.
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`
 
+/** Build the `?startDate=&endDate=` suffix shared by the tag summary endpoints. */
+function rangeQuery(range?: { startDate?: string; endDate?: string }): string {
+  const params = new URLSearchParams()
+  if (range?.startDate) params.set('startDate', range.startDate)
+  if (range?.endDate) params.set('endDate', range.endDate)
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
 /**
  * API Client class for making authenticated requests
  */
@@ -1088,6 +1097,108 @@ export class ApiClient {
     return this.request('/tags', undefined, {
       method: 'POST',
       body: { name, color },
+    })
+  }
+
+  async updateTag(id: number, name: string, color: string): Promise<{ ok: boolean }> {
+    return this.request(`/tags/${id}`, undefined, { method: 'PUT', body: { name, color } })
+  }
+
+  async deleteTag(id: number): Promise<{ ok: boolean }> {
+    return this.request(`/tags/${id}`, undefined, { method: 'DELETE' })
+  }
+
+  // ============ TAG RULES ============
+  // Saved filters that attach a tag to matching transactions. Rules are profile-scoped writes,
+  // so every call here uses the active profile (the default scope).
+
+  getTagsSummary(range?: { startDate?: string; endDate?: string }): Promise<Models.TagSummary[]> {
+    return this.request<Models.TagSummary[]>(`/tags/summary${rangeQuery(range)}`)
+  }
+
+  getTagSummary(
+    id: number,
+    range?: { startDate?: string; endDate?: string }
+  ): Promise<Models.TagDetailSummary> {
+    return this.request<Models.TagDetailSummary>(`/tags/${id}/summary${rangeQuery(range)}`)
+  }
+
+  getTagRules(): Promise<Models.TagRule[]> {
+    return this.request<Models.TagRule[]>('/tags/rules')
+  }
+
+  createTagRule(input: {
+    tag_id: number
+    name: string
+    criteria: Models.TagRuleCriteria
+    auto_apply: boolean
+  }): Promise<Models.TagRule> {
+    return this.request<Models.TagRule>('/tags/rules', undefined, {
+      method: 'POST',
+      body: input,
+    })
+  }
+
+  updateTagRule(
+    id: number,
+    input: { tag_id?: number; name: string; criteria: Models.TagRuleCriteria; auto_apply: boolean }
+  ): Promise<{ ok: boolean }> {
+    return this.request(`/tags/rules/${id}`, undefined, { method: 'PUT', body: input })
+  }
+
+  deleteTagRule(id: number): Promise<{ ok: boolean }> {
+    return this.request(`/tags/rules/${id}`, undefined, { method: 'DELETE' })
+  }
+
+  /** Dry-run a criteria set against existing transactions before writing anything. */
+  previewTagRule(input: {
+    tag_id?: number
+    criteria: Models.TagRuleCriteria
+  }): Promise<Models.TagRulePreview> {
+    return this.request<Models.TagRulePreview>('/tags/rules/preview', undefined, {
+      method: 'POST',
+      body: input,
+    })
+  }
+
+  /** Tag existing transactions. Pass `criteria` to apply an unsaved rule instead of stored ones. */
+  applyTagRules(
+    tagId: number,
+    criteria?: Models.TagRuleCriteria
+  ): Promise<{ matched: number; tagged: number; scanned: number; truncated: boolean }> {
+    return this.request(`/tags/${tagId}/apply`, undefined, {
+      method: 'POST',
+      body: criteria ? { criteria } : {},
+    })
+  }
+
+  setTransactionTags(transactionId: number, tagIds: number[]): Promise<{ ok: boolean }> {
+    return this.request(`/transactions/${transactionId}/tags`, undefined, {
+      method: 'PUT',
+      body: { tagIds },
+    })
+  }
+
+  /**
+   * Add or remove one tag across many transactions at once (the transactions-page bulk action).
+   * Additive: `mode: 'add'` attaches the tag on top of each row's existing tags and returns `added`
+   * (newly linked); `mode: 'remove'` detaches only this tag and returns `removed`. Scoped to the
+   * active write profile, like applyTagRules.
+   */
+  bulkTagTransactions(
+    tagId: number,
+    transactionIds: number[],
+    mode: 'add' | 'remove' = 'add'
+  ): Promise<{
+    ok: boolean
+    mode: 'add' | 'remove'
+    matched: number
+    added?: number
+    removed?: number
+  }> {
+    return this.request(`/tags/${tagId}/transactions`, undefined, {
+      method: 'POST',
+      body: { transactionIds, mode },
     })
   }
 

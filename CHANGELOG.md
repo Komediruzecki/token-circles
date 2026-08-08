@@ -8,6 +8,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Tags with rules.** A new **Tags** page (sidebar → Analytics) turns tags into a way to organize across categories instead of inventing a new one. Create a tag like "Company" or "Trip to Rome", give it a rule — a saved filter over description, counterparty, notes, payment method, amount, date, transaction type, categories, and accounts — then apply that rule to every transaction you already have. Each rule shows a preview ("42 matching, 12 would be newly tagged", with examples) before anything is written, and can keep auto-tagging matching transactions you add later.
+- Each tag gets its own view: income, expenses and transfers for the period, a monthly income-vs-expense chart, and a breakdown of which categories the tagged spending falls into — so a "Company" tag reads like a mini profit-and-loss across whatever categories and accounts it spans.
+- Tags on the Transactions page are now linkable: "View" on a tag opens the transactions list already filtered to it.
+- Tag several transactions at once: select rows on the Transactions page and use **Tag** to add or remove a tag across the whole selection. Adding leaves each row's other tags in place, and you can pick existing tags or create a new one on the spot.
+
 ### Fixed
 
 - Danger Zone resets now remove every matching data type without leaving account history, loan details, import logs, category links, or receipt files behind. Profile-specific actions preserve other profiles, while Reset All consistently clears data across all of your profiles.

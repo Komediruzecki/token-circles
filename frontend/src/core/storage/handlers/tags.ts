@@ -59,7 +59,8 @@ export async function tagsGetTransactions(params: Record<string, string>): Promi
 
 export async function tagsUpdate(params: Record<string, string>, body: unknown): Promise<Response> {
   const db = await getDB()
-  const tag = await currentProfileRecord('tags', idParam(params))
+  const tagId = idParam(params)
+  const tag = await currentProfileRecord('tags', tagId)
   if (!tag) return notFound('Tag')
   if (body && typeof body === 'object') {
     const b = body as Record<string, unknown>
@@ -67,26 +68,58 @@ export async function tagsUpdate(params: Record<string, string>, body: unknown):
     if (b.color !== undefined) tag.color = b.color as string
   }
   await db.put('tags', tag)
+
+  // Transactions carry a denormalized copy of their tags (see transactionTagsSet), so a rename
+  // or recolor has to be written through — otherwise the table keeps rendering the old label.
+  const pid = await adapter.getCurrentProfileId()
+  const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
+    string,
+    any
+  >[]
+  for (const t of txns) {
+    const copies = (t.tags as { id: number; name: string; color: string }[]) || []
+    if (!copies.some((copy) => copy.id === tagId)) continue
+    t.tags = copies.map((copy) =>
+      copy.id === tagId ? { id: tagId, name: tag.name, color: tag.color } : copy
+    )
+    await db.put('transactions', t)
+  }
   return json(tag)
 }
 
 export async function tagsDelete(params: Record<string, string>): Promise<Response> {
   const db = await getDB()
-  const tag = await currentProfileRecord('tags', idParam(params))
+  const tagId = idParam(params)
+  const tag = await currentProfileRecord('tags', tagId)
   if (!tag) return notFound('Tag')
-  // Remove tag from all transactions that reference it
+  // Remove tag from all transactions that reference it — both the id list and the
+  // denormalized copy the table renders from.
   const pid = await adapter.getCurrentProfileId()
-  const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
+  const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
+    string,
+    any
+  >[]
   for (const t of txns) {
     const tagIds = (t.tag_ids as number[]) || []
-    const idx = tagIds.indexOf(idParam(params))
+    const copies = (t.tags as { id: number }[]) || []
+    const idx = tagIds.indexOf(tagId)
+    const hasCopy = copies.some((copy) => copy.id === tagId)
+    if (idx === -1 && !hasCopy) continue
     if (idx !== -1) {
       tagIds.splice(idx, 1)
       t.tag_ids = tagIds
-      await db.put('transactions', t)
+    }
+    if (hasCopy) t.tags = copies.filter((copy) => copy.id !== tagId)
+    await db.put('transactions', t)
+  }
+  // Drop the tag's rules too, so a deleted tag can't keep auto-tagging new transactions.
+  if (db.objectStoreNames.contains('tagRules')) {
+    const rules = (await db.getAllFromIndex('tagRules', 'by_tag', tagId)) as Record<string, any>[]
+    for (const rule of rules) {
+      if (rule.profile_id === pid) await db.delete('tagRules', rule.id as number)
     }
   }
-  await db.delete('tags', idParam(params))
+  await db.delete('tags', tagId)
   return ok()
 }
 

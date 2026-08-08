@@ -7,6 +7,7 @@ import { HttpError } from '../http';
 import { validateTransactionCreate, validateTransactionUpdate } from '../validation';
 import { recalcGoalsByCategory } from '../recalc-goals';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
+import { autoApplyTagRules } from '../tag-rules';
 import * as db from '../db';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
@@ -821,6 +822,13 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     insertResult.meta.last_row_id,
     pid
   );
+
+  // Apply auto-apply tag rules to the new row. Deliberately after the balance batch has
+  // committed and fail-soft inside autoApplyTagRules — a tagging problem must never fail or
+  // roll back a transaction the user successfully saved.
+  if (created) {
+    await autoApplyTagRules(c.env.DB, pid, created.id as number, created);
+  }
 
   // Recalculate linked goal progress.
   if (category_id) await recalcGoalsByCategory(c.env.DB, category_id, pids);

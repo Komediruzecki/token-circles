@@ -124,6 +124,19 @@ export {
   transactionTagsSet,
 } from './handlers/tags'
 
+// Tag rules (saved filters that attach a tag to matching transactions)
+export {
+  tagRulesCreate,
+  tagRulesDelete,
+  tagRulesList,
+  tagRulesPreview,
+  tagRulesUpdate,
+  tagsApplyRules,
+  tagsBulkTagTransactions,
+  tagSummary,
+  tagsSummary,
+} from './handlers/tagRules'
+
 // Category Mappings
 export {
   categoryMappingsCreate,

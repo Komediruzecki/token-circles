@@ -15,6 +15,7 @@ const PROFILE_STORES = [
   'housings',
   'recurring',
   'tags',
+  'tagRules',
   'categoryMappings',
   'import_logs',
 ] as const

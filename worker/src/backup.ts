@@ -33,6 +33,7 @@ export interface BackupData {
   recurring: Row[];
   housings: Row[];
   tags: Row[];
+  tagRules: Row[];
   transactionTags: Row[];
   categoryMappings: Row[];
   receipts: Row[];
@@ -63,6 +64,7 @@ const PROFILE_SCOPED_KEYS = [
   'recurring',
   'housings',
   'tags',
+  'tagRules',
   'categoryMappings',
   'receipts',
   'importLogs',
@@ -83,6 +85,7 @@ const PROFILE_TABLES = [
   'emergency_fund_config',
   'portfolio_holdings',
   'transactions',
+  'tag_rules',
   'tags',
   'loans',
   'categories',
@@ -211,6 +214,7 @@ function normalizeBackup(input: unknown): NormalizedBackup {
     recurring: rows(data.recurring, 'recurring'),
     housings: rows(data.housings, 'housings'),
     tags: rows(data.tags, 'tags'),
+    tagRules: rows(data.tagRules, 'tagRules'),
     transactionTags,
     categoryMappings: rows(data.categoryMappings, 'categoryMappings'),
     receipts: rows(data.receipts, 'receipts'),
@@ -309,6 +313,9 @@ function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
     requireReference(row, 'transaction_id', transactionIds, `transactionTags[${index}]`, false);
     requireReference(row, 'tag_id', tagIds, `transactionTags[${index}]`, false);
   });
+  data.tagRules.forEach((row, index) =>
+    requireReference(row, 'tag_id', tagIds, `tagRules[${index}]`, false)
+  );
   data.receipts.forEach((row, index) =>
     requireReference(row, 'transaction_id', transactionIds, `receipts[${index}]`)
   );
@@ -385,6 +392,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     recurring,
     housings,
     tags,
+    tagRules,
     transactionTags,
     categoryMappings,
     receipts,
@@ -416,6 +424,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     scoped('recurring_transactions'),
     scoped('housings'),
     scoped('tags'),
+    scoped('tag_rules'),
     db.all<Row>(
       env.DB,
       `SELECT tt.* FROM transaction_tags tt
@@ -477,6 +486,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     recurring,
     housings,
     tags,
+    tagRules,
     transactionTags,
     categoryMappings,
     receipts,
@@ -771,6 +781,13 @@ export async function restoreBackup(
         false
       ),
       tag_id: mapped(tagMap, row.tag_id, `transactionTags[${index}].tag_id`, false),
+    }));
+    await insertRows('tag_rules', data.tagRules, (row, index) => ({
+      ...withProfile(row, `tagRules[${index}]`),
+      tag_id: mapped(tagMap, row.tag_id, `tagRules[${index}].tag_id`, false),
+      // Criteria round-trip as the opaque JSON blob shared/tagRules.ts normalizes on read.
+      criteria:
+        typeof row.criteria === 'string' ? row.criteria : JSON.stringify(row.criteria ?? {}),
     }));
     await insertRows('import_logs', data.importLogs, (row, index) =>
       withProfile(row, `importLogs[${index}]`)

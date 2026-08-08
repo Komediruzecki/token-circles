@@ -78,6 +78,9 @@ const PROFILE_TABLES = [
   'categories',
   'accounts',
   'loans',
+  // tag_rules must be listed before tags: it holds an FK to tags, and D1 deployments with FK
+  // enforcement on would reject deleting a tag that still has rules pointing at it.
+  'tag_rules',
   'tags',
   'housings',
   'portfolio_holdings',

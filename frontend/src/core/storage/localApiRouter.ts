@@ -620,10 +620,51 @@ const routes: RouteDef[] = [
       POST: (ctx) => h.tagsCreate(ctx.body),
     }),
   },
+  // Literal segments first — /tags/(\d+) only matches digits, but keeping the same ordering as
+  // the Worker routes makes the two route tables read identically.
+  {
+    pattern: /^\/tags\/summary$/,
+    methods: ['GET'],
+    handler: dispatch({ GET: (ctx) => h.tagsSummary(ctx.query) }),
+  },
+  {
+    pattern: /^\/tags\/rules$/,
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: () => h.tagRulesList(),
+      POST: (ctx) => h.tagRulesCreate(ctx.body),
+    }),
+  },
+  {
+    pattern: /^\/tags\/rules\/preview$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.tagRulesPreview(ctx.body) }),
+  },
+  {
+    pattern: /^\/tags\/rules\/(\d+)$/,
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.tagRulesUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.tagRulesDelete(ctx.params),
+    }),
+  },
   {
     pattern: /^\/tags\/(\d+)\/transactions$/,
+    methods: ['GET', 'POST'],
+    handler: dispatch({
+      GET: (ctx) => h.tagsGetTransactions(ctx.params),
+      POST: (ctx) => h.tagsBulkTagTransactions(ctx.params, ctx.body),
+    }),
+  },
+  {
+    pattern: /^\/tags\/(\d+)\/summary$/,
     methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.tagsGetTransactions(ctx.params) }),
+    handler: dispatch({ GET: (ctx) => h.tagSummary(ctx.params, ctx.query) }),
+  },
+  {
+    pattern: /^\/tags\/(\d+)\/apply$/,
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.tagsApplyRules(ctx.params, ctx.body) }),
   },
   {
     pattern: /^\/tags\/(\d+)$/,

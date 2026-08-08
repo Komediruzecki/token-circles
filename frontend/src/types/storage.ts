@@ -206,6 +206,7 @@ export interface ExportData {
   bills?: Record<string, unknown>[]
   recurring?: Record<string, unknown>[]
   tags?: Record<string, unknown>[]
+  tagRules?: Record<string, unknown>[]
   housings?: Record<string, unknown>[]
   categoryMappings?: Record<string, unknown>[]
   receipts?: Record<string, unknown>[]
