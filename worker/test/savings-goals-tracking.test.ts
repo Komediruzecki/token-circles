@@ -8,6 +8,11 @@ import { issueSessionCookie } from '../src/auth';
 
 let cookie = '';
 
+// The "recent activity" rows must stay on/after today for the default-start-date case, which
+// hardcoded dates cannot do — pinned at 2026-08-01/05 this suite passed only until the calendar
+// reached them, then failed for everyone. Derive them from the clock instead.
+const TODAY = new Date().toISOString().slice(0, 10);
+
 beforeEach(async () => {
   for (const t of ['savings_goals', 'transactions', 'categories', 'profiles', 'users']) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
@@ -25,11 +30,11 @@ beforeEach(async () => {
       "INSERT INTO transactions (profile_id, description, amount, type, date, category_id) VALUES (700, 'old', 500, 'expense', '2024-01-10', 9)"
     ),
     env.DB.prepare(
-      "INSERT INTO transactions (profile_id, description, amount, type, date, category_id) VALUES (700, 'new1', 100, 'expense', '2026-08-01', 9)"
-    ),
+      "INSERT INTO transactions (profile_id, description, amount, type, date, category_id) VALUES (700, 'new1', 100, 'expense', ?, 9)"
+    ).bind(TODAY),
     env.DB.prepare(
-      "INSERT INTO transactions (profile_id, description, amount, amount_local, currency, type, date, category_id) VALUES (700, 'new2 HRK', 190, 25, 'HRK', 'expense', '2026-08-05', 9)"
-    ),
+      "INSERT INTO transactions (profile_id, description, amount, amount_local, currency, type, date, category_id) VALUES (700, 'new2 HRK', 190, 25, 'HRK', 'expense', ?, 9)"
+    ).bind(TODAY),
   ]);
   cookie = (await issueSessionCookie(70, 'password', env)).split(';')[0];
 });

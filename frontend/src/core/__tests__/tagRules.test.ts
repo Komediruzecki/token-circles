@@ -4,6 +4,7 @@ import {
   EMPTY_TAG_RULE_CRITERIA,
   isTagRuleCriteriaEmpty,
   normalizeTagRuleCriteria,
+  splitTagRuleConditions,
   tagRuleScanNarrowing,
   transactionMatchesAnyTagRule,
   transactionMatchesTagRule,
@@ -252,6 +253,72 @@ describe('tagRuleScanNarrowing', () => {
         expect(transactionMatchesTagRule(row, narrowed)).toBe(true)
       }
     }
+  })
+})
+
+describe('splitTagRuleConditions', () => {
+  it('returns one entry per populated condition and none for the rest', () => {
+    const parts = splitTagRuleConditions(
+      criteria({ description: 'aws', categoryIds: [7], accountIds: [2] })
+    )
+    expect(parts.map((p) => p.key).sort()).toEqual(['accounts', 'categories', 'description'])
+    expect(splitTagRuleConditions(criteria())).toEqual([])
+  })
+
+  it('isolates each condition so it can be evaluated alone', () => {
+    const parts = splitTagRuleConditions(criteria({ description: 'aws', categoryIds: [7] }))
+    const byKey = Object.fromEntries(parts.map((p) => [p.key, p.criteria]))
+    // The description entry constrains description ONLY — category is left unset.
+    expect(byKey.description.description).toBe('aws')
+    expect(byKey.description.categoryIds).toEqual([])
+    expect(byKey.categories.categoryIds).toEqual([7])
+    expect(byKey.categories.description).toBe('')
+  })
+
+  it('explains the reported case: description matches, category is the blocker', () => {
+    // The exact rule and row from the dev report — description "Feedbackqueue" on a transaction
+    // filed under a different category than the rule required. The whole rule matches nothing,
+    // and the per-condition split is what makes the reason visible.
+    const row = {
+      description: 'Feedbackqueue',
+      beneficiary: 'Feedbackqueue',
+      type: 'expense',
+      amount: 8.2,
+      date: '2026-07-20',
+      category_id: 99,
+      account_id: 4,
+    }
+    const rule = criteria({
+      description: 'Feedbackqueue',
+      categoryIds: [7],
+      accountIds: [1, 4],
+    })
+    expect(transactionMatchesTagRule(row, rule)).toBe(false)
+
+    const counts = Object.fromEntries(
+      splitTagRuleConditions(rule).map((p) => [
+        p.key,
+        transactionMatchesTagRule(row, p.criteria) ? 1 : 0,
+      ])
+    )
+    expect(counts).toEqual({ description: 1, accounts: 1, categories: 0 })
+  })
+
+  it('labels each condition readably', () => {
+    const parts = splitTagRuleConditions(
+      criteria({ description: 'aws', descriptionMode: 'starts_with', amountMin: 5 })
+    )
+    const labels = parts.map((p) => p.label)
+    expect(labels).toContain('description starts with "aws"')
+    expect(labels).toContain('amount ≥ 5')
+  })
+
+  it('agrees with the full rule: every condition passing means the rule passes', () => {
+    const rule = criteria({ description: 'aws', types: ['expense'], categoryIds: [7] })
+    const allPass = splitTagRuleConditions(rule).every((p) =>
+      transactionMatchesTagRule(tx(), p.criteria)
+    )
+    expect(allPass).toBe(transactionMatchesTagRule(tx(), rule))
   })
 })
 

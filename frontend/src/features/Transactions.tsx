@@ -43,7 +43,7 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
-import { useAppState } from '../core/appStore'
+import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
@@ -126,6 +126,34 @@ export default function Transactions() {
     },
     () => {
       refreshTransactions()
+    }
+  )
+
+  /** Load the tag list used by the filter bar and the bulk-tag modal. */
+  const loadTags = async (): Promise<Array<{ id: number; name: string; color: string }>> => {
+    try {
+      const tagData = await api.getTags()
+      const list = Array.isArray(tagData)
+        ? (tagData as Array<{ id: number; name: string; color: string }>)
+        : []
+      setTags(list)
+      return list
+    } catch {
+      return tags()
+    }
+  }
+
+  // Tags are created on the Tags page, but this page keeps its own copy for the filter bar and
+  // the bulk-tag modal. Pages stay mounted once visited and refetchOnActive only refires when a
+  // tracked dep changes — so without tracking tagsVersion, a tag created after this page's first
+  // mount never appeared here and the bulk-tag modal read "No tags yet".
+  refetchOnActive(
+    'transactions',
+    () => {
+      void state.tagsVersion
+    },
+    () => {
+      void loadTags()
     }
   )
 
@@ -352,6 +380,8 @@ export default function Transactions() {
       const created = await api.createTag(name, '#6e9bff')
       const tag = { id: created.id, name: created.name ?? name, color: created.color ?? '#6e9bff' }
       if (!tags().some((t) => t.id === tag.id)) setTags([...tags(), tag])
+      // Keep the Tags page (and any other consumer) in step with a tag created from here.
+      bumpTagsVersion()
       return tag
     } catch (error) {
       console.error('Failed to create tag:', error)
@@ -762,14 +792,8 @@ export default function Transactions() {
     } catch {
       // Categories will remain empty
     }
-    try {
-      const tagData = await api.getTags()
-      if (Array.isArray(tagData)) setTags(tagData as any[])
-      // Check hash for a tag filter (e.g. #transactions?tag=3 from the Tags page).
-      applyTagFromHash(tagData as Array<{ id: number }>)
-    } catch {
-      // Tags will remain empty
-    }
+    // Check hash for a tag filter (e.g. #transactions?tag=3 from the Tags page).
+    applyTagFromHash(await loadTags())
     try {
       const acctData = await api.getAccounts()
       if (Array.isArray(acctData)) {

@@ -4,6 +4,7 @@
 import {
   isTagRuleCriteriaEmpty,
   normalizeTagRuleCriteria,
+  splitTagRuleConditions,
   TAG_RULE_SCAN_LIMIT,
   tagRuleScanNarrowing,
   transactionMatchesTagRule,
@@ -169,7 +170,42 @@ export async function matchTransactions(
   for (const row of rows) {
     if (active.some((criteria) => transactionMatchesTagRule(row, criteria))) ids.push(row.id);
   }
+
   return { ids, scanned: rows.length, truncated: rows.length >= TAG_RULE_SCAN_LIMIT };
+}
+
+export interface TagRuleConditionCount {
+  key: string;
+  label: string;
+  matched: number;
+}
+
+/**
+ * Count how many transactions each individual condition of a rule matches.
+ *
+ * Answers "why did my rule match nothing?" — under AND one unsatisfied condition zeroes the whole
+ * result and the UI otherwise gives no clue which. Deliberately scans WITHOUT the narrowing
+ * pushdown: narrowing already drops the rows failing the structural conditions, so counting over a
+ * narrowed scan would report 0 for every condition and explain nothing.
+ */
+export async function explainTagRule(
+  database: D1Database,
+  profileId: number,
+  criteria: TagRuleCriteria
+): Promise<TagRuleConditionCount[]> {
+  const conditions = splitTagRuleConditions(criteria);
+  if (conditions.length < 2) return [];
+  const rows = await db.all<TagRuleTransaction>(
+    database,
+    `SELECT ${SCAN_COLUMNS} FROM transactions WHERE profile_id = ?
+     ORDER BY date DESC, id DESC LIMIT ${TAG_RULE_SCAN_LIMIT}`,
+    profileId
+  );
+  return conditions.map((condition) => ({
+    key: condition.key,
+    label: condition.label,
+    matched: rows.filter((row) => transactionMatchesTagRule(row, condition.criteria)).length,
+  }));
 }
 
 // Chunk size for the id IN-lists below. Kept at 90 (not 100) so the "already tagged" COUNT —

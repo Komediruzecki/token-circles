@@ -248,6 +248,128 @@ export function tagRuleScanNarrowing(criteria: TagRuleCriteria): TagRuleCriteria
   return isTagRuleCriteriaEmpty(narrowed) ? null : narrowed;
 }
 
+/** One populated condition of a rule, isolated so it can be counted on its own. */
+export interface TagRuleCondition {
+  /** Stable identifier for the condition (`description`, `categories`, …). */
+  key: string;
+  /** Human-readable label, e.g. `description contains "AWS"`. */
+  label: string;
+  /** The condition on its own, ready to hand to `transactionMatchesTagRule`. */
+  criteria: TagRuleCriteria;
+}
+
+/**
+ * Split a rule into its individual populated conditions.
+ *
+ * Exists so a preview can answer "why did my rule match nothing?". Under `match: 'all'` a single
+ * unsatisfied condition silently zeroes the whole result, and the user has no way to tell which —
+ * the common trap being a category or account chip left selected from an earlier edit. Counting
+ * each condition separately turns that dead end into a diagnosis.
+ *
+ * Each returned condition is a full `TagRuleCriteria` with exactly one field populated, so callers
+ * evaluate it with the very same `transactionMatchesTagRule` and the breakdown can never disagree
+ * with the real result.
+ */
+export function splitTagRuleConditions(criteria: TagRuleCriteria): TagRuleCondition[] {
+  const out: TagRuleCondition[] = [];
+  const base = (): TagRuleCriteria => ({ ...EMPTY_TAG_RULE_CRITERIA, match: 'all' });
+  const textLabel: Record<TagRuleTextMode, string> = {
+    contains: 'contains',
+    equals: 'is',
+    starts_with: 'starts with',
+    ends_with: 'ends with',
+  };
+
+  if (criteria.types.length) {
+    out.push({
+      key: 'types',
+      label: `type is ${criteria.types.join(' or ')}`,
+      criteria: { ...base(), types: criteria.types },
+    });
+  }
+  if (criteria.categoryIds.length) {
+    out.push({
+      key: 'categories',
+      label: `${criteria.categoryIds.length} selected category(s)`,
+      criteria: { ...base(), categoryIds: criteria.categoryIds },
+    });
+  }
+  if (criteria.accountIds.length) {
+    out.push({
+      key: 'accounts',
+      label: `${criteria.accountIds.length} selected account(s)`,
+      criteria: { ...base(), accountIds: criteria.accountIds },
+    });
+  }
+  if (criteria.description) {
+    out.push({
+      key: 'description',
+      label: `description ${textLabel[criteria.descriptionMode]} "${criteria.description}"`,
+      criteria: {
+        ...base(),
+        description: criteria.description,
+        descriptionMode: criteria.descriptionMode,
+      },
+    });
+  }
+  if (criteria.counterparty) {
+    out.push({
+      key: 'counterparty',
+      label: `counterparty ${textLabel[criteria.counterpartyMode]} "${criteria.counterparty}"`,
+      criteria: {
+        ...base(),
+        counterparty: criteria.counterparty,
+        counterpartyMode: criteria.counterpartyMode,
+      },
+    });
+  }
+  if (criteria.notes) {
+    out.push({
+      key: 'notes',
+      label: `notes ${textLabel[criteria.notesMode]} "${criteria.notes}"`,
+      criteria: { ...base(), notes: criteria.notes, notesMode: criteria.notesMode },
+    });
+  }
+  if (criteria.meansOfPayment) {
+    out.push({
+      key: 'meansOfPayment',
+      label: `payment ${textLabel[criteria.meansOfPaymentMode]} "${criteria.meansOfPayment}"`,
+      criteria: {
+        ...base(),
+        meansOfPayment: criteria.meansOfPayment,
+        meansOfPaymentMode: criteria.meansOfPaymentMode,
+      },
+    });
+  }
+  if (criteria.amountMin !== null || criteria.amountMax !== null) {
+    const label =
+      criteria.amountMin !== null && criteria.amountMax !== null
+        ? `amount ${criteria.amountMin}–${criteria.amountMax}`
+        : criteria.amountMin !== null
+          ? `amount ≥ ${criteria.amountMin}`
+          : `amount ≤ ${criteria.amountMax}`;
+    out.push({
+      key: 'amount',
+      label,
+      criteria: { ...base(), amountMin: criteria.amountMin, amountMax: criteria.amountMax },
+    });
+  }
+  if (criteria.dateFrom !== null || criteria.dateTo !== null) {
+    const label =
+      criteria.dateFrom && criteria.dateTo
+        ? `${criteria.dateFrom} → ${criteria.dateTo}`
+        : criteria.dateFrom
+          ? `from ${criteria.dateFrom}`
+          : `until ${criteria.dateTo}`;
+    out.push({
+      key: 'date',
+      label,
+      criteria: { ...base(), dateFrom: criteria.dateFrom, dateTo: criteria.dateTo },
+    });
+  }
+  return out;
+}
+
 /** Human-readable one-line summary of a rule, for list rows and confirmation copy. */
 export function describeTagRuleCriteria(criteria: TagRuleCriteria): string {
   const parts: string[] = [];

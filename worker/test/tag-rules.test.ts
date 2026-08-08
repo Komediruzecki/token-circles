@@ -268,6 +268,42 @@ describe('tag rules', () => {
     expect(await tagIdsFor(food)).toEqual([]);
   });
 
+  it('explains a 0-match rule by counting each condition separately', async () => {
+    // Mirror of the IndexedDB test of the same name. The reported confusion: description clearly
+    // matches a transaction, yet the rule finds nothing, because a category chip left selected
+    // ANDs the result to zero with nothing on screen saying so.
+    const tagId = await createTag();
+    await seedTransaction({ description: 'Feedbackqueue', category_id: 11 });
+
+    const preview = await (
+      await call('/api/tags/rules/preview', {
+        method: 'POST',
+        body: {
+          tag_id: tagId,
+          criteria: { description: 'Feedbackqueue', categoryIds: [10] },
+        },
+      })
+    ).json<{ matched: number; conditions: { key: string; matched: number }[] }>();
+
+    expect(preview.matched).toBe(0);
+    const byKey = Object.fromEntries(preview.conditions.map((c) => [c.key, c.matched]));
+    expect(byKey.description).toBe(1); // the text condition is fine on its own...
+    expect(byKey.categories).toBe(0); // ...the category is what zeroes the rule
+  });
+
+  it('omits the breakdown when the rule matched something', async () => {
+    const tagId = await createTag();
+    await seedTransaction({ description: 'Feedbackqueue', category_id: 10 });
+    const preview = await (
+      await call('/api/tags/rules/preview', {
+        method: 'POST',
+        body: { tag_id: tagId, criteria: { description: 'Feedbackqueue', categoryIds: [10] } },
+      })
+    ).json<{ matched: number; conditions: unknown[] }>();
+    expect(preview.matched).toBe(1);
+    expect(preview.conditions).toEqual([]);
+  });
+
   it('refuses to apply when the tag has no rules', async () => {
     const tagId = await createTag();
     const res = await call(`/api/tags/${tagId}/apply`, { method: 'POST', body: {} });

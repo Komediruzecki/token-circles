@@ -20,6 +20,7 @@ function mount(overrides: Partial<Parameters<typeof BulkActionBar>[0]> = {}) {
   host = document.createElement('div')
   document.body.appendChild(host)
   const [count, setCount] = createSignal(0)
+  const [tagList, setTagList] = createSignal(TAGS)
   const onApplyTags = vi.fn()
   const onCreateTag = vi.fn(async (name: string) => ({ id: 99, name, color: '#123456' }))
   dispose = render(
@@ -27,7 +28,7 @@ function mount(overrides: Partial<Parameters<typeof BulkActionBar>[0]> = {}) {
       <BulkActionBar
         selectedCount={count()}
         categories={[]}
-        tags={TAGS}
+        tags={tagList()}
         onClearSelection={() => {}}
         onDeleteSelected={() => {}}
         onReconcileSelected={() => {}}
@@ -40,7 +41,7 @@ function mount(overrides: Partial<Parameters<typeof BulkActionBar>[0]> = {}) {
     ),
     host
   )
-  return { setCount, onApplyTags, onCreateTag }
+  return { setCount, setTagList, onApplyTags, onCreateTag }
 }
 
 describe('BulkActionBar — bulk tagging', () => {
@@ -109,6 +110,24 @@ describe('BulkActionBar — bulk tagging', () => {
     setCount(3)
     expect(host.querySelector('[data-test-id="bulk-action-bar"]')).not.toBeNull()
     expect(host.querySelector('[data-test-id="bulk-tag-modal"]')).toBeNull()
+  })
+
+  it('picks up a tag created elsewhere without remounting', () => {
+    // The reported bug: a tag created on the Tags page did not reach this modal, which kept
+    // saying "No tags yet". The page-level cause was a mount-only fetch (now keyed on
+    // tagsVersion); this pins the component half — the chip list must track the prop, not latch
+    // whatever it was handed first.
+    const { setCount, setTagList } = mount()
+    setTagList([])
+    setCount(1)
+    host.querySelector<HTMLButtonElement>('[data-test-id="bulk-tag-btn"]')!.click()
+    expect(host.querySelector('[data-test-id="bulk-tag-chips"]')).toBeNull()
+    expect(host.textContent).toContain('No tags yet')
+
+    setTagList([{ id: 5, name: 'Company', color: '#6e9bff' }])
+    const chips = host.querySelectorAll<HTMLButtonElement>('[data-test-id="bulk-tag-chips"] button')
+    expect(chips).toHaveLength(1)
+    expect(chips[0].textContent).toContain('Company')
   })
 
   it('creates a tag inline and pre-selects it', async () => {

@@ -10,6 +10,7 @@
  */
 import {
   normalizeTagRuleCriteria,
+  splitTagRuleConditions,
   TAG_RULE_SCAN_LIMIT,
   tagRuleScanNarrowing,
   transactionMatchesTagRule,
@@ -190,7 +191,31 @@ async function matchingTransactions(
   const matched = scan.filter((row) =>
     criteriaList.some((criteria) => transactionMatchesTagRule(row, criteria))
   )
+
   return { matched, scanned: scan.length, truncated: scan.length >= TAG_RULE_SCAN_LIMIT }
+}
+
+/**
+ * Count how many transactions each individual condition of a rule matches — mirrors the Worker's
+ * explainTagRule so a 0-match preview explains itself identically in both runtimes.
+ *
+ * Deliberately counts over the UNNARROWED candidate set: the scan above drops rows that fail the
+ * structural conditions, so counting there would report 0 for every condition and explain nothing.
+ */
+async function explainTagRule(
+  profileId: number,
+  criteria: TagRuleCriteria
+): Promise<{ key: string; label: string; matched: number }[]> {
+  const conditions = splitTagRuleConditions(criteria)
+  if (conditions.length < 2) return []
+  const db = await getDB()
+  const all = (await db.getAllFromIndex('transactions', 'by_profile', profileId)) as Row[]
+  const scan = all.slice(0, TAG_RULE_SCAN_LIMIT)
+  return conditions.map((condition) => ({
+    key: condition.key,
+    label: condition.label,
+    matched: scan.filter((row) => transactionMatchesTagRule(row, condition.criteria)).length,
+  }))
 }
 
 /** Dry-run: how many existing transactions a criteria set would tag, plus a sample. */
@@ -199,6 +224,8 @@ export async function tagRulesPreview(body: unknown): Promise<Response> {
   const b = (body && typeof body === 'object' ? body : {}) as Row
   const criteria = normalizeTagRuleCriteria(b.criteria)
   const { matched, scanned, truncated } = await matchingTransactions(pid, [criteria])
+  // Only when the rule found nothing — that is the only time the breakdown is shown.
+  const conditions = matched.length === 0 ? await explainTagRule(pid, criteria) : []
 
   const tagId = Number(b.tag_id)
   const hasTag = Number.isInteger(tagId) && tagId > 0
@@ -224,6 +251,7 @@ export async function tagRulesPreview(body: unknown): Promise<Response> {
     scanned,
     truncated,
     sample,
+    conditions,
   })
 }
 

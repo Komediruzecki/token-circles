@@ -19,6 +19,7 @@ export interface AppState {
   sidebarCollapsed: boolean
   quickAddCategories: Category[]
   profileVersion: number
+  tagsVersion: number
 }
 
 const initialState: AppState = {
@@ -34,6 +35,7 @@ const initialState: AppState = {
   sidebarCollapsed: true,
   quickAddCategories: [],
   profileVersion: 0,
+  tagsVersion: 0,
 }
 
 const [state, setState] = createStore<AppState>(initialState)
@@ -170,4 +172,18 @@ export function getProfileVersion() {
 
 export function bumpProfileVersion() {
   setState('profileVersion', (v) => v + 1)
+}
+
+// ── Tag version ───────────────────────────────────────────────────────────────
+// Tags are created on the Tags page but consumed on the Transactions page (the filter bar and
+// the bulk-tag modal). Pages stay mounted once visited, so Transactions' tag list would still
+// hold whatever existed at ITS first mount — a tag created afterwards left the bulk-tag modal
+// saying "No tags yet". Bump this on every tag mutation; Transactions tracks it and refetches.
+
+export function getTagsVersion() {
+  return state.tagsVersion
+}
+
+export function bumpTagsVersion() {
+  setState('tagsVersion', (v) => v + 1)
 }

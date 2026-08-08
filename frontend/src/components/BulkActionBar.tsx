@@ -199,14 +199,14 @@ export default function BulkActionBar(props: BulkActionBarProps) {
             </div>
             <div class={styles.modalFooter}>
               <button
-                class={styles.btnSecondary}
+                class={styles.modalBtn}
                 onClick={() => {
                   setShowCategoryModal(false)
                 }}
               >
                 Cancel
               </button>
-              <button class={styles.btnPrimary} onClick={handleApplyCategory}>
+              <button class={styles.modalBtnPrimary} onClick={handleApplyCategory}>
                 Apply
               </button>
             </div>
@@ -269,14 +269,14 @@ export default function BulkActionBar(props: BulkActionBarProps) {
             </div>
             <div class={styles.modalFooter}>
               <button
-                class={styles.btnSecondary}
+                class={styles.modalBtn}
                 onClick={() => {
                   setShowTypeModal(false)
                 }}
               >
                 Cancel
               </button>
-              <button class={styles.btnPrimary} onClick={handleApplyType}>
+              <button class={styles.modalBtnPrimary} onClick={handleApplyType}>
                 Apply
               </button>
             </div>
@@ -386,7 +386,7 @@ export default function BulkActionBar(props: BulkActionBarProps) {
                   />
                   <button
                     type="button"
-                    class={styles.btnSecondary}
+                    class={styles.modalBtn}
                     disabled={!newTagName().trim()}
                     onClick={() => void handleCreateNewTag()}
                   >
@@ -397,7 +397,7 @@ export default function BulkActionBar(props: BulkActionBarProps) {
             </div>
             <div class={styles.modalFooter}>
               <button
-                class={styles.btnSecondary}
+                class={styles.modalBtn}
                 onClick={() => {
                   setShowTagModal(false)
                 }}
@@ -405,7 +405,7 @@ export default function BulkActionBar(props: BulkActionBarProps) {
                 Cancel
               </button>
               <button
-                class={styles.btnPrimary}
+                class={styles.modalBtnPrimary}
                 data-test-id="bulk-tag-apply"
                 disabled={pickedTagIds().length === 0 || applyingTags()}
                 onClick={() => void handleApplyTags()}

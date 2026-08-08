@@ -160,6 +160,8 @@ export interface TagRulePreview {
     date: string
     type: string
   }>
+  /** How many rows each individual condition matched — explains a 0-match rule. */
+  conditions?: Array<{ key: string; label: string; matched: number }>
 }
 
 // ============ CATEGORIES ============

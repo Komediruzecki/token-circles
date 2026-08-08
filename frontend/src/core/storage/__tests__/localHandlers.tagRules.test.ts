@@ -198,6 +198,28 @@ describe('localHandlers - tag rules', () => {
     expect(anyPreview.matched).toBe(3)
   })
 
+  it('explains a 0-match rule by counting each condition separately', async () => {
+    // The reported confusion: description clearly matches a transaction, yet the rule finds
+    // nothing, because a category chip left selected ANDs the result to zero and nothing on
+    // screen says so. The preview now reports per-condition counts.
+    const tagId = await makeTag()
+    await seedTransaction({ description: 'Feedbackqueue', category_id: 11 })
+
+    const preview = await (
+      await tagRulesPreview({
+        tag_id: tagId,
+        criteria: { description: 'Feedbackqueue', categoryIds: [10] },
+      })
+    ).json()
+
+    expect(preview.matched).toBe(0)
+    const byKey = Object.fromEntries(
+      preview.conditions.map((c: { key: string; matched: number }) => [c.key, c.matched])
+    )
+    expect(byKey.description).toBe(1) // the text condition is fine on its own...
+    expect(byKey.categories).toBe(0) // ...the category is what zeroes the rule
+  })
+
   it('refuses to apply when the tag has no rules', async () => {
     const tagId = await makeTag()
     const res = await tagsApplyRules({ p1: String(tagId) }, {})

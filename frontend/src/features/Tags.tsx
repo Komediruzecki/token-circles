@@ -24,7 +24,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
 import { api, formatCurrency, showToast } from '../core/api'
-import { useAppState } from '../core/appStore'
+import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
@@ -85,18 +85,31 @@ export default function Tags() {
   const [tagColor, setTagColor] = createSignal(TAG_COLORS[0])
 
   // Overview: tags + their totals for the focus period, refetched on profile/period change.
+  //
+  // The fetcher never rejects. Its callers are fire-and-forget (`refreshOverview()` after a
+  // save/delete), and a rejecting refetch there surfaces as an "Uncaught (in promise)" with no
+  // user-visible explanation at all. Instead the tag list — the one call the page cannot work
+  // without — records its failure, and the page renders a retry banner.
   const [overview, { refetch: refetchOverview }] = createResource(
     gatedSource('tags', () => `${state.profileVersion}|${range().from}|${range().to}`),
     async () => {
       const [summary, rules, categories, accounts] = await Promise.all([
-        api.getTagsSummary({ startDate: range().from, endDate: range().to }),
+        api
+          .getTagsSummary({ startDate: range().from, endDate: range().to })
+          .catch(() => null as Models.TagSummary[] | null),
         api.getTagRules().catch(() => [] as Models.TagRule[]),
         api.getCategories().catch(() => [] as Models.Category[]),
         api.getAccounts().catch(() => [] as Models.Account[]),
       ])
-      return { summary, rules, categories, accounts }
+      return { summary: summary ?? [], failed: summary === null, rules, categories, accounts }
     }
   )
+
+  /** True when the tag list itself could not be loaded (network, auth, or a server error). */
+  const loadFailed = () => overview.latest?.failed === true
+
+  /** Refetch without letting a rejection escape as an unhandled promise rejection. */
+  const refreshOverview = () => void Promise.resolve(refetchOverview()).catch(() => {})
 
   const tags = () => overview.latest?.summary ?? []
   const rules = () => overview.latest?.rules ?? []
@@ -127,6 +140,10 @@ export default function Tags() {
     },
     (key) => api.getTagSummary(key.id, { startDate: key.from, endDate: key.to })
   )
+
+  /** As refreshOverview, for the selected tag's detail panel. Declared after its resource so it
+   *  can't be called from setup code before `refetchDetail` is initialised. */
+  const refreshDetail = () => void Promise.resolve(refetchDetail()).catch(() => {})
 
   // Close any open rule draft when the selected tag changes. Save/preview/apply all read the live
   // selectedTagId(), so leaving a draft open across a tag switch (the tag cards stay clickable)
@@ -185,7 +202,9 @@ export default function Tags() {
         if (created?.id) setSelectedTagId(created.id)
       }
       setShowTagForm(false)
-      void refetchOverview()
+      // The Transactions page keeps its own tag list for the filter bar and bulk-tag modal.
+      bumpTagsVersion()
+      refreshOverview()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not save tag', 'error')
     }
@@ -196,7 +215,8 @@ export default function Tags() {
       await api.deleteTag(tag.id)
       showToast(`Tag "${tag.name}" deleted`, 'success')
       if (selectedTagId() === tag.id) setSelectedTagId(null)
-      void refetchOverview()
+      bumpTagsVersion()
+      refreshOverview()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not delete tag', 'error')
     }
@@ -273,7 +293,7 @@ export default function Tags() {
       }
       setDraft(null)
       setPreview(null)
-      void refetchOverview()
+      refreshOverview()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not save rule', 'error')
     }
@@ -284,7 +304,7 @@ export default function Tags() {
       await api.deleteTagRule(rule.id)
       showToast('Rule deleted', 'success')
       if (draft()?.id === rule.id) setDraft(null)
-      void refetchOverview()
+      refreshOverview()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not delete rule', 'error')
     }
@@ -314,8 +334,8 @@ export default function Tags() {
       // Refetch the detail panel too: applying tags N transactions but changes none of the
       // detail resource's keys, so its chart + category breakdown would otherwise keep showing the
       // pre-apply (often empty) state — exactly the view the user applied the rule to populate.
-      void refetchOverview()
-      void refetchDetail()
+      refreshOverview()
+      refreshDetail()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not apply rules', 'error')
     } finally {
@@ -387,7 +407,14 @@ export default function Tags() {
               placeholder="Tag name (e.g. Company, Trip to Rome)"
               value={tagName()}
               onInput={(e) => setTagName(e.currentTarget.value)}
-              autofocus
+              // Focus explicitly on mount rather than with the `autofocus` attribute: the browser
+              // refuses autofocus when something already holds focus (the button that opened this
+              // form) and logs a console warning every time.
+              ref={(el) => {
+                queueMicrotask(() => {
+                  el.focus()
+                })
+              }}
               data-test-id="tag-name-input"
             />
             <div class={styles.swatches}>
@@ -437,6 +464,17 @@ export default function Tags() {
       </div>
 
       <OrbitalDivider id="tags-sec-list" label="Your tags" meta={`${tags().length} tags`} />
+
+      {/* A failed load used to be indistinguishable from having no tags. Say which it is, and
+          offer the retry, instead of rendering a confident "No tags yet". */}
+      <Show when={loadFailed()}>
+        <div class={styles.loadError} data-test-id="tags-load-error">
+          <span>Couldn’t load your tags — the server returned an error.</span>
+          <button class={styles.secondaryButton} type="button" onClick={refreshOverview}>
+            Retry
+          </button>
+        </div>
+      </Show>
 
       <Show when={!loading()} fallback={<div class={styles.loadingState}>Loading tags…</div>}>
         <Show
@@ -936,6 +974,42 @@ export default function Tags() {
                               were scanned.
                             </span>
                           </Show>
+
+                          {/* Under AND a single unsatisfied condition zeroes the whole result, and
+                              nothing on screen says which one — most often a category or account
+                              chip left selected from an earlier edit. Break the count down per
+                              condition so the culprit is the row reading 0. */}
+                          <Show
+                            when={
+                              result().matched === 0 &&
+                              current().criteria.match === 'all' &&
+                              (result().conditions?.length ?? 0) > 1
+                            }
+                          >
+                            <div class={styles.conditionBreakdown} data-test-id="tag-rule-why">
+                              <span class={styles.conditionHint}>
+                                Every condition must match (AND). On its own, each matched:
+                              </span>
+                              <ul class={styles.conditionList}>
+                                <For each={result().conditions}>
+                                  {(condition) => (
+                                    <li
+                                      class={
+                                        condition.matched === 0 ? styles.conditionZero : undefined
+                                      }
+                                    >
+                                      <span class={styles.conditionLabel}>{condition.label}</span>
+                                      <span class={styles.conditionCount}>
+                                        {condition.matched}
+                                        {condition.matched === 0 ? ' ← blocks the rule' : ''}
+                                      </span>
+                                    </li>
+                                  )}
+                                </For>
+                              </ul>
+                            </div>
+                          </Show>
+
                           <Show when={result().sample.length > 0}>
                             <ul class={styles.sampleList}>
                               <For each={result().sample}>

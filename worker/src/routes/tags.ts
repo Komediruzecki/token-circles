@@ -6,7 +6,12 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
-import { linkTransactionsToTag, listTagRules, matchTransactions } from '../tag-rules';
+import {
+  explainTagRule,
+  linkTransactionsToTag,
+  listTagRules,
+  matchTransactions,
+} from '../tag-rules';
 
 // Port of backend/routes/tags.js (tags CRUD + transaction tagging), plus the tag-rule engine
 // (saved filters that attach a tag to matching transactions) and per-tag analytics.
@@ -223,6 +228,9 @@ tagsRoutes.post('/api/tags/rules/preview', requireAuth, async (c) => {
   const b = (await c.req.json()) as Record<string, unknown>;
   const criteria = normalizeTagRuleCriteria(b.criteria);
   const { ids, scanned, truncated } = await matchTransactions(c.env.DB, pid, [criteria]);
+  // Only when the rule found nothing — the breakdown is shown only then, and it costs a second
+  // (deliberately unnarrowed) scan.
+  const conditions = ids.length === 0 ? await explainTagRule(c.env.DB, pid, criteria) : [];
 
   // How many matches the tag already covers, so the UI can show "N new".
   let alreadyTagged = 0;
@@ -263,6 +271,7 @@ tagsRoutes.post('/api/tags/rules/preview', requireAuth, async (c) => {
     scanned,
     truncated,
     sample,
+    conditions,
   });
 });
 

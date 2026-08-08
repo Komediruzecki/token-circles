@@ -1,56 +1,93 @@
+/* The selection bar sits directly under the FilterBar, so it takes the same card surface rather
+   than the flat primary-blue slab it used to be — that slab ignored the app's tokens entirely and
+   read as a foreign element on a dark page. Selection is signalled with a primary-tinted border,
+   an accent rail and a soft glow, which keeps the emphasis without the wall of colour. */
 .bulkBar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
   padding: 10px 16px;
-  background: var(--primary);
-  border-radius: 8px;
+  background: color-mix(in oklab, var(--card-bg) 88%, var(--primary));
+  border: 1px solid color-mix(in oklab, var(--primary) 38%, var(--border));
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent);
   margin-bottom: 16px;
-  color: #fff;
+  color: var(--text);
 }
 
 .bulkCount {
   font-size: 13px;
   font-weight: 600;
   margin-right: auto;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Small primary dot so "N selected" reads as a live state at a glance. */
+.bulkCount::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex: 0 0 auto;
 }
 
 .btn {
   padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
   white-space: nowrap;
+  background: var(--bg);
+  color: var(--text);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .btn:hover {
-  opacity: 0.85;
+  border-color: var(--primary);
 }
 
 .btnSecondary {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.btnSecondary:hover {
+  background: color-mix(in oklab, var(--primary) 12%, var(--bg));
+  border-color: var(--primary);
 }
 
 .btnDanger {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--bg);
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
+  color: var(--danger);
 }
 
 .btnDanger:hover {
-  background: color-mix(in oklab, var(--danger) 52%, transparent);
+  background: color-mix(in oklab, var(--danger) 14%, var(--bg));
+  border-color: var(--danger);
 }
 
 .btnGhost {
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  border-color: transparent;
+  color: var(--text-secondary);
 }
 
 .btnGhost:hover {
-  background: rgba(255, 255, 255, 0.15);
+  color: var(--text);
+  border-color: var(--border);
+  background: transparent;
 }
 
 /* Modal styles for bulk edit */
@@ -162,7 +199,9 @@
   border-top: 1px solid var(--border);
 }
 
-.btnPrimary {
+/* Modal footer buttons. Named apart from the bar's .btn* on purpose: both used to be called
+   .btnSecondary, so whichever CSS rule came last silently restyled the other surface. */
+.modalBtnPrimary {
   background: var(--primary);
   color: #fff;
   border: none;
@@ -174,11 +213,16 @@
   transition: background 0.2s;
 }
 
-.btnPrimary:hover {
+.modalBtnPrimary:hover {
   background: var(--primary-hover);
 }
 
-.btnSecondary {
+.modalBtnPrimary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.modalBtn {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
@@ -190,8 +234,13 @@
   transition: all 0.2s;
 }
 
-.btnSecondary:hover {
+.modalBtn:hover {
   background: var(--bg);
+}
+
+.modalBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Tag bulk-apply modal */
