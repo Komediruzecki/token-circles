@@ -1,6 +1,7 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
+import { importRowLabel } from '../../../../../shared/importRowLabel'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getLocalCurrency } from '../../api'
 import { normalizeCurrencyCode } from '../../currencies'
@@ -626,7 +627,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     // row loop below (audit A2) — so `clean` here is just all rows, not the
     // pre-resolution deduped subset.
     const clean = rows
-    const skipped: { index: number; reason: string }[] = []
+    const skipped: { index: number; reason: string; label?: string }[] = []
     const validatedRows: Array<{
       index: number
       row: Record<string, unknown>
@@ -658,7 +659,8 @@ export async function importExecute(body: unknown): Promise<Response> {
       ) {
         skipped.push({
           index,
-          reason: `Invalid ${invalidFields.join(', ')} on row ${index + 1}`,
+          reason: `Could not read ${invalidFields.join(', ')} — check the number format`,
+          label: importRowLabel(row.date, row.description),
         })
         continue
       }
@@ -746,6 +748,8 @@ export async function importExecute(body: unknown): Promise<Response> {
     const accountIdMap = new Map<string, number>()
     // Also track accounts from means_of_payment column values
     const mopAccountMap = new Map<string, number>()
+    // id → display name, so a rejection can name the account rather than quote a bare id.
+    const accountNameById = new Map<number, string>()
     // Seed with ALL existing accounts by name so a transfer whose destination (category)
     // or source (means_of_payment) names an account that already exists resolves on BOTH
     // legs — even when that value wasn't flagged 'account' in this import. Without this a
@@ -753,6 +757,8 @@ export async function importExecute(body: unknown): Promise<Response> {
     // null) and silently drained the source account. Mirrors the worker / Express backend.
     const existingAccounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
     for (const a of existingAccounts) {
+      const record = a as Record<string, unknown>
+      if (typeof record.id === 'number') accountNameById.set(record.id, toStr(record.name))
       const nm = toStr((a as Record<string, unknown>).name)
         .toLowerCase()
         .trim()
@@ -1005,7 +1011,19 @@ export async function importExecute(body: unknown): Promise<Response> {
         transfer_account_id: transferAccountId,
       })
       if (invariantError) {
-        skipped.push({ index: i, reason: invariantError })
+        // Mirror of the Worker: name the account when a transfer points at itself, so the user
+        // knows which cell to fix rather than being told two ids are equal.
+        const sameAccount =
+          resolvedAccountId !== null && resolvedAccountId === transferAccountId
+            ? accountNameById.get(resolvedAccountId)
+            : undefined
+        skipped.push({
+          index: i,
+          reason: sameAccount
+            ? `${invariantError} — both sides resolve to "${sameAccount}" (source comes from Means of Payment, destination from Category)`
+            : invariantError,
+          label: importRowLabel(row.date, row.description),
+        })
         continue
       }
 

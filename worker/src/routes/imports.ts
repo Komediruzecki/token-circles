@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
+import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
@@ -388,6 +389,8 @@ export async function executeImport(
 
   // name(lowercased) -> accountId, seeded with the profile(s)' existing accounts.
   const accountIdMap = new Map<string, number>();
+  // id → display name, so a rejection can name the account rather than quote a bare id.
+  const accountNameById = new Map<number, string>();
   const loadAccounts = async () => {
     const accs = await db.all<{ id: number; name: string }>(
       DB,
@@ -399,6 +402,7 @@ export async function executeImport(
     // "Revolut ") must key on the trimmed form or the transfer's destination leg never
     // resolves and shows "Erste Current -> —".
     for (const a of accs) accountIdMap.set(a.name.trim().toLowerCase(), a.id);
+    for (const a of accs) accountNameById.set(a.id, a.name);
   };
   await loadAccounts();
 
@@ -407,7 +411,7 @@ export async function executeImport(
   const requestedCurrency = input.defaultCurrency;
   const defaultCurrency = await resolveProfileBaseCurrency(DB, pid, requestedCurrency, !dryRun);
   const rowsArr = rows as Array<Record<string, any>>;
-  const skippedItems: Array<{ index: number; reason: string }> = [];
+  const skippedItems: Array<{ index: number; reason: string; label?: string }> = [];
   const validatedRows: Array<{
     index: number;
     row: Record<string, any>;
@@ -446,7 +450,8 @@ export async function executeImport(
     ) {
       skippedItems.push({
         index,
-        reason: `Invalid ${invalidFields.join(', ')} on row ${index + 1}`,
+        reason: `Could not read ${invalidFields.join(', ')} — check the number format`,
+        label: importRowLabel(pick(row, mapping, 'date'), pick(row, mapping, 'description')),
       });
       continue;
     }
@@ -709,7 +714,20 @@ export async function executeImport(
       transfer_account_id: transferAccountId,
     });
     if (invariantError) {
-      skippedItems.push({ index: ri, reason: invariantError });
+      // Name the account for the self-transfer case. The invariant lives in shared/ and only sees
+      // ids, but "both sides resolve to Revolut" is what actually tells the user which cell to fix:
+      // the source comes from the Means of Payment column and the destination from Category.
+      const sameAccount =
+        accountId !== null && accountId === transferAccountId
+          ? accountNameById.get(accountId)
+          : undefined;
+      skippedItems.push({
+        index: ri,
+        reason: sameAccount
+          ? `${invariantError} — both sides resolve to "${sameAccount}" (source comes from Means of Payment, destination from Category)`
+          : invariantError,
+        label: importRowLabel(dateRaw, description),
+      });
       continue;
     }
     // Multiplicity-aware duplicate check on the resolved fields: skip a row only when it

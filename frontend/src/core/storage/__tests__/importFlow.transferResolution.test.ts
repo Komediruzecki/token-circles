@@ -95,11 +95,21 @@ describe('importExecute — transfer resolves against existing accounts', () => 
     const body = (await res.json()) as {
       imported: number
       skipped: number
-      skipped_items: Array<{ index: number; reason: string }>
+      skipped_items: Array<{ index: number; reason: string; label?: string }>
     }
     expect(body.imported).toBe(0)
     expect(body.skipped).toBe(2)
     expect(body.skipped_items.map((item) => item.index)).toEqual([0, 1])
+
+    // Both rejections must be actionable: name the row the way it appears in the sheet, and for
+    // the self-transfer say which account both legs landed on and which columns decide them —
+    // "source and destination must be different" alone leaves the user hunting for the cell.
+    expect(body.skipped_items[0].label).toBe('2026-07-20 · Missing destination')
+    expect(body.skipped_items[1].label).toBe('2026-07-21 · Self transfer')
+    expect(body.skipped_items[1].reason).toContain('both sides resolve to "Revolut"')
+    expect(body.skipped_items[1].reason).toContain('Means of Payment')
+    // The missing-leg row has no single account to blame, so it keeps the plain invariant text.
+    expect(body.skipped_items[0].reason).not.toContain('both sides resolve to')
     expect((await db.get('accounts', erste))?.balance).toBe(1000)
     expect((await db.get('accounts', revolut))?.balance).toBe(500)
     expect(await db.getAllFromIndex('transactions', 'by_profile', 1)).toHaveLength(0)

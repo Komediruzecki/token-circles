@@ -162,3 +162,48 @@ describe('import upload size cap (audit S8)', () => {
     expect(json.headers).toEqual(['date', 'amount']);
   });
 });
+
+describe('import rejection messages are actionable', () => {
+  // A bare "Row 285: …" means counting through a multi-thousand-row sheet, and the count is off
+  // by the header row so it lands on the wrong line. Rejections quote the row's own date and
+  // description, and name the account when a transfer resolves to itself. Mirrors the IndexedDB
+  // assertions in frontend/src/core/storage/__tests__/importFlow.transferResolution.test.ts.
+  it('labels a row by date and description, without repeating the row number', async () => {
+    const res = await execute({
+      rows: [['2026-05-04', 'Vendite Ecommerce', '45.05', '1,234', '1.00']],
+      mapping: { date: 0, description: 1, amount: 2, amount_local: 3, exchange_rate: 4 },
+      dry_run: true,
+    });
+    const body = await res.json<{
+      skipped_items: Array<{ index: number; reason: string; label?: string }>;
+    }>();
+    expect(body.skipped_items).toHaveLength(1);
+    expect(body.skipped_items[0].label).toBe('2026-05-04 · Vendite Ecommerce');
+    expect(body.skipped_items[0].reason).toContain('Could not read amount_local');
+    // The UI already prints the row number; the reason must not repeat it.
+    expect(body.skipped_items[0].reason).not.toContain('on row');
+  });
+
+  it('names the account when a transfer resolves to itself', async () => {
+    await env.DB.prepare(
+      "INSERT INTO accounts (id, profile_id, name, type, balance) VALUES (77, ?, 'Revolut', 'giro', 500)"
+    )
+      .bind(PROFILE)
+      .run();
+
+    const res = await execute({
+      rows: [['2026-07-21', 'Self transfer', '100', 'Revolut', 'Revolut', 'Transfer']],
+      mapping: { date: 0, description: 1, amount: 2, category: 3, means_of_payment: 4, type: 5 },
+      dry_run: true,
+    });
+    const body = await res.json<{
+      skipped_items: Array<{ index: number; reason: string; label?: string }>;
+    }>();
+    expect(body.skipped_items).toHaveLength(1);
+    expect(body.skipped_items[0].label).toBe('2026-07-21 · Self transfer');
+    expect(body.skipped_items[0].reason).toContain('both sides resolve to "Revolut"');
+    // Say which columns decide each leg — that is the cell the user has to edit.
+    expect(body.skipped_items[0].reason).toContain('Means of Payment');
+    expect(body.skipped_items[0].reason).toContain('Category');
+  });
+});

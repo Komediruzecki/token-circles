@@ -57,9 +57,20 @@ describe('serverless import numeric validation', () => {
     const body = await response.json()
     expect(response.status).toBe(200)
     expect(body.imported).toBe(0)
+    // The row number is rendered by the UI, so the reason no longer repeats it ("Row 1: Invalid
+    // amount_local on row 1"). It now quotes the row's own date and description instead, which is
+    // what lets the user find the line in a multi-thousand-row sheet.
     expect(body.skipped_items).toEqual([
-      { index: 0, reason: 'Invalid amount_local on row 1' },
-      { index: 1, reason: 'Invalid exchange_rate on row 2' },
+      {
+        index: 0,
+        reason: 'Could not read amount_local — check the number format',
+        label: '2026-01-01 · Bad local',
+      },
+      {
+        index: 1,
+        reason: 'Could not read exchange_rate — check the number format',
+        label: '2026-01-02 · Bad rate',
+      },
     ])
     expect(await (await getDB()).count('transactions')).toBe(0)
   })

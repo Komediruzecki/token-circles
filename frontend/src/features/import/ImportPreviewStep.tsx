@@ -119,8 +119,11 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             <For each={validationIssues().slice(0, 8)}>
               {(issue) => (
                 <div>
+                  {/* Quote the row's own date and description alongside the number: the number
+                      alone means counting through a multi-thousand-line sheet, and it is off by
+                      the header row, so it usually lands on the wrong line. */}
                   {typeof issue.index === 'number'
-                    ? `Row ${issue.index + 1}: `
+                    ? `Row ${issue.index + 1}${issue.label ? ` (${issue.label})` : ''}: `
                     : issue.field
                       ? `${issue.field}: `
                       : ''}

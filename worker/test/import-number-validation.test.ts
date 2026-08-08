@@ -103,13 +103,23 @@ describe('Worker import numeric validation', () => {
     });
     const body = (await response.json()) as {
       imported: number;
-      skipped_items: Array<{ index: number; reason: string }>;
+      skipped_items: Array<{ index: number; reason: string; label?: string }>;
     };
     expect(response.status).toBe(200);
     expect(body.imported).toBe(0);
+    // Indices still identify the original rows; the reason no longer repeats the row number the
+    // UI already prints, and each rejection now quotes the row's date and description.
     expect(body.skipped_items).toEqual([
-      { index: 0, reason: 'Invalid amount_local on row 1' },
-      { index: 1, reason: 'Invalid exchange_rate on row 2' },
+      {
+        index: 0,
+        reason: 'Could not read amount_local — check the number format',
+        label: '2026-01-01 · Bad local',
+      },
+      {
+        index: 1,
+        reason: 'Could not read exchange_rate — check the number format',
+        label: '2026-01-02 · Bad rate',
+      },
     ]);
   });
 

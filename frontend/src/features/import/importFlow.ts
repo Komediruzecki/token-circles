@@ -133,6 +133,8 @@ export interface ImportValidationIssue {
   index?: number
   field?: string
   reason: string
+  /** `date · description` for the offending row, so the user can search for it in their sheet. */
+  label?: string
 }
 
 export interface ImportFlowOptions {
