@@ -1,6 +1,7 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
+import { parseImportCsv } from '../../../../../shared/importCsv'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getLocalCurrency } from '../../api'
@@ -368,26 +369,7 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   const gid = gidMatch ? gidMatch[1] : null
 
   // CSV parse helper (handles quoted fields, commas in values)
-  const parseCSV = (text: string): { headers: string[]; rows: string[][] } => {
-    const rows: string[][] = []
-    const lines = text.trim().split('\n')
-    for (const line of lines) {
-      const cols: string[] = []
-      let cur = ''
-      let inQuotes = false
-      for (const ch of line) {
-        if (ch === '"') {
-          inQuotes = !inQuotes
-        } else if (ch === ',' && !inQuotes) {
-          cols.push(cur.trim().replace(/^"|"$/g, ''))
-          cur = ''
-        } else cur += ch
-      }
-      cols.push(cur.trim().replace(/^"|"$/g, ''))
-      rows.push(cols)
-    }
-    return { headers: rows[0] || [], rows: rows.slice(1).filter((r) => r.some((c) => c)) }
-  }
+  const parseCSV = (text: string): { headers: string[]; rows: string[][] } => parseImportCsv(text)
 
   const GOOGLE_SHEETS_TIMEOUT = 10000
 
@@ -644,23 +626,35 @@ export async function importExecute(body: unknown): Promise<Response> {
       const amountLocal = amountLocalRaw ? parseImportNumber(amountLocalRaw) : amount
       const exchangeRateRaw = toStr(row.exchange_rate).trim()
       const exchangeRate = exchangeRateRaw ? parseImportNumber(exchangeRateRaw) : 1
+      // A blank description is NOT a reason to drop a transaction. It used to be, here only —
+      // the Worker never checked it — so the same sheet imported clean in the cloud and lost
+      // hundreds of rows locally. A real sheet leaves the description empty on plenty of rows
+      // (the amount, date, category and accounts still say what the row is), and the rejection
+      // came back as "Could not read description — check the number format", which described
+      // neither the field nor the problem.
       const invalidFields: string[] = []
-      if (!description) invalidFields.push('description')
-      if (!date) invalidFields.push('date')
       if (amount === null) invalidFields.push('amount')
       if (amountLocal === null) invalidFields.push('amount_local')
       if (exchangeRate === null || exchangeRate <= 0) invalidFields.push('exchange_rate')
+      // Label from the NORMALIZED date: `row.date` is still in the source dialect, and a Google
+      // Visualization sheet delivers `Date(2026,1,7)` there.
+      const label = importRowLabel(date, description)
+      if (!date) {
+        skipped.push({ index, reason: 'No date — every transaction needs one', label })
+        continue
+      }
+      // The null tests are redundant with `invalidFields` — they are spelled out so the
+      // narrowing survives to the push below, which needs the three as plain numbers.
       if (
         invalidFields.length > 0 ||
         amount === null ||
         amountLocal === null ||
-        exchangeRate === null ||
-        exchangeRate <= 0
+        exchangeRate === null
       ) {
         skipped.push({
           index,
           reason: `Could not read ${invalidFields.join(', ')} — check the number format`,
-          label: importRowLabel(row.date, row.description),
+          label,
         })
         continue
       }

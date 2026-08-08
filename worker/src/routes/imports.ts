@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
+import { parseImportCsv } from '../../../shared/importCsv';
 import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
@@ -13,26 +14,11 @@ import { normalizeCurrencyCode } from '../currency';
 import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 
-// Parse CSV text into headers + data rows (quoted-field aware). Pure JS.
+// Parse CSV text into headers + data rows. The implementation moved to shared/ so this and the
+// frontend's copy stop drifting; re-exported under the old name so existing call sites and tests
+// keep working.
 export function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const all: string[][] = [];
-  for (const line of text.trim().split('\n')) {
-    const cols: string[] = [];
-    let cur = '';
-    let inQuotes = false;
-    for (const ch of line) {
-      if (ch === '"') inQuotes = !inQuotes;
-      else if (ch === ',' && !inQuotes) {
-        cols.push(cur.trim().replace(/^"|"$/g, ''));
-        cur = '';
-      } else cur += ch;
-    }
-    cols.push(cur.trim().replace(/^"|"$/g, ''));
-    all.push(cols);
-  }
-  const headers = all[0] || [];
-  const rows = all.slice(1).filter((row) => row.some((cell) => cell));
-  return { headers, rows };
+  return parseImportCsv(text);
 }
 
 // Port of backend/routes/importRoutes.js.
