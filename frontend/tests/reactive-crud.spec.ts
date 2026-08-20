@@ -8,6 +8,13 @@ import { login, navigateToRoute } from './test-helpers'
 // Unique suffix to avoid collisions across test runs (data persists in DB)
 const uniq = Date.now().toString(36)
 
+/** Today as `YYYY-MM-DD` in local time — never a pinned literal, which the calendar overtakes. */
+function isoToday(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 test.describe.serial('Bills Reactive CRUD', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
@@ -166,9 +173,11 @@ test.describe.serial('Transactions CRUD', () => {
 
     await page.getByTestId('tx-description').fill(txDescription)
     await page.getByTestId('tx-amount').fill('250.50')
-    // Use a date at/after the demo seed's newest row so the created tx sorts to the top of the
-    // (date-desc) list and lands on the visible first page rather than a buried later page.
-    await page.getByTestId('tx-date').fill('2026-07-28')
+    // Date it TODAY. The page opens on the current calendar month (defaultPeriod), and the demo
+    // seed runs through the current month, so any fixed date eventually falls outside the visible
+    // period and the row simply isn't there. This was pinned to '2026-07-28' and passed until the
+    // calendar reached August, at which point the row was filtered out of a July period entirely.
+    await page.getByTestId('tx-date').fill(isoToday())
     // Category and Account are required for an expense — pick the first real option (index 0 is
     // the placeholder). Tolerant if the seed has none.
     await page
@@ -182,6 +191,11 @@ test.describe.serial('Transactions CRUD', () => {
 
     await page.getByTestId('tx-save-btn').click()
     await page.waitForTimeout(2000)
+
+    // Search for it rather than trusting it to land on page 1: the seeded month holds 50-70 rows
+    // against a 50-row page, so a same-day row can sit on page 2 purely by sort order. The search
+    // filters the whole period, not the visible page.
+    await page.getByTestId('transactions-search').fill(txDescription)
 
     // The created transaction's description is the value under test — scoped to the description cell.
     const resultRow = page

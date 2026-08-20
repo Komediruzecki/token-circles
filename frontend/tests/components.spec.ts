@@ -25,7 +25,11 @@ test.describe('UI Components', () => {
   test('Pagination renders for the seeded transaction volume', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'transactions')
-    // The demo seed spans many years (>1 page of 50), so pagination renders.
+    // The page opens on the current calendar month, where the seed puts 50-70 rows against a
+    // 50-row page — right on the boundary, so pagination appeared or not by luck of the draw.
+    // Widen to all time first: the seed spans many years, so >1 page is certain. Scoped to this
+    // page: visited pages stay mounted, so a bare test-id also matches the dashboard's period bar.
+    await page.getByTestId('page-transactions').getByTestId('period-pill-all').click()
     await expect(page.getByTestId('transactions-pagination').first()).toBeVisible({
       timeout: 10000,
     })

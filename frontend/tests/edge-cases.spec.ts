@@ -21,8 +21,14 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should paginate a large transaction dataset', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
     await expect(page.getByTestId('transactions-table')).toBeVisible({ timeout: 10000 })
-    // The demo seed spans many years — more than one 50-row page — so pagination renders.
-    await expect(page.getByTestId('transactions-pagination').first()).toBeVisible()
+    // The page opens on the current calendar month, where the seed puts 50-70 rows against a
+    // 50-row page — right on the boundary. Widen to all time, which the seed fills across years.
+    // Scoped to this page: visited pages stay mounted, so the dashboard's period bar is still in
+    // the DOM and a bare test-id matches two elements.
+    await page.getByTestId('page-transactions').getByTestId('period-pill-all').click()
+    await expect(page.getByTestId('transactions-pagination').first()).toBeVisible({
+      timeout: 10000,
+    })
   })
 
   test('should reject an empty account form (modal stays open)', async ({ page }) => {
