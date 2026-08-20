@@ -16,6 +16,7 @@ import Sparkline from '../components/Dashboard/Sparkline'
 import { DashboardSettings } from '../components/DashboardSettings'
 import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
+import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
 import {
   api,
   apiHouseholdGet,
@@ -569,7 +570,13 @@ export default function Dashboard() {
       </div>
 
       {initialLoad() && !metrics() ? (
-        <div class={styles.emptyState}>Loading...</div>
+        // Mirrors the real first paint: a metrics row above a chart. The header and period bar
+        // are already rendered above, so this is not a SkeletonPage — spacing comes from the
+        // page's own module rather than an inline style.
+        <div class={styles.skeletonStack}>
+          <SkeletonCard count={4} />
+          <SkeletonChart />
+        </div>
       ) : metrics() ? (
         <>
           {/* Metrics Grid — always visible */}
@@ -840,7 +847,7 @@ export default function Dashboard() {
                       />
                     </ChartErrorBoundary>
                   ) : (
-                    <div class={styles.emptyState}>Loading chart data...</div>
+                    <SkeletonChart />
                   )}
                 </div>
               </div>
@@ -881,7 +888,7 @@ export default function Dashboard() {
                       />
                     </ChartErrorBoundary>
                   ) : (
-                    <div class={styles.emptyState}>Loading chart data...</div>
+                    <SkeletonChart />
                   )}
                 </div>
               </div>

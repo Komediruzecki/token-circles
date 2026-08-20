@@ -7,6 +7,11 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
+  /* Loading placeholders — see the light theme for why these are per-theme rather than
+     module-level fallbacks. */
+  --skeleton-base: rgba(255, 255, 255, 0.05);
+  --skeleton-shine: rgba(255, 255, 255, 0.11);
+
   /* Backgrounds — night ramp */
   --bg: #0a0e1c;
   --bg-color: #0a0e1c;

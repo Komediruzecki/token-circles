@@ -8,6 +8,11 @@
 [data-theme='light'] {
   color-scheme: light;
 
+  /* Loading placeholders. Must be defined per theme: the Skeleton module falls back to white at
+     4-8% opacity, which is invisible on a light surface. */
+  --skeleton-base: rgba(16, 28, 60, 0.07);
+  --skeleton-shine: rgba(16, 28, 60, 0.13);
+
   /* Backgrounds — paper-blue ramp */
   --bg: #f7f9ff;
   --bg-color: #f7f9ff;

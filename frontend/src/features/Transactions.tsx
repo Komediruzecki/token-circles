@@ -39,6 +39,7 @@ import Pagination from '../components/Pagination'
 import PeriodBar from '../components/PeriodBar'
 import ReconciliationModal from '../components/ReconciliationModal'
 import RecurringSection from '../components/RecurringSection'
+import { SkeletonTable } from '../components/Skeleton'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, getLocalCurrency, toast } from '../core/api'
@@ -1693,7 +1694,7 @@ export default function Transactions() {
       )}
 
       {initialLoad() && transactions().length === 0 ? (
-        <div class={styles.loading}>Loading transactions...</div>
+        <SkeletonTable rows={8} cols={5} />
       ) : (
         <>
           {/* Page Summary (top) */}

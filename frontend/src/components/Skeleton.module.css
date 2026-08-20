@@ -1,0 +1,157 @@
+/* ── Shimmer animation ── */
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+/* ── Base skeleton ── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base, rgba(255, 255, 255, 0.04)) 0%,
+    var(--skeleton-shine, rgba(255, 255, 255, 0.08)) 40%,
+    var(--skeleton-base, rgba(255, 255, 255, 0.04)) 70%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius, 6px);
+}
+
+/* ── Table skeleton ── */
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: var(--radius, 8px);
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+}
+
+.row {
+  display: flex;
+  gap: 0;
+  height: 44px;
+}
+
+.row:first-child {
+  height: 40px;
+}
+
+.row:first-child .cell {
+  background: var(--skeleton-base, rgba(255, 255, 255, 0.06));
+}
+
+.cell {
+  flex: 1;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+}
+
+.cellInner {
+  width: 60%;
+  height: 14px;
+  composes: skeleton;
+  border-radius: 4px;
+}
+
+.row:first-child .cellInner {
+  width: 40%;
+  height: 12px;
+}
+
+/* Vary widths per column for realism */
+.cell:nth-child(4n + 1) .cellInner {
+  width: 70%;
+}
+.cell:nth-child(4n + 3) .cellInner {
+  width: 45%;
+}
+.cell:nth-child(4n + 4) .cellInner {
+  width: 55%;
+}
+
+/* ── Card skeleton ── */
+.card {
+  composes: skeleton;
+  min-height: 140px;
+  border-radius: var(--radius, 10px);
+}
+
+.cardStack {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+/* ── Text skeleton ── */
+.textLine {
+  composes: skeleton;
+  height: 14px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.textLine:last-child {
+  width: 60%;
+  margin-bottom: 0;
+}
+
+.textBlock {
+  padding: 8px 0;
+}
+
+/* ── Chart skeleton ── */
+.chart {
+  composes: skeleton;
+  height: 200px;
+  border-radius: var(--radius, 10px);
+  display: flex;
+  align-items: flex-end;
+  padding: 16px;
+  gap: 12px;
+}
+
+.chartBar {
+  flex: 1;
+  border-radius: 4px 4px 0 0;
+  background: var(--skeleton-shine, rgba(255, 255, 255, 0.06));
+}
+
+/* ── Page-level wrapper ── */
+.pageWrapper {
+  padding: 24px;
+}
+
+.header {
+  composes: skeleton;
+  width: 180px;
+  height: 24px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toolbarBtn {
+  composes: skeleton;
+  width: 100px;
+  height: 34px;
+  border-radius: var(--radius, 6px);
+}
+
+/* Space the blocks the page shell stacks. Kept here rather than as inline `margin-top` styles on
+   the elements, so the spacing lives with the rest of the module. */
+.pageWrapper > .cardStack,
+.pageWrapper > .table,
+.pageWrapper > .chart {
+  margin-top: 16px;
+}

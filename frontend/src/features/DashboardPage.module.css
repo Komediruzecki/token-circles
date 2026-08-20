@@ -632,3 +632,11 @@
   border-color: var(--primary);
   color: var(--primary);
 }
+
+/* First-paint placeholder: the metrics row stacked over the chart, matching the gap the real
+   content uses. Lives here rather than as an inline style on the skeleton. */
+.skeletonStack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

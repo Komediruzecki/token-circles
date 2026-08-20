@@ -75,13 +75,64 @@ export class ThemeStore {
   }
 
   /**
-   * Initialize theme from localStorage
+   * Read the system color-scheme preference.
+   * Returns undefined when matchMedia is unavailable.
+   */
+  private systemPrefers(): 'light' | 'dark' | undefined {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  }
+
+  /**
+   * Resolve the effective theme, respecting user choice over system preference.
+   */
+  private resolveTheme(): Theme {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY)
+    if (saved && THEMES.some((t) => t.id === saved)) return saved
+    const sys = this.systemPrefers()
+    if (sys) return sys
+    return DEFAULT_THEME
+  }
+
+  /**
+   * Apply a theme to the document WITHOUT recording it as the user's choice.
+   *
+   * The distinction matters: `setTheme` persists, and persistence is what "following the system"
+   * must never do. Applying the system preference through `setTheme` would write that value to
+   * storage, so the very next `resolveTheme()` would read it back as an explicit choice — the
+   * theme would track the OS exactly once and then be pinned forever, silently converting
+   * "follow my system" into "stay light" (or dark).
+   */
+  private applyTheme(theme: Theme): void {
+    const resolved = THEMES.some((t) => t.id === theme) ? theme : DEFAULT_THEME
+    this.currentTheme = resolved
+    document.documentElement.setAttribute('data-theme', resolved)
+    this.refreshCharts()
+  }
+
+  /** True when the user has pinned a theme, which system changes must not override. */
+  private hasExplicitChoice(): boolean {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY)
+    return Boolean(saved && THEMES.some((t) => t.id === saved))
+  }
+
+  /**
+   * Initialize theme, respecting: 1) explicit user choice, 2) system preference, 3) dark default.
+   * Also follows live system-preference changes for as long as no explicit choice is stored.
    */
   init(): void {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY)
-    const themeToUse = saved && THEMES.some((t) => t.id === saved) ? saved : DEFAULT_THEME
-    this.currentTheme = themeToUse
-    document.documentElement.setAttribute('data-theme', themeToUse)
+    this.applyTheme(this.resolveTheme())
+
+    // Follow system changes — but only while the user hasn't pinned a theme, and only by applying,
+    // never by persisting (see applyTheme).
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    if (!mq.addEventListener) return
+    mq.addEventListener('change', () => {
+      if (this.hasExplicitChoice()) return
+      const sys = this.systemPrefers()
+      if (sys) this.applyTheme(sys)
+    })
   }
 
   /**

@@ -27,4 +27,5 @@ export const pages: Record<PageName, PageComponent> = {
   counterparties: lazy(() => import('./features/Counterparties.tsx')),
   portfolio: lazy(() => import('./features/Portfolio.tsx')),
   tags: lazy(() => import('./features/Tags.tsx')),
+  notFound: lazy(() => import('./features/NotFound.tsx')),
 }

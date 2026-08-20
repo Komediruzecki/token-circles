@@ -50,6 +50,7 @@ import {
 import { initVersionWatch } from './core/appVersion'
 import { loadBillingPlan } from './core/billingStore'
 import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
+import { resolvePageFromHash } from './core/hashRoute.js'
 import { logger } from './core/logger.js'
 import { maybeOfferOnboarding, onboardingOpen } from './core/onboardingStore'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
@@ -400,13 +401,8 @@ export function App() {
     }
 
     // Parse initial hash from URL (supports #pagename?param=value)
-    const rawHash = window.location.hash.slice(1)
-    const hashPage = rawHash.split('?')[0]
-    if (hashPage && allPages[hashPage as PageName]) {
-      setActivePage(hashPage as PageName)
-    } else {
-      setActivePage('dashboard')
-    }
+    const initialPage = resolvePageFromHash(window.location.hash, (name) => name in allPages)
+    if (initialPage) setActivePage(initialPage)
 
     // (Quick Add categories load reactively via the profileVersion effect above.)
 
@@ -518,11 +514,8 @@ export function App() {
 
   // Listen for hash changes (back/forward buttons, manual URL edits)
   const handleHashChange = () => {
-    const newRawHash = window.location.hash.slice(1)
-    const newHashPage = newRawHash.split('?')[0]
-    if (newHashPage && allPages[newHashPage as PageName]) {
-      setActivePage(newHashPage as PageName)
-    }
+    const next = resolvePageFromHash(window.location.hash, (name) => name in allPages)
+    if (next) setActivePage(next)
   }
   window.addEventListener('hashchange', handleHashChange)
   onCleanup(() => {

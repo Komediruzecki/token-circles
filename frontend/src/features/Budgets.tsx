@@ -41,6 +41,7 @@ import InfoTip from '../components/InfoTip'
 import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
 import SectionRail from '../components/SectionRail'
+import { SkeletonCard } from '../components/Skeleton'
 import { getLocalCurrency } from '../core/api'
 import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -879,8 +880,11 @@ export default function Budgets() {
         />
 
         {loading() ? (
-          <div data-test-id="loading-state" class={styles.emptyState}>
-            Loading budgets...
+          // Keeps the `loading-state` hook the text placeholder carried — Categories, Bills and
+          // Retirement all key their "wait for the list" step on that id, and dropping it here
+          // would leave Budgets the odd page out.
+          <div data-test-id="loading-state">
+            <SkeletonCard count={3} />
           </div>
         ) : allocations().length === 0 ? (
           <div class={styles.emptyState}>

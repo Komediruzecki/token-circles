@@ -39,6 +39,7 @@ export type PageName =
   | 'counterparties'
   | 'portfolio'
   | 'tags'
+  | 'notFound'
 
 // ============ PROFILE ============
 export interface Profile {
