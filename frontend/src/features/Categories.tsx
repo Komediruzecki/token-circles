@@ -30,8 +30,8 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createResource, createSignal, For } from 'solid-js'
-import CategoryIcon from '../components/CategoryIcon'
+import { createMemo, createResource, createSignal, For } from 'solid-js'
+import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
@@ -202,6 +202,11 @@ export default function Categories() {
     background: `color-mix(in oklab, ${color} 20%, transparent)`,
     color,
   })
+
+  // Live preview of the icon the typed keyword resolves to. This has to be a memo: a Solid
+  // component body runs once, so <CategoryIcon icon={formData().icon}> would render whatever
+  // the field held at mount and never update. The memo re-reads the signal per keystroke.
+  const iconPreview = createMemo(() => getCategorySvg(formData().name, 18, formData().icon))
 
   return (
     <div class={`page page-categories page-enter ${styles.categoriesPage}`}>
@@ -471,15 +476,24 @@ export default function Categories() {
                 </select>
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Icon (emoji)</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., food, home, car"
-                  value={formData().icon}
-                  oninput={(e) => setFormData({ ...formData(), icon: e.target.value })}
-                  maxlength="2"
-                />
+                <label class={styles.formLabel}>Icon</label>
+                <div class={styles.iconField}>
+                  <input
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., food, home, car"
+                    value={formData().icon}
+                    oninput={(e) => setFormData({ ...formData(), icon: e.target.value })}
+                    maxlength="32"
+                  />
+                  <span class={styles.iconPreview} aria-hidden="true">
+                    {iconPreview()}
+                  </span>
+                </div>
+                <span class={styles.fieldHint}>
+                  Type a keyword and we pick the matching icon. Leave it blank to choose one from
+                  the category name.
+                </span>
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Color</label>

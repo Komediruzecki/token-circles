@@ -1,6 +1,6 @@
 {
   "name": "finance-manager-frontend",
-  "version": "5.9.0",
+  "version": "5.9.1",
   "type": "module",
   "description": "Finance Manager Frontend - SolidJS + TypeScript",
   "author": "Komediruzecki",
@@ -31,6 +31,7 @@
     "lines": "cloc src --exclude-dir=node_modules,dist --by-file-by-lang --not-match-f='(.*[.]d[.]ts|.*[.]stories[.].*|.*[.]test[.].*|.*[.]json)'",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:tours": "node scripts/walk-tours.mjs",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:unit": "vitest run",
     "test:ui": "playwright test --ui",

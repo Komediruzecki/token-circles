@@ -380,12 +380,26 @@ const defaultIconValues = new Set(['tag', 'folder', ''])
 const isDefaultIcon = (icon?: string | null) =>
   icon === null || icon === undefined || defaultIconValues.has(icon)
 
+/**
+ * Resolve whatever the user typed into the icon field. An exact icon key wins
+ * ("utensils"), otherwise the same keyword matching used on category names runs over it,
+ * so a plain word — "food", "groceries", "rent" — lands on the right glyph instead of
+ * falling through to the category name. `Object.hasOwn` keeps inherited members
+ * (`constructor`, `toString`) from resolving to a non-icon object.
+ */
+export function iconFromUserValue(icon: string): IconDef | null {
+  const key = icon.trim().toLowerCase()
+  if (!key) return null
+  if (Object.hasOwn(iconNameMap, key)) return iconNameMap[key]!
+  return findIcon(key)
+}
+
 export function getCategorySvg(name: string, size = 18, icon?: string | null) {
   let iconDef: IconDef | null = null
 
   // If the stored icon was explicitly chosen by the user (not a default), use it
   if (!isDefaultIcon(icon)) {
-    iconDef = iconNameMap[icon!]
+    iconDef = iconFromUserValue(icon!)
   }
 
   // Otherwise, try pattern matching on the category name

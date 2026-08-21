@@ -567,6 +567,11 @@ export function App() {
       ),
     },
     {
+      name: 'categories' as PageName,
+      label: 'Categories',
+      icon: <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />,
+    },
+    {
       name: 'budgets' as PageName,
       label: 'Budgets',
       icon: (
@@ -683,7 +688,7 @@ export function App() {
   const pick = (...names: string[]) =>
     names.map((n) => navByName[n]).filter((x): x is (typeof navItems)[number] => Boolean(x))
   const navSections: { group?: string; items: (typeof navItems)[number][] }[] = [
-    { items: pick('dashboard', 'transactions', 'accounts', 'bills') },
+    { items: pick('dashboard', 'transactions', 'categories', 'accounts', 'bills') },
     { group: 'Planning', items: pick('budgets', 'goals', 'loans', 'retirement') },
     { group: 'Calculators', items: pick('compound', 'emergency', 'rentBuy') },
     { group: 'Analytics', items: pick('analytics', 'portfolio', 'tags') },

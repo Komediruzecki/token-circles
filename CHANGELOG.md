@@ -6,6 +6,15 @@ technical detail lives in [dev-changelog.md](dev-changelog.md).
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.1] — 2026-08-22
+
+### Fixed
+
+- **Categories has a place in the sidebar again.** The Categories page was reachable only by accident — the "What's New" tour navigated to it, but it had no sidebar entry, so you landed on a standalone page with no way in and no way back. It now sits between Transactions and Accounts.
+- The icon field when creating or editing a category accepted only two characters, while its own example said "e.g., food, home, car" — so none of the suggestions could be typed. It now takes a word and shows, next to the field, the icon that word resolves to. "food", "car" and "rent" each pick their own glyph; anything unrecognized falls back to matching on the category name, as before. Fixed in both the Categories page and the add-category form on Budgets.
+- The tick mark on a selected category color sat off-centre in its circle. It is centred now.
+- The category icon and its name were touching on the Categories page, with no space between them.
+
 ## [5.9.0] — 2026-08-21
 
 ### Added

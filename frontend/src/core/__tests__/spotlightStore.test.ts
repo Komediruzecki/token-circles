@@ -10,6 +10,7 @@
  *      so renamed/removed anchors fail CI instead of the user's onboarding.
  */
 import { describe, expect, it } from 'vitest'
+import appSrc from '../../App.tsx?raw'
 import routerSrc from '../../router.tsx?raw'
 import { SPOTLIGHT_TOURS } from '../spotlightStore'
 
@@ -33,6 +34,19 @@ for (const src of Object.values(componentSources)) {
 const routeNames = new Set<string>()
 for (const m of routerSrc.matchAll(/^\s+([A-Za-z0-9]+):\s*lazy\(/gm)) routeNames.add(m[1])
 
+// Pages the sidebar actually links to, parsed from `navItems` in App.tsx.
+const navPages = new Set<string>()
+for (const m of appSrc.matchAll(/name:\s*'([A-Za-z0-9]+)'\s+as\s+PageName/g)) navPages.add(m[1])
+
+/**
+ * Routes that deliberately have no sidebar entry. `notFound` is the hash-router's
+ * catch-all and is never navigated to on purpose. Anything else in here needs a reason —
+ * an unreachable route is a page users can only land on by accident (which is exactly how
+ * the Categories page ended up orphaned: a spotlight tour navigated to `#categories`, a
+ * route with no way back and no way in).
+ */
+const INTENTIONALLY_HIDDEN = new Set(['notFound'])
+
 const allSteps = SPOTLIGHT_TOURS.flatMap((t) => t.steps.map((s) => ({ tour: t.id, ...s })))
 const keyOf = (sel: string) => sel.match(/^\[data-tour="([a-z0-9-]+)"\]$/)?.[1]
 
@@ -53,6 +67,29 @@ describe('spotlight tours', () => {
       expect(ids.has(tour.id), `tour id "${tour.id}" is unique`).toBe(false)
       ids.add(tour.id)
     }
+  })
+
+  it('the sidebar was parsed correctly', () => {
+    expect(navPages.size).toBeGreaterThan(10)
+    expect(navPages.has('dashboard')).toBe(true)
+  })
+
+  it('every route is reachable from the sidebar', () => {
+    const orphans = [...routeNames].filter((r) => !navPages.has(r) && !INTENTIONALLY_HIDDEN.has(r))
+    expect(
+      orphans,
+      `routes with no sidebar entry (users can reach them only by luck):\n${orphans.join('\n')}`
+    ).toEqual([])
+  })
+
+  it('every tour lands on a page the user can navigate back to', () => {
+    const stranding = SPOTLIGHT_TOURS.filter(
+      (t) => !navPages.has(t.page) && !INTENTIONALLY_HIDDEN.has(t.page)
+    ).map((t) => `${t.id} -> ${t.page}`)
+    expect(
+      stranding,
+      `tours that navigate to a page missing from the sidebar:\n${stranding.join('\n')}`
+    ).toEqual([])
   })
 
   it('every step targets a data-tour anchor (no magic CSS / label / test-id selectors)', () => {

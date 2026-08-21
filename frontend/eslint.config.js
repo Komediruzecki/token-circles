@@ -21,6 +21,7 @@ export default defineConfig(
       'workbox-*.js',
       'sw.js',
       'public/**', // static assets served verbatim (theme-init.js, manifest) — not part of the TS project
+      'scripts/**', // standalone Node tooling (walk-tours.mjs) — run by hand, not part of the TS project
       'vite.config.ts',
       '**/assets/**',
       '**/*.d.ts',

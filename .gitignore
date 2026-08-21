@@ -69,7 +69,9 @@ Thumbs.db
 
 # Claude Code agent workspace (per-user, machine-specific) — never commit.
 # Keeps internal plans/skills/settings out of the public repo.
-.claude/
+.claude/*
+# ...but share the repo's agent skills (tour-check). Worktrees and local state stay ignored.
+!.claude/skills/
 
 # Test artifacts
 test-results/

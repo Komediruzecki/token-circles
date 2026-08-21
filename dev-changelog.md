@@ -7,6 +7,22 @@ All notable changes to Token Circles are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.1] — 2026-08-22
+
+### Fixed
+
+- **Orphaned `categories` route.** `App.tsx` navigates to each spotlight step's `requiredPage`, and the Categories tour's page is `categories` — a route present in `router.tsx` but absent from `navItems`, so it was reachable only via the tour or a hand-typed `#categories`. Added to the sidebar between Transactions and Accounts. Bills' "Categories" is a count of subscription groups and Budgets' is an embedded editor, so neither replaces the standalone manager.
+- `.category-header` was `display: flex` with no `gap`; the 40px icon chip and the name rendered 0px apart. Set to `gap: 12px`, matching `.catCardHeader` on the Budgets page. The rule is triplicated in `CategoriesPage.module.css` (lines 570-839 duplicate 300-569 verbatim); all three copies were updated. The duplication itself is left for a separate change, since removing it can alter cascade order.
+- `.color-btn` / `.color-picker-btn` were 24px circles with no flex centring and default button padding, so the 12-14px check SVG sat on the text baseline instead of the centre. Now `display: flex` + `padding: 0`; measured offset from centre is 0x0 in both the card swatches and the modal.
+- Category icon fields were capped at `maxlength="2"` while advertising `e.g., food, home, car`. Raised to 32, and `getCategorySvg` now resolves a typed value through `iconFromUserValue`: exact `iconNameMap` key first, then the same keyword matching used on category names, so "food" and "groceries" land on real glyphs. `Object.hasOwn` guards the lookup so `constructor` / `toString` cannot resolve to a non-icon object now that longer strings are typeable. Applied to both `Categories.tsx` and the add-category modal in `Budgets.tsx`.
+- The icon preview is a `createMemo`, not a bare `<CategoryIcon>`: a Solid component body runs once, so passing the signal as a prop rendered the icon held at mount and never updated as the user typed.
+
+### Added
+
+- `frontend/scripts/walk-tours.mjs` (`pnpm run test:tours`) — walks every spotlight tour step in a real browser against the seeded demo account and fails a step on either the app's own `targetMissing` banner or a degenerate highlight rect. 51 steps across 15 tours, desktop and mobile. Not wired into CI by choice; it is a pre-tag gate, documented in the `prod-update` skill.
+- `spotlightStore.test.ts` gains two guardrails: every route in `router.tsx` must be reachable from the sidebar, and no tour may navigate to a page the sidebar omits. Both fail on the pre-fix tree.
+- `.claude/skills/` is now tracked (`.claude/*` ignored, `!.claude/skills/`), carrying the `tour-check` and `prod-update` skills.
+
 ## [5.9.0] — 2026-08-21
 
 ### Added

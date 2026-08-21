@@ -30,7 +30,7 @@
  * Budgets Component
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
-import { createResource, createSignal, For } from 'solid-js'
+import { createMemo, createResource, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
@@ -190,6 +190,13 @@ export default function Budgets() {
     color: '#6e9bff',
     icon: '',
   })
+
+  // Live preview of the icon the typed keyword resolves to. Must be a memo: a Solid
+  // component body runs once, so <CategoryIcon icon={catFormData().icon}> would render
+  // whatever the field held at mount and never update as the user types.
+  const catIconPreview = createMemo(() =>
+    getCategorySvg(catFormData().name, 18, catFormData().icon)
+  )
 
   const currentMonthNum = () => parseInt(month().split('-')[1])
   const currentYearNum = () => parseInt(month().split('-')[0])
@@ -1351,15 +1358,24 @@ export default function Budgets() {
                 </select>
               </div>
               <div class={styles.catFormGroup}>
-                <label class={styles.formLabel}>Icon (emoji)</label>
-                <input
-                  type="text"
-                  class={styles.formInput}
-                  placeholder="e.g., food, home, car"
-                  value={catFormData().icon}
-                  oninput={(e) => setCatFormData({ ...catFormData(), icon: e.target.value })}
-                  maxlength="2"
-                />
+                <label class={styles.formLabel}>Icon</label>
+                <div class={styles.iconField}>
+                  <input
+                    type="text"
+                    class={styles.formInput}
+                    placeholder="e.g., food, home, car"
+                    value={catFormData().icon}
+                    oninput={(e) => setCatFormData({ ...catFormData(), icon: e.target.value })}
+                    maxlength="32"
+                  />
+                  <span class={styles.iconPreview} aria-hidden="true">
+                    {catIconPreview()}
+                  </span>
+                </div>
+                <span class={styles.fieldHint}>
+                  Type a keyword and we pick the matching icon. Leave it blank to choose one from
+                  the category name.
+                </span>
               </div>
               <div class={styles.catFormGroup}>
                 <label class={styles.formLabel}>Color</label>
