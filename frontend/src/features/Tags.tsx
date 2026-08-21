@@ -52,13 +52,16 @@ const TX_TYPES: { value: Models.TransactionType; label: string }[] = [
 interface RuleDraft {
   /** Existing rule id, or null while composing a new one. */
   id: number | null
+  /** The tag this draft is for. Carried on the draft rather than read from the live selection so
+   *  a rule can never be saved against whichever tag happens to be selected when you hit Save. */
+  tagId: number
   name: string
   autoApply: boolean
   criteria: TagRuleCriteria
 }
 
-function newDraft(): RuleDraft {
-  return { id: null, name: '', autoApply: true, criteria: { ...EMPTY_TAG_RULE_CRITERIA } }
+function newDraft(tagId: number): RuleDraft {
+  return { id: null, tagId, name: '', autoApply: true, criteria: { ...EMPTY_TAG_RULE_CRITERIA } }
 }
 
 function monthLabel(month: string): string {
@@ -130,12 +133,21 @@ export default function Tags() {
   const loading = () => overview.loading && !overview.latest
 
   // With a single tag there is nothing to choose between, and leaving it unselected hides the
-  // rules behind a click nobody knows to make — the detail below then reads as a separate,
-  // unattached section. Select it for the user.
-  createEffect(() => {
-    const all = tags()
-    if (all.length === 1 && selectedTagId() === null) setSelectedTagId(all[0]!.id)
-  })
+  // rules behind a click nobody knows to make. So select it for the user — but only when the LIST
+  // becomes a single tag, never as a standing "if nothing is selected, select it" invariant.
+  //
+  // As an invariant it re-ran on every selection change and fought the user twice over. Clicking
+  // the selected card to deselect it re-selected the tag immediately. Worse, deleting your only
+  // tag clears the selection while `tags()` still holds the stale list — so it re-selected the tag
+  // that had just been deleted, and the detail resource asked the API for the summary of a tag
+  // that no longer existed ("Tag not found"). `on(tags, …)` reads the selection untracked, so
+  // neither of those can happen.
+  createEffect(
+    on(tags, (all, prev) => {
+      const becameLone = all.length === 1 && (prev === undefined || prev.length !== 1)
+      if (becameLone && selectedTagId() === null) setSelectedTagId(all[0]!.id)
+    })
+  )
 
   const selectedTag = createMemo(() => tags().find((t) => t.id === selectedTagId()) ?? null)
   const selectedRules = createMemo(() => rules().filter((rule) => rule.tag_id === selectedTagId()))
@@ -153,13 +165,19 @@ export default function Tags() {
    *  can't be called from setup code before `refetchDetail` is initialised. */
   const refreshDetail = () => void Promise.resolve(refetchDetail()).catch(() => {})
 
-  // Close any open rule draft when the selected tag changes. Save/preview/apply all read the live
-  // selectedTagId(), so leaving a draft open across a tag switch (the tag cards stay clickable)
-  // would silently retarget the rule to the newly-selected tag.
+  // Close an open rule draft when the user switches to a different tag — the tag cards stay
+  // clickable, and a draft left open across a switch reads as belonging to the tag now on screen.
+  // (What gets SAVED was never at risk: save/preview/apply act on the draft's own tagId.)
+  //
+  // Only a draft for a different tag is dropped, so "Add rule" on an unselected card can select
+  // the tag and open its editor in one click. That works today either way — Solid flushes this
+  // effect between startNewRule's two setters — but the guard is what makes it true by intent
+  // rather than by setter ordering, which a later `batch()` would quietly reverse.
   createEffect(
     on(
       selectedTagId,
-      () => {
+      (id) => {
+        if (draft()?.tagId === id) return
         setDraft(null)
         setPreview(null)
       },
@@ -180,6 +198,15 @@ export default function Tags() {
   })
 
   // ── Tag CRUD ───────────────────────────────────────────────────────────────
+
+  /** Close the tag form and leave no half-open state behind. `showTagForm` drives the create
+   *  form at the top of the page and `editingTag` drives the in-card edit form, so clearing only
+   *  one of them left the card's form open after a save — the toast said "Tag updated" while the
+   *  editor still covered the name it had just changed. */
+  const closeTagForm = () => {
+    setShowTagForm(false)
+    setEditingTag(null)
+  }
 
   const openNewTag = () => {
     setEditingTag(null)
@@ -209,7 +236,7 @@ export default function Tags() {
         showToast('Tag created', 'success')
         if (created?.id) setSelectedTagId(created.id)
       }
-      setShowTagForm(false)
+      closeTagForm()
       // The Transactions page keeps its own tag list for the filter bar and bulk-tag modal.
       bumpTagsVersion()
       refreshOverview()
@@ -232,15 +259,19 @@ export default function Tags() {
 
   // ── Rule editing ───────────────────────────────────────────────────────────
 
-  const startNewRule = () => {
+  /** Open an empty rule editor for a tag, selecting it first if it isn't already. Every caller
+   *  names the tag, so the editor can never open against a stale or absent selection. */
+  const startNewRule = (tagId: number) => {
+    setSelectedTagId(tagId)
     setPreview(null)
-    setDraft(newDraft())
+    setDraft(newDraft(tagId))
   }
 
   const startEditRule = (rule: Models.TagRule) => {
     setPreview(null)
     setDraft({
       id: rule.id,
+      tagId: rule.tag_id,
       name: rule.name,
       autoApply: rule.auto_apply,
       criteria: normalizeTagRuleCriteria(rule.criteria),
@@ -260,7 +291,7 @@ export default function Tags() {
 
   const runPreview = async () => {
     const current = draft()
-    const tagId = selectedTagId()
+    const tagId = current?.tagId ?? null
     if (!current || tagId === null) return
     const criteria = current.criteria
     setPreviewing(true)
@@ -280,7 +311,7 @@ export default function Tags() {
 
   const saveRule = async () => {
     const current = draft()
-    const tagId = selectedTagId()
+    const tagId = current?.tagId ?? null
     if (!current || tagId === null) return
     if (isTagRuleCriteriaEmpty(current.criteria)) {
       showToast('Add at least one condition before saving', 'warning')
@@ -320,9 +351,9 @@ export default function Tags() {
 
   /** Tag existing transactions. Uses the draft criteria when one is open, else the saved rules. */
   const applyRules = async (useDraft: boolean) => {
-    const tagId = selectedTagId()
-    if (tagId === null) return
     const current = draft()
+    const tagId = useDraft ? (current?.tagId ?? null) : selectedTagId()
+    if (tagId === null) return
     if (useDraft && (!current || isTagRuleCriteriaEmpty(current.criteria))) {
       showToast('Add at least one condition first', 'warning')
       return
@@ -454,7 +485,12 @@ export default function Tags() {
           type="button"
           data-test-id={`tag-rules-${tag.id}`}
           onClick={() => {
-            setSelectedTagId(tag.id)
+            // With rules, this is "go read them". With none, "Add rule" has to actually add one:
+            // it used to only select and scroll, landing you on "No rules yet for this tag" and a
+            // second Add rule button — which, on a tag you had just created and were already
+            // looking at, was indistinguishable from the button doing nothing.
+            if (tag.rule_count > 0) setSelectedTagId(tag.id)
+            else startNewRule(tag.id)
             queueMicrotask(() => {
               document
                 .getElementById('tags-sec-rules')
@@ -531,7 +567,7 @@ export default function Tags() {
         <button class={styles.primaryButton} type="submit">
           {editingTag() ? 'Save' : 'Create'}
         </button>
-        <button class={styles.ghostButton} type="button" onClick={() => setShowTagForm(false)}>
+        <button class={styles.ghostButton} type="button" onClick={closeTagForm}>
           Cancel
         </button>
       </div>
@@ -631,32 +667,6 @@ export default function Tags() {
       <Show when={selectedTag()}>
         {(tag) => (
           <>
-            {/* Everything below belongs to one tag, and a section divider alone did not carry
-                that — the stats and rules read as their own unattached panels. This states the
-                subject in the tag's own colour and gives an obvious way back out. */}
-            <div
-              class={styles.tagContext}
-              style={{ '--tag-color': tag().color }}
-              data-test-id="tag-context"
-            >
-              <span class={styles.tagContextDot} />
-              <span class={styles.tagContextText}>
-                <strong class={styles.tagContextName}>{tag().name}</strong>
-                <span class={styles.tagContextHint}>
-                  The activity and rules below apply to this tag
-                </span>
-              </span>
-              <Show when={tags().length > 1}>
-                <button
-                  class={styles.tagContextClear}
-                  type="button"
-                  onClick={() => setSelectedTagId(null)}
-                >
-                  Show all tags
-                </button>
-              </Show>
-            </div>
-
             <div class={styles.detailGrid}>
               <div class={styles.chartCard}>
                 <h3 class={styles.cardTitle}>Monthly flow</h3>
@@ -722,7 +732,7 @@ export default function Tags() {
 
             <div class={styles.rulesCard}>
               <h3 class={styles.rulesCardTitle}>
-                <span class={styles.tagContextDot} style={{ '--tag-color': tag().color }} />
+                <span class={styles.tagTitleDot} style={{ '--tag-color': tag().color }} />
                 Rules for {tag().name}
               </h3>
               <p class={styles.muted}>
@@ -778,7 +788,13 @@ export default function Tags() {
 
               <div class={styles.ruleActions}>
                 <Show when={!draft()}>
-                  <button class={styles.primaryButton} type="button" onClick={startNewRule}>
+                  <button
+                    class={styles.primaryButton}
+                    type="button"
+                    onClick={() => {
+                      startNewRule(tag().id)
+                    }}
+                  >
                     + Add rule
                   </button>
                 </Show>
