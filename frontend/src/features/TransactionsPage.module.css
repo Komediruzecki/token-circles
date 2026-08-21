@@ -464,3 +464,37 @@
   border-color: var(--primary);
   color: var(--primary);
 }
+
+/* Shown when arriving from a tag whose current focus month is empty: the period was widened on
+   the user's behalf, and saying so beats silently showing a different window than the period bar
+   last announced. */
+.periodWidenedNote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: var(--radius, 8px);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.periodWidenedDismiss {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.periodWidenedDismiss:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}

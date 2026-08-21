@@ -129,6 +129,14 @@ export default function Tags() {
   }
   const loading = () => overview.loading && !overview.latest
 
+  // With a single tag there is nothing to choose between, and leaving it unselected hides the
+  // rules behind a click nobody knows to make — the detail below then reads as a separate,
+  // unattached section. Select it for the user.
+  createEffect(() => {
+    const all = tags()
+    if (all.length === 1 && selectedTagId() === null) setSelectedTagId(all[0]!.id)
+  })
+
   const selectedTag = createMemo(() => tags().find((t) => t.id === selectedTagId()) ?? null)
   const selectedRules = createMemo(() => rules().filter((rule) => rule.tag_id === selectedTagId()))
 
@@ -343,8 +351,17 @@ export default function Tags() {
     }
   }
 
-  const viewTaggedTransactions = (tagId: number) => {
-    window.location.hash = `#transactions?tag=${tagId}`
+  /**
+   * Open the transactions list filtered to this tag.
+   *
+   * The list opens on the global focus period, and a tag with nothing in the current month would
+   * land the user on an empty table — which reads as "the filter is broken", not "this month was
+   * quiet". When the summary says there is nothing to see in this period, ask for all time and let
+   * the list explain why it widened.
+   */
+  const viewTaggedTransactions = (tag: Models.TagSummary) => {
+    const widen = tag.count === 0 ? '&period=all' : ''
+    window.location.hash = `#transactions?tag=${tag.id}${widen}`
   }
 
   // ── Chart data ─────────────────────────────────────────────────────────────
@@ -381,6 +398,146 @@ export default function Tags() {
 
   const hasChartData = createMemo(() => (detail.latest?.monthly.length ?? 0) > 0)
 
+  /** A tag card's normal contents — split out so the card can host the edit form in its place. */
+  const tagCardBody = (tag: Models.TagSummary) => (
+    <>
+      <button
+        class={styles.tagCardMain}
+        type="button"
+        onClick={() => setSelectedTagId(selectedTagId() === tag.id ? null : tag.id)}
+      >
+        <span class={styles.tagHeader}>
+          <span class={styles.tagDot} style={{ background: tag.color }} />
+          <span class={styles.tagName}>{tag.name}</span>
+          <Show when={tag.rule_count > 0}>
+            <span class={styles.rulePill}>
+              {tag.rule_count} rule{tag.rule_count === 1 ? '' : 's'}
+            </span>
+          </Show>
+          <Show when={tag.count === 0}>
+            {/* Zero here means "nothing in the focus period", not "nothing ever".
+                          Without saying so the card reads as a broken tag. */}
+            <span class={styles.quietPill}>none this period</span>
+          </Show>
+        </span>
+        <span class={styles.tagStats}>
+          <span class={styles.stat}>
+            <span class={styles.statLabel}>In</span>
+            <span class={`${styles.statValue} ${styles.positive}`}>
+              {formatCurrency(tag.income)}
+            </span>
+          </span>
+          <span class={styles.stat}>
+            <span class={styles.statLabel}>Out</span>
+            <span class={`${styles.statValue} ${styles.negative}`}>
+              {formatCurrency(tag.expense)}
+            </span>
+          </span>
+          <span class={styles.stat}>
+            <span class={styles.statLabel}>Net</span>
+            <span class={`${styles.statValue} ${tag.net >= 0 ? styles.positive : styles.negative}`}>
+              {formatCurrency(tag.net)}
+            </span>
+          </span>
+          <span class={styles.stat}>
+            <span class={styles.statLabel}>Txs</span>
+            <span class={styles.statValue}>{tag.count}</span>
+          </span>
+        </span>
+      </button>
+      <div class={styles.tagCardActions}>
+        {/* The rule count used to be a pill inside the card's main button — it looked
+                      like a badge, so nobody clicked it, and editing a rule meant discovering
+                      that the whole card selects. This is the affordance. */}
+        <button
+          class={styles.rulesButton}
+          type="button"
+          data-test-id={`tag-rules-${tag.id}`}
+          onClick={() => {
+            setSelectedTagId(tag.id)
+            queueMicrotask(() => {
+              document
+                .getElementById('tags-sec-rules')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            })
+          }}
+        >
+          {tag.rule_count > 0
+            ? `${tag.rule_count} rule${tag.rule_count === 1 ? '' : 's'}`
+            : 'Add rule'}
+          <span aria-hidden="true">→</span>
+        </button>
+        <button
+          class={styles.ghostButton}
+          type="button"
+          onClick={() => {
+            viewTaggedTransactions(tag)
+          }}
+        >
+          View
+        </button>
+        <button
+          class={styles.ghostButton}
+          type="button"
+          onClick={() => {
+            openEditTag(tag)
+          }}
+        >
+          Edit
+        </button>
+        <ConfirmButton
+          class={styles.dangerButton}
+          label="Delete"
+          message={`Delete tag "${tag.name}"? It will be removed from ${tag.count} transaction(s); the transactions themselves are kept.`}
+          onConfirm={() => void deleteTag(tag)}
+        />
+      </div>
+    </>
+  )
+
+  /** The name + colour form, rendered either at the top (creating) or inside a card (editing). */
+  const tagForm = () => (
+    <form class={styles.tagForm} onSubmit={(e) => void saveTag(e)}>
+      <div class={styles.tagFormRow}>
+        <input
+          class={styles.input}
+          type="text"
+          placeholder="Tag name (e.g. Company, Trip to Rome)"
+          value={tagName()}
+          onInput={(e) => setTagName(e.currentTarget.value)}
+          // Focus explicitly on mount rather than with the `autofocus` attribute: the browser
+          // refuses autofocus when something already holds focus (the button that opened this
+          // form) and logs a console warning every time.
+          ref={(el) => {
+            queueMicrotask(() => {
+              el.focus()
+            })
+          }}
+          data-test-id="tag-name-input"
+        />
+        <div class={styles.swatches}>
+          <For each={TAG_COLORS}>
+            {(color) => (
+              <button
+                type="button"
+                class={`${styles.swatch} ${tagColor() === color ? styles.swatchActive : ''}`}
+                style={{ background: color }}
+                aria-label={`Use color ${color}`}
+                onClick={() => setTagColor(color)}
+              />
+            )}
+          </For>
+        </div>
+        <button class={styles.primaryButton} type="submit">
+          {editingTag() ? 'Save' : 'Create'}
+        </button>
+        <button class={styles.ghostButton} type="button" onClick={() => setShowTagForm(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+
   return (
     <div class={`${styles.page} page page-tags page-enter`}>
       <div class={styles.pageHeader}>
@@ -398,47 +555,10 @@ export default function Tags() {
 
       <PeriodBar showPills />
 
-      <Show when={showTagForm()}>
-        <form class={styles.tagForm} onSubmit={(e) => void saveTag(e)}>
-          <div class={styles.tagFormRow}>
-            <input
-              class={styles.input}
-              type="text"
-              placeholder="Tag name (e.g. Company, Trip to Rome)"
-              value={tagName()}
-              onInput={(e) => setTagName(e.currentTarget.value)}
-              // Focus explicitly on mount rather than with the `autofocus` attribute: the browser
-              // refuses autofocus when something already holds focus (the button that opened this
-              // form) and logs a console warning every time.
-              ref={(el) => {
-                queueMicrotask(() => {
-                  el.focus()
-                })
-              }}
-              data-test-id="tag-name-input"
-            />
-            <div class={styles.swatches}>
-              <For each={TAG_COLORS}>
-                {(color) => (
-                  <button
-                    type="button"
-                    class={`${styles.swatch} ${tagColor() === color ? styles.swatchActive : ''}`}
-                    style={{ background: color }}
-                    aria-label={`Use color ${color}`}
-                    onClick={() => setTagColor(color)}
-                  />
-                )}
-              </For>
-            </div>
-            <button class={styles.primaryButton} type="submit">
-              {editingTag() ? 'Save' : 'Create'}
-            </button>
-            <button class={styles.ghostButton} type="button" onClick={() => setShowTagForm(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      </Show>
+      {/* Creating a tag shows the form here, next to the button that opened it. EDITING renders
+          the same form inside the card being edited (see the grid below) — it used to appear up
+          here too, detached from the tag it was changing and above every other card. */}
+      <Show when={showTagForm() && !editingTag()}>{tagForm()}</Show>
 
       <div class={styles.summaryRow}>
         <div class={styles.summaryCard}>
@@ -496,73 +616,11 @@ export default function Tags() {
                   class={`${styles.tagCard} ${selectedTagId() === tag.id ? styles.tagCardActive : ''}`}
                   data-test-id={`tag-card-${tag.id}`}
                 >
-                  <button
-                    class={styles.tagCardMain}
-                    type="button"
-                    onClick={() => setSelectedTagId(selectedTagId() === tag.id ? null : tag.id)}
-                  >
-                    <span class={styles.tagHeader}>
-                      <span class={styles.tagDot} style={{ background: tag.color }} />
-                      <span class={styles.tagName}>{tag.name}</span>
-                      <Show when={tag.rule_count > 0}>
-                        <span class={styles.rulePill}>
-                          {tag.rule_count} rule{tag.rule_count === 1 ? '' : 's'}
-                        </span>
-                      </Show>
-                    </span>
-                    <span class={styles.tagStats}>
-                      <span class={styles.stat}>
-                        <span class={styles.statLabel}>In</span>
-                        <span class={`${styles.statValue} ${styles.positive}`}>
-                          {formatCurrency(tag.income)}
-                        </span>
-                      </span>
-                      <span class={styles.stat}>
-                        <span class={styles.statLabel}>Out</span>
-                        <span class={`${styles.statValue} ${styles.negative}`}>
-                          {formatCurrency(tag.expense)}
-                        </span>
-                      </span>
-                      <span class={styles.stat}>
-                        <span class={styles.statLabel}>Net</span>
-                        <span
-                          class={`${styles.statValue} ${tag.net >= 0 ? styles.positive : styles.negative}`}
-                        >
-                          {formatCurrency(tag.net)}
-                        </span>
-                      </span>
-                      <span class={styles.stat}>
-                        <span class={styles.statLabel}>Txs</span>
-                        <span class={styles.statValue}>{tag.count}</span>
-                      </span>
-                    </span>
-                  </button>
-                  <div class={styles.tagCardActions}>
-                    <button
-                      class={styles.ghostButton}
-                      type="button"
-                      onClick={() => {
-                        viewTaggedTransactions(tag.id)
-                      }}
-                    >
-                      View
-                    </button>
-                    <button
-                      class={styles.ghostButton}
-                      type="button"
-                      onClick={() => {
-                        openEditTag(tag)
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <ConfirmButton
-                      class={styles.dangerButton}
-                      label="Delete"
-                      message={`Delete tag "${tag.name}"? It will be removed from ${tag.count} transaction(s); the transactions themselves are kept.`}
-                      onConfirm={() => void deleteTag(tag)}
-                    />
-                  </div>
+                  <Show when={editingTag()?.id === tag.id} fallback={<>{tagCardBody(tag)}</>}>
+                    {/* Edit in place. The form used to open above the whole grid, so on a page
+                        with several tags you were editing one thing while looking at another. */}
+                    <div class={styles.tagCardEditing}>{tagForm()}</div>
+                  </Show>
                 </div>
               )}
             </For>
@@ -573,11 +631,31 @@ export default function Tags() {
       <Show when={selectedTag()}>
         {(tag) => (
           <>
-            <OrbitalDivider
-              id="tags-sec-detail"
-              label={tag().name}
-              meta={`${detail.latest?.totals.count ?? 0} transactions`}
-            />
+            {/* Everything below belongs to one tag, and a section divider alone did not carry
+                that — the stats and rules read as their own unattached panels. This states the
+                subject in the tag's own colour and gives an obvious way back out. */}
+            <div
+              class={styles.tagContext}
+              style={{ '--tag-color': tag().color }}
+              data-test-id="tag-context"
+            >
+              <span class={styles.tagContextDot} />
+              <span class={styles.tagContextText}>
+                <strong class={styles.tagContextName}>{tag().name}</strong>
+                <span class={styles.tagContextHint}>
+                  The activity and rules below apply to this tag
+                </span>
+              </span>
+              <Show when={tags().length > 1}>
+                <button
+                  class={styles.tagContextClear}
+                  type="button"
+                  onClick={() => setSelectedTagId(null)}
+                >
+                  Show all tags
+                </button>
+              </Show>
+            </div>
 
             <div class={styles.detailGrid}>
               <div class={styles.chartCard}>
@@ -639,14 +717,26 @@ export default function Tags() {
             <OrbitalDivider
               id="tags-sec-rules"
               label="Rules"
-              meta={`${selectedRules().length} for ${tag().name}`}
+              meta={`${selectedRules().length} rule${selectedRules().length === 1 ? '' : 's'}`}
             />
 
             <div class={styles.rulesCard}>
+              <h3 class={styles.rulesCardTitle}>
+                <span class={styles.tagContextDot} style={{ '--tag-color': tag().color }} />
+                Rules for {tag().name}
+              </h3>
               <p class={styles.muted}>
                 A rule is a saved filter. Apply it to tag every matching transaction you already
                 have, and leave auto-apply on to tag matching ones you add later.
               </p>
+              <Show when={selectedRules().length > 1}>
+                {/* Rules are OR'd (transactionMatchesAnyTagRule). Nothing said so, which made
+                    "match this AND either of those" look impossible rather than like two rules. */}
+                <p class={styles.muted}>
+                  A transaction gets this tag if it matches <strong>any</strong> rule below — so a
+                  condition that must always hold goes in every rule.
+                </p>
+              </Show>
 
               <Show
                 when={selectedRules().length > 0}
@@ -707,256 +797,276 @@ export default function Tags() {
               <Show when={draft()}>
                 {(current) => (
                   <div class={styles.ruleEditor} data-test-id="tag-rule-editor">
-                    <div class={styles.editorRow}>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Rule name</span>
-                        <input
-                          class={styles.input}
-                          type="text"
-                          placeholder="e.g. Business card spend"
-                          value={current().name}
-                          onInput={(e) => {
-                            const d = draft()
-                            if (d) setDraft({ ...d, name: e.currentTarget.value })
-                          }}
-                        />
-                      </label>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Match</span>
-                        <select
-                          class={styles.select}
-                          value={current().criteria.match}
-                          onChange={(e) => {
-                            patchCriteria({
-                              match: e.currentTarget.value as TagRuleCriteria['match'],
-                            })
-                          }}
-                        >
-                          <option value="all">All conditions (AND)</option>
-                          <option value="any">Any condition (OR)</option>
-                        </select>
-                      </label>
-                      <label class={styles.checkboxField}>
-                        <input
-                          type="checkbox"
-                          checked={current().autoApply}
-                          onChange={(e) => {
-                            const d = draft()
-                            if (d) setDraft({ ...d, autoApply: e.currentTarget.checked })
-                          }}
-                        />
-                        <span>Auto-apply to new transactions</span>
-                      </label>
-                    </div>
-
-                    <div class={styles.editorRow}>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Description</span>
-                        <div class={styles.inlineGroup}>
+                    <section class={styles.editorSection}>
+                      <h4 class={styles.editorSectionTitle}>Name this rule</h4>
+                      <div class={styles.editorRow}>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Rule name</span>
+                          <input
+                            class={styles.input}
+                            type="text"
+                            placeholder="e.g. Business card spend"
+                            value={current().name}
+                            onInput={(e) => {
+                              const d = draft()
+                              if (d) setDraft({ ...d, name: e.currentTarget.value })
+                            }}
+                          />
+                        </label>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Match</span>
                           <select
-                            class={styles.selectSmall}
-                            value={current().criteria.descriptionMode}
+                            class={styles.select}
+                            value={current().criteria.match}
                             onChange={(e) => {
                               patchCriteria({
-                                descriptionMode: e.currentTarget
-                                  .value as TagRuleCriteria['descriptionMode'],
+                                match: e.currentTarget.value as TagRuleCriteria['match'],
                               })
                             }}
                           >
-                            <For each={TEXT_MODES}>
-                              {(mode) => <option value={mode.value}>{mode.label}</option>}
-                            </For>
+                            <option value="all">All conditions (AND)</option>
+                            <option value="any">Any condition (OR)</option>
                           </select>
+                        </label>
+                        <label class={styles.checkboxField}>
+                          <input
+                            type="checkbox"
+                            checked={current().autoApply}
+                            onChange={(e) => {
+                              const d = draft()
+                              if (d) setDraft({ ...d, autoApply: e.currentTarget.checked })
+                            }}
+                          />
+                          <span>Auto-apply to new transactions</span>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section class={styles.editorSection}>
+                      <h4 class={styles.editorSectionTitle}>Match on text</h4>
+                      <div class={styles.editorRow}>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Description</span>
+                          <div class={styles.inlineGroup}>
+                            <select
+                              class={styles.selectSmall}
+                              value={current().criteria.descriptionMode}
+                              onChange={(e) => {
+                                patchCriteria({
+                                  descriptionMode: e.currentTarget
+                                    .value as TagRuleCriteria['descriptionMode'],
+                                })
+                              }}
+                            >
+                              <For each={TEXT_MODES}>
+                                {(mode) => <option value={mode.value}>{mode.label}</option>}
+                              </For>
+                            </select>
+                            <input
+                              class={styles.input}
+                              type="text"
+                              placeholder="any text"
+                              value={current().criteria.description}
+                              onInput={(e) => {
+                                patchCriteria({ description: e.currentTarget.value })
+                              }}
+                            />
+                          </div>
+                        </label>
+
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Counterparty (beneficiary or payor)</span>
+                          <div class={styles.inlineGroup}>
+                            <select
+                              class={styles.selectSmall}
+                              value={current().criteria.counterpartyMode}
+                              onChange={(e) => {
+                                patchCriteria({
+                                  counterpartyMode: e.currentTarget
+                                    .value as TagRuleCriteria['counterpartyMode'],
+                                })
+                              }}
+                            >
+                              <For each={TEXT_MODES}>
+                                {(mode) => <option value={mode.value}>{mode.label}</option>}
+                              </For>
+                            </select>
+                            <input
+                              class={styles.input}
+                              type="text"
+                              placeholder="any name"
+                              value={current().criteria.counterparty}
+                              onInput={(e) => {
+                                patchCriteria({ counterparty: e.currentTarget.value })
+                              }}
+                            />
+                          </div>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section class={styles.editorSection}>
+                      <h4 class={styles.editorSectionTitle}>
+                        Notes, payment method, amount and date
+                      </h4>
+                      <div class={styles.editorRow}>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Notes contain</span>
                           <input
                             class={styles.input}
                             type="text"
                             placeholder="any text"
-                            value={current().criteria.description}
+                            value={current().criteria.notes}
                             onInput={(e) => {
-                              patchCriteria({ description: e.currentTarget.value })
+                              patchCriteria({ notes: e.currentTarget.value })
                             }}
                           />
-                        </div>
-                      </label>
-
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Counterparty (beneficiary or payor)</span>
-                        <div class={styles.inlineGroup}>
-                          <select
-                            class={styles.selectSmall}
-                            value={current().criteria.counterpartyMode}
-                            onChange={(e) => {
-                              patchCriteria({
-                                counterpartyMode: e.currentTarget
-                                  .value as TagRuleCriteria['counterpartyMode'],
-                              })
-                            }}
-                          >
-                            <For each={TEXT_MODES}>
-                              {(mode) => <option value={mode.value}>{mode.label}</option>}
-                            </For>
-                          </select>
+                        </label>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Payment method contains</span>
                           <input
                             class={styles.input}
                             type="text"
-                            placeholder="any name"
-                            value={current().criteria.counterparty}
+                            placeholder="e.g. card, SEPA"
+                            value={current().criteria.meansOfPayment}
                             onInput={(e) => {
-                              patchCriteria({ counterparty: e.currentTarget.value })
+                              patchCriteria({ meansOfPayment: e.currentTarget.value })
                             }}
                           />
-                        </div>
-                      </label>
-                    </div>
-
-                    <div class={styles.editorRow}>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Notes contain</span>
-                        <input
-                          class={styles.input}
-                          type="text"
-                          placeholder="any text"
-                          value={current().criteria.notes}
-                          onInput={(e) => {
-                            patchCriteria({ notes: e.currentTarget.value })
-                          }}
-                        />
-                      </label>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Payment method contains</span>
-                        <input
-                          class={styles.input}
-                          type="text"
-                          placeholder="e.g. card, SEPA"
-                          value={current().criteria.meansOfPayment}
-                          onInput={(e) => {
-                            patchCriteria({ meansOfPayment: e.currentTarget.value })
-                          }}
-                        />
-                      </label>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Amount between</span>
-                        <div class={styles.inlineGroup}>
-                          <input
-                            class={styles.input}
-                            type="number"
-                            step="0.01"
-                            placeholder="min"
-                            value={current().criteria.amountMin ?? ''}
-                            onInput={(e) => {
-                              patchCriteria({
-                                amountMin:
-                                  e.currentTarget.value === ''
-                                    ? null
-                                    : Number(e.currentTarget.value),
-                              })
-                            }}
-                          />
-                          <input
-                            class={styles.input}
-                            type="number"
-                            step="0.01"
-                            placeholder="max"
-                            value={current().criteria.amountMax ?? ''}
-                            onInput={(e) => {
-                              patchCriteria({
-                                amountMax:
-                                  e.currentTarget.value === ''
-                                    ? null
-                                    : Number(e.currentTarget.value),
-                              })
-                            }}
-                          />
-                        </div>
-                      </label>
-                      <label class={styles.field}>
-                        <span class={styles.fieldLabel}>Date between</span>
-                        <div class={styles.inlineGroup}>
-                          <input
-                            class={styles.input}
-                            type="date"
-                            value={current().criteria.dateFrom ?? ''}
-                            onInput={(e) => {
-                              patchCriteria({ dateFrom: e.currentTarget.value || null })
-                            }}
-                          />
-                          <input
-                            class={styles.input}
-                            type="date"
-                            value={current().criteria.dateTo ?? ''}
-                            onInput={(e) => {
-                              patchCriteria({ dateTo: e.currentTarget.value || null })
-                            }}
-                          />
-                        </div>
-                      </label>
-                    </div>
-
-                    <div class={styles.field}>
-                      <span class={styles.fieldLabel}>Transaction types</span>
-                      <div class={styles.chipRow}>
-                        <For each={TX_TYPES}>
-                          {(type) => (
-                            <button
-                              type="button"
-                              class={`${styles.chip} ${current().criteria.types.includes(type.value) ? styles.chipActive : ''}`}
-                              onClick={() => {
+                        </label>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Amount between</span>
+                          <div class={styles.inlineGroup}>
+                            <input
+                              class={styles.input}
+                              type="number"
+                              step="0.01"
+                              placeholder="min"
+                              value={current().criteria.amountMin ?? ''}
+                              onInput={(e) => {
                                 patchCriteria({
-                                  types: current().criteria.types.includes(type.value)
-                                    ? current().criteria.types.filter((t) => t !== type.value)
-                                    : [...current().criteria.types, type.value],
+                                  amountMin:
+                                    e.currentTarget.value === ''
+                                      ? null
+                                      : Number(e.currentTarget.value),
                                 })
                               }}
-                            >
-                              {type.label}
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-
-                    <div class={styles.field}>
-                      <span class={styles.fieldLabel}>Categories</span>
-                      <div class={styles.chipRow}>
-                        <For each={categories()}>
-                          {(cat) => (
-                            <button
-                              type="button"
-                              class={`${styles.chip} ${current().criteria.categoryIds.includes(cat.id) ? styles.chipActive : ''}`}
-                              onClick={() => {
+                            />
+                            <input
+                              class={styles.input}
+                              type="number"
+                              step="0.01"
+                              placeholder="max"
+                              value={current().criteria.amountMax ?? ''}
+                              onInput={(e) => {
                                 patchCriteria({
-                                  categoryIds: toggleInList(current().criteria.categoryIds, cat.id),
+                                  amountMax:
+                                    e.currentTarget.value === ''
+                                      ? null
+                                      : Number(e.currentTarget.value),
                                 })
                               }}
-                            >
-                              <span class={styles.chipDot} style={{ background: cat.color }} />
-                              {cat.name}
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-
-                    <div class={styles.field}>
-                      <span class={styles.fieldLabel}>Accounts</span>
-                      <div class={styles.chipRow}>
-                        <For each={accounts()}>
-                          {(acct) => (
-                            <button
-                              type="button"
-                              class={`${styles.chip} ${current().criteria.accountIds.includes(acct.id) ? styles.chipActive : ''}`}
-                              onClick={() => {
-                                patchCriteria({
-                                  accountIds: toggleInList(current().criteria.accountIds, acct.id),
-                                })
+                            />
+                          </div>
+                        </label>
+                        <label class={styles.field}>
+                          <span class={styles.fieldLabel}>Date between</span>
+                          <div class={styles.inlineGroup}>
+                            <input
+                              class={styles.input}
+                              type="date"
+                              value={current().criteria.dateFrom ?? ''}
+                              onInput={(e) => {
+                                patchCriteria({ dateFrom: e.currentTarget.value || null })
                               }}
-                            >
-                              {acct.name}
-                            </button>
-                          )}
-                        </For>
+                            />
+                            <input
+                              class={styles.input}
+                              type="date"
+                              value={current().criteria.dateTo ?? ''}
+                              onInput={(e) => {
+                                patchCriteria({ dateTo: e.currentTarget.value || null })
+                              }}
+                            />
+                          </div>
+                        </label>
                       </div>
-                    </div>
+                    </section>
+
+                    <section class={styles.editorSection}>
+                      <h4 class={styles.editorSectionTitle}>Narrow by type, category or account</h4>
+                      <div class={styles.field}>
+                        <span class={styles.fieldLabel}>Transaction types</span>
+                        <div class={styles.chipRow}>
+                          <For each={TX_TYPES}>
+                            {(type) => (
+                              <button
+                                type="button"
+                                class={`${styles.chip} ${current().criteria.types.includes(type.value) ? styles.chipActive : ''}`}
+                                onClick={() => {
+                                  patchCriteria({
+                                    types: current().criteria.types.includes(type.value)
+                                      ? current().criteria.types.filter((t) => t !== type.value)
+                                      : [...current().criteria.types, type.value],
+                                  })
+                                }}
+                              >
+                                {type.label}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+
+                      <div class={styles.field}>
+                        <span class={styles.fieldLabel}>Categories</span>
+                        <div class={styles.chipRow}>
+                          <For each={categories()}>
+                            {(cat) => (
+                              <button
+                                type="button"
+                                class={`${styles.chip} ${current().criteria.categoryIds.includes(cat.id) ? styles.chipActive : ''}`}
+                                onClick={() => {
+                                  patchCriteria({
+                                    categoryIds: toggleInList(
+                                      current().criteria.categoryIds,
+                                      cat.id
+                                    ),
+                                  })
+                                }}
+                              >
+                                <span class={styles.chipDot} style={{ background: cat.color }} />
+                                {cat.name}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+
+                      <div class={styles.field}>
+                        <span class={styles.fieldLabel}>Accounts</span>
+                        <div class={styles.chipRow}>
+                          <For each={accounts()}>
+                            {(acct) => (
+                              <button
+                                type="button"
+                                class={`${styles.chip} ${current().criteria.accountIds.includes(acct.id) ? styles.chipActive : ''}`}
+                                onClick={() => {
+                                  patchCriteria({
+                                    accountIds: toggleInList(
+                                      current().criteria.accountIds,
+                                      acct.id
+                                    ),
+                                  })
+                                }}
+                              >
+                                {acct.name}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                    </section>
 
                     <p class={styles.ruleSummary}>{describeTagRuleCriteria(current().criteria)}</p>
 

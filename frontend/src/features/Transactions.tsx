@@ -49,14 +49,16 @@ import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
 import { refetchOnActive } from '../core/pageVisibility'
-import { usePeriod } from '../core/periodStore'
-import { toRange } from '../utils/period'
+import { setPeriod, usePeriod } from '../core/periodStore'
+import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
   const state = useAppState()
   const { period, helpers } = usePeriod()
+  // Set when we widened the focus period on the user's behalf, so the list can say so.
+  const [periodWidenedFor, setPeriodWidenedFor] = createSignal<string | null>(null)
   // The global focus period drives the date filter (any mode → a range; "all" → no bound).
   const periodRange = () => (period().preset === 'all' ? null : toRange(period()))
   const [transactions, setTransactions] = createSignal<Transaction[]>([])
@@ -746,18 +748,27 @@ export default function Transactions() {
    * preselected; pages stay mounted once visited, so this runs on `hashchange` too, not only
    * at mount. Unknown ids are ignored rather than producing an empty, unexplained list.
    */
-  const applyTagFromHash = (known?: Array<{ id: number }>) => {
+  const applyTagFromHash = (known?: Array<{ id: number; name?: string }>) => {
     const hash = window.location.hash.slice(1)
     const queryIdx = hash.indexOf('?')
     if (queryIdx < 0) return
-    const raw = new URLSearchParams(hash.slice(queryIdx + 1)).get('tag')
+    const params = new URLSearchParams(hash.slice(queryIdx + 1))
+    const raw = params.get('tag')
     if (!raw) return
     const knownIds = new Set((known ?? tags()).map((t) => t.id))
     const ids = raw
       .split(',')
       .map((v) => parseInt(v, 10))
       .filter((id) => !isNaN(id) && knownIds.has(id))
-    if (ids.length > 0) setSelectedTags(ids)
+    if (ids.length === 0) return
+    setSelectedTags(ids)
+    // The Tags page appends `period=all` when the tag has nothing in the current focus month.
+    // Arriving on an empty list looks like the filter is broken rather than like the month is
+    // simply quiet, so it widens the window and says why instead of leaving the user to guess.
+    if (params.get('period') === 'all') {
+      setPeriod(fromPill('all'))
+      setPeriodWidenedFor((known ?? tags()).find((t) => t.id === ids[0])?.name ?? 'this tag')
+    }
   }
 
   const handleTagHashChange = () => {
@@ -1697,6 +1708,27 @@ export default function Transactions() {
         <SkeletonTable rows={8} cols={5} />
       ) : (
         <>
+          {/* We changed the focus period on the user's behalf when they arrived from a tag with
+              nothing in the current month. Silently showing a different window than the period bar
+              last said would be worse than saying so. */}
+          <Show when={periodWidenedFor()}>
+            {(tagName) => (
+              <div class={styles.periodWidenedNote} data-test-id="period-widened-note">
+                <span>
+                  No <strong>{tagName()}</strong> transactions in that month — showing{' '}
+                  <strong>all time</strong>.
+                </span>
+                <button
+                  class={styles.periodWidenedDismiss}
+                  type="button"
+                  onClick={() => setPeriodWidenedFor(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </Show>
+
           {/* Page Summary (top) */}
           <TransactionSummaryBar
             totalAmount={pageTotal()}
