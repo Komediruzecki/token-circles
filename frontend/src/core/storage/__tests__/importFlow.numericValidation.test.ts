@@ -42,7 +42,7 @@ describe('serverless import numeric validation', () => {
   it('reports exact invalid row fields during preview and writes nothing', async () => {
     const response = await importExecute({
       rows: [
-        ['2026-01-01', 'Bad local', '10.00', '1,234', '1.00'],
+        ['2026-01-01', 'Bad local', '10.00', '1,2,3', '1.00'],
         ['2026-01-02', 'Bad rate', '20.00', '20.00', 'abc'],
       ],
       mapping: {
@@ -75,12 +75,12 @@ describe('serverless import numeric validation', () => {
     expect(await (await getDB()).count('transactions')).toBe(0)
   })
 
-  it('rejects an ambiguous opening balance before creating the account', async () => {
+  it('rejects a malformed opening balance before creating the account', async () => {
     const response = await importExecute({
       rows: [['2026-01-01', 'Opening', '10.00', 'Savings']],
       mapping: { date: 0, description: 1, amount: 2, category: 3 },
       categoryTypes: { Savings: 'account' },
-      accountBalances: { Savings: '1,234' },
+      accountBalances: { Savings: '1,2,3' },
       dry_run: false,
     })
     expect(response.status).toBe(422)
@@ -98,11 +98,11 @@ describe('serverless import numeric validation', () => {
     expect(transactions[0].amount).toBeCloseTo(2468.13, 2)
   })
 
-  it('rejects the entire bulk import before writing when any amount is ambiguous', async () => {
+  it('rejects the entire bulk import before writing when any amount is malformed', async () => {
     const response = await importBulk({
       items: [
         { description: 'Valid', amount: '10.00', date: '2026-01-01' },
-        { description: 'Ambiguous', amount: '1,234', date: '2026-01-02' },
+        { description: 'Malformed', amount: '1,2,3', date: '2026-01-02' },
       ],
     })
     expect(response.status).toBe(422)

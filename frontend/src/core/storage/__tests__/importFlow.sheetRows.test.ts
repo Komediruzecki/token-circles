@@ -11,6 +11,7 @@
  * imported clean in the cloud), labelled with a date cut mid-token.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
+import { isoToday } from '../handlers/importFlow.js'
 import { getDB } from '../idb.js'
 import { importExecute } from '../localHandlers.js'
 
@@ -155,7 +156,7 @@ describe('import of a real Google Sheet row set', () => {
     )
   })
 
-  it('rejects a row with no date, and says so in those words', async () => {
+  it('imports a row with no date as today, and warns instead of dropping it', async () => {
     const response = await importExecute({
       rows: [
         [
@@ -173,13 +174,78 @@ describe('import of a real Google Sheet row set', () => {
         ],
       ],
       mapping: MAPPING,
-      dry_run: true,
+      dry_run: false,
     })
     const body = await response.json()
-    expect(body.skipped_items).toHaveLength(1)
-    expect(body.skipped_items[0].reason).toBe('No date — every transaction needs one')
-    expect(body.skipped_items[0].label).toBe('Groceries run')
+    // Losing the transaction is worse than guessing its date: the user can correct a date, but
+    // cannot correct a row that never arrived.
+    expect(body.skipped_items ?? []).toEqual([])
+    expect(body.imported).toBe(1)
+    expect(body.warnings).toHaveLength(1)
+    expect(body.warnings[0].reason).toContain("today's date")
+
+    const db = await getDB()
+    const rows = await db.getAll('transactions')
+    expect(rows[0].date).toBe(isoToday())
+  })
+
+  it('warns about an amount it had to round, and still imports it', async () => {
+    const response = await importExecute({
+      rows: [
+        [
+          'BoostIO 11 month pay',
+          '5802.4',
+          'Date(2021,11,24)',
+          '',
+          '',
+          'Passive Income',
+          'HRK',
+          '754.312',
+          'Erste Current',
+          '',
+          'Income',
+        ],
+      ],
+      mapping: MAPPING,
+      dry_run: false,
+    })
+    const body = await response.json()
+    expect(body.skipped_items ?? []).toEqual([])
+    expect(body.imported).toBe(1)
+    expect(body.warnings.map((w: { reason: string }) => w.reason).join(' ')).toContain('754.312')
+
+    const db = await getDB()
+    const rows = await db.getAll('transactions')
+    expect(rows[0].amount_local).toBeCloseTo(754.31, 2)
+  })
+
+  it('does not re-import a dateless row on a second sync', async () => {
+    const row = [
+      'Standing order',
+      '9.99',
+      '',
+      '',
+      '',
+      'Subscriptions',
+      'EUR',
+      '',
+      'Erste Current',
+      '',
+      'Expense',
+    ]
+    const first = await importExecute({ rows: [row], mapping: MAPPING, dry_run: false })
+    expect((await first.json()).imported).toBe(1)
+
+    // A dateless row is stored under today, and dedup resolves the same date on both sides, so a
+    // repeat sync recognises it. Locking that down: the sheet sync runs daily, and a row that
+    // failed to match its stored copy would pile up one duplicate per day.
+    const second = await importExecute({ rows: [row], mapping: MAPPING, dry_run: false })
+    const body = await second.json()
     expect(body.imported).toBe(0)
+    expect(body.duplicates).toBe(1)
+
+    const db = await getDB()
+    expect(await db.count('transactions')).toBe(1)
   })
 
   it('writes nothing for a rejected row', async () => {

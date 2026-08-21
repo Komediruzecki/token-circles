@@ -19,10 +19,19 @@ describe('parseImportNumber', () => {
     expect(parseImportNumber(input)).toBeCloseTo(expected as number, 8);
   });
 
+  // A lone separator is a decimal point now, so these parse rather than reject — see
+  // shared/importNumber.ts. They carry the `ambiguous-separator` flag, which the import surfaces.
   it.each([
-    '1,234',
-    '1.234',
-    '12,345',
+    ['1,234', 1.23],
+    ['1.234', 1.23],
+    ['12,345', 12.35],
+    ['1.000', 1],
+    ['754.312', 754.31],
+  ])('reads a lone separator as a decimal point: %j', (input, expected) => {
+    expect(parseImportNumber(input as string)).toBeCloseTo(expected as number, 8);
+  });
+
+  it.each([
     '',
     'abc',
     '1,2,3',

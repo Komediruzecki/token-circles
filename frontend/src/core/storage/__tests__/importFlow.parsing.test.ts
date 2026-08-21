@@ -7,7 +7,10 @@ describe('import number parsing (audit I1)', () => {
     expect(parseAmount('1234,56')).toBeCloseTo(1234.56, 2)
     expect(parseAmount('1.234.567,89')).toBeCloseTo(1234567.89, 2) // dot thousands + comma decimal
     expect(parseAmount('12.50')).toBeCloseTo(12.5, 2)
-    expect(parseAmount('1.000')).toBeNaN()
+    // A lone separator now reads as a decimal point, so this is 1.00 and not 1000. It is the one
+    // shape the rule can get wrong, which is why the parser flags it `ambiguous-separator` and
+    // the import surfaces it — see importNumber.test.ts.
+    expect(parseAmount('1.000')).toBeCloseTo(1.0, 2)
   })
 
   it('parses US-formatted amounts', () => {

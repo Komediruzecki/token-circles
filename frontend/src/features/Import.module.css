@@ -569,6 +569,21 @@
   font-size: 12px;
 }
 
+/* Rows that DO import but carry something to look at — a rounded amount, an invented date.
+   Same shape as .validationWarning, in the advisory colour rather than the danger one, because
+   nothing here blocks the import. */
+.infoNote {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning, #d9a441) 45%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warning, #d9a441) 7%, transparent);
+  color: var(--text);
+  font-size: 12px;
+}
+
 /* Preview row filter — a segmented control above the table for switching the view
    between all rows, within-batch duplicates, and the no-account-transfer warning. */
 .filterBar {

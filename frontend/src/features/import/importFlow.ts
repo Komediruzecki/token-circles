@@ -129,6 +129,21 @@ export interface ImportSummary {
   source: string
 }
 
+/**
+ * The row number to SHOW for a parsed data row.
+ *
+ * `rows` holds data only — every parser consumes the first record as the header row — so index 0
+ * is the SECOND line of the source. Printing `index + 1` therefore named a line one above the one
+ * the user had to open: a rejection reported as row 2599 was row 2600 in the sheet. Add the header
+ * back so the number matches what the spreadsheet shows down its left edge.
+ *
+ * Exact for a source with one header row and no blank rows. Wholly empty records are dropped while
+ * parsing, and each one dropped above a row shifts that row by one more.
+ */
+export function sourceRowNumber(index: number): number {
+  return index + 2
+}
+
 export interface ImportValidationIssue {
   index?: number
   field?: string
@@ -301,6 +316,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const [previewValidationIssues, setPreviewValidationIssues] = createSignal<
     ImportValidationIssue[]
   >([])
+  // Rows that WILL import but carry something the user should see — a rounded amount, a date the
+  // sheet did not supply. Kept apart from the issues above precisely because these do not
+  // deselect the row: the transaction lands either way, and the note is how the user knows to
+  // look at it.
+  const [previewWarnings, setPreviewWarnings] = createSignal<ImportValidationIssue[]>([])
   const invalidRowSet = createMemo(
     () =>
       new Set(
@@ -523,6 +543,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         ...(Array.isArray(data?.validation_errors) ? data.validation_errors : []),
       ]
       setPreviewValidationIssues(issues)
+      setPreviewWarnings(Array.isArray(data?.warnings) ? data.warnings : [])
       const invalidIndices = new Set(
         issues
           .map((issue) => issue.index)
@@ -1407,6 +1428,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     approvedCategories,
     existingDuplicates,
     previewValidationIssues,
+    previewWarnings,
     invalidRowSet,
     loading,
     dropProcessing,

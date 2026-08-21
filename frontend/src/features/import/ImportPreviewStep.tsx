@@ -7,6 +7,7 @@ import { For, Show } from 'solid-js'
 import InfoTip from '../../components/InfoTip'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
+import { sourceRowNumber } from './importFlow'
 import type { ImportFlow } from './importFlow'
 
 /**
@@ -25,6 +26,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
   const duplicates = () => flow.duplicateIndices().length
   const invalidRows = () => flow.invalidRowSet().size
   const validationIssues = () => flow.previewValidationIssues()
+  const warnings = () => flow.previewWarnings()
   const selectableTotal = () => total() - invalidRows()
 
   return (
@@ -123,7 +125,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                       alone means counting through a multi-thousand-line sheet, and it is off by
                       the header row, so it usually lands on the wrong line. */}
                   {typeof issue.index === 'number'
-                    ? `Row ${issue.index + 1}${issue.label ? ` (${issue.label})` : ''}: `
+                    ? `Row ${sourceRowNumber(issue.index)}${issue.label ? ` (${issue.label})` : ''}: `
                     : issue.field
                       ? `${issue.field}: `
                       : ''}
@@ -139,6 +141,26 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
         {/* Dry-run verdict: rows the dedup pass will skip because they already
             exist. A full-duplicate re-import gets called out as "nothing new"
             up front instead of surprising the user with "Imported 0". */}
+        {/* Imported anyway, but worth a look — a rounded amount, a date we had to invent.
+            Deliberately NOT wired into invalidRowSet: these rows stay selected. */}
+        <Show when={warnings().length > 0}>
+          <div class={styles.infoNote} data-test-id="import-warnings">
+            <strong>Imported with changes — check these rows</strong>
+            <For each={warnings().slice(0, 8)}>
+              {(warning) => (
+                <div>
+                  {typeof warning.index === 'number'
+                    ? `Row ${sourceRowNumber(warning.index)}${warning.label ? ` (${warning.label})` : ''}: `
+                    : ''}
+                  {warning.reason}
+                </div>
+              )}
+            </For>
+            <Show when={warnings().length > 8}>
+              <div>And {warnings().length - 8} more.</div>
+            </Show>
+          </div>
+        </Show>
         <Show when={(flow.existingDuplicates() ?? 0) > 0}>
           <div
             data-test-id="import-existing-dups"
@@ -450,7 +472,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                     .map((ci) => (ci !== undefined ? r?.[ci] : undefined))
                     .filter((v): v is string => v !== undefined && v.trim() !== '')
                     .join(' · ')
-                  return { rowNo: mi + 1, summary }
+                  return { rowNo: sourceRowNumber(mi), summary }
                 }
                 const dupTitle = () => {
                   if (!isDuplicate()) return undefined

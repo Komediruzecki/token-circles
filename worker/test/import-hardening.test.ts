@@ -170,7 +170,7 @@ describe('import rejection messages are actionable', () => {
   // assertions in frontend/src/core/storage/__tests__/importFlow.transferResolution.test.ts.
   it('labels a row by date and description, without repeating the row number', async () => {
     const res = await execute({
-      rows: [['2026-05-04', 'Vendite Ecommerce', '45.05', '1,234', '1.00']],
+      rows: [['2026-05-04', 'Vendite Ecommerce', '45.05', '1,2,3', '1.00']],
       mapping: { date: 0, description: 1, amount: 2, amount_local: 3, exchange_rate: 4 },
       dry_run: true,
     });

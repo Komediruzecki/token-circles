@@ -8,6 +8,12 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { parseImportNumber } from '../import-number';
+import {
+  checkImportRowNumbers,
+  MISSING_DATE_WARNING,
+  unreadableNumbersReason,
+} from '../../../shared/importRowChecks';
+import type { ImportRowWarning } from '../../../shared/importRowChecks';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
@@ -398,6 +404,7 @@ export async function executeImport(
   const defaultCurrency = await resolveProfileBaseCurrency(DB, pid, requestedCurrency, !dryRun);
   const rowsArr = rows as Array<Record<string, any>>;
   const skippedItems: Array<{ index: number; reason: string; label?: string }> = [];
+  const warnings: ImportRowWarning[] = [];
   const validatedRows: Array<{
     index: number;
     row: Record<string, any>;
@@ -408,38 +415,32 @@ export async function executeImport(
   }> = [];
   for (let index = 0; index < rowsArr.length; index++) {
     const row = rowsArr[index]!;
-    const amountRaw = parseImportNumber(pick(row, mapping, 'amount'));
-    const amountLocalSource = pick(row, mapping, 'amount_local');
-    const amountLocal =
-      amountLocalSource === null ||
-      amountLocalSource === undefined ||
-      String(amountLocalSource).trim() === ''
-        ? amountRaw
-        : parseImportNumber(amountLocalSource);
-    const exchangeRateSource = pick(row, mapping, 'exchange_rate');
-    const exchangeRate =
-      exchangeRateSource === null ||
-      exchangeRateSource === undefined ||
-      String(exchangeRateSource).trim() === ''
-        ? 1
-        : parseImportNumber(exchangeRateSource);
-    const invalidFields: string[] = [];
-    if (amountRaw === null) invalidFields.push('amount');
-    if (amountLocal === null) invalidFields.push('amount_local');
-    if (exchangeRate === null || exchangeRate <= 0) invalidFields.push('exchange_rate');
+    const rawDate = pick(row, mapping, 'date');
+    const label = importRowLabel(rawDate, pick(row, mapping, 'description'));
+    const checked = checkImportRowNumbers({
+      amount: pick(row, mapping, 'amount'),
+      amountLocal: pick(row, mapping, 'amount_local'),
+      exchangeRate: pick(row, mapping, 'exchange_rate'),
+    });
+    const { amount: amountRaw, amountLocal, exchangeRate } = checked;
     if (
-      invalidFields.length > 0 ||
+      checked.invalidFields.length > 0 ||
       amountRaw === null ||
       amountLocal === null ||
-      exchangeRate === null ||
-      exchangeRate <= 0
+      exchangeRate === null
     ) {
       skippedItems.push({
         index,
-        reason: `Could not read ${invalidFields.join(', ')} — check the number format`,
-        label: importRowLabel(pick(row, mapping, 'date'), pick(row, mapping, 'description')),
+        reason: unreadableNumbersReason(checked.invalidFields),
+        label,
       });
       continue;
+    }
+    // A row that still imports but deserves a look: a rounded amount, or a date the sheet did not
+    // give (parseDateString falls back to today, which is a guess the user must be told about).
+    for (const reason of checked.warnings) warnings.push({ index, reason, label });
+    if (String(rawDate ?? '').trim() === '') {
+      warnings.push({ index, reason: MISSING_DATE_WARNING, label });
     }
     validatedRows.push({
       index,
@@ -497,6 +498,7 @@ export async function executeImport(
         error: 'One or more account starting balances are invalid or ambiguous.',
         validation_errors: accountValidationErrors,
         skipped_items: skippedItems,
+        warnings,
       },
     };
   }
@@ -766,6 +768,7 @@ export async function executeImport(
         imported: txStmts.length,
         skipped: skippedItems.length,
         skipped_items: skippedItems,
+        warnings,
         dry_run: true,
         duplicates: duplicateIndices.length,
         duplicate_indices: duplicateIndices,
@@ -807,6 +810,7 @@ export async function executeImport(
       imported,
       skipped: skippedItems.length,
       skipped_items: skippedItems,
+      warnings,
       duplicates: duplicateIndices.length,
       duplicate_indices: duplicateIndices,
       new_categories: newCats,

@@ -81,7 +81,7 @@ describe('Worker import numeric validation', () => {
           date: '2026-01-01',
           description: 'Bad local',
           amount: '10.00',
-          amount_local: '1,234',
+          amount_local: '1,2,3',
           exchange_rate: '1.00',
         },
         {
@@ -123,7 +123,7 @@ describe('Worker import numeric validation', () => {
     ]);
   });
 
-  it('rejects an ambiguous opening balance before any account write', async () => {
+  it('rejects a malformed opening balance before any account write', async () => {
     const response = await execute({
       rows: [
         {
@@ -140,7 +140,7 @@ describe('Worker import numeric validation', () => {
         category: 'category',
       },
       categoryTypes: { Savings: 'account' },
-      accountBalances: { Savings: '1,234' },
+      accountBalances: { Savings: '1,2,3' },
     });
     expect(response.status).toBe(422);
     const count = await env.DB.prepare(

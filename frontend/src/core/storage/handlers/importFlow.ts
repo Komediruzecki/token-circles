@@ -2,6 +2,11 @@
  * Import handlers — IndexedDB-backed implementations
  */
 import { parseImportCsv } from '../../../../../shared/importCsv'
+import {
+  checkImportRowNumbers,
+  MISSING_DATE_WARNING,
+  unreadableNumbersReason,
+} from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { getLocalCurrency } from '../../api'
@@ -11,6 +16,7 @@ import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json } from './helpers'
 import type { WorkBook } from 'xlsx'
+import type { ImportRowWarning } from '../../../../../shared/importRowChecks'
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
 
@@ -20,6 +26,13 @@ const pad2 = (n: number): string => String(n).padStart(2, '0')
  *  Exported for tests. */
 export function parseAmount(v: unknown): number {
   return parseImportNumber(v) ?? NaN
+}
+
+/** Today as `YYYY-MM-DD` in local time — the fallback for a row whose sheet gave no date. */
+export function isoToday(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function toStr(v: unknown): string {
@@ -279,7 +292,10 @@ async function detectDuplicates(
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
-    const date = normalizeDate(row.date) || toStr(row.date)
+    // Same today-default the import applies to a dateless row, so this preview keys the row on
+    // the date it will actually be stored under rather than on the empty cell. (The insert path
+    // dedups separately, via resolvedDedupKey on the resolved date — this is the upload preview.)
+    const date = normalizeDate(row.date) || toStr(row.date) || isoToday()
     const desc = toStr(row.description).toLowerCase().trim()
     // Locale-aware amount parse so a European-formatted import ("1.234,56") matches the stored
     // value instead of being read as 1.234 and missing the duplicate (audit I1/I4).
@@ -610,9 +626,12 @@ export async function importExecute(body: unknown): Promise<Response> {
     // pre-resolution deduped subset.
     const clean = rows
     const skipped: { index: number; reason: string; label?: string }[] = []
+    const warnings: ImportRowWarning[] = []
     const validatedRows: Array<{
       index: number
       row: Record<string, unknown>
+      /** Already normalized, and already defaulted to today when the sheet gave none. */
+      date: string
       amount: number
       amountLocal: number
       exchangeRate: number
@@ -620,45 +639,38 @@ export async function importExecute(body: unknown): Promise<Response> {
     for (let index = 0; index < clean.length; index++) {
       const row = clean[index]
       const description = toStr(row.description)
-      const date = normalizeDate(row.date) || toStr(row.date)
-      const amount = parseImportNumber(row.amount)
-      const amountLocalRaw = toStr(row.amount_local).trim()
-      const amountLocal = amountLocalRaw ? parseImportNumber(amountLocalRaw) : amount
-      const exchangeRateRaw = toStr(row.exchange_rate).trim()
-      const exchangeRate = exchangeRateRaw ? parseImportNumber(exchangeRateRaw) : 1
+      // A row with no usable date imports dated today rather than being dropped — a missing date
+      // is a thing to fix, not a reason to lose the transaction — and says so in a warning.
+      const parsedDate = normalizeDate(row.date) || toStr(row.date)
+      const dateMissing = !parsedDate
+      const date = parsedDate || isoToday()
       // A blank description is NOT a reason to drop a transaction. It used to be, here only —
       // the Worker never checked it — so the same sheet imported clean in the cloud and lost
       // hundreds of rows locally. A real sheet leaves the description empty on plenty of rows
-      // (the amount, date, category and accounts still say what the row is), and the rejection
-      // came back as "Could not read description — check the number format", which described
-      // neither the field nor the problem.
-      const invalidFields: string[] = []
-      if (amount === null) invalidFields.push('amount')
-      if (amountLocal === null) invalidFields.push('amount_local')
-      if (exchangeRate === null || exchangeRate <= 0) invalidFields.push('exchange_rate')
+      // (the amount, date, category and accounts still say what the row is).
+      const checked = checkImportRowNumbers({
+        amount: row.amount,
+        amountLocal: row.amount_local,
+        exchangeRate: row.exchange_rate,
+      })
+      const { amount, amountLocal, exchangeRate } = checked
       // Label from the NORMALIZED date: `row.date` is still in the source dialect, and a Google
       // Visualization sheet delivers `Date(2026,1,7)` there.
       const label = importRowLabel(date, description)
-      if (!date) {
-        skipped.push({ index, reason: 'No date — every transaction needs one', label })
-        continue
-      }
       // The null tests are redundant with `invalidFields` — they are spelled out so the
       // narrowing survives to the push below, which needs the three as plain numbers.
       if (
-        invalidFields.length > 0 ||
+        checked.invalidFields.length > 0 ||
         amount === null ||
         amountLocal === null ||
         exchangeRate === null
       ) {
-        skipped.push({
-          index,
-          reason: `Could not read ${invalidFields.join(', ')} — check the number format`,
-          label,
-        })
+        skipped.push({ index, reason: unreadableNumbersReason(checked.invalidFields), label })
         continue
       }
-      validatedRows.push({ index, row, amount, amountLocal, exchangeRate })
+      for (const reason of checked.warnings) warnings.push({ index, reason, label })
+      if (dateMissing) warnings.push({ index, reason: MISSING_DATE_WARNING, label })
+      validatedRows.push({ index, row, date, amount, amountLocal, exchangeRate })
     }
     const validRows = validatedRows.map(({ row }) => row)
 
@@ -799,6 +811,7 @@ export async function importExecute(body: unknown): Promise<Response> {
               },
             ],
             skipped_items: skipped,
+            warnings,
           },
           422
         )
@@ -858,9 +871,8 @@ export async function importExecute(body: unknown): Promise<Response> {
     const toInsert: Record<string, unknown>[] = []
 
     for (const validated of validatedRows) {
-      const { index: i, row, amount, amountLocal, exchangeRate } = validated
+      const { index: i, row, date, amount, amountLocal, exchangeRate } = validated
       const description = toStr(row.description)
-      const date = normalizeDate(row.date) || toStr(row.date)
       // Determine transaction type.
       // An explicit "transfer" always wins — a transfer between two accounts is a
       // transfer regardless of sign, and the category names the destination account
@@ -1151,6 +1163,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       dry_run: dryRun,
       imported_ids: dryRun ? [] : imported,
       skipped_items: skipped,
+      warnings,
       // Rows flagged as duplicates of an existing/earlier-in-file transaction (audit A2).
       duplicates: duplicates.length,
       duplicate_indices: duplicates,
