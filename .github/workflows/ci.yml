@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Three gates, one per thing that actually ships: the SolidJS frontend, the Cloudflare Worker,
+# and lint. The legacy Express/SQLite backend under backend/ is NOT tested here — it is not part
+# of either shipping runtime (browser-only mode is IndexedDB, cloud mode is the Worker), and its
+# Jest suite asserted wall-clock timings on shared runners, which turned main red for no reason.
+# It does still BOOT in e2e.yml, where it is the API the Playwright suite drives the real
+# frontend against; see the note there before removing it.
+
 jobs:
   test:
     name: Test
@@ -29,52 +36,46 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Rebuild native modules
-        run: pnpm rebuild better-sqlite3
+      - name: Typecheck
+        run: pnpm run typecheck
 
-      - name: Run tests
-        run: |
-          # Create required directories
-          mkdir -p db assets
+      - name: Run frontend tests
+        run: pnpm run test
 
-          # Start server in background
-          node backend/index.js &
-          SERVER_PID=$!
-          echo "Server PID: $SERVER_PID"
+  worker:
+    name: Worker Tests
+    runs-on: ubuntu-latest
 
-          # Wait for server to be ready (max 15 seconds)
-          for i in $(seq 1 30); do
-            if curl -s http://localhost:3847/api/profiles > /dev/null 2>&1; then
-              echo "Server is ready"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "Server failed to start"
-              kill $SERVER_PID 2>/dev/null
-              exit 1
-            fi
-            sleep 0.5
-          done
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-          # Run both suites and report both (set +e so a backend failure doesn't abort the
-          # step before the frontend tests run; the explicit exit below still gates).
-          set +e
-          pnpm run test:backend
-          BACKEND_TEST_EXIT=$?
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
-          # Run frontend tests
-          pnpm run test
-          FRONTEND_TEST_EXIT=$?
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
 
-          # Cleanup
-          kill $SERVER_PID 2>/dev/null
-          
-          if [ $BACKEND_TEST_EXIT -ne 0 ] || [ $FRONTEND_TEST_EXIT -ne 0 ]; then
-            exit 1
-          fi
-          exit 0
-        env:
-          NODE_ENV: test
+      # Same install as deploy-worker.yml: worker/.gitignore deliberately does not pin a
+      # lockfile ("deps installed fresh"), so --frozen-lockfile fails with ERR_PNPM_NO_LOCKFILE.
+      - name: Install worker deps (outside the pnpm workspace)
+        working-directory: worker
+        run: pnpm install --no-frozen-lockfile --ignore-workspace
+
+      - name: Typecheck
+        working-directory: worker
+        run: pnpm run typecheck
+
+      # Runs the real Worker in workerd via Miniflare, against a local D1 built from
+      # worker/migrations/ — so a broken migration fails here rather than at deploy time.
+      - name: Run worker tests
+        working-directory: worker
+        run: pnpm run test
 
   lint:
     name: Lint Frontend
@@ -100,5 +101,3 @@ jobs:
 
       - name: Run ESLint
         run: pnpm run lint
-
-

@@ -32,6 +32,11 @@ jobs:
       - name: Rebuild native modules
         run: pnpm rebuild better-sqlite3
 
+      # NOT dead code, despite backend/ being the legacy runtime that nothing ships (ci.yml no
+      # longer tests it). The Playwright suite drives the REAL built frontend, and something has
+      # to answer /api — playwright.config.ts points the vite dev proxy at this server on :3847.
+      # Deleting this step takes all 35 spec files with it. Retiring it properly means pointing
+      # the proxy at a locally-run Worker (wrangler dev + a seeded local D1) instead.
       - name: Start backend server
         run: |
           mkdir -p db assets
