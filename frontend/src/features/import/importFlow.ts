@@ -1309,6 +1309,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
             created_accounts: data.created_accounts ?? [],
             created_categories: data.created_categories ?? [],
             rows_skipped_invalid: invalidSkipped,
+            rows_with_warnings: Array.isArray(data.warnings) ? data.warnings.length : 0,
           }),
         }),
       })

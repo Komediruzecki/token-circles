@@ -239,7 +239,7 @@ async function upgradeSchema(
   }
 
   // v12: tagRules store — saved filters that attach a tag to matching transactions
-  // (mirrors worker migration 0020_tag_rules).
+  // (mirrors worker migration 0021_tag_rules).
   if (oldVersion < 12) {
     const tagRules = db.createObjectStore('tagRules', { keyPath: 'id', autoIncrement: true })
     tagRules.createIndex('by_profile', 'profile_id')

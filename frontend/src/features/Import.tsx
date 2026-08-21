@@ -187,6 +187,7 @@ export default function Import() {
                           created_accounts?: string[]
                           created_categories?: string[]
                           rows_skipped_invalid?: number
+                          rows_with_warnings?: number
                         })
                       : null
                   } catch {
@@ -235,6 +236,12 @@ export default function Import() {
                       </span>
                       {(details?.rows_skipped_invalid ?? 0) > 0 && (
                         <span>Rows skipped as invalid: {details!.rows_skipped_invalid}</span>
+                      )}
+                      {(details?.rows_with_warnings ?? 0) > 0 && (
+                        <span>
+                          Rows imported with a warning: {details!.rows_with_warnings} (a missing
+                          date filled in as today, or an amount rounded to cents)
+                        </span>
                       )}
                     </div>
                     <div style={{ 'margin-top': '10px', 'text-align': 'right' }}>

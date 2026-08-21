@@ -58,6 +58,15 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
         importId,
       });
 
+      const body = outcome.body as Record<string, unknown>;
+      // executeImport rejects the whole batch on a validation error rather than importing part of
+      // it. Nothing landed, so don't claim the source is synced — leaving last_synced_at alone is
+      // what makes the next run (or a manual preview) retry it.
+      if (outcome.status !== 200) {
+        console.error('[sheet-sync] source', src.id, 'rejected:', body.error ?? outcome.status);
+        continue;
+      }
+
       const now = new Date().toISOString();
       await db.update(
         env.DB,
@@ -67,9 +76,14 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
         src.id
       );
 
-      const body = outcome.body as Record<string, unknown>;
       const imported = Number(body.imported ?? 0);
       const dupes = Number(body.duplicates ?? 0);
+      // Rows the sheet lost (unreadable numbers) and rows that imported but guessed something
+      // (missing date → today, odd decimals → rounded to cents). Nobody watches a cron run, so
+      // these counts are the only trace the user ever gets — carry them into the session details
+      // the Import page renders.
+      const skipped = Array.isArray(body.skipped_items) ? body.skipped_items.length : 0;
+      const warned = Array.isArray(body.warnings) ? body.warnings.length : 0;
       // Record the session so it shows in the Import page's Recent Imports (and is undoable).
       // Only when something actually imported — a daily re-sync of an unchanged sheet imports 0
       // (every row already exists) and must not spam Recent Imports with an entry every day.
@@ -82,8 +96,17 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
           duplicates_skipped: dupes,
           accounts_created: Number(body.accounts_created ?? 0),
           categories_created: Number(body.categories_created ?? 0),
-          details: JSON.stringify({ mode: 'daily-sync', source_id: src.id }),
+          details: JSON.stringify({
+            mode: 'daily-sync',
+            source_id: src.id,
+            rows_skipped_invalid: skipped,
+            rows_with_warnings: warned,
+          }),
         });
+      } else if (skipped > 0) {
+        // A run where every changed row was unreadable writes no session (an entry a day for a
+        // permanently broken sheet is worse than none), so the Worker log is where it shows.
+        console.warn('[sheet-sync] source', src.id, 'skipped', skipped, 'unreadable rows');
       }
     } catch (err) {
       console.error(

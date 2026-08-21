@@ -6,7 +6,7 @@ technical detail lives in [dev-changelog.md](dev-changelog.md).
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.9.0] — 2026-08-21
 
 ### Added
 
@@ -17,6 +17,15 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Imports no longer drop rows they can read.** A row with no description now imports instead of being rejected — previously this happened only in browser-only mode, so the same sheet imported cleanly in the cloud while silently losing hundreds of rows locally. A row with no date imports dated today and tells you so, rather than being thrown away.
+- Amounts with more than two decimals — the residue of a currency conversion — are rounded to cents and imported, instead of being rejected as unreadable. The preview lists which rows were rounded so you can correct the sheet if you'd rather.
+- A single separator in an amount now reads as a decimal point (`1,12` is one euro twelve), and the preview flags the one shape that could also be thousands grouping so you can check it.
+- Import rejections now name the row by its date and description, and a self-transfer says which account both sides landed on and which column each came from — instead of a bare row number to count to in a multi-thousand-line sheet.
+- A spreadsheet cell containing a line break no longer corrupts the import: the row used to vanish and be replaced by shifted junk rows, with nothing reported.
+- The daily sync of a saved Google Sheet now says what it did: the entry under Recent Imports lists how many rows it had to skip and how many it imported with a warning (a missing date filled in as today, an amount rounded to cents). Nobody is watching a sync at 8am, so those were previously landing in your books unannounced.
+- Dark mode follows your operating system when you haven't picked a theme yourself, and keeps following it as you switch back and forth.
+- Unknown addresses now show a proper "page not found" screen rather than leaving you on whatever page you were viewing.
+- The Transactions, Dashboard and Budgets pages show placeholder shapes while loading instead of the word "Loading".
 - Danger Zone resets now remove every matching data type without leaving account history, loan details, import logs, category links, or receipt files behind. Profile-specific actions preserve other profiles, while Reset All consistently clears data across all of your profiles.
 - Reset Categories now restores the same defaults in browser-only and cloud modes without leaving transactions or goals linked to deleted categories.
 - Account balance fields now accept either a comma or dot for cents without moving the cursor while you type.
