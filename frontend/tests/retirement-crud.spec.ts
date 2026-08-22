@@ -22,14 +22,25 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await expect(page.getByTestId('add-retirement-goal-btn')).toBeVisible()
   })
 
-  test('should have projection cards section', async ({ page }) => {
-    const projectionCards = page.getByTestId('retirement-projection-row')
-    await expect(projectionCards).toBeVisible({ timeout: 10000 })
+  test('should have an editable assumptions panel', async ({ page }) => {
+    const assumptions = page.getByTestId('retirement-assumptions')
+    await expect(assumptions).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('retirement-input-networth')).toBeEditable()
+    await expect(page.getByTestId('retirement-input-contribution')).toBeEditable()
   })
 
-  test('should have projection details section', async ({ page }) => {
-    const projectionDetails = page.getByTestId('retirement-projection-details')
-    await expect(projectionDetails).toBeVisible({ timeout: 10000 })
+  test('should redraw the projection when an assumption changes', async ({ page }) => {
+    const summary = page.getByTestId('retirement-summary')
+    await expect(summary).toBeVisible({ timeout: 10000 })
+    const before = await summary.textContent()
+
+    await page.getByTestId('retirement-input-contribution').fill('4321')
+    await expect(summary).not.toHaveText(before ?? '')
+  })
+
+  test('should have a card for each lifestyle target', async ({ page }) => {
+    const cards = page.getByTestId('retirement-lifestyle-card')
+    await expect(cards.first()).toBeVisible({ timeout: 10000 })
   })
 
   test('should have goals section', async ({ page }) => {
@@ -303,12 +314,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
     expect(hasEmptyText).toBeFalsy()
   })
 
-  test('should have projection bars section', async ({ page }) => {
-    await page.waitForTimeout(500)
-
-    const projectionBars = page.getByTestId('retirement-projections')
-    const hasBars = await projectionBars.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasBars).toBeTruthy()
+  test('should have a results panel beside the assumptions', async ({ page }) => {
+    await expect(page.getByTestId('retirement-results')).toBeVisible({ timeout: 10000 })
   })
 
   test('should render the projection chart', async ({ page }) => {
@@ -344,11 +351,10 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await navigateToRoute(page, 'retirement')
     await page.waitForTimeout(500)
 
-    const loadingText = page.getByTestId('loading-state')
-    const pageContent = page.getByTestId('retirement-projections')
-    const hasLoading = await loadingText.isVisible({ timeout: 500 }).catch(() => false)
-    const hasContent = await pageContent.isVisible({ timeout: 500 }).catch(() => false)
-    expect(hasLoading || hasContent).toBeTruthy()
+    // Either the placeholder or the panel it becomes; the page never shows neither.
+    await expect(
+      page.getByTestId('loading-state').or(page.getByTestId('retirement-results')).first()
+    ).toBeVisible({ timeout: 10000 })
   })
 
   test('should have responsive goal cards', async ({ page }) => {
@@ -387,8 +393,8 @@ test.describe('Retirement Planning CRUD Operations', () => {
   test('should format currency correctly', async ({ page }) => {
     await page.waitForTimeout(500)
 
-    // The projection details always render formatted money amounts (digits present).
-    const details = page.getByTestId('retirement-projection-details')
+    // The projection summary always renders formatted money amounts (digits present).
+    const details = page.getByTestId('retirement-summary')
     await expect(details).toBeVisible()
     await expect(details).toContainText(/\d/)
   })

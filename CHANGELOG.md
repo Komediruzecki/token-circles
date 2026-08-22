@@ -8,8 +8,17 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The retirement planner is editable.** It never was: the projection came from server defaults — age 30, retire at 65, 500 a month, 7% — and the page asked for them without passing anything, so no control could reach any of it. You were looking at a fixed picture of someone else's retirement. Every assumption is now a field, and the chart redraws as you type.
+- **Simple and advanced.** Simple asks for a contribution, a return, and what you want to retire on. Advanced projects your income and spending separately, so you can plan a pay rise, a job change, a career break, or a few years of higher spending, and work the return out from how your money is actually allocated.
+- **Inflation is a switch, not a footnote.** On, the chart reads in today's money and the target line is flat — the point of reading it that way is that the number you are chasing stops moving. Off, everything is in future money, which flatters it. Your rate is kept either way.
+- **More than one retirement.** Add a lifestyle for each place or way you might retire; each gets its own target and its own date. Retiring somewhere cheaper is a different date, not a different plan.
+- **Your figures, filled in.** Net worth comes from your accounts, income and spending from your transactions, and the retirement target from what you spend now — each labelled with where it came from, so you can see what was a guess and change it.
+
 ### Fixed
 
+- **The projection was compounding wrong, in your favour, by a lot.** Investment gains were kept in a separate pile that never earned anything itself, which is simple interest wearing compound interest's clothes. Over thirty years at 7% on 100,000 it reported about 303,000 where the answer is 761,000. Every projection in the app now agrees, and agrees with the arithmetic.
 - Hovering a disabled button no longer lights it up as though it were clickable.
 
 ## [5.9.1] — 2026-08-22

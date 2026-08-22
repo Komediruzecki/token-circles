@@ -191,6 +191,8 @@ export {
   retirementGoalUpdate,
   retirementGoals,
   retirementProjection,
+  retirementSettingsGet,
+  retirementSettingsUpdate,
 } from './handlers/calculators'
 
 // Receipts

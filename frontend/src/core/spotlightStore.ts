@@ -420,6 +420,13 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
         'Set your current age, target age, monthly contribution, and expected return.'
       ),
       step(
+        'retirement-planner',
+        'retirement',
+        'Your assumptions',
+        'Every figure here is editable, and the chart redraws as you change it. What we could work out from your accounts and transactions is filled in already.',
+        'top'
+      ),
+      step(
         'retirement-goals',
         'retirement',
         'Your retirement goals',

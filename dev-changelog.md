@@ -9,6 +9,72 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `shared/retirement.ts` — a month-by-month projection model with no I/O, run by the Worker
+  and by the browser-only storage layer, replacing three hand-written copies that disagreed
+  with each other and with the chart the page drew from their output. Covers what the old
+  code could not express: inflation as a real/nominal pair rather than a discarded
+  parameter, an opening balance, planned income steps and annual raises, dated expense
+  periods, several lifestyle targets at once, and a return band.
+- `shared/retirementSettings.ts` — the saved shape of the assumptions, its normaliser, and
+  derivation of unset fields from a user's accounts and transactions. The settings row is
+  JSON last written by whatever version of the app saved it, so every field falls back
+  rather than throwing; rates are clamped to a range a projection survives, expense windows
+  that end before they start lose the end rather than silently contributing nothing, and
+  duplicate lifestyle ids are made unique. Normalisation runs before storage as well as
+  after, so the row can only ever hold something the model accepts.
+- `GET`/`PUT /api/retirement/settings` on both runtimes. GET returns the saved assumptions
+  with anything unset derived, plus what was filled and where from, and what could not be
+  answered from the data at all.
+- `frontend/src/features/RetirementPlanner.tsx` — the editable panel. The projection runs
+  in the browser from the shared module, so the chart redraws on every keystroke instead of
+  after a round trip, and still agrees with the server by construction. Only saving is a
+  request.
+
+### Fixed
+
+- Every copy of the projection accumulated interest in a bucket that was never added back
+  to the balance before the next month's return, so gains earned nothing. Over 30 years at
+  7% that is 303k where the answer is 761k. The model is checked against closed-form
+  arithmetic — a lump sum has to land on `pv * (1+r)^n`, level contributions on the annuity
+  future value — which the replaced code fails outright.
+- Annual rates were converted to monthly by dividing by twelve, which overstates the return
+  by roughly 3% of itself at 8% and compounds from there. Now `(1 + r)^(1/12) - 1`
+  everywhere, including `/api/calculators/retirement`.
+- Real returns are netted with Fisher rather than by subtraction: 8.1% against 3.5% is
+  4.44% real, not 4.6%, which is ~11% of the final balance over 40 years.
+- `/api/calculator/retire` reported the balance after twice the projection horizon as
+  "savings at retirement". It now reports the balance at the retirement age.
+- The browser-mode FIRE calculator accepted an `inflationRate` and discarded it. It is
+  passed through.
+- `/api/retirement/projection` had always accepted overrides on the query string; the page
+  called it with none, and had no controls that could have supplied any. The page now owns
+  the inputs.
+
+### Changed
+
+- An income step now sets the salary outright instead of only raising it. It previously
+  applied only when it beat what raises had already produced, so a sabbatical or a career
+  change typed into the field was silently discarded and the chart did not move. Raises
+  compound from whatever the step set, and a step already in force at the start month is
+  the opening income. The spreadsheet fixtures are unaffected -- their steps all increase.
+- `projectRetirement` clamps the horizon at 150 years. No plan reaches it, but
+  `/api/calculator/retire` builds a horizon from a retirement age taken straight from the
+  request body, which could otherwise allocate a row per month without bound.
+- A month still being typed (`2026`) no longer counts as a start date. Comparing it yielded
+  NaN, which fails every comparison, so an expense period quietly applied from the beginning
+  of time while the user was mid-keystroke.
+- "Plan until age" is disabled, with a reason, until a date of birth is set: stopping at an
+  age means nothing without a date to count it from, and the projection ignored the field.
+- The withdrawal-rate hint no longer prints "Infinityx your annual spending" when the field
+  is cleared.
+- The retirement page's chart came from a fourth formula applied to the endpoint's output
+  (`cumulative += annual_contribution * (1 + return/100)^y`), which is neither the
+  endpoint's arithmetic nor correct. The page renders the shared model's own series.
+- Two e2e assertions on the retirement page stop swallowing a slow first paint into a fixed
+  timeout, and retry properly instead.
+
 ### Changed
 
 - **Removed 84 verbatim-duplicated rules from five CSS modules** — 519 lines, all pure deletions: `CategoriesPage` (-43 rules, lines 301-579 duplicated 580-858), `BudgetsPage` (-21), `GoalsPage` (-13), `HousingPage` (-5), `RetirementPage` (-2). Only rules whose selector _and_ whole source span (comments included) were byte-identical were touched, and the last occurrence is the one kept — the copy that already won the cascade, so nothing that sat between the copies changes. A selector repeated with _different_ declarations is a deliberate override and was left alone: `.btn-primary` appears twice in each of these files on purpose, the second time to apply the azure-glass recipe. This supersedes the note in 5.9.1 that the duplication was left for a separate change.

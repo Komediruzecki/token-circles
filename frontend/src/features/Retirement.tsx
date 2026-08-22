@@ -3,7 +3,16 @@
  *
  * GIVEN: A user is viewing the Retirement page
  * WHEN: The page loads
- * THEN: The header displays "Retirement" and shows retirement goals with progress
+ * THEN: The header displays "Retirement" and shows the planner above their goals
+ *
+ * GIVEN: A user wants to change an assumption behind the projection
+ * WHEN: They edit any field in the planner
+ * THEN: The chart and the retirement dates redraw immediately, before anything is saved
+ *
+ * GIVEN: A user has accounts and transactions but has never opened the planner
+ * WHEN: The page loads
+ * THEN: Their net worth, income and spending are filled in from that data, each labelled
+ *       with where it came from
  *
  * GIVEN: A user wants to create a retirement goal
  * WHEN: They click the "Create Goal" button
@@ -12,10 +21,6 @@
  * GIVEN: A user has a retirement goal
  * WHEN: They view the goal card
  * THEN: The progress bar shows current amount toward the target with a percentage
- *
- * GIVEN: A user views the projection
- * WHEN: They have valid retirement goal data
- * THEN: The projection shows projected retirement income and total accumulated wealth
  *
  * GIVEN: A user wants to edit a goal
  * WHEN: They click the edit button on a goal
@@ -28,17 +33,16 @@
 
 /**
  * Retirement Component
- * Tracks retirement savings, calculates projected growth, and sets retirement goals
+ * Retirement goals, and the planner that projects what they add up to.
  */
 import { createSignal, For, onMount } from 'solid-js'
 import Badge from '../components/Badge'
-import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
-import { theme } from '../core/theme'
 import styles from './RetirementPage.module.css'
+import RetirementPlanner from './RetirementPlanner'
 
 interface RetirementGoal {
   id: number
@@ -53,30 +57,9 @@ interface RetirementGoal {
   profile_id: number
 }
 
-interface RetirementProjection {
-  current_age: number
-  retirement_age: number
-  annual_contribution: number
-  expected_return: number
-  years_to_retire: number
-  projected_total: number
-  projected_income: number
-  monthly_income_in_retirement: number
-}
-
-interface ProjectedBalance {
-  age: number
-  balance: number
-  cumulative: number
-  annual_contribution: number
-}
-
 export default function Retirement() {
   const [goals, setGoals] = createSignal<RetirementGoal[]>([])
-  const [projection, setProjection] = createSignal<RetirementProjection | null>(null)
-  const [projectedBalances, setProjectedBalances] = createSignal<ProjectedBalance[]>([])
   const [initialLoad, setInitialLoad] = createSignal(true)
-  const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [editingGoal, setEditingGoal] = createSignal<RetirementGoal | null>(null)
   const [formData, setFormData] = createSignal({
@@ -113,38 +96,6 @@ export default function Retirement() {
       showToast('Failed to load retirement goals', 'error')
     } finally {
       setInitialLoad(false)
-    }
-  }
-
-  // Load projection
-  const loadProjection = async () => {
-    try {
-      const res = await apiGet<RetirementProjection & { current_amount: number }>(
-        '/api/retirement/projection'
-      )
-      setProjection(res)
-
-      // Calculate detailed projection
-      if (res) {
-        const balances: ProjectedBalance[] = []
-        let cumulative = res.current_amount
-        const age = res.current_age
-
-        for (let y = 0; y <= res.years_to_retire; y++) {
-          const year = age + y
-          cumulative += res.annual_contribution * Math.pow(1 + res.expected_return / 100, y)
-          balances.push({
-            age: year,
-            balance: cumulative,
-            cumulative: cumulative,
-            annual_contribution: res.annual_contribution,
-          })
-        }
-        setProjectedBalances(balances)
-      }
-    } catch (err) {
-      console.error('Failed to load projection', err)
-      showToast('Failed to load retirement projection', 'error')
     }
   }
 
@@ -185,7 +136,6 @@ export default function Retirement() {
         retirement_age: '',
       })
       loadGoals()
-      loadProjection()
     } catch (err) {
       console.error('Failed to save retirement goal', err)
       showToast('Failed to save retirement goal', 'error')
@@ -198,7 +148,6 @@ export default function Retirement() {
       await apiDelete(`/api/retirement-goals/${id}`)
       showToast('Goal deleted successfully', 'success')
       loadGoals()
-      loadProjection()
     } catch (err) {
       console.error('Failed to delete retirement goal', err)
       showToast('Failed to delete retirement goal', 'error')
@@ -219,40 +168,6 @@ export default function Retirement() {
       retirement_age: goal.retirement_age.toString(),
     })
     setShowAddModal(true)
-  }
-
-  // Calculate years until retirement
-  const yearsUntil = (): number => {
-    if (!projection()) return 0
-    return projection()!.years_to_retire
-  }
-
-  // Calculate months until retirement
-  const monthsUntil = (): number => {
-    return yearsUntil() * 12
-  }
-
-  // Get total contributed
-  const totalContributed = (): number => {
-    const years = yearsUntil()
-    if (!projection()) return 0
-    return years * projection()!.annual_contribution
-  }
-
-  // Get remaining to save
-  const remainingToSave = (): number => {
-    if (!projection()) return 0
-    return (projection() as any).projected_total - (projection() as any).current_amount
-  }
-
-  // Calculate growth
-  const calculateGrowth = (): number => {
-    if (!projection()) return 0
-    return (
-      (projection() as any).projected_total -
-      (projection() as any).current_amount -
-      totalContributed()
-    )
   }
 
   // Get progress percentage
@@ -290,7 +205,6 @@ export default function Retirement() {
 
   onMount(() => {
     loadGoals()
-    loadProjection()
   })
 
   return (
@@ -320,147 +234,9 @@ export default function Retirement() {
         </p>
       </div>
 
-      {/* Projected Balances Chart */}
-      <OrbitalDivider id="retirement-sec-projections" label="Projected Balances Over Time" />
-      <div class={styles.retirementProjections} data-test-id="retirement-projections">
-        {projection() ? (
-          <div data-test-id="retirement-chart">
-            <Chart
-              id="retirement-projection-chart"
-              type="line"
-              data={{
-                labels: projectedBalances().map((pb) => pb.age.toString()),
-                datasets: [
-                  {
-                    label: 'Projected Balance',
-                    data: projectedBalances().map((pb) => pb.balance),
-                    borderColor: '#59d2a2',
-                    backgroundColor: 'rgba(89, 210, 162, 0.12)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  x: {
-                    title: {
-                      display: true,
-                      text: 'Age',
-                      color: chartColors().text,
-                    },
-                    ticks: {
-                      stepSize: 5,
-                      color: chartColors().text,
-                    },
-                    grid: { color: chartColors().border },
-                  },
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      callback: (value: any) => formatAmount(value),
-                      color: chartColors().text,
-                    },
-                    grid: { color: chartColors().border },
-                  },
-                },
-                plugins: {
-                  legend: {
-                    display: true,
-                    labels: {
-                      usePointStyle: true,
-                      padding: 15,
-                      font: { size: 12 },
-                      color: chartColors().text,
-                    },
-                  },
-                  tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                      label: (context: any) => {
-                        const age = context.label
-                        const balance = formatAmount(context.raw)
-                        return `${age} years: ${balance}`
-                      },
-                    },
-                  },
-                },
-              }}
-              height={250}
-              width="100%"
-            />
-          </div>
-        ) : (
-          <div class={styles.emptyState}>Loading projection...</div>
-        )}
-      </div>
+      <RetirementPlanner />
 
       <div class={styles.retirementContent}>
-        {/* Projection Cards */}
-        <div class={styles.retirementProjection}>
-          {projection() && (
-            <>
-              <div data-test-id="retirement-projection-row" class={styles.projectionRow}>
-                <div class={`${styles.projectionCard} ${styles.primary}`}>
-                  <div class={styles.cardLabel}>Projected Total</div>
-                  <div class={styles.cardValue}>{formatAmount(projection()!.projected_total)}</div>
-                  <div class={styles.cardSub}>At age {projection()!.retirement_age}</div>
-                </div>
-                <div class={styles.projectionCard}>
-                  <div class={styles.cardLabel}>Years to Retire</div>
-                  <div class={styles.cardValue}>{yearsUntil()} years</div>
-                  <div class={styles.cardSub}>{monthsUntil()} months</div>
-                </div>
-                <div class={styles.projectionCard}>
-                  <div class={styles.cardLabel}>Monthly Contribution</div>
-                  <div class={styles.cardValue}>
-                    {formatAmount(projection()!.annual_contribution / 12)}
-                  </div>
-                  <div class={styles.cardSub}>
-                    {formatAmount(projection()!.annual_contribution)}/year
-                  </div>
-                </div>
-                <div class={styles.projectionCard}>
-                  <div class={styles.cardLabel}>Expected Return</div>
-                  <div class={styles.cardValue}>{projection()!.expected_return}%</div>
-                  <div class={styles.cardSub}>Annual average</div>
-                </div>
-              </div>
-              <div data-test-id="retirement-projection-details" class={styles.projectionDetails}>
-                <div class={styles.detailRow}>
-                  <span class={styles.detailLabel}>Current Savings</span>
-                  <span class={styles.detailValue}>
-                    {formatAmount((projection() as any).current_amount)}
-                  </span>
-                </div>
-                <div class={styles.detailRow}>
-                  <span class={styles.detailLabel}>Total Contributions</span>
-                  <span class={styles.detailValue}>{formatAmount(totalContributed())}</span>
-                </div>
-                <div class={styles.detailRow}>
-                  <span class={styles.detailLabel}>Investment Growth</span>
-                  <span class={`${styles.detailValue} ${styles.positive}`}>
-                    {formatAmount(calculateGrowth())}
-                  </span>
-                </div>
-                <div class={styles.detailRow}>
-                  <span class={styles.detailLabel}>Remaining to Save</span>
-                  <span
-                    class={`${styles.detailValue} ${remainingToSave() > 0 ? styles.positive : ''}`}
-                  >
-                    {formatAmount(remainingToSave())}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
         {/* Goals Section */}
         <div
           data-test-id="retirement-goals"

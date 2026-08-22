@@ -1,0 +1,501 @@
+/**
+ * The retirement planner, driven through the real component.
+ *
+ * The bug this page had was not in the arithmetic — it was that nothing on it was
+ * connected to anything. The projection came from server defaults no control could reach,
+ * so the chart was a fixed picture of someone else's retirement. A test that computes a
+ * projection and compares numbers would not have caught that; these mount the panel and
+ * type into it.
+ */
+import { render } from 'solid-js/web'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { projectRetirement } from '../../../../shared/retirement'
+import { DEFAULT_SETTINGS, settingsToInput } from '../../../../shared/retirementSettings'
+import type { RetirementSettings } from '../../../../shared/retirementSettings'
+
+let serverSettings: Partial<RetirementSettings> = {}
+let serverFilled: { field: string; value: number | string; source: string }[] = []
+
+const apiGet = vi.fn(async () => ({
+  settings: { ...DEFAULT_SETTINGS, ...serverSettings },
+  filled: serverFilled,
+  missing: [],
+  startMonth: '2026-01',
+}))
+const apiPut = vi.fn(async (_path: string, body: RetirementSettings) => ({ settings: body }))
+const showToast = vi.fn()
+
+vi.mock('../../core/api', () => ({
+  apiGet: (...args: unknown[]) => apiGet(...(args as [])),
+  apiPut: (...args: unknown[]) => apiPut(...(args as [string, RetirementSettings])),
+  formatCurrency: (n: number) => `EUR ${Math.round(n)}`,
+  showToast: (...args: unknown[]) => showToast(...args),
+}))
+
+// The chart needs a canvas jsdom will not give it. What it was asked to draw is asserted
+// through the captured props instead, which is the part that can actually be wrong.
+// Captured inside an effect, not in the component body: Solid props are getters, and a
+// body-level read would freeze the first render and make every later assertion vacuous.
+let lastChartData: any = null
+vi.mock('../../components/Chart', async () => {
+  const { createEffect } = await import('solid-js')
+  return {
+    default: (props: any) => {
+      createEffect(() => {
+        lastChartData = props.data
+      })
+      return null
+    },
+  }
+})
+
+let host: HTMLDivElement
+let dispose: (() => void) | undefined
+
+const flush = () => new Promise((r) => setTimeout(r, 0))
+
+beforeEach(() => {
+  serverSettings = {}
+  serverFilled = []
+  lastChartData = null
+  apiGet.mockClear()
+  apiPut.mockClear()
+  showToast.mockClear()
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    onchange: null,
+    dispatchEvent: () => false,
+  }))
+  host = document.createElement('div')
+  document.body.appendChild(host)
+})
+
+afterEach(() => {
+  dispose?.()
+  host?.remove()
+  vi.unstubAllGlobals()
+})
+
+async function mountPlanner() {
+  const { default: RetirementPlanner } = await import('../RetirementPlanner')
+  dispose = render(() => <RetirementPlanner />, host)
+  await flush()
+  await flush()
+  return host
+}
+
+function byTestId(root: HTMLElement, id: string): HTMLElement | null {
+  return root.querySelector(`[data-test-id="${id}"]`)
+}
+
+function inputByTestId(root: HTMLElement, id: string): HTMLInputElement | null {
+  return root.querySelector(`[data-test-id="${id}"]`)
+}
+
+function buttonByTestId(root: HTMLElement, id: string): HTMLButtonElement | null {
+  return root.querySelector(`[data-test-id="${id}"]`)
+}
+
+const byTestIdAll = (root: HTMLElement, id: string) => [
+  ...root.querySelectorAll<HTMLElement>(`[data-test-id="${id}"]`),
+]
+
+/** Type into a control the way a person does: set the value, then fire input. */
+async function type(input: HTMLInputElement, value: string) {
+  input.value = value
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await flush()
+}
+
+async function check(input: HTMLInputElement, checked: boolean) {
+  input.checked = checked
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  await flush()
+}
+
+/** The net-worth series the chart was last handed. */
+const netWorthSeries = (): number[] => lastChartData.datasets[0].data
+
+describe('loading', () => {
+  it('shows the saved assumptions in the controls', async () => {
+    serverSettings = { netWorth: 66931.42, monthlyContribution: 1200, annualReturnPct: 5.78 }
+    const root = await mountPlanner()
+
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('66931.42')
+    expect(inputByTestId(root, 'retirement-input-contribution')!.value).toBe('1200')
+    expect(inputByTestId(root, 'retirement-input-return')!.value).toBe('5.78')
+  })
+
+  it('says which figures came from the user data and where from', async () => {
+    serverFilled = [
+      { field: 'netWorth', value: 66931.42, source: 'Total of your accounts' },
+      { field: 'monthlyExpenses', value: 2400, source: '14 months of transactions' },
+    ]
+    const root = await mountPlanner()
+
+    const note = byTestId(root, 'retirement-derived-note')
+    expect(note).not.toBeNull()
+    expect(note!.textContent).toContain('Current net worth')
+    expect(note!.textContent).toContain('Total of your accounts')
+    expect(note!.textContent).toContain('14 months of transactions')
+  })
+
+  it('says nothing when there was nothing to fill in', async () => {
+    const root = await mountPlanner()
+    expect(byTestId(root, 'retirement-derived-note')).toBeNull()
+  })
+})
+
+describe('editing', () => {
+  it('redraws the projection as the contribution is typed, before anything is saved', async () => {
+    serverSettings = { netWorth: 10000, monthlyContribution: 500, annualReturnPct: 7 }
+    const root = await mountPlanner()
+
+    const before = netWorthSeries()
+    await type(inputByTestId(root, 'retirement-input-contribution')!, '2000')
+    const after = netWorthSeries()
+
+    expect(after[after.length - 1]).toBeGreaterThan(before[before.length - 1])
+    expect(apiPut).not.toHaveBeenCalled()
+  })
+
+  it('redraws when the opening balance changes', async () => {
+    serverSettings = { netWorth: 10000, monthlyContribution: 0, annualReturnPct: 7 }
+    const root = await mountPlanner()
+
+    await type(inputByTestId(root, 'retirement-input-networth')!, '100000')
+    expect(netWorthSeries()[0]).toBeCloseTo(100000, 6)
+  })
+
+  it('redraws when the expected return changes', async () => {
+    serverSettings = { netWorth: 100000, monthlyContribution: 0, annualReturnPct: 5 }
+    const root = await mountPlanner()
+
+    const slower = netWorthSeries()
+    await type(inputByTestId(root, 'retirement-input-return')!, '9')
+    const faster = netWorthSeries()
+    expect(faster[faster.length - 1]).toBeGreaterThan(slower[slower.length - 1])
+  })
+
+  it('moves the retirement date when the target lifestyle gets cheaper', async () => {
+    serverSettings = {
+      netWorth: 200000,
+      monthlyContribution: 2000,
+      annualReturnPct: 7,
+      birthMonth: '1994-01',
+      lifestyles: [{ id: 'a', label: 'Zagreb', monthlySpendToday: 3000 }],
+    }
+    const root = await mountPlanner()
+
+    const expensive = byTestId(root, 'retirement-crossing')!.textContent
+    const spendInput = [...host.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.getAttribute('aria-label') === "Monthly spending in today's money"
+    )!
+    await type(spendInput, '1200')
+    const cheap = byTestId(root, 'retirement-crossing')!.textContent
+
+    expect(cheap).not.toBe(expensive)
+    expect(cheap).toMatch(/^Age \d+/)
+  })
+
+  it('shows a card per lifestyle, each with its own target', async () => {
+    serverSettings = {
+      netWorth: 300000,
+      monthlyContribution: 2000,
+      annualReturnPct: 7,
+      safeWithdrawalRatePct: 4,
+      lifestyles: [
+        { id: 'zg', label: 'Zagreb', monthlySpendToday: 1500 },
+        { id: 'zh', label: 'Zurich', monthlySpendToday: 4000 },
+      ],
+    }
+    const root = await mountPlanner()
+
+    const cards = byTestIdAll(root, 'retirement-lifestyle-card')
+    expect(cards).toHaveLength(2)
+    expect(cards[0].textContent).toContain('Zagreb')
+    expect(cards[0].textContent).toContain('EUR 450000')
+    expect(cards[1].textContent).toContain('Zurich')
+    expect(cards[1].textContent).toContain('EUR 1200000')
+  })
+
+  it('adds and removes a lifestyle', async () => {
+    const root = await mountPlanner()
+    expect(byTestIdAll(root, 'retirement-lifestyle-card')).toHaveLength(1)
+
+    buttonByTestId(root, 'retirement-add-lifestyle')!.click()
+    await flush()
+    expect(byTestIdAll(root, 'retirement-lifestyle-card')).toHaveLength(2)
+
+    const remove = [...host.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (b) => b.getAttribute('aria-label') === 'Remove lifestyle'
+    )
+    remove[1].click()
+    await flush()
+    expect(byTestIdAll(root, 'retirement-lifestyle-card')).toHaveLength(1)
+  })
+
+  it('will not let the last lifestyle be removed, leaving nothing to aim at', async () => {
+    await mountPlanner()
+    const remove = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Remove lifestyle'
+    )!
+    expect(remove.disabled).toBe(true)
+  })
+})
+
+describe('modes', () => {
+  it('starts in whichever mode was saved', async () => {
+    serverSettings = { mode: 'advanced' }
+    const root = await mountPlanner()
+    expect(byTestId(root, 'retirement-input-income')).not.toBeNull()
+    expect(byTestId(root, 'retirement-input-contribution')).toBeNull()
+  })
+
+  it('swaps the single contribution for income and spending', async () => {
+    const root = await mountPlanner()
+    expect(byTestId(root, 'retirement-input-contribution')).not.toBeNull()
+    expect(byTestId(root, 'retirement-input-income')).toBeNull()
+
+    buttonByTestId(root, 'retirement-mode-advanced')!.click()
+    await flush()
+
+    expect(byTestId(root, 'retirement-input-contribution')).toBeNull()
+    expect(byTestId(root, 'retirement-input-income')).not.toBeNull()
+    expect(byTestId(root, 'retirement-input-expenses')).not.toBeNull()
+    expect(byTestId(root, 'retirement-input-raise')).not.toBeNull()
+  })
+
+  it('only offers pay steps and spending periods in advanced mode', async () => {
+    const root = await mountPlanner()
+    expect(byTestId(root, 'retirement-income-steps')).toBeNull()
+
+    buttonByTestId(root, 'retirement-mode-advanced')!.click()
+    await flush()
+    expect(byTestId(root, 'retirement-income-steps')).not.toBeNull()
+    expect(byTestId(root, 'retirement-expense-periods')).not.toBeNull()
+  })
+
+  it('adds a pay step that changes the projection', async () => {
+    serverSettings = {
+      mode: 'advanced',
+      netWorth: 0,
+      monthlyIncome: 3000,
+      monthlyExpenses: 2000,
+      annualReturnPct: 6,
+    }
+    const root = await mountPlanner()
+    const before = netWorthSeries()
+
+    buttonByTestId(root, 'retirement-add-step')!.click()
+    await flush()
+    const stepAmount = [...host.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.getAttribute('aria-label') === 'Monthly income from then'
+    )!
+    await type(stepAmount, '8000')
+
+    const after = netWorthSeries()
+    expect(after[after.length - 1]).toBeGreaterThan(before[before.length - 1])
+  })
+})
+
+describe('inflation', () => {
+  it('collapses the real reading onto the nominal one when switched off', async () => {
+    serverSettings = {
+      netWorth: 100000,
+      monthlyContribution: 0,
+      annualReturnPct: 6,
+      annualInflationPct: 3,
+      adjustForInflation: true,
+    }
+    const root = await mountPlanner()
+
+    const real = netWorthSeries()
+    const toggle = byTestId(root, 'retirement-toggle-inflation')!.querySelector('input')!
+    await check(toggle, false)
+    const nominal = netWorthSeries()
+
+    expect(nominal[nominal.length - 1]).toBeGreaterThan(real[real.length - 1])
+    // The rate is kept, so switching back restores the assumption rather than a default.
+    expect(inputByTestId(root, 'retirement-input-inflation')!.value).toBe('3')
+  })
+
+  it("switches the chart between today's money and future money", async () => {
+    serverSettings = {
+      netWorth: 100000,
+      monthlyContribution: 0,
+      annualReturnPct: 6,
+      annualInflationPct: 3,
+    }
+    const root = await mountPlanner()
+
+    expect(lastChartData.datasets[0].label).toContain("today's money")
+    const todays = netWorthSeries()
+
+    const toggle = byTestId(root, 'retirement-toggle-nominal')!.querySelector('input')!
+    await check(toggle, true)
+
+    expect(lastChartData.datasets[0].label).not.toContain("today's money")
+    expect(netWorthSeries()[10]).toBeGreaterThan(todays[10])
+  })
+
+  it("draws a flat target in today's money and a rising one in future money", async () => {
+    serverSettings = {
+      annualInflationPct: 3,
+      lifestyles: [{ id: 'a', label: 'A', monthlySpendToday: 2000 }],
+    }
+    const root = await mountPlanner()
+
+    const flat = lastChartData.datasets[lastChartData.datasets.length - 1].data
+    expect(flat[0]).toBeCloseTo(flat[flat.length - 1], 6)
+
+    await check(byTestId(root, 'retirement-toggle-nominal')!.querySelector('input')!, true)
+    const rising = lastChartData.datasets[lastChartData.datasets.length - 1].data
+    expect(rising[rising.length - 1]).toBeGreaterThan(rising[0])
+  })
+})
+
+describe('the return band', () => {
+  it('adds a better and a worse line either side of the plan', async () => {
+    const root = await mountPlanner()
+    const plain = lastChartData.datasets.length
+
+    await check(byTestId(root, 'retirement-toggle-band')!.querySelector('input')!, true)
+    expect(lastChartData.datasets.length).toBe(plain + 2)
+
+    const [worse, better] = lastChartData.datasets.slice(1, 3)
+    const last = (d: any) => d.data[d.data.length - 1]
+    expect(last(worse)).toBeLessThan(last(lastChartData.datasets[0]))
+    expect(last(better)).toBeGreaterThan(last(lastChartData.datasets[0]))
+  })
+})
+
+describe('saving', () => {
+  it('will not offer to save until something has changed', async () => {
+    const root = await mountPlanner()
+    const button = buttonByTestId(root, 'retirement-save-settings')!
+    expect(button.disabled).toBe(true)
+
+    await type(inputByTestId(root, 'retirement-input-networth')!, '1234')
+    expect(button.disabled).toBe(false)
+  })
+
+  it('sends what is on screen and confirms', async () => {
+    const root = await mountPlanner()
+
+    await type(inputByTestId(root, 'retirement-input-networth')!, '54321')
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    await flush()
+
+    expect(apiPut).toHaveBeenCalledTimes(1)
+    const [path, body] = apiPut.mock.calls[0]
+    expect(path).toBe('/api/retirement/settings')
+    expect(body.netWorth).toBe(54321)
+    expect(showToast).toHaveBeenCalledWith('Retirement assumptions saved', 'success')
+    expect(buttonByTestId(root, 'retirement-save-settings')!.disabled).toBe(true)
+  })
+
+  it('says so and stays editable when the save fails', async () => {
+    apiPut.mockRejectedValueOnce(new Error('offline'))
+    const root = await mountPlanner()
+
+    await type(inputByTestId(root, 'retirement-input-networth')!, '54321')
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    await flush()
+
+    expect(showToast).toHaveBeenCalledWith('Failed to save your retirement assumptions', 'error')
+    expect(buttonByTestId(root, 'retirement-save-settings')!.disabled).toBe(false)
+  })
+
+  it('keeps working when the settings cannot be loaded at all', async () => {
+    apiGet.mockRejectedValueOnce(new Error('offline'))
+    const root = await mountPlanner()
+
+    expect(showToast).toHaveBeenCalledWith('Failed to load your retirement assumptions', 'error')
+    expect(byTestId(root, 'retirement-assumptions')).not.toBeNull()
+  })
+})
+
+describe('the chart and the model agree', () => {
+  it('plots exactly what the shared model returns for the settings on screen', async () => {
+    serverSettings = {
+      netWorth: 50000,
+      monthlyContribution: 900,
+      annualReturnPct: 7,
+      annualInflationPct: 2.5,
+      birthMonth: '1994-01',
+      lifeExpectancyAge: 90,
+    }
+    const root = await mountPlanner()
+
+    const expected = projectRetirement(
+      settingsToInput({ ...DEFAULT_SETTINGS, ...serverSettings } as RetirementSettings, '2026-01')
+    )
+    const yearlyReal = expected.rows.filter((_, i) => i % 12 === 0).map((r) => r.netWorthReal)
+
+    expect(netWorthSeries()).toHaveLength(yearlyReal.length)
+    expect(netWorthSeries()[0]).toBeCloseTo(yearlyReal[0], 6)
+    expect(netWorthSeries()[20]).toBeCloseTo(yearlyReal[20], 6)
+    expect(lastChartData.labels[0]).toBe('32')
+    expect(byTestId(root, 'retirement-summary')!.textContent).toContain('Investment growth')
+  })
+})
+
+describe('controls that cannot do anything say so', () => {
+  it('disables "plan until age" until there is a date of birth to count from', async () => {
+    const root = await mountPlanner()
+    expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(true)
+    expect(byTestId(root, 'retirement-life-needs-birth')!.textContent).toContain('date of birth')
+
+    await type(inputByTestId(root, 'retirement-input-birth')!, '1994-01')
+    expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(false)
+    expect(byTestId(root, 'retirement-life-needs-birth')).toBeNull()
+  })
+
+  it('shortens the projection once an age can be counted to', async () => {
+    serverSettings = { birthMonth: '1994-01', lifeExpectancyAge: 70 }
+    const root = await mountPlanner()
+    const short = netWorthSeries().length
+
+    await type(inputByTestId(root, 'retirement-input-life')!, '95')
+    expect(netWorthSeries().length).toBeGreaterThan(short)
+  })
+
+  it('does not print an infinite multiple when the withdrawal rate is cleared', async () => {
+    const root = await mountPlanner()
+    await type(inputByTestId(root, 'retirement-input-swr')!, '')
+    expect(byTestId(root, 'retirement-assumptions')!.textContent).not.toContain('Infinity')
+  })
+})
+
+describe('a pay step the user typed is the pay they get', () => {
+  it('projects a pay cut rather than ignoring it', async () => {
+    serverSettings = {
+      mode: 'advanced',
+      netWorth: 0,
+      monthlyIncome: 5000,
+      monthlyExpenses: 2000,
+      annualRaisePct: 5,
+      annualReturnPct: 6,
+    }
+    const root = await mountPlanner()
+    const before = netWorthSeries()
+
+    buttonByTestId(root, 'retirement-add-step')!.click()
+    await flush()
+    const stepAmount = [...host.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.getAttribute('aria-label') === 'Monthly income from then'
+    )!
+    await type(stepAmount, '1500')
+
+    const after = netWorthSeries()
+    expect(after[after.length - 1]).toBeLessThan(before[before.length - 1])
+  })
+})

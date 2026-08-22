@@ -1,119 +1,119 @@
-import { Hono } from 'hono'
-import type { AppEnv } from '../index'
-import { requireAuth } from '../auth'
-import { getProfileId, getProfileIds } from '../profile'
-import { HttpError } from '../http'
-import * as db from '../db'
+import { Hono } from 'hono';
+import type { Context } from 'hono';
+import type { AppEnv } from '../index';
+import { requireAuth } from '../auth';
+import { getProfileId, getProfileIds } from '../profile';
+import { HttpError } from '../http';
+import * as db from '../db';
+import { normalizedTransactionAmountSql } from '../transaction-amount';
+import { projectRetirement } from '../../../shared/retirement';
+import {
+  buildFacts,
+  deriveSettings,
+  monthOf,
+  normalizeSettings,
+  settingsToInput,
+} from '../../../shared/retirementSettings';
+import type { CashflowRow, RetirementSettings } from '../../../shared/retirementSettings';
 
 // Port of the retirement-GOALS CRUD from backend/routes/retirement.js +
-// backend/repositories/retirementGoalsRepo.js. The projection / FIRE calculator
-// endpoints (calculateRetirementProjection, /api/calculator/retire) are pure
-// math, ported faithfully at the bottom of this file.
-export const retirementGoalsRoutes = new Hono<AppEnv>()
+// backend/repositories/retirementGoalsRepo.js. The projection itself is not ported
+// any more: it comes from shared/retirement.ts, which the browser-only storage layer
+// runs too, so the two stop giving different answers to the same question.
+export const retirementGoalsRoutes = new Hono<AppEnv>();
 
-// Retirement projection — ported verbatim from backend/utils.js
-// (calculateRetirementProjection). Pure math; the `settings`/`database`/`profileId`
-// args are accepted to mirror the signature but are unused by the calculation.
-function calculateRetirementProjection(
-  currentAge = 30,
-  retirementAge = 65,
-  currentSavings = 0,
-  monthlyContribution = 500,
-  annualReturn = 7,
-  withdrawalRate = 4,
-  country = 'US'
-) {
-  const monthsToRetirement = (retirementAge - currentAge) * 12
-  const annualContribution = monthlyContribution * 12
-  const countryAdjustment = country === 'US' ? 1.0 : 0.9
-  const monthlyExpenses = (currentAge >= retirementAge ? 0 : 2500) * countryAdjustment
-  const adjustedExpenses = country === 'US' && currentAge >= retirementAge ? 2500 : monthlyExpenses
-  const annualWithdrawal = adjustedExpenses * 12
+const SETTINGS_KEY = 'retirement_settings';
 
-  let savings = currentSavings
-  let investmentGains = 0
-  let balance = savings
+// Twelve months is enough to average out a bonus and a holiday without reaching back
+// into a job the user has since left.
+const FACT_WINDOW_MONTHS = 12;
 
-  for (let i = 1; i <= monthsToRetirement; i++) {
-    const monthlyReturn = annualReturn / 100 / 12
-    investmentGains += savings * monthlyReturn
-    savings += monthlyContribution
-    balance = savings + investmentGains
+async function loadSettings(c: Context<AppEnv>): Promise<RetirementSettings> {
+  const pid = await getProfileId(c);
+  const row = await db.first<{ value: string }>(
+    c.env.DB,
+    'SELECT value FROM settings WHERE key = ? AND profile_id = ?',
+    SETTINGS_KEY,
+    pid
+  );
+  if (!row) return normalizeSettings({});
+  try {
+    return normalizeSettings(JSON.parse(row.value));
+  } catch {
+    // A row that will not parse is a row written by something that is not this app.
+    // Defaults are a better answer than a 500 on a page the user just opened.
+    return normalizeSettings({});
   }
+}
 
-  let retirementSavings = balance
-  let yearsInRetirement = 0
-  let balanceAtYearEnd = retirementSavings
-  let finalBalance = retirementSavings
+/**
+ * What the app can observe about this user: what their accounts hold, what has moved
+ * through them lately, and any age they have already told a retirement goal.
+ */
+async function loadFacts(c: Context<AppEnv>) {
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
 
-  while (retirementSavings > 0 && yearsInRetirement < 50) {
-    retirementSavings -= annualWithdrawal
-    const annualReturnReal = (annualReturn - 3) / 100
-    retirementSavings *= 1 + annualReturnReal
-    yearsInRetirement++
-    balanceAtYearEnd = Math.max(0, retirementSavings)
-    finalBalance = balanceAtYearEnd
-  }
+  const since = new Date();
+  since.setUTCMonth(since.getUTCMonth() - FACT_WINDOW_MONTHS);
+  const sinceStr = since.toISOString().split('T')[0];
 
-  const shortfall = balanceAtYearEnd < 0 ? Math.abs(balanceAtYearEnd) : 0
-  const yearsOfRunway = Math.round(retirementSavings / (annualWithdrawal / 12))
+  const [accounts, cashflow, goal] = await Promise.all([
+    db.all<{ balance: number }>(
+      c.env.DB,
+      `SELECT balance FROM accounts WHERE profile_id IN (${inClause})`,
+      ...pids
+    ),
+    db.all<CashflowRow>(
+      c.env.DB,
+      `SELECT date, ${normalizedTransactionAmountSql()} AS amount, type FROM transactions
+       WHERE profile_id IN (${inClause}) AND type IN ('income', 'expense') AND date >= ?`,
+      ...pids,
+      sinceStr
+    ),
+    db.first<{ current_age: number }>(
+      c.env.DB,
+      `SELECT current_age FROM retirement_goals WHERE profile_id IN (${inClause})
+       ORDER BY created_at DESC LIMIT 1`,
+      ...pids
+    ),
+  ]);
 
-  return {
-    currentAge,
-    retirementAge,
-    currentSavings: Math.round(currentSavings),
-    monthlyContribution: Math.round(monthlyContribution),
-    annualReturn: Math.round(annualReturn),
-    withdrawalRate: Math.round(withdrawalRate),
-    country,
-    expensesAtRetirement: Math.round(annualWithdrawal),
-    retirementSavings: Math.round(retirementSavings),
-    retirementAgeActual: retirementAge + yearsInRetirement,
-    yearsInRetirement,
-    balanceAtRetirement: Math.round(balance),
-    finalBalance: Math.round(finalBalance),
-    shortfall,
-    yearsOfRunway,
-    current_age: currentAge,
-    retirement_age: retirementAge,
-    current_amount: Math.round(currentSavings),
-    annual_contribution: Math.round(annualContribution),
-    expected_return: Math.round(annualReturn),
-    withdrawal_rate: Math.round(withdrawalRate),
-    years_to_retire: retirementAge - currentAge,
-    projected_total: Math.round(balance),
-    projected_income: Math.round(balance > 0 ? balance * 0.04 : 0),
-    monthly_income_in_retirement: Math.round(balance > 0 ? (balance * 0.04) / 12 : 0),
-  }
+  return buildFacts({
+    accountBalances: accounts.map((a) => a.balance),
+    cashflow,
+    currentAge: goal?.current_age ?? null,
+  });
 }
 
 // List goals + the saved retirement_settings blob (aggregating read across
 // profiles -> getProfileIds; settings keyed off the first profile, as upstream).
 retirementGoalsRoutes.get('/api/retirement-goals', requireAuth, async (c) => {
-  const pids = await getProfileIds(c)
-  const inClause = pids.map(() => '?').join(',')
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const rows = await db.all(
     c.env.DB,
     `SELECT * FROM retirement_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC`,
     ...pids
-  )
+  );
   const settings = await db.first<{ value: string }>(
     c.env.DB,
     'SELECT * FROM settings WHERE key = ? AND profile_id = ?',
     'retirement_settings',
     pids[0]
-  )
+  );
   return c.json({
     goals: rows,
     settings: settings ? JSON.parse(settings.value) : {},
-  })
-})
+  });
+});
 
 retirementGoalsRoutes.post('/api/retirement-goals', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const b = (await c.req.json()) as Record<string, any>
-  const dl = b.deadline || b.target_date || null
-  if (!b.name || b.target_amount == null) throw new HttpError(400, 'Name and target amount are required')
+  const pid = await getProfileId(c);
+  const b = (await c.req.json()) as Record<string, any>;
+  const dl = b.deadline || b.target_date || null;
+  if (!b.name || b.target_amount == null)
+    throw new HttpError(400, 'Name and target amount are required');
   const res = await db.insert(c.env.DB, 'retirement_goals', {
     profile_id: pid,
     name: b.name,
@@ -125,7 +125,7 @@ retirementGoalsRoutes.post('/api/retirement-goals', requireAuth, async (c) => {
     retirement_age: b.retirement_age || 65,
     monthly_contribution: b.monthly_contribution || 0,
     expected_return_rate: b.expected_return_rate || 7,
-  })
+  });
   return c.json({
     id: res.meta.last_row_id,
     name: b.name,
@@ -134,13 +134,13 @@ retirementGoalsRoutes.post('/api/retirement-goals', requireAuth, async (c) => {
     deadline: dl,
     notes: b.notes,
     profile_id: pid,
-  })
-})
+  });
+});
 
 retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const b = (await c.req.json()) as Record<string, any>
-  const dl = b.deadline || b.target_date || null
+  const pid = await getProfileId(c);
+  const b = (await c.req.json()) as Record<string, any>;
+  const dl = b.deadline || b.target_date || null;
   const res = await db.update(
     c.env.DB,
     'retirement_goals',
@@ -158,22 +158,29 @@ retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) =>
     'id = ? AND profile_id = ?',
     c.req.param('id'),
     pid
-  )
-  if (!res.meta.changes) throw new HttpError(404, 'Not found')
-  return c.json({ ok: true })
-})
+  );
+  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  return c.json({ ok: true });
+});
 
 retirementGoalsRoutes.delete('/api/retirement-goals/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const res = await db.del(c.env.DB, 'retirement_goals', 'id = ? AND profile_id = ?', c.req.param('id'), pid)
-  if (!res.meta.changes) throw new HttpError(404, 'Not found')
-  return c.json({ ok: true })
-})
+  const pid = await getProfileId(c);
+  const res = await db.del(
+    c.env.DB,
+    'retirement_goals',
+    'id = ? AND profile_id = ?',
+    c.req.param('id'),
+    pid
+  );
+  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  return c.json({ ok: true });
+});
 
-// FIRE calculator — pure-math projection (timelines, scenarios, withdrawal phase).
-// Ported from backend/routes/retirement.js (POST /api/calculator/retire).
+// FIRE calculator — the accumulation phase comes from the shared model; only the
+// drawdown loop below is specific to this endpoint. Ported from
+// backend/routes/retirement.js (POST /api/calculator/retire).
 retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
-  const b = (await c.req.json()) as Record<string, any>
+  const b = (await c.req.json()) as Record<string, any>;
   const {
     currentAge = 30,
     retirementAge = 65,
@@ -184,7 +191,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
     withdrawalRate = 4,
     expensesAtRetirement = null,
     country = '',
-  } = b
+  } = b;
 
   // Use direct expenses at retirement if provided, otherwise apply country cost-of-living adjustment
   const colMultipliers: Record<string, number> = {
@@ -193,55 +200,59 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
     switzerland: 1.3,
     croatia: 0.6,
     japan: 0.85,
-  }
-  const col = colMultipliers[country] || 1.0
-  const adjustedExpenses = expensesAtRetirement !== null ? expensesAtRetirement : annualExpenses * col
+  };
+  const col = colMultipliers[country] || 1.0;
+  const adjustedExpenses =
+    expensesAtRetirement !== null ? expensesAtRetirement : annualExpenses * col;
 
-  // FIRE number: how much needed to retire (25x rule, or 100 / withdrawalRate)
-  const fireNumber = adjustedExpenses / (withdrawalRate / 100)
+  const monthsToRetirement = (retirementAge - currentAge) * 12;
+  if (monthsToRetirement <= 0)
+    throw new HttpError(400, 'Retirement age must be greater than current age');
 
-  // Project savings until retirement
-  const monthsToRetirement = (retirementAge - currentAge) * 12
-  if (monthsToRetirement <= 0) throw new HttpError(400, 'Retirement age must be greater than current age')
-  const monthlyReturn = annualReturn / 100 / 12
+  const today = monthOf(new Date());
+  const accumulate = (returnPct: number, horizonMonths: number) =>
+    projectRetirement({
+      startMonth: today,
+      netWorth: currentSavings,
+      monthlyIncome: monthlyContribution,
+      monthlyExpenses: 0,
+      annualReturnPct: returnPct,
+      // This endpoint has no inflation input, so it projects in nominal money throughout.
+      annualInflationPct: 0,
+      horizonMonths,
+      safeWithdrawalRatePct: withdrawalRate,
+      lifestyles: [{ id: 'fire', label: 'FIRE', monthlySpendToday: adjustedExpenses / 12 }],
+    });
 
-  let savings = currentSavings
-  const timeline: Array<{ year: number; age: number; savings: number }> = []
-  for (let m = 0; m <= monthsToRetirement; m++) {
-    if (m % 12 === 0) {
-      timeline.push({
-        year: currentAge + m / 12,
-        age: Math.round(currentAge + m / 12),
-        savings: Math.round(savings),
-      })
-    }
-    savings = savings * (1 + monthlyReturn) + monthlyContribution
-  }
+  // Twice the horizon, so a plan that misses the chosen retirement age still reports the
+  // age it would have worked at rather than reporting nothing.
+  const projection = accumulate(annualReturn, monthsToRetirement * 2);
+  const fireNumber = projection.lifestyles[0].targetToday;
+  const crossing = projection.lifestyles[0].crossing;
+  const fireMonth = crossing ? crossing.index : null;
+  const fireAge = crossing ? currentAge + crossing.index / 12 : null;
+  const savingsAtRetirement = projection.rows[monthsToRetirement].netWorth;
 
-  // FIRE date: find first month where savings >= fireNumber
-  let fireMonth: number | null = null
-  let fireAge: number | null = null
-  savings = currentSavings
-  for (let m = 1; m <= monthsToRetirement * 2; m++) {
-    savings = savings * (1 + monthlyReturn) + monthlyContribution
-    if (savings >= fireNumber && fireMonth === null) {
-      fireMonth = m
-      fireAge = currentAge + m / 12
-    }
-  }
+  const timeline = projection.rows
+    .filter((r) => r.index <= monthsToRetirement && r.index % 12 === 0)
+    .map((r) => ({
+      year: currentAge + r.index / 12,
+      age: Math.round(currentAge + r.index / 12),
+      savings: Math.round(r.netWorth),
+    }));
 
-  // Withdrawal phase projection (20 years)
-  let retirementSavings = savings
-  const withdrawalTimeline: Array<{ year: number; savings: number; balance: number }> = []
+  // Drawdown is a different phase from accumulation — annual withdrawals, no contributions —
+  // so it stays an explicit loop here rather than being forced through the model.
+  const withdrawalTimeline: Array<{ year: number; savings: number; balance: number }> = [];
   if (fireMonth !== null) {
-    const annualWithdrawal = adjustedExpenses
+    let remaining = savingsAtRetirement;
     for (let y = 0; y < 20; y++) {
-      retirementSavings = retirementSavings * (1 + annualReturn / 100) - annualWithdrawal
+      remaining = remaining * (1 + annualReturn / 100) - adjustedExpenses;
       withdrawalTimeline.push({
         year: y + 1,
-        savings: Math.max(0, Math.round(retirementSavings)),
-        balance: Math.max(0, Math.round(retirementSavings)),
-      })
+        savings: Math.max(0, Math.round(remaining)),
+        balance: Math.max(0, Math.round(remaining)),
+      });
     }
   }
 
@@ -250,32 +261,28 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
     fireAge: fireAge ? Math.round(fireAge * 10) / 10 : null,
     fireMonth,
     fireYear: fireAge ? Math.floor(fireAge) : null,
-    savingsAtRetirement: Math.round(savings),
+    savingsAtRetirement: Math.round(savingsAtRetirement),
     monthsToFire: fireMonth,
-    currentNWAtFire: Math.round(savings),
+    currentNWAtFire: Math.round(savingsAtRetirement),
     traditionalRetirementAge: 65,
     timeline: timeline.filter((t) => t.year % 5 === 0 || t.year === currentAge),
     withdrawalTimeline,
     scenarios: [
-      { name: 'Conservative', return: 4, fireNumber: Math.round(adjustedExpenses / 0.04), fireAge: null as number | null },
-      { name: 'Moderate', return: 6, fireNumber: Math.round(adjustedExpenses / 0.06), fireAge: null as number | null },
-      { name: 'Optimistic', return: 8, fireNumber: Math.round(adjustedExpenses / 0.08), fireAge: null as number | null },
+      { name: 'Conservative', return: 4 },
+      { name: 'Moderate', return: 6 },
+      { name: 'Optimistic', return: 8 },
     ].map((s) => {
-      let m = currentSavings
-      let fa: number | null = null
-      for (let mo = 1; mo <= monthsToRetirement * 2; mo++) {
-        m = m * (1 + s.return / 100 / 12) + monthlyContribution
-        if (m >= s.fireNumber && fa === null) {
-          fa = currentAge + mo / 12
-        }
-      }
+      const run = accumulate(s.return, monthsToRetirement * 2);
+      const hit = run.lifestyles[0].crossing;
+      const fa = hit ? currentAge + hit.index / 12 : null;
       return {
         ...s,
+        fireNumber: Math.round(run.lifestyles[0].targetToday),
         fireAge: fa ? Math.round(fa * 10) / 10 : null,
         reached: fa !== null,
-        savingsAtFire: Math.round(m),
-        shortfall: fa === null ? s.fireNumber - Math.round(m) : 0,
-      }
+        savingsAtFire: Math.round(run.finalNetWorth),
+        shortfall: fa === null ? Math.round(run.lifestyles[0].targetToday - run.finalNetWorth) : 0,
+      };
     }),
     inputs: {
       currentAge,
@@ -288,28 +295,40 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
       country,
       expensesAtRetirement,
     },
-  })
-})
+  });
+});
 
-// Retirement projection — wraps calculateRetirementProjection (ported above).
-// Reads the saved retirement_goals settings blob (mirrors backend, though the
-// calc itself ignores it) and the per-request overrides from the query string.
+// The assumptions behind the projection, with anything the user has not set filled in
+// from their own accounts and transactions. `filled` says what was taken and where from,
+// so the page can show its working instead of passing guesses off as entered figures.
+retirementGoalsRoutes.get('/api/retirement/settings', requireAuth, async (c) => {
+  const [saved, facts] = await Promise.all([loadSettings(c), loadFacts(c)]);
+  const { settings, filled, missing } = deriveSettings(saved, facts, monthOf(new Date()));
+  return c.json({ settings, facts, filled, missing, startMonth: monthOf(new Date()) });
+});
+
+retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => {
+  const pid = await getProfileId(c);
+  // Normalised before storage, so the row can only ever hold something the model accepts —
+  // whatever the client sent, and whatever an older client sends later.
+  const settings = normalizeSettings(await c.req.json());
+  await db.run(
+    c.env.DB,
+    'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)',
+    SETTINGS_KEY,
+    JSON.stringify(settings),
+    pid
+  );
+  return c.json({ settings });
+});
+
+// The projection itself. The page computes this in the browser from the same shared
+// module for instant feedback while editing; this endpoint answers for anything that
+// cannot, and is the reason the two can be checked against each other at all.
 retirementGoalsRoutes.get('/api/retirement/projection', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const q = (k: string) => c.req.query(k)
-
-  // Loaded to mirror the backend read; calculateRetirementProjection does not use it.
-  await db.first(c.env.DB, 'SELECT * FROM settings WHERE key = ? AND profile_id = ?', 'retirement_goals', pid)
-
-  const result = calculateRetirementProjection(
-    parseFloat(q('currentAge') ?? q('age') ?? '30') || 30,
-    parseFloat(q('retirementAge') ?? q('retire') ?? '65') || 65,
-    parseFloat(q('currentSavings') ?? q('savings') ?? '0') || 0,
-    parseFloat(q('monthlyContribution') ?? q('contribution') ?? '500') || 0,
-    parseFloat(q('annualReturn') ?? q('return') ?? '7') || 7,
-    parseFloat(q('withdrawalRate') ?? q('rate') ?? '4') || 4,
-    q('country') || 'US'
-  )
-
-  return c.json(result)
-})
+  const [saved, facts] = await Promise.all([loadSettings(c), loadFacts(c)]);
+  const today = monthOf(new Date());
+  const { settings, filled, missing } = deriveSettings(saved, facts, today);
+  const projection = projectRetirement(settingsToInput(settings, today));
+  return c.json({ settings, filled, missing, projection });
+});

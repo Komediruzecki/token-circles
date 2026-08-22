@@ -823,7 +823,15 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/retirement\/projection$/,
     methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.retirementProjection(ctx.query) }),
+    handler: dispatch({ GET: () => h.retirementProjection() }),
+  },
+  {
+    pattern: /^\/retirement\/settings$/,
+    methods: ['GET', 'PUT'],
+    handler: dispatch({
+      GET: () => h.retirementSettingsGet(),
+      PUT: (ctx) => h.retirementSettingsUpdate(ctx.body),
+    }),
   },
   {
     pattern: /^\/retirement-goals$/,

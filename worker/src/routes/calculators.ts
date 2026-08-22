@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
+import { monthlyRate as monthlyRateFor } from '../../../shared/retirement';
 import * as db from '../db';
 
 // Port of backend/routes/calculators.js. Every endpoint here is pure math except
@@ -260,7 +261,9 @@ calculatorsRoutes.get('/api/calculators/retirement', requireAuth, async (c) => {
     throw new HttpError(400, 'Unsupported country code');
 
   const yearsToRetirement = retirementAge - currentAge;
-  const monthlyRate = annualReturn / 100 / 12;
+  // The monthly rate that compounds to the annual one. Dividing by twelve instead
+  // overstates the return by roughly 3% of itself at 8%, and the error compounds.
+  const monthlyRate = monthlyRateFor(annualReturn);
 
   // Future value of current savings
   const futureValueCurrent = currentSavings * Math.pow(1 + monthlyRate, yearsToRetirement * 12);
