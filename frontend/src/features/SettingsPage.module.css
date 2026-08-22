@@ -299,10 +299,10 @@
 
 /* ── Buttons (used by cards + subcomponents) ── */
 .btn-primary {
-  background: var(--primary-bg);
-  color: var(--primary);
-  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
-  box-shadow: var(--glow-primary);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: var(--btn-primary-border);
+  box-shadow: var(--btn-primary-shadow);
   padding: 10px 20px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -312,8 +312,8 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
-  border-color: var(--primary);
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-border-hover);
 }
 
 .btn-primary:disabled {

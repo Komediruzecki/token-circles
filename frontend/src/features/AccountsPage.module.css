@@ -326,12 +326,16 @@
 }
 
 .btn-primary {
-  background: var(--primary);
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: var(--btn-primary-border);
+  box-shadow: var(--btn-primary-shadow);
 }
 
-.btn-primary:hover {
-  background: var(--primary-hover);
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-border-hover);
+  color: var(--btn-primary-fg);
 }
 
 .btn-sm {
@@ -365,7 +369,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--modal-overlay, rgba(0, 0, 0, 0.4));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -569,24 +573,4 @@
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
   border-color: color-mix(in oklab, var(--primary) 10%, var(--border));
-}
-
-/* Brand-derived modal overlay. */
-.modal-overlay {
-  background: var(--modal-overlay, rgba(0, 0, 0, 0.4));
-}
-
-/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
-   instead of the old solid fill. Appended last so it wins the cascade. ── */
-.btn-primary {
-  background: var(--primary-bg);
-  color: var(--primary);
-  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
-  box-shadow: var(--glow-primary, none);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
-  border-color: var(--primary);
-  color: var(--primary);
 }

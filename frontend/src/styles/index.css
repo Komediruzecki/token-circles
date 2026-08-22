@@ -30,6 +30,20 @@
 @import './themes/orbit-dark.css';
 @import './themes/instrument-deck.css';
 
+/* Primary-button skin, defined once. Every page's own .btn-primary rule consumes these;
+   before this the recipe was pasted into thirteen stylesheets and, in twelve of them,
+   appended a second time so it could override the solid fill the same file still declared.
+   Themes own the primitives (--primary, --primary-bg, --glow-primary) — these only name
+   what those primitives are used for, so a page never restates the recipe. */
+:root {
+  --btn-primary-bg: var(--primary-bg);
+  --btn-primary-fg: var(--primary);
+  --btn-primary-border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  --btn-primary-shadow: var(--glow-primary, none);
+  --btn-primary-bg-hover: color-mix(in oklab, var(--primary) 20%, transparent);
+  --btn-primary-border-hover: var(--primary);
+}
+
 body {
   font-family: var(--font-inter);
   background: var(--bg);

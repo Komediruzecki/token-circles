@@ -1,5 +1,9 @@
 .budget-summary {
   padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 .budget-summary .page-header {
   display: flex;
@@ -117,6 +121,8 @@
   padding: 12px;
   background: var(--bg);
   border-radius: var(--radius);
+  flex-direction: column;
+  gap: 4px;
 }
 
 .stat-item .stat-label {
@@ -148,6 +154,15 @@
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
 }
 
 .form-input {
@@ -385,12 +400,6 @@
 }
 
 /* stat item */
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .stat-label {
   font-size: 12px;
   color: var(--text-secondary);
@@ -403,9 +412,9 @@
 
 /* buttons */
 .btn-primary {
-  background: var(--primary);
-  color: #fff;
-  border: none;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: var(--btn-primary-border);
   padding: 10px 20px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -415,10 +424,13 @@
   align-items: center;
   gap: 6px;
   transition: background 0.2s;
+  box-shadow: var(--btn-primary-shadow);
 }
 
-.btn-primary:hover {
-  background: var(--primary-hover);
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-border-hover);
+  color: var(--btn-primary-fg);
 }
 
 .btn-primary:disabled {
@@ -442,21 +454,6 @@
 .btn-ghost:hover {
   background: var(--bg);
   color: var(--text);
-}
-
-.btn-outline {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 10px 20px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
 }
 
 .btn-outline:hover {
@@ -657,14 +654,6 @@
   position: fixed;
   inset: 0;
   z-index: 99;
-}
-
-/* budget summary grid */
-.budget-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
 }
 
 /* category chart section */
@@ -1216,21 +1205,6 @@
 .categories-section h2 {
   font-family: var(--font-display, inherit);
   letter-spacing: -0.01em;
-}
-
-/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
-   instead of the old solid fill. Appended last so it wins the cascade. ── */
-.btn-primary {
-  background: var(--primary-bg);
-  color: var(--primary);
-  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
-  box-shadow: var(--glow-primary, none);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
-  border-color: var(--primary);
-  color: var(--primary);
 }
 
 /* Icon field: the input sits next to a live preview of the icon the typed keyword

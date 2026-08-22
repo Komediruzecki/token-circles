@@ -48,6 +48,11 @@
 /* analytics page specific classes */
 .analytics-chart {
   margin-top: 24px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
 }
 
 .analytics-chart .chart-title {
@@ -82,11 +87,14 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   margin-bottom: 8px;
+  position: relative;
 }
 
 .rate-value {
   font-size: 24px;
   font-weight: 700;
+  position: relative;
+  color: var(--primary);
 }
 
 .rate-change {
@@ -602,14 +610,6 @@
   color: #fff;
 }
 
-.analytics-chart {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
 .chart-title {
   font-size: 18px;
   font-weight: 600;
@@ -691,19 +691,6 @@
   font-size: 11px;
   color: var(--text-secondary);
   opacity: 0.8;
-}
-
-.rate-value {
-  position: relative;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.rate-label {
-  position: relative;
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 
 .rate-info {

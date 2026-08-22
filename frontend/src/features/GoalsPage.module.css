@@ -21,9 +21,12 @@
   font-size: 14px;
 }
 .goals-page .goal-progress {
-  margin-top: 12px;
+  margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 .goals-page .goal-track-hint {
   margin: 8px 0 0;
@@ -118,9 +121,9 @@
   border-top: 1px solid var(--border);
 }
 .goals-page .btn-primary {
-  background: var(--primary);
-  color: #fff;
-  border: none;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: var(--btn-primary-border);
   padding: 10px 20px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -130,9 +133,12 @@
   align-items: center;
   gap: 6px;
   transition: background 0.2s;
+  box-shadow: var(--btn-primary-shadow);
 }
-.goals-page .btn-primary:hover {
-  background: var(--primary-hover);
+.goals-page .btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-border-hover);
+  color: var(--btn-primary-fg);
 }
 .goals-page .btn-secondary {
   background: transparent;
@@ -197,11 +203,6 @@
 .goals-page .goal-actions {
   display: flex;
   gap: 4px;
-}
-.goals-page .goal-progress {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
 }
 .goals-page .progress-bar {
   display: flex;
@@ -289,9 +290,11 @@
   color: var(--text-secondary);
 }
 
+/* flex-shrink: 0 so the actions cluster never squeezes the title/date column. */
 .goal-actions {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .goal-progress {
@@ -508,13 +511,6 @@
 }
 
 /* ── Brand: goal ring row + glass surfaces (appended overrides) ── */
-.goals-page .goal-progress {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-top: 14px;
-}
-
 .goals-page .goal-progress .progress-stats {
   display: flex;
   flex-direction: column;
@@ -544,27 +540,7 @@
   letter-spacing: -0.01em;
 }
 
-/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
-   instead of the old solid fill. Appended last so it wins the cascade. ── */
-.goals-page .btn-primary {
-  background: var(--primary-bg);
-  color: var(--primary);
-  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
-  box-shadow: var(--glow-primary, none);
-}
-
-.goals-page .btn-primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-/* ── Goal card header fix: the actions cluster must never squeeze the title/date
-   column, and "Add Funds" lives on its own row (see Goals.tsx). Appended last. ── */
-.goal-actions {
-  flex-shrink: 0;
-}
-
+/* "Add Funds" lives on its own row (see Goals.tsx). */
 .goal-cta {
   margin: -2px 0 12px;
 }

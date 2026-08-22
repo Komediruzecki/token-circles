@@ -6,6 +6,12 @@ technical detail lives in [dev-changelog.md](dev-changelog.md).
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Hovering a disabled button no longer lights it up as though it were clickable.
+
 ## [5.9.1] — 2026-08-22
 
 ### Fixed

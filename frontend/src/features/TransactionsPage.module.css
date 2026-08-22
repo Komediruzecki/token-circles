@@ -271,9 +271,9 @@
 
 /* button styles */
 .btn-primary {
-  background: var(--primary);
-  color: #fff;
-  border: none;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  border: var(--btn-primary-border);
   padding: 10px 20px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -284,10 +284,13 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
+  box-shadow: var(--btn-primary-shadow);
 }
 
-.btn-primary:hover {
-  background: var(--primary-hover);
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-border-hover);
+  color: var(--btn-primary-fg);
 }
 
 .btn-secondary {
@@ -448,21 +451,6 @@
   .transactions-page .page-header h1 {
     font-size: 20px;
   }
-}
-
-/* ── Brand coherence: primary buttons use the Settings recipe (azure glass + glow)
-   instead of the old solid fill. Appended last so it wins the cascade. ── */
-.btn-primary {
-  background: var(--primary-bg);
-  color: var(--primary);
-  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
-  box-shadow: var(--glow-primary, none);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--primary) 20%, transparent);
-  border-color: var(--primary);
-  color: var(--primary);
 }
 
 /* Shown when arriving from a tag whose current focus month is empty: the period was widened on
