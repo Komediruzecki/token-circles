@@ -7,6 +7,22 @@ All notable changes to Token Circles are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Removed 84 verbatim-duplicated rules from five CSS modules** — 519 lines, all pure deletions: `CategoriesPage` (-43 rules, lines 301-579 duplicated 580-858), `BudgetsPage` (-21), `GoalsPage` (-13), `HousingPage` (-5), `RetirementPage` (-2). Only rules whose selector _and_ whole source span (comments included) were byte-identical were touched, and the last occurrence is the one kept — the copy that already won the cascade, so nothing that sat between the copies changes. A selector repeated with _different_ declarations is a deliberate override and was left alone: `.btn-primary` appears twice in each of these files on purpose, the second time to apply the azure-glass recipe. This supersedes the note in 5.9.1 that the duplication was left for a separate change.
+- Verified by rebuilding before and after and comparing the emitted stylesheets: after normalising the CSS-module name hashes (they embed file content and line numbers, so every generated class name shifts), all five affected chunks expand to an identical ordered list of selector/declaration pairs. The only textual difference is in `Retirement.css`, where esbuild now merges `.goal-balance` and `.goal-progress` — adjacent once the duplicates were gone — into one selector list.
+
+### Removed
+
+- **Nine CSS modules nothing imported**, 629 lines that never reached a bundle: `Button`, `Card`, `Filter`, `Table`, `ModalContent`, `ModalActions`, `TaskList`, `CategoryMultiSelect` under `components/`, and `Page` under `pages/`. These are the shared-component stylesheets from the SolidJS migration whose contents were copied into each page module — the origin of the duplication above. They looked referenced under a substring grep: `Button.module.css` also matches `ExportChartButton.module.css`, and `Page.module.css` matches every `*Page.module.css` in `features/`.
+
+### Added
+
+- `cssModuleHygiene.test.ts` guards both defects for every `*.module.css`: no rule repeated verbatim inside one file, and no module left unimported. Both fail on the pre-change tree.
+- `vitest.config.ts` now sets `css: true`. Under the default (`css: false`) vitest short-circuits every CSS import to empty content, so a `?raw` import of a stylesheet resolves to an empty string and any test asserting on stylesheet source passes vacuously ([vitest#10788](https://github.com/vitest-dev/vitest/issues/10788)). Cost measured at roughly +1s on the full suite, with all 1001 tests unaffected.
+
 ## [5.9.1] — 2026-08-22
 
 ### Fixed

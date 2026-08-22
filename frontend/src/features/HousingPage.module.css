@@ -230,34 +230,6 @@
   padding: 16px 20px;
   border-top: 1px solid var(--border);
 }
-.housing-page .form-group {
-  margin-bottom: 16px;
-}
-.housing-page .form-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--text);
-}
-.housing-page .form-control {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-}
-.housing-page .form-control:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-.housing-page .form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
 @keyframes fade-in {
   from {
     opacity: 0;

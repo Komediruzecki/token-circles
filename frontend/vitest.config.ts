@@ -24,6 +24,11 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Process CSS so `?raw` imports of stylesheets return their source. Under the default
+    // (css: false) vitest short-circuits every CSS import to empty content, which makes a
+    // `?raw` import silently resolve to '' and any test asserting on stylesheet source pass
+    // vacuously (vitest#10788). cssModuleHygiene.test.ts depends on this.
+    css: true,
     globals: true,
     include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test-setup.ts'],

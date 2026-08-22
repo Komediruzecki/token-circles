@@ -20,73 +20,10 @@
   color: var(--text-secondary);
   font-size: 14px;
 }
-.goals-page .goals-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-.goals-page .goal-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-.goals-page .goal-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.goals-page .goal-icon {
-  font-size: 32px;
-}
-.goals-page .goal-info {
-  flex: 1;
-  min-width: 0;
-}
-.goals-page .goal-name {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-.goals-page .goal-date {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.goals-page .goal-actions {
-  display: flex;
-  gap: 4px;
-}
 .goals-page .goal-progress {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
-}
-.goals-page .progress-bar {
-  display: flex;
-  align-items: center;
-  height: 8px;
-  background: var(--bg);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-.goals-page .progress-fill {
-  height: 100%;
-  background: var(--primary);
-  transition: width 0.3s;
-}
-.goals-page .progress-stats {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-}
-.goals-page .progress-percent {
-  font-weight: 600;
-}
-.goals-page .progress-current {
-  color: var(--text-secondary);
 }
 .goals-page .goal-track-hint {
   margin: 8px 0 0;

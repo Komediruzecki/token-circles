@@ -161,14 +161,6 @@
   border-top: 1px solid var(--border);
   margin-top: 12px;
 }
-.retirement-page .balance-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.retirement-page .balance-value {
-  font-size: 20px;
-  font-weight: 700;
-}
 .retirement-page .goal-progress {
   margin-top: 12px;
   padding-top: 12px;
