@@ -5,7 +5,12 @@ let _yahooFinance = null;
 
 function getClient() {
   if (!_yahooFinance) {
-    _yahooFinance = require('yahoo-finance2').default;
+    // yahoo-finance2 v3 exports the class, not a ready-made singleton. Calling `.quote()` on
+    // the class throws "Call `const yahooFinance = new YahooFinance()` first", which this
+    // module swallows into the empty-price fallback -- so every holding silently reports
+    // currentPrice === purchase_price and a gain of exactly 0.
+    const YahooFinance = require('yahoo-finance2').default;
+    _yahooFinance = new YahooFinance();
   }
   return _yahooFinance;
 }
