@@ -18,6 +18,10 @@
 - [Docker Compose](../docker-compose.yml) — One-command production deployment
 - [Dockerfile](../Dockerfile) — Container image definition
 
+## Marketing
+
+- [Marketing Screenshots](marketing-screenshots.md) — Re-shooting the product stills the landing sites bundle: seeding, profiles, and the traps that produce a plausible wrong image
+
 ## Feature Specifications
 
 Detailed EARS (Exactly As Required Specification) documents for all features:
