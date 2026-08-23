@@ -15,7 +15,8 @@
   "homepage": "https://github.com/Komediruzecki/finance-manager#readme",
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "packages/*"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
@@ -24,7 +25,7 @@
     "build": "pnpm -C frontend run build",
     "lint": "pnpm -C frontend run lint",
     "lint:backend": "pnpm -C backend run lint",
-    "typecheck": "pnpm -C frontend run typecheck",
+    "typecheck": "pnpm -C packages/pwa-kit run typecheck && pnpm -C frontend run typecheck",
     "format": "pnpm -C frontend run format",
     "test": "pnpm -C frontend run test",
     "test:backend": "pnpm -C backend run test",

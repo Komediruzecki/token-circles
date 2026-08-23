@@ -1,0 +1,77 @@
+/*
+ * InstallAppButton — a settings row when the browser can install, a sentence when it cannot.
+ *
+ * The two states are shaped differently on purpose: the prompt is an action and reads as a
+ * control; the iOS hint is an instruction and reads as text, because there is nothing to press.
+ */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.copy {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--primary);
+}

@@ -128,13 +128,23 @@ export default defineConfig(({ mode }) => {
               registerType: 'autoUpdate',
               includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],
               manifest: {
+                // `id` is what the browser uses to decide whether an install already exists.
+                // Without it the id is derived from start_url, so changing start_url later would
+                // read as a different app and offer a second install alongside the first.
+                id: '/',
                 name: 'Token Circles',
                 short_name: 'Token Circles',
                 description: 'Your money, in clear orbit',
+                start_url: '/',
+                scope: '/',
                 display: 'standalone',
+                // Opening a link while installed focuses the running window instead of spawning
+                // another one — the behaviour people expect from an app rather than a tab.
+                launch_handler: { client_mode: 'navigate-existing' },
+                orientation: 'any',
+                categories: ['finance', 'productivity'],
                 background_color: '#0a0e1c',
                 theme_color: '#0a0e1c',
-                version: Date.now().toString(),
                 icons: [
                   {
                     src: 'icon-192.png',
@@ -255,6 +265,7 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: {
+        '@pwa-kit': resolve(__dirname, '../packages/pwa-kit/src/index.ts'),
         '@': resolve(__dirname, 'src'),
         '@/core': resolve(__dirname, 'src/core'),
         '@/features': resolve(__dirname, 'src/features'),

@@ -1,0 +1,26 @@
+{
+  "name": "@komediruzecki/pwa-kit",
+  "version": "0.1.0",
+  "description": "Progressive-web-app install and service-worker plumbing, framework-light and testable",
+  "license": "AGPL-3.0-only",
+  "author": "Komediruzecki",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./install": "./src/install.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "peerDependencies": {
+    "solid-js": ">=1.8.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "solid-js": "^1.9.9",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  }
+}

@@ -30,7 +30,9 @@
       "@/stores/*": ["src/stores/*"],
       "@/types/*": ["src/types/*"],
       "@/lib/*": ["src/lib/*"],
-      "@/css/*": ["src/css/*"]
+      "@/css/*": ["src/css/*"],
+      "@pwa-kit": ["../packages/pwa-kit/src/index.ts"],
+      "@pwa-kit/*": ["../packages/pwa-kit/src/*"]
     },
     "plugins": [
       {
@@ -42,5 +44,11 @@
       }
     ]
   },
-  "include": ["src/**/*", "tests/**/*", "server/**/*", "css-modules.d.ts"]
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "server/**/*",
+    "css-modules.d.ts",
+    "../packages/pwa-kit/**/*"
+  ]
 }

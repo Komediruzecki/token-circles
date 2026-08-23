@@ -31,6 +31,7 @@ import AccountDeletion from '../components/AccountDeletion'
 import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
+import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
 import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
 import { ResendVerification } from '../components/ResendVerification'
@@ -255,6 +256,13 @@ const IconSun = () => (
   <Svg>
     <circle cx="12" cy="12" r="4" />
     <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2" />
+  </Svg>
+)
+const IconInstall = () => (
+  <Svg>
+    <path d="M12 3v12" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
   </Svg>
 )
 const IconCoin = () => (
@@ -984,6 +992,18 @@ export default function Settings() {
           <div class={styles.content}>
             {/* ─────────────── GENERAL ─────────────── */}
             <Show when={activeTab() === 'general'}>
+              {/* Drawn only when this browser can actually install — see InstallAppButton, which
+                  renders nothing rather than offering a button that could not work. */}
+              <Show when={canOfferInstall()}>
+                <div class={styles.card}>
+                  <CardHead
+                    icon={<IconInstall />}
+                    title="Install as an app"
+                    desc="Keep Token Circles on your home screen or dock."
+                  />
+                  <InstallAppButton />
+                </div>
+              </Show>
               <div class={styles.card} data-tour="settings-theme">
                 <CardHead icon={<IconSun />} title="Appearance" desc="Theme for the whole app." />
                 <div class={styles.row}>

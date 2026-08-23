@@ -20,6 +20,9 @@ export default defineConfig({
       '@/stores': resolve(__dirname, 'src/stores'),
       '@/types': resolve(__dirname, 'src/types'),
       '@/lib': resolve(__dirname, 'src/lib'),
+      // packages/pwa-kit is app-agnostic source, deliberately outside the pnpm workspace so it
+      // costs the lockfile nothing until it is extracted. Aliased rather than installed.
+      '@pwa-kit': resolve(__dirname, '../packages/pwa-kit/src/index.ts'),
     },
   },
   test: {
@@ -30,7 +33,11 @@ export default defineConfig({
     // vacuously (vitest#10788). cssModuleHygiene.test.ts depends on this.
     css: true,
     globals: true,
-    include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
+    include: [
+      'src/**/__tests__/**/*.test.{ts,tsx}',
+      // The kit ships its own tests; they run here so CI covers them with no extra job.
+      '../packages/pwa-kit/test/**/*.test.ts',
+    ],
     setupFiles: ['./src/test-setup.ts'],
   },
 })

@@ -227,6 +227,18 @@ importers:
         specifier: ^4.0.18
         version: 4.1.9(@types/node@22.20.0)(@vitest/coverage-v8@4.1.9)(jsdom@28.1.0(@noble/hashes@1.8.0))(vite@8.1.0(@types/node@22.20.0)(less@4.6.7)(sass@1.101.0)(stylus@0.62.0)(terser@5.48.0)(yaml@2.9.0))
 
+  packages/pwa-kit:
+    devDependencies:
+      solid-js:
+        specifier: ^1.9.9
+        version: 1.9.13
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@22.20.0)(@vitest/coverage-v8@4.1.9)(jsdom@28.1.0(@noble/hashes@1.8.0))(vite@8.1.0(@types/node@22.20.0)(less@4.6.7)(sass@1.101.0)(stylus@0.62.0)(terser@5.48.0)(yaml@2.9.0))
+
 packages:
 
   '@acemir/cssom@0.9.31':

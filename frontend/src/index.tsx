@@ -1,5 +1,6 @@
 /* @refresh reload */
 import './styles/index.css'
+import { installPwaInstallListeners } from '@pwa-kit'
 import { render } from 'solid-js/web'
 import { App } from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -14,6 +15,10 @@ installBootRecovery()
 // A shared demo link (?demo=high|mid|low) must switch to client-only mode before
 // <App/> reads the storage mode, so do it here — before render().
 applyDemoModeFromUrl()
+
+// `beforeinstallprompt` fires early and is never replayed, and the event itself is the only
+// handle on the native install sheet — miss it and the app can never offer installation at all.
+installPwaInstallListeners()
 
 // The emailed confirm link lands back here as `#everified…`. Read and strip it before render:
 // it is not a page, so the hash router would resolve it to a 404, and a fragment left in the
