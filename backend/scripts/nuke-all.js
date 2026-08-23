@@ -6,33 +6,18 @@
  * Use --no-seed flag to skip re-seeding (empty DB).
  */
 const db = require('../database');
+const { PROFILE_DATA_TABLES, PROFILE_CHILD_TABLES } = require('../lib/profileTables');
 
 const skipSeed = process.argv.includes('--no-seed');
 
 console.log('Nuking ALL data...');
 
-// Order matters: child tables first, then parents
+// Order matters: child tables first, then parents. The per-profile tables come from the
+// shared list in lib/profileTables.js; settings and the profile rows themselves are only
+// nuked here, where every profile is going anyway.
 const allTables = [
-  'transaction_tags',
-  'loan_rate_periods',
-  'loan_prepayments',
-  'account_balance_history',
-  'transactions',
-  'receipts',
-  'category_mappings',
-  'recurring_transactions',
-  'budgets',
-  'budgets_zero_based',
-  'savings_goals',
-  'retirement_goals',
-  'emergency_fund_config',
-  'loans',
-  'bills',
-  'housings',
-  'tags',
-  'categories',
-  'accounts',
-  'portfolio_holdings',
+  ...PROFILE_CHILD_TABLES.map((t) => t.table),
+  ...PROFILE_DATA_TABLES,
   'settings',
   'profiles',
 ];

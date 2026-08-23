@@ -1,4 +1,5 @@
 const { BaseRepository } = require('./baseRepo');
+const { PROFILE_DATA_TABLES, PROFILE_CHILD_TABLES } = require('../lib/profileTables');
 
 class ProfilesRepository extends BaseRepository {
   listAll() {
@@ -45,34 +46,30 @@ class ProfilesRepository extends BaseRepository {
     return super.all('SELECT * FROM profiles WHERE user_id = ? ORDER BY id', userId);
   }
 
-  deleteAllDataForProfile(pid) {
-    const tables = [
-      'transactions',
-      'budgets',
-      'categories',
-      'budgets_zero_based',
-      'loans',
-      'loan_rate_periods',
-      'loan_prepayments',
-      'accounts',
-      'savings_goals',
-      'retirement_goals',
-      'emergency_fund_config',
-      'account_balance_history',
-      'receipts',
-      'portfolio_holdings',
-      'bills',
-      'housings',
-      'recurring_transactions',
-      'tags',
-      'transaction_tags',
-      'category_mappings',
-      'settings',
-    ];
-    const deleteAll = this.db.transaction(() => {
-      for (const table of tables) {
+  /**
+   * Delete every row of profile data, keeping the profile row itself.
+   * `settings` is per-profile configuration rather than data, so it only goes when the
+   * caller is deleting the profile outright (includeSettings).
+   */
+  clearDataForProfile(pid, { includeSettings = false } = {}) {
+    const clear = this.db.transaction(() => {
+      for (const child of PROFILE_CHILD_TABLES) {
+        this.run(
+          `DELETE FROM ${child.table} WHERE ${child.key} IN (SELECT id FROM ${child.parent} WHERE profile_id = ?)`,
+          pid
+        );
+      }
+      for (const table of PROFILE_DATA_TABLES) {
         this.run(`DELETE FROM ${table} WHERE profile_id = ?`, pid);
       }
+      if (includeSettings) this.run('DELETE FROM settings WHERE profile_id = ?', pid);
+    });
+    clear();
+  }
+
+  deleteAllDataForProfile(pid) {
+    const deleteAll = this.db.transaction(() => {
+      this.clearDataForProfile(pid, { includeSettings: true });
       this.deleteById(pid);
     });
     deleteAll();

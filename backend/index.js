@@ -473,7 +473,13 @@ app.use((req, res, next) => {
 app.use(require('./routes/appInfo')(routeDeps));
 app.use(require('./routes/auth')(routeDeps));
 app.use(
-  require('./routes/profiles')({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth })
+  require('./routes/profiles')({
+    apiRateLimiter,
+    logError,
+    seedThreeTierProfiles,
+    requireAuth,
+    demoProfileIds: db.PROFILES_TO_NUKE,
+  })
 );
 app.use(require('./routes/settings')({ apiRateLimiter, requireAuth }));
 app.use(require('./routes/billing')({ apiRateLimiter, requireAuth }));

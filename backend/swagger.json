@@ -311,13 +311,18 @@
       "post": {
         "tags": ["Profiles"],
         "summary": "Reseed demo data",
-        "responses": { "200": { "description": "Demo data reseeded" } }
+        "description": "Clears every demo profile the authenticated user owns and rebuilds all three example profiles (Low/Mid/High Income) as a set. The X-Profile-Id header is not used.",
+        "responses": {
+          "200": { "description": "Demo data reseeded" },
+          "403": { "description": "The demo profiles belong to another account" }
+        }
       }
     },
     "/api/profile/data": {
       "delete": {
         "tags": ["Profiles"],
         "summary": "Clear profile data",
+        "description": "Deletes every row belonging to the active profile - transactions, accounts, holdings, tags, receipts, housing and the rest - then reseeds the default categories. Per-profile settings are kept.",
         "responses": { "200": { "description": "Data cleared" } }
       }
     },

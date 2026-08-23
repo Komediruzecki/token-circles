@@ -4,6 +4,7 @@
  * Keeps any non-demo profiles and the admin user intact.
  */
 const db = require('../database');
+const { PROFILE_DATA_TABLES, PROFILE_CHILD_TABLES } = require('../lib/profileTables');
 
 const DEMO_IDS = db.PROFILES_TO_NUKE || [1, 2, 3];
 const idList = DEMO_IDS.join(',');
@@ -11,40 +12,14 @@ const idList = DEMO_IDS.join(',');
 console.log('Nuking demo profiles and their data...');
 
 // 1. Junction/child tables (linked via parent table)
-const junctionTables = [
-  { name: 'transaction_tags', key: 'transaction_id', link: 'transactions' },
-  { name: 'loan_rate_periods', key: 'loan_id', link: 'loans' },
-  { name: 'loan_prepayments', key: 'loan_id', link: 'loans' },
-  { name: 'account_balance_history', key: 'account_id', link: 'accounts' },
-];
-
-for (const jt of junctionTables) {
-  const sql = `DELETE FROM ${jt.name} WHERE ${jt.key} IN (SELECT id FROM ${jt.link} WHERE profile_id IN (${idList}))`;
+for (const jt of PROFILE_CHILD_TABLES) {
+  const sql = `DELETE FROM ${jt.table} WHERE ${jt.key} IN (SELECT id FROM ${jt.parent} WHERE profile_id IN (${idList}))`;
   const r = db.prepare(sql).run();
-  console.log(`  ${jt.name}: ${r.changes} rows`);
+  console.log(`  ${jt.table}: ${r.changes} rows`);
 }
 
 // 2. Direct profile_id tables
-const directTables = [
-  'transactions',
-  'categories',
-  'accounts',
-  'budgets',
-  'budgets_zero_based',
-  'savings_goals',
-  'retirement_goals',
-  'emergency_fund_config',
-  'loans',
-  'bills',
-  'housings',
-  'tags',
-  'category_mappings',
-  'recurring_transactions',
-  'receipts',
-  'portfolio_holdings',
-];
-
-for (const table of directTables) {
+for (const table of PROFILE_DATA_TABLES) {
   const sql = `DELETE FROM ${table} WHERE profile_id IN (${idList})`;
   const r = db.prepare(sql).run();
   console.log(`  ${table}: ${r.changes} rows`);

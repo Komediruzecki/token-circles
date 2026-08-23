@@ -2,7 +2,13 @@ const express = require('express');
 const { toCamelCase } = require('../utils');
 const { getProfileId } = require('../middleware/profile');
 const { asyncHandler } = require('../lib/errors');
-module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, requireAuth }) {
+module.exports = function ({
+  apiRateLimiter,
+  logError,
+  seedThreeTierProfiles,
+  requireAuth,
+  demoProfileIds = [1, 2, 3],
+}) {
   const router = express.Router();
 
   function updateProfileHandler(req, res) {
@@ -103,14 +109,25 @@ module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, re
     '/api/profiles/reseed-demo',
     apiRateLimiter,
     asyncHandler((req, res) => {
-      const pid = getProfileId(req);
-      req.repos.transactions.deleteAll(pid);
-      req.repos.budgets.deleteAll(pid);
-      req.repos.loans.deleteAll(pid);
-      req.repos.categories.deleteAll(pid);
-      req.repos.accounts.deleteAll(pid);
-      req.repos.goals.deleteAll(pid);
-      req.repos.bills.deleteAll(pid);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      // Clear every demo profile, not just the active one: seedThreeTierProfiles() rebuilds all
+      // three, and it skips any profile that still has transactions. Clearing one and seeding
+      // three meant "restore the three example profiles" restored whichever profile happened to
+      // be active and left the other two as they were — and a profile that had been emptied some
+      // other way got a SECOND copy of its accounts, holdings and goals stacked on top. Scoped to
+      // the profiles this user owns, so the endpoint can never wipe another account's data.
+      //
+      // Clear EVERY table too, not the hand-picked few this used to name: the seeder inserts
+      // holdings and recurring rows unconditionally, so anything left behind comes back doubled.
+      const owned = req.repos.profiles
+        .allByIds(demoProfileIds)
+        .filter((p) => p.user_id === req.session.userId);
+      if (owned.length === 0) {
+        return res.status(403).json({ error: 'The demo profiles belong to another account' });
+      }
+      for (const profile of owned) req.repos.profiles.clearDataForProfile(profile.id);
       seedThreeTierProfiles();
       res.json({ ok: true, message: 'Demo data has been restored' });
     })
@@ -121,13 +138,8 @@ module.exports = function ({ apiRateLimiter, logError, seedThreeTierProfiles, re
     apiRateLimiter,
     asyncHandler((req, res) => {
       const pid = getProfileId(req);
-      req.repos.transactions.deleteAll(pid);
-      req.repos.budgets.deleteAll(pid);
-      req.repos.loans.deleteAll(pid);
-      req.repos.categories.deleteAll(pid);
-      req.repos.accounts.deleteAll(pid);
-      req.repos.goals.deleteAll(pid);
-      req.repos.bills.deleteAll(pid);
+      // "Delete all my data" means all of it — holdings, tags, receipts and housing included.
+      req.repos.profiles.clearDataForProfile(pid);
       const defaults = [
         { name: 'Housing', color: '#ef4444', icon: 'home', type: 'expense', tax_deductible: 0 },
         {

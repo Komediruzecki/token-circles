@@ -198,6 +198,49 @@ All notable changes to Token Circles are documented here. The format is based on
   themes, at percentages chosen to keep their perceived weight (dark luminance 44.2 -> 42.8,
   light 215.9 -> 216.5).
 
+### Fixed — the legacy backend's destructive routes
+
+- **`POST /api/profiles/reseed-demo` was additive.** It deleted a hand-written list of seven tables (`transactions`, `budgets`, `loans`, `categories`, `accounts`, `savings_goals`, `bills`) and then called `seedThreeTierProfiles()`, which re-seeds a profile as soon as that profile has no transactions and then inserts into `portfolio_holdings` and `recurring_transactions` unconditionally. Neither table was ever deleted, so every call appended another full copy — a database reseeded four times held SPY x4 and VTI x4 — while the response still returned `{ ok: true, message: 'Demo data has been restored' }`.
+- **The same endpoint cleared one profile and re-seeded three.** The clear ran against the active profile only, so the other two demo profiles kept their rows; since the seeder skips a profile that still has transactions, "restore the three example profiles" restored whichever one was active. A demo profile that had been emptied another way hit the opposite case — the seeder re-seeded it on top of the accounts, holdings and goals the clear never reached. It now clears every demo profile the caller owns before seeding, and answers 403 to a caller who owns none of them instead of wiping that caller's active profile.
+- **`DELETE /api/profile/data` carried the identical seven-table list**, so "clear this profile's data" left `portfolio_holdings`, `recurring_transactions`, `tags`, `receipts`, `housings`, `category_mappings`, `budgets_zero_based`, `retirement_goals` and `emergency_fund_config` in place. It now clears the same full set. Per-profile `settings` are still kept — they are configuration, not data.
+- **`ProfilesRepository.deleteAllDataForProfile` deleted `categories` before `budgets_zero_based` and `category_mappings`**, both of which hold real foreign keys into it while the connection runs with `foreign_keys = ON`. Deleting a profile that had either populated could fail on a constraint. The shared list is ordered children-before-parents.
+
+### Changed — the legacy backend's destructive routes
+
+- `backend/lib/profileTables.js` is now the single source of truth for what belongs to a profile: 16 tables with a `profile_id` column plus 4 child tables reached through a parent (`transaction_tags`, `loan_rate_periods`, `loan_prepayments`, `account_balance_history` — the middle two have no foreign key at all, so nothing cascades them). `routes/profiles.js`, `ProfilesRepository`, `scripts/nuke-demo.js` and `scripts/nuke-all.js` all read it; the four copies they used to keep had already drifted apart.
+- `ProfilesRepository` gains `clearDataForProfile(pid, { includeSettings })`; `deleteAllDataForProfile` is that plus the profile row.
+
+### Added — the legacy backend's destructive routes
+
+- `backend/test/unit/routes/profile-data-clearing.test.js` — in-process supertest against the real
+  router, real repositories and the real seeder.
+  - **Reseed.** Reseeds twice and asserts every table holds identical per-profile counts
+    (`Math.random` is pinned, because the seeder randomizes how many dining/lunch/health rows it
+    writes), asserts one holding per ticker, asserts a demo profile emptied by other means is
+    rebuilt rather than doubled, asserts a stale row planted in profile 3 is gone after a reseed
+    run from profile 1, and asserts a caller who owns none of the demo profiles gets a 403 with
+    their own data untouched.
+  - **Clear.** Plants a row in every per-profile table and then names the tables that still hold
+    rows after `DELETE /api/profile/data`, so a failure says which table the delete list forgot
+    rather than that a count was wrong. Rows are planted from `PRAGMA table_info` rather than a
+    hand-written list, so a per-profile table added to `schema.sql` later is probed by the next
+    run instead of being quietly skipped; child rows hang off a parent of the same profile,
+    because `loan_rate_periods` and `loan_prepayments` declare no foreign key and
+    `PROFILE_CHILD_TABLES` is the only place that link is written down. Also covers what the
+    clear deliberately keeps — per-profile `settings` survive it, and deleting the profile
+    outright takes them with it.
+  - **Schema drift.** `PROFILE_DATA_TABLES + settings` must equal every table in `schema.sql`
+    carrying a `profile_id`, so a new per-profile table cannot be added without landing in the
+    shared list.
+  - Eight of the twelve fail on the pre-fix tree. One fails with a 500 rather than an assertion:
+    the old order deleted `categories` while `budgets_zero_based` and `category_mappings` still
+    pointed at them. That path had no test at all — `BE-PRF-019` only asserted the response says
+    `ok: true`, which it also said while leaving holdings, tags, receipts and housing behind.
+
+### Notes
+
+- Legacy backend only. #375 ("make destructive operations complete") swept the same class of bug out of the IndexedDB adapter and the Worker but never touched `backend/`, which is what a self-hosted Docker install runs. The Worker's `reseed-demo` calls `clearProfileData` and has no three-tier seed; browser-only mode does `clearAllData({ includeProfiles: true })` before `seedDemoProfiles()`. Both were already symmetric.
+
 ## [5.9.1] — 2026-08-22
 
 ### Fixed
