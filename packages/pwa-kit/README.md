@@ -34,6 +34,53 @@ installPwaInstallListeners();
 The state is a module-level singleton on purpose. It has to outlive any component, because the
 event fires before there are components.
 
+### `sw-runtime` — every caching rule, testable
+
+`createServiceWorkerRuntime(options)` is the whole worker minus the globals. The app's `sw.ts`
+owns `self`, `clients`, `skipWaiting` and `__WB_MANIFEST` and does nothing else; the rules live
+here so they can be run against a fake CacheStorage instead of only against a real deploy.
+
+The model is a **precached shell, one build at a time**:
+
+|                 |                                                                                                                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install()`     | Fetch the shell, **refuse it unless every script it names is in this build's manifest**, then store it with the assets it needs to boot. The previous build's cache is copied forward first, so an unchanged chunk costs nothing. Rejecting means the worker never activates, and the visitor keeps the build they have — whole. |
+| `handleFetch()` | Navigations answer from the cached shell without touching the network. Assets answer cache-first, and only for URLs this build shipped. A hashed chunk the origin answers with HTML becomes a **503**, so it fails as a load error rather than a syntax error inside the page.                                                   |
+| `activate()`    | Drop the other builds' caches — only ones carrying this app's prefix.                                                                                                                                                                                                                                                            |
+
+No `skipWaiting`, no `clientsClaim`. A worker that took over mid-session would pair its own chunk
+map with the page's already-loaded HTML, which is what a multi-reload deploy loop is made of.
+
+Every option has a default that suits a standard Vite SPA: `cachePrefix`, `shellKey`,
+`assetPathPrefix`, `standaloneDocumentPaths`, `stableShellAssets`, `bypassPathPrefixes`.
+
+References in the shipped HTML are **resolved**, not matched on a leading slash — Vite writes
+`./assets/x.js` under a relative `base` and `/assets/x.js` under an absolute one, and a worker
+that recognised only one would silently precache nothing and check nothing.
+
+### `register` — put it on the page, and route its updates to the user
+
+```ts
+import { registerServiceWorker, reloadToLatest, requestUpdateCheck } from '@pwa-kit';
+
+registerServiceWorker({
+  buildId: __GIT_SHA__,
+  enabled: __SW_ENABLED__,
+  onUpdateReady: () => showTheUpdateAffordance(),
+});
+```
+
+Because the worker refuses to skip waiting, this is the only way a visitor moves to a newer build,
+so the prompt has to mean something. Three things feed it: a **waiting worker**, its **build id**
+(asked over a MessageChannel — a worker built from the commit the page is already running is
+adopted silently rather than announced), and a **stale-build notice** the worker posts the moment
+a request proves the origin has moved on.
+
+`reloadToLatest()` is the reload to use everywhere, never `location.reload()`. The controlling
+worker answers a plain reload out of its own precache, so when the running build's chunks are gone
+a reload re-serves the same dead shell and fails identically, forever. It climbs a ladder instead:
+adopt the waiting worker → else unregister and reload → else (offline) reload plainly.
+
 ## Consuming it
 
 It is a workspace package with no build step — `exports` points at TypeScript source, and the
@@ -49,8 +96,8 @@ The tests live here (`test/`) and run under the frontend's vitest, which is alia
 `@pwa-kit`. That way CI covers the kit with no extra job. When this becomes its own repository it
 brings its own runner and the tests move with it unchanged.
 
-## Not here yet
-
-The service-worker half — registration, the update prompt, and the caching rules — is the risky
-part and is deliberately a separate change. See
-[#417](https://github.com/Komediruzecki/token-circles/issues/417).
+104 cases: 11 for install, 58 for the caching rules against a fake CacheStorage, 35 for the
+registration and update flow against a fake `ServiceWorkerContainer`. Every one of them is a thing
+that happened or would have — a deploy landing between two fetches, a chunk answered with
+index.html and a 200, a cache surviving from a build whose chunks are gone. In a browser each
+needs a deployment to reproduce.

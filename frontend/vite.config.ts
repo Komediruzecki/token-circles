@@ -42,17 +42,26 @@ const GIT_SHA = (() => {
 // release version: unregistering on EVERY release tore down and re-registered the SW on the
 // first load of each new version, racing the fresh registration — one ingredient of the
 // multi-reload deploy transitions this epoch replaces.
-const SW_CLEANUP_EPOCH = 'nav-network-first-1'
+//
+// 'precache-shell-1' retires the generated Workbox worker. Its caches are named
+// finance-manager-* and workbox-precache-*, which the new worker's activate() would never touch
+// (it only deletes its own prefix), so they would sit in the quota forever — and its
+// clientsClaim would let it seize a page the new worker is supposed to own.
+const SW_CLEANUP_EPOCH = 'precache-shell-1'
 
-export default defineConfig(({ mode }) => {
-  // Service worker / PWA only in the production build. The dev-domain build
-  // (`vite build --mode dev`) and local `vite` ship NO service worker and actively
-  // unregister any stale one, so the dev domain never serves cached/stale assets.
+export default defineConfig(({ command, mode }) => {
+  // The worker ships with every BUILD, dev deploy included — not just production. It is what
+  // makes the app installable at all (Chrome will not offer "Install app" without a service
+  // worker that handles fetch), so gating it on production meant the install affordance could
+  // only ever be tested in production. `vite dev` still ships none: there is no dist/sw.js to
+  // register, and a stale one is actively removed below.
+  const shipsServiceWorker = command === 'build'
   const isProd = mode === 'production'
   return {
     define: {
       __APP_VERSION__: JSON.stringify(APP_VERSION),
       __GIT_SHA__: JSON.stringify(GIT_SHA),
+      __SW_ENABLED__: JSON.stringify(shipsServiceWorker),
     },
     base: './',
     build: {
@@ -77,18 +86,20 @@ export default defineConfig(({ mode }) => {
       {
         name: 'sw-cleanup',
         transformIndexHtml(html) {
-          if (isProd) {
-            // Prod ships a service worker; unregister it only when SW_CLEANUP_EPOCH changes
-            // (a one-time strategy migration), then re-register immediately so the tab is not
-            // left without a worker until the next load. The marker is only advanced after
-            // the unregisters settle, so an interrupted cleanup retries on the next load.
+          if (shipsServiceWorker) {
+            // A one-time reset, and nothing more: the app registers the worker itself (see
+            // index.tsx). The unregisters are exposed as `window.__SW_CLEANUP__` so registration
+            // can wait for them — an unregister that resolved AFTER a fresh register would
+            // silently remove the worker that had just been installed, which is the race the
+            // previous version of this script had built into it.
             return html.replace(
               '<head>',
-              `<head><script>(function(){var k='fm-sw-ver',v='${SW_CLEANUP_EPOCH}';if('serviceWorker' in navigator&&localStorage.getItem(k)!==v){navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}).catch(function(){}).then(function(){localStorage.setItem(k,v);navigator.serviceWorker.register('./sw.js').catch(function(){})})}})()</script>`
+              `<head><script>(function(){var k='fm-sw-ver',v='${SW_CLEANUP_EPOCH}';if(!('serviceWorker' in navigator)){return}try{if(localStorage.getItem(k)===v){return}}catch(e){}window.__SW_CLEANUP__=navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}).then(function(){return window.caches&&caches.keys?caches.keys().then(function(n){return Promise.all(n.map(function(c){return caches.delete(c)}))}):null}).catch(function(){}).then(function(){try{localStorage.setItem(k,v)}catch(e){}})})()</script>`
             )
           }
-          // Dev / non-prod: no service worker. Unregister any stale one and drop its
-          // caches so the dev domain always serves fresh assets.
+          // `vite dev`: no worker is built, so any registration on this origin is a leftover from
+          // a build served from the same host. Remove it and its caches, or it answers for assets
+          // this dev server is rebuilding on every save.
           return html.replace(
             '<head>',
             `<head><script>(function(){if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})})}if(window.caches&&caches.keys){caches.keys().then(function(k){k.forEach(function(n){caches.delete(n)})})}})()</script>`
@@ -122,10 +133,19 @@ export default defineConfig(({ mode }) => {
           fs.writeFileSync(resolve(__dirname, 'dist', 'version.json'), payload)
         },
       },
-      ...(isProd
+      ...(shipsServiceWorker
         ? [
             VitePWA({
-              registerType: 'autoUpdate',
+              // `injectManifest`, not `generateSW`: the worker is src/sw.ts, hand-written over
+              // @komediruzecki/pwa-kit's runtime, so every caching rule can be run against a fake
+              // CacheStorage in a unit test instead of only against a real deploy. The generated
+              // worker could only be read, never exercised.
+              strategies: 'injectManifest',
+              srcDir: 'src',
+              filename: 'sw.ts',
+              // The app registers the worker itself (src/index.tsx), after the one-time cleanup
+              // above has settled — see the race that script's comment describes.
+              injectRegister: null,
               includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],
               manifest: {
                 // `id` is what the browser uses to decide whether an install already exists.
@@ -168,96 +188,40 @@ export default defineConfig(({ mode }) => {
                   },
                 ],
               },
-              workbox: {
-                // Precache only the truly-static offline shell (icons, self-hosted fonts).
-                // index.html is deliberately NOT precached and navigateFallback is OFF: every
-                // navigation resolves against the network first (the edge serves it no-cache),
-                // so an open tab can never be re-served a stale shell by its OWN service worker
-                // after a deploy. Precached-index + navigateFallback was the root cause of the
-                // multi-reload update loop: a version-mismatch reload got the OLD index.html
-                // back from the old SW, whose hashed chunks were already deleted server-side.
-                globPatterns: ['**/*.{ico,png,svg,woff2}'],
-                // A new SW takes over immediately and old precaches are purged, so a deploy can't
-                // leave a client pinned to a stale shell that references now-deleted chunks.
-                cleanupOutdatedCaches: true,
-                clientsClaim: true,
-                skipWaiting: true,
-                // Explicit undefined overrides the plugin's `index.html` default (the options
-                // are merged with Object.assign, so the key must be present to win). With no
-                // navigation fallback, hashed assets / the API / version.json / sw.js all
-                // resolve to real network responses — a missing chunk fails as an honest 404
-                // (server/assets-worker.ts guarantees that edge-side).
-                navigateFallback: undefined,
-                runtimeCaching: [
-                  {
-                    // The version stamp is a freshness probe — always hit the network, never cache.
-                    urlPattern: ({ url }) => url.pathname === '/version.json',
-                    handler: 'NetworkOnly',
-                  },
-                  {
-                    // Navigations (the entry document). Online: always the fresh index.html —
-                    // the edge serves it no-cache, so a deploy is picked up on the very next
-                    // (re)load. Offline / degraded: fall back to the last good shell so the
-                    // installed PWA still boots. Registered before the catch-all so pages get
-                    // their own cache and a fast offline fallback timeout.
-                    urlPattern: ({ request }) => request.mode === 'navigate',
-                    handler: 'NetworkFirst',
-                    options: {
-                      cacheName: 'finance-manager-pages-v1',
-                      networkTimeoutSeconds: 4,
-                      expiration: {
-                        maxEntries: 10,
-                        maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-                      },
-                      cacheableResponse: {
-                        statuses: [200],
-                      },
-                    },
-                  },
-                  {
-                    urlPattern: ({ request }) =>
-                      request.destination === 'script' || request.destination === 'style',
-                    handler: 'NetworkFirst',
-                    options: {
-                      // v4: a fresh cache name so a client carrying a pre-fix, poisoned v3 entry
-                      // (a 200 text/html cached for a script) can never replay it after this ships.
-                      // (New poisoning is impossible: asset misses are real 404s at the edge and
-                      // only 200s are cached here.)
-                      cacheName: 'finance-manager-js-css-v4',
-                      networkTimeoutSeconds: 10,
-                      expiration: {
-                        maxEntries: 30,
-                        // 7 days: online loads are network-first anyway, so a long age only
-                        // decides how far back the OFFLINE fallback reaches. The previous 5
-                        // minutes made offline boots fail for any tab older than one poll.
-                        maxAgeSeconds: 7 * 24 * 60 * 60,
-                      },
-                      // Cache only a genuine 200 — never an opaque/error response.
-                      cacheableResponse: {
-                        statuses: [200],
-                      },
-                    },
-                  },
-                  {
-                    urlPattern: ({ url }) => {
-                      return (
-                        url.origin === self.location.origin && !url.pathname.startsWith('/api/')
-                      )
-                    },
-                    handler: 'NetworkFirst',
-                    options: {
-                      cacheName: 'finance-manager-v4',
-                      networkTimeoutSeconds: 10,
-                      expiration: {
-                        maxEntries: 60,
-                        maxAgeSeconds: 1 * 24 * 60 * 60, // 1 day
-                      },
-                      cacheableResponse: {
-                        statuses: [200],
-                      },
-                    },
-                  },
+              injectManifest: {
+                // Classic script rather than an ES module worker, so Firefox and older WebKit can
+                // register it without `{ type: 'module' }`.
+                rollupFormat: 'iife',
+                // An allowlist of "safe to serve from cache": immutable hashed build output plus
+                // the few small, stable files the shell needs. theme-init.js is not optional —
+                // index.html loads it with a <script src>, and the worker refuses any shell whose
+                // scripts it did not ship, so leaving it out would fail every install.
+                //
+                // Deliberately absent: icon-512.png and og-image.jpg, which are read by the OS
+                // install sheet and by crawlers, never by the page, and neither goes through the
+                // worker.
+                globDirectory: 'dist',
+                globPatterns: [
+                  'assets/**/*.{js,css}',
+                  'manifest.webmanifest',
+                  'theme-init.js',
+                  'favicon.svg',
+                  'icon-192.png',
+                  'icon-192.svg',
                 ],
+                globIgnores: [
+                  '**/*.map',
+                  'sw.js',
+                  'workbox-*.js',
+                  // Their own documents, with their own scripts — see STANDALONE_DOCUMENTS.
+                  'export*.html',
+                  'chart.umd.min.js',
+                ],
+                // Above the default 2 MB cap Workbox silently drops a file from the manifest,
+                // which would mean the biggest chunk is the one asset never cached.
+                maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+                // Hashed filenames are already their own revision.
+                dontCacheBustURLsMatching: /-[A-Za-z0-9_-]{8}\.(?:js|css)$/,
               },
             }),
           ]

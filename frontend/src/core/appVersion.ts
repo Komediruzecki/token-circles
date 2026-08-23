@@ -21,9 +21,9 @@
  * stamp wins. While an update is pending, `serverVersion` exposes what the server is running
  * so the UI can say "vNEW available" without lying about what is currently executing.
  */
+import { reloadToLatest } from '@pwa-kit'
 import { createSignal } from 'solid-js'
 import { toast } from './api'
-import { activateUpdatedServiceWorker } from './bootRecovery'
 
 export interface VersionInfo {
   version?: string
@@ -131,17 +131,37 @@ export function recordAutoReload(sha: string, now: number): void {
   }
 }
 
-/** Update the SW (bounded), then reload to pick up `serverSha`; guarded against loops. */
+/** Reload to pick up `serverSha`; guarded against loops. */
 function reloadForUpdate(serverSha: string): void {
   const now = Date.now()
   if (!shouldAutoReload(serverSha, now)) return
   recordAutoReload(serverSha, now)
-  // Refresh the service worker BEFORE reloading so the reload is served by the new one (or
-  // by the network) rather than by the old worker's caches. Guard is already recorded — a
-  // second hashchange while we wait cannot queue another reload.
-  void activateUpdatedServiceWorker().finally(() => {
-    window.location.reload()
-  })
+  // `reloadToLatest`, not `location.reload()`. The worker answers navigations from its own
+  // precache, so a plain reload lands right back on the build we are trying to leave; this adopts
+  // the waiting worker when there is one and unregisters first when there is not. The guard is
+  // already recorded, so a second hashchange while it works cannot queue another reload.
+  void reloadToLatest()
+}
+
+/**
+ * The service worker's own signal that a deploy landed: a new worker installed and is waiting.
+ *
+ * It arrives earlier and more reliably than the version.json poll — the browser found it, we did
+ * not have to ask — but it means exactly the same thing, so it lands in the same state and waits
+ * for the same safe moment. The `applyUpdate` the kit offers is deliberately unused:
+ * `reloadForUpdate` goes through `reloadToLatest`, which does the same adoption and adds the
+ * fallback for a worker that never takes control.
+ */
+export function noteWaitingBuild(): void {
+  if (!updateAvailable()) {
+    setUpdateAvailable(true)
+    toast('A new version is available — it will load on your next move.', 'info')
+  }
+  pendingReload = true
+  // No sha to key the guard on: the browser told us there is a newer worker, not which commit it
+  // came from. The rolling cap still applies, and adopting a waiting worker cannot loop the way a
+  // plain reload can — after it takes control there is no longer a waiting worker to announce.
+  latestServerSha = latestServerSha ?? 'sw-waiting'
 }
 
 /** One poll of version.json; updates the signals and arms the safe-moment reload. */

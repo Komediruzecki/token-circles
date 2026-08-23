@@ -8,7 +8,9 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./install": "./src/install.ts"
+    "./install": "./src/install.ts",
+    "./register": "./src/register.ts",
+    "./sw-runtime": "./src/sw-runtime.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

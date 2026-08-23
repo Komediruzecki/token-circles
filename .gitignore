@@ -15,7 +15,10 @@ backend/*.db-wal
 frontend/dist/
 frontend/build/
 frontend/vite/
-frontend/node_modules/
+frontend/# No trailing slash, deliberately: a worktree that symlinks node_modules to the main checkout
+# creates a FILE with this name, which `node_modules/` does not match — and committing one makes
+# `pnpm install --frozen-lockfile` fail on a fresh clone, because it cannot mkdir over it.
+node_modules
 frontend/test-results/
 frontend/playwright-report/
 frontend/playwright.local.config.ts
