@@ -344,6 +344,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  /* A label that wraps to two lines must not push its own input out of line with the
+     one beside it. Aligning on the end edge keeps the controls on one row whatever the
+     labels do. */
+  align-items: end;
 }
 
 /* modal */
@@ -606,7 +610,7 @@
 
 .planner-layout {
   display: grid;
-  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -668,6 +672,11 @@
   margin-top: 4px;
 }
 
+/* Same hint slot, but this one is reporting that the setting does not hold up. */
+.field-warn {
+  color: var(--warning);
+}
+
 /* Label wrapping a checkbox: the control sits beside its text, and any hint below
    stays aligned with the text rather than with the box. */
 .check-row {
@@ -706,6 +715,10 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  /* A spending period is two month pickers, an amount and a button. In a side rail they
+     cannot all share one line, and shrinking them to fit is what left the selects too
+     narrow to show a month name. Wrap instead. */
+  flex-wrap: wrap;
 }
 
 .list-row input {
@@ -801,8 +814,11 @@
   flex: 1.5 1 0;
 }
 
+/* A spending period carries two of these plus an amount and a button. Give each picker a
+   width it can actually render "September" in and let the row wrap when they do not fit,
+   rather than dividing the rail into slivers. */
 .list-row .month-picker {
-  flex: 1 1 0;
+  flex: 1 1 13rem;
 }
 
 @media (max-width: 900px) {

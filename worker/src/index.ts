@@ -18,6 +18,7 @@ import { housingRoutes } from './routes/housing';
 import { retirementGoalsRoutes } from './routes/retirement-goals';
 import { counterpartiesRoutes } from './routes/counterparties';
 import { settingsRoutes } from './routes/settings';
+import { turnstileConfigured } from './turnstile';
 import { dashboardRoutes } from './routes/dashboard';
 import { analyticsRoutes } from './routes/analytics';
 import { calculatorsRoutes } from './routes/calculators';
@@ -99,7 +100,21 @@ app.use(
 );
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
-app.get('/api/health', (c) => c.json({ ok: true, env: c.env.APP_ENV ?? 'unknown' }));
+// `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means
+// the gate has no secret and every password sign-in on this environment fails closed. It
+// reports only whether a secret exists, which is not a fact worth hiding — in the "missing"
+// state nobody can authenticate at all.
+app.get('/api/health', (c) =>
+  c.json({
+    ok: true,
+    env: c.env.APP_ENV ?? 'unknown',
+    captcha: turnstileConfigured(c.env)
+      ? 'configured'
+      : c.env.APP_ENV === 'development'
+        ? 'disabled'
+        : 'missing',
+  })
+);
 
 // Auth: Google Sign-In + session endpoints. start/callback are public; me/logout self-gate.
 app.route('/', authRoutes);

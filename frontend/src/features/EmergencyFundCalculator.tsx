@@ -18,12 +18,14 @@
  * Emergency Fund Tracker Component
  * Calculates monthly expenses and compares against savings account balances
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createSignal, For } from 'solid-js'
 import Chart from '../components/Chart'
 import { mobileXTicks } from '../components/chartMobile'
 import ExportChartButton from '../components/ExportChartButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { apiGet, formatCurrency, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import sharedStyles from './CalculatorShared.module.css'
 import styles from './EmergencyFundCalculator.module.css'
@@ -36,9 +38,18 @@ export default function EmergencyFundCalculator() {
   const [coverage, setCoverage] = createSignal<any[]>([])
   const [loading, setLoading] = createSignal(false)
 
-  onMount(() => {
-    loadEmergencyFund()
-  })
+  // /api/calculator/emergency-fund is profile-scoped (it averages that profile's expenses),
+  // so a profile switch has to re-ask. onMount alone fires once for the whole session.
+  const state = useAppState()
+  refetchOnActive(
+    'emergency',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      void loadEmergencyFund()
+    }
+  )
 
   const loadEmergencyFund = async () => {
     setLoading(true)

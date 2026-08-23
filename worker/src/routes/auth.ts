@@ -15,7 +15,7 @@ import {
 import { sendMail } from '../email';
 import { renderAccountExists, renderPasswordReset, renderWelcome } from '../emailTemplates';
 import { enforce, clientIp } from '../ratelimit';
-import { verifyTurnstile } from '../turnstile';
+import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -133,8 +133,8 @@ authRoutes.post('/api/auth/register', async (c) => {
     password?: string;
     turnstileToken?: string;
   };
-  if (!(await verifyTurnstile(c, body.turnstileToken)))
-    return c.json({ error: 'Captcha verification failed. Please try again.' }, 403);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
   if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
@@ -190,8 +190,8 @@ authRoutes.post('/api/auth/login', async (c) => {
     password?: string;
     turnstileToken?: string;
   };
-  if (!(await verifyTurnstile(c, body.turnstileToken)))
-    return c.json({ error: 'Captcha verification failed. Please try again.' }, 403);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
   if (!email || !password) return c.json({ error: 'Email and password are required' }, 400);
@@ -222,8 +222,8 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
     email?: string;
     turnstileToken?: string;
   };
-  if (!(await verifyTurnstile(c, body.turnstileToken)))
-    return c.json({ error: 'Captcha verification failed. Please try again.' }, 403);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
   // Per-email cap (on top of per-IP) so one address can't be bombed from rotating IPs.

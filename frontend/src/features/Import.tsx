@@ -68,6 +68,9 @@ export default function Import() {
   let skipFirstAccountsReload = true
   createEffect(() => {
     const onImport = state.page === 'import'
+    // Accounts are profile-scoped, so a profile switch invalidates them too — not just
+    // navigating away and back.
+    void state.profileVersion
     if (skipFirstAccountsReload) {
       skipFirstAccountsReload = false
       return

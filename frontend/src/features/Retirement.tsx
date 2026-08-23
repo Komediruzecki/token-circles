@@ -35,12 +35,14 @@
  * Retirement Component
  * Retirement goals, and the planner that projects what they add up to.
  */
-import { createSignal, For, onMount } from 'solid-js'
+import { createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import { refetchOnActive } from '../core/pageVisibility'
 import styles from './RetirementPage.module.css'
 import RetirementPlanner from './RetirementPlanner'
 
@@ -58,6 +60,7 @@ interface RetirementGoal {
 }
 
 export default function Retirement() {
+  const state = useAppState()
   const [goals, setGoals] = createSignal<RetirementGoal[]>([])
   const [initialLoad, setInitialLoad] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
@@ -203,9 +206,18 @@ export default function Retirement() {
     return 'success'
   }
 
-  onMount(() => {
-    loadGoals()
-  })
+  // Pages stay mounted since the keep-alive host (#317), so onMount fires once for the
+  // life of the session — a profile switch left this list showing the previous profile's
+  // goals until the page was reloaded. Track the profile and reload, deferred while hidden.
+  refetchOnActive(
+    'retirement',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      loadGoals()
+    }
+  )
 
   return (
     <div

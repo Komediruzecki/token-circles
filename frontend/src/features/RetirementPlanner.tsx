@@ -11,8 +11,8 @@
  * every keystroke instead of after a round trip, and the two still agree by construction.
  * Only saving talks to the server.
  */
-import { createMemo, createSignal, For, Index, onMount, Show } from 'solid-js'
-import { projectRetirement } from '../../../shared/retirement'
+import { createMemo, createSignal, For, Index, Show } from 'solid-js'
+import { projectRetirement, yearsOfWithdrawals } from '../../../shared/retirement'
 import {
   DEFAULT_SETTINGS,
   effectiveReturnPct,
@@ -27,6 +27,8 @@ import MonthPicker from '../components/MonthPicker'
 import NumberField from '../components/NumberField'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { apiGet, apiPut, formatCurrency, showToast } from '../core/api'
+import { useAppState } from '../core/appStore'
+import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import styles from './RetirementPage.module.css'
 import type { ExpensePeriod, IncomeStep, Lifestyle } from '../../../shared/retirement'
@@ -60,6 +62,7 @@ const PLAN_FROM_YEAR = NOW_YEAR - 5
 const PLAN_TO_YEAR = NOW_YEAR + 80
 
 export default function RetirementPlanner() {
+  const state = useAppState()
   const [settings, setSettings] = createSignal<RetirementSettings>(DEFAULT_SETTINGS)
   const [filled, setFilled] = createSignal<DerivedField[]>([])
   const [startMonth, setStartMonth] = createSignal(monthOf(new Date()))
@@ -112,6 +115,17 @@ export default function RetirementPlanner() {
   }
 
   const projection = createMemo(() => projectRetirement(settingsToInput(settings(), startMonth())))
+
+  /**
+   * A withdrawal rate is a claim about how much of the pot you take each year, so raising it
+   * lowers the target and brings the date forward — which looks like a free lunch until you
+   * ask how long the money lasts. That is the number this works out, and the field says it.
+   */
+  const withdrawalRunway = createMemo(() =>
+    yearsOfWithdrawals(settings().safeWithdrawalRatePct, projection().realAnnualReturnPct)
+  )
+
+  const swrSustainable = createMemo(() => !Number.isFinite(withdrawalRunway()))
 
   const scenarios = createMemo(() => {
     if (!showBand()) return []
@@ -279,7 +293,19 @@ export default function RetirementPlanner() {
     update('expensePeriods', [...settings().expensePeriods, next])
   }
 
-  onMount(load)
+  // Assumptions, derived defaults and the facts behind them are all profile-scoped, so a
+  // profile switch has to re-ask the server. Pages stay mounted under the keep-alive host
+  // (#317), so onMount fires once per session and left the panel showing the old profile's
+  // plan. refetchOnActive reloads while visible and defers while hidden.
+  refetchOnActive(
+    'retirement',
+    () => {
+      void state.profileVersion
+    },
+    () => {
+      void load()
+    }
+  )
 
   return (
     <div class={styles.planner} data-test-id="retirement-planner" data-tour="retirement-planner">
@@ -834,10 +860,31 @@ export default function RetirementPlanner() {
                     update('safeWithdrawalRatePct', v)
                   }}
                 />
-                <span class={styles.fieldHint}>
-                  {settings().safeWithdrawalRatePct > 0
-                    ? `${(100 / settings().safeWithdrawalRatePct).toFixed(0)}x your annual spending. 4% is the usual rule of thumb.`
-                    : 'A rate above zero. 4% is the usual rule of thumb.'}
+                <span
+                  class={`${styles.fieldHint} ${swrSustainable() ? '' : styles.fieldWarn}`}
+                  data-test-id="retirement-swr-hint"
+                >
+                  <Show
+                    when={settings().safeWithdrawalRatePct > 0}
+                    fallback="A rate above zero. 4% is the usual rule of thumb."
+                  >
+                    {(100 / settings().safeWithdrawalRatePct).toFixed(0)}x your annual spending, so
+                    a higher rate needs a smaller pot and retires you sooner.{' '}
+                    <Show
+                      when={swrSustainable()}
+                      fallback={
+                        <>
+                          But at {settings().safeWithdrawalRatePct}% against a{' '}
+                          {projection().realAnnualReturnPct.toFixed(2)}% real return the pot is
+                          empty after about {Math.round(withdrawalRunway())} years — the earlier
+                          date is borrowed, not earned. 4% is the usual rule of thumb.
+                        </>
+                      }
+                    >
+                      Growth covers it at a {projection().realAnnualReturnPct.toFixed(2)}% real
+                      return, so the pot lasts indefinitely.
+                    </Show>
+                  </Show>
                 </span>
               </div>
               <div class={styles.formGroup}>

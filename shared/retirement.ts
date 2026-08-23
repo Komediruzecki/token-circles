@@ -211,10 +211,47 @@ export function blendedReturnPct(slices: AllocationSlice[], inflationPct: number
   return total;
 }
 
-/** Portfolio needed to fund `monthlySpendToday` forever at `swrPct`. 4% means 25x. */
+/**
+ * Portfolio needed to fund `monthlySpendToday` at `swrPct`. 4% means 25x.
+ *
+ * Note what raising the rate does: the target is spending divided by the rate, so a higher
+ * withdrawal rate asks for a SMALLER pot and is therefore reached sooner. That is
+ * arithmetic, not a shortcut — the rate is a claim about how much of the pot you can take
+ * each year, and claiming more means needing less saved. Whether the claim survives
+ * contact with reality is the separate question `yearsOfWithdrawals` answers.
+ */
 export function targetFromSpend(monthlySpendToday: number, swrPct: number): number {
   if (swrPct <= 0) return Number.POSITIVE_INFINITY;
   return (monthlySpendToday * 12) / (swrPct / 100);
+}
+
+/**
+ * How many years a pot survives if you draw `swrPct` of its starting value each year, in
+ * today's money, while it earns `realReturnPct` a year after inflation.
+ *
+ * Infinity when growth covers the withdrawals — that is the whole meaning of a rate being
+ * "safe". Otherwise, with s = swrPct/100, r = realReturnPct/100 and a starting pot P, the
+ * withdrawal is a constant W = sP in real terms, so
+ *
+ *   B(n) = P(1+r)^n - W((1+r)^n - 1)/r
+ *
+ * and solving B(n) = 0 gives
+ *
+ *   n = ln(s / (s - r)) / ln(1 + r)
+ *
+ * P cancels: doubling the pot doubles the withdrawal, so the runway is unchanged. That is
+ * why a bigger target does not buy you a longer retirement — only a lower rate does.
+ */
+export function yearsOfWithdrawals(swrPct: number, realReturnPct: number): number {
+  const s = swrPct / 100;
+  const r = realReturnPct / 100;
+  // Drawing nothing, or drawing no more than the pot earns, never exhausts it.
+  if (s <= 0 || s <= r) return Number.POSITIVE_INFINITY;
+  // A total loss each year leaves nothing to draw a second time.
+  if (r <= -1) return 0;
+  // The formula is 0/0 at r = 0; its limit there is the plain 1/s.
+  if (r === 0) return 1 / s;
+  return Math.log(s / (s - r)) / Math.log(1 + r);
 }
 
 function horizonFor(input: RetirementInput): number {

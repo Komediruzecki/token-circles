@@ -10,7 +10,10 @@ name: Deploy API Worker
 # so re-runs only apply new files). One-time per env, NOT done here:
 #   pnpm run d1:create:{dev,prod}   (paste the printed database_id into worker/wrangler.jsonc)
 #   pnpm run r2:create:{dev,prod}
-#   pnpm run secret:{dev,prod}      (JWT_SECRET + GOOGLE_CLIENT_SECRET)
+#   pnpm run secret:{dev,prod}      (JWT_SECRET + GOOGLE_CLIENT_SECRET + TURNSTILE_SECRET)
+# TURNSTILE_SECRET must be the secret belonging to the SAME widget as the site key that
+# environment's frontend build uses (frontend/.env.dev / .env.production). Changing one
+# without the other passes the widget client-side and 403s every sign-in server-side.
 # Requires repo secrets: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID.
 
 on:

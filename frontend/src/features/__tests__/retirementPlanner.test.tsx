@@ -11,6 +11,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectRetirement } from '../../../../shared/retirement'
 import { DEFAULT_SETTINGS, settingsToInput } from '../../../../shared/retirementSettings'
+import { bumpProfileVersion, setPage } from '../../core/appStore'
 import type { RetirementSettings } from '../../../../shared/retirementSettings'
 
 let serverSettings: Partial<RetirementSettings> = {}
@@ -82,6 +83,10 @@ afterEach(() => {
 })
 
 async function mountPlanner() {
+  // The panel reloads through refetchOnActive, which only fetches while its page is the
+  // visible one — that is how a profile switch reaches it. In the app a page mounts only
+  // when navigated to; here we have to say so.
+  setPage('retirement')
   const { default: RetirementPlanner } = await import('../RetirementPlanner')
   dispose = render(() => <RetirementPlanner />, host)
   await flush()
@@ -637,5 +642,62 @@ describe('the controls behave like controls', () => {
     await flush()
     expect(apiPut).toHaveBeenCalled()
     expect(apiPut.mock.calls[0][1].monthlyContribution).toBeCloseTo(7.29, 10)
+  })
+})
+
+/**
+ * Pages stay mounted since the keep-alive host (#317) — they are hidden with CSS, not
+ * unmounted — so an onMount loader fires once for the whole session. Switching profile in
+ * the sidebar left this panel showing the previous profile's plan until the page was
+ * reloaded by hand.
+ */
+describe('a profile switch reloads the plan', () => {
+  it('re-asks the server when the active profile changes', async () => {
+    serverSettings = { netWorth: 1000 }
+    const root = await mountPlanner()
+    expect(apiGet).toHaveBeenCalledTimes(1)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('1000')
+
+    // The other profile's saved plan.
+    serverSettings = { netWorth: 250000 }
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('250000')
+  })
+
+  it('does not refetch while the page is hidden, and catches up on return', async () => {
+    serverSettings = { netWorth: 1000 }
+    const root = await mountPlanner()
+    expect(apiGet).toHaveBeenCalledTimes(1)
+
+    // Away on another page: a switch there must not fan out a fetch from every mounted page.
+    setPage('dashboard')
+    await flush()
+    serverSettings = { netWorth: 777 }
+    bumpProfileVersion()
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(1)
+
+    setPage('retirement')
+    await flush()
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('777')
+  })
+
+  it('leaves unsaved edits alone when nothing changed profile', async () => {
+    const root = await mountPlanner()
+    await type(inputByTestId(root, 'retirement-input-networth')!, '4242')
+    setPage('dashboard')
+    await flush()
+    setPage('retirement')
+    await flush()
+    // A plain revisit is not a refetch — that is what keeps navigation instant, and it is
+    // also what stops a typed-but-unsaved figure being thrown away.
+    expect(apiGet).toHaveBeenCalledTimes(1)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('4242')
   })
 })

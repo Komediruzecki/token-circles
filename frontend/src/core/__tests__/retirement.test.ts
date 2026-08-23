@@ -23,6 +23,7 @@ import {
   projectScenarios,
   realAnnualReturnPct,
   targetFromSpend,
+  yearsOfWithdrawals,
 } from '../../../../shared/retirement'
 import type { RetirementInput } from '../../../../shared/retirement'
 
@@ -649,5 +650,188 @@ describe('half-typed months', () => {
     )
     expect(p.rows.find((r) => r.month === '2026-02')?.expenses).toBeCloseTo(1000, 6)
     expect(p.rows.find((r) => r.month === '2026-09')?.expenses).toBeCloseTo(1500, 6)
+  })
+})
+
+/**
+ * The withdrawal rate, in detail.
+ *
+ * Raising it brings the retirement date FORWARD, which reads as a bug and is not one: the
+ * rate is a claim about how much of the pot you take each year, so claiming more means
+ * needing less saved. What it also does — shorten how long the money lasts — was invisible,
+ * and that is the part that made it look like a free lunch. These pin both halves together
+ * so neither can be changed without the other being reconsidered.
+ */
+describe('withdrawal rate: a smaller target, bought with a shorter runway', () => {
+  // The exact plan that prompted the question: born October 1995, 50k net worth, 7%
+  // return, 2.5% inflation, lifestyles at 1k/2k/4k a month.
+  const reported = (swr: number): RetirementInput => ({
+    startMonth: '2026-01',
+    birthMonth: '1995-10',
+    netWorth: 50_000,
+    monthlyIncome: 4_000,
+    monthlyExpenses: 2_000,
+    annualReturnPct: 7,
+    annualInflationPct: 2.5,
+    safeWithdrawalRatePct: swr,
+    lifeExpectancyAge: 90,
+    lifestyles: [
+      { id: 'a', label: 'Easy', monthlySpendToday: 1_000 },
+      { id: 'b', label: 'Comfortable', monthlySpendToday: 2_000 },
+      { id: 'c', label: 'Generous', monthlySpendToday: 4_000 },
+    ],
+  })
+
+  it('reproduces both targets the user saw, to the cent', () => {
+    // 1000/mo at 4% is 25x annual spending; at 12% it is 8.33x.
+    expect(targetFromSpend(1_000, 4)).toBeCloseTo(300_000, 6)
+    expect(targetFromSpend(1_000, 12)).toBeCloseTo(100_000, 6)
+
+    const at4 = projectRetirement(reported(4))
+    const at12 = projectRetirement(reported(12))
+    expect(at4.lifestyles[0].targetToday).toBeCloseTo(300_000, 6)
+    expect(at12.lifestyles[0].targetToday).toBeCloseTo(100_000, 6)
+  })
+
+  it('reaches the smaller target sooner — the behaviour that looked wrong', () => {
+    const at4 = projectRetirement(reported(4)).lifestyles[0].crossing
+    const at12 = projectRetirement(reported(12)).lifestyles[0].crossing
+    expect(at4).not.toBeNull()
+    expect(at12).not.toBeNull()
+    expect(at12!.index).toBeLessThan(at4!.index)
+    // Same pot, same growth: only the finish line moved. Ages are non-null here because
+    // this plan has a birth month; without one the projection reports no age at all.
+    expect(typeof at4!.age).toBe('number')
+    expect(typeof at12!.age).toBe('number')
+    expect(at12!.age!).toBeLessThan(at4!.age!)
+  })
+
+  it('is monotonic — every increase in the rate moves the date earlier or leaves it', () => {
+    let previous = Number.POSITIVE_INFINITY
+    for (const swr of [2, 3, 4, 5, 6, 8, 10, 12, 16, 20]) {
+      const crossing = projectRetirement(reported(swr)).lifestyles[0].crossing
+      expect(crossing).not.toBeNull()
+      expect(crossing!.index).toBeLessThanOrEqual(previous)
+      previous = crossing!.index
+    }
+  })
+
+  it('shows what the earlier date costs: the money runs out', () => {
+    const real = realAnnualReturnPct(7, 2.5)
+    expect(real).toBeCloseTo(4.390243902439025, 10)
+    // 4% is under the real return, so growth covers it forever. That is what "safe" means.
+    expect(yearsOfWithdrawals(4, real)).toBe(Number.POSITIVE_INFINITY)
+    // 12% is not. About eleven years, and then nothing.
+    expect(yearsOfWithdrawals(12, real)).toBeCloseTo(10.6, 1)
+  })
+
+  it('scales the target with spending, not with the plan', () => {
+    const at4 = projectRetirement(reported(4))
+    expect(at4.lifestyles[1].targetToday).toBeCloseTo(600_000, 6)
+    expect(at4.lifestyles[2].targetToday).toBeCloseTo(1_200_000, 6)
+    // A more expensive lifestyle is always reached later, never sooner.
+    const [easy, comfortable, generous] = at4.lifestyles
+    expect(easy.crossing!.index).toBeLessThan(comfortable.crossing!.index)
+    expect(comfortable.crossing!.index).toBeLessThan(generous.crossing!.index)
+  })
+
+  it('does not care how long you plan to live', () => {
+    // The crossing is where the pot reaches the target; the horizon only decides how far
+    // the chart is drawn. A shorter life expectancy must not move the date.
+    const to60 = projectRetirement({ ...reported(4), lifeExpectancyAge: 60 })
+    const to90 = projectRetirement({ ...reported(4), lifeExpectancyAge: 90 })
+    expect(to60.lifestyles[0].crossing!.month).toBe(to90.lifestyles[0].crossing!.month)
+  })
+})
+
+describe('how long the money lasts', () => {
+  it('is forever exactly when growth covers the draw', () => {
+    expect(yearsOfWithdrawals(4, 4)).toBe(Number.POSITIVE_INFINITY)
+    expect(yearsOfWithdrawals(3.99, 4)).toBe(Number.POSITIVE_INFINITY)
+    expect(Number.isFinite(yearsOfWithdrawals(4.01, 4))).toBe(true)
+  })
+
+  it('is 1/rate when the pot does not grow at all', () => {
+    expect(yearsOfWithdrawals(4, 0)).toBeCloseTo(25, 10)
+    expect(yearsOfWithdrawals(10, 0)).toBeCloseTo(10, 10)
+    expect(yearsOfWithdrawals(100, 0)).toBeCloseTo(1, 10)
+  })
+
+  it('shortens as the draw rises and lengthens as the return rises', () => {
+    const real = 4.39
+    let previous = Number.POSITIVE_INFINITY
+    for (const swr of [5, 6, 8, 12, 20, 50, 100]) {
+      const years = yearsOfWithdrawals(swr, real)
+      expect(years).toBeLessThan(previous)
+      previous = years
+    }
+    expect(yearsOfWithdrawals(8, 6)).toBeGreaterThan(yearsOfWithdrawals(8, 2))
+  })
+
+  it('handles a return that loses to inflation', () => {
+    // A negative real return drains the pot faster than no growth would.
+    expect(yearsOfWithdrawals(4, -2)).toBeLessThan(yearsOfWithdrawals(4, 0))
+    expect(yearsOfWithdrawals(4, -2)).toBeGreaterThan(0)
+  })
+
+  it('degrades sanely at the edges rather than returning NaN', () => {
+    expect(yearsOfWithdrawals(0, 5)).toBe(Number.POSITIVE_INFINITY)
+    expect(yearsOfWithdrawals(-1, 5)).toBe(Number.POSITIVE_INFINITY)
+    // Everything lost every year leaves nothing to draw a second time.
+    expect(yearsOfWithdrawals(50, -100)).toBe(0)
+    expect(yearsOfWithdrawals(50, -150)).toBe(0)
+    for (const [swr, real] of [
+      [4, 4.39],
+      [12, 4.39],
+      [0.01, 0.01],
+      [100, 99],
+    ]) {
+      expect(Number.isNaN(yearsOfWithdrawals(swr, real))).toBe(false)
+    }
+  })
+
+  it('draws the whole pot in the first year at 100%', () => {
+    expect(yearsOfWithdrawals(100, 0)).toBeCloseTo(1, 10)
+  })
+})
+
+describe('targets at the edges', () => {
+  it('treats a zero or negative rate as an unreachable target rather than dividing by it', () => {
+    expect(targetFromSpend(2_000, 0)).toBe(Number.POSITIVE_INFINITY)
+    expect(targetFromSpend(2_000, -4)).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('needs nothing saved to fund nothing', () => {
+    expect(targetFromSpend(0, 4)).toBe(0)
+  })
+
+  it('reports no crossing rather than a wrong one when the target is out of reach', () => {
+    const result = projectRetirement({
+      startMonth: '2026-01',
+      netWorth: 0,
+      monthlyIncome: 100,
+      monthlyExpenses: 0,
+      annualReturnPct: 0,
+      annualInflationPct: 0,
+      safeWithdrawalRatePct: 4,
+      horizonMonths: 12,
+      lifestyles: [{ id: 'x', label: 'Unreachable', monthlySpendToday: 10_000 }],
+    })
+    expect(result.lifestyles[0].crossing).toBeNull()
+  })
+
+  it('crosses at month zero when the pot is already big enough', () => {
+    const result = projectRetirement({
+      startMonth: '2026-01',
+      netWorth: 1_000_000,
+      monthlyIncome: 0,
+      monthlyExpenses: 0,
+      annualReturnPct: 0,
+      annualInflationPct: 0,
+      safeWithdrawalRatePct: 4,
+      horizonMonths: 12,
+      lifestyles: [{ id: 'x', label: 'Already there', monthlySpendToday: 1_000 }],
+    })
+    expect(result.lifestyles[0].crossing?.index).toBe(0)
   })
 })
