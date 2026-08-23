@@ -497,6 +497,7 @@ app.use(require('./routes/categories')({ apiRateLimiter, logError, requireAuth }
 app.use(require('./routes/budgets')({ apiRateLimiter, requireAuth }));
 app.use(require('./routes/dashboard')({ apiRateLimiter, logError, requireAuth }));
 app.use(require('./routes/exportRoutes')({ apiRateLimiter, logError, requireAuth }));
+app.use(require('./routes/importSources')({ requireAuth }));
 app.use(
   require('./routes/importRoutes')({
     apiRateLimiter,
