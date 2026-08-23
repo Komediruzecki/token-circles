@@ -25,6 +25,15 @@ export default defineConfig({
       '@pwa-kit': resolve(__dirname, '../packages/pwa-kit/src/index.ts'),
     },
   },
+  // Mirror vite.config.ts. Without it a kebab-case class reached through its camelCase name —
+  // `styles.createCard` for `.create-card`, which is how this codebase writes them — resolves to
+  // `undefined` under test, so every rendered component carries `class="… undefined"` and no test
+  // can assert on a class at all.
+  css: {
+    modules: {
+      localsConvention: 'camelCase',
+    },
+  },
   test: {
     environment: 'jsdom',
     // Process CSS so `?raw` imports of stylesheets return their source. Under the default

@@ -28,6 +28,14 @@ export interface AccountSelectProps {
   onCreated?: (account: { id: number; name: string }) => void | Promise<void>
   /** Prefill for the new-account name, e.g. derived from the statement's bank. */
   suggestedName?: () => string
+  /**
+   * Mark the control itself as the thing that is wrong. A form error rendered only at the top of
+   * the page is invisible on a phone — the field that needs fixing is what the user is looking
+   * at, and it has to say so.
+   */
+  invalid?: () => boolean
+  /** Shown under the control when `invalid`. Keep it to a few words. */
+  invalidMessage?: () => string
   testId?: string
 }
 
@@ -89,7 +97,8 @@ export function AccountSelect(props: AccountSelectProps) {
   return (
     <div class={styles.wrap}>
       <select
-        class={styles.select}
+        class={props.invalid?.() ? `${styles.select} ${styles.selectInvalid}` : styles.select}
+        aria-invalid={props.invalid?.() ? 'true' : undefined}
         data-test-id={props.testId ?? 'account-select'}
         value={creating() ? CREATE_SENTINEL : props.value()}
         onChange={(e) => {
@@ -106,6 +115,12 @@ export function AccountSelect(props: AccountSelectProps) {
         <For each={props.accounts()}>{(a) => <option value={a.name}>{a.name}</option>}</For>
         <option value={CREATE_SENTINEL}>New account…</option>
       </select>
+
+      <Show when={props.invalid?.()}>
+        <p class={styles.error} data-test-id="account-select-invalid">
+          {props.invalidMessage?.() ?? 'Choose an account'}
+        </p>
+      </Show>
 
       <Show when={creating()}>
         <div class={styles.createCard} data-test-id="account-select-create">

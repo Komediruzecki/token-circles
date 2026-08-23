@@ -20,6 +20,17 @@
   border-color: var(--primary);
 }
 
+.select-invalid {
+  border-color: var(--expense);
+  /* A second ring, because a 1px border on a 13px control is easy to miss on a phone — which is
+     the screen this exists for. */
+  box-shadow: 0 0 0 1px var(--expense);
+}
+
+.select-invalid:focus {
+  border-color: var(--expense);
+}
+
 .create-card {
   border: 1px solid color-mix(in oklab, var(--primary) 24%, var(--border));
   border-radius: 10px;

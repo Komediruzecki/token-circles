@@ -4,7 +4,7 @@
  * Import page and the onboarding wizard — pass `compact` to drop the page-sized
  * explainer table.
  */
-import { createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
 import { AccountSelect } from '../../components/AccountSelect'
 import { OrbitSpinner } from '../../components/OrbitSpinner'
 import { Pill } from '../../components/Pill'
@@ -32,6 +32,18 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
 
   const bankLabel = (bankId: BankId | null) =>
     listAdapters().find((a) => a.id === bankId)?.label ?? ''
+
+  // Marking the field red only helps if the user can see it. On a phone the row that needs
+  // fixing is usually below the fold — the whole reason the summary at the top of the page went
+  // unnoticed — so the first offending row is brought into view when the errors appear.
+  createEffect(() => {
+    if (flow.bankFilesMissingAccount().length === 0) return
+    queueMicrotask(() => {
+      document
+        .querySelector('[data-test-id="bank-file-row"][data-invalid="true"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  })
 
   // Drag-over highlight per dropzone. dragenter/dragleave fire for every child
   // the cursor crosses, so track depth and only clear at zero. Only file drags
@@ -461,72 +473,78 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               }}
             >
               <For each={flow.bankFiles()}>
-                {(row, i) => (
-                  <div
-                    data-test-id="bank-file-row"
-                    style={{
-                      display: 'flex',
-                      'align-items': 'flex-start',
-                      gap: '8px',
-                      'flex-wrap': 'wrap',
-                      border: '1px solid var(--border)',
-                      'border-radius': '8px',
-                      padding: '8px 10px',
-                    }}
-                  >
-                    <span
+                {(row, i) => {
+                  const missingAccount = () => flow.bankFilesMissingAccount().includes(i())
+                  return (
+                    <div
+                      data-test-id="bank-file-row"
+                      data-invalid={missingAccount() ? 'true' : undefined}
                       style={{
-                        flex: '1 1 180px',
-                        'font-size': '13px',
-                        'overflow-wrap': 'anywhere',
-                        'padding-top': '6px',
+                        display: 'flex',
+                        'align-items': 'flex-start',
+                        gap: '8px',
+                        'flex-wrap': 'wrap',
+                        border: `1px solid ${missingAccount() ? 'var(--expense)' : 'var(--border)'}`,
+                        'border-radius': '8px',
+                        padding: '8px 10px',
                       }}
                     >
-                      {row.file.name}
-                      {row.meta.iban ? (
-                        <span style="color: var(--text-secondary);"> · {row.meta.iban}</span>
-                      ) : null}
-                    </span>
-                    <select
-                      class={styles.mappingSelect}
-                      style={{ 'max-width': '130px' }}
-                      value={row.bankId ?? ''}
-                      onChange={(e) => {
-                        flow.updateBankFile(i(), {
-                          bankId: (e.currentTarget.value || null) as BankId | null,
-                        })
-                      }}
-                    >
-                      <option value="">Unknown</option>
-                      <For each={listAdapters()}>
-                        {(a) => <option value={a.id}>{a.label}</option>}
-                      </For>
-                    </select>
-                    <AccountSelect
-                      accounts={flow.bankAccounts}
-                      value={() => row.targetAccount}
-                      onChange={(name) => {
-                        flow.updateBankFile(i(), { targetAccount: name })
-                      }}
-                      onCreated={async () => {
-                        await flow.loadBankAccounts()
-                      }}
-                      suggestedName={() =>
-                        [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ')
-                      }
-                      testId="bank-target-account"
-                    />
-                    <button
-                      class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                      style={{ 'margin-top': '2px' }}
-                      onClick={() => {
-                        flow.removeBankFile(i())
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
+                      <span
+                        style={{
+                          flex: '1 1 180px',
+                          'font-size': '13px',
+                          'overflow-wrap': 'anywhere',
+                          'padding-top': '6px',
+                        }}
+                      >
+                        {row.file.name}
+                        {row.meta.iban ? (
+                          <span style="color: var(--text-secondary);"> · {row.meta.iban}</span>
+                        ) : null}
+                      </span>
+                      <select
+                        class={styles.mappingSelect}
+                        style={{ 'max-width': '130px' }}
+                        value={row.bankId ?? ''}
+                        onChange={(e) => {
+                          flow.updateBankFile(i(), {
+                            bankId: (e.currentTarget.value || null) as BankId | null,
+                          })
+                        }}
+                      >
+                        <option value="">Unknown</option>
+                        <For each={listAdapters()}>
+                          {(a) => <option value={a.id}>{a.label}</option>}
+                        </For>
+                      </select>
+                      <AccountSelect
+                        accounts={flow.bankAccounts}
+                        value={() => row.targetAccount}
+                        onChange={(name) => {
+                          flow.updateBankFile(i(), { targetAccount: name })
+                        }}
+                        onCreated={async () => {
+                          await flow.loadBankAccounts()
+                        }}
+                        suggestedName={() =>
+                          [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ')
+                        }
+                        invalid={missingAccount}
+                        invalidMessage={() => 'Choose an account for this statement'}
+                        testId="bank-target-account"
+                      />
+                      <button
+                        class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
+                        style={{ 'margin-top': '2px' }}
+                        onClick={() => {
+                          flow.removeBankFile(i())
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )
+                }}
               </For>
             </div>
 

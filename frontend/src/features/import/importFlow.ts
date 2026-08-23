@@ -140,6 +140,25 @@ export interface ImportSummary {
  * Exact for a source with one header row and no blank rows. Wholly empty records are dropped while
  * parsing, and each one dropped above a row shifts that row by one more.
  */
+/**
+ * Which recognized rows still have no target account, by index.
+ *
+ * Pure and exported so the rule can be asserted directly: what the import UI colours red has to
+ * be exactly what `runBankTransform` refuses on, and the two drifting apart would mean marking
+ * the wrong field — or none.
+ *
+ * Unrecognized rows are excluded on purpose. They are skipped by the transform anyway, so an
+ * account on them is not required and demanding one would be a red field the user cannot clear.
+ */
+export function rowsMissingAccount(
+  rows: readonly Pick<BankFileRow, 'bankId' | 'targetAccount'>[]
+): number[] {
+  return rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.bankId !== null && !row.targetAccount)
+    .map(({ index }) => index)
+}
+
 export function sourceRowNumber(index: number): number {
   return index + 2
 }
@@ -253,6 +272,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
 
   // Bank Imports state
   const [bankFiles, setBankFiles] = createSignal<BankFileRow[]>([])
+  /**
+   * Whether the per-field errors on the bank rows are showing yet. False until the user actually
+   * tries to process, so an untouched form is not covered in red; true from the first failed
+   * attempt onward, which is the point at which they have asked and been refused.
+   */
+  const [showBankFieldErrors, setShowBankFieldErrors] = createSignal(false)
+
+  /**
+   * Which rows are missing their target account, by index. Derived rather than stored, so filling
+   * one in clears its own error immediately and removing a row cannot leave a stale index behind.
+   */
+  const bankFilesMissingAccount = (): number[] =>
+    showBankFieldErrors() ? rowsMissingAccount(bankFiles()) : []
   const [bankAccounts, setBankAccounts] = createSignal<
     { id: number; name: string; bank_name?: string | null }[]
   >([])
@@ -809,10 +841,15 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setError('None of the files were recognized as a supported bank statement')
       return null
     }
-    if (recognized.some((r) => !r.targetAccount)) {
+    if (rowsMissingAccount(bankFiles()).length > 0) {
+      // The summary at the top of the page stays — it is useful on a wide screen — but on a phone
+      // it is above the fold the user is nowhere near, so the rows themselves have to say which
+      // one is wrong.
+      setShowBankFieldErrors(true)
       setError('Choose a target account for every recognized file')
       return null
     }
+    setShowBankFieldErrors(false)
     const knownAccounts = bankAccounts().map((a) => a.name)
     const categoryRules = rulesOverride?.categoryRules ?? loadCategoryRules()
     const stored = rulesOverride?.transferRules ?? loadTransferRules()
@@ -1391,6 +1428,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     pasteDelimiter,
     setPasteDelimiter,
     bankFiles,
+    bankFilesMissingAccount,
     bankAccounts,
     bankWarnings,
     showBankRules,

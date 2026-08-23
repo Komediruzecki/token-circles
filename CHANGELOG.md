@@ -19,6 +19,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Install Token Circles as an app.** Settings now offers it where the browser supports it — the app gets its own window and a home-screen icon, without the browser around it. On iPhone and iPad, where no browser offers this to a page, it explains the Share menu instead. Nothing is shown at all on browsers that cannot install, or when you are already running the installed app.
 - **Signing up with a password now confirms your email.** The welcome mail carries a "Confirm your email" link; clicking it is the whole job. Until then a strip at the top of the app says so and offers to send the link again. Nothing is blocked in the meantime — the account works either way; confirming just means we can reach you about it, which matters most when you need a password reset. Accounts created with Google are already confirmed by Google and see none of this.
 
+### Fixed
+
+- **Bank import tells you which file is missing an account.** Pressing "Process & continue" without picking a target account put one line at the top of the page — on a phone, above a fold you are nowhere near by then, so the app looked like it simply did nothing. The file that needs an account now goes red, says "Choose an account for this statement" right under the picker, and scrolls into view. The summary at the top stays.
+
 ## [5.9.3] — 2026-08-23
 
 ### Fixed

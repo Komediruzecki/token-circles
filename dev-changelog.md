@@ -51,6 +51,16 @@ All notable changes to Token Circles are documented here. The format is based on
 - Manifest: `id` (without it the identity is derived from `start_url`, so changing that later reads as a different app and offers a second install beside the first), plus explicit `scope`, `launch_handler: navigate-existing`, `orientation` and `categories`. Dropped `version: Date.now()` — not a manifest member, and it churned the file on every build.
 - Tests: 11 for the kit, 6 for the button.
 
+### Fixed
+
+- **The bank-import account error is now on the field, not only at the top of the page.** `runBankTransform` refused with `setError('Choose a target account for every recognized file')` and nothing else; on a phone that line is off-screen by the time the button is reachable, so the refusal was indistinguishable from the button doing nothing.
+  - `rowsMissingAccount(rows)` is extracted and exported from `importFlow.ts`, and **both** the transform's guard and the UI's red-marking now call it — so what is coloured red is by construction exactly what the transform refuses on. Unrecognized rows are excluded: the transform skips them, so demanding an account there would be an error the user cannot clear.
+  - `bankFilesMissingAccount()` gates that list behind `showBankFieldErrors`, set on the first failed attempt. Derived rather than stored, so filling one in clears its own error with no second submit and removing a row cannot leave a stale index behind.
+  - `AccountSelect` gains `invalid` / `invalidMessage`: a `--expense` border plus a 1px ring (a 1px border on a 13px control is easy to miss on a phone, which is the screen this is for), `aria-invalid="true"`, and the message under the control.
+  - The row itself takes a red border and `data-invalid="true"`, and the first offending row is scrolled into view — marking a field only helps if it is on screen.
+- **`vitest.config.ts` now mirrors `vite.config.ts`'s `css.modules.localsConvention: 'camelCase'`.** Without it a kebab-case class reached through its camelCase name — `styles.createCard` for `.create-card`, which is how this codebase writes them — resolved to `undefined` under test, so every rendered component carried `class="… undefined"` and no test could assert on a class at all. Found by writing the first test that tried.
+- Tests: `rowsMissingAccount` (5) and `AccountSelect.invalid` (5). Five mutations run — flagging unrecognized rows, indexing among recognized rows only, dropping the invalid class, dropping `aria-invalid`, never rendering the message — each killed.
+
 ### Removed
 
 - `frontend/public/manifest.json` — dead since VitePWA started generating `manifest.webmanifest`. Nothing linked it, and its `short_name` ("Circles") disagreed with the one actually being served.
