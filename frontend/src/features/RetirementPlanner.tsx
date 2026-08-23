@@ -23,16 +23,21 @@ import {
   settingsToInput,
 } from '../../../shared/retirementSettings'
 import Chart from '../components/Chart'
+import InfoTip from '../components/InfoTip'
 import MonthPicker from '../components/MonthPicker'
 import NumberField from '../components/NumberField'
 import OrbitalDivider from '../components/OrbitalDivider'
+import RangeField from '../components/RangeField'
+import Toggle from '../components/Toggle'
 import { apiGet, apiPut, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
+import { lifestyleMarkersPlugin } from './lifestyleMarkers'
 import styles from './RetirementPage.module.css'
 import type { ExpensePeriod, IncomeStep, Lifestyle } from '../../../shared/retirement'
 import type { DerivedField, RetirementSettings } from '../../../shared/retirementSettings'
+import type { LifestyleMarker } from './lifestyleMarkers'
 
 interface SettingsResponse {
   settings: RetirementSettings
@@ -55,6 +60,13 @@ function labelFor(field: string): string {
   return FIELD_LABELS[field] ?? field
 }
 
+/**
+ * One colour per lifestyle, shared by its dashed target line and its marker on the chart
+ * so the two read as the same thing without a second legend entry. Index 0 is the net
+ * worth line's green, so lifestyles start at 1.
+ */
+const LIFESTYLE_PALETTE = ['#59d2a2', '#6e9bff', '#f0a860', '#d98ce0']
+
 // Year ranges for the month pickers. A plan can reach back a few years — people record a
 // pay step that already happened — and forward across a working life and then some.
 const NOW_YEAR = new Date().getFullYear()
@@ -71,6 +83,9 @@ export default function RetirementPlanner() {
   const [dirty, setDirty] = createSignal(false)
   const [showNominal, setShowNominal] = createSignal(false)
   const [showBand, setShowBand] = createSignal(false)
+  // On by default: the date each lifestyle becomes affordable is the answer the page
+  // exists to give, and leaving it off by default hides it behind a preference.
+  const [showMarkers, setShowMarkers] = createSignal(true)
 
   const chartColors = () => theme.getChartColors()
 
@@ -92,13 +107,17 @@ export default function RetirementPlanner() {
   const save = async () => {
     setSaving(true)
     try {
-      const res = await apiPut<{ settings: RetirementSettings }>(
+      const res = await apiPut<Pick<SettingsResponse, 'settings' | 'filled'>>(
         '/api/retirement/settings',
         settings()
       )
       // Take back what was stored rather than what was sent: the server normalises, and the
       // panel should show what will actually be used next time.
       setSettings(normalizeSettings(res.settings))
+      // Saving is exactly what stops a field being derived, so the provenance note has to
+      // come back from the save too. Without this it kept crediting "your data" for figures
+      // the user had just entered by hand.
+      setFilled(res.filled || [])
       setDirty(false)
       showToast('Retirement assumptions saved', 'success')
     } catch (err) {
@@ -126,6 +145,63 @@ export default function RetirementPlanner() {
   )
 
   const swrSustainable = createMemo(() => !Number.isFinite(withdrawalRunway()))
+
+  /**
+   * The age the pot would empty at: the age the first lifestyle is reached, plus the
+   * runway. The first is the one the cards mark as primary, and a single chip has to pick
+   * one — a plan reached at 36 and one reached at 52 do not run out at the same age even
+   * on the same rate, which is the part a runway in years alone does not convey.
+   *
+   * Null unless there is a date of birth to count ages from and a crossing to count from.
+   */
+  const runsOutAtAge = createMemo(() => {
+    if (swrSustainable()) return null
+    const crossing = projection().lifestyles[0]?.crossing
+    if (!crossing || crossing.age === null) return null
+    return Math.round(crossing.age + withdrawalRunway())
+  })
+
+  /**
+   * What the withdrawal rate means, in the one place a user will look for it. Written out
+   * rather than left to the reader because the rate is the single most misread control on
+   * this page: a bigger number reads as "more money", when the spending never changes and
+   * only the pot you call sufficient does.
+   */
+  const swrExplainer = createMemo(() => {
+    const rate = settings().safeWithdrawalRatePct
+    if (rate <= 0)
+      return 'The share of your pot you take in your first retired year. 4% is the usual rule of thumb.'
+    const multiple = (100 / rate).toFixed(0)
+    const real = projection().realAnnualReturnPct.toFixed(2)
+    const lasts = swrSustainable()
+      ? `Growth of ${real}% after inflation covers it, so the pot is never spent down.`
+      : `At ${real}% growth after inflation the pot empties after about ${Math.round(withdrawalRunway())} years.`
+    return (
+      `The share of your pot you take in your first retired year — and after that, the same amount ` +
+      `raised with inflation, not the same percentage. It sets the pot you need: ${multiple}x your ` +
+      `annual spending. Raising it is not more money to live on; the spending is unchanged. It only ` +
+      `calls a smaller pot enough, which is why it retires you sooner. ${lasts} 4% is the usual rule of thumb.`
+    )
+  })
+
+  /**
+   * A marker per lifestyle that is actually reached inside the projection. The x is in
+   * chart-point units: the chart plots one point a year and a crossing lands on a month,
+   * so twelfths are the resolution the line is drawn at.
+   */
+  const markers = createMemo<LifestyleMarker[]>(() =>
+    projection().lifestyles.flatMap((lifestyle, i) => {
+      const crossing = lifestyle.crossing
+      if (!crossing) return []
+      return [
+        {
+          x: crossing.index / 12,
+          label: lifestyle.label,
+          color: LIFESTYLE_PALETTE[(i + 1) % LIFESTYLE_PALETTE.length],
+        },
+      ]
+    })
+  )
 
   const scenarios = createMemo(() => {
     if (!showBand()) return []
@@ -168,7 +244,6 @@ export default function RetirementPlanner() {
 
   const chartData = createMemo(() => {
     const p = projection()
-    const palette = ['#59d2a2', '#6e9bff', '#f0a860', '#d98ce0']
     return {
       labels: axisLabels(),
       datasets: [
@@ -197,7 +272,7 @@ export default function RetirementPlanner() {
         ...p.lifestyles.map((l, i) => ({
           label: `${l.label} target`,
           data: targetSeries(l),
-          borderColor: palette[(i + 1) % palette.length],
+          borderColor: LIFESTYLE_PALETTE[(i + 1) % LIFESTYLE_PALETTE.length],
           backgroundColor: 'transparent',
           fill: false,
           tension: 0,
@@ -242,6 +317,9 @@ export default function RetirementPlanner() {
           label: (ctx: any) => `${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`,
         },
       },
+      // Read by lifestyleMarkersPlugin. Empty rather than absent when the toggle is off:
+      // the plugin instance is shared across updates and only its options change.
+      lifestyleMarkers: { markers: showMarkers() ? markers() : [] },
     },
   }))
 
@@ -314,16 +392,21 @@ export default function RetirementPlanner() {
       <Show when={!loading()} fallback={<div class={styles.emptyState}>Loading your plan...</div>}>
         <Show when={filled().length > 0}>
           <div class={styles.derivedNote} data-test-id="retirement-derived-note">
+            {/* The same circled-i as InfoTip, drawn larger: this note is the page's own
+                voice explaining where its numbers came from, and at 16px it read as a
+                stray bullet rather than the mark the rest of the app uses. */}
             <svg
-              width="16"
-              height="16"
+              class={styles.derivedIcon}
+              width="22"
+              height="22"
               fill="none"
               stroke="currentColor"
               stroke-width="2"
               viewBox="0 0 24 24"
               aria-hidden="true"
             >
-              <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <circle cx="12" cy="12" r="10" />
+              <path stroke-linecap="round" d="M12 16v-4m0-4h.01" />
             </svg>
             <div>
               <strong>Filled in from your data.</strong> Change anything that looks wrong — these
@@ -400,6 +483,10 @@ export default function RetirementPlanner() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel} for="ret-birth">
                   Date of birth
+                  <InfoTip
+                    testId="retirement-info-birth"
+                    text="Used to label the chart with your age instead of the year, and to work out how long a plan that stops at an age has to run."
+                  />
                 </label>
                 <MonthPicker
                   id="ret-birth"
@@ -414,7 +501,6 @@ export default function RetirementPlanner() {
                     update('birthMonth', v)
                   }}
                 />
-                <span class={styles.fieldHint}>Used to label the chart with your age.</span>
               </div>
             </div>
 
@@ -472,6 +558,10 @@ export default function RetirementPlanner() {
               <div class={styles.formGroup}>
                 <label class={styles.formLabel} for="ret-raise">
                   Annual pay rise (%)
+                  <InfoTip
+                    testId="retirement-info-raise"
+                    text="Applied every January, unless a pay step beats it."
+                  />
                 </label>
                 <NumberField
                   id="ret-raise"
@@ -483,13 +573,16 @@ export default function RetirementPlanner() {
                     update('annualRaisePct', v)
                   }}
                 />
-                <span class={styles.fieldHint}>
-                  Applied every January, unless a pay step beats it.
-                </span>
               </div>
 
               <fieldset class={styles.subSection} data-test-id="retirement-income-steps">
-                <legend class={styles.subLegend}>Planned pay steps</legend>
+                <legend class={styles.subLegend}>
+                  Planned pay steps
+                  <InfoTip
+                    testId="retirement-info-steps"
+                    text="What you will earn from that month on. Lower than today is a pay cut or a sabbatical, and is projected as one; raises carry on from there."
+                  />
+                </legend>
                 <Index each={settings().incomeSteps}>
                   {(step, i) => (
                     <div class={styles.listRow}>
@@ -554,14 +647,16 @@ export default function RetirementPlanner() {
                 >
                   Add pay step
                 </button>
-                <span class={styles.fieldHint}>
-                  What you will earn from that month on. Lower than today is a pay cut or a
-                  sabbatical, and is projected as one; raises carry on from there.
-                </span>
               </fieldset>
 
               <fieldset class={styles.subSection} data-test-id="retirement-expense-periods">
-                <legend class={styles.subLegend}>Planned spending</legend>
+                <legend class={styles.subLegend}>
+                  Planned spending
+                  <InfoTip
+                    testId="retirement-info-periods"
+                    text="Leave the end blank for spending that carries on. A negative amount is a planned saving."
+                  />
+                </legend>
                 <Index each={settings().expensePeriods}>
                   {(period, i) => (
                     <div class={styles.listRow}>
@@ -643,10 +738,6 @@ export default function RetirementPlanner() {
                 >
                   Add spending period
                 </button>
-                <span class={styles.fieldHint}>
-                  Leave the end blank for spending that carries on. A negative amount is a planned
-                  saving.
-                </span>
               </fieldset>
             </Show>
 
@@ -726,7 +817,13 @@ export default function RetirementPlanner() {
 
               <Show when={settings().useAllocation}>
                 <fieldset class={styles.subSection} data-test-id="retirement-allocation">
-                  <legend class={styles.subLegend}>Allocation</legend>
+                  <legend class={styles.subLegend}>
+                    Allocation
+                    <InfoTip
+                      testId="retirement-info-allocation"
+                      text="Weights are shares of the portfolio. Cash is held at minus inflation, because that is what it does."
+                    />
+                  </legend>
                   <Index each={settings().allocation}>
                     {(slice, i) => (
                       <div class={styles.listRow}>
@@ -776,16 +873,18 @@ export default function RetirementPlanner() {
                       </div>
                     )}
                   </Index>
-                  <span class={styles.fieldHint}>
-                    Weights are shares of the portfolio. Cash is held at minus inflation, because
-                    that is what it does.
-                  </span>
                 </fieldset>
               </Show>
             </Show>
 
             <fieldset class={styles.subSection} data-test-id="retirement-lifestyles">
-              <legend class={styles.subLegend}>What you want to retire into</legend>
+              <legend class={styles.subLegend}>
+                What you want to retire into
+                <InfoTip
+                  testId="retirement-info-lifestyles"
+                  text="Monthly spending in today's money. Somewhere cheaper is a different retirement date, not a different plan."
+                />
+              </legend>
               <Index each={settings().lifestyles}>
                 {(lifestyle) => (
                   <div class={styles.listRow}>
@@ -839,57 +938,54 @@ export default function RetirementPlanner() {
               >
                 Add a lifestyle
               </button>
-              <span class={styles.fieldHint}>
-                Monthly spending in today's money. Somewhere cheaper is a different retirement date,
-                not a different plan.
-              </span>
             </fieldset>
 
             <div class={styles.formRow}>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel} for="ret-swr">
                   Withdrawal rate (%)
+                  <InfoTip testId="retirement-info-swr" text={swrExplainer()} />
                 </label>
-                <NumberField
-                  id="ret-swr"
-                  step="0.01"
-                  class={styles.formControl}
-                  testId="retirement-input-swr"
-                  value={settings().safeWithdrawalRatePct}
-                  onChange={(v) => {
-                    update('safeWithdrawalRatePct', v)
-                  }}
-                />
-                <span
-                  class={`${styles.fieldHint} ${swrSustainable() ? '' : styles.fieldWarn}`}
-                  data-test-id="retirement-swr-hint"
-                >
-                  <Show
-                    when={settings().safeWithdrawalRatePct > 0}
-                    fallback="A rate above zero. 4% is the usual rule of thumb."
-                  >
-                    {(100 / settings().safeWithdrawalRatePct).toFixed(0)}x your annual spending, so
-                    a higher rate needs a smaller pot and retires you sooner.{' '}
-                    <Show
-                      when={swrSustainable()}
-                      fallback={
-                        <>
-                          But at {settings().safeWithdrawalRatePct}% against a{' '}
-                          {projection().realAnnualReturnPct.toFixed(2)}% real return the pot is
-                          empty after about {Math.round(withdrawalRunway())} years — the earlier
-                          date is borrowed, not earned. 4% is the usual rule of thumb.
-                        </>
-                      }
-                    >
-                      Growth covers it at a {projection().realAnnualReturnPct.toFixed(2)}% real
-                      return, so the pot lasts indefinitely.
-                    </Show>
-                  </Show>
-                </span>
+                {/* The slider is the point: what this number costs you is a trade-off, and
+                    dragging it shows the chart and the runway move together. The number box
+                    beside it keeps exact entry, and doubles as the slider's readout. */}
+                <div class={styles.sliderRow}>
+                  <RangeField
+                    min={1}
+                    max={12}
+                    step={0.1}
+                    showReadout={false}
+                    value={settings().safeWithdrawalRatePct}
+                    testId="retirement-slider-swr"
+                    ariaLabel="Withdrawal rate, percent"
+                    onChange={(v) => {
+                      update('safeWithdrawalRatePct', round(v))
+                    }}
+                  />
+                  <NumberField
+                    id="ret-swr"
+                    step="0.01"
+                    class={`${styles.formControl} ${styles.sliderNumber}`}
+                    testId="retirement-input-swr"
+                    value={settings().safeWithdrawalRatePct}
+                    onChange={(v) => {
+                      update('safeWithdrawalRatePct', v)
+                    }}
+                  />
+                </div>
               </div>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel} for="ret-life">
                   Plan until age
+                  {/* Stopping at an age means nothing without a date to count it from, and the
+                      projection quietly ignores the field in that case. Say so rather than
+                      leaving a control that does nothing. */}
+                  <Show when={settings().birthMonth === null}>
+                    <InfoTip
+                      testId="retirement-life-needs-birth"
+                      text="Set your date of birth to plan to an age. Until then the chart runs 60 years."
+                    />
+                  </Show>
                 </label>
                 <NumberField
                   id="ret-life"
@@ -902,14 +998,6 @@ export default function RetirementPlanner() {
                     update('lifeExpectancyAge', v)
                   }}
                 />
-                {/* Stopping at an age means nothing without a date to count it from, and the
-                    projection quietly ignores the field in that case. Say so rather than
-                    leaving a control that does nothing. */}
-                <Show when={settings().birthMonth === null}>
-                  <span class={styles.fieldHint} data-test-id="retirement-life-needs-birth">
-                    Set your date of birth to plan to an age. Until then the chart runs 60 years.
-                  </span>
-                </Show>
               </div>
             </div>
 
@@ -950,23 +1038,71 @@ export default function RetirementPlanner() {
               </For>
             </div>
 
+            {/* The cards say when you can stop. This says how long stopping then lasts,
+                which is the half of the answer the withdrawal rate quietly decides. */}
+            <div
+              class={`${styles.runwayChip} ${swrSustainable() ? '' : styles.runwayChipWarn}`}
+              data-test-id="retirement-runway-chip"
+            >
+              <svg
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path stroke-linecap="round" d="M12 7v5l3 2" />
+              </svg>
+              <Show
+                when={swrSustainable()}
+                fallback={
+                  <span>
+                    Retired for about <strong>{Math.round(withdrawalRunway())} years</strong> before
+                    the money runs out
+                    <Show when={runsOutAtAge() !== null}>, around age {runsOutAtAge()}</Show>.
+                    Drawing {settings().safeWithdrawalRatePct}% a year outpaces{' '}
+                    {projection().realAnnualReturnPct.toFixed(2)}% growth after inflation.
+                  </span>
+                }
+              >
+                <span>
+                  Retired <strong>for as long as you like</strong> — growth of{' '}
+                  {projection().realAnnualReturnPct.toFixed(2)}% after inflation covers the{' '}
+                  {settings().safeWithdrawalRatePct}% you draw, so the pot is never spent down.
+                </span>
+              </Show>
+            </div>
+
+            {/* The app's own switch rather than three native checkboxes, in its compact
+                size: these annotate the chart and should not out-shout it. */}
             <div class={styles.chartControls}>
-              <label class={styles.checkRow} data-test-id="retirement-toggle-nominal">
-                <input
-                  type="checkbox"
-                  checked={showNominal()}
-                  onChange={(e) => setShowNominal(e.currentTarget.checked)}
-                />
-                <span>Show future money instead of today's</span>
-              </label>
-              <label class={styles.checkRow} data-test-id="retirement-toggle-band">
-                <input
-                  type="checkbox"
-                  checked={showBand()}
-                  onChange={(e) => setShowBand(e.currentTarget.checked)}
-                />
-                <span>Show a better and worse return</span>
-              </label>
+              <Toggle
+                size="compact"
+                checked={showNominal()}
+                onChange={setShowNominal}
+                data-test-id="retirement-toggle-nominal"
+              >
+                Show future money instead of today's
+              </Toggle>
+              <Toggle
+                size="compact"
+                checked={showBand()}
+                onChange={setShowBand}
+                data-test-id="retirement-toggle-band"
+              >
+                Show a better and worse return
+              </Toggle>
+              <Toggle
+                size="compact"
+                checked={showMarkers()}
+                onChange={setShowMarkers}
+                data-test-id="retirement-toggle-markers"
+              >
+                Mark when each lifestyle is reached
+              </Toggle>
             </div>
 
             <div class={styles.retirementProjections} data-test-id="retirement-chart">
@@ -975,6 +1111,7 @@ export default function RetirementPlanner() {
                 type="line"
                 data={chartData()}
                 options={chartOptions()}
+                plugins={[lifestyleMarkersPlugin]}
                 height={280}
                 width="100%"
               />

@@ -415,3 +415,118 @@ test.describe('Retirement Planning CRUD Operations', () => {
     expect(await page.getByTestId('retirement-age-badge').count()).toBe(cardCount)
   })
 })
+
+/**
+ * Layout of the assumptions form, measured rather than eyeballed.
+ *
+ * The form pairs controls two to a row. Explanations used to sit under one of the two as
+ * block text, which made that column taller and knocked its control out of line with its
+ * neighbour — visible as a date-of-birth picker floating above the net worth box beside
+ * it. The explanations now live behind info tips, which are painted over the page and
+ * occupy no layout at all. These assert that property directly, because it is the kind of
+ * regression that reappears the moment someone adds one more hint.
+ */
+test.describe('the assumptions form stays in line', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page)
+    await navigateToRoute(page, 'retirement')
+    await expect(page.getByTestId('retirement-assumptions')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('no field carries text below its control', async ({ page }) => {
+    // The row aligns its two groups on their end edge, so a group whose control is the
+    // last thing in it ends exactly where the control does. Anything rendered after the
+    // control — the block hints this page used to carry — opens a gap between the two,
+    // and that gap is what lifted one column's input above its neighbour's. Measuring
+    // the gap catches the defect in whichever field someone reintroduces it, rather than
+    // in the one pair of controls that happened to show it.
+    const groups = await page.evaluate(() => {
+      const form = document.querySelector('[data-test-id="retirement-assumptions"]')
+      if (!form) return []
+      return [...form.querySelectorAll('[class*="form-row"] > *')]
+        .map((group) => {
+          const controls = [...group.querySelectorAll('input, select')]
+          if (controls.length === 0) return null
+          const lowest = Math.max(...controls.map((c) => c.getBoundingClientRect().bottom))
+          return {
+            gap: group.getBoundingClientRect().bottom - lowest,
+            label: (group.textContent ?? '').replace(/\s+/g, ' ').slice(0, 40),
+          }
+        })
+        .filter((g) => g !== null)
+    })
+
+    expect(groups.length).toBeGreaterThan(0)
+    for (const group of groups) {
+      expect(group.gap, `"${group.label}" has text under its control`).toBeLessThanOrEqual(2)
+    }
+  })
+
+  test('opening an info tip does not move the control it explains', async ({ page }) => {
+    const birth = page.getByTestId('retirement-input-birth')
+    const before = await birth.boundingBox()
+
+    await page.getByTestId('retirement-info-birth').click()
+    await expect(page.getByTestId('retirement-info-birth-panel')).toBeVisible()
+
+    const after = await birth.boundingBox()
+    expect(after?.y).toBeCloseTo(before?.y ?? 0, 0)
+  })
+
+  test('the info tip is reachable by tap, not only by hover', async ({ page }) => {
+    await page
+      .getByTestId('retirement-info-swr')
+      .tap({ force: true })
+      .catch(async () => {
+        // Desktop Chrome has no touch by default; a click is the same code path.
+        await page.getByTestId('retirement-info-swr').click()
+      })
+    await expect(page.getByTestId('retirement-info-swr-panel')).toContainText('annual spending')
+  })
+
+  test('the tip panel clips its accent to its own corners', async ({ page }) => {
+    await page.getByTestId('retirement-info-swr').click()
+    const panel = page.getByTestId('retirement-info-swr-panel')
+    await expect(panel).toBeVisible()
+
+    // The accent hairline spans the full width of a panel with rounded corners, so without
+    // the clip it runs straight past where the corner curves away and overhangs the edge.
+    const shape = await panel.evaluate((el) => {
+      const cs = window.getComputedStyle(el)
+      const box = el.getBoundingClientRect()
+      return {
+        overflow: cs.overflow,
+        radius: parseFloat(cs.borderTopLeftRadius),
+        onScreen: box.left >= 0 && box.right <= window.innerWidth,
+      }
+    })
+    expect(shape.overflow).toBe('hidden')
+    expect(shape.radius).toBeGreaterThan(0)
+    expect(shape.onScreen).toBe(true)
+  })
+
+  test('the chart options are the app switch, not native checkboxes', async ({ page }) => {
+    const markers = page.getByTestId('retirement-toggle-markers')
+    await expect(markers).toHaveAttribute('role', 'switch')
+    // Markers are on by default: the date each lifestyle is reached is the answer the page
+    // exists to give, not a preference to go looking for.
+    await expect(markers).toHaveAttribute('aria-checked', 'true')
+
+    // The label is inside the control, so clicking the words flips it.
+    await markers.getByText('Mark when each lifestyle is reached').click()
+    await expect(markers).toHaveAttribute('aria-checked', 'false')
+  })
+
+  test('the withdrawal rate slider drives the projection', async ({ page }) => {
+    const chip = page.getByTestId('retirement-runway-chip')
+    await expect(chip).toBeVisible()
+
+    const slider = page.getByTestId('retirement-slider-swr')
+    await slider.fill('11')
+    await expect(page.getByTestId('retirement-input-swr')).toHaveValue('11')
+    await expect(chip).toContainText('runs out')
+
+    await slider.fill('3')
+    await expect(chip).toContainText('as long as you like')
+  })
+})

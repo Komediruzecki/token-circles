@@ -28,7 +28,14 @@ const SETTINGS_KEY = 'retirement_settings';
 // into a job the user has since left.
 const FACT_WINDOW_MONTHS = 12;
 
-async function loadSettings(c: Context<AppEnv>): Promise<RetirementSettings> {
+/**
+ * The stored row exactly as written, without defaults applied.
+ *
+ * deriveSettings decides what to fill from which keys are present, so normalising here
+ * would tell it every field had been set and it would fill nothing. Callers that want a
+ * complete object take it from deriveSettings, which normalises on the way out.
+ */
+async function loadSavedSettings(c: Context<AppEnv>): Promise<Record<string, unknown>> {
   const pid = await getProfileId(c);
   const row = await db.first<{ value: string }>(
     c.env.DB,
@@ -36,13 +43,14 @@ async function loadSettings(c: Context<AppEnv>): Promise<RetirementSettings> {
     SETTINGS_KEY,
     pid
   );
-  if (!row) return normalizeSettings({});
+  if (!row) return {};
   try {
-    return normalizeSettings(JSON.parse(row.value));
+    const parsed: unknown = JSON.parse(row.value);
+    return parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
   } catch {
     // A row that will not parse is a row written by something that is not this app.
     // Defaults are a better answer than a 500 on a page the user just opened.
-    return normalizeSettings({});
+    return {};
   }
 }
 
@@ -302,7 +310,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
 // from their own accounts and transactions. `filled` says what was taken and where from,
 // so the page can show its working instead of passing guesses off as entered figures.
 retirementGoalsRoutes.get('/api/retirement/settings', requireAuth, async (c) => {
-  const [saved, facts] = await Promise.all([loadSettings(c), loadFacts(c)]);
+  const [saved, facts] = await Promise.all([loadSavedSettings(c), loadFacts(c)]);
   const { settings, filled, missing } = deriveSettings(saved, facts, monthOf(new Date()));
   return c.json({ settings, facts, filled, missing, startMonth: monthOf(new Date()) });
 });
@@ -319,14 +327,23 @@ retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => 
     JSON.stringify(settings),
     pid
   );
-  return c.json({ settings });
+  // Re-derive rather than echoing the body back. Saving is exactly what stops a field
+  // being derived, so a client that only took `settings` from here kept showing "filled
+  // in from your data" for figures the user had just entered by hand.
+  //
+  // What is stored is the normalised object, so every key is present and `filled` comes
+  // back empty by construction. `missing` does not: it reports what the user's data cannot
+  // answer at all, which a save does not change, so it is worth the extra read.
+  const facts = await loadFacts(c);
+  const derived = deriveSettings(settings, facts, monthOf(new Date()));
+  return c.json({ settings: derived.settings, filled: derived.filled, missing: derived.missing });
 });
 
 // The projection itself. The page computes this in the browser from the same shared
 // module for instant feedback while editing; this endpoint answers for anything that
 // cannot, and is the reason the two can be checked against each other at all.
 retirementGoalsRoutes.get('/api/retirement/projection', requireAuth, async (c) => {
-  const [saved, facts] = await Promise.all([loadSettings(c), loadFacts(c)]);
+  const [saved, facts] = await Promise.all([loadSavedSettings(c), loadFacts(c)]);
   const today = monthOf(new Date());
   const { settings, filled, missing } = deriveSettings(saved, facts, today);
   const projection = projectRetirement(settingsToInput(settings, today));

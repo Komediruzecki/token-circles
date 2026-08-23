@@ -1,0 +1,116 @@
+/*
+ * RangeField — a themed slider.
+ *
+ * Range inputs cannot be styled through one set of selectors: WebKit wants
+ * ::-webkit-slider-runnable-track and ::-webkit-slider-thumb, Firefox wants
+ * ::-moz-range-track and ::-moz-range-thumb, and a browser drops the whole rule if it
+ * does not recognise one selector in a list. So the two engines are written out
+ * separately below rather than grouped.
+ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.readout {
+  min-width: 3.6rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The filled portion is a gradient on the track, with the stop supplied inline as
+   --fill so it can follow the value without a stylesheet rewrite per frame. */
+.input::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--primary) var(--fill, 0%),
+    color-mix(in oklab, var(--border) 100%, transparent) var(--fill, 0%),
+    color-mix(in oklab, var(--border) 100%, transparent) 100%
+  );
+}
+
+.input::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--primary) var(--fill, 0%),
+    color-mix(in oklab, var(--border) 100%, transparent) var(--fill, 0%),
+    color-mix(in oklab, var(--border) 100%, transparent) 100%
+  );
+}
+
+.input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  /* Half the thumb minus half the track, to sit the thumb on the line. */
+  margin-top: -5px;
+  border: 2px solid var(--card-bg);
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 55%, transparent);
+  transition: box-shadow 0.15s ease;
+}
+
+.input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--card-bg);
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 55%, transparent);
+  transition: box-shadow 0.15s ease;
+}
+
+.input:hover::-webkit-slider-thumb,
+.input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+.input:hover::-moz-range-thumb,
+.input:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+.input:focus {
+  outline: none;
+}

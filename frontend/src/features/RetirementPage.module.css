@@ -672,11 +672,6 @@
   margin-top: 4px;
 }
 
-/* Same hint slot, but this one is reporting that the setting does not hold up. */
-.field-warn {
-  color: var(--warning);
-}
-
 /* Label wrapping a checkbox: the control sits beside its text, and any hint below
    stays aligned with the text rather than with the box. */
 .check-row {
@@ -860,5 +855,78 @@
 
   .chart-controls {
     gap: 12px;
+  }
+}
+
+/* The note's own info mark. Sized to read as the same symbol the InfoTip triggers use,
+   rather than as a bullet, and nudged down onto the first line of text. */
+.derived-icon {
+  margin-top: 1px;
+}
+
+/* ── Withdrawal rate: a slider with an exact-entry box ───────────────────────
+   The slider carries the meaning — dragging it moves the chart and the runway
+   together — and the number box carries the precision. The box is deliberately
+   narrow: it is a readout that happens to be editable, not the main control. ── */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-row > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.slider-number {
+  flex: 0 0 5.5rem;
+  width: 5.5rem;
+  text-align: center;
+}
+
+/* ── Runway chip ─────────────────────────────────────────────────────────────
+   The cards above say when you can stop; this says how long stopping then lasts.
+   It sits between them and the chart because it is the consequence of both. ── */
+.runway-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--primary) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.runway-chip svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--primary);
+}
+
+.runway-chip strong {
+  font-weight: 600;
+}
+
+/* Drawing faster than the pot grows is not an error, but it is the thing a reader
+   most needs to notice, so the chip changes colour rather than adding a second one. */
+.runway-chip-warn {
+  border-color: color-mix(in oklab, var(--warning) 45%, transparent);
+  background: color-mix(in oklab, var(--warning) 12%, transparent);
+}
+
+.runway-chip-warn svg {
+  color: var(--warning);
+}
+
+/* A pill with a full sentence in it wraps badly at phone widths; square it off so the
+   text can use the whole line. */
+@media (max-width: 560px) {
+  .runway-chip {
+    border-radius: var(--radius);
   }
 }

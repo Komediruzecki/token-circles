@@ -315,6 +315,10 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
   // saved, and the client's normalizeSettings() fills in every field. Restating
   // DEFAULT_SETTINGS here in JS would be a second copy of shared/retirementSettings.ts
   // that nothing keeps in step. See #406 — this server is being retired, not grown.
+  // The profile goes in the key, unlike the Worker, which keys on 'retirement_settings'
+  // alone and separates profiles through the table's (key, profile_id) primary key. The
+  // difference is this server's settings repository: its get() is `WHERE key = ?` with no
+  // profile filter, so a shared key would hand back whichever profile's row came first.
   const SETTINGS_KEY = 'retirement_settings';
   const settingsKeyFor = (profileId) => `${SETTINGS_KEY}:${profileId}`;
   const currentMonth = () => {
@@ -354,8 +358,11 @@ module.exports = function ({ apiRateLimiter, logError, requireAuth }) {
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       req.repos.settings.upsert(settingsKeyFor(pid), JSON.stringify(body), pid);
       // Echo back what was stored: the panel takes the server's copy as authoritative so it
-      // shows what will actually be used next time.
-      res.json({ settings: body });
+      // shows what will actually be used next time. `filled` and `missing` complete the
+      // envelope GET uses — this server derives nothing, so both are empty, but the client
+      // reads them on save and their absence would leave the previous GET's provenance
+      // standing against figures the user has just typed in.
+      res.json({ settings: body, filled: [], missing: [] });
     })
   );
 

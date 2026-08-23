@@ -13,6 +13,13 @@ export interface ChartProps {
   height?: number
   width?: string
   onReady?: (chart: ChartJS.Chart) => void
+  /**
+   * Inline Chart.js plugins for this chart alone, rather than registered globally.
+   * Keep them stateless and read their settings from `options.plugins.<id>`: the
+   * update path below swaps `options` but leaves the plugin list in place, so a
+   * plugin that stores its own data would keep drawing the previous chart's.
+   */
+  plugins?: ChartJS.Plugin[]
 }
 
 export default function Chart(props: ChartProps) {
@@ -27,6 +34,7 @@ export default function Chart(props: ChartProps) {
     const type = props.type
     const chartData = props.data
     const chartOptions = props.options
+    const chartPlugins = props.plugins
     const onReady = props.onReady
 
     let cancelled = false
@@ -62,6 +70,7 @@ export default function Chart(props: ChartProps) {
           type,
           data: chartData,
           options: mergedOptions,
+          plugins: chartPlugins,
         })
         chartType = type
         onReady?.(chart)

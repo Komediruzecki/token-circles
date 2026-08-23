@@ -15,30 +15,61 @@ import {
 } from '../../../../../shared/retirementSettings'
 import { getDB } from '../idb'
 import { adapter, getAmount, idParam, json, ok } from './helpers'
-import type { CashflowRow, RetirementSettings } from '../../../../../shared/retirementSettings'
+import type { CashflowRow } from '../../../../../shared/retirementSettings'
 
+/**
+ * The retirement assumptions are per profile, and the settings store has no profile
+ * column — it is keyed by `key` alone — so the profile goes in the key.
+ *
+ * Without it every profile shared one row: opening a second profile showed the first
+ * one's plan, and saving there overwrote it. Both server runtimes have always scoped
+ * these by profile (`PRIMARY KEY (key, profile_id)`), so this is browser mode catching
+ * up rather than a new convention.
+ */
 const RETIREMENT_SETTINGS_KEY = 'retirement_settings'
+const settingsKeyFor = (profileId: unknown) => `${RETIREMENT_SETTINGS_KEY}:${String(profileId)}`
 
 // Twelve months is enough to average out a bonus and a holiday without reaching back into
 // a job the user has since left.
 const FACT_WINDOW_MONTHS = 12
 
-async function loadRetirementSettings(): Promise<RetirementSettings> {
-  const db = await getDB()
-  const rows = await db.getAll('settings')
-  const row = rows.find((r: Record<string, unknown>) => r.key === RETIREMENT_SETTINGS_KEY)
-  if (!row) return normalizeSettings({})
-  // Browser mode stores the object; the Worker stores JSON. Accept either, so a profile
-  // restored from a server backup opens rather than silently resetting to defaults.
-  const value = row.value
+/** Browser mode stores the object; the Worker stores JSON. Accept either, so a profile
+ *  restored from a server backup opens rather than silently resetting to defaults. */
+function asSavedSettings(value: unknown): Record<string, unknown> {
+  const asObject = (v: unknown): Record<string, unknown> =>
+    v !== null && typeof v === 'object' ? (v as Record<string, unknown>) : {}
   if (typeof value === 'string') {
     try {
-      return normalizeSettings(JSON.parse(value))
+      return asObject(JSON.parse(value))
     } catch {
-      return normalizeSettings({})
+      return {}
     }
   }
-  return normalizeSettings(value)
+  return asObject(value)
+}
+
+/**
+ * The stored assumptions exactly as written, without defaults applied — deriveSettings
+ * fills from which keys are present, and normalising here would claim every field was
+ * already set. Same contract as the Worker's loadSavedSettings.
+ *
+ * A row saved before the key carried a profile is adopted by whichever profile opens the
+ * page first, and the old row is removed. Leaving it in place would hand the same plan to
+ * every profile that has not saved one yet, which is the behaviour being fixed.
+ */
+async function loadSavedRetirementSettings(): Promise<Record<string, unknown>> {
+  const db = await getDB()
+  const pid = await adapter.getCurrentProfileId()
+  const key = settingsKeyFor(pid)
+  const rows = await db.getAll('settings')
+  const row = rows.find((r: Record<string, unknown>) => r.key === key)
+  if (row) return asSavedSettings(row.value)
+
+  const legacy = rows.find((r: Record<string, unknown>) => r.key === RETIREMENT_SETTINGS_KEY)
+  if (!legacy) return {}
+  await db.put('settings', { key, value: legacy.value })
+  await db.delete('settings', RETIREMENT_SETTINGS_KEY)
+  return asSavedSettings(legacy.value)
 }
 
 /** What the app can observe: account balances, recent cashflow, and any age on a goal. */
@@ -348,7 +379,7 @@ export async function emergencyFund(): Promise<Response> {
  */
 export async function retirementProjection(): Promise<Response> {
   try {
-    const [saved, facts] = await Promise.all([loadRetirementSettings(), loadRetirementFacts()])
+    const [saved, facts] = await Promise.all([loadSavedRetirementSettings(), loadRetirementFacts()])
     const today = monthOf(new Date())
     const { settings, filled, missing } = deriveSettings(saved, facts, today)
     const projection = projectRetirement(settingsToInput(settings, today))
@@ -361,7 +392,7 @@ export async function retirementProjection(): Promise<Response> {
 /** The saved assumptions, with what derivation could fill and what it could not. */
 export async function retirementSettingsGet(): Promise<Response> {
   try {
-    const [saved, facts] = await Promise.all([loadRetirementSettings(), loadRetirementFacts()])
+    const [saved, facts] = await Promise.all([loadSavedRetirementSettings(), loadRetirementFacts()])
     const today = monthOf(new Date())
     const { settings, filled, missing } = deriveSettings(saved, facts, today)
     return json({ settings, facts, filled, missing, startMonth: today })
@@ -375,8 +406,22 @@ export async function retirementSettingsUpdate(body: unknown): Promise<Response>
     // Normalised before storage, so the row can only ever hold something the model accepts.
     const settings = normalizeSettings(body)
     const db = await getDB()
-    await db.put('settings', { key: RETIREMENT_SETTINGS_KEY, value: settings })
-    return json({ settings })
+    const pid = await adapter.getCurrentProfileId()
+    await db.put('settings', { key: settingsKeyFor(pid), value: settings })
+    // Re-derive and return the provenance too. Saving is what stops a field being derived,
+    // so a client that only took `settings` from here went on showing "filled in from your
+    // data" against figures the user had just entered by hand.
+    //
+    // What is stored is the normalised object, so every key is present and `filled` comes
+    // back empty by construction. `missing` does not: it reports what the user's data
+    // cannot answer at all, which a save does not change.
+    const facts = await loadRetirementFacts()
+    const derived = deriveSettings(settings, facts, monthOf(new Date()))
+    return json({
+      settings: derived.settings,
+      filled: derived.filled,
+      missing: derived.missing,
+    })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

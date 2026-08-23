@@ -23,7 +23,11 @@ const apiGet = vi.fn(async () => ({
   missing: [],
   startMonth: '2026-01',
 }))
-const apiPut = vi.fn(async (_path: string, body: RetirementSettings) => ({ settings: body }))
+let serverFilledAfterSave: { field: string; value: number | string; source: string }[] = []
+const apiPut = vi.fn(async (_path: string, body: RetirementSettings) => ({
+  settings: body,
+  filled: serverFilledAfterSave,
+}))
 const showToast = vi.fn()
 
 vi.mock('../../core/api', () => ({
@@ -38,12 +42,16 @@ vi.mock('../../core/api', () => ({
 // Captured inside an effect, not in the component body: Solid props are getters, and a
 // body-level read would freeze the first render and make every later assertion vacuous.
 let lastChartData: any = null
+let lastChartOptions: any = null
+let lastChartPlugins: any = null
 vi.mock('../../components/Chart', async () => {
   const { createEffect } = await import('solid-js')
   return {
     default: (props: any) => {
       createEffect(() => {
         lastChartData = props.data
+        lastChartOptions = props.options
+        lastChartPlugins = props.plugins
       })
       return null
     },
@@ -58,7 +66,10 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 beforeEach(() => {
   serverSettings = {}
   serverFilled = []
+  serverFilledAfterSave = []
   lastChartData = null
+  lastChartOptions = null
+  lastChartPlugins = null
   apiGet.mockClear()
   apiPut.mockClear()
   showToast.mockClear()
@@ -132,6 +143,18 @@ async function type(input: HTMLInputElement, value: string) {
 async function check(input: HTMLInputElement, checked: boolean) {
   input.checked = checked
   input.dispatchEvent(new Event('change', { bubbles: true }))
+  await flush()
+}
+
+/** The chart options are branded switches, so they are pressed rather than checked. */
+function switchByTestId(root: HTMLElement, id: string): HTMLButtonElement {
+  return root.querySelector<HTMLButtonElement>(`[role="switch"][data-test-id="${id}"]`)!
+}
+
+const isOn = (toggle: HTMLButtonElement) => toggle.getAttribute('aria-checked') === 'true'
+
+async function flip(toggle: HTMLButtonElement, on: boolean) {
+  if (isOn(toggle) !== on) toggle.click()
   await flush()
 }
 
@@ -354,8 +377,7 @@ describe('inflation', () => {
     expect(lastChartData.datasets[0].label).toContain("today's money")
     const todays = netWorthSeries()
 
-    const toggle = byTestId(root, 'retirement-toggle-nominal')!.querySelector('input')!
-    await check(toggle, true)
+    await flip(switchByTestId(root, 'retirement-toggle-nominal'), true)
 
     expect(lastChartData.datasets[0].label).not.toContain("today's money")
     expect(netWorthSeries()[10]).toBeGreaterThan(todays[10])
@@ -371,7 +393,7 @@ describe('inflation', () => {
     const flat = lastChartData.datasets[lastChartData.datasets.length - 1].data
     expect(flat[0]).toBeCloseTo(flat[flat.length - 1], 6)
 
-    await check(byTestId(root, 'retirement-toggle-nominal')!.querySelector('input')!, true)
+    await flip(switchByTestId(root, 'retirement-toggle-nominal'), true)
     const rising = lastChartData.datasets[lastChartData.datasets.length - 1].data
     expect(rising[rising.length - 1]).toBeGreaterThan(rising[0])
   })
@@ -382,7 +404,7 @@ describe('the return band', () => {
     const root = await mountPlanner()
     const plain = lastChartData.datasets.length
 
-    await check(byTestId(root, 'retirement-toggle-band')!.querySelector('input')!, true)
+    await flip(switchByTestId(root, 'retirement-toggle-band'), true)
     expect(lastChartData.datasets.length).toBe(plain + 2)
 
     const [worse, better] = lastChartData.datasets.slice(1, 3)
@@ -469,7 +491,16 @@ describe('controls that cannot do anything say so', () => {
   it('disables "plan until age" until there is a date of birth to count from', async () => {
     const root = await mountPlanner()
     expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(true)
-    expect(byTestId(root, 'retirement-life-needs-birth')!.textContent).toContain('date of birth')
+
+    // The explanation now lives behind the field's info tip, so it costs no layout and
+    // does not shove the control out of line with its neighbour. Opening it is what
+    // makes the sentence readable, so that is what the test does.
+    const tip = byTestId(root, 'retirement-life-needs-birth')!
+    tip.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    expect(byTestId(root, 'retirement-life-needs-birth-panel')!.textContent).toContain(
+      'date of birth'
+    )
 
     await pickMonth(byTestId(root, 'retirement-input-birth')!, '1994-01')
     expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(false)
@@ -699,5 +730,215 @@ describe('a profile switch reloads the plan', () => {
     // also what stops a typed-but-unsaved figure being thrown away.
     expect(apiGet).toHaveBeenCalledTimes(1)
     expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('4242')
+  })
+})
+
+describe('the withdrawal rate says what it costs', () => {
+  const chip = (root: HTMLElement) => byTestId(root, 'retirement-runway-chip')!
+
+  it('says the money never runs out while growth covers the draw', async () => {
+    // 4% against a 4.39% real return: the pot earns more than it gives up.
+    serverSettings = { safeWithdrawalRatePct: 4, annualReturnPct: 7, annualInflationPct: 2.5 }
+    const root = await mountPlanner()
+    expect(chip(root).textContent).toContain('for as long as you like')
+  })
+
+  it('counts the years it does last once the draw outpaces growth', async () => {
+    serverSettings = { safeWithdrawalRatePct: 12, annualReturnPct: 7, annualInflationPct: 2.5 }
+    const root = await mountPlanner()
+    // ln(0.12 / (0.12 - 0.043902)) / ln(1.043902) = 10.6 years.
+    expect(chip(root).textContent).toContain('11 years')
+    expect(chip(root).textContent).toContain('runs out')
+  })
+
+  it('names the age the money runs out at, when there is an age to count to', async () => {
+    serverSettings = {
+      safeWithdrawalRatePct: 12,
+      annualReturnPct: 7,
+      annualInflationPct: 2.5,
+      birthMonth: '1995-10',
+      netWorth: 50000,
+      monthlyContribution: 1000,
+    }
+    const root = await mountPlanner()
+    expect(chip(root).textContent).toMatch(/around age \d+/)
+  })
+
+  it('changes its mind as the slider is dragged past the real return', async () => {
+    serverSettings = { safeWithdrawalRatePct: 4, annualReturnPct: 7, annualInflationPct: 2.5 }
+    const root = await mountPlanner()
+    expect(chip(root).textContent).toContain('for as long as you like')
+
+    const slider = inputByTestId(root, 'retirement-slider-swr')!
+    slider.value = '9'
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+    await flush()
+    expect(chip(root).textContent).toContain('runs out')
+  })
+
+  it('drives the same value from the slider and the number box', async () => {
+    const root = await mountPlanner()
+    const slider = inputByTestId(root, 'retirement-slider-swr')!
+    const box = inputByTestId(root, 'retirement-input-swr')!
+
+    slider.value = '6.5'
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+    await flush()
+    expect(box.value).toBe('6.5')
+
+    // A figure the slider's tenths cannot land on is still allowed: the box is there for
+    // exactly that, and the slider follows as closely as it can.
+    await type(box, '3.25')
+    expect(Number(slider.value)).toBeCloseTo(3.25, 2)
+    expect(byTestId(root, 'retirement-assumptions')!.textContent).not.toContain('NaN')
+  })
+
+  it('rounds what the slider emits, so the field can still be saved', async () => {
+    const root = await mountPlanner()
+    const slider = inputByTestId(root, 'retirement-slider-swr')!
+    slider.value = '4.3'
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+    await flush()
+    // A step-invalid value blocks the whole form from submitting, so the emitted number
+    // has to stay a clean two decimals.
+    expect(inputByTestId(root, 'retirement-input-swr')!.value).toBe('4.3')
+  })
+
+  it('explains itself in a tip rather than in a line that shifts the form', async () => {
+    const root = await mountPlanner()
+    // No hint element under the control: the explanation costs the layout nothing until
+    // it is asked for. That is what stopped the field falling out of line with its
+    // neighbour in the same row.
+    byTestId(root, 'retirement-info-swr')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    const text = document.querySelector('[data-test-id="retirement-info-swr-panel"]')!.textContent!
+    expect(text).toContain('25x your annual spending')
+    expect(text).toContain('not more money to live on')
+  })
+})
+
+describe('the chart marks when each lifestyle is reached', () => {
+  const markers = () => lastChartOptions?.plugins?.lifestyleMarkers?.markers ?? []
+  const markerToggle = (root: HTMLElement) => switchByTestId(root, 'retirement-toggle-markers')
+  const lifestyleSpend = (root: HTMLElement) =>
+    [...root.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.getAttribute('aria-label') === "Monthly spending in today's money"
+    )!
+
+  it('registers the marker plugin with the chart', async () => {
+    await mountPlanner()
+    expect(lastChartPlugins?.[0]?.id).toBe('lifestyleMarkers')
+  })
+
+  it('marks each lifestyle that is reached, on by default', async () => {
+    serverSettings = {
+      netWorth: 50000,
+      monthlyContribution: 1500,
+      lifestyles: [
+        { id: 'a', label: 'Lean', monthlySpendToday: 1000 },
+        { id: 'b', label: 'Comfortable', monthlySpendToday: 2000 },
+      ],
+    }
+    const root = await mountPlanner()
+    expect(isOn(markerToggle(root))).toBe(true)
+    expect(markers().map((m: { label: string }) => m.label)).toEqual(['Lean', 'Comfortable'])
+  })
+
+  it('places a marker at the month of the crossing, not the nearest year', async () => {
+    serverSettings = { netWorth: 50000, monthlyContribution: 1500 }
+    await mountPlanner()
+    const x = markers()[0].x
+    expect(Number.isInteger(x)).toBe(false)
+    expect(x).toBeGreaterThan(0)
+  })
+
+  it('gives each lifestyle the colour of its own target line', async () => {
+    serverSettings = {
+      netWorth: 50000,
+      monthlyContribution: 2000,
+      lifestyles: [
+        { id: 'a', label: 'Lean', monthlySpendToday: 800 },
+        { id: 'b', label: 'Rich', monthlySpendToday: 1200 },
+      ],
+    }
+    await mountPlanner()
+    const targetLines = lastChartData.datasets.filter((d: { label: string }) =>
+      d.label.endsWith(' target')
+    )
+    expect(markers().map((m: { color: string }) => m.color)).toEqual(
+      targetLines.map((d: { borderColor: string }) => d.borderColor)
+    )
+  })
+
+  it('marks nothing for a lifestyle the plan never reaches', async () => {
+    serverSettings = {
+      netWorth: 0,
+      monthlyContribution: 0,
+      lifestyles: [{ id: 'a', label: 'Never', monthlySpendToday: 9000 }],
+    }
+    await mountPlanner()
+    expect(markers()).toEqual([])
+  })
+
+  it('clears the markers when the toggle is turned off', async () => {
+    serverSettings = { netWorth: 50000, monthlyContribution: 1500 }
+    const root = await mountPlanner()
+    expect(markers().length).toBe(1)
+
+    await flip(markerToggle(root), false)
+    // Emptied rather than removed: the plugin instance is shared across chart updates and
+    // only its options change, so an absent key would leave the last markers drawn.
+    expect(markers()).toEqual([])
+  })
+
+  it('follows an edit to a lifestyle without a reload', async () => {
+    serverSettings = { netWorth: 50000, monthlyContribution: 1500 }
+    const root = await mountPlanner()
+    const before = markers()[0].x
+
+    await type(lifestyleSpend(root), '4000')
+    expect(markers()[0].x).toBeGreaterThan(before)
+  })
+})
+
+describe('what was filled in from your data stops being claimed once you save it', () => {
+  it('takes the provenance back from the save, not from the last load', async () => {
+    serverFilled = [
+      { field: 'monthlyContribution', value: 7.29, source: 'Income minus spending over 12 months' },
+    ]
+    const root = await mountPlanner()
+    expect(byTestId(root, 'retirement-derived-note')!.textContent).toContain('Monthly contribution')
+
+    await type(inputByTestId(root, 'retirement-input-contribution')!, '500')
+    serverFilledAfterSave = []
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    await flush()
+    // Saving is exactly what stops a field being derived. Leaving the note up would go on
+    // crediting "your data" for a figure the user had just typed.
+    expect(byTestId(root, 'retirement-derived-note')).toBeNull()
+  })
+
+  it('keeps showing whatever the save says is still derived', async () => {
+    serverFilled = [{ field: 'netWorth', value: 1, source: 'Total of your accounts' }]
+    const root = await mountPlanner()
+    await type(inputByTestId(root, 'retirement-input-contribution')!, '500')
+    serverFilledAfterSave = [{ field: 'birthMonth', value: '1994-01', source: 'Age 32 on a goal' }]
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    await flush()
+    const note = byTestId(root, 'retirement-derived-note')!
+    expect(note.textContent).toContain('Date of birth')
+    expect(note.textContent).not.toContain('Current net worth')
+  })
+
+  it('sends the contribution it was given back unchanged', async () => {
+    const root = await mountPlanner()
+    await type(inputByTestId(root, 'retirement-input-contribution')!, '500')
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    // The reported bug: a contribution of exactly the default is a real answer, and has
+    // to reach the server as one.
+    expect(apiPut.mock.calls[0][1].monthlyContribution).toBe(500)
   })
 })

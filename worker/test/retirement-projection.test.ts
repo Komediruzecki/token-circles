@@ -229,6 +229,68 @@ describe('PUT /api/retirement/settings', () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as any).settings.mode).toBe('simple');
   });
+
+  // Derivation used to read "the user has not set this" off the value, so saving any
+  // figure that matched a default was indistinguishable from never having saved. The
+  // reported symptom was a contribution of exactly 500 reverting to a derived 7.29 on the
+  // next load; these pin the round trip at the level the user actually experiences it.
+  it('keeps a contribution saved at exactly the default value', async () => {
+    await seedAccounts();
+    await seedCashflow();
+    await put('/api/retirement/settings', { ...normalizeSettings({}), monthlyContribution: 500 });
+    const body = (await (await get('/api/retirement/settings')).json()) as any;
+    expect(body.settings.monthlyContribution).toBe(500);
+    expect(body.filled.map((f: any) => f.field)).not.toContain('monthlyContribution');
+  });
+
+  it('keeps a net worth the user deliberately saved as zero', async () => {
+    await seedAccounts();
+    await put('/api/retirement/settings', { ...normalizeSettings({}), netWorth: 0 });
+    const body = (await (await get('/api/retirement/settings')).json()) as any;
+    expect(body.settings.netWorth).toBe(0);
+    expect(body.filled.map((f: any) => f.field)).not.toContain('netWorth');
+  });
+
+  it('keeps a saved plan stable across repeated loads', async () => {
+    await seedAccounts();
+    await seedCashflow();
+    const saved = { ...normalizeSettings({}), monthlyContribution: 500, netWorth: 0 };
+    await put('/api/retirement/settings', saved);
+    const first = (await (await get('/api/retirement/settings')).json()) as any;
+    const second = (await (await get('/api/retirement/settings')).json()) as any;
+    expect(second.settings).toEqual(first.settings);
+    expect(second.settings.monthlyContribution).toBe(500);
+  });
+
+  it('reports on save that nothing is derived any more', async () => {
+    await seedAccounts();
+    await seedCashflow();
+    // Before saving, the account total and the cashflow fill several fields.
+    const before = (await (await get('/api/retirement/settings')).json()) as any;
+    expect(before.filled.length).toBeGreaterThan(0);
+
+    const res = await put('/api/retirement/settings', {
+      ...normalizeSettings({}),
+      monthlyContribution: 500,
+    });
+    const body = (await res.json()) as any;
+    // The client shows "filled in from your data" from this response, so it has to say
+    // what is still derived rather than repeating what the last load said.
+    expect(body.filled).toEqual([]);
+    expect(body.settings.monthlyContribution).toBe(500);
+  });
+
+  it('still fills a field the save left out', async () => {
+    await seedAccounts();
+    // birthMonth is sent as null when there is none, which stays "no answer".
+    await put('/api/retirement/settings', { ...normalizeSettings({}), birthMonth: null });
+    await env.DB.prepare(
+      "INSERT INTO retirement_goals (profile_id, name, target_amount, current_age, retirement_age) VALUES (800, 'FIRE', 1000000, 32, 55)"
+    ).run();
+    const body = (await (await get('/api/retirement/settings')).json()) as any;
+    expect(body.settings.birthMonth).toMatch(/^\d{4}-\d{2}$/);
+    expect(body.filled.map((f: any) => f.field)).toContain('birthMonth');
+  });
 });
 
 describe('GET /api/retirement/projection', () => {

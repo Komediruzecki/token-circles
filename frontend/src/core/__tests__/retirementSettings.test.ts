@@ -302,18 +302,14 @@ describe('deriveSettings', () => {
   })
 
   it('fills the opening balance from the account total', () => {
-    const { settings, filled } = deriveSettings(
-      normalizeSettings({}),
-      facts({ netWorth: 66931.42 }),
-      '2026-08'
-    )
+    const { settings, filled } = deriveSettings({}, facts({ netWorth: 66931.42 }), '2026-08')
     expect(settings.netWorth).toBeCloseTo(66931.42, 10)
     expect(filled.map((f) => f.field)).toContain('netWorth')
   })
 
   it('leaves a balance the user already set alone', () => {
     const { settings, filled } = deriveSettings(
-      normalizeSettings({ netWorth: 10000 }),
+      { netWorth: 10000 },
       facts({ netWorth: 66931.42 }),
       '2026-08'
     )
@@ -323,7 +319,7 @@ describe('deriveSettings', () => {
 
   it('fills income and spending from enough history', () => {
     const { settings, filled } = deriveSettings(
-      normalizeSettings({ mode: 'advanced' }),
+      { mode: 'advanced' },
       facts({ monthlyIncome: 3566.06, monthlyExpenses: 2400, monthsObserved: 14 }),
       '2026-08'
     )
@@ -334,7 +330,7 @@ describe('deriveSettings', () => {
 
   it('refuses to average over too little history', () => {
     const { settings, filled, missing } = deriveSettings(
-      normalizeSettings({ mode: 'advanced' }),
+      { mode: 'advanced' },
       facts({ monthlyIncome: 3566.06, monthlyExpenses: 2400, monthsObserved: 2 }),
       '2026-08'
     )
@@ -346,7 +342,7 @@ describe('deriveSettings', () => {
 
   it('accepts exactly the minimum number of months', () => {
     const { settings } = deriveSettings(
-      normalizeSettings({ mode: 'advanced' }),
+      { mode: 'advanced' },
       facts({
         monthlyIncome: 3000,
         monthlyExpenses: 2000,
@@ -359,7 +355,7 @@ describe('deriveSettings', () => {
 
   it('derives the simple contribution from what the user actually saves', () => {
     const { settings, filled } = deriveSettings(
-      normalizeSettings({}),
+      {},
       facts({ monthlyIncome: 3566.06, monthlyExpenses: 2400, monthsObserved: 12 }),
       '2026-08'
     )
@@ -369,7 +365,7 @@ describe('deriveSettings', () => {
 
   it('does not offer a negative contribution when spending exceeds income', () => {
     const { settings } = deriveSettings(
-      normalizeSettings({}),
+      {},
       facts({ monthlyIncome: 2000, monthlyExpenses: 3000, monthsObserved: 12 }),
       '2026-08'
     )
@@ -378,7 +374,7 @@ describe('deriveSettings', () => {
 
   it('sets the retirement target to what the user spends now', () => {
     const { settings, filled } = deriveSettings(
-      normalizeSettings({}),
+      {},
       facts({ monthlyExpenses: 2400, monthlyIncome: 3500, monthsObserved: 12 }),
       '2026-08'
     )
@@ -389,32 +385,28 @@ describe('deriveSettings', () => {
   })
 
   it('leaves lifestyles the user has customised alone', () => {
-    const saved = normalizeSettings({
+    const saved = {
       lifestyles: [
         { id: 'zg', label: 'Zagreb', monthlySpendToday: 1500 },
         { id: 'zh', label: 'Zurich', monthlySpendToday: 4000 },
       ],
-    })
+    }
     const { settings } = deriveSettings(
       saved,
       facts({ monthlyExpenses: 2400, monthlyIncome: 3500, monthsObserved: 12 }),
       '2026-08'
     )
-    expect(settings.lifestyles).toEqual(saved.lifestyles)
+    expect(settings.lifestyles).toEqual(normalizeSettings(saved).lifestyles)
   })
 
   it('turns an age recorded on a goal into a birth month', () => {
-    const { settings, filled } = deriveSettings(
-      normalizeSettings({}),
-      facts({ currentAge: 32 }),
-      '2026-08'
-    )
+    const { settings, filled } = deriveSettings({}, facts({ currentAge: 32 }), '2026-08')
     expect(settings.birthMonth).toBe('1994-08')
     expect(filled.find((f) => f.field === 'birthMonth')?.source).toContain('32')
   })
 
   it('reports what it could not answer', () => {
-    const { missing } = deriveSettings(normalizeSettings({}), NO_FACTS, '2026-08')
+    const { missing } = deriveSettings({}, NO_FACTS, '2026-08')
     expect(missing).toContain('netWorth')
     expect(missing).toContain('birthMonth')
     expect(missing).toContain('monthlyIncome')
@@ -422,7 +414,7 @@ describe('deriveSettings', () => {
 
   it('reports nothing missing once the data covers it', () => {
     const { missing } = deriveSettings(
-      normalizeSettings({}),
+      {},
       facts({
         netWorth: 50000,
         monthlyIncome: 3000,
@@ -436,7 +428,7 @@ describe('deriveSettings', () => {
   })
 
   it('does not mutate the settings it was given', () => {
-    const saved = normalizeSettings({})
+    const saved = { netWorth: 1234, lifestyles: [{ id: 'a', label: 'A', monthlySpendToday: 900 }] }
     const before = JSON.stringify(saved)
     deriveSettings(saved, facts({ netWorth: 1000, currentAge: 40 }), '2026-08')
     expect(JSON.stringify(saved)).toBe(before)
@@ -444,7 +436,7 @@ describe('deriveSettings', () => {
 
   it('produces settings the model accepts', () => {
     const { settings } = deriveSettings(
-      normalizeSettings({}),
+      {},
       facts({
         netWorth: 66931.42,
         monthlyIncome: 3566.06,
@@ -458,6 +450,113 @@ describe('deriveSettings', () => {
     expect(p.rows[0].netWorth).toBeCloseTo(66931.42, 10)
     expect(p.rows[0].age).toBe(32)
     expect(p.lifestyles[0].crossing).not.toBeNull()
+  })
+})
+
+/**
+ * Derivation used to decide "the user has not set this" by comparing the value to the
+ * default. Every default is also a perfectly ordinary answer, so anyone who saved one had
+ * it silently overwritten on the next load — the reported case being a contribution of
+ * exactly 500, which reset to a derived 7.29 after a profile switch.
+ *
+ * These cover every field that can be derived, from both sides: absent is filled, present
+ * is left alone even when what is present happens to equal the default.
+ */
+describe('saving a value that happens to equal the default is still saving it', () => {
+  const observed = (over: Partial<RetirementFacts> = {}): RetirementFacts => ({
+    ...NO_FACTS,
+    netWorth: 66931.42,
+    monthlyIncome: 3566.06,
+    monthlyExpenses: 2400,
+    monthsObserved: 12,
+    currentAge: 32,
+    ...over,
+  })
+
+  it('keeps a contribution saved at exactly the default', () => {
+    const { settings, filled } = deriveSettings(
+      { monthlyContribution: DEFAULT_SETTINGS.monthlyContribution },
+      observed(),
+      '2026-08'
+    )
+    expect(settings.monthlyContribution).toBe(DEFAULT_SETTINGS.monthlyContribution)
+    expect(filled.map((f) => f.field)).not.toContain('monthlyContribution')
+  })
+
+  it('derives the contribution when the key was never stored', () => {
+    const { settings, filled } = deriveSettings({}, observed(), '2026-08')
+    expect(settings.monthlyContribution).toBeCloseTo(1166.06, 6)
+    expect(filled.map((f) => f.field)).toContain('monthlyContribution')
+  })
+
+  it('keeps a net worth the user deliberately set to zero', () => {
+    const { settings, filled } = deriveSettings({ netWorth: 0 }, observed(), '2026-08')
+    expect(settings.netWorth).toBe(0)
+    expect(filled.map((f) => f.field)).not.toContain('netWorth')
+  })
+
+  it('keeps income and spending deliberately set to zero', () => {
+    const { settings, filled } = deriveSettings(
+      { mode: 'advanced', monthlyIncome: 0, monthlyExpenses: 0 },
+      observed(),
+      '2026-08'
+    )
+    expect(settings.monthlyIncome).toBe(0)
+    expect(settings.monthlyExpenses).toBe(0)
+    expect(filled.map((f) => f.field)).not.toContain('monthlyIncome')
+    expect(filled.map((f) => f.field)).not.toContain('monthlyExpenses')
+  })
+
+  it('keeps a lifestyle saved at exactly the default spend', () => {
+    const saved = { lifestyles: [{ id: 'default', label: 'Retirement', monthlySpendToday: 2000 }] }
+    const { settings, filled } = deriveSettings(saved, observed(), '2026-08')
+    expect(settings.lifestyles[0].monthlySpendToday).toBe(2000)
+    expect(settings.lifestyles[0].label).toBe('Retirement')
+    expect(filled.map((f) => f.field)).not.toContain('lifestyles')
+  })
+
+  it('keeps a birth month the user picked, rather than re-deriving it from an age', () => {
+    const { settings, filled } = deriveSettings(
+      { birthMonth: '1990-03' },
+      observed({ currentAge: 32 }),
+      '2026-08'
+    )
+    expect(settings.birthMonth).toBe('1990-03')
+    expect(filled.map((f) => f.field)).not.toContain('birthMonth')
+  })
+
+  it('still treats an explicit null as no answer, so an optional field stays derivable', () => {
+    // The client always sends birthMonth, as null when it has none. Presence alone would
+    // read that as "set" and the age on a goal would never fill it in again.
+    const { settings, filled } = deriveSettings(
+      { birthMonth: null },
+      observed({ currentAge: 32 }),
+      '2026-08'
+    )
+    expect(settings.birthMonth).toBe('1994-08')
+    expect(filled.map((f) => f.field)).toContain('birthMonth')
+  })
+
+  it('survives a saved blob that is not an object', () => {
+    for (const saved of [null, undefined, 'nonsense', 42]) {
+      const { settings } = deriveSettings(saved, observed(), '2026-08')
+      expect(settings.netWorth).toBeCloseTo(66931.42, 6)
+    }
+  })
+
+  it('round-trips: what derivation filled once is not re-derived after it is saved', () => {
+    // The save path stores the whole normalised object, which is what makes every key
+    // present on the next load. That is the mechanism the reported bug broke.
+    const first = deriveSettings({}, observed(), '2026-08')
+    expect(first.filled.length).toBeGreaterThan(0)
+
+    const second = deriveSettings(
+      JSON.parse(JSON.stringify(first.settings)) as unknown,
+      observed({ netWorth: 999999, monthlyIncome: 1, monthlyExpenses: 1 }),
+      '2026-08'
+    )
+    expect(second.filled).toEqual([])
+    expect(second.settings).toEqual(first.settings)
   })
 })
 
@@ -551,7 +650,7 @@ describe('buildFacts', () => {
       ],
       currentAge: 32,
     })
-    const { settings, missing } = deriveSettings(normalizeSettings({}), facts, '2026-04')
+    const { settings, missing } = deriveSettings({}, facts, '2026-04')
     expect(settings.netWorth).toBeCloseTo(66931.42, 6)
     expect(settings.birthMonth).toBe('1994-04')
     expect(missing).toEqual([])
@@ -626,7 +725,7 @@ describe('rounding, so the form can actually be saved', () => {
       monthsObserved: 12,
       currentAge: null,
     }
-    const derived = deriveSettings({ ...DEFAULT_SETTINGS }, facts, '2026-01')
+    const derived = deriveSettings({}, facts, '2026-01')
     expect(derived.settings.monthlyContribution).toBeCloseTo(7.29, 10)
     const filled = derived.filled.find((f) => f.field === 'monthlyContribution')
     expect(filled?.value).toBeCloseTo(7.29, 10)

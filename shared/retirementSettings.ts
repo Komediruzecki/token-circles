@@ -309,18 +309,35 @@ export const MIN_MONTHS_FOR_AVERAGES = 3;
  * not to overwrite a considered assumption every time the page loads. `filled` says what
  * was taken and where from, so the UI can show its working rather than presenting derived
  * numbers as though the user had entered them.
+ *
+ * Takes what came out of storage, NOT a normalised object. "The user has not set this" is
+ * a fact about the stored row, and normalising invents a default for every absent key,
+ * which erases exactly the distinction this function turns on. Earlier versions took the
+ * normalised settings and inferred "unset" from the value instead — netWorth of 0,
+ * contribution of 500, retirement spending of 2000 — so saving any of those figures was
+ * indistinguishable from never having saved at all, and the next page load overwrote them
+ * with derived numbers. Saving the default silently meant unsetting it.
+ *
+ * A key counts as set when it is present and not null. `null` is how the client says "no
+ * value" for an optional field such as birthMonth, so it has to keep meaning that; 0 and
+ * 500 are answers, and are now treated as such.
  */
 export function deriveSettings(
-  saved: RetirementSettings,
+  saved: unknown,
   facts: RetirementFacts,
   today: Month
 ): DerivedSettings {
-  const settings = { ...saved };
+  const raw: Record<string, unknown> =
+    saved !== null && typeof saved === 'object' ? (saved as Record<string, unknown>) : {};
+  /** Did the user actually store a value for this field? */
+  const isSet = (field: keyof RetirementSettings): boolean =>
+    raw[field] !== undefined && raw[field] !== null;
+  const settings = normalizeSettings(raw);
   const filled: DerivedField[] = [];
   const missing: string[] = [];
   const enoughHistory = facts.monthsObserved >= MIN_MONTHS_FOR_AVERAGES;
 
-  if (settings.netWorth === 0 && facts.netWorth !== null && facts.netWorth !== 0) {
+  if (!isSet('netWorth') && facts.netWorth !== null && facts.netWorth !== 0) {
     settings.netWorth = facts.netWorth;
     filled.push({ field: 'netWorth', value: facts.netWorth, source: 'Total of your accounts' });
   } else if (facts.netWorth === null) {
@@ -329,12 +346,12 @@ export function deriveSettings(
 
   const monthsLabel = `${facts.monthsObserved} months of transactions`;
 
-  if (enoughHistory && facts.monthlyIncome !== null && settings.monthlyIncome === 0) {
+  if (enoughHistory && facts.monthlyIncome !== null && !isSet('monthlyIncome')) {
     settings.monthlyIncome = facts.monthlyIncome;
     filled.push({ field: 'monthlyIncome', value: facts.monthlyIncome, source: monthsLabel });
   }
 
-  if (enoughHistory && facts.monthlyExpenses !== null && settings.monthlyExpenses === 0) {
+  if (enoughHistory && facts.monthlyExpenses !== null && !isSet('monthlyExpenses')) {
     settings.monthlyExpenses = facts.monthlyExpenses;
     filled.push({ field: 'monthlyExpenses', value: facts.monthlyExpenses, source: monthsLabel });
   }
@@ -345,7 +362,7 @@ export function deriveSettings(
     enoughHistory &&
     facts.monthlyIncome !== null &&
     facts.monthlyExpenses !== null &&
-    settings.monthlyContribution === DEFAULT_SETTINGS.monthlyContribution
+    !isSet('monthlyContribution')
   ) {
     const saved_ = round(Math.max(0, facts.monthlyIncome - facts.monthlyExpenses));
     settings.monthlyContribution = saved_;
@@ -358,12 +375,7 @@ export function deriveSettings(
 
   // Retirement spending defaults to what the user spends now: the most defensible guess
   // available, and one they can see and change.
-  if (
-    enoughHistory &&
-    facts.monthlyExpenses !== null &&
-    settings.lifestyles.length === 1 &&
-    settings.lifestyles[0].monthlySpendToday === DEFAULT_SETTINGS.lifestyles[0].monthlySpendToday
-  ) {
+  if (enoughHistory && facts.monthlyExpenses !== null && !isSet('lifestyles')) {
     settings.lifestyles = [
       {
         ...settings.lifestyles[0],
@@ -378,7 +390,7 @@ export function deriveSettings(
     });
   }
 
-  if (settings.birthMonth === null) {
+  if (!isSet('birthMonth')) {
     if (facts.currentAge !== null && facts.currentAge > 0) {
       const derived = monthFromOrdinal(monthOrdinal(today) - Math.round(facts.currentAge * 12));
       settings.birthMonth = derived;

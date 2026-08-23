@@ -1,0 +1,101 @@
+/*
+ * InfoTip — the circled-i trigger and the panel it reveals.
+ *
+ * The panel is `position: fixed` and placed from the trigger's measured box, so it
+ * escapes any `overflow: hidden` ancestor rather than being clipped inside a form
+ * column. That is also why nothing here sets `top`/`left`: the component supplies
+ * them, and the stylesheet only says what the panel looks like.
+ */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 4px;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: help;
+  opacity: 0.75;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease,
+    background 0.15s ease;
+  /* A 12px glyph is a 12px tap target. Touch needs ~24px, so the button keeps its
+     small look and grows its hit area outwards instead. */
+  min-width: 24px;
+  min-height: 24px;
+  margin-top: -6px;
+  margin-bottom: -6px;
+}
+
+.trigger:hover,
+.trigger:focus-visible,
+.trigger[aria-expanded='true'] {
+  color: var(--primary);
+  opacity: 1;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.panel {
+  position: fixed;
+  z-index: 1000;
+  max-width: 280px;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.45;
+  /* Labels are often uppercase or bold; the explanation should not inherit that. */
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+  /* Clips the accent hairline below to the panel's rounded corners. Without it the bar
+     runs straight past where the corner curves away and overhangs the edge. */
+  overflow: hidden;
+}
+
+/* A hairline of the accent along the top edge, so the panel reads as part of the app
+   rather than a browser tooltip. */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--primary),
+    color-mix(in oklab, var(--primary) 20%, transparent)
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel {
+    animation: infotip-in 0.12s ease-out;
+  }
+}
+
+@keyframes infotip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
