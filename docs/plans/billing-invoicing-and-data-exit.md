@@ -9,7 +9,7 @@ Companion issues: [#417](https://github.com/Komediruzecki/token-circles/issues/4
 
 ---
 
-## Part A — What happens when a payment fails
+## Part A — What happens when a payment fails **[DONE — PR #421]**
 
 ### What the code does today
 
@@ -133,14 +133,45 @@ the subscription ends, the plan drops to free and the data is suddenly over ever
 nothing happens to it — which is quietly the worst of both worlds: we keep storing it, and they
 cannot necessarily reach all of it.
 
+### What the export actually does today _(audited 2026-08-24)_
+
+Better than assumed in one respect and worse in three. `GET /api/export` → `exportBackup()` in
+`worker/src/backup.ts` returns a full JSON backup **including the receipt files themselves**, as
+base64 in a `receiptFiles[]` array beside the `receipts` rows. There is no missing-blob problem:
+the bytes are in there, and `POST /api/import` restores them. A ZIP is therefore a **convenience**,
+not a data-exit requirement — the data can already come out.
+
+The three gaps are real, and the first is the one that matters for cancellation:
+
+1. **It exports the selected profiles, not the account.** `getProfileIds(c)` reads `X-Profile-Ids`
+   and falls back to the _current_ profile. Settings → Export sends whatever scope `apiFetch`
+   injects, so a user with five profiles in single-profile scope downloads one of them and is told
+   "Data exported successfully". For a cancellation path that is the wrong default by a mile:
+   the one moment someone needs _everything_ is the moment the button gives them a fifth of it.
+   → **The fix is small and worth doing on its own: an explicit account-wide export.** Either a
+   `?scope=account` on the existing route or a separate `GET /api/export/all`, plus a Settings
+   control that says "all profiles" in so many words.
+2. **It is built entirely in memory.** Every receipt is read from R2, base64-encoded (+33%), held
+   in an array, and then `c.json()` serializes the lot. A Worker has ~128 MB. The practical
+   ceiling is therefore somewhere around 40–60 MB of receipts, and past it the user gets a failure,
+   not a download. Worth _measuring_ before designing anything: for most accounts this never
+   binds, and a streaming ZIP is a lot of machinery to build for a limit nobody has hit.
+3. **One missing R2 object aborts the whole backup.** `exportBackup` throws
+   `503 Receipt file "…" is unavailable; full backup aborted` if any single object is absent.
+   All-or-nothing on a condition the user can neither see nor fix — and it fails exactly the
+   person with the most data. A missing blob should be _reported in the payload_ (the receipt row
+   exported with a `file_missing: true` marker) and the rest of the backup delivered.
+   → This is the one I would fix first. It is a handful of lines and it converts an unrecoverable
+   export into a complete one with a footnote.
+
 ### Proposal, in the order the user experiences it
 
-1. **Export first, always.** Before anything is blocked, offer a complete ZIP: every profile as
-   CSV/JSON, plus the receipt files. Built in Settings → Data, next to the existing CSV exports,
-   and linked from the "your plan has ended" mail in Part A.
-   - Assembled in a Worker, streamed from R2. A large receipt library will not fit in a Worker's
-     memory, so this needs streaming or a job that writes the ZIP to R2 and mails a link — the
-     shape depends on the real ceiling, which is worth measuring before designing.
+1. **Export first, always.** Before anything is blocked, make sure the export covers the whole
+   account and cannot fail wholesale — the two fixes above. Linked from the "your plan has ended"
+   mail in Part A.
+   - A ZIP (receipts as real files rather than base64, profiles as CSV) is a nice-to-have on top,
+     and only worth building once the memory ceiling has been measured against real accounts. The
+     JSON backup already satisfies "get my data out"; the ZIP satisfies "open my receipts".
 2. **Then read-only, not deleted.** Over-limit profiles become read-only rather than hidden: the
    user can still see and export them, but cannot add to them. Hiding data someone paid to create
    reads as data loss even when it isn't.
@@ -168,8 +199,9 @@ it is the thing that makes every later decision safe to make.
 
 ## Suggested order
 
-1. **A** (dunning mail) — small, self-contained, and the current silence is the most visible gap.
-2. **B1** — a dashboard toggle, and it is the compliance-relevant half of "invoices".
-3. **C, export only** — makes everything after it safe.
+1. ~~**A** (dunning mail)~~ — **done, PR #421.**
+2. **C, the two export fixes** — account-wide scope and no all-or-nothing failure. Small, useful to
+   everyone, and they make everything after them safe.
+3. **B1** — a dashboard toggle, and it is the compliance-relevant half of "invoices".
 4. **B3 track** starts with the accountant, in parallel and not by us.
 5. **C, limits + retention** — once the export exists and the numbers are known.
