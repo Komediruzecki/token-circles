@@ -68,7 +68,15 @@ export default function BillingPlans(props: {
   busyKey: () => string | null
   onUpgrade: (planId: string, interval: 'monthly' | 'annual') => void
   onManage: () => void
+  /**
+   * Why upgrading is unavailable right now, or null when it is available. Separate from
+   * `configured`, which is about the server; this is about this account. Managing an existing
+   * subscription stays enabled either way — someone who is already paying must always be able
+   * to reach the portal and cancel.
+   */
+  upgradeBlockedReason?: () => string | null
 }) {
+  const upgradeBlocked = (): string | null => props.upgradeBlockedReason?.() ?? null
   const [plans, setPlans] = createSignal<PlanDef[]>([])
   const [notices, setNotices] = createSignal<{ beta?: string; fairUse?: string }>({})
   const [interval, setInterval] = createSignal<'monthly' | 'annual'>('monthly')
@@ -265,6 +273,7 @@ export default function BillingPlans(props: {
                       disabled={
                         props.busyKey() !== null ||
                         !props.configured() ||
+                        upgradeBlocked() !== null ||
                         !props.availablePlans().includes(p.id)
                       }
                       style={ctaStyle(recommended)}
@@ -286,6 +295,14 @@ export default function BillingPlans(props: {
       <Show when={!props.configured()}>
         <p style={{ 'font-size': '12px', color: 'var(--text-secondary)', margin: '14px 0 0' }}>
           Billing isn't configured on the server yet — upgrade is disabled.
+        </p>
+      </Show>
+      <Show when={props.configured() && upgradeBlocked() !== null}>
+        <p
+          style={{ 'font-size': '12px', color: 'var(--text-secondary)', margin: '14px 0 0' }}
+          data-testid="upgrade-blocked-reason"
+        >
+          {upgradeBlocked()}
         </p>
       </Show>
       <p style={{ 'font-size': '12px', color: 'var(--text-secondary)', margin: '10px 0 0' }}>

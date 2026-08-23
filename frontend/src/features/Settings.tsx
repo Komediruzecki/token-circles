@@ -33,6 +33,7 @@ import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
+import { ResendVerification } from '../components/ResendVerification'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
@@ -398,6 +399,7 @@ export default function Settings() {
     cancel_at_period_end?: boolean
     configured: boolean
     availablePlans?: string[]
+    email_verification_required?: boolean
   } | null>(null)
   // Real tier name (the per-tier webhook stores 'basic'/'advanced'/'ultimate'; 'premium' is legacy).
   const planLabel = (p: string | undefined): string => {
@@ -1577,10 +1579,31 @@ export default function Settings() {
                 >
                   {billingStatusLine().text}
                 </p>
+                {/* Said here rather than discovered at the Stripe redirect: the checkout route
+                    refuses an unconfirmed address, and finding that out after leaving the app is
+                    the worst place to learn it. */}
+                <Show when={billing()?.email_verification_required}>
+                  <p
+                    style="margin: 0 0 16px; font-size: 13px; color: var(--text-secondary);"
+                    data-testid="billing-verify-email-notice"
+                  >
+                    Confirm your email address before subscribing — receipts, renewal notices and
+                    the way back into your account all go there.{' '}
+                    <ResendVerification
+                      variant="inline"
+                      data-testid="billing-resend-verification"
+                    />
+                  </p>
+                </Show>
                 <BillingPlans
                   currentPlan={() => billing()?.plan ?? 'free'}
                   configured={() => billing()?.configured ?? false}
                   availablePlans={() => billing()?.availablePlans ?? []}
+                  upgradeBlockedReason={() =>
+                    billing()?.email_verification_required === true
+                      ? 'Upgrading is available once your email address is confirmed.'
+                      : null
+                  }
                   busyKey={billingBusyKey}
                   onUpgrade={(plan, interval) =>
                     redirectToStripe('/api/billing/checkout', 'Could not start checkout', plan, {

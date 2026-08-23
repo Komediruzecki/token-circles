@@ -78,6 +78,24 @@ function availablePlans(env: AppEnv['Bindings']): PaidPlan[] {
 
 // POST /api/billing/checkout — start a subscription checkout for { plan, interval }; returns { url }.
 billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const u = await db.first<{
+    email: string | null;
+    stripe_customer_id: string | null;
+    auth_provider: string | null;
+    email_verified: number | null;
+  }>(
+    c.env.DB,
+    'SELECT email, stripe_customer_id, auth_provider, email_verified FROM users WHERE id = ?',
+    userId
+  );
+  // First, and before anything about Stripe: this is a fact about the account, true or false
+  // whether or not billing is configured. Checked here and not only in the UI because this is
+  // the route that creates the charge, and it is reachable with a session and a fetch whatever
+  // the page decided to draw.
+  if (mustVerifyEmail(u)) {
+    throw new HttpError(403, 'Confirm your email address before subscribing');
+  }
   if (!c.env.STRIPE_SECRET_KEY) throw new HttpError(501, 'Billing is not configured');
   const b = (await c.req.json().catch(() => ({}))) as { plan?: string; interval?: string };
   const plan = paidPlan(b.plan) ?? 'advanced'; // default to Advanced (the legacy single price)
@@ -85,12 +103,6 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
   const price = priceId(c.env, plan, interval);
   if (!price) throw new HttpError(501, `The ${plan} (${interval}) plan isn't available yet`);
 
-  const userId = c.get('userId');
-  const u = await db.first<{ email: string | null; stripe_customer_id: string | null }>(
-    c.env.DB,
-    'SELECT email, stripe_customer_id FROM users WHERE id = ?',
-    userId
-  );
   const origin = c.env.CORS_ORIGIN ?? new URL(c.req.url).origin;
   const params: Record<string, string> = {
     mode: 'subscription',
@@ -135,6 +147,26 @@ billingRoutes.post('/api/billing/portal', requireAuth, async (c) => {
   return c.json({ url: portal.url });
 });
 
+/**
+ * A password account has to confirm its address before it can start paying.
+ *
+ * Everything else about verification is a soft nudge — the account works, the banner asks. This
+ * one place is hard, because the address is where the receipts, the renewal notices and the
+ * recovery link all go: a typo at signup sends a stranger the paper trail for someone else's
+ * subscription, and the person who typed it has no way back into the account that is billing them.
+ *
+ * Google accounts arrive with Google's own `email_verified` claim, so they are never gated.
+ * Managing an EXISTING subscription is never gated either — see the portal route.
+ */
+function mustVerifyEmail(
+  u: {
+    auth_provider?: string | null;
+    email_verified?: number | null;
+  } | null
+): boolean {
+  return u?.auth_provider === 'password' && !u.email_verified;
+}
+
 // GET /api/billing/status — current plan + subscription state (the app refreshes this on return).
 billingRoutes.get('/api/billing/status', requireAuth, async (c) => {
   const userId = c.get('userId');
@@ -143,9 +175,11 @@ billingRoutes.get('/api/billing/status', requireAuth, async (c) => {
     subscription_status: string | null;
     plan_renews_at: string | null;
     cancel_at_period_end: number | null;
+    auth_provider: string | null;
+    email_verified: number | null;
   }>(
     c.env.DB,
-    'SELECT plan, subscription_status, plan_renews_at, cancel_at_period_end FROM users WHERE id = ?',
+    'SELECT plan, subscription_status, plan_renews_at, cancel_at_period_end, auth_provider, email_verified FROM users WHERE id = ?',
     userId
   );
   return c.json({
@@ -156,6 +190,9 @@ billingRoutes.get('/api/billing/status', requireAuth, async (c) => {
     cancel_at_period_end: !!u?.cancel_at_period_end,
     configured: !!c.env.STRIPE_SECRET_KEY,
     availablePlans: availablePlans(c.env), // which paid tiers have a Price configured
+    // The upgrade panel reads this instead of discovering the rule by being refused: a button
+    // that redirects to Stripe and fails there is a worse way to learn than not offering it.
+    email_verification_required: mustVerifyEmail(u),
   });
 });
 

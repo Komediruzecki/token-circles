@@ -13,11 +13,8 @@
 import { createEffect, createSignal, onMount, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { useAppState } from '../core/appStore'
-import {
-  fetchVerificationStatus,
-  resendVerificationEmail,
-  takeEmailVerifyResult,
-} from '../core/emailVerification'
+import { fetchVerificationStatus, takeEmailVerifyResult } from '../core/emailVerification'
+import { ResendVerification } from './ResendVerification'
 import styles from './VerifyEmailBanner.module.css'
 import type { Component } from 'solid-js'
 
@@ -36,7 +33,6 @@ function loadDismissed(): boolean {
 export const VerifyEmailBanner: Component = () => {
   const state = useAppState()
   const [email, setEmail] = createSignal<string | null>(null)
-  const [sendState, setSendState] = createSignal<'idle' | 'sending' | 'sent'>('idle')
   const [dismissed, setDismissed] = createSignal(loadDismissed())
 
   const refresh = async (): Promise<void> => {
@@ -71,18 +67,6 @@ export const VerifyEmailBanner: Component = () => {
     }
   })
 
-  const resend = async (): Promise<void> => {
-    if (sendState() !== 'idle') return
-    setSendState('sending')
-    try {
-      await resendVerificationEmail()
-      setSendState('sent')
-    } catch (err) {
-      setSendState('idle')
-      toast(err instanceof Error ? err.message : 'Could not resend the email', 'error')
-    }
-  }
-
   const dismiss = (): void => {
     setDismissed(true)
     try {
@@ -113,19 +97,7 @@ export const VerifyEmailBanner: Component = () => {
         <p class={styles.text}>
           Confirm your email — we sent a link to <span class={styles.address}>{email()}</span>
         </p>
-        <Show
-          when={sendState() !== 'sent'}
-          fallback={<span class={styles.sent}>Sent — check your inbox</span>}
-        >
-          <button
-            class={styles.resend}
-            onClick={() => void resend()}
-            disabled={sendState() === 'sending'}
-            data-testid="verify-email-resend"
-          >
-            {sendState() === 'sending' ? 'Sending...' : 'Resend'}
-          </button>
-        </Show>
+        <ResendVerification data-testid="verify-email-resend" />
         <button
           class={styles.close}
           onClick={dismiss}
