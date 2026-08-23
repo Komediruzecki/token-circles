@@ -73,6 +73,20 @@ Run `pnpm run test` once to initialize the test database before running individu
 - ESLint + Prettier configured — run `pnpm run lint` before committing
 - Follow existing patterns in the codebase
 
+### Editable form controls
+
+Read [`.claude/skills/solid-forms/SKILL.md`](.claude/skills/solid-forms/SKILL.md) before
+adding an `<input>` or a list of editable rows. Four bugs have shipped from this area more
+than once, and all four look correct in a diff:
+
+- a `<For>` over editable rows rebuilds each row on every keystroke, so the field loses
+  focus after one character — use `<Index>`
+- `value={n}` + `onInput={e => set(Number(e.currentTarget.value))}` writes back under the
+  caret, so the field cannot be emptied and cannot hold a decimal — use `NumberField`
+- an unrounded derived number fails HTML5 `step` validation and silently blocks the whole
+  form from saving — round where the number is produced
+- `<input type="month">` makes users click back one year at a time — use `MonthPicker`
+
 ## Pull Request Guidelines
 
 - Keep PRs focused on a single change

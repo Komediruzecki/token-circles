@@ -92,10 +92,26 @@ export const RETURN_SCENARIOS = [
   { id: 'optimistic', label: 'Optimistic', offsetPct: 3 },
 ];
 
-function num(value: unknown, fallback: number, min: number, max: number): number {
+/**
+ * Round to a fixed number of decimals, and normalise -0 away.
+ *
+ * Every number here ends up in an `<input type="number">` with a `step`, and HTML5 marks a
+ * value that is not a whole multiple of that step invalid. An average like
+ * 7.292500000001382 — which is what dividing a sum of money by a month count actually
+ * produces — is therefore not merely ugly, it makes the form refuse to save.
+ */
+export function round(value: number, decimals = 2): number {
+  if (!Number.isFinite(value)) return 0;
+  const factor = Math.pow(10, decimals);
+  const rounded = Math.round(value * factor) / factor;
+  // A tiny negative rounds to -0, which then formats as "-0" in the field.
+  return rounded === 0 ? 0 : rounded;
+}
+
+function num(value: unknown, fallback: number, min: number, max: number, decimals = 2): number {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
+  return round(Math.min(max, Math.max(min, n)), decimals);
 }
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -153,7 +169,7 @@ function normalizeAllocation(value: unknown): AllocationSlice[] {
     const r = raw as Record<string, unknown>;
     return {
       label: str(r.label, `Asset ${i + 1}`),
-      weightPct: num(r.weightPct, 0, 0, 100),
+      weightPct: num(r.weightPct, 0, 0, 100, 0),
       annualReturnPct: num(r.annualReturnPct, 0, -50, 50),
       erodesWithInflation: bool(r.erodesWithInflation, false),
     };
@@ -193,7 +209,7 @@ export function normalizeSettings(raw: unknown): RetirementSettings {
     mode: r.mode === 'advanced' ? 'advanced' : 'simple',
     adjustForInflation: bool(r.adjustForInflation, DEFAULT_SETTINGS.adjustForInflation),
     birthMonth: month(r.birthMonth, DEFAULT_SETTINGS.birthMonth),
-    lifeExpectancyAge: num(r.lifeExpectancyAge, DEFAULT_SETTINGS.lifeExpectancyAge, 40, 120),
+    lifeExpectancyAge: num(r.lifeExpectancyAge, DEFAULT_SETTINGS.lifeExpectancyAge, 40, 120, 0),
     netWorth: num(r.netWorth, DEFAULT_SETTINGS.netWorth, -1e12, 1e12),
     monthlyContribution: num(
       r.monthlyContribution,
@@ -331,7 +347,7 @@ export function deriveSettings(
     facts.monthlyExpenses !== null &&
     settings.monthlyContribution === DEFAULT_SETTINGS.monthlyContribution
   ) {
-    const saved_ = Math.max(0, facts.monthlyIncome - facts.monthlyExpenses);
+    const saved_ = round(Math.max(0, facts.monthlyIncome - facts.monthlyExpenses));
     settings.monthlyContribution = saved_;
     filled.push({
       field: 'monthlyContribution',
@@ -407,7 +423,7 @@ export function buildFacts(input: {
 }): RetirementFacts {
   const netWorth =
     input.accountBalances.length > 0
-      ? input.accountBalances.reduce((sum, b) => sum + (Number.isFinite(b) ? b : 0), 0)
+      ? round(input.accountBalances.reduce((sum, b) => sum + (Number.isFinite(b) ? b : 0), 0))
       : null;
 
   const income: Record<string, number> = {};
@@ -430,7 +446,7 @@ export function buildFacts(input: {
   const mean = (totals: Record<string, number>): number | null => {
     const values = Object.values(totals);
     if (values.length === 0) return null;
-    return values.reduce((a, b) => a + b, 0) / values.length;
+    return round(values.reduce((a, b) => a + b, 0) / values.length);
   };
 
   return {

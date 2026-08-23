@@ -15,6 +15,7 @@ import {
   MIN_MONTHS_FOR_AVERAGES,
   monthOf,
   normalizeSettings,
+  round,
   settingsToInput,
 } from '../../../../shared/retirementSettings'
 import type { RetirementFacts } from '../../../../shared/retirementSettings'
@@ -561,5 +562,73 @@ describe('monthOf', () => {
   it('formats a date as the month the projection indexes by', () => {
     expect(monthOf(new Date(Date.UTC(2026, 0, 15)))).toBe('2026-01')
     expect(monthOf(new Date(Date.UTC(2026, 11, 31)))).toBe('2026-12')
+  })
+})
+
+/**
+ * Every number here is bound for an `<input type="number">` with a `step`, and HTML5 marks
+ * a value that is not a whole multiple of that step invalid — which blocks the whole form
+ * from submitting. A number nobody typed must therefore never carry float noise.
+ */
+describe('rounding, so the form can actually be saved', () => {
+  it('rounds to two decimals and kills -0', () => {
+    expect(round(7.292500000001382)).toBeCloseTo(7.29, 10)
+    expect(round(2.005)).toBeCloseTo(2.01, 10)
+    expect(round(-0.0001)).toBe(0)
+    expect(Object.is(round(-0.0001), -0)).toBe(false)
+    expect(round(1234.5678, 0)).toBe(1235)
+    expect(round(Number.NaN)).toBe(0)
+    expect(round(Number.POSITIVE_INFINITY)).toBe(0)
+  })
+
+  it('cleans noise already sitting in a saved settings row', () => {
+    const settings = normalizeSettings({
+      monthlyContribution: 7.292500000001382,
+      netWorth: 12345.678901,
+      annualReturnPct: 4.444444444444445,
+      lifeExpectancyAge: 87.6,
+      allocation: [{ label: 'Shares', weightPct: 62.5, annualReturnPct: 7.1234 }],
+    })
+    expect(settings.monthlyContribution).toBeCloseTo(7.29, 10)
+    expect(settings.netWorth).toBeCloseTo(12345.68, 10)
+    expect(settings.annualReturnPct).toBeCloseTo(4.44, 10)
+    // Age and portfolio weight have integer steps, so they round the whole way.
+    expect(settings.lifeExpectancyAge).toBe(88)
+    expect(settings.allocation[0].weightPct).toBe(63)
+    expect(settings.allocation[0].annualReturnPct).toBeCloseTo(7.12, 10)
+  })
+
+  it('rounds the averages facts are built from', () => {
+    const facts = buildFacts({
+      accountBalances: [1000.005, 2000.005, 0.001],
+      cashflow: [
+        { date: '2026-01-05', amount: 1000, type: 'income' },
+        { date: '2026-02-05', amount: 1000, type: 'income' },
+        { date: '2026-03-05', amount: 1000.01, type: 'income' },
+        { date: '2026-01-06', amount: 300, type: 'expense' },
+        { date: '2026-02-06', amount: 300, type: 'expense' },
+        { date: '2026-03-06', amount: 300, type: 'expense' },
+      ],
+      currentAge: null,
+    })
+    expect(facts.monthlyIncome).toBe(1000)
+    expect(facts.monthlyExpenses).toBe(300)
+    expect(facts.netWorth).toBeCloseTo(3000.01, 10)
+  })
+
+  it('rounds the contribution it derives, which is a difference of two averages', () => {
+    // 3382.4925 - 3375.2 is 7.292500000001382 in binary floating point. This exact number
+    // is what a real profile produced, and what the form then refused to save.
+    const facts: RetirementFacts = {
+      netWorth: 1000,
+      monthlyIncome: 3382.4925,
+      monthlyExpenses: 3375.2,
+      monthsObserved: 12,
+      currentAge: null,
+    }
+    const derived = deriveSettings({ ...DEFAULT_SETTINGS }, facts, '2026-01')
+    expect(derived.settings.monthlyContribution).toBeCloseTo(7.29, 10)
+    const filled = derived.filled.find((f) => f.field === 'monthlyContribution')
+    expect(filled?.value).toBeCloseTo(7.29, 10)
   })
 })

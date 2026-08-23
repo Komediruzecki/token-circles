@@ -105,8 +105,20 @@ const byTestIdAll = (root: HTMLElement, id: string) => [
   ...root.querySelectorAll<HTMLElement>(`[data-test-id="${id}"]`),
 ]
 
-/** Type into a control the way a person does: set the value, then fire input. */
+/** The month controls are a pair of selects, so a month is chosen in two gestures. */
+async function pickMonth(picker: HTMLElement, value: string) {
+  const [monthSel, yearSel] = [...picker.querySelectorAll<HTMLSelectElement>('select')]
+  const [year, month] = value.split('-')
+  yearSel.value = year
+  yearSel.dispatchEvent(new Event('change', { bubbles: true }))
+  monthSel.value = String(Number(month))
+  monthSel.dispatchEvent(new Event('change', { bubbles: true }))
+  await flush()
+}
+
+/** Type into a control the way a person does: focus it, set the value, fire input. */
 async function type(input: HTMLInputElement, value: string) {
+  input.focus()
   input.value = value
   input.dispatchEvent(new Event('input', { bubbles: true }))
   await flush()
@@ -454,7 +466,7 @@ describe('controls that cannot do anything say so', () => {
     expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(true)
     expect(byTestId(root, 'retirement-life-needs-birth')!.textContent).toContain('date of birth')
 
-    await type(inputByTestId(root, 'retirement-input-birth')!, '1994-01')
+    await pickMonth(byTestId(root, 'retirement-input-birth')!, '1994-01')
     expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(false)
     expect(byTestId(root, 'retirement-life-needs-birth')).toBeNull()
   })
@@ -497,5 +509,133 @@ describe('a pay step the user typed is the pay they get', () => {
 
     const after = netWorthSeries()
     expect(after[after.length - 1]).toBeLessThan(before[before.length - 1])
+  })
+})
+
+/**
+ * These are the bugs the panel actually shipped with, in the order a user hit them.
+ * Each one is a regression test rather than a feature test: the arithmetic was fine, the
+ * controls were not usable.
+ */
+describe('the controls behave like controls', () => {
+  const labelled = (label: string) =>
+    [...host.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.getAttribute('aria-label') === label
+    )!
+
+  it('keeps focus in a list row across a whole number, one keystroke at a time', async () => {
+    const root = await mountPlanner()
+    buttonByTestId(root, 'retirement-mode-advanced')!.click()
+    await flush()
+    buttonByTestId(root, 'retirement-add-step')!.click()
+    await flush()
+
+    const field = labelled('Monthly income from then')
+    field.focus()
+    const nodeAtStart = field
+
+    // Typing "4500" is four separate input events, and every one of them rewrites the
+    // array behind the row. Keyed by reference, <For> would rebuild the row each time and
+    // the caret would land back on the body after the first digit.
+    for (const text of ['4', '45', '450', '4500']) {
+      await type(labelled('Monthly income from then'), text)
+      expect(document.activeElement).toBe(nodeAtStart)
+      expect(labelled('Monthly income from then')).toBe(nodeAtStart)
+    }
+
+    expect(nodeAtStart.value).toBe('4500')
+  })
+
+  it('keeps focus while editing a lifestyle name', async () => {
+    await mountPlanner()
+    const field = labelled('Lifestyle name')
+    field.focus()
+
+    for (const text of ['C', 'Co', 'Cos', 'Cosy']) {
+      await type(labelled('Lifestyle name'), text)
+      expect(document.activeElement).toBe(field)
+    }
+    expect(field.value).toBe('Cosy')
+  })
+
+  it('lets a number field be emptied instead of snapping back to 0', async () => {
+    const root = await mountPlanner()
+    const netWorth = inputByTestId(root, 'retirement-input-networth')!
+    await type(netWorth, '5000')
+    expect(netWorth.value).toBe('5000')
+
+    await type(netWorth, '')
+    // The box stays empty while it has focus. Writing "0" back under the caret is what
+    // made this field impossible to retype.
+    expect(netWorth.value).toBe('')
+
+    netWorth.dispatchEvent(new Event('blur', { bubbles: true }))
+    await flush()
+    expect(netWorth.value).toBe('0')
+  })
+
+  it('lets a decimal be typed without the field rewriting itself', async () => {
+    const root = await mountPlanner()
+    const swr = inputByTestId(root, 'retirement-input-swr')!
+
+    for (const text of ['3', '3.7', '3.75']) {
+      await type(swr, text)
+      expect(swr.value).toBe(text)
+    }
+  })
+
+  it('leaves a half-typed number alone instead of clearing it', async () => {
+    const root = await mountPlanner()
+    const swr = inputByTestId(root, 'retirement-input-swr')!
+
+    // Mid-way through "3.75" the text reads "3." — which a number input reports as an
+    // empty value while still showing the "3." to the user. Writing anything back here is
+    // what used to eat the keystroke.
+    swr.focus()
+    swr.value = ''
+    swr.dispatchEvent(new Event('input', { bubbles: true }))
+    await flush()
+    expect(swr.value).toBe('')
+
+    await type(swr, '3.75')
+    expect(swr.value).toBe('3.75')
+  })
+
+  it('picks a birth year in one gesture, without stepping through decades', async () => {
+    const root = await mountPlanner()
+    const picker = byTestId(root, 'retirement-input-birth')!
+    const [monthSel, yearSel] = [...picker.querySelectorAll<HTMLSelectElement>('select')]
+
+    // The whole point: 1950 is present as an option, not something you scroll back to.
+    expect([...yearSel.options].some((o) => o.value === '1950')).toBe(true)
+    expect([...monthSel.options].map((o) => o.textContent)).toContain('September')
+
+    await pickMonth(picker, '1950-09')
+    expect(yearSel.value).toBe('1950')
+    expect(monthSel.value).toBe('9')
+    expect(inputByTestId(root, 'retirement-input-life')!.disabled).toBe(false)
+  })
+
+  it('saves an auto-filled contribution rather than rejecting it as invalid', async () => {
+    // What the derivation produced from real data: an average of money, which is a
+    // division, which is not a round number. `step="0.01"` then marked the field invalid
+    // and the save bounced.
+    serverSettings = { monthlyContribution: 7.292500000001382 }
+    const root = await mountPlanner()
+
+    const field = inputByTestId(root, 'retirement-input-contribution')!
+    expect(field.value).toBe('7.29')
+    // `step="0.01"` makes 7.292500000001382 invalid, and one invalid field blocks the
+    // whole form: the submit button does nothing and the browser puts a bubble on a
+    // number the user never typed.
+    expect(field.checkValidity()).toBe(true)
+    expect(field.closest('form')!.checkValidity()).toBe(true)
+
+    // Saving is gated on having changed something, so change something.
+    await type(inputByTestId(root, 'retirement-input-networth')!, '1000')
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    expect(apiPut).toHaveBeenCalled()
+    expect(apiPut.mock.calls[0][1].monthlyContribution).toBeCloseTo(7.29, 10)
   })
 })

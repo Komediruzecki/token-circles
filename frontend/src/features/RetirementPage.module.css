@@ -771,16 +771,78 @@
   flex-wrap: wrap;
 }
 
+/* ── MonthPicker: two selects worn as one control ────────────────────────────
+   A month has no day in it, so it needs no calendar — and the native month input
+   makes you step to a birth year one year at a time. ── */
+.month-picker {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.month-picker select {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.month-picker select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* "September" needs the room; a year is always four digits. */
+.month-picker select:first-of-type {
+  flex: 1.5 1 0;
+}
+
+.list-row .month-picker {
+  flex: 1 1 0;
+}
+
 @media (max-width: 900px) {
   .planner-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 
+/* One editable row can hold two months, an amount and a remove button. Below this
+   they cannot share a line without every control becoming too narrow to read, so
+   each takes the full width and the button tucks under its own row. */
+@media (max-width: 640px) {
   .list-row {
     flex-wrap: wrap;
+    align-items: stretch;
+    gap: 6px;
   }
 
-  .list-row input {
-    flex-basis: 45%;
+  .list-row input,
+  .list-row .month-picker {
+    flex: 1 1 100%;
+  }
+
+  .list-row button {
+    align-self: flex-end;
+  }
+
+  .sub-section {
+    padding: 10px;
+  }
+
+  .planner-layout {
+    gap: 16px;
+  }
+
+  .assumptions {
+    padding: 14px;
+  }
+
+  .chart-controls {
+    gap: 12px;
   }
 }
