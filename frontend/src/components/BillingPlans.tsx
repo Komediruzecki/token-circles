@@ -166,23 +166,35 @@ export default function BillingPlans(props: {
             const per = () => (interval() === 'annual' ? '/yr' : '/mo')
             return (
               <div
+                data-testid={mine ? 'plan-card-current' : undefined}
                 style={{
                   position: 'relative',
-                  border: `1px solid ${recommended ? 'var(--primary)' : 'var(--border, rgba(255,255,255,0.12))'}`,
+                  // The plan you are ON outranks the plan we recommend. Before this the only
+                  // coloured border on the grid belonged to RECOMMENDED, so a subscriber whose
+                  // plan happened to be the recommended one saw nothing at all saying it was
+                  // theirs — and one whose plan was not saw a highlight on somebody else's card.
+                  border: `${mine ? 2 : 1}px solid ${
+                    mine
+                      ? 'var(--success, #22c55e)'
+                      : recommended
+                        ? 'var(--primary)'
+                        : 'var(--border, rgba(255,255,255,0.12))'
+                  }`,
                   'border-radius': '12px',
-                  padding: '16px',
+                  // 2px vs 1px would shift the card's contents by a pixel against its neighbours.
+                  padding: mine ? '15px' : '16px',
                   background: 'var(--bg, #0b0e14)',
                   display: 'flex',
                   'flex-direction': 'column',
                 }}
               >
-                <Show when={recommended}>
+                <Show when={mine || recommended}>
                   <span
                     style={{
                       position: 'absolute',
                       top: '-9px',
                       left: '16px',
-                      background: 'var(--primary)',
+                      background: mine ? 'var(--success, #22c55e)' : 'var(--primary)',
                       color: '#fff',
                       'font-size': '10px',
                       'font-weight': 700,
@@ -192,7 +204,7 @@ export default function BillingPlans(props: {
                       'border-radius': '999px',
                     }}
                   >
-                    Recommended
+                    {mine ? 'Your plan' : 'Recommended'}
                   </span>
                 </Show>
 
@@ -245,12 +257,11 @@ export default function BillingPlans(props: {
                           style={{
                             'text-align': 'center',
                             'font-size': '13px',
-                            'font-weight': 600,
                             color: 'var(--text-secondary)',
                             padding: '8px',
                           }}
                         >
-                          Current plan
+                          Free forever
                         </div>
                       }
                     >
@@ -259,9 +270,22 @@ export default function BillingPlans(props: {
                         onClick={props.onManage}
                         disabled={props.busyKey() !== null}
                         style={ctaStyle(false)}
+                        data-testid="manage-subscription"
                       >
-                        {props.busyKey() === 'manage' ? 'Redirecting…' : 'Manage billing'}
+                        {props.busyKey() === 'manage' ? 'Redirecting…' : 'Manage subscription'}
                       </button>
+                      {/* Said out loud, because "manage" is where cancelling lives and nobody
+                          guesses that from the word. */}
+                      <div
+                        style={{
+                          'text-align': 'center',
+                          'font-size': '11.5px',
+                          color: 'var(--text-secondary)',
+                          'margin-top': '6px',
+                        }}
+                      >
+                        Change plan, update your card, or cancel
+                      </div>
                     </Show>
                   </Show>
                   <Show when={!mine && p.id !== 'free'}>

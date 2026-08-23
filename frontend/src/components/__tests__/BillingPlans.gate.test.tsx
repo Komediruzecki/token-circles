@@ -71,7 +71,7 @@ async function mount(opts: { blocked?: string | null; currentPlan?: string } = {
 const upgradeButton = () =>
   [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Upgrade')
 const manageButton = () =>
-  [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('Manage billing'))
+  host.querySelector<HTMLButtonElement>('[data-testid="manage-subscription"]')
 const reason = () => host.querySelector('[data-testid="upgrade-blocked-reason"]')
 
 beforeEach(() => {
@@ -113,10 +113,76 @@ describe('when this account cannot upgrade yet', () => {
     expect(upgraded).toEqual([])
   })
 
-  it('leaves Manage billing alone, so a subscriber can still cancel', async () => {
+  it('leaves Manage subscription alone, so a subscriber can still cancel', async () => {
     await mount({ blocked: 'nope', currentPlan: 'advanced' })
 
     expect(manageButton()).toBeDefined()
     expect(manageButton()!.disabled).toBe(false)
+  })
+})
+
+/**
+ * Which card is mine.
+ *
+ * The grid used to give its only coloured border and its only badge to RECOMMENDED, so the first
+ * subscriber could not tell which plan they were on: theirs looked like every other card, and if
+ * theirs happened to BE the recommended one, the highlight it carried said "Recommended" rather
+ * than "yours". The plan you are on has to outrank the plan we would like to sell you.
+ */
+describe('the plan you are on', () => {
+  const currentCard = () => host.querySelector('[data-testid="plan-card-current"]')
+
+  it('is the marked card, and it is the right one', async () => {
+    await mount({ currentPlan: 'advanced' })
+
+    expect(currentCard()?.textContent).toContain('Your plan')
+    expect(currentCard()?.textContent).toContain('Advanced')
+  })
+
+  it('carries a border of its own, not only a word', async () => {
+    await mount({ currentPlan: 'advanced' })
+
+    // The badge is small and sits at the card's edge; the border is what makes the card read as
+    // selected at a glance, which is the complaint this fixes. Asserted on the inline style
+    // because that is where the component puts it.
+    const style = currentCard()?.getAttribute('style') ?? ''
+    expect(style).toContain('--success')
+    expect(style).toContain('2px solid')
+  })
+
+  it('is marked on Free too, where there is no button to infer it from', async () => {
+    await mount({ currentPlan: 'free' })
+
+    expect(currentCard()?.textContent).toContain('Free')
+    // Nothing else on a Free row says "this is you" — no Manage button, no price.
+    expect(currentCard()?.textContent).toContain('Your plan')
+  })
+
+  it('takes the badge back from Recommended when they are the same card', async () => {
+    // 'advanced' is RECOMMENDED. A subscriber on it must be told it is theirs, not sold it.
+    await mount({ currentPlan: 'advanced' })
+
+    expect(currentCard()?.textContent).toContain('Your plan')
+    expect(currentCard()?.textContent).not.toContain('Recommended')
+  })
+
+  it('still recommends the upgrade to someone who does not have it', async () => {
+    await mount({ currentPlan: 'free' })
+
+    expect(host.textContent).toContain('Recommended')
+  })
+
+  it("maps the legacy 'premium' status onto the tier it is", async () => {
+    // Billing stores 'premium' from the single-price era; the grid has no such card.
+    await mount({ currentPlan: 'premium' })
+
+    expect(currentCard()?.textContent).toContain('Advanced')
+  })
+
+  it('says what Manage actually does, since cancelling is the thing people look for', async () => {
+    await mount({ currentPlan: 'advanced' })
+
+    expect(manageButton()?.textContent).toContain('Manage subscription')
+    expect(currentCard()?.textContent).toContain('cancel')
   })
 })

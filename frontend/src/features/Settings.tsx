@@ -1595,10 +1595,36 @@ export default function Settings() {
               <div class={styles.card}>
                 <CardHead icon={<IconBilling />} title="Plan & billing" />
                 <p
-                  style={`margin: 0 0 16px; font-size: 13px; color: ${billingStatusLine().color};`}
+                  style={`margin: 0 0 ${billing() && billing()?.plan !== 'free' ? '8px' : '16px'}; font-size: 13px; color: ${billingStatusLine().color};`}
                 >
                   {billingStatusLine().text}
                 </p>
+                {/* The portal is where cancelling, switching plan and replacing a card all live,
+                    and until now the only way to it was a button on one card in the grid below —
+                    which competes with the Upgrade buttons beside it and is easy to read as one
+                    more of them. Someone looking for "how do I cancel" reads the status line
+                    first, so the way out belongs directly under it. */}
+                <Show when={billing() && billing()?.plan !== 'free'}>
+                  <p style="margin: 0 0 16px; font-size: 13px;">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        redirectToStripe(
+                          '/api/billing/portal',
+                          'Could not open billing portal',
+                          'manage'
+                        )
+                      }
+                      disabled={billingBusyKey() !== null}
+                      data-testid="billing-manage-link"
+                      style="background: none; border: none; padding: 0; font: inherit; color: var(--primary); text-decoration: underline; cursor: pointer;"
+                    >
+                      {billingBusyKey() === 'manage'
+                        ? 'Redirecting…'
+                        : 'Manage or cancel your subscription'}
+                    </button>
+                  </p>
+                </Show>
                 {/* Said here rather than discovered at the Stripe redirect: the checkout route
                     refuses an unconfirmed address, and finding that out after leaving the app is
                     the worst place to learn it. */}
