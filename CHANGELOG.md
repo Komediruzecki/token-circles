@@ -8,6 +8,14 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.9.3] — 2026-08-23
+
+### Fixed
+
+- **"Reseed demo data" no longer stacks up duplicate holdings.** On the self-hosted server every run of the demo reset left the previous run's portfolio holdings and recurring transactions in place and added a fresh copy on top, so a database reset four times listed every example holding four times over — while the app still reported the demo data as restored.
+- **Reseeding restores all three example profiles, not just the one you were looking at.** The reset rebuilds the Low/Mid/High Income set, but it only cleared the profile that happened to be active. The other two kept whatever they already held, and a profile that had been emptied some other way came back with its accounts, holdings and goals doubled.
+- **"Delete all my data" now deletes all of it.** The same self-hosted reset left portfolio holdings, recurring transactions, tags, receipts, housing details and category import rules behind. Browser-only and cloud storage were already clearing everything.
+
 ## [5.9.2] — 2026-08-23
 
 ### Added
@@ -34,9 +42,6 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **"Filled in from your data" stops taking credit for what you typed.** After saving, the note still listed your own entries as though the app had guessed them.
 - **Sign-in says when the server, not the password, is the problem.** A missing captcha secret rejected every sign-in as though the credentials were wrong. A misconfigured server now answers as one, logs which half is wrong, and reports its captcha state on the health endpoint.
 - Self-hosters on the legacy backend: the Import page and the retirement planner no longer request endpoints that server never had.
-- **"Reseed demo data" no longer stacks up duplicate holdings.** On the self-hosted server every run of the demo reset left the previous run's portfolio holdings and recurring transactions in place and added a fresh copy on top, so a database reset four times listed every example holding four times over — while the app still reported the demo data as restored.
-- **Reseeding restores all three example profiles, not just the one you were looking at.** The reset rebuilds the Low/Mid/High Income set, but it only cleared the profile that happened to be active. The other two kept whatever they already held, and a profile that had been emptied some other way came back with its accounts, holdings and goals doubled.
-- **"Delete all my data" now deletes all of it.** The same self-hosted reset left portfolio holdings, recurring transactions, tags, receipts, housing details and category import rules behind. Browser-only and cloud storage were already clearing everything.
 
 ### Changed
 
