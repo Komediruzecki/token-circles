@@ -5,6 +5,7 @@ import { App } from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
+import { consumeEmailVerifyRedirect } from './core/emailVerification'
 
 // Install the stale-chunk recovery listeners before anything renders, so a failed dynamic
 // import after a deploy quietly reloads to the fresh build instead of surfacing a parse error.
@@ -13,6 +14,11 @@ installBootRecovery()
 // A shared demo link (?demo=high|mid|low) must switch to client-only mode before
 // <App/> reads the storage mode, so do it here — before render().
 applyDemoModeFromUrl()
+
+// The emailed confirm link lands back here as `#everified…`. Read and strip it before render:
+// it is not a page, so the hash router would resolve it to a 404, and a fragment left in the
+// address bar re-announces the outcome on every reload.
+consumeEmailVerifyRedirect()
 
 const root = document.getElementById('root')
 

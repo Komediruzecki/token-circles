@@ -31,6 +31,7 @@ import ResetPassword from './components/ResetPassword'
 import Spotlight from './components/Spotlight'
 import ToastContainer from './components/ToastContainer'
 import TourSelectionModal from './components/TourSelectionModal'
+import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import { api, toast } from './core/api.js'
 import {
   bumpProfileVersion,
@@ -1131,6 +1132,10 @@ export function App() {
             </button>
 
             <main class={layoutStyles.main} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+              {/* Above the page host, not inside it: the address is an account matter, and the
+                  pages here stay mounted and hidden, so a per-page home would render it once
+                  per page. */}
+              <VerifyEmailBanner />
               {Object.entries(allPages).map(([name, page]) => (
                 <Show when={mountedPages().has(name)}>
                   <div style={{ display: activePage() === name ? 'block' : 'none' }}>

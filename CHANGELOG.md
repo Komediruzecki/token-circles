@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Signing up with a password now confirms your email.** The welcome mail carries a "Confirm your email" link; clicking it is the whole job. Until then a strip at the top of the app says so and offers to send the link again. Nothing is blocked in the meantime — the account works either way; confirming just means we can reach you about it, which matters most when you need a password reset. Accounts created with Google are already confirmed by Google and see none of this.
+
 ## [5.9.3] — 2026-08-23
 
 ### Fixed

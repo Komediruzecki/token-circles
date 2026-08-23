@@ -13,7 +13,12 @@ import {
   verifyPassword,
 } from '../auth';
 import { sendMail } from '../email';
-import { renderAccountExists, renderPasswordReset, renderWelcome } from '../emailTemplates';
+import {
+  renderAccountExists,
+  renderEmailVerification,
+  renderPasswordReset,
+  renderWelcome,
+} from '../emailTemplates';
 import { enforce, clientIp } from '../ratelimit';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 
@@ -40,6 +45,51 @@ function randomToken(): string {
 async function sha256Hex(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Email verification (password signups) ──────────────────────────────────────────────────────
+//
+// A password account starts unverified and works anyway: the confirm link is a soft gate, so
+// nothing is blocked on it — the app shows a banner until it is clicked. Google accounts arrive
+// with Google's own email_verified claim and never see any of this.
+//
+// The link stays valid long enough to survive a night in a spam folder. It is longer than the
+// password-reset TTL on purpose: a reset link is a live credential, a confirm link is not.
+const VERIFY_TOKEN_TTL_HOURS = 24;
+
+/**
+ * Mint a single-use confirm token for `userId`, superseding any link already outstanding, and
+ * store only its hash. Returns the raw token for the email.
+ */
+async function createEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string
+): Promise<string> {
+  await db
+    .prepare('DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL')
+    .bind(userId)
+    .run();
+  const token = randomToken();
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  await db
+    .prepare(
+      'INSERT INTO email_verifications (user_id, email, token_hash, expires_at) VALUES (?, ?, ?, ?)'
+    )
+    .bind(userId, email, await sha256Hex(token), expiresAt)
+    .run();
+  return token;
+}
+
+/**
+ * The confirm link. It points at this worker rather than the app because there is nothing for
+ * the user to fill in — one GET does the whole job and bounces them back to the app.
+ */
+function verifyLink(apiOrigin: string, token: string, returnTo: string): string {
+  return (
+    `${apiOrigin}/api/auth/verify-email?token=${encodeURIComponent(token)}` +
+    `&returnTo=${encodeURIComponent(returnTo)}`
+  );
 }
 
 // Google Sign-In (server-side code flow) + session endpoints. The token is set as
@@ -169,7 +219,16 @@ authRoutes.post('/api/auth/register', async (c) => {
     await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
       .bind('Personal Profile', userId)
       .run();
-    const welcome = renderWelcome({ appUrl: base });
+    // Best-effort, exactly like the mail it replaces: a signup is never held up, or failed, by
+    // the mail server. An account with no confirm link can always ask for one from the app.
+    let verifyUrl: string | undefined;
+    try {
+      const token = await createEmailVerification(c.env.DB, userId, email);
+      verifyUrl = verifyLink(new URL(c.req.url).origin, token, base);
+    } catch (e) {
+      console.error('Verification token could not be minted:', e);
+    }
+    const welcome = renderWelcome({ appUrl: base, verifyUrl });
     await sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
       (e) => {
         console.error('Welcome email failed:', e);
@@ -304,11 +363,85 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   return c.json({ ok: true });
 });
 
-// Current user.
+// ── Email verification ─────────────────────────────────────────────────────────────────────────
+
+// The emailed confirm link. A top-level navigation, so the outcome comes back to the app as a
+// fragment (#everified=1 / #everified_error=…) the way the Google callback does — there is no
+// page to render here and nothing for the user to type.
+authRoutes.get('/api/auth/verify-email', async (c) => {
+  const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
+  if (rl) return rl;
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  const requested = c.req.query('returnTo') ?? '';
+  const returnTo = isAllowedReturnTo(requested, c.env) ? requested : base;
+  const back = (fragment: string) =>
+    new Response(null, { status: 302, headers: { Location: `${returnTo}/#${fragment}` } });
+  const fail = (reason: string) => back(`everified_error=${encodeURIComponent(reason)}`);
+
+  const token = c.req.query('token') ?? '';
+  if (!token) return fail('missing_token');
+  const row = await c.env.DB.prepare(
+    'SELECT id, user_id, email, expires_at FROM email_verifications WHERE token_hash = ? AND used_at IS NULL'
+  )
+    .bind(await sha256Hex(token))
+    .first<{ id: number; user_id: number; email: string; expires_at: string }>();
+  // One message for an unknown token and one for an already-used one would let a caller probe
+  // token state, so both land here.
+  if (!row) return fail('invalid_or_used');
+  // Single-use: spend the token whatever the outcome below, so a link that failed for any reason
+  // cannot be retried until it happens to succeed.
+  await c.env.DB.prepare("UPDATE email_verifications SET used_at = datetime('now') WHERE id = ?")
+    .bind(row.id)
+    .run();
+  if (Date.parse(row.expires_at) < Date.now()) return fail('expired');
+  const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
+    .bind(row.user_id)
+    .first<{ email: string | null }>();
+  // The address has to still be the one this link was sent to. Otherwise changing the address
+  // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
+  if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
+    return fail('invalid_or_used');
+  }
+  await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
+    .bind(row.user_id)
+    .run();
+  return back('everified=1');
+});
+
+// Send the confirm link again. Authenticated, so unlike forgot-password there is no address to
+// keep secret — the caller has already proved the account is theirs, and a 429 can be shown.
+authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const user = await c.env.DB.prepare('SELECT email, email_verified FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ email: string | null; email_verified: number }>();
+  if (!user) return c.json({ error: 'User not found' }, 404);
+  if (!user.email) return c.json({ error: 'This account has no email address' }, 400);
+  // Not an error: the address is confirmed, which is what the caller wanted.
+  if (user.email_verified) return c.json({ ok: true, alreadyVerified: true });
+  // Per-address cap on top of the per-IP one — the IP bucket does nothing against a caller who
+  // rotates addresses, and this route sends real mail to a real inbox.
+  const emailRl = await enforce(c, `resend-verification:${user.email}`, 3, 3600);
+  if (emailRl) return emailRl;
+
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  const token = await createEmailVerification(c.env.DB, userId, user.email);
+  const link = verifyLink(new URL(c.req.url).origin, token, base);
+  const mail = renderEmailVerification({
+    link,
+    ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    assetOrigin: base,
+  });
+  await sendMail(c.env, user.email, mail.subject, mail.html, { text: mail.text });
+  return c.json({ ok: true });
+});
+
+// Current user. email_verified rides along because the app's confirm-your-email banner is the
+// only thing that reads it, and this is the call it already makes.
 authRoutes.get('/api/auth/me', requireAuth, async (c) => {
   const userId = c.get('userId');
   const user = await c.env.DB.prepare(
-    'SELECT id, username, email, auth_provider FROM users WHERE id = ?'
+    'SELECT id, username, email, auth_provider, email_verified FROM users WHERE id = ?'
   )
     .bind(userId)
     .first();

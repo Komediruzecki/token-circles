@@ -9,6 +9,23 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Email verification for password accounts (Worker).** `users.email_verified` has existed since `0001_init.sql` and was written but never asked for: `POST /api/auth/register` inserted it as `0`, and the only things that set it to `1` were Google's own `email_verified` claim and completing a password reset. Nothing read it — login did not check it and `/api/auth/me` did not return it, so a password signup was indistinguishable from a confirmed one.
+  - `0022_email_verifications.sql` — same shape and the same reasoning as `password_resets` (0005): only the token's SHA-256 is stored, single-use, superseded on resend, expiry checked at use time. 24h TTL, longer than the 2h reset TTL because a reset link is a live credential and a confirm link is not. The row keeps the `email` it was minted for as well as the user id.
+  - `GET /api/auth/verify-email?token=&returnTo=` — a top-level navigation with nothing to fill in, so it does the work and bounces back to the app as `#everified=1` / `#everified_error=…`, the way the Google callback already does. `returnTo` goes through `isAllowedReturnTo`, an unknown token and a spent one get the identical answer, the token is spent whatever the outcome, and the account's address must still be the one the link was sent to — otherwise changing it after asking for a link would confirm the NEW address on the strength of mail delivered to the old one.
+  - `POST /api/auth/resend-verification` (session required) — 3/hour per address on top of the per-IP cap, and answers `{ ok: true, alreadyVerified: true }` rather than an error when there is nothing to confirm. The 429 can be shown here, unlike forgot-password: the caller already proved the account is theirs, so there is no address-existence oracle to protect.
+  - `renderWelcome` takes an optional `verifyUrl`, which turns the primary button into "Confirm your email" and demotes "Open Token Circles" to a text link. One mail rather than two — a welcome and a confirm arriving together read as a duplicate. `renderEmailVerification` is the stand-alone resend, where welcome copy would be wrong.
+  - `/api/auth/me` returns `email_verified`; the banner is the only thing that reads it, and this is the call it already makes.
+- **`<VerifyEmailBanner/>`** — mounted at the top of `<main>`, above the page host, since the pages there stay mounted and hidden and a per-page home would render it once per page. Self-checking (asks `/api/auth/me` itself, re-asks on every session change, so it appears straight after an in-session signup), dismissible for the tab via `sessionStorage`. It shows nothing when `/me` omits `email_verified` — which is how the legacy self-hosted backend answers — rather than reading the absence as "unverified" and nagging every user of it with a Resend button that server has no endpoint for.
+- `core/emailVerification.ts` reads the `#everified…` fragment in `index.tsx` before render and strips it: it is not a page, so the hash router would resolve it to a 404, and a fragment left in the address bar re-announces the outcome on every reload.
+- Tests: `worker/test/email-verification.test.ts` (17) and `frontend/src/{core,components}/__tests__/` (26). Each guard is covered by a test that fails without it — verified by mutation for the address-still-matches check, single-use consumption, the `returnTo` allow-list, the absent-field case and the Google-account case.
+
+### Notes
+
+- Worker only. The legacy Express backend has no `/api/auth/register` at all, and browser-only mode has no accounts, so there is nothing to verify in either.
+- Soft gate on purpose, copying the shape used in mercurypitch: the account works unverified and the banner is the only consequence. Making it a hard gate is a one-line change in login, but it strands anyone whose confirm mail is lost.
+
 ## [5.9.3] — 2026-08-23
 
 ### Fixed

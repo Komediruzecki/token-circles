@@ -1,0 +1,112 @@
+/*
+ * VerifyEmailBanner — the confirm-your-email nudge.
+ *
+ * A strip above the page content rather than a floating pill: the message names an address and
+ * carries two actions, which at a phone width is more than a pill can hold without truncating
+ * the one part that matters.
+ */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--primary) 8%, var(--card-bg));
+  color: var(--text);
+}
+
+.icon {
+  flex: none;
+  color: var(--primary);
+}
+
+.text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  /* A long address wraps rather than pushing the actions off a narrow screen. */
+  overflow-wrap: anywhere;
+}
+
+.address {
+  font-weight: 600;
+}
+
+.resend,
+.close {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.resend {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.resend:hover:not(:disabled),
+.close:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.resend:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sent {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Touch target, without the glyph growing to match. */
+  width: 28px;
+  height: 28px;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+  .banner {
+    flex-wrap: wrap;
+  }
+
+  .text {
+    /* Force the actions onto their own line instead of squeezing the message to nothing. */
+    flex-basis: 100%;
+    order: 1;
+  }
+
+  .icon {
+    order: 0;
+  }
+
+  .resend,
+  .sent {
+    order: 2;
+  }
+
+  .close {
+    order: 3;
+    margin-left: auto;
+  }
+}
