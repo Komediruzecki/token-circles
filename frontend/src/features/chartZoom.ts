@@ -133,13 +133,13 @@ export function createChartZoom(total: () => number): ChartZoom {
   }
 
   const onWheel = (e: WheelEvent) => {
-    const zoomingOut = e.deltaY > 0
-    // Already showing everything and asked for more: the gesture has nothing to do here,
-    // so let it scroll the page instead of swallowing it. Without this the chart is a
-    // trap — you reach it and can never scroll past.
-    if (zoomingOut && view() === null) return
+    // The wheel belongs to the chart for as long as the pointer is over it, even when it
+    // is already fully zoomed out and there is nothing left to do. Handing the gesture
+    // back at the extremes reads as the page lurching out from under you mid-scroll: one
+    // notch too far and you are somewhere else. Move off the chart and scrolling is
+    // ordinary again, which is where every other zoomable chart draws the line.
     e.preventDefault()
-    applyZoom(zoomingOut ? ZOOM_STEP : 1 / ZOOM_STEP, e.clientX)
+    applyZoom(e.deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP, e.clientX)
   }
 
   const distance = () => {

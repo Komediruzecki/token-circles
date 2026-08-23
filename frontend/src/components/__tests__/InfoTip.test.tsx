@@ -70,6 +70,15 @@ describe('InfoTip', () => {
     expect(panel()).toBeNull()
   })
 
+  it('is named by the explanation, since some copy lives nowhere else', () => {
+    // The Budgets page states its whole model in one of these. A generic name would leave
+    // that reachable by sighted pointer alone.
+    const trigger = mount('Zero-based budgeting: allocate every dollar to a category')
+    expect(trigger.getAttribute('aria-label')).toBe(
+      'Zero-based budgeting: allocate every dollar to a category'
+    )
+  })
+
   it('closes on Escape and hands focus back to the trigger', () => {
     const trigger = mount()
     trigger.click()

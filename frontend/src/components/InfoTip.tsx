@@ -21,7 +21,11 @@ interface InfoTipProps {
   /** The explanation. Plain text — keep it to a sentence or two. */
   text: string
   testId?: string
-  /** Screen-reader name for the trigger. Defaults to naming the tip generically. */
+  /**
+   * Screen-reader name for the trigger. Defaults to the explanation itself: the tip is
+   * the only place some copy lives — the Budgets page states its whole model in one —
+   * and a generic name would leave that reachable by sighted pointer alone.
+   */
   label?: string
 }
 
@@ -113,7 +117,7 @@ export default function InfoTip(props: InfoTipProps) {
         type="button"
         class={styles.trigger}
         data-test-id={props.testId}
-        aria-label={props.label ?? 'What this means'}
+        aria-label={props.label ?? props.text}
         aria-expanded={open()}
         aria-describedby={open() ? panelId : undefined}
         onPointerEnter={(e) => {

@@ -994,10 +994,11 @@ describe('the chart can be zoomed into a few years', () => {
     expect(wheel(root, -120).defaultPrevented).toBe(true)
   })
 
-  it('lets the page scroll once there is nothing left to zoom out of', async () => {
-    // Otherwise the chart is a trap: you reach it and can never scroll past it.
+  it('keeps the wheel even when there is nothing left to zoom out of', async () => {
+    // Handing the gesture back at the extreme reads as the page lurching out from under
+    // you mid-scroll. Moving off the chart is what returns the wheel to the page.
     const root = await mountPlanner()
-    expect(wheel(root, 120).defaultPrevented).toBe(false)
+    expect(wheel(root, 120).defaultPrevented).toBe(true)
     expect(xScale().min).toBeUndefined()
   })
 
