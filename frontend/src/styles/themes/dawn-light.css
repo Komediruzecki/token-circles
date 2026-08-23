@@ -9,9 +9,12 @@
   color-scheme: light;
 
   /* Loading placeholders. Must be defined per theme: the Skeleton module falls back to white at
-     4-8% opacity, which is invisible on a light surface. */
-  --skeleton-base: rgba(16, 28, 60, 0.07);
-  --skeleton-shine: rgba(16, 28, 60, 0.13);
+     4-8% opacity, which is invisible on a light surface. Azure rather than ink, so a loading
+     page reads as this app rather than as grey furniture; a higher percentage than the dark
+     theme uses because this azure is the deeper one, and the two are matched on perceived
+     brightness (238 base, 225 shine over --card-bg) rather than on opacity. */
+  --skeleton-base: color-mix(in oklab, var(--primary) 11%, transparent);
+  --skeleton-shine: color-mix(in oklab, var(--primary) 20%, transparent);
 
   /* Backgrounds — paper-blue ramp */
   --bg: #f7f9ff;

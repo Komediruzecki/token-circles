@@ -8,9 +8,12 @@
   color-scheme: dark;
 
   /* Loading placeholders — see the light theme for why these are per-theme rather than
-     module-level fallbacks. */
-  --skeleton-base: rgba(255, 255, 255, 0.05);
-  --skeleton-shine: rgba(255, 255, 255, 0.11);
+     module-level fallbacks. Tinted with the theme's own azure rather than plain white, so a
+     page that is still loading already looks like this app. The percentages are picked to
+     land on the same perceived brightness the neutral versions had (base 39, shine 53 in
+     relative luminance over --card-bg), so only the hue changes, not the shimmer's weight. */
+  --skeleton-base: color-mix(in oklab, var(--primary) 9%, transparent);
+  --skeleton-shine: color-mix(in oklab, var(--primary) 20%, transparent);
 
   /* Backgrounds — night ramp */
   --bg: #0a0e1c;
