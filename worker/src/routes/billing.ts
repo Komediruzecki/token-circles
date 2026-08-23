@@ -3,6 +3,9 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { sendMail } from '../email';
+import type { BillingAccount } from '../billingMail';
+import { mailForBillingEvent } from '../billingMail';
 
 // Stripe billing — implemented with raw fetch to the Stripe REST API (no SDK, so the Worker
 // bundle stays lean and there's no SDK/Workers version drift). Webhook signatures are verified
@@ -264,6 +267,33 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       eventCreated
     );
 
+  const appOrigin =
+    c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+
+  /** Everything the billing mails need about the account behind a Stripe customer id. */
+  const accountFor = (customerId: unknown) =>
+    db.first<BillingAccount>(
+      c.env.DB,
+      'SELECT email, plan FROM users WHERE stripe_customer_id = ?',
+      String(customerId)
+    );
+
+  /**
+   * Send, and never let it break the webhook. An unacked webhook is retried, and a retry that
+   * re-sends mail is worse than a mail that never arrived — the `stripe_events` insert above
+   * already makes the whole handler idempotent, so one delivery is one send.
+   */
+  const notify = async (account: BillingAccount | null): Promise<void> => {
+    const outgoing = mailForBillingEvent(event.type ?? '', obj, account, appOrigin);
+    if (!outgoing) return;
+    try {
+      const { to, mail } = outgoing;
+      await sendMail(c.env, to, mail.subject, mail.html, { text: mail.text });
+    } catch (e) {
+      console.error(`Billing mail (${event.type}) failed to send:`, e);
+    }
+  };
+
   switch (event.type) {
     case 'checkout.session.completed': {
       // Links the Stripe customer to our user and activates the chosen tier. Keyed by our user id
@@ -309,8 +339,19 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       );
       break;
     }
-    case 'customer.subscription.deleted':
-      await applySubscription(String(obj.customer), 'free', 'canceled', null, 0);
+    case 'customer.subscription.deleted': {
+      // Read before the update: after it the plan is 'free', and a mail that says "your Free plan
+      // has ended" is nonsense.
+      const acct = await accountFor(obj.customer);
+      const applied = await applySubscription(String(obj.customer), 'free', 'canceled', null, 0);
+      // A stale event neither changes the plan nor announces that it did.
+      if (applied.meta.changes) await notify(acct);
+      break;
+    }
+    case 'invoice.payment_failed':
+    case 'invoice.payment_action_required':
+      // Which of the two mails, and whether either is warranted, is billingMail.ts's decision.
+      await notify(await accountFor(obj.customer));
       break;
   }
   return c.json({ received: true });

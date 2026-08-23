@@ -314,6 +314,123 @@ export function renderPasswordReset(opts: {
   };
 }
 
+// ── Billing mails (Stripe webhooks) ──────────────────────────────────────────
+//
+// Stripe can send its own versions of these, and it says less than we can: it knows the invoice
+// failed, we know what the plan does and where the button is. If Stripe's own failed-payment mail
+// is switched on, switch it OFF — two mails about one decline, in two voices, reads as a system
+// that has lost track of itself.
+//
+// Every one of these is triggered by a webhook, never by a user, so the sends are best-effort and
+// must never fail the request: an unacked webhook is retried, and a retry that re-sends mail is
+// worse than a mail that never arrived.
+
+/** A card was declined and Stripe is retrying. The subscription is still live meanwhile. */
+export function renderPaymentFailed(opts: {
+  planName: string;
+  amountDue?: number | null;
+  currency?: string | null;
+  nextAttempt?: Date | null;
+  payUrl?: string | null;
+  appUrl?: string;
+}): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  const pay = opts.payUrl || `${app}/#settings`;
+  const amount =
+    typeof opts.amountDue === 'number' && opts.amountDue > 0
+      ? formatMoney(opts.amountDue, opts.currency)
+      : null;
+  const retry = opts.nextAttempt
+    ? opts.nextAttempt.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : null;
+  const subject = `Your ${BRAND} payment didn't go through`;
+  const body = `
+    ${h1("Your payment didn't go through")}
+    ${p(`Your bank declined the ${amount ? `${escapeHtml(amount)} ` : ''}payment for ${BRAND} ${escapeHtml(opts.planName)}. It happens — an expired card, a new number, or the bank simply asking questions.`)}
+    ${p(`<strong>Nothing has changed yet.</strong> Your plan is still active and we will try the card again${retry ? ` on ${escapeHtml(retry)}` : ''}. Updating it now is the quickest way to end this.`)}
+    <div style="padding:8px 0 12px">${btn(pay, 'Update your card')}</div>
+    ${p(`If the retries run out, the account moves to Free. Nothing is deleted — your data stays where it is and you can pick the plan back up whenever you like.`, `font-size:12.5px;color:${C.faint}`)}
+  `;
+  return {
+    subject,
+    html: shell({
+      title: subject,
+      preheader: `Your card was declined${retry ? ` — we retry on ${retry}` : ''}. Your plan is still active.`,
+      body,
+      footerReason: 'Sent because a payment for your subscription could not be collected.',
+      orbit: false,
+      assetOrigin: opts.appUrl,
+    }),
+    text: `Your ${BRAND} payment didn't go through\n\nYour bank declined the ${amount ? `${amount} ` : ''}payment for ${BRAND} ${opts.planName}.\n\nNothing has changed yet — your plan is still active and we will try again${retry ? ` on ${retry}` : ''}.\n\nUpdate your card: ${pay}\n\nIf the retries run out the account moves to Free. Nothing is deleted.${textFooter('Sent because a payment for your subscription could not be collected.')}`,
+  };
+}
+
+/**
+ * The bank wants the cardholder to confirm (3-D Secure / SCA). Deliberately not the same mail as a
+ * decline: nothing is wrong, and the only thing that fixes it is the user opening a page — which a
+ * "your payment failed" subject line makes them less likely to do, not more.
+ */
+export function renderPaymentActionRequired(opts: {
+  planName: string;
+  payUrl?: string | null;
+  appUrl?: string;
+}): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  const confirm = opts.payUrl || `${app}/#settings`;
+  const subject = `Your bank needs you to confirm a ${BRAND} payment`;
+  const body = `
+    ${h1('One step from your bank')}
+    ${p(`Your bank wants you to confirm the payment for ${BRAND} ${escapeHtml(opts.planName)} before it goes through — the usual card-verification step, not a problem with your card.`)}
+    <div style="padding:8px 0 12px">${btn(confirm, 'Confirm the payment')}</div>
+    ${p(`Your plan stays active while this is outstanding. If it is not confirmed, the payment is treated as failed and we retry it.`, `font-size:12.5px;color:${C.faint}`)}
+  `;
+  return {
+    subject,
+    html: shell({
+      title: subject,
+      preheader: 'A quick confirmation with your bank, then the payment goes through.',
+      body,
+      footerReason: 'Sent because your bank asked for confirmation of a subscription payment.',
+      orbit: false,
+      assetOrigin: opts.appUrl,
+    }),
+    text: `Your bank needs you to confirm a ${BRAND} payment\n\nYour bank wants you to confirm the payment for ${BRAND} ${opts.planName} before it goes through. This is the usual card-verification step, not a problem with your card.\n\nConfirm it here: ${confirm}\n\nYour plan stays active while this is outstanding.${textFooter('Sent because your bank asked for confirmation of a subscription payment.')}`,
+  };
+}
+
+/** The subscription is over — cancelled, or dunning ran out. Says what happens to the data. */
+export function renderSubscriptionEnded(opts: {
+  planName: string;
+  appUrl?: string;
+}): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  const subject = `Your ${BRAND} ${opts.planName} plan has ended`;
+  const body = `
+    ${h1('Your plan has ended')}
+    ${p(`Your ${BRAND} ${escapeHtml(opts.planName)} plan has ended and the account is now on Free.`)}
+    ${card('Your data is still here', 'Nothing has been deleted. You can open everything, and export all of it from Settings at any time.')}
+    ${card('Picking it back up', 'Choosing a plan again restores the paid features immediately — there is nothing to restore or re-import.', C.warm)}
+    <div style="padding:8px 0 4px">${btn(`${app}/#settings`, 'Open Settings')}</div>
+    ${p(`If this was not deliberate — a card that expired, say — choosing the plan again is all it takes.`, `font-size:12.5px;color:${C.faint};margin:16px 0 0`)}
+  `;
+  return {
+    subject,
+    html: shell({
+      title: subject,
+      preheader: 'The account is on Free now. Nothing has been deleted.',
+      body,
+      footerReason: 'Sent because your subscription ended.',
+      assetOrigin: opts.appUrl,
+    }),
+    text: `Your ${BRAND} ${opts.planName} plan has ended\n\nThe account is now on Free. Nothing has been deleted — you can open everything, and export all of it from Settings at any time.\n\nChoosing a plan again restores the paid features immediately.\n\nOpen Settings: ${app}/#settings${textFooter('Sent because your subscription ended.')}`,
+  };
+}
+
 // ── Reminder mails (paid feature) ────────────────────────────────────────────
 
 export interface BudgetAlertRow {
