@@ -29,10 +29,12 @@ import NumberField from '../components/NumberField'
 import OrbitalDivider from '../components/OrbitalDivider'
 import RangeField from '../components/RangeField'
 import Toggle from '../components/Toggle'
+import ToggleField from '../components/ToggleField'
 import { apiGet, apiPut, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
+import { createChartZoom } from './chartZoom'
 import { lifestyleMarkersPlugin } from './lifestyleMarkers'
 import styles from './RetirementPage.module.css'
 import type { ExpensePeriod, IncomeStep, Lifestyle } from '../../../shared/retirement'
@@ -225,6 +227,10 @@ export default function RetirementPlanner() {
       .map((r) => (r.age === null ? r.month.slice(0, 4) : String(r.age)))
   )
 
+  // Sixty years across half a screen puts a decade in a centimetre. Zoom moves the x
+  // scale's range rather than the data, so the axis relabels itself as you go.
+  const zoom = createChartZoom(() => axisLabels().length)
+
   const value = (row: { netWorth: number; netWorthReal: number }) =>
     showNominal() ? row.netWorth : row.netWorthReal
 
@@ -295,6 +301,10 @@ export default function RetirementPlanner() {
           text: settings().birthMonth ? 'Age' : 'Year',
           color: chartColors().text,
         },
+        // A category scale reads these as point indices, so zooming is a matter of handing
+        // it a narrower range; it relabels its own ticks from whatever it is given.
+        min: zoom.window()?.min,
+        max: zoom.window()?.max,
         ticks: { color: chartColors().text, maxTicksLimit: 12 },
         grid: { color: chartColors().border },
       },
@@ -780,40 +790,34 @@ export default function RetirementPlanner() {
               </div>
             </div>
 
-            <label class={styles.checkRow} data-test-id="retirement-toggle-inflation">
-              <input
-                type="checkbox"
-                checked={settings().adjustForInflation}
-                onChange={(e) => {
-                  update('adjustForInflation', e.currentTarget.checked)
-                }}
-              />
-              <span>
-                Adjust for inflation
-                <span class={styles.fieldHint}>
-                  {settings().adjustForInflation
-                    ? `A real return of ${projection().realAnnualReturnPct.toFixed(2)}% after inflation.`
-                    : 'Everything is shown in future money, which flatters the numbers.'}
-                </span>
-              </span>
-            </label>
+            {/* A setting with a line of its own explaining what it currently means reads as
+                a settings row, so it uses the same one the rest of the app does: wording on
+                the left, switch on the right. The description is live — it reports the
+                effect of the setting as it stands, not a fixed caption. */}
+            <ToggleField
+              title="Adjust for inflation"
+              description={
+                settings().adjustForInflation
+                  ? `A real return of ${projection().realAnnualReturnPct.toFixed(2)}% after inflation.`
+                  : 'Everything is shown in future money, which flatters the numbers.'
+              }
+              checked={settings().adjustForInflation}
+              onChange={(v) => {
+                update('adjustForInflation', v)
+              }}
+              data-test-id="retirement-toggle-inflation"
+            />
 
             <Show when={settings().mode === 'advanced'}>
-              <label class={styles.checkRow} data-test-id="retirement-toggle-allocation">
-                <input
-                  type="checkbox"
-                  checked={settings().useAllocation}
-                  onChange={(e) => {
-                    update('useAllocation', e.currentTarget.checked)
-                  }}
-                />
-                <span>
-                  Work the return out from an allocation
-                  <span class={styles.fieldHint}>
-                    Currently {effectiveReturnPct(settings()).toFixed(2)}% blended.
-                  </span>
-                </span>
-              </label>
+              <ToggleField
+                title="Work the return out from an allocation"
+                description={`Currently ${effectiveReturnPct(settings()).toFixed(2)}% blended.`}
+                checked={settings().useAllocation}
+                onChange={(v) => {
+                  update('useAllocation', v)
+                }}
+                data-test-id="retirement-toggle-allocation"
+              />
 
               <Show when={settings().useAllocation}>
                 <fieldset class={styles.subSection} data-test-id="retirement-allocation">
@@ -1105,17 +1109,51 @@ export default function RetirementPlanner() {
               </Toggle>
             </div>
 
-            <div class={styles.retirementProjections} data-test-id="retirement-chart">
+            <div
+              class={styles.retirementProjections}
+              data-test-id="retirement-chart"
+              ref={zoom.attach}
+            >
               <Chart
                 id="retirement-projection-chart"
                 type="line"
                 data={chartData()}
                 options={chartOptions()}
                 plugins={[lifestyleMarkersPlugin]}
+                onReady={zoom.onReady}
                 height={280}
                 width="100%"
               />
+              {/* Only once there is a zoom to undo: a permanent button on a chart that is
+                  already showing everything is a control that does nothing. */}
+              <Show when={zoom.zoomed()}>
+                <button
+                  type="button"
+                  class={styles.zoomReset}
+                  data-test-id="retirement-zoom-reset"
+                  onClick={zoom.reset}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 12a9 9 0 1 0 3-6.7" />
+                    <path d="M3 4v4h4" />
+                  </svg>
+                  Reset zoom
+                </button>
+              </Show>
             </div>
+            <p class={styles.chartHint}>
+              Scroll to zoom, drag to pan, pinch on a touch screen. Double-click to go back to the
+              whole projection.
+            </p>
 
             <div class={styles.projectionDetails} data-test-id="retirement-summary">
               <div class={styles.detailRow}>

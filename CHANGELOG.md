@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.9.2] — 2026-08-23
+
 ### Added
 
 - **The retirement planner is editable.** It never was: the projection came from server defaults — age 30, retire at 65, 500 a month, 7% — and the page asked for them without passing anything, so no control could reach any of it. You were looking at a fixed picture of someone else's retirement. Every assumption is now a field, and the chart redraws as you type.
@@ -15,11 +17,28 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Inflation is a switch, not a footnote.** On, the chart reads in today's money and the target line is flat — the point of reading it that way is that the number you are chasing stops moving. Off, everything is in future money, which flatters it. Your rate is kept either way.
 - **More than one retirement.** Add a lifestyle for each place or way you might retire; each gets its own target and its own date. Retiring somewhere cheaper is a different date, not a different plan.
 - **Your figures, filled in.** Net worth comes from your accounts, income and spending from your transactions, and the retirement target from what you spend now — each labelled with where it came from, so you can see what was a guess and change it.
+- **Zoom into the chart.** Sixty years drawn across half a screen puts a decade in a centimetre. Scroll to zoom, drag to pan, pinch on a phone or tablet; the axis relabels itself as you go. Double-click, or the button that appears in the corner, goes back to the whole projection.
+- **The chart marks when you reach each lifestyle.** A line at the month it becomes affordable, labelled with that lifestyle's name in its own colour, so you can see where your savings meet the target rather than reading the date off a card and hunting for it on the chart.
+- **The withdrawal rate is a slider, and it tells you what it costs.** It is the most misread number on the page: raising it looks like more money to live on, when your spending never changes and all that moves is the size of pot you are calling enough. A chip under the cards now says how long that pot actually lasts — "for as long as you like", or "about eleven years, around age 46" — and it moves as you drag.
+- **Every assumption explains itself.** The notes that used to sit under the fields are now behind a small "i" beside each label: hover on a computer, tap on a phone. They were unreachable on a phone before, since a hover is the only thing that showed them.
 
 ### Fixed
 
 - **The projection was compounding wrong, in your favour, by a lot.** Investment gains were kept in a separate pile that never earned anything itself, which is simple interest wearing compound interest's clothes. Over thirty years at 7% on 100,000 it reported about 303,000 where the answer is 761,000. Every projection in the app now agrees, and agrees with the arithmetic.
-- Hovering a disabled button no longer lights it up as though it were clickable.
+- **The retirement fields can be typed in.** Every one of them threw away your keystroke after a single digit, and the lists of pay steps and spending periods rebuilt themselves as you typed, so the field you were in stopped being the field you were in. Decimals survive being half-typed, and a field can be emptied instead of snapping back to zero.
+- **A date of birth is picked, not scrolled to.** The browser's own month control makes you step to 1995 one year at a time. It is a month and a year to choose from now.
+- **Saving works instead of being rejected.** A contribution the app worked out for you could arrive as 7.292500000001382, which the form then refused to save because it is not a whole number of cents. Derived figures are rounded to something a person would write down.
+- **Saving a figure that happened to match a default quietly unset it.** Type 500 a month, save, switch profiles and back, and it was replaced by a number worked out from your transactions. The same held for a net worth of 0, an income or spending of 0, and a retirement spend of 2000 — the app could not tell "I chose this" from "I never said", so it overwrote your answer every time the page loaded.
+- **In browser-only mode every profile shared one retirement plan.** Opening a second profile showed the first one's assumptions, and saving there overwrote them. Each profile keeps its own plan now, and a plan saved before this fix stays with whichever profile opens the page first.
+- **Switching profile refreshes the page you are looking at.** Retirement, and every other page kept open behind it, went on showing the previous profile's figures until you reloaded or navigated away and back.
+- **"Filled in from your data" stops taking credit for what you typed.** After saving, the note still listed your own entries as though the app had guessed them.
+- **Sign-in says when the server, not the password, is the problem.** A missing captcha secret rejected every sign-in as though the credentials were wrong. A misconfigured server now answers as one, logs which half is wrong, and reports its captcha state on the health endpoint.
+- Self-hosters on the legacy backend: the Import page and the retirement planner no longer request endpoints that server never had.
+
+### Changed
+
+- **The loading placeholders take the theme's blue** instead of a flat grey that belonged to no theme in particular.
+- **Every switch on the retirement page is the app's own switch.** The chart's options sit under it in a compact size, and the two settings inside the form read as settings rows: wording and what it currently means on the left, switch on the right.
 
 ## [5.9.1] — 2026-08-22
 

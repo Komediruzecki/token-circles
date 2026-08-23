@@ -310,6 +310,8 @@
 /* retirement projections */
 .retirement-projections {
   margin-bottom: 24px;
+  /* Anchors the zoom reset button, and is the element gestures are bound to. */
+  position: relative;
 }
 
 /* form */
@@ -929,4 +931,44 @@
   .runway-chip {
     border-radius: var(--radius);
   }
+}
+
+/* ── Chart zoom ──────────────────────────────────────────────────────────── */
+.zoom-reset {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+  border-radius: 999px;
+  /* Opaque enough to stay legible over a line that runs underneath it. */
+  background: color-mix(in oklab, var(--card-bg) 92%, var(--primary));
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.zoom-reset:hover {
+  background: color-mix(in oklab, var(--card-bg) 78%, var(--primary));
+  border-color: var(--primary);
+}
+
+.zoom-reset:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.chart-hint {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
 }

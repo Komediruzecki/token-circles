@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.9.2] — 2026-08-23
+
 ### Added
 
 - `shared/retirement.ts` — a month-by-month projection model with no I/O, run by the Worker
@@ -96,6 +98,105 @@ All notable changes to Token Circles are documented here. The format is based on
 
 - `cssModuleHygiene.test.ts` guards both defects for every `*.module.css`: no rule repeated verbatim inside one file, and no module left unimported. Both fail on the pre-change tree.
 - `vitest.config.ts` now sets `css: true`. Under the default (`css: false`) vitest short-circuits every CSS import to empty content, so a `?raw` import of a stylesheet resolves to an empty string and any test asserting on stylesheet source passes vacuously ([vitest#10788](https://github.com/vitest-dev/vitest/issues/10788)). Cost measured at roughly +1s on the full suite, with all 1001 tests unaffected.
+
+### Added — planner interaction
+
+- `NumberField` — a numeric input that renders once untracked and syncs from the model only
+  while `document.activeElement` is not the input. A controlled `value={n}` compiles to an
+  effect that writes on every model change, and a partly-typed number (`3.`, `-`) makes
+  `<input type="number">` report `value === ''` while still showing the text, so any write at
+  that instant discards the keystroke.
+- `MonthPicker` — a month `<select>` plus a year `<select>`, emitting and accepting `YYYY-MM`,
+  replacing `<input type="month">`. The native control steps to a birth year one year at a
+  time.
+- `InfoTip` rewritten. The first version used the native `title` attribute, which is
+  hover-only: on a phone every explanation in the app was unreachable. It opens on hover, on
+  focus and on tap, pins on click, closes on Escape / outside press / blur, and is
+  `position: fixed` from the trigger's measured box so it escapes any `overflow` ancestor and
+  occupies no layout. Writing its tests turned up that Escape closed the panel and the focus
+  it handed back reopened it in the same tick, so Escape appeared to do nothing.
+- `RangeField` — a themed slider. Used for the withdrawal rate, paired with the existing
+  number box, which doubles as its readout.
+- `Toggle` gains a compact size and an optional label rendered inside the button. Putting the
+  text in the control is what makes clicking the words flip it and what names the control for
+  a screen reader; a `<label>` wrapped round a `<button>` does neither. The pill moved into
+  its own span, so a label-less toggle is the same 44x26 box it always was.
+- `frontend/src/features/lifestyleMarkers.ts` — a Chart.js plugin drawing a dashed line at
+  each lifestyle's crossing with a pill label in that lifestyle's target-line colour. A
+  plugin rather than an HTML overlay: it redraws with the chart on every data change, resize
+  and theme swap, and clips to the plot area. Stateless — the markers arrive through
+  `options.plugins.lifestyleMarkers`, because one plugin instance is shared across updates.
+  Pills stack when they would overlap and labels are truncated with `measureText`.
+- `frontend/src/features/chartZoom.ts` — scroll, pinch and drag over the x scale's
+  `min`/`max`, which a category scale reads as point indices, so the axis relabels itself
+  from whatever range it is given. No new dependency: `chartjs-plugin-zoom` would have been
+  one for behaviour that is a hundred lines of arithmetic, and the window maths is separated
+  from the DOM so anchoring, clamping and gesture fall-through are testable without a canvas.
+  A wheel that would zoom out from the full extent does not `preventDefault`, so the chart is
+  not a trap you can never scroll past.
+- `Chart` takes an inline `plugins` array.
+- `shared/retirement.ts` gains `yearsOfWithdrawals(swrPct, realReturnPct)` —
+  `ln(s/(s-r)) / ln(1+r)`, with the pot cancelling out. Infinite when `s <= r`, `1/s` at
+  `r = 0` (the formula's limit, where it is otherwise 0/0), zero at `r <= -1`.
+
+### Fixed — the planner
+
+- Editable lists used `<For>`, which keys by reference, over `.map(x => ({...x}))` — a new
+  object per keystroke, so every row's DOM was disposed and rebuilt and focus went to
+  `<body>`. Now `<Index>`, which keys by position. A `.claude/skills/solid-forms` skill
+  records this and the controlled-input rule, with review greps, since it had been fixed and
+  reintroduced before.
+- Derived numbers are rounded. A contribution derived as a difference of two averages could
+  be `7.292500000001382`, which is not a whole multiple of the field's `step` and so is
+  `:invalid` — and one invalid field blocks the whole `<form>` from submitting, so the plan
+  could not be saved at all.
+- `deriveSettings` decided "the user has not set this" by comparing the stored value to the
+  default. Every default is also an ordinary answer, so saving one was indistinguishable from
+  never having saved: a contribution of 500, a net worth of 0, an income or spending of 0, a
+  retirement spend of 2000. It now takes the **stored row** rather than a normalised object
+  and asks which keys are present — normalising invents a default for every absent key and
+  destroys exactly the distinction the function turns on. A key counts as set when present
+  and not null, since `null` is how the client says "no value" for an optional field such as
+  `birthMonth`. All three loaders return raw rows to match. Mutation-checked: restoring the
+  old sentinel for any of the five numeric fields fails a test each.
+- Both `PUT /api/retirement/settings` handlers re-derive and return `filled`/`missing`.
+  Saving is what stops a field being derived, so a client that only took `settings` back went
+  on crediting "filled in from your data" for figures the user had just typed.
+- In browser mode the settings store is keyed by `key` alone — no profile column — and the
+  assumptions were saved under a bare `retirement_settings`, so every profile in the browser
+  shared one plan. The profile is now part of the key; a row saved under the old key is
+  adopted by whichever profile opens the page first and the old row removed. Both server
+  runtimes were always correct, separating profiles through the settings table's
+  `(key, profile_id)` primary key. The legacy backend keys per profile rather than sharing
+  the Worker's plain key because its settings repository looks rows up by key alone with no
+  profile filter.
+- The retirement page reloaded through `onMount`, which under the keep-alive page host
+  (#317) fires once per session, so a profile switch left the panel showing the previous
+  profile's plan. Now `refetchOnActive`, which refetches while visible and defers while
+  hidden. Reverting it fails two of three tests.
+- `GET`/`PUT /api/retirement/settings` added to the legacy backend, which had no route for
+  them — a guaranteed 404 on every visit, surfacing as an intermittent E2E failure whenever
+  `page-loading.spec.ts` sampled the console at the wrong moment.
+- `verifyTurnstileDetailed` reads Cloudflare's `error-codes` and separates a deployment fault
+  (`invalid-input-secret`, `missing-input-secret` — logged, answered 503 with
+  `captcha_not_configured`) from a client one (403). `/api/health` reports
+  `captcha: configured | disabled | missing`, and `secret:{dev,prod}` now sets
+  `TURNSTILE_SECRET`, which is how an environment came to be a secret short with nothing to
+  notice it: `5caef64` switched the dev widget on, the dev worker had no secret, and
+  `verifyTurnstile` took its fail-closed branch for every password sign-in from that day.
+
+### Changed — planner layout
+
+- Field hints move from block text under the controls into info tips on the labels. A field
+  that carried one was taller than the field beside it, so its control sat out of line — the
+  date-of-birth picker floating above the net worth box. An e2e test measures it: no field
+  may carry text below its control, checked across every field in the form, so the next hint
+  someone adds inline is caught wherever it lands.
+- The left rail is 440px rather than 360px, `.form-row` aligns on the end edge, and
+  `.list-row` wraps rather than shrinking its month selects to 80px.
+- Skeleton placeholders are tinted from `--primary` via `color-mix(in oklab, …)` in both
+  themes, at percentages chosen to keep their perceived weight (dark luminance 44.2 -> 42.8,
+  light 215.9 -> 216.5).
 
 ## [5.9.1] — 2026-08-22
 

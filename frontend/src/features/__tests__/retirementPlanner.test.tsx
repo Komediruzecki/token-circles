@@ -53,6 +53,22 @@ vi.mock('../../components/Chart', async () => {
         lastChartOptions = props.options
         lastChartPlugins = props.plugins
       })
+      // Zoom gestures anchor on the x scale, so the stand-in has to answer for one: a
+      // 600px plot over whatever range the options currently ask for.
+      props.onReady?.({
+        canvas: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 600, height: 280 }) },
+        scales: {
+          x: {
+            width: 600,
+            getValueForPixel: (px: number) => {
+              const points = (lastChartData?.labels?.length ?? 1) - 1
+              const min = lastChartOptions?.scales?.x?.min ?? 0
+              const max = lastChartOptions?.scales?.x?.max ?? points
+              return min + (px / 600) * (max - min)
+            },
+          },
+        },
+      })
       return null
     },
   }
@@ -140,13 +156,7 @@ async function type(input: HTMLInputElement, value: string) {
   await flush()
 }
 
-async function check(input: HTMLInputElement, checked: boolean) {
-  input.checked = checked
-  input.dispatchEvent(new Event('change', { bubbles: true }))
-  await flush()
-}
-
-/** The chart options are branded switches, so they are pressed rather than checked. */
+/** Every toggle on the page is now a branded switch, so they are pressed, not checked. */
 function switchByTestId(root: HTMLElement, id: string): HTMLButtonElement {
   return root.querySelector<HTMLButtonElement>(`[role="switch"][data-test-id="${id}"]`)!
 }
@@ -356,8 +366,7 @@ describe('inflation', () => {
     const root = await mountPlanner()
 
     const real = netWorthSeries()
-    const toggle = byTestId(root, 'retirement-toggle-inflation')!.querySelector('input')!
-    await check(toggle, false)
+    await flip(switchByTestId(root, 'retirement-toggle-inflation'), false)
     const nominal = netWorthSeries()
 
     expect(nominal[nominal.length - 1]).toBeGreaterThan(real[real.length - 1])
@@ -940,5 +949,184 @@ describe('what was filled in from your data stops being claimed once you save it
     // The reported bug: a contribution of exactly the default is a real answer, and has
     // to reach the server as one.
     expect(apiPut.mock.calls[0][1].monthlyContribution).toBe(500)
+  })
+})
+
+describe('the chart can be zoomed into a few years', () => {
+  const xScale = () => lastChartOptions.scales.x
+  const wheel = (root: HTMLElement, deltaY: number) => {
+    const event = new WheelEvent('wheel', { deltaY, clientX: 300, bubbles: true, cancelable: true })
+    byTestId(root, 'retirement-chart')!.dispatchEvent(event)
+    return event
+  }
+
+  it('starts showing the whole projection', async () => {
+    const root = await mountPlanner()
+    expect(xScale().min).toBeUndefined()
+    expect(xScale().max).toBeUndefined()
+    expect(byTestId(root, 'retirement-zoom-reset')).toBeNull()
+  })
+
+  it('narrows the axis on a scroll, and says so with a way back', async () => {
+    const root = await mountPlanner()
+    wheel(root, -120)
+    await flush()
+
+    const span = xScale().max - xScale().min
+    expect(span).toBeGreaterThan(0)
+    expect(span).toBeLessThan(netWorthSeries().length - 1)
+    expect(byTestId(root, 'retirement-zoom-reset')).not.toBeNull()
+  })
+
+  it('keeps narrowing as the scrolling continues', async () => {
+    const root = await mountPlanner()
+    wheel(root, -120)
+    await flush()
+    const first = xScale().max - xScale().min
+
+    for (let i = 0; i < 4; i++) wheel(root, -120)
+    await flush()
+    expect(xScale().max - xScale().min).toBeLessThan(first)
+  })
+
+  it('swallows the scroll while zooming, so the page does not run away underneath', async () => {
+    const root = await mountPlanner()
+    expect(wheel(root, -120).defaultPrevented).toBe(true)
+  })
+
+  it('lets the page scroll once there is nothing left to zoom out of', async () => {
+    // Otherwise the chart is a trap: you reach it and can never scroll past it.
+    const root = await mountPlanner()
+    expect(wheel(root, 120).defaultPrevented).toBe(false)
+    expect(xScale().min).toBeUndefined()
+  })
+
+  it('goes back to the whole projection from the reset button', async () => {
+    const root = await mountPlanner()
+    for (let i = 0; i < 3; i++) wheel(root, -120)
+    await flush()
+    expect(xScale().min).not.toBeUndefined()
+
+    buttonByTestId(root, 'retirement-zoom-reset')!.click()
+    await flush()
+    expect(xScale().min).toBeUndefined()
+    expect(byTestId(root, 'retirement-zoom-reset')).toBeNull()
+  })
+
+  it('goes back on a double-click, which is what people try first', async () => {
+    const root = await mountPlanner()
+    for (let i = 0; i < 3; i++) wheel(root, -120)
+    await flush()
+
+    byTestId(root, 'retirement-chart')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    await flush()
+    expect(xScale().min).toBeUndefined()
+  })
+
+  it('pulls the view back inside a projection that got shorter', async () => {
+    serverSettings = { birthMonth: '1994-01', lifeExpectancyAge: 95 }
+    const root = await mountPlanner()
+    for (let i = 0; i < 6; i++) wheel(root, -120)
+    await flush()
+    const long = netWorthSeries().length
+
+    await type(inputByTestId(root, 'retirement-input-life')!, '60')
+    const short = netWorthSeries().length
+    expect(short).toBeLessThan(long)
+    // The window has to follow the data, not point past the end of it.
+    expect(xScale().max).toBeLessThanOrEqual(short - 1)
+  })
+
+  it('leaves the markers on their crossings while zoomed', async () => {
+    serverSettings = { netWorth: 50000, monthlyContribution: 1500 }
+    const root = await mountPlanner()
+    const before = lastChartOptions.plugins.lifestyleMarkers.markers[0].x
+
+    for (let i = 0; i < 3; i++) wheel(root, -120)
+    await flush()
+    // Zoom moves the scale, not the data, so a marker stays at the month it belongs to.
+    expect(lastChartOptions.plugins.lifestyleMarkers.markers[0].x).toBe(before)
+  })
+})
+
+describe('zoom gestures beyond the wheel', () => {
+  const xScale = () => lastChartOptions.scales.x
+  const chartEl = (root: HTMLElement) => byTestId(root, 'retirement-chart')!
+  const pointer = (type: string, id: number, clientX: number) =>
+    new PointerEvent(type, { pointerId: id, clientX, bubbles: true, cancelable: true })
+
+  const pinch = (root: HTMLElement, from: [number, number], to: [number, number]) => {
+    const el = chartEl(root)
+    el.dispatchEvent(pointer('pointerdown', 1, from[0]))
+    el.dispatchEvent(pointer('pointerdown', 2, from[1]))
+    el.dispatchEvent(pointer('pointermove', 1, to[0]))
+    el.dispatchEvent(pointer('pointermove', 2, to[1]))
+    el.dispatchEvent(pointer('pointerup', 1, to[0]))
+    el.dispatchEvent(pointer('pointerup', 2, to[1]))
+  }
+
+  it('zooms in when two fingers move apart', async () => {
+    const root = await mountPlanner()
+    pinch(root, [250, 350], [100, 500])
+    await flush()
+    expect(xScale().max - xScale().min).toBeLessThan(netWorthSeries().length - 1)
+  })
+
+  it('zooms back out when they come together', async () => {
+    const root = await mountPlanner()
+    pinch(root, [250, 350], [50, 550])
+    await flush()
+    const zoomedIn = xScale().max - xScale().min
+
+    pinch(root, [50, 550], [280, 320])
+    await flush()
+    expect(xScale().min === undefined || xScale().max - xScale().min > zoomedIn).toBe(true)
+  })
+
+  it('drags the view sideways once there is somewhere to drag to', async () => {
+    const root = await mountPlanner()
+    for (let i = 0; i < 5; i++) {
+      chartEl(root).dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -120, clientX: 500, bubbles: true, cancelable: true })
+      )
+    }
+    await flush()
+    const before = xScale().min
+
+    const el = chartEl(root)
+    el.dispatchEvent(pointer('pointerdown', 1, 400))
+    el.dispatchEvent(pointer('pointermove', 1, 300))
+    el.dispatchEvent(pointer('pointerup', 1, 300))
+    await flush()
+    // Dragging left walks the window forward through the projection.
+    expect(xScale().min).toBeGreaterThan(before)
+  })
+
+  it('ignores a drag while the whole projection is showing', async () => {
+    const root = await mountPlanner()
+    const el = chartEl(root)
+    el.dispatchEvent(pointer('pointerdown', 1, 400))
+    el.dispatchEvent(pointer('pointermove', 1, 200))
+    el.dispatchEvent(pointer('pointerup', 1, 200))
+    await flush()
+    // A page that scrolls under your finger matters more than a pan with nowhere to go.
+    expect(xScale().min).toBeUndefined()
+  })
+
+  it('does not start a gesture from a right click', async () => {
+    const root = await mountPlanner()
+    const el = chartEl(root)
+    el.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 9,
+        button: 2,
+        pointerType: 'mouse',
+        clientX: 400,
+        bubbles: true,
+      })
+    )
+    el.dispatchEvent(pointer('pointermove', 9, 100))
+    await flush()
+    expect(xScale().min).toBeUndefined()
   })
 })

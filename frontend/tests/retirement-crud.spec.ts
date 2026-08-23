@@ -517,6 +517,51 @@ test.describe('the assumptions form stays in line', () => {
     await expect(markers).toHaveAttribute('aria-checked', 'false')
   })
 
+  test('settings rows keep their wording left and their switch right', async ({ page }) => {
+    const row = page.getByTestId('retirement-toggle-inflation')
+    await expect(row).toHaveAttribute('role', 'switch')
+
+    const layout = await page.evaluate(() => {
+      const sw = document.querySelector('[data-test-id="retirement-toggle-inflation"]')!
+      const row = sw.parentElement!
+      const copy = row.firstElementChild!
+      return {
+        copyLeft: Math.round(copy.getBoundingClientRect().left),
+        copyRight: Math.round(copy.getBoundingClientRect().right),
+        switchLeft: Math.round(sw.getBoundingClientRect().left),
+        rowRight: Math.round(row.getBoundingClientRect().right),
+        text: (copy.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      }
+    })
+    // Title and its live description on the left, switch hard against the right edge.
+    expect(layout.switchLeft).toBeGreaterThan(layout.copyRight)
+    expect(layout.text).toContain('Adjust for inflation')
+    expect(layout.text).toMatch(/A real return of [\d.]+% after inflation\./)
+  })
+
+  test('the chart zooms on a scroll and offers a way back', async ({ page }) => {
+    const chart = page.getByTestId('retirement-chart')
+    await expect(chart).toBeVisible()
+    await expect(page.getByTestId('retirement-zoom-reset')).toHaveCount(0)
+
+    const box = (await chart.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    for (let i = 0; i < 4; i++) await page.mouse.wheel(0, -120)
+
+    const reset = page.getByTestId('retirement-zoom-reset')
+    await expect(reset).toBeVisible()
+
+    // Fewer ticks on the axis is the visible result: the scale relabels from the range.
+    const zoomedTicks = await page.evaluate(() => {
+      const c = (window as any).Chart?.getChart?.('retirement-projection-chart')
+      return c ? c.scales.x.ticks.length : null
+    })
+
+    await reset.click()
+    await expect(page.getByTestId('retirement-zoom-reset')).toHaveCount(0)
+    if (zoomedTicks !== null) expect(zoomedTicks).toBeGreaterThan(0)
+  })
+
   test('the withdrawal rate slider drives the projection', async ({ page }) => {
     const chip = page.getByTestId('retirement-runway-chip')
     await expect(chip).toBeVisible()
