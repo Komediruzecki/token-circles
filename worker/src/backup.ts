@@ -43,6 +43,18 @@ export interface BackupData {
   customReports: Row[];
   settingsRows: Row[];
   settings: Record<string, unknown>;
+  /**
+   * Receipts whose stored file could not be read, and which were therefore left out of this
+   * backup entirely — metadata row included, so the file stays internally consistent and
+   * restorable. Absent (not empty) when nothing was skipped, so an older backup is unchanged.
+   */
+  skippedReceipts?: SkippedReceipt[];
+}
+
+export interface SkippedReceipt {
+  receipt_id: number;
+  original_name: string;
+  reason: 'storage_unavailable' | 'file_missing';
 }
 
 interface NormalizedBackup extends Omit<BackupData, 'receiptFiles'> {
@@ -440,24 +452,52 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     scoped('settings'),
   ]);
 
+  // One unreadable receipt used to fail the whole export with a 503 — no backup file at all,
+  // because one image out of hundreds was missing from storage. That is the worst possible failure
+  // mode for a backup: it withholds the data at the exact moment the data is proving fragile, and
+  // no amount of retrying fixes a blob that is simply gone.
+  //
+  // Skip it instead, and drop its metadata row with it. Dropping the row is what keeps the file
+  // restorable: `validateBackup` requires every receipt to carry its bytes, so a backup listing a
+  // receipt with no file would be rejected on the way back in. What was left out is reported in
+  // `skippedReceipts` and by the route, so it is a stated omission rather than a silent one.
   const receiptFiles: ReceiptFileBackup[] = [];
-  if (receipts.length > 0 && !env.RECEIPTS) {
-    throw new HttpError(503, 'Receipt storage is unavailable; full backup aborted');
-  }
+  const includedReceipts: Row[] = [];
+  const skippedReceipts: SkippedReceipt[] = [];
+  const skip = (receipt: Row, reason: SkippedReceipt['reason']) =>
+    skippedReceipts.push({
+      receipt_id: Number(receipt.id),
+      original_name: String(receipt.original_name ?? receipt.id),
+      reason,
+    });
+
   for (const receipt of receipts) {
-    const object = await env.RECEIPTS!.get(String(receipt.storage_path ?? ''));
-    if (!object) {
-      throw new HttpError(
-        503,
-        `Receipt file "${String(receipt.original_name ?? receipt.id)}" is unavailable; full backup aborted`
-      );
+    if (!env.RECEIPTS) {
+      skip(receipt, 'storage_unavailable');
+      continue;
     }
+    const object = await env.RECEIPTS.get(String(receipt.storage_path ?? ''));
+    if (!object) {
+      skip(receipt, 'file_missing');
+      continue;
+    }
+    includedReceipts.push(receipt);
     receiptFiles.push({
       receipt_id: Number(receipt.id),
       content_type:
         object.httpMetadata?.contentType ?? String(receipt.file_type ?? 'application/octet-stream'),
       data_base64: toBase64(await object.arrayBuffer()),
     });
+  }
+
+  // A transaction pointing at a receipt that is not in the backup would restore as a dangling
+  // reference. The transaction itself is kept — losing a purchase because its photo is missing
+  // would be a far worse trade — with the pointer cleared.
+  if (skippedReceipts.length > 0) {
+    const gone = new Set(skippedReceipts.map((r) => r.receipt_id));
+    for (const row of transactions) {
+      if (row.receipt_id != null && gone.has(Number(row.receipt_id))) row.receipt_id = null;
+    }
   }
 
   const settings: Record<string, unknown> = {};
@@ -489,13 +529,14 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     tagRules,
     transactionTags,
     categoryMappings,
-    receipts,
+    receipts: includedReceipts,
     receiptFiles,
     balanceHistoryRows,
     importLogs,
     customReports,
     settingsRows,
     settings,
+    ...(skippedReceipts.length > 0 ? { skippedReceipts } : {}),
   };
 }
 

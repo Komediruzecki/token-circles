@@ -185,7 +185,11 @@ function request(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
-async function exportSelected(): Promise<BackupData> {
+/**
+ * Note the request below still sends `X-Profile-Ids: [2000, 2001]`, deliberately: the point is
+ * that the full backup ignores it. "Excluded" (2002) is in every one of these files.
+ */
+async function exportAccount(): Promise<BackupData> {
   const response = await request('/api/export');
   expect(response.status).toBe(200);
   return response.json<BackupData>();
@@ -193,9 +197,9 @@ async function exportSelected(): Promise<BackupData> {
 
 describe('Worker full backup and staged restore', () => {
   it('exports every financial domain, scoped settings, relations, and receipt bytes', async () => {
-    const backup = await exportSelected();
+    const backup = await exportAccount();
     expect(backup.version).toBe('3.0.0');
-    expect(backup.profiles.map((profile) => profile.name)).toEqual(['Home', 'Joint']);
+    expect(backup.profiles.map((profile) => profile.name)).toEqual(['Home', 'Joint', 'Excluded']);
 
     for (const key of [
       'categories',
@@ -244,19 +248,110 @@ describe('Worker full backup and staged restore', () => {
     );
   });
 
-  it('aborts a full backup instead of silently omitting a missing receipt object', async () => {
+  it('covers the whole account, not the profiles the caller happens to have selected', async () => {
+    // The request sends X-Profile-Ids: [2000, 2001]. A restore deletes every profile the user
+    // owns, so a backup that honoured that selection would delete "Excluded" on the way back in.
+    const backup = await exportAccount();
+
+    expect(backup.profiles.map((profile) => profile.id)).toEqual([2000, 2001, 2002]);
+  });
+
+  it('refuses to hand back an empty file to an account with no profiles', async () => {
+    // A backup of nothing is not a backup, and restoring one would delete everything it does not
+    // contain. Say so instead of handing over a file that looks like a safety net.
+    await env.DB.prepare(
+      "INSERT INTO users (id, email, auth_provider, token_version) VALUES (299, 'empty@example.com', 'password', 1)"
+    ).run();
+    const emptyCookie = (await issueSessionCookie(299, 'password', env)).split(';')[0];
+
+    const response = await SELF.fetch('https://example.com/api/export', {
+      headers: { Cookie: emptyCookie },
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('skips a receipt whose file is gone rather than failing the whole backup', async () => {
+    // The one receipt object in the fixture, deleted out from under the metadata row — a file
+    // lost to a storage migration, a manual delete, an upload that never completed. It used to
+    // 503 the whole export, so the account most in need of a backup was the one that could not
+    // take one.
     await env.RECEIPTS!.delete('2000/receipt.png');
 
     const response = await request('/api/export');
 
-    expect(response.status).toBe(503);
-    await expect(response.json<{ error: string }>()).resolves.toEqual({
-      error: 'Receipt file "receipt.png" is unavailable; full backup aborted',
-    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Backup-Skipped-Receipts')).toBe('1');
+    const backup = await response.json<BackupData>();
+    expect(backup.skippedReceipts).toEqual([
+      { receipt_id: 3100, original_name: 'receipt.png', reason: 'file_missing' },
+    ]);
+    // Everything else is there — including the transaction the receipt belonged to.
+    expect(backup.transactions.some((row) => Number(row.id) === 2300)).toBe(true);
+    expect(backup.accounts.length).toBeGreaterThan(0);
   });
 
-  it('round-trips two profiles and leaves another user untouched', async () => {
-    const backup = await exportSelected();
+  it('leaves a skipped receipt out of the metadata too, so the file still restores', async () => {
+    // `validateBackup` requires every receipt row to carry its bytes. A backup that listed a
+    // receipt it had no file for would be a file that exports fine and refuses to come back.
+    await env.RECEIPTS!.delete('2000/receipt.png');
+    const backup = await exportAccount();
+
+    expect(backup.receipts).toHaveLength(0);
+    expect(backup.receiptFiles).toHaveLength(0);
+    // And the transaction keeps its row, with the pointer to the vanished receipt cleared.
+    const transaction = backup.transactions.find((row) => Number(row.id) === 2300)!;
+    expect(transaction.receipt_id).toBeNull();
+
+    const restore = await request('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backup),
+    });
+    expect(restore.status).toBe(200);
+  });
+
+  it('says nothing about skipped receipts when none were skipped', async () => {
+    const response = await request('/api/export');
+
+    expect(response.headers.get('X-Backup-Skipped-Receipts')).toBeNull();
+    expect((await response.json<BackupData>()).skippedReceipts).toBeUndefined();
+  });
+
+  it('lets you restore the profiles you already have, over a lower plan cap', async () => {
+    // Free allows two; this account holds three. Judged against the plan limit alone, the user's
+    // own backup is unrestorable — which is the one moment they most need it to work.
+    const backup = await exportAccount();
+    expect(backup.profiles).toHaveLength(3);
+
+    const response = await request('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backup),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it('still caps a restore that would add profiles beyond both the plan and the account', async () => {
+    const backup = await exportAccount();
+    backup.profiles = [
+      ...backup.profiles,
+      { ...backup.profiles[0]!, id: 9001, name: 'Extra one' },
+      { ...backup.profiles[0]!, id: 9002, name: 'Extra two' },
+    ];
+
+    const response = await request('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backup),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('round-trips every profile and leaves another user untouched', async () => {
+    const backup = await exportAccount();
     const response = await request('/api/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -268,7 +363,7 @@ describe('Worker full backup and staged restore', () => {
       rows_restored: number;
       first_profile_id: number;
     }>();
-    expect(result.profiles_restored).toBe(2);
+    expect(result.profiles_restored).toBe(3);
     expect(result.rows_restored).toBeGreaterThan(20);
 
     const profiles = await env.DB.prepare(
@@ -276,7 +371,7 @@ describe('Worker full backup and staged restore', () => {
     )
       .bind(USER_ID)
       .all<{ id: number; name: string }>();
-    expect(profiles.results?.map((profile) => profile.name)).toEqual(['Home', 'Joint']);
+    expect(profiles.results?.map((profile) => profile.name)).toEqual(['Excluded', 'Home', 'Joint']);
     expect(
       await env.DB.prepare('SELECT COUNT(*) AS count FROM profiles WHERE name LIKE ?')
         .bind('__restore_%')
@@ -353,7 +448,7 @@ describe('Worker full backup and staged restore', () => {
   });
 
   it('keeps the current dataset when staging fails', async () => {
-    const backup = await exportSelected();
+    const backup = await exportAccount();
     backup.transactions[0] = { ...backup.transactions[0], amount: null };
 
     const response = await request('/api/import', {
@@ -383,7 +478,7 @@ describe('Worker full backup and staged restore', () => {
   });
 
   it('restores a valid zero-byte receipt attachment', async () => {
-    const backup = await exportSelected();
+    const backup = await exportAccount();
     backup.receiptFiles[0]!.data_base64 = '';
 
     const response = await request('/api/import', {

@@ -112,12 +112,37 @@ exportRoutes.get('/api/export/:type', requireAuth, async (c) => {
   });
 });
 
-// GET /api/export — full JSON backup across the selected profiles.
+/**
+ * GET /api/export — the full JSON backup. Always the whole account, never a selection.
+ *
+ * It used to export whatever `X-Profile-Ids` asked for, which made the file's coverage a property
+ * of the caller. `POST /api/import` deletes EVERY profile the user owns before restoring, so a
+ * backup taken with two of three profiles selected — a stale header, a household mid-switch, a
+ * script — silently destroyed the third on the way back in. The two halves have to agree on what
+ * "the backup" means, and the only safe answer is the same thing restore replaces.
+ *
+ * Per-resource CSV exports above are still selection-scoped: those are extracts, not backups, and
+ * nothing restores from them.
+ */
 exportRoutes.get('/api/export', requireAuth, async (c) => {
   const rl = await enforce(c, `export:${c.get('userId')}`, 10, 300);
   if (rl) return rl;
-  const pids = await getProfileIds(c);
-  return c.json(await exportBackup(c.env, c.get('userId'), pids));
+  const userId = c.get('userId');
+  const owned = await db.all<{ id: number }>(
+    c.env.DB,
+    'SELECT id FROM profiles WHERE user_id = ? ORDER BY id',
+    userId
+  );
+  const pids = owned.map((profile) => profile.id);
+  if (pids.length === 0) throw new HttpError(404, 'There is nothing to back up yet');
+  const backup = await exportBackup(c.env, userId, pids);
+  // Surfaced in a header as well as the payload: the browser downloads the file without ever
+  // parsing it, so the UI needs somewhere to read "this backup is missing two receipt images"
+  // that does not involve opening a hundred megabytes of JSON.
+  if (backup.skippedReceipts?.length) {
+    c.header('X-Backup-Skipped-Receipts', String(backup.skippedReceipts.length));
+  }
+  return c.json(backup);
 });
 
 // POST /api/import — restore a complete v3 backup for the signed-in user.
@@ -144,11 +169,24 @@ exportRoutes.post('/api/import', requireAuth, async (c) => {
     Array.isArray((payload as Record<string, unknown>).profiles)
       ? ((payload as Record<string, unknown>).profiles as unknown[]).length
       : 0;
-  if (profileLimit !== null && profileCount > profileLimit) {
-    throw new HttpError(
-      403,
-      `Your plan allows up to ${profileLimit} profile${profileLimit === 1 ? '' : 's'}`
+  if (profileLimit !== null) {
+    // The cap is on how many profiles you may KEEP, and a restore does not create new ones — it
+    // puts back the ones you had. Judging it against the plan limit alone made your own backup
+    // unrestorable the moment your account held more profiles than your current plan allows: a
+    // downgrade, a plan change, or simply profiles created before the cap existed. So the ceiling
+    // is the higher of the two. Going beyond what you already have is still capped.
+    const owned = await db.first<{ count: number }>(
+      c.env.DB,
+      'SELECT COUNT(*) AS count FROM profiles WHERE user_id = ?',
+      c.get('userId')
     );
+    const ceiling = Math.max(profileLimit, Number(owned?.count ?? 0));
+    if (profileCount > ceiling) {
+      throw new HttpError(
+        403,
+        `Your plan allows up to ${profileLimit} profile${profileLimit === 1 ? '' : 's'}`
+      );
+    }
   }
   return c.json(await restoreBackup(c.env, c.get('userId'), payload));
 });

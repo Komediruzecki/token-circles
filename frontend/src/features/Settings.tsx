@@ -711,10 +711,13 @@ export default function Settings() {
   // Data Management
   const handleExport = async () => {
     try {
+      // No profile headers. The full backup is the whole account by definition now — restoring one
+      // replaces every profile you own, so a file that covered a selection was a file that quietly
+      // deleted the profiles it left out. The server decides the scope; passing a selection here
+      // would only suggest it could be something else.
       const response = await apiFetch(`/api/export?pretty=${prettyPrintJson()}`, {
         method: 'GET',
         credentials: 'include',
-        headers: exportProfileHeaders(allProfiles().map((profile) => profile.id)),
       })
 
       if (!response.ok) throw new Error('Export failed')
@@ -726,6 +729,17 @@ export default function Settings() {
       a.download = `finance-backup-all-profiles-${new Date().toISOString().split('T')[0]}.json`
       a.click()
       URL.revokeObjectURL(url)
+
+      // A receipt whose stored file has gone missing no longer fails the whole export — but the
+      // user has to be told, because the one thing a backup must never do is look complete when
+      // it is not. Everything else in the file, including that receipt's transaction, is intact.
+      const skipped = Number(response.headers.get('X-Backup-Skipped-Receipts') ?? 0)
+      if (skipped > 0) {
+        toast(
+          `Backup saved, without ${skipped} receipt ${skipped === 1 ? 'file' : 'files'} whose stored image could not be read. Everything else is included.`,
+          'warning'
+        )
+      }
     } catch {
       toast('Failed to export data', 'error')
     }
