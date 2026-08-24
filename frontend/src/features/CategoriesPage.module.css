@@ -833,6 +833,32 @@ select.form-control {
   background: var(--btn-secondary-bg);
   color: var(--text-secondary);
 }
+/* Sits beside .icon-preview and matches its 36px box, so the field reads as one control. */
+.icon-browse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.icon-browse-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.icon-browse-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 .field-hint {
   display: block;
   margin-top: 6px;

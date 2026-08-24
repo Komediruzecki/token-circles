@@ -381,6 +381,46 @@ const isDefaultIcon = (icon?: string | null) =>
   icon === null || icon === undefined || defaultIconValues.has(icon)
 
 /**
+ * Every icon a person can actually choose, sorted, for the gallery to list.
+ *
+ * Derived from `iconNameMap` rather than written out beside it: a second hand-maintained list
+ * goes stale the first time somebody adds an icon and does not think to update it.
+ *
+ * `tag` and `folder` are left out even though both are real icons. They are also the values the
+ * app stores when NOBODY chose an icon, and `isDefaultIcon` below reads them as exactly that — so
+ * picking either from a gallery would store a choice that the renderer then ignores in favour of
+ * pattern-matching the category name. Offering an icon that cannot be chosen is worse than not
+ * offering it. Telling the two apart properly needs a column saying whether a value was chosen,
+ * which is a schema change and not this.
+ */
+export const PICKABLE_ICON_NAMES: readonly string[] = Object.keys(iconNameMap)
+  .filter((key) => !defaultIconValues.has(key))
+  .sort()
+
+/**
+ * Draw one icon by its exact key. The gallery needs this rather than `getCategorySvg`, which is
+ * built to *resolve* a value — keyword matching, name fallback, generic fallback — and would
+ * happily show a glyph for a key that is not the one being offered.
+ */
+export function iconSvgByKey(key: string, size = 22) {
+  const def = Object.hasOwn(iconNameMap, key) ? iconNameMap[key]! : fallbackIcon
+  return (
+    <svg
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      viewBox={def.viewBox ?? '0 0 24 24'}
+    >
+      <path d={def.path} />
+    </svg>
+  )
+}
+
+/**
  * Resolve whatever the user typed into the icon field. An exact icon key wins
  * ("utensils"), otherwise the same keyword matching used on category names runs over it,
  * so a plain word — "food", "groceries", "rent" — lands on the right glyph instead of

@@ -1,0 +1,158 @@
+/*
+ * The icon gallery sits ON TOP of the category modal, which is why every measurement here is
+ * smaller than that one's: it is a helper for a single field, not a second full-page dialog.
+ */
+
+.picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Above .modal-overlay (9999) on the category page — it opens from inside that modal. */
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: min(420px, calc(100vw - 2rem));
+  /* dvh second, so a mobile browser with a retracting toolbar gets the honest height. */
+  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.picker-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.picker-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.picker-close:hover {
+  background: var(--btn-secondary-bg);
+  color: var(--text-primary);
+}
+
+.picker-search {
+  padding: 12px 16px 0;
+  flex-shrink: 0;
+}
+
+.picker-search-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--input-bg, var(--card-bg));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.picker-search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* The scrolling part. Everything above and below it is pinned. */
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.picker-item:hover {
+  background: var(--btn-secondary-bg);
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.picker-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.picker-item-active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.picker-item-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+}
+
+/*
+ * The key is the label, and some of them are long ("more-horizontal"). Wrapping mid-word keeps the
+ * cells the same height instead of letting one name stretch a whole grid row.
+ */
+.picker-item-name {
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.picker-empty {
+  margin: 0;
+  padding: 0 16px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

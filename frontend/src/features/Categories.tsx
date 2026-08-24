@@ -33,6 +33,7 @@
 import { createMemo, createResource, createSignal, For } from 'solid-js'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
+import IconPicker from '../components/IconPicker'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -123,6 +124,7 @@ export default function Categories() {
         showToast('Category created successfully', 'success')
       }
       setShowAddModal(false)
+      setShowIconPicker(false)
       setEditingCategory(null)
       setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
       refetchCategories()
@@ -207,6 +209,10 @@ export default function Categories() {
   // component body runs once, so <CategoryIcon icon={formData().icon}> would render whatever
   // the field held at mount and never update. The memo re-reads the signal per keystroke.
   const iconPreview = createMemo(() => getCategorySvg(formData().name, 18, formData().icon))
+
+  // The gallery is a helper for the icon field, so it opens over the category modal rather
+  // than replacing it — the half-filled form behind it has to still be there afterwards.
+  const [showIconPicker, setShowIconPicker] = createSignal(false)
 
   return (
     <div class={`page page-categories page-enter ${styles.categoriesPage}`}>
@@ -424,6 +430,7 @@ export default function Categories() {
           onclick={(e) => {
             if (e.target === e.currentTarget) {
               setShowAddModal(false)
+              setShowIconPicker(false)
               setEditingCategory(null)
               setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
             }
@@ -443,6 +450,7 @@ export default function Categories() {
                 class={styles.modalClose}
                 onClick={() => {
                   setShowAddModal(false)
+                  setShowIconPicker(false)
                   setEditingCategory(null)
                   setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
                 }}
@@ -489,10 +497,31 @@ export default function Categories() {
                   <span class={styles.iconPreview} aria-hidden="true">
                     {iconPreview()}
                   </span>
+                  <button
+                    type="button"
+                    class={styles.iconBrowseBtn}
+                    data-test-id="category-icon-browse"
+                    aria-label="Browse icons"
+                    title="Browse icons"
+                    onClick={() => setShowIconPicker(true)}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v6H4zM14 15h6v6h-6z" />
+                    </svg>
+                  </button>
                 </div>
                 <span class={styles.fieldHint}>
-                  Type a keyword and we pick the matching icon. Leave it blank to choose one from
-                  the category name.
+                  Type a keyword and we pick the matching icon, or browse the gallery. Leave it
+                  blank to choose one from the category name.
                 </span>
               </div>
               <div class={styles.formGroup}>
@@ -529,6 +558,7 @@ export default function Categories() {
                   class={styles.btnSecondary}
                   onClick={() => {
                     setShowAddModal(false)
+                    setShowIconPicker(false)
                     setEditingCategory(null)
                     setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
                   }}
@@ -542,6 +572,19 @@ export default function Categories() {
             </form>
           </div>
         </div>
+      )}
+
+      {showAddModal() && showIconPicker() && (
+        <IconPicker
+          value={formData().icon}
+          onPick={(name) => {
+            // Straight into the same field the user could have typed into. Closing afterwards is
+            // the point of a picker: one click, and you are looking at your form again.
+            setFormData({ ...formData(), icon: name })
+            setShowIconPicker(false)
+          }}
+          onClose={() => setShowIconPicker(false)}
+        />
       )}
 
       {/* Budget Modal */}
