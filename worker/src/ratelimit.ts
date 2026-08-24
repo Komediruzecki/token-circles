@@ -45,6 +45,20 @@ export async function rateLimit(
   return { ok: false, retryAfter: Math.max(retryAfter, 1) };
 }
 
+/**
+ * Forget a bucket entirely.
+ *
+ * Called after a SUCCESSFUL sign-in. The limit exists to blunt credential guessing, and a
+ * successful sign-in is proof the credentials are right — counting it against the same budget
+ * locked out the one person who could not possibly be the attacker. Ten successful logins in a
+ * quarter of an hour is a person testing on three devices, not a break-in.
+ *
+ * Failures still accumulate, so a run of wrong passwords is refused exactly as before.
+ */
+export async function clearRateLimit(env: Env, bucket: string): Promise<void> {
+  await db.run(env.DB, 'DELETE FROM rate_limits WHERE bucket = ?', bucket);
+}
+
 // Best-effort cleanup of expired buckets. Called from the scheduled (cron) handler.
 export async function sweepRateLimits(env: Env): Promise<void> {
   await db.run(env.DB, 'DELETE FROM rate_limits WHERE reset_at <= ?', Date.now());
@@ -53,6 +67,13 @@ export async function sweepRateLimits(env: Env): Promise<void> {
 /** Best-effort client IP for keying. Cloudflare sets CF-Connecting-IP. */
 export function clientIp(c: Context<AppEnv>): string {
   return c.req.header('CF-Connecting-IP') || c.req.header('x-forwarded-for') || 'unknown';
+}
+
+/** "in about 12 minutes" / "in about a minute" / "in 30 seconds". */
+export function humanWait(seconds: number): string {
+  if (seconds <= 90) return `in ${Math.max(seconds, 1)} seconds`;
+  const minutes = Math.round(seconds / 60);
+  return minutes === 1 ? 'in about a minute' : `in about ${minutes} minutes`;
 }
 
 /**
@@ -68,7 +89,13 @@ export async function enforce(
   const r = await rateLimit(c.env, bucket, limit, windowSec);
   if (!r.ok) {
     c.header('Retry-After', String(r.retryAfter));
-    return c.json({ error: 'Too many requests. Please wait a bit and try again.' }, 429);
+    // Say how long. "Please wait a bit" leaves the user guessing whether that is seconds or an
+    // hour, and the only way to find out is to keep trying — which is the one thing that must not
+    // help, and here does not.
+    return c.json(
+      { error: `Too many attempts. Please try again ${humanWait(r.retryAfter)}.` },
+      429
+    );
   }
   return null;
 }

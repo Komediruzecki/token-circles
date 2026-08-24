@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { AppEnv } from '../index';
+import * as db from '../db';
+import { deviceLabel } from '../deviceLabel';
 import {
   requireAuth,
   verifyGoogleIdToken,
@@ -19,7 +22,8 @@ import {
   renderPasswordReset,
   renderWelcome,
 } from '../emailTemplates';
-import { enforce, clientIp } from '../ratelimit';
+import { clearRateLimit, enforce, clientIp } from '../ratelimit';
+import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -164,7 +168,7 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
       }
     );
   }
-  const sessionCookie = await issueSessionCookie(userId, 'google', c.env);
+  const sessionCookie = await issueSessionCookie(userId, 'google', c.env, sessionOrigin(c));
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
   return new Response(null, {
     status: 302,
@@ -239,10 +243,34 @@ authRoutes.post('/api/auth/register', async (c) => {
   return c.json({ ok: true });
 });
 
+/** What to remember about the device signing in, so it can be shown back to the user later. */
+const sessionOrigin = (c: Context<AppEnv>) => ({
+  userAgent: c.req.header('user-agent') ?? null,
+  ip: clientIp(c),
+});
+
+/**
+ * Login throttles. The window is shared; the two limits are not.
+ *
+ * The IP ceiling is a flood guard on a key that is not a person — CGNAT puts a whole carrier
+ * behind one address. The per-account limit is the one that stops guessing at a specific account,
+ * and both are cleared on a successful sign-in.
+ */
+const LOGIN_WINDOW_SEC = 900;
+const LOGIN_IP_LIMIT = 30;
+const LOGIN_EMAIL_LIMIT = 10;
+
 // Email + password login.
 authRoutes.post('/api/auth/login', async (c) => {
-  const rl = await enforce(c, `login:${clientIp(c)}`, 10, 900);
-  if (rl) return rl;
+  // Per-IP, and generous: an IP is not a person. A household, an office and an entire mobile
+  // carrier behind CGNAT all share one, so this ceiling only exists to stop a flood — the
+  // per-account limit below is the one that actually protects an account.
+  const ipBucket = `login:${clientIp(c)}`;
+  const rl = await enforce(c, ipBucket, LOGIN_IP_LIMIT, LOGIN_WINDOW_SEC);
+  if (rl) {
+    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'rate_limited_ip' });
+    return rl;
+  }
   if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
   const body = (await c.req.json().catch(() => ({}))) as {
     email?: string;
@@ -250,14 +278,23 @@ authRoutes.post('/api/auth/login', async (c) => {
     turnstileToken?: string;
   };
   const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
-  if (!captcha.ok) return captchaRejection(c, captcha);
+  if (!captcha.ok) {
+    // The widget goes green and the request is still refused, which reads as the app being broken.
+    // Recording the reason is what turns that into a five-second diagnosis.
+    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: `captcha:${captcha.reason}` });
+    return captchaRejection(c, captcha);
+  }
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
   if (!email || !password) return c.json({ error: 'Email and password are required' }, 400);
   // Per-account throttle (on top of per-IP) so a single account can't be brute-forced from rotating
   // IPs. Mirrors the layered approach used in forgot-password.
-  const emailRl = await enforce(c, `login-email:${email}`, 10, 900);
-  if (emailRl) return emailRl;
+  const emailBucket = `login-email:${email}`;
+  const emailRl = await enforce(c, emailBucket, LOGIN_EMAIL_LIMIT, LOGIN_WINDOW_SEC);
+  if (emailRl) {
+    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'rate_limited_email', email });
+    return emailRl;
+  }
   const user = await c.env.DB.prepare('SELECT id, password_hash FROM users WHERE email = ?')
     .bind(email)
     .first<{ id: number; password_hash: string | null }>();
@@ -266,9 +303,16 @@ authRoutes.post('/api/auth/login', async (c) => {
   // the real outcome.
   const passwordOk = await verifyPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
   if (!user || !user.password_hash || !passwordOk) {
+    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'bad_credentials', email });
     return c.json({ error: 'Invalid email or password' }, 401);
   }
-  c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env));
+  // Signing in correctly proves the credentials are right, so it must not spend the budget that
+  // exists to stop people guessing them. Without this, ten successful logins in a quarter of an
+  // hour — one person with a phone, a tablet and a laptop — locked the account out of its own
+  // password. Failures still accumulate exactly as before.
+  await Promise.all([clearRateLimit(c.env, ipBucket), clearRateLimit(c.env, emailBucket)]);
+  logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
+  c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env, sessionOrigin(c)));
   return c.json({ id: user.id, email });
 });
 
@@ -448,12 +492,96 @@ authRoutes.get('/api/auth/me', requireAuth, async (c) => {
   return c.json(user);
 });
 
-// Logout everywhere: bump token_version (revokes all issued JWTs) and clear the cookie.
+/**
+ * Sign out THIS device: clear the cookie, leave every other session alone.
+ *
+ * It used to bump `token_version`, which revokes every JWT the account has ever been issued — so
+ * signing out on a laptop silently signed the same person out on their phone and tablet too. The
+ * button that calls this is labelled "Logout", next to nothing that suggests it reaches other
+ * devices, and being ejected from a session you are actively using reads as the app breaking.
+ *
+ * The cookie is httpOnly, so clearing it ends the session for this browser. The JWT stays
+ * technically valid until it expires, which is the standing trade-off for a stateless token —
+ * and the case that trade-off is wrong for (a session you believe is stolen) is exactly what
+ * /api/auth/logout-all is for.
+ */
 authRoutes.post('/api/auth/logout', requireAuth, async (c) => {
-  const userId = c.get('userId');
-  await c.env.DB.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?')
-    .bind(userId)
+  const sessionId = c.get('sessionId');
+  // Deleting the row is what actually ends it — clearing the cookie only ends it for a browser
+  // that cooperates. A token issued before the sessions table existed has no row to delete and
+  // simply ages out; "sign out everywhere" is what revokes those.
+  if (sessionId !== undefined) {
+    await c.env.DB.prepare('DELETE FROM auth_sessions WHERE id = ? AND user_id = ?')
+      .bind(sessionId, c.get('userId'))
+      .run();
+  }
+  logAuthEvent(c, { event: 'logout', outcome: 'ok', userId: c.get('userId') });
+  c.header('Set-Cookie', clearedSessionCookie(c.env));
+  return c.json({ ok: true });
+});
+
+/**
+ * Where this account is signed in. The current device is flagged rather than hidden — seeing
+ * yourself in the list is how you know the list is the whole truth.
+ */
+authRoutes.get('/api/auth/sessions', requireAuth, async (c) => {
+  const rows = await db.all<{
+    id: string;
+    provider: string | null;
+    user_agent: string | null;
+    ip: string | null;
+    created_at: string;
+    last_seen_at: string;
+  }>(
+    c.env.DB,
+    `SELECT id, provider, user_agent, ip, created_at, last_seen_at
+     FROM auth_sessions WHERE user_id = ? ORDER BY last_seen_at DESC`,
+    c.get('userId')
+  );
+  const current = c.get('sessionId');
+  return c.json({
+    sessions: rows.map((row) => ({
+      id: row.id,
+      device: deviceLabel(row.user_agent),
+      provider: row.provider,
+      ip: row.ip,
+      created_at: row.created_at,
+      last_seen_at: row.last_seen_at,
+      current: row.id === current,
+    })),
+  });
+});
+
+/** End one device. Scoped to the caller's own sessions — an id alone is not authority. */
+authRoutes.delete('/api/auth/sessions/:id', requireAuth, async (c) => {
+  const id = c.req.param('id');
+  const res = await c.env.DB.prepare('DELETE FROM auth_sessions WHERE id = ? AND user_id = ?')
+    .bind(id, c.get('userId'))
     .run();
+  if ((res.meta.changes ?? 0) === 0) return c.json({ error: 'Session not found' }, 404);
+  logAuthEvent(c, {
+    event: 'logout',
+    outcome: 'ok',
+    reason: id === c.get('sessionId') ? 'this_device' : 'other_device',
+    userId: c.get('userId'),
+  });
+  // Ending the session you are asking from should also clear your own cookie.
+  if (id === c.get('sessionId')) c.header('Set-Cookie', clearedSessionCookie(c.env));
+  return c.json({ ok: true });
+});
+
+/** Sign out everywhere: bump token_version, which revokes every JWT issued for this account. */
+authRoutes.post('/api/auth/logout-all', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  // Both: the rows end every device that has one, and the token_version bump is the only thing
+  // that can reach a token issued before the sessions table existed.
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM auth_sessions WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').bind(
+      userId
+    ),
+  ]);
+  logAuthEvent(c, { event: 'logout', outcome: 'ok', reason: 'all_devices', userId });
   c.header('Set-Cookie', clearedSessionCookie(c.env));
   return c.json({ ok: true });
 });

@@ -1,0 +1,138 @@
+/*
+ * SignedInDevices — a list that has to stay readable on a phone, which is exactly the device
+ * most likely to be the one you want to sign out remotely.
+ *
+ * The row is a grid, not a flex line: the device name and its metadata can wrap freely while the
+ * icon and the "Sign out" button hold their columns, so a long label never squeezes the action
+ * off-screen.
+ */
+
+.wrap {
+  margin-top: 16px;
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.muted {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.endButton,
+.allButton {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.endButton:hover:not(:disabled),
+.allButton:hover:not(:disabled) {
+  border-color: var(--expense);
+  color: var(--expense);
+  background: color-mix(in oklab, var(--expense) 12%, transparent);
+}
+
+.endButton:disabled,
+.allButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Under ~420px the button no longer fits beside a wrapped device label; give it its own line
+   rather than letting the grid crush the text it belongs to. */
+@media (max-width: 420px) {
+  .row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .endButton {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

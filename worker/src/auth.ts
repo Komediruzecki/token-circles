@@ -15,6 +15,7 @@
 
 import type { MiddlewareHandler } from 'hono';
 import type { AppEnv, Env } from './index';
+import { logAuthEvent } from './authlog';
 
 const encoder = new TextEncoder();
 
@@ -57,6 +58,7 @@ interface JwtPayload {
   iat: number;
   exp: number;
   v: number; // token_version, for revocation
+  sid?: string; // sessions.id — absent on tokens issued before the sessions table existed
 }
 
 async function signJwt(payload: JwtPayload, secret: string): Promise<string> {
@@ -142,26 +144,60 @@ function cookie(name: string, value: string, maxAgeSeconds: number, env: Env): s
 export function clearedSessionCookie(env: Env): string {
   return cookie(SESSION_COOKIE, '', 0, env);
 }
-function readCookie(request: Request, name: string): string | null {
+/**
+ * EVERY value the request carries for this cookie name, in the order the browser sent them.
+ *
+ * Usually one. But cookie identity is (name, Domain, Path), not name alone, so one request can
+ * legitimately carry several `fm_session` values — and does: prod issues its cookie on
+ * `.tokencircles.com`, which domain-matches `api.dev.tokencircles.com`, so a browser that has
+ * signed into both sends prod's cookie AND dev's to the dev API.
+ *
+ * The old version returned the FIRST match and stopped. RFC 6265 §5.4 sorts equal-Path cookies
+ * oldest-first, so the first match is the STALEST one — which made this deterministic rather than
+ * flaky: the dev API kept verifying prod's JWT, failed the token_version check against its own
+ * database, and answered 401 to a user who had just logged in successfully. Signing in again
+ * could not fix it, because the fresh cookie was appended behind the stale one. Only clearing
+ * site data cleared it.
+ */
+function readCookies(request: Request, name: string): string[] {
   const header = request.headers.get('Cookie');
-  if (!header) return null;
+  if (!header) return [];
+  const values: string[] = [];
   for (const part of header.split(';')) {
     const [k, ...v] = part.trim().split('=');
-    if (k === name) return v.join('=');
+    if (k === name) values.push(v.join('='));
   }
-  return null;
+  return values;
 }
 
-/** Sign a JWT for the user (reading their current token_version) and return a Set-Cookie value. */
+/** What the device was, recorded once at sign-in so it can be shown back to the user later. */
+export interface SessionOrigin {
+  userAgent?: string | null;
+  ip?: string | null;
+}
+
+/**
+ * Sign a JWT for the user and return a Set-Cookie value.
+ *
+ * Also records a `sessions` row and puts its id in the token, which is what makes one device
+ * revocable without touching the others.
+ */
 export async function issueSessionCookie(
   userId: number,
   provider: string,
-  env: Env
+  env: Env,
+  origin: SessionOrigin = {}
 ): Promise<string> {
   if (!env.JWT_SECRET) throw new Error('JWT_SECRET not configured');
   const row = await env.DB.prepare('SELECT token_version FROM users WHERE id = ?')
     .bind(userId)
     .first<{ token_version: number }>();
+  const sid = crypto.randomUUID();
+  await env.DB.prepare(
+    'INSERT INTO auth_sessions (id, user_id, provider, user_agent, ip) VALUES (?, ?, ?, ?, ?)'
+  )
+    .bind(sid, userId, provider, origin.userAgent ?? null, origin.ip ?? null)
+    .run();
   const now = Math.floor(Date.now() / 1000);
   const token = await signJwt(
     {
@@ -170,6 +206,7 @@ export async function issueSessionCookie(
       iat: now,
       exp: now + TOKEN_TTL_SECONDS,
       v: row?.token_version ?? 1,
+      sid,
     },
     env.JWT_SECRET
   );
@@ -179,30 +216,123 @@ export async function issueSessionCookie(
 export interface AuthUser {
   userId: number;
   provider: string;
+  /** Which device this is. Absent for a token issued before the sessions table existed. */
+  sessionId?: string;
 }
 
-/** Portable core: verify the session cookie against the JWT secret + D1. No Hono dependency. */
+/**
+ * How stale `last_seen_at` is allowed to get. Writing it on every request would put a D1 write in
+ * front of every authenticated call for a column nobody reads more precisely than "today".
+ */
+const SESSION_TOUCH_SECONDS = 300;
+
+/** Why a session was refused. Logged, never returned to the caller — see authlog.ts. */
+export type AuthFailure =
+  | 'not_configured'
+  | 'no_cookie'
+  | 'bad_token'
+  | 'unknown_user'
+  /** token_version moved past this token — "sign out everywhere". */
+  | 'revoked'
+  /** The token is fine; the device it belongs to was signed out. */
+  | 'session_ended';
+
+export interface AuthResult {
+  user: AuthUser | null;
+  reason?: AuthFailure;
+  /**
+   * How many session cookies the request carried. More than one means duplicates across Domain or
+   * Path scopes — worth surfacing, because it is invisible from the outside and it is what turns
+   * a working login into a permanent 401.
+   */
+  cookieCount: number;
+}
+
+/**
+ * Portable core: verify the session cookie against the JWT secret + D1. No Hono dependency.
+ *
+ * Tries every session cookie on the request rather than only the first. One that fails is not
+ * evidence the request is unauthenticated — it may simply be another deployment's cookie riding
+ * along on a shared parent domain — so the first one that actually verifies wins, whatever order
+ * the browser chose to send them in.
+ */
+export async function authenticateRequest(request: Request, env: Env): Promise<AuthResult> {
+  if (!env.JWT_SECRET) return { user: null, reason: 'not_configured', cookieCount: 0 };
+  const tokens = readCookies(request, SESSION_COOKIE);
+  if (tokens.length === 0) return { user: null, reason: 'no_cookie', cookieCount: 0 };
+
+  // Keep the most informative failure to report. A token that verified and was then revoked says
+  // far more than one that was never ours to begin with.
+  let reason: AuthFailure = 'bad_token';
+  for (const token of tokens) {
+    const payload = await verifyJwt(token, env.JWT_SECRET);
+    if (!payload) continue;
+    // Fail closed: the user must still exist, and a token whose version is below the
+    // stored token_version was revoked (logout / "sign out everywhere").
+    const user = await env.DB.prepare('SELECT token_version FROM users WHERE id = ?')
+      .bind(Number(payload.sub))
+      .first<{ token_version: number }>();
+    if (!user) {
+      if (reason === 'bad_token') reason = 'unknown_user';
+      continue;
+    }
+    if (user.token_version > (payload.v ?? 0)) {
+      reason = 'revoked';
+      continue;
+    }
+    if (payload.sid !== undefined) {
+      const session = await env.DB.prepare(
+        'SELECT id, last_seen_at FROM auth_sessions WHERE id = ? AND user_id = ?'
+      )
+        .bind(payload.sid, Number(payload.sub))
+        .first<{ id: string; last_seen_at: string }>();
+      // The row is gone: this device was signed out, here or from the session list.
+      if (!session) {
+        reason = 'session_ended';
+        continue;
+      }
+      // Conditional, so an idle-ish session costs one write every SESSION_TOUCH_SECONDS rather
+      // than one per request. Fire-and-forget: a failed touch must never fail the request.
+      void env.DB.prepare(
+        `UPDATE auth_sessions SET last_seen_at = datetime('now')
+         WHERE id = ? AND last_seen_at <= datetime('now', ?)`
+      )
+        .bind(payload.sid, `-${SESSION_TOUCH_SECONDS} seconds`)
+        .run()
+        .catch(() => undefined);
+    }
+    return {
+      user: {
+        userId: Number(payload.sub),
+        provider: payload.provider,
+        ...(payload.sid !== undefined ? { sessionId: payload.sid } : {}),
+      },
+      cookieCount: tokens.length,
+    };
+  }
+  return { user: null, reason, cookieCount: tokens.length };
+}
+
 export async function getAuthFromRequest(request: Request, env: Env): Promise<AuthUser | null> {
-  if (!env.JWT_SECRET) return null;
-  const token = readCookie(request, SESSION_COOKIE);
-  if (!token) return null;
-  const payload = await verifyJwt(token, env.JWT_SECRET);
-  if (!payload) return null;
-  // Fail closed: the user must still exist, and a token whose version is below the
-  // stored token_version was revoked (logout / "sign out everywhere").
-  const user = await env.DB.prepare('SELECT token_version FROM users WHERE id = ?')
-    .bind(Number(payload.sub))
-    .first<{ token_version: number }>();
-  if (!user) return null;
-  if (user.token_version > (payload.v ?? 0)) return null;
-  return { userId: Number(payload.sub), provider: payload.provider };
+  return (await authenticateRequest(request, env)).user;
 }
 
 /** Hono middleware: 401 unless authenticated; exposes the user id via c.get('userId'). */
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const auth = await getAuthFromRequest(c.req.raw, c.env);
-  if (!auth) return c.json({ error: 'Unauthorized' }, 401);
-  c.set('userId', auth.userId);
+  const auth = await authenticateRequest(c.req.raw, c.env);
+  if (!auth.user) {
+    // A 401 is the one 4xx that can mean the SERVER is wrong, so unlike the other 4xx it is
+    // recorded — with the reason, and with how many session cookies came in.
+    logAuthEvent(c, {
+      event: 'session',
+      outcome: 'denied',
+      reason: auth.reason,
+      cookieCount: auth.cookieCount,
+    });
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  c.set('userId', auth.user.userId);
+  if (auth.user.sessionId !== undefined) c.set('sessionId', auth.user.sessionId);
   await next();
 };
 

@@ -70,7 +70,7 @@ export interface Env {
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
-export type AppEnv = { Bindings: Env; Variables: { userId: number } };
+export type AppEnv = { Bindings: Env; Variables: { userId: number; sessionId?: string } };
 
 const app = new Hono<AppEnv>();
 

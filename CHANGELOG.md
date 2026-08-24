@@ -10,6 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **You can see where you are signed in, and sign out of one device.** The account had a single session control, and it revoked everything: signing out on a laptop silently signed you out on your phone and tablet too, mid-use. Settings now lists every signed-in device — what it is, roughly where from, and when it was last active, with the one you are reading on marked — and each has its own "Sign out" that touches only that device. "Sign out on all devices" is still there as the separate, deliberate thing it is for: a device you no longer have, or a session you think someone else has.
 - **Your plan is marked as yours.** The plan grid gave its only coloured border and its only badge to the plan we recommend, so a subscriber could not tell at a glance which one they were actually on — and if the plan they were paying for happened to be the recommended one, the only highlight on the page said "Recommended" rather than "Your plan". The card you are on now carries its own border and badge, on Free as well as on a paid plan.
 - **A plain way to cancel.** "Manage or cancel your subscription" now sits directly under the line that tells you which plan you are on, instead of only as a button on one card among several. The button on the card says what it opens: change plan, update your card, or cancel.
 - **The app updates in one clean step, and the installed app opens offline.** The old service worker took over an open page the moment a deploy landed, which paired the new build's file list with the page's already-loaded HTML — the multi-reload transitions, and the occasional blank screen that only a hard refresh cleared. The new one keeps you on one complete version until you move, then swaps both halves at once. It also keeps the last version it saw, so the installed app opens without a connection.
@@ -21,6 +22,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Signing in with a stale cookie left over from another environment.** A browser that had used both the live site and the preview site ended up holding two session cookies with the same name; the server read whichever the browser happened to list first, which was reliably the older, expired one — so a correct password produced a login screen again, on that browser only, and clearing site data was the only way out. Every cookie sent is now tried, and the one that actually verifies wins.
+- **"Too many attempts" after a handful of ordinary sign-ins.** The rate limit counted every attempt, including the successful ones, so signing in and out across a few devices spent the budget meant for someone guessing at your password. Only failures count now, a success clears the count, and the message says how long the wait actually is instead of "please wait a bit".
 - **Bank import tells you which file is missing an account.** Pressing "Process & continue" without picking a target account put one line at the top of the page — on a phone, above a fold you are nowhere near by then, so the app looked like it simply did nothing. The file that needs an account now goes red, says "Choose an account for this statement" right under the picker, and scrolls into view. The summary at the top stays.
 
 ## [5.9.3] — 2026-08-23

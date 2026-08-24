@@ -35,6 +35,7 @@ import { canOfferInstall, InstallAppButton } from '../components/InstallAppButto
 import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
 import { ResendVerification } from '../components/ResendVerification'
+import SignedInDevices from '../components/SignedInDevices'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
@@ -1696,6 +1697,9 @@ export default function Settings() {
                     'Not signed in.'
                   )}
                 </p>
+                <Show when={accountInfo()?.email || accountInfo()?.username}>
+                  <SignedInDevices />
+                </Show>
                 <div class={styles.formGroup} style="margin-top: 16px;">
                   <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
