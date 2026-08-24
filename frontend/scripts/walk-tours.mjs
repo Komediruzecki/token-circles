@@ -9,15 +9,15 @@
 // real browser walk catches that, which is what this script does.
 //
 // Usage:
-//   # 1. legacy backend with seeded demo data (the tours need real rows to point at)
-//   NODE_ENV=test node backend/index.js &
-//   curl -c /tmp/c.txt -X POST localhost:3847/api/auth/login -H 'Content-Type: application/json' \
-//        -H 'X-Skip-RateLimit: true' -d '{"username":"person","password":"something-like-this"}'
-//   curl -b /tmp/c.txt -X POST localhost:3847/api/profiles/reseed-demo -H 'X-Profile-ID: 1'
-//   # 2. dev server pointed at that backend
-//   cd frontend && API_PROXY_TARGET=http://127.0.0.1:3847 npm run dev -- --port 3800
-//   # 3. walk
-//   node scripts/walk-tours.mjs
+//   # Everything the e2e suite needs, which is everything this needs: the Worker on :8787
+//   # against a local D1, the dev server proxying /api at it, and the seeded fixture account.
+//   cd frontend && pnpm exec playwright test --project=setup
+//   # ...then, with those servers still up:
+//   pnpm run test:tours
+//
+// The setup project boots both servers, seeds the fixture profile and writes the signed-in
+// session to tests/.auth/state.json, which this script loads. It does NOT sign in itself: the
+// login route is rate-limited, and one shared session is the whole reason global.setup exists.
 //
 // Env vars:
 //   BASE_URL   app URL (default http://127.0.0.1:3800)
@@ -28,10 +28,12 @@
 // Exits 0 when every step of every tour spotlights a visible element; exits 1 and
 // prints MISS lines otherwise.
 // ============================================================
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 
-const BASE = process.env.BASE_URL || 'http://127.0.0.1:3800'
+const BASE = process.env.BASE_URL || `http://127.0.0.1:${process.env.E2E_PORT || 3800}`
+// Written by tests/global.setup.ts; the same path tests/e2e-constants.ts names.
+const STATE_PATH = 'tests/.auth/state.json'
 const MOBILE = process.env.MOBILE === '1'
 const ONLY = process.env.TOUR || ''
 
@@ -59,28 +61,30 @@ try {
   browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
 }
 
-const ctx = await browser.newContext({
-  viewport: MOBILE ? { width: 390, height: 844 } : { width: 1280, height: 800 },
-  hasTouch: MOBILE,
-})
-
-// Authenticate the same way the e2e helpers do, so the walk runs against the seeded
-// demo profile rather than an empty local DB — tours point at rows, not empty states.
-const loginRes = await ctx.request.post(`${BASE}/api/auth/login`, {
-  data: { username: 'person', password: 'something-like-this' },
-  headers: { 'x-skip-ratelimit': 'true' },
-})
-if (!loginRes.ok()) {
+/*
+ * The signed-in session, exactly as the e2e suite uses it.
+ *
+ * This script used to sign in for itself, against the Express backend on :3847 with a
+ * username and password. That backend is gone — the API is the Worker now, its login takes an
+ * email, and the fixture account lives in a local D1 that has to be seeded first. Rather than
+ * grow a second copy of all that, the walk reuses what `global.setup.ts` already produced.
+ */
+if (!existsSync(STATE_PATH)) {
   console.error(
-    `FATAL: login returned ${loginRes.status()}. Is the backend up on 3847 and the dev ` +
-      `server proxying to it (API_PROXY_TARGET)?`
+    `FATAL: no saved session at ${STATE_PATH}.\n` +
+      `Run the setup project first — it boots the Worker and the dev server, seeds the fixture ` +
+      `profile and writes the session:\n\n  pnpm exec playwright test --project=setup\n`
   )
   process.exit(1)
 }
+
+const ctx = await browser.newContext({
+  viewport: MOBILE ? { width: 390, height: 844 } : { width: 1280, height: 800 },
+  hasTouch: MOBILE,
+  storageState: STATE_PATH,
+})
+
 await ctx.addInitScript(() => {
-  localStorage.setItem('currentProfileId', '1')
-  localStorage.setItem('darkMode', 'false')
-  localStorage.setItem('finance_storage_mode', 'self-hosted')
   // Start every tour from a clean slate so "Done" badges never change the modal layout.
   localStorage.removeItem('finance_spotlight_tours')
 })
@@ -102,15 +106,47 @@ async function openTourModal() {
   // visibility.
   const btn = page.locator('[data-test-id="whats-new-btn"]')
   const toggle = page.locator('[aria-label="Toggle sidebar"]').first()
-  const inViewport = async () => {
+
+  /*
+   * Is the drawer open? Horizontally only.
+   *
+   * A closed drawer parks the whole nav at a negative x (-240), so x is what actually says
+   * open or shut. Vertical position says nothing: the nav scrolls, and "What's New" is near
+   * the bottom of it — on a phone it sits at y ≈ 1182 in an 844-tall viewport, open or not.
+   * An earlier version required the button to be inside the viewport vertically too, which no
+   * amount of toggling could ever make true; it walked four tours and then hung on the fifth,
+   * where the nav happened to be scrolled, blaming the fifth tour for it. `scrollIntoViewIfNeeded`
+   * below is what handles the vertical half, and it needs the drawer open first.
+   */
+  const drawerOpen = async () => {
     const box = await btn.boundingBox().catch(() => null)
     if (!box) return false
-    const vp = page.viewportSize()
-    return box.x >= 0 && box.y >= 0 && box.x < vp.width && box.y < vp.height
+    return box.x >= 0 && box.x < page.viewportSize().width
   }
-  if (!(await inViewport())) {
+  /*
+   * Poll for the drawer instead of clicking once and sleeping.
+   *
+   * A single click with a fixed 400ms wait fails whenever the drawer is mid-animation or the
+   * click lands while the page is still settling after the previous tour — and because the
+   * click's error was swallowed, the failure surfaced 8 seconds later as an unactionable button,
+   * naming the wrong element. It walked four tours on a phone and then died on the fifth, every
+   * time, with nothing wrong with the fifth.
+   *
+   * Each attempt clicks and then waits for the button to actually reach the viewport, which is
+   * the condition that matters. Clicking a toggle twice is harmless: if the first one did open
+   * the drawer, the loop exits before the second.
+   */
+  for (let attempt = 0; attempt < 4 && !(await drawerOpen()); attempt++) {
     await toggle.click({ timeout: 5000 }).catch(() => {})
-    await page.waitForTimeout(400)
+    for (let waited = 0; waited < 1500 && !(await drawerOpen()); waited += 100) {
+      await page.waitForTimeout(100)
+    }
+  }
+  if (!(await drawerOpen())) {
+    throw new Error(
+      'the sidebar drawer never opened after 4 attempts at the toggle. Every tour is started ' +
+        'from it, so nothing can be walked.'
+    )
   }
   await btn.scrollIntoViewIfNeeded().catch(() => {})
   await btn.click({ timeout: 8000 })

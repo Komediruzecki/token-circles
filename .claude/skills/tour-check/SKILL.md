@@ -21,24 +21,32 @@ refactored, so the only trustworthy check is walking every step in a real browse
 
 ## Steps
 
-1. **Boot the seeded demo stack.** The tours point at real rows; walking an empty database
-   produces empty states and false MISSes.
+1. **Boot the seeded stack.** The tours point at real rows; walking an empty database produces
+   empty states and false MISSes.
+
+   This is the same stack the e2e suite uses — the Worker on :8787 against a local D1, and the
+   dev server proxying `/api` at it. `global.setup.ts` applies the migrations, registers the
+   fixture account, seeds its profile and saves the signed-in session to
+   `tests/.auth/state.json`, which the walker loads. It does not sign in for itself: the login
+   route is rate-limited, and one shared session is the whole point of `global.setup`.
+
+   Playwright will start and then stop both servers for you, so start them yourself first and
+   let the setup project reuse them (`reuseExistingServer` is on outside CI):
 
    ```sh
-   cd <repo root>
-   mkdir -p db assets
-   NODE_ENV=test node backend/index.js &                 # legacy API on :3847
-   curl -fsS --retry 10 --retry-connrefused -c /tmp/c.txt \
-     -X POST http://127.0.0.1:3847/api/auth/login \
-     -H 'Content-Type: application/json' -H 'X-Skip-RateLimit: true' \
-     -d '{"username":"person","password":"something-like-this"}'
-   curl -fsS -b /tmp/c.txt -X POST http://127.0.0.1:3847/api/profiles/reseed-demo \
-     -H 'X-Skip-RateLimit: true' -H 'X-Profile-ID: 1'
-   cd frontend && API_PROXY_TARGET=http://127.0.0.1:3847 npm run dev -- --port 3800 --strictPort &
+   # terminal 1
+   cd worker && pnpm run d1:migrate:local && pnpm exec wrangler dev --port 8787
+   # terminal 2
+   cd frontend && API_PROXY_TARGET=http://127.0.0.1:8787 npm run dev -- --port 3800 --strictPort
+   # terminal 3 — seeds and writes tests/.auth/state.json
+   cd frontend && pnpm exec playwright test --project=setup
    ```
 
-   `API_PROXY_TARGET` matters: without it the dev server proxies `/api` to the Cloudflare
-   worker (:8787) instead of the seeded demo backend, and login fails.
+   `API_PROXY_TARGET` matters: without it the dev server proxies `/api` at whatever the default
+   is rather than the Worker you just started.
+
+   A fresh worktree also needs `worker/.dev.vars` (gitignored) or the setup fails with
+   `login failed: 500 {"error":"Auth not configured"}`.
 
 2. **Walk.**
 
@@ -51,6 +59,9 @@ refactored, so the only trustworthy check is walking every step in a real browse
 
    Env: `BASE_URL` (default `http://127.0.0.1:3800`), `CHROMIUM` (sandboxes usually need
    `CHROMIUM=/opt/pw-browsers/chromium`).
+
+   The mobile walk is several minutes slower than desktop — each tour reopens the sidebar
+   drawer. It is not stuck.
 
 3. **Read the output.** Every step prints `ok` or `MISS` with its title and the spotlight's
    pixel size. A `MISS` means either the app raised its own "target missing" banner, or the
