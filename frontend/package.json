@@ -20,7 +20,7 @@
     "deploy:dev": "pnpm run build:dev && npx wrangler deploy --env dev",
     "deploy:prod": "pnpm run build && npx wrangler deploy --env prod",
     "tsc": "npx tsc",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json && tsc --noEmit -p tests-shots/tsconfig.json",
     "vite": "npx vite",
     "preview": "vite preview",
     "lint": "eslint",
@@ -37,7 +37,9 @@
     "test:unit": "vitest run",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "analyze-bundle": "VITE_ANALYZE_BUNDLE=true vite build"
+    "analyze-bundle": "VITE_ANALYZE_BUNDLE=true vite build",
+    "pwa:icons": "node scripts/gen-pwa-icons.mjs",
+    "pwa:shots": "playwright test --config=playwright.shots.config.ts"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.2.9",

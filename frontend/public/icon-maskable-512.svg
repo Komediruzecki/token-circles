@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The maskable variant of icon-512.svg. Two deliberate differences, both required by the
+       spec (https://w3c.github.io/manifest/#dfn-maskable):
+       1. The background is a full-bleed rect, not a rounded one. The platform supplies the
+          shape; baking our own corners in produces a rounded square inside a circle.
+       2. The artwork is scaled to 80% and centred, so all of it sits inside the safe zone —
+          the circle of diameter 0.8 x 512 that every mask is guaranteed to keep. In the
+          unscaled icon the orange marker reaches 207px from the centre, just past the 204.8px
+          safe radius, so a circular mask would clip it. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93b4ff"/>
+      <stop offset="1" stop-color="#3b6fe0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#93b4ff" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#3b6fe0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="#0a0e1c"/>
+  <g transform="translate(256 256) scale(0.8) translate(-256 -256)">
+    <circle cx="256" cy="256" r="150" fill="url(#glow)"/>
+    <circle cx="256" cy="256" r="182" fill="none" stroke="url(#g)" stroke-width="10" opacity="0.4"/>
+    <circle cx="256" cy="256" r="124" fill="none" stroke="url(#g)" stroke-width="14" opacity="0.78" stroke-dasharray="585 140" transform="rotate(-24 256 256)"/>
+    <circle cx="256" cy="256" r="52" fill="url(#g)"/>
+    <circle cx="384" cy="122" r="22" fill="#f0a860"/>
+  </g>
+</svg>

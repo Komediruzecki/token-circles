@@ -3,6 +3,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
+import { pwaManifest } from './src/pwaManifest'
 import solidPlugin from 'vite-plugin-solid'
 import { devtoolsPlugin as devtools } from 'solid-devtools/vite'
 import fs from 'fs'
@@ -147,47 +148,7 @@ export default defineConfig(({ command, mode }) => {
               // above has settled — see the race that script's comment describes.
               injectRegister: null,
               includeAssets: ['icon-192.png', 'icon-512.png', 'icon-192.svg', 'icon-512.svg'],
-              manifest: {
-                // `id` is what the browser uses to decide whether an install already exists.
-                // Without it the id is derived from start_url, so changing start_url later would
-                // read as a different app and offer a second install alongside the first.
-                id: '/',
-                name: 'Token Circles',
-                short_name: 'Token Circles',
-                description: 'Your money, in clear orbit',
-                start_url: '/',
-                scope: '/',
-                display: 'standalone',
-                // Opening a link while installed focuses the running window instead of spawning
-                // another one — the behaviour people expect from an app rather than a tab.
-                launch_handler: { client_mode: 'navigate-existing' },
-                orientation: 'any',
-                categories: ['finance', 'productivity'],
-                background_color: '#0a0e1c',
-                theme_color: '#0a0e1c',
-                icons: [
-                  {
-                    src: 'icon-192.png',
-                    sizes: '192x192',
-                    type: 'image/png',
-                  },
-                  {
-                    src: 'icon-512.png',
-                    sizes: '512x512',
-                    type: 'image/png',
-                  },
-                  {
-                    src: 'icon-192.svg',
-                    sizes: '192x192',
-                    type: 'image/svg+xml',
-                  },
-                  {
-                    src: 'icon-512.svg',
-                    sizes: '512x512',
-                    type: 'image/svg+xml',
-                  },
-                ],
-              },
+              manifest: pwaManifest,
               injectManifest: {
                 // Classic script rather than an ES module worker, so Firefox and older WebKit can
                 // register it without `{ type: 'module' }`.

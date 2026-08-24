@@ -1,0 +1,11 @@
+{
+  // Same reasoning as tests/tsconfig.json: this directory runs in Node (it writes PNGs into
+  // public/), so it gets node types the app deliberately does not. Separate from tests/ because
+  // the two have different configs and different entry points, and ESLint's project service
+  // resolves a file's config by walking up from its directory.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": ["**/*", "../playwright.shots.config.ts", "../css-modules.d.ts"]
+}

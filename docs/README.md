@@ -21,6 +21,7 @@ under `backend/`, and the Docker files that describe it), and the rules that are
 - [Self-Hosting Guide](self-hosting.md) — _retired_ — Docker, reverse proxy, environment variables for the Express server
 - [Docker Guide](docker.md) — _retired_ — container setup for the Express server
 - [Deploy-Update Pipeline](deploy-update-pipeline.md) — How open tabs cross a release: service worker, version.json, reload bounds, manual verification
+- [PWA Install Assets](pwa-install-assets.md) — The maskable icon and the install-dialog screenshots: what they are, why they fail silently, and how to regenerate them
 - [Docker Compose](../docker-compose.yml) — _retired_ — one-command deployment of the Express server
 - [Dockerfile](../Dockerfile) — _retired_ — container image for the Express server
 
