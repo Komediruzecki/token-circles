@@ -24,10 +24,18 @@ const componentSources = import.meta.glob(
   }
 ) as Record<string, string>
 
-// All `data-tour="key"` anchors actually present in the component tree.
+/*
+ * All tour anchors declared anywhere in the component tree.
+ *
+ * Two spellings, because an anchor is not always written as a literal attribute. A shared
+ * component that several pages mount can own its own wrapper and take the key as a prop —
+ * `<PeriodBar tourAnchor="budgets-month" />` renders `data-tour="budgets-month"`, and the page
+ * that used to wrap it in a div purely to carry the attribute no longer needs to. Both forms
+ * declare the key at the call site, which is the thing this file is checking for.
+ */
 const domKeys = new Set<string>()
 for (const src of Object.values(componentSources)) {
-  for (const m of src.matchAll(/data-tour="([a-z0-9-]+)"/g)) domKeys.add(m[1])
+  for (const m of src.matchAll(/(?:data-tour|tourAnchor)="([a-z0-9-]+)"/g)) domKeys.add(m[1]!)
 }
 
 // Valid route names, parsed straight from the router's `pages` map.

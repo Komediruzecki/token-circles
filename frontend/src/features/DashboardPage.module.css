@@ -27,11 +27,11 @@
   flex-wrap: wrap;
 }
 
-.header-period-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+/* The period bar's own slot. It used to live inside .page-header as a flex row; it is now a
+   sibling below it, because `position: sticky` can only travel inside its parent's box and the
+   header is exactly as tall as its contents. */
+.period-bar-slot {
+  margin-bottom: 16px;
 }
 
 .page-title h2 {
@@ -61,8 +61,8 @@
     gap: 12px;
   }
 
-  .header-period-row {
-    gap: 8px;
+  .period-bar-slot {
+    margin-bottom: 12px;
   }
 }
 

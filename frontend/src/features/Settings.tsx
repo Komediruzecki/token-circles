@@ -51,6 +51,7 @@ import { setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
 import { getStorageAdapter, migrateData, setStorageMode } from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
+import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { toYYYYMM } from '../utils/period'
 import styles from './SettingsPage.module.css'
@@ -1020,7 +1021,11 @@ export default function Settings() {
                 </div>
               </Show>
               <div class={styles.card} data-tour="settings-theme">
-                <CardHead icon={<IconSun />} title="Appearance" desc="Theme for the whole app." />
+                <CardHead
+                  icon={<IconSun />}
+                  title="Appearance"
+                  desc="Theme and layout for the whole app."
+                />
                 <div class={styles.row}>
                   <span class={styles.rowLabel}>Theme</span>
                   <span class={styles.segmented}>
@@ -1037,6 +1042,21 @@ export default function Settings() {
                     />
                     <span>Dark</span>
                   </span>
+                </div>
+                <div class={styles.row}>
+                  <span class={styles.rowLabel}>
+                    Keep the period bar in view
+                    <small class={styles.rowHint}>
+                      Pins the month control to the top while a page scrolls, so you can change
+                      period without scrolling back up.
+                    </small>
+                  </span>
+                  <OrbitalToggle
+                    id="setting-sticky-period"
+                    checked={stickyPeriodBar}
+                    onChange={setStickyPeriodBar}
+                    aria-label="Keep the period bar in view"
+                  />
                 </div>
               </div>
 

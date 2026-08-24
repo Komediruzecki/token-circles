@@ -183,6 +183,24 @@
   font-size: 14px;
 }
 
+/* A second line under a row's label, for a setting whose name does not explain what it does.
+   Block, so the toggle beside it stays vertically centred against both lines rather than
+   against the first one. */
+.row-hint {
+  display: block;
+  max-width: 46ch;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+  .row-hint {
+    max-width: none;
+  }
+}
+
 .segmented {
   display: inline-flex;
   align-items: center;

@@ -564,10 +564,9 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
-        <div class={styles.headerPeriodRow} data-tour="dashboard-period">
-          <PeriodBar />
-        </div>
       </div>
+
+      <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
 
       {initialLoad() && !metrics() ? (
         // Mirrors the real first paint: a metrics row above a chart. The header and period bar

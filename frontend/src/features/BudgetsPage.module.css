@@ -1245,3 +1245,9 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* The period bar's own slot. It used to be an inline-styled wrapper div per page; the bar now
+   renders its own sticky host, so all a page owes it is the gap underneath. */
+.period-bar-slot {
+  margin-bottom: 16px;
+}

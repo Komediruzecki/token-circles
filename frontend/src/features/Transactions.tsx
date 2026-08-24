@@ -904,9 +904,7 @@ export default function Transactions() {
       </div>
 
       {/* Global period navigator */}
-      <div style={{ 'margin-bottom': '12px' }}>
-        <PeriodBar />
-      </div>
+      <PeriodBar class={styles.periodBarSlot} />
 
       {/* Filter Bar — everything in one row */}
       <FilterBar

@@ -542,13 +542,11 @@ export default function Budgets() {
       />
 
       {/* Global period navigator */}
-      <div
-        data-test-id="month-selector"
-        data-tour="budgets-month"
-        style={{ 'margin-bottom': '16px' }}
-      >
-        <PeriodBar />
-      </div>
+      <PeriodBar
+        hostTestId="month-selector"
+        tourAnchor="budgets-month"
+        class={styles.periodBarSlot}
+      />
 
       {/* Budget Summary Cards */}
       <div

@@ -3,9 +3,20 @@
  * global app layout: sidebar, main content, grid systems
  */
 
+/*
+ * clip, not hidden — same job, one crucial difference.
+ *
+ * Both stop the page scrolling sideways. But `overflow-x: hidden` makes the element a SCROLL
+ * CONTAINER, and a `position: sticky` descendant then binds to that container's scrollport
+ * instead of the viewport. On `body`, that scrollport never scrolls (the viewport does), so
+ * sticky silently did nothing anywhere in the app — the element just rode the page off the top.
+ *
+ * `clip` clips without creating a scroll container, so sticky binds to the viewport and works.
+ * `.main` below already relies on exactly this; these two were simply missed.
+ */
 :global(html),
 :global(body) {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Buttons */
@@ -322,7 +333,9 @@
     /* Clear the fixed hamburger toggle (top: ~12px + 36px tall) so page titles
        are never rendered underneath it. */
     padding: calc(56px + env(safe-area-inset-top, 0px)) 16px 16px;
-    overflow-x: hidden;
+    /* clip, matching the base rule — `hidden` here would make .main a scroll container on a phone
+       and unpin every sticky child, which is the whole reason the base rule says clip. */
+    overflow-x: clip;
   }
 
   .page-header {
@@ -346,7 +359,7 @@
 @media (max-width: 480px) {
   .main {
     padding: calc(56px + env(safe-area-inset-top, 0px)) 10px 12px;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   .page-header h2 {
