@@ -15,20 +15,18 @@
   "homepage": "https://github.com/Komediruzecki/finance-manager#readme",
   "workspaces": [
     "frontend",
-    "backend",
     "packages/*"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "dev": "pnpm -C frontend run dev",
-    "start": "pnpm -C backend run start",
     "build": "pnpm -C frontend run build",
     "lint": "pnpm -C frontend run lint",
-    "lint:backend": "pnpm -C backend run lint",
     "typecheck": "pnpm -C packages/pwa-kit run typecheck && pnpm -C frontend run typecheck",
     "format": "pnpm -C frontend run format",
     "test": "pnpm -C frontend run test",
-    "test:backend": "pnpm -C backend run test",
+    "test:worker": "pnpm -C worker run test",
+    "test:e2e": "pnpm -C frontend run test:e2e",
     "dev:worker": "pnpm -C worker run dev",
     "worker:deploy:dev": "pnpm -C worker run deploy:dev",
     "worker:deploy:prod": "pnpm -C worker run deploy:prod",
@@ -43,10 +41,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "better-sqlite3",
-      "bcrypt",
-      "puppeteer",
-      "sqlite3"
+      "puppeteer"
     ]
   }
 }

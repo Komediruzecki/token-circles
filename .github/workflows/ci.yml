@@ -7,11 +7,8 @@ on:
     branches: [main]
 
 # Three gates, one per thing that actually ships: the SolidJS frontend, the Cloudflare Worker,
-# and lint. The legacy Express/SQLite backend under backend/ is NOT tested here — it is not part
-# of either shipping runtime (browser-only mode is IndexedDB, cloud mode is the Worker), and its
-# Jest suite asserted wall-clock timings on shared runners, which turned main red for no reason.
-# It does still BOOT in e2e.yml, where it is the API the Playwright suite drives the real
-# frontend against; see the note there before removing it.
+# and lint. Those two runtimes are the whole product — browser-only mode is IndexedDB, cloud mode
+# is the Worker. e2e.yml drives the built frontend against a locally-run Worker.
 
 jobs:
   test:

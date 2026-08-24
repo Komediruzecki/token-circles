@@ -19,39 +19,35 @@ to the browser.
 **So: a server-side change means `worker/`.** A change to how data is stored, queried, migrated or
 authorised is a change under `worker/src/` plus a migration under `worker/migrations/`.
 
-## What is not the backend
+## What used to be
 
-`backend/` is an Express + SQLite server, retired. Nothing deploys it, `ci.yml` does not test it,
-and no user runs it. It still boots in `e2e.yml` because 35 Playwright specs need _something_ to
-answer `/api`, and that is the only reason it is still in the tree.
+There was a Node/Express + SQLite server under `backend/`, from before the Worker. It is deleted.
+If you find something that still refers to it — a doc, a script, a stale comment — that is a bug in
+the reference, not a runtime you should go looking for.
 
-Also retired, and describing that same server rather than anything that runs today:
+Two leftovers are still in the tree and are worth reading with that in mind:
 
-- `Dockerfile`, `docker-compose.yml`, `.dockerignore`
-- `docs/docker.md`, and the Docker half of `docs/self-hosting.md`
-- `db/` (a `database.sqlite` that is 0 bytes)
-- `test/backend/`, `backend/test/`
-- `docs/specs/backend/` — written against the Express routes. Useful as a description of _what the
-  API does_, misleading as a description of _how it is implemented_.
+- `docs/self-hosting.md` and `docs/docker.md` describe deploying that server with Docker. Kept for
+  anyone running an old image, marked retired at the top. Self-hosting today means running your own
+  copy of the Worker (`wrangler deploy`) against your own D1 and R2. It does not mean Docker.
+- `docs/specs/backend/` and `test/e2e/specs/` were written against the Express routes. Read them for
+  _what the API does_ — that contract carried over — not for how it is implemented. The
+  implementation is `worker/src/routes/`.
 
-Do not fix bugs there. Do not port a Worker change into it "for consistency". If a change seems to
-need it, it does not — say so instead.
-
-Self-hosting today means running your own copy of the Worker (`wrangler deploy`) against your own
-D1 and R2. It does not mean Docker.
+`0001_init.sql` also still creates tables only that server used. They are empty and unread. That is
+not a reason to name a new table around them, but see the schema rule below before reusing a name.
 
 ## Where things live
 
 ```
 frontend/          SolidJS app. Components, features, core/ (storage, api, stores).
-frontend/tests/    Playwright e2e (35 spec files, drive the real built app).
+frontend/tests/    Playwright e2e — the real built app against a locally-run Worker.
 worker/src/        Hono routes, auth, billing, mail. This is the API.
 worker/migrations/ D1 schema. Numbered, applied in order, never edited once merged.
 worker/test/       vitest + @cloudflare/vitest-pool-workers (real Worker isolate, real D1).
 shared/            Pure TypeScript used by BOTH runtimes. Import it, don't fork it.
 packages/pwa-kit/  Extractable service-worker + install-prompt kit.
 docs/              Specs, plans, audits. See docs/README.md for the index.
-backend/           Retired. See above.
 ```
 
 ## Rules that are not negotiable
@@ -59,9 +55,10 @@ backend/           Retired. See above.
 **Migrations are append-only.** A merged migration has run on dev and prod; editing it changes
 nothing on either and desynchronises anyone who applies it fresh. Add a new numbered file.
 
-**Check the schema before naming a table.** `0001_init.sql` created tables for the Express server
-that nothing reads. `CREATE TABLE IF NOT EXISTS <name>` against an existing table of that name is
-a silent no-op, and the _next_ statement is what fails.
+**Check the schema before naming a table.** `0001_init.sql` created tables for the retired Express
+server that nothing reads. `CREATE TABLE IF NOT EXISTS <name>` against an existing table of that
+name is a silent no-op, and the _next_ statement is what fails — `auth_sessions` is named that way
+because `sessions` was already taken by one of them.
 
 **Deploys.** `push main` deploys to **dev**. Only a `v*` tag deploys to **prod** — annotated tags
 only (`git tag -a`). Migrations apply before each deploy.
@@ -84,10 +81,16 @@ pnpm dev:worker               # the Worker on :8787 (wrangler dev, local D1)
 pnpm -C worker run d1:migrate:local
 
 pnpm test                     # frontend vitest
-pnpm -C worker run test       # worker vitest
+pnpm test:worker              # worker vitest
+pnpm test:e2e                 # playwright — starts both servers and seeds the fixture itself
 pnpm typecheck                # both
 pnpm lint                     # frontend eslint (worker has none)
 ```
 
 With `TURNSTILE_SECRET` unset and `APP_ENV=development`, the captcha gate is off locally — that is
 deliberate and only applies in development.
+
+`pnpm dev:worker` and `pnpm test:e2e` both need a `JWT_SECRET` in `worker/.dev.vars` (any string —
+it signs sessions for a throwaway database under `worker/.wrangler`). The e2e suite does the rest
+itself: `frontend/tests/global.setup.ts` registers the fixture account, seeds it from
+`frontend/tests/e2e-seed.ts` — that file is the test data — and saves the signed-in state.

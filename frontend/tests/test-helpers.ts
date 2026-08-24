@@ -3,16 +3,9 @@
  */
 
 import { expect } from '@playwright/test'
+import { E2E_BASE, E2E_PROFILE } from './e2e-constants'
 
-// Keep in sync with playwright.config.ts: E2E_PORT overrides the default 3800
-// so the suite can run while another dev server holds the standard port.
-// (globalThis dance: the frontend tsconfig has no node types — vite/client only.)
-const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
-const E2E_PORT = Number(env?.E2E_PORT || 3800)
-export const E2E_BASE = `http://127.0.0.1:${E2E_PORT}`
-
-// Track whether the context has been authenticated already
-const contextAuthSetup = new WeakMap<any, boolean>()
+export { E2E_BASE }
 
 /**
  * Navigate to a hash route in serverless/demo mode and wait until the app shell is ready.
@@ -55,43 +48,16 @@ export async function gotoServerlessZeroState(page: any, route: string, readyTes
 }
 
 /**
- * Login to the application
- * Creates a real backend session via API login, then sets localStorage.
- * Skips the backend rate limiter for tests and reuses auth state.
+ * Open the app already signed in.
+ *
+ * There is no request here any more. `global.setup.ts` signs in once and Playwright hands every
+ * context that session — cookie and the localStorage keys that put the app in server mode — via
+ * `storageState`. Each context signing in for itself is what spent the login rate limit on a
+ * machine with enough cores to run a context per CPU.
  */
 export async function login(page: any) {
-  const ctx = page.context()
-  try {
-    // Skip re-login if this context already has authentication + localStorage set up
-    if (contextAuthSetup.has(ctx) && contextAuthSetup.get(ctx)) {
-      await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-      await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
-      return
-    }
-
-    // Authenticate with backend, skipping rate limiter (header is recognized by test/dev backend)
-    const loginRes = await ctx.request.post(`${E2E_BASE}/api/auth/login`, {
-      // eslint-disable-next-line sonarjs/no-hardcoded-passwords
-      data: { username: 'person', password: 'something-like-this' },
-      headers: { 'x-skip-ratelimit': 'true' },
-    })
-    if (!loginRes.ok()) {
-      console.error('Login failed:', loginRes.status(), await loginRes.text())
-      throw new Error(`Login returned ${loginRes.status()}`)
-    }
-    // addInitScript must be called BEFORE navigation so localStorage is set when app initializes
-    await ctx.addInitScript(() => {
-      localStorage.setItem('currentProfileId', '1')
-      localStorage.setItem('darkMode', 'false')
-      localStorage.setItem('finance_storage_mode', 'self-hosted')
-    })
-    contextAuthSetup.set(ctx, true)
-    await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
-  } catch (error) {
-    console.error('Login failed:', error)
-    throw error
-  }
+  await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
 }
 
 /**
@@ -119,4 +85,21 @@ export function getByTestId(page: any, testId: string, options: any = {}) {
  */
 export function getByTestIdMulti(page: any, testId: string, options: any = {}) {
   return page.locator(`[data-test-id="${testId}"]`, options)
+}
+
+/**
+ * The id of the seeded fixture profile.
+ *
+ * Specs used to hardcode `X-Profile-Id: '1'`, which held only because the Express server's seeded
+ * database always produced it. The profile is created through the API now, so its id is whatever
+ * the database hands out — and specs that create their own leave others behind it in the list.
+ */
+export async function firstProfileId(ctx: any): Promise<number> {
+  const res = await ctx.request.get(`${E2E_BASE}/api/profiles`)
+  expect(res.ok(), `could not read profiles: ${res.status()}`).toBeTruthy()
+  const body = await res.json()
+  const profiles = Array.isArray(body) ? body : body.profiles
+  const fixture = profiles?.find((p: { name: string }) => p.name === E2E_PROFILE)
+  expect(fixture, `no "${E2E_PROFILE}" profile — did the setup project run?`).toBeTruthy()
+  return fixture.id as number
 }

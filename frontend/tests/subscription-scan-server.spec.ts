@@ -12,7 +12,7 @@
  * transactions, and expect detections from the envelope-shaped response.
  */
 import { expect, test } from '@playwright/test'
-import { E2E_BASE } from './test-helpers'
+import { E2E_BASE, firstProfileId } from './test-helpers'
 
 const day = 24 * 60 * 60 * 1000
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString().slice(0, 10)
@@ -21,15 +21,12 @@ test.describe('subscription scan — server mode @smoke', () => {
   test('detects recurring charges from the paginated transactions envelope', async ({ page }) => {
     const ctx = page.context()
 
-    const auth = await ctx.request.post(`${E2E_BASE}/api/auth/login`, {
-      // eslint-disable-next-line sonarjs/no-hardcoded-passwords
-      data: { username: 'person', password: 'something-like-this' },
-      headers: { 'x-skip-ratelimit': 'true' },
-    })
-    expect(auth.ok()).toBeTruthy()
+    // No sign-in here: the setup project saved a signed-in storageState and every context starts
+    // from it, so ctx.request already carries the session cookie.
+    const home = await firstProfileId(ctx)
 
     const res = await ctx.request.post(`${E2E_BASE}/api/profiles`, {
-      headers: { 'Content-Type': 'application/json', 'X-Profile-Id': '1' },
+      headers: { 'Content-Type': 'application/json', 'X-Profile-Id': String(home) },
       data: { name: `Sub Scan Probe ${Date.now()}` },
     })
     expect(res.ok()).toBeTruthy()

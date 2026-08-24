@@ -544,6 +544,10 @@ test.describe('the assumptions form stays in line', () => {
     await expect(chart).toBeVisible()
     await expect(page.getByTestId('retirement-zoom-reset')).toHaveCount(0)
 
+    // Scroll it into view first: boundingBox() reports document coordinates, and a chart sitting
+    // below the fold gets a wheel event that scrolls the PAGE instead of zooming the chart. How
+    // far down it sits depends on how much is rendered above it, which depends on the data.
+    await chart.scrollIntoViewIfNeeded()
     const box = (await chart.boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     for (let i = 0; i < 4; i++) await page.mouse.wheel(0, -120)

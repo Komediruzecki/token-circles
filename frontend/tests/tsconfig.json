@@ -1,0 +1,14 @@
+{
+  // The Playwright suite is checked separately from the app, because it is the one place in this
+  // package that legitimately runs in Node: the setup project shells out to `wrangler d1 execute`
+  // and writes the saved storageState to disk. Adding "node" to the app's `types` would put
+  // `process`, `Buffer` and `fs` in scope for every component, where reaching for them is a bug.
+  //
+  // It lives here rather than as ../tsconfig.tests.json so ESLint's project service finds it by
+  // directory, the same way it finds the app's.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": ["**/*", "../playwright.config.ts", "../css-modules.d.ts"]
+}

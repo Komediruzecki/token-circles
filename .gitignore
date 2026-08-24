@@ -98,3 +98,6 @@ local/
 /backend/test-seed.js
 /backend/test-seed2.js
 CLAUDE.md
+
+# Playwright signed-in state, written by tests/global.setup.ts. Holds a session cookie.
+frontend/tests/.auth/

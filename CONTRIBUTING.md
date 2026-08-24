@@ -37,9 +37,8 @@ pnpm -C worker run d1:migrate:local   # once, and after pulling new migrations
 pnpm run dev
 ```
 
-`backend/` is a retired Express + SQLite server. Nothing deploys it and CI does not test it; it
-survives only as the API the Playwright suite currently drives. Do not add to it — see
-[AGENTS.md](./AGENTS.md).
+The Worker needs a `JWT_SECRET` to sign sessions. Put any string in `worker/.dev.vars` — locally it
+signs for a database under `worker/.wrangler` that you can delete at any time.
 
 ## Workflow
 
@@ -78,9 +77,16 @@ Worker itself with migrations applied.
 New behaviour needs a test that fails without the change. A guard needs a test that fails when the
 guard is removed — it is worth deleting the guard once to check that it does.
 
-The Playwright suite (`frontend/tests/`) is the exception: it drives the real built app and needs
-an API answering on :3847. `.github/workflows/e2e.yml` is the reference for how it is started and
-seeded.
+The Playwright suite is the exception — it drives the real built app against a real Worker:
+
+```bash
+pnpm run test:e2e                     # everything
+pnpm -C frontend run test:e2e:smoke   # the @smoke subset CI runs on pull requests
+```
+
+It starts both servers itself, applies the migrations, registers a fixture account and seeds it.
+`frontend/tests/e2e-seed.ts` is the test data. Delete `worker/.wrangler` to start from an empty
+database.
 
 ## Code Style
 

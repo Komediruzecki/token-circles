@@ -44,11 +44,5 @@
       }
     ]
   },
-  "include": [
-    "src/**/*",
-    "tests/**/*",
-    "server/**/*",
-    "css-modules.d.ts",
-    "../packages/pwa-kit/**/*"
-  ]
+  "include": ["src/**/*", "server/**/*", "css-modules.d.ts", "../packages/pwa-kit/**/*"]
 }

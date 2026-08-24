@@ -10,28 +10,24 @@
  *
  * Isolation-safe: it creates a FRESH profile (default categories only) and
  * activates that, so it never wipes the shared seeded profile other specs use.
- * It logs in inline (rather than via the login() helper) so it can point the
- * app at the pristine profile instead of the helper's pinned profile 1.
+ * It sets localStorage itself, rather than going through the login() helper, so
+ * it can point the app at the pristine profile instead of the seeded one.
  */
 import { expect, test } from '@playwright/test'
-import { E2E_BASE } from './test-helpers'
+import { E2E_BASE, firstProfileId } from './test-helpers'
 
 test.describe('onboarding — server mode @smoke', () => {
   test('auto-opens for a logged-in user whose active profile is pristine', async ({ page }) => {
     const ctx = page.context()
 
-    // Real backend session (cookie lands in the context jar), skipping the rate limiter.
-    const auth = await ctx.request.post(`${E2E_BASE}/api/auth/login`, {
-      // eslint-disable-next-line sonarjs/no-hardcoded-passwords
-      data: { username: 'person', password: 'something-like-this' },
-      headers: { 'x-skip-ratelimit': 'true' },
-    })
-    expect(auth.ok()).toBeTruthy()
+    // No sign-in here: the setup project saved a signed-in storageState and every context starts
+    // from it, so ctx.request already carries the session cookie.
+    const home = await firstProfileId(ctx)
 
     // A brand-new profile: the worker/backend seeds default categories only —
     // zero accounts/transactions/bills — the pristine state a fresh signup has.
     const res = await ctx.request.post(`${E2E_BASE}/api/profiles`, {
-      headers: { 'Content-Type': 'application/json', 'X-Profile-Id': '1' },
+      headers: { 'Content-Type': 'application/json', 'X-Profile-Id': String(home) },
       data: { name: `Onboarding Probe ${Date.now()}` },
     })
     expect(res.ok()).toBeTruthy()

@@ -10,6 +10,9 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    # The suite runs serially on CI (see playwright.config.ts); a clean run is well under this,
+    # so hitting it means something is hung rather than slow.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -29,30 +32,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Rebuild native modules
-        run: pnpm rebuild better-sqlite3
+      # worker/ is deliberately NOT a pnpm workspace member (see deploy-worker.yml), so the root
+      # install does not reach it — and the suite now needs its wrangler.
+      - name: Install worker dependencies
+        working-directory: worker
+        run: pnpm install --no-frozen-lockfile --ignore-workspace
 
-      # NOT dead code, despite backend/ being the legacy runtime that nothing ships (ci.yml no
-      # longer tests it). The Playwright suite drives the REAL built frontend, and something has
-      # to answer /api — playwright.config.ts points the vite dev proxy at this server on :3847.
-      # Deleting this step takes all 35 spec files with it. Retiring it properly means pointing
-      # the proxy at a locally-run Worker (wrangler dev + a seeded local D1) instead.
-      - name: Start backend server
-        run: |
-          mkdir -p db assets
-          NODE_ENV=test node backend/index.js &
-          sleep 5
-          # All /api routes now require an authenticated session, so log in first
-          # and reuse the cookie jar when seeding demo data.
-          # Fail fast if login or seeding fails — otherwise the smoke tests run against an
-          # empty DB and surface as confusing "element not visible" errors. --retry covers
-          # a slow server boot (replacing the fragile fixed sleep + `|| true`).
-          curl -fsS --retry 10 --retry-delay 1 --retry-connrefused \
-            -c /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/auth/login \
-            -H "Content-Type: application/json" -H "X-Skip-RateLimit: true" \
-            -d '{"username":"person","password":"something-like-this"}'
-          curl -fsS -b /tmp/e2e-cookies.txt -X POST http://127.0.0.1:3847/api/profiles/reseed-demo \
-            -H "X-Skip-RateLimit: true" -H "X-Profile-ID: 1"
+      # `wrangler dev` runs the Worker locally against a local D1 and R2 under worker/.wrangler —
+      # no Cloudflare account, no network. It needs a signing key like any other deployment; this
+      # one signs sessions for a database that is deleted with the runner.
+      - name: Configure the local Worker
+        run: echo "JWT_SECRET=e2e-local-signing-key-not-a-real-secret" > worker/.dev.vars
 
       - name: Build frontend
         working-directory: ./frontend
@@ -62,6 +52,11 @@ jobs:
         working-directory: ./frontend
         run: pnpm exec playwright install --with-deps chromium
 
+      # Playwright starts both servers itself (wrangler on :8787, vite on :3800 proxied at it),
+      # applies the D1 migrations, then runs a setup project that registers an account, seeds the
+      # fixture profile and saves the signed-in state every spec starts from. See
+      # frontend/playwright.config.ts and frontend/tests/global.setup.ts — the whole thing runs
+      # locally with `pnpm run test:e2e`, which the four curl commands this replaces never did.
       - name: Run E2E tests
         working-directory: ./frontend
         env:
@@ -90,11 +85,3 @@ jobs:
           name: playwright-screenshots
           path: test-results/
           retention-days: 30
-
-      - name: Verify API endpoints
-        run: |
-          echo "Testing API endpoints..."
-          curl -s http://localhost:3847/api/accounts > /dev/null && echo "✓ API/accounts OK" || echo "✗ API/accounts FAILED"
-          curl -s http://localhost:3847/api/transactions/summary > /dev/null && echo "✓ API/transactions/summary OK" || echo "✗ API/transactions/summary FAILED"
-          curl -s http://localhost:3847/api/housing > /dev/null && echo "✓ API/housing OK" || echo "✗ API/housing FAILED"
-          curl -s http://localhost:3847/api/loans > /dev/null && echo "✓ API/loans OK" || echo "✗ API/loans FAILED"
