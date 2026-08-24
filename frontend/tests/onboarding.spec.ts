@@ -188,6 +188,46 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible()
   })
 
+  test('the footer promotes the import once there is a file to import', async ({ page }) => {
+    // The step body's own "Process & continue" sits under the account pickers, so on a phone it
+    // was below the fold while the footer's big primary button offered to skip the whole step.
+    // The action the user came for was the one they had to scroll for; the one that abandons the
+    // flow was the one under their thumb.
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-profile-name')).toHaveValue('Personal Profile')
+    await page.getByTestId('onboarding-next').click()
+
+    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+    await page.getByTestId('onboarding-account-name').fill('Revolut EUR')
+    await page.getByTestId('onboarding-account-create').click()
+    await expect(page.getByTestId('onboarding-account-chip')).toHaveCount(1)
+    await page.getByTestId('onboarding-next').click()
+
+    // Nothing staged yet: skipping is genuinely the only forward action, so it keeps the primary.
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+    await expect(page.getByTestId('onboarding-next')).toHaveText('Continue without importing')
+    await expect(page.getByTestId('onboarding-import-process-bank')).toHaveCount(0)
+
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+
+    // Now there is something to import, and it takes the primary.
+    const primary = page.getByTestId('onboarding-import-process-bank')
+    await expect(primary).toBeVisible()
+    await expect(primary).toHaveText('Process & continue')
+    // Skipping is still reachable, demoted to the ghost button beside it.
+    await expect(page.getByTestId('onboarding-import-skip')).toHaveText("Don't import")
+    // ...and it is no longer what the big button does.
+    await expect(page.getByTestId('onboarding-next')).toHaveCount(0)
+
+    // The footer button does exactly what the inline one does.
+    await page.getByTestId('bank-target-account').selectOption('Revolut EUR')
+    await primary.click()
+    await expect(page.getByTestId('onboarding-import-to-preview')).toBeVisible()
+  })
+
   test('imports a bank statement inline and auto-detects subscriptions', async ({ page }) => {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
 

@@ -625,6 +625,20 @@
     padding-left: 18px;
     padding-right: 18px;
   }
+
+  /*
+   * The import step can carry four buttons — Back, Skip setup, Don't import and the primary —
+   * which does not fit a 360px phone on one line. Wrapping keeps the primary at full width for
+   * its label instead of squashing every button until none of them read as the main one.
+   */
+  .footer,
+  .footerRight {
+    flex-wrap: wrap;
+  }
+
+  .footerRight {
+    justify-content: flex-end;
+  }
 }
 
 /* ---- reduced motion ---- */

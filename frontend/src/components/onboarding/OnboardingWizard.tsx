@@ -868,6 +868,43 @@ export function OnboardingWizard() {
           disabled: importFlow.loading(),
           testId: 'onboarding-import-skip',
         }
+        /**
+         * The forward action of the data-entry tab the user is on, once that tab has something
+         * to act on. Null before then — with no file chosen there is genuinely nothing to
+         * promote, and the footer should go on offering to move past the step.
+         *
+         * Mirrors the buttons `ImportDataEntry` renders inline. Those stay exactly where they
+         * are: the import PAGE uses the same component without this footer, and its flow was
+         * fine as it was.
+         */
+        const readyEntryAction = (): FooterAction | null => {
+          const go = (label: string, run: () => void, testId: string): FooterAction => ({
+            label,
+            run,
+            disabled: importFlow.loading(),
+            testId,
+          })
+          switch (importFlow.activeImportTab()) {
+            case 'bank-imports':
+              return importFlow.bankFiles().length > 0
+                ? go(
+                    'Process & continue',
+                    () => void importFlow.processBankFiles(),
+                    'onboarding-import-process-bank'
+                  )
+                : null
+            case 'google-sheets':
+              return importFlow.sheetResult()
+                ? go('Continue to mapping', importFlow.goToMapping, 'onboarding-import-to-mapping')
+                : null
+            default:
+              // file-upload and paste-csv both land their parsed rows in uploadResult().
+              return importFlow.uploadResult()
+                ? go('Continue to mapping', importFlow.goToMapping, 'onboarding-import-to-mapping')
+                : null
+          }
+        }
+
         switch (importFlow.activeStep()) {
           case 'mapping':
             return {
@@ -885,12 +922,23 @@ export function OnboardingWizard() {
               testId: 'onboarding-import-selected',
               secondary: dontImport,
             }
-          default:
+          default: {
+            // The tab's own forward button lives in the step body, below its inputs — under the
+            // account pickers, on the bank tab. On a phone that put it below the fold while the
+            // footer's big primary button said "Continue without importing": the one action the
+            // user came here to take was the small one they had to scroll for, and the one that
+            // abandons the flow was the one under their thumb.
+            //
+            // Promote it as soon as there is something to process, and demote skipping to the
+            // ghost button beside it — the same shape mapping and preview already use.
+            const ready = readyEntryAction()
+            if (ready) return { ...ready, secondary: dontImport }
             return {
               label: 'Continue without importing',
               run: () => void continueFromImport(),
               disabled: importFlow.loading(),
             }
+          }
         }
       }
       case 'subscriptions':
