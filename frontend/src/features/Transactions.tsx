@@ -517,10 +517,17 @@ export default function Transactions() {
     return filtered
   })
 
-  // Get uncategorized transactions
+  // Get uncategorized transactions.
+  //
+  // Transfers are excluded: a transfer has no category BY DESIGN — money moving between two of
+  // your own accounts is not spending — so listing them here filled the modal with rows that
+  // could not, and should not, be categorized. Only imports create genuinely uncategorized rows
+  // (a gated category name imports with category_id null); the app itself will not.
   const uncategorizedTransactions = createMemo(() => {
     const allTransactions = transactions()
-    return allTransactions.filter((tx) => tx.category_id === undefined || tx.category_id === null)
+    return allTransactions.filter(
+      (tx) => (tx.category_id === undefined || tx.category_id === null) && tx.type !== 'transfer'
+    )
   })
 
   // Calculate paginated results
@@ -551,17 +558,15 @@ export default function Transactions() {
   const reconciledCount = createMemo(() => transactions().filter((t) => t.reconciled).length)
 
   // Auto-categorize handler
+  // One write per call, NO reload here: the modal applies a batch and fires onApplied once at
+  // the end. Reloading the whole list after every row turned "Apply 50" into 50 full refetches.
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
     try {
       await api.updateTransaction(transactionId, { category_id: categoryId })
-      // Reload transactions to update the view
-      const data = (await api.getTransactions()) as Transaction[]
-      setTransactions(data)
     } catch (error) {
       console.error('Failed to apply category:', error)
       if (errorStatus(error) === 409) {
         toast(error instanceof Error ? error.message : 'That transaction changed', 'error')
-        await refreshTransactions()
       }
     }
   }
@@ -1803,7 +1808,10 @@ export default function Transactions() {
         isOpen={isAutoCategorizeModalOpen}
         onClose={() => setAutoCategorizeModalOpen(false)}
         uncategorizedTransactions={uncategorizedTransactions}
+        categories={categories}
+        accountName={(id) => accounts().find((a) => a.id === id)?.name}
         onApply={handleAutoApplyCategory}
+        onApplied={() => void refreshTransactions()}
       />
 
       {/* Reconciliation Modal */}

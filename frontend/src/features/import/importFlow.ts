@@ -379,6 +379,18 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     type: 'success' | 'error'
     text: string
   } | null>(null)
+  /*
+   * Success banners announce and then leave. The banner renders at the top of the step, and one
+   * that never clears is still sitting there on the NEXT step — "Preview recalculated" hanging
+   * over the preview minutes later reads as a stuck page, not a confirmation. Errors are not
+   * routed through this: they stay until acted on.
+   */
+  let resultMessageTimer: ReturnType<typeof setTimeout> | undefined
+  const announceResult = (text: string) => {
+    setResultMessage({ type: 'success', text })
+    clearTimeout(resultMessageTimer)
+    resultMessageTimer = setTimeout(() => setResultMessage(null), 6000)
+  }
 
   const currentHeaders = () => {
     if (uploadResult()) return uploadResult()!.headers
@@ -407,6 +419,49 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       }
     })
     return Array.from(categories)
+  }
+
+  /**
+   * Every distinct Means-of-Payment value, and the Category value of every row the sheet calls a
+   * transfer. These name ACCOUNTS, not categories.
+   *
+   * `detectCategories` reads the category column alone, and `categoryTypes` is built from what it
+   * returns — so a Means-of-Payment value was never enumerated, never classified, never shown in
+   * the mapping step and never created. A transfer's SOURCE comes from that column, so on a
+   * profile with no accounts yet every transfer row was rejected for a missing source account,
+   * which is precisely what a first import on a new account looks like.
+   *
+   * A transfer's destination is included for the same reason it needs no marking: there is no
+   * reading of "transfer to Groceries" that makes Groceries a category, and a first-time import
+   * has no way to have marked it yet.
+   */
+  const detectAccountValues = () => {
+    const names = new Set<string>()
+    const mopIdx = columnMapping()['means_of_payment']
+    const catIdx = columnMapping()['category']
+    const typeIdx = columnMapping()['type']
+    currentRows().forEach((row) => {
+      if (mopIdx !== undefined && row[mopIdx]?.trim()) names.add(row[mopIdx].trim())
+      const isTransfer = typeIdx !== undefined && row[typeIdx]?.trim().toLowerCase() === 'transfer'
+      if (isTransfer && catIdx !== undefined && row[catIdx]?.trim()) {
+        names.add(row[catIdx].trim())
+      }
+    })
+    return Array.from(names)
+  }
+
+  /**
+   * Every value the mapping step should show a row for: the category column's values, then the
+   * account-by-construction ones that appear nowhere else. Without the union the Means-of-Payment
+   * accounts were created invisibly — real accounts, but never listed in the table, so no
+   * starting balance, no date, and no way to opt out. Order: categories first, extras after, so
+   * the table the user already knows does not reshuffle.
+   */
+  const mappingValues = () => {
+    const cats = detectCategories()
+    const seen = new Set(cats.map((c) => c.toLowerCase()))
+    const extras = detectAccountValues().filter((n) => !seen.has(n.toLowerCase()))
+    return [...cats, ...extras]
   }
 
   const applyUniversalStartDate = (date: string) => {
@@ -480,16 +535,22 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const goToMapping = () => {
     const headers = currentHeaders()
     if (headers.length === 0) return
+    // A banner about the previous step must not follow the user onto this one.
+    setResultMessage(null)
     setActiveStep('mapping')
     const mapping = autoDetectMapping(headers)
     setColumnMapping(mapping)
 
     // Initialize category types when category column is auto-detected
     if (mapping['category'] !== undefined) {
-      const categories = detectCategories()
       const types: Record<string, 'income' | 'expense' | 'account'> = {}
-      categories.forEach((cat) => {
+      detectCategories().forEach((cat) => {
         types[cat] = classifyCategory(cat)
+      })
+      // Account-by-construction values last, so they win over any keyword guess: a
+      // Means-of-Payment value is the account the money moved from whatever it is called.
+      detectAccountValues().forEach((name) => {
+        types[name] = 'account'
       })
       setCategoryTypes(types)
     }
@@ -510,18 +571,33 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         ? resolveHeaderMapping(headerMapping, headers)
         : autoDetectMapping(headers)
     setColumnMapping(resolved)
+    /*
+     * Both branches have to pick up the account-by-construction values, and a saved source is the
+     * branch that matters most: this is the Google Sheets auto-sync path, and a mapping saved
+     * before those values were classified at all has no entry for any of them. Restoring it
+     * verbatim would keep every transfer unresolvable for exactly the people who had already set
+     * the source up.
+     *
+     * A saved decision still wins where there is one — `??` fills gaps, it does not overwrite.
+     */
+    const withAccountValues = (base: Record<string, 'income' | 'expense' | 'account'>) => {
+      const merged = { ...base }
+      for (const name of detectAccountValues()) merged[name] = merged[name] ?? 'account'
+      return merged
+    }
     if (savedCategoryTypes && Object.keys(savedCategoryTypes).length > 0) {
-      setCategoryTypes({ ...savedCategoryTypes })
+      setCategoryTypes(withAccountValues({ ...savedCategoryTypes }))
     } else if (resolved['category'] !== undefined) {
       const types: Record<string, 'income' | 'expense' | 'account'> = {}
       for (const cat of detectCategories()) types[cat] = classifyCategory(cat)
-      setCategoryTypes(types)
+      setCategoryTypes(withAccountValues(types))
     }
   }
 
   const goToPreview = async () => {
     const rows = currentRows()
     if (rows.length === 0) return
+    setResultMessage(null)
     setActiveStep('preview')
     // Bank imports precompute duplicates from the RAW statement rows (per-second
     // timestamps / balance intact), so two distinct same-day transactions aren't
@@ -984,16 +1060,20 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     return { categoryRules, transferRules }
   }
 
+  /*
+   * No `setResultMessage` here. That banner renders at the top of the page/panel, and the Save
+   * rules button lives deep inside the rules editor — on a phone the confirmation appeared a
+   * full screen above the click and was simply never seen. The editor confirms inline, beside
+   * the button that was pressed.
+   */
   const saveBankRules = () => {
     persistBankRulesFromDraft()
     loadBankRules()
-    setResultMessage({ type: 'success', text: 'Bank import rules saved.' })
   }
 
   const resetBankRules = () => {
     resetBankImportRules()
     loadBankRules()
-    setResultMessage({ type: 'success', text: 'Bank import rules reset to defaults.' })
   }
 
   // Re-run the transform with the just-saved edited rules and refresh the preview in
@@ -1030,10 +1110,15 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         for (const cat of detectCategories()) {
           merged[cat] = existing[cat] ?? classifyCategory(cat)
         }
+        // A recalculate must not drop the account-by-construction values, or the transfers that
+        // resolved a moment ago stop resolving. An explicit user choice still wins.
+        for (const name of detectAccountValues()) {
+          merged[name] = existing[name] ?? 'account'
+        }
         setCategoryTypes(merged)
       }
       await goToPreview()
-      setResultMessage({ type: 'success', text: 'Preview recalculated from your rules.' })
+      announceResult('Preview recalculated from your rules.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to recalculate the preview')
     } finally {
@@ -1315,7 +1400,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         if (dateSkipped > 0) parts.push(`${dateSkipped} outside date range`)
         text = `Imported ${importedCount} transactions${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
       }
-      setResultMessage({ type: 'success', text })
+      announceResult(text)
 
       // Record the session in the import log (best-effort; the import itself succeeded)
       const source =
@@ -1478,6 +1563,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     currentRows,
     duplicateSet,
     detectCategories,
+    mappingValues,
     dateSkippedCount,
     transferVoidDestinations,
     previewFilter,

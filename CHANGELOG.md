@@ -8,6 +8,19 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A first import no longer rejects every transfer.** A transfer row names two accounts — the one the money left (the "Means of payment" column) and the one it landed in (the "Category" column) — but only category values anyone had explicitly marked as accounts were ever offered for creation, and nothing at all read the Means of payment column. On a fresh profile with no accounts yet, that rejected every transfer row with "A transfer must have both source and destination accounts", hundreds of times over. Both columns now count: values from Means of payment, and the destination of any row the sheet itself calls a transfer, are offered as accounts to create like everything else.
+- **When a transfer still cannot resolve, the message says why.** Instead of the same one-line rule repeated for every row, each rejection now names the side that failed and quotes the value that did not match — "no account named 'Erste Current' (Means of Payment, the source)" — so it reads as a fix, not a verdict.
+
+### Changed
+
+- **Saving categorization rules confirms next to the button, and banners no longer overstay.** "Save rules" showed its green confirmation at the top of the page — on a phone, a full screen above the button, so the save looked like it did nothing. It now confirms right beside the button and quietly leaves after a few seconds. The page-top messages ("Preview recalculated…", "Imported N transactions…") also used to stay forever, following you onto the next step; they now dismiss themselves and never carry over.
+- **The "Expected columns" table now tells the truth, defaults included.** It listed Date and Description as required when neither is — a missing date imports as today (and is flagged), a blank description imports as-is, and only Amount will actually reject a row. Each optional column now also says what happens when it is missing: Currency falls back to your base currency, Type is read from the amount's sign, Amount Local defaults to Amount.
+- **Auto Categorize can now actually be used on an import.** The list showed only each transaction's description — a bank-statement string like "411111XXXXXX1111, Revolut\*_1010_ Dublin" identifies nothing — and a row with no suggestion offered no way forward at all. Every row now shows its date, signed amount and account (from → to for a transfer), a row with no match gets a category picker, and "Select all matches" stages every suggestion in one click. Nothing is written until "Apply N", which now means exactly what it says. Transfers no longer appear in the list: money moving between your own accounts has no category by design.
+- **Onboarding's long steps show their progress where you are.** Pressing "Import selected" with five thousand rows on screen used to appear to do nothing: the spinner and the summary render at the top of the panel, a whole table above where you were scrolled. The button you pressed now spins and says what it is doing, and the panel scrolls back up so the progress and the result land on screen.
+- **Adding found subscriptions is one button, not three.** The last onboarding step had its own "Add" mid-panel, then a separate "Continue" in the footer that did not add — so the order was add, wait, continue, and nothing said so. The footer's single button now reads "Add 2 subscriptions & continue" when something is selected, and just "Continue" when nothing is.
+
 ## [5.10.0] — 2026-08-24
 
 ### Added

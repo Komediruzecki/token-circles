@@ -931,3 +931,15 @@
   font-size: 14px;
   margin: 0;
 }
+
+/* Confirms a rules save right beside the button that did it. The page-top banner is a full
+   screen away from this editor on a phone, which is how "Save rules" came to look like it did
+   nothing. */
+.inline-confirmation {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+}

@@ -43,6 +43,23 @@ export interface SubscriptionScanPanelProps {
   onAdded?: (count: number) => void
   /** Extra hint under the empty state (e.g. "Import transactions first"). */
   emptyHint?: string
+  /**
+   * Hand the host the panel's selection state and its add action.
+   *
+   * The onboarding wizard has one primary button per step, and this panel used to be the step
+   * where that stopped being true: its own "Add 3" sat mid-panel while the wizard's "Continue"
+   * sat in the footer, and Continue did NOT add — so the required order was add, wait, then
+   * continue, with nothing saying so. Exposing the state lets the wizard fold both into its one
+   * footer button ("Add 3 & continue"); passing `hideAddButton` removes the in-panel duplicate.
+   */
+  expose?: (api: {
+    chosenCount: () => number
+    submitting: () => boolean
+    /** Adds the selection; resolves with how many were actually created. */
+    addSelected: () => Promise<number>
+  }) => void
+  /** Hide the panel's own Add button (the host renders the action itself). */
+  hideAddButton?: boolean
 }
 
 interface RowState {
@@ -151,9 +168,9 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     return undefined
   }
 
-  const addSelected = async () => {
+  const addSelected = async (): Promise<number> => {
     const picks = chosen()
-    if (submitting() || picks.length === 0) return
+    if (submitting() || picks.length === 0) return 0
     setSubmitting(true)
     let ok = 0
     try {
@@ -182,7 +199,10 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     } finally {
       setSubmitting(false)
     }
+    return ok
   }
+
+  props.expose?.({ chosenCount: () => chosen().length, submitting, addSelected })
 
   const confidenceLabel: Record<DetectedSubscription['confidence'], string> = {
     high: 'High confidence',
@@ -324,15 +344,17 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               >
                 Rescan
               </button>
-              <button
-                class={styles.add}
-                type="button"
-                data-test-id="sub-scan-add-btn"
-                disabled={chosen().length === 0 || submitting()}
-                onClick={() => void addSelected()}
-              >
-                {submitting() ? 'Adding…' : `Add ${chosen().length || ''}`.trim()}
-              </button>
+              <Show when={!props.hideAddButton}>
+                <button
+                  class={styles.add}
+                  type="button"
+                  data-test-id="sub-scan-add-btn"
+                  disabled={chosen().length === 0 || submitting()}
+                  onClick={() => void addSelected()}
+                >
+                  {submitting() ? 'Adding…' : `Add ${chosen().length || ''}`.trim()}
+                </button>
+              </Show>
             </span>
           </div>
         </Show>

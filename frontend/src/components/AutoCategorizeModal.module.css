@@ -303,3 +303,60 @@
     align-self: flex-end;
   }
 }
+
+/* The metadata line under the description: date, signed amount, account. The description alone
+   is a bank-statement string that identifies nothing. */
+.txMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metaExpense {
+  color: var(--expense, var(--danger));
+  font-weight: 600;
+}
+
+.metaIncome {
+  color: var(--income, var(--success));
+  font-weight: 600;
+}
+
+.rowAction {
+  margin-top: 6px;
+}
+
+.categorySelect {
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-bg, var(--card-bg));
+  color: var(--text);
+  font-size: 12px;
+}
+
+.stageAllBtn {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stageAllBtn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.stageAllBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

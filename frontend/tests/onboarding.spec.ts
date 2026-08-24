@@ -277,10 +277,16 @@ test.describe('onboarding wizard', () => {
     const netflixRow = page.locator('[data-test-id="sub-scan-row"][data-name="Netflix"]')
     await expect(netflixRow).toBeVisible({ timeout: 15000 })
     await expect(page.locator('[data-test-id="sub-scan-row"][data-name="Spotify"]')).toBeVisible()
-    await page.getByTestId('sub-scan-add-btn').click()
-    // Added rows move to the tracked section
-    await expect(page.getByTestId('sub-scan-add-btn')).toBeDisabled()
-    await page.getByTestId('onboarding-next').click()
+    /*
+     * One button, both jobs. The panel used to carry its own "Add 2" mid-step while the footer's
+     * Continue silently did not add — the required order was add, wait, continue, and nothing
+     * said so. The footer's single primary now names the whole action, and the in-panel button
+     * is gone in the wizard.
+     */
+    await expect(page.getByTestId('sub-scan-add-btn')).toHaveCount(0)
+    const addContinue = page.getByTestId('onboarding-subs-add-continue')
+    await expect(addContinue).toHaveText(/Add 2 subscriptions & continue/)
+    await addContinue.click()
 
     // Done step reflects the session, finish lands on the dashboard
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()

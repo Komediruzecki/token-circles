@@ -118,25 +118,32 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
           <Show when={!props.compact}>
             <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
               <h3 class={styles.settingsCardTitle}>Expected columns</h3>
+              {/*
+                This table is the import's contract, so it has to tell the truth. Only Amount
+                hard-fails a row. A missing Date imports as today and is flagged; a blank
+                Description imports (bank exports are full of them — a rule that rejected blanks
+                once silently dropped 291 rows). Everything else is optional with the default
+                shown beside the sample, so "optional" never reads as "mysterious".
+              */}
               <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
-                <table class={styles.previewTable}>
+                <table class={styles.previewTable} data-test-id="import-expected-columns">
                   <thead>
                     <tr>
                       <th>Column</th>
                       <th>Required</th>
-                      <th>Sample Data</th>
+                      <th>Sample (default when missing)</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
                       <td>Date</td>
-                      <td>Yes</td>
-                      <td>2024-01-15</td>
+                      <td>No</td>
+                      <td>2024-01-15 (today's date, and the row is flagged)</td>
                     </tr>
                     <tr>
                       <td>Description</td>
-                      <td>Yes</td>
-                      <td>Grocery Store Purchase</td>
+                      <td>No</td>
+                      <td>Grocery Store Purchase (empty)</td>
                     </tr>
                     <tr>
                       <td>Amount</td>
@@ -144,14 +151,34 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                       <td>-45.99</td>
                     </tr>
                     <tr>
+                      <td>Type</td>
+                      <td>No</td>
+                      <td>expense / income / transfer (from the amount's sign)</td>
+                    </tr>
+                    <tr>
                       <td>Category</td>
                       <td>No</td>
-                      <td>Groceries</td>
+                      <td>Groceries (uncategorized; a transfer's destination account)</td>
                     </tr>
                     <tr>
                       <td>Currency</td>
                       <td>No</td>
-                      <td>EUR</td>
+                      <td>EUR (your base currency from Settings)</td>
+                    </tr>
+                    <tr>
+                      <td>Means of Payment</td>
+                      <td>No</td>
+                      <td>Erste Current (the account the money left)</td>
+                    </tr>
+                    <tr>
+                      <td>Amount Local</td>
+                      <td>No</td>
+                      <td>-45.99 (same as Amount)</td>
+                    </tr>
+                    <tr>
+                      <td>Exchange Rate</td>
+                      <td>No</td>
+                      <td>1.0</td>
                     </tr>
                     <tr>
                       <td>Beneficiary</td>
@@ -164,29 +191,9 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                       <td>John Doe</td>
                     </tr>
                     <tr>
-                      <td>Means of Payment</td>
-                      <td>No</td>
-                      <td>Credit Card</td>
-                    </tr>
-                    <tr>
-                      <td>Exchange Rate</td>
-                      <td>No</td>
-                      <td>1.0</td>
-                    </tr>
-                    <tr>
                       <td>Notes</td>
                       <td>No</td>
                       <td>Weekly shopping</td>
-                    </tr>
-                    <tr>
-                      <td>Type</td>
-                      <td>No</td>
-                      <td>expense</td>
-                    </tr>
-                    <tr>
-                      <td>Amount Local</td>
-                      <td>No</td>
-                      <td>-45.99</td>
                     </tr>
                   </tbody>
                 </table>

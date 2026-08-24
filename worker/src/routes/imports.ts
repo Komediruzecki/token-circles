@@ -557,19 +557,45 @@ export async function executeImport(
   // Account-typed values that don't already name an existing account — the accounts a run
   // would CREATE. Surfaced so the preview can show new accounts (parity with the serverless
   // detectNewAccounts). accountIdMap holds the existing accounts, so "not in it" == new.
+  //
+  // TWO columns, not one. A transfer's destination comes from Category and its SOURCE comes from
+  // Means of Payment, and this scanned only Category — so a Means-of-Payment value was
+  // enumerated nowhere, offered nowhere, and never created. On a profile with no accounts yet
+  // that rejects every single transfer row for a missing source, which is exactly what a first
+  // import looks like. A Means-of-Payment value needs no `categoryTypes` marking to qualify:
+  // it is the account the money moved from, by definition of the column.
   const newAccts: string[] = [];
   const seenAcct = new Set<string>();
   const ctLower: Record<string, string> = {};
   if (categoryTypes)
     for (const [k, v] of Object.entries(categoryTypes)) ctLower[k.toLowerCase().trim()] = String(v);
-  for (const row of validRows) {
-    const raw = pick(row, mapping, 'category');
-    if (!raw || !String(raw).trim()) continue;
+  const offerAccount = (raw: unknown) => {
+    if (!raw || !String(raw).trim()) return;
     const name = String(raw).trim();
     const lower = name.toLowerCase();
-    if (ctLower[lower] !== 'account' || accountIdMap.has(lower) || seenAcct.has(lower)) continue;
+    if (accountIdMap.has(lower) || seenAcct.has(lower)) return;
     seenAcct.add(lower);
     newAccts.push(name);
+  };
+  /*
+   * A row the sheet itself calls a transfer names an account in BOTH columns, whatever anyone
+   * marked. The destination of a transfer is an account by definition — there is no reading of
+   * "transfer to Groceries" that makes Groceries a category — so a `type` of transfer is enough
+   * to offer the Category value, without waiting for a `categoryTypes` marking that a first-time
+   * import has no way to have set yet.
+   */
+  const rowIsTransfer = (row: Record<string, unknown>) =>
+    mapping.type !== undefined &&
+    String(pick(row, mapping, 'type') || '')
+      .trim()
+      .toLowerCase() === 'transfer';
+
+  for (const row of validRows) {
+    const raw = pick(row, mapping, 'category');
+    const markedAccount =
+      raw && String(raw).trim() && ctLower[String(raw).trim().toLowerCase()] === 'account';
+    if (markedAccount || rowIsTransfer(row)) offerAccount(raw);
+    offerAccount(pick(row, mapping, 'means_of_payment'));
   }
   // Only create approved names when gating is on; unapproved values import uncategorized
   // (category_id resolves to null below). Absent → create every new name (backward-compat).
@@ -702,18 +728,38 @@ export async function executeImport(
       transfer_account_id: transferAccountId,
     });
     if (invariantError) {
-      // Name the account for the self-transfer case. The invariant lives in shared/ and only sees
-      // ids, but "both sides resolve to Revolut" is what actually tells the user which cell to fix:
-      // the source comes from the Means of Payment column and the destination from Category.
-      const sameAccount =
-        accountId !== null && accountId === transferAccountId
-          ? accountNameById.get(accountId)
-          : undefined;
+      // The invariant lives in shared/ and only sees ids, so on its own it says "a transfer must
+      // have both source and destination accounts" — which names neither the side that is missing
+      // nor the cell to go and fix. Repeated over a few hundred rows that is unreadable, and it is
+      // the reported experience: 341 identical lines and nothing to act on. Say which side failed
+      // and quote the value that did not resolve.
+      const detail = (() => {
+        if (validatedType !== 'transfer') return undefined;
+        if (accountId !== null && accountId === transferAccountId) {
+          const name = accountNameById.get(accountId);
+          return `both sides resolve to "${name}" (source comes from Means of Payment, destination from Category)`;
+        }
+        const missing: string[] = [];
+        if (accountId === null) {
+          missing.push(
+            mopName
+              ? `no account named "${String(mopName).trim()}" (Means of Payment, the source)`
+              : 'the Means of Payment cell is empty, so there is no source account'
+          );
+        }
+        if (transferAccountId === null) {
+          const cat = pick(row, mapping, 'category');
+          missing.push(
+            cat && String(cat).trim()
+              ? `no account named "${String(cat).trim()}" (Category, the destination)`
+              : 'the Category cell is empty, so there is no destination account'
+          );
+        }
+        return missing.length ? missing.join('; ') : undefined;
+      })();
       skippedItems.push({
         index: ri,
-        reason: sameAccount
-          ? `${invariantError} — both sides resolve to "${sameAccount}" (source comes from Means of Payment, destination from Category)`
-          : invariantError,
+        reason: detail ? `${invariantError} — ${detail}` : invariantError,
         label: importRowLabel(dateRaw, description),
       });
       continue;

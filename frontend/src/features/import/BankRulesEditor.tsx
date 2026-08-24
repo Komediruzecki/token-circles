@@ -3,7 +3,7 @@
  * tab, and on the preview step with a Recalculate button that re-runs the transform.
  * Shared by the Import page and the onboarding wizard via the ImportFlow controller.
  */
-import { createUniqueId, For, Show } from 'solid-js'
+import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
 import { produce } from 'solid-js/store'
 import {
   loadCategoryRules,
@@ -20,6 +20,22 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
   // Unique per instance: the Import page and the onboarding wizard can both be
   // mounted (keep-alive), and a shared datalist id would cross-wire the combobox.
   const categoryListId = `bank-category-list-${createUniqueId()}`
+
+  /*
+   * Confirmation lives HERE, beside the buttons, not in the page-top banner. The editor sits far
+   * down a scrolling step — in onboarding especially — and a message rendered above the fold is a
+   * message nobody sees. Cleared after a few seconds; the timer dies with the component.
+   */
+  const [confirmation, setConfirmation] = createSignal<string | null>(null)
+  let confirmationTimer: ReturnType<typeof setTimeout> | undefined
+  const confirm = (text: string) => {
+    setConfirmation(text)
+    clearTimeout(confirmationTimer)
+    confirmationTimer = setTimeout(() => setConfirmation(null), 4000)
+  }
+  onCleanup(() => {
+    clearTimeout(confirmationTimer)
+  })
   return (
     <div style={{ 'margin-top': '16px' }}>
       <button
@@ -235,7 +251,9 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
+          <div
+            style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap', 'align-items': 'center' }}
+          >
             <Show when={props.onRecalculate}>
               <button
                 class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
@@ -249,16 +267,43 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
             </Show>
             <button
               class={`${styles.btn} ${props.onRecalculate ? styles.btnOutline : styles.btnPrimary} ${styles.btnSm}`}
-              onClick={flow.saveBankRules}
+              data-test-id="bank-rules-save"
+              onClick={() => {
+                flow.saveBankRules()
+                confirm('Rules saved.')
+              }}
             >
               Save rules
             </button>
             <button
               class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-              onClick={flow.resetBankRules}
+              onClick={() => {
+                flow.resetBankRules()
+                confirm('Rules reset to defaults.')
+              }}
             >
               Reset to defaults
             </button>
+            <Show when={confirmation()}>
+              <span
+                class={styles.inlineConfirmation}
+                data-test-id="bank-rules-confirmation"
+                role="status"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {confirmation()}
+              </span>
+            </Show>
           </div>
         </div>
       </Show>

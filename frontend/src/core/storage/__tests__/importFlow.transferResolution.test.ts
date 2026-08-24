@@ -205,3 +205,57 @@ describe('importExecute — configured account currency', () => {
     expect(account?.currency).toBe('EUR')
   })
 })
+
+describe('a first import, before any account exists', () => {
+  // The reported case: onboarding, Google Sheet connected, 341 transfer rows — every one
+  // rejected with "A transfer must have both source and destination accounts", because nothing
+  // ever enumerated the Means-of-Payment column as accounts to create.
+  const rows = [
+    ['2026-07-22', 'Top-up by *1111', '150', 'Revolut', 'Erste Current', 'Transfer'],
+    ['2026-07-20', 'Groceries', '42', 'Food', 'Erste Current', 'Expense'],
+  ]
+  const mapping = { date: 0, description: 1, amount: 2, category: 3, means_of_payment: 4, type: 5 }
+
+  it('offers BOTH sides of the transfer as accounts to create', async () => {
+    const res = await importExecute({ rows, mapping, dry_run: true })
+    const body = (await res.json()) as { new_accounts?: string[] }
+    const offered = (body.new_accounts ?? []).map((n) => n.toLowerCase())
+
+    // The source comes from Means of Payment — the column nothing used to read.
+    expect(offered).toContain('erste current')
+    // The destination is an account by construction: the row's own type says transfer.
+    expect(offered).toContain('revolut')
+    // The expense row's category stays a category.
+    expect(offered).not.toContain('food')
+  })
+
+  it('rejects the unresolved transfer naming the side and the value, not just the rule', async () => {
+    const res = await importExecute({ rows: [rows[0]!], mapping, dry_run: true })
+    const body = (await res.json()) as {
+      skipped_items: Array<{ reason: string }>
+    }
+    const reason = body.skipped_items[0]?.reason ?? ''
+    expect(reason).toContain('Erste Current')
+    expect(reason).toContain('Revolut')
+    expect(reason).toContain('Means of Payment')
+  })
+
+  it('imports the transfer once both are approved as accounts', async () => {
+    const res = await importExecute({
+      rows: [rows[0]!],
+      mapping,
+      categoryTypes: { Revolut: 'account', 'Erste Current': 'account' },
+      dry_run: false,
+    })
+    const body = (await res.json()) as { imported: number; skipped: number }
+    expect(body.skipped).toBe(0)
+    expect(body.imported).toBe(1)
+
+    const db = await getDB()
+    const tx = (await db.getAllFromIndex('transactions', 'by_profile', 1))[0]!
+    expect(tx.type).toBe('transfer')
+    expect(tx.account_id).not.toBeNull()
+    expect(tx.transfer_account_id).not.toBeNull()
+    expect(tx.account_id).not.toBe(tx.transfer_account_id)
+  })
+})

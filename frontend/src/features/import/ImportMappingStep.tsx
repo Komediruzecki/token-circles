@@ -101,7 +101,10 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
               </tr>
             </thead>
             <tbody>
-              <For each={flow.detectCategories()}>
+              {/* mappingValues, not detectCategories: the Means-of-Payment / transfer-destination
+                  values become accounts on import, and an account this run will create has to be
+                  visible here — with its balance setup — not created silently. */}
+              <For each={flow.mappingValues()}>
                 {(category) => {
                   const currentType = () => flow.categoryTypes()[category] || 'expense'
                   const isAccount = () => currentType() === 'account'

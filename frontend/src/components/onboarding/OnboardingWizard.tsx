@@ -757,6 +757,30 @@ export function OnboardingWizard() {
     </div>
   )
 
+  /*
+   * The scan panel's selection, surfaced so the footer's ONE primary button can carry the whole
+   * step: "Add 3 & continue" adds and then advances. Before this the panel had its own Add button
+   * mid-step while the footer's Continue silently did not add — the required order was add, wait,
+   * continue, and nothing said so.
+   */
+  /*
+   * The wizard's scrollable middle. A 5000-row preview puts the user deep inside it, and the
+   * footer button they then press swaps the content far above their viewport — processing
+   * spinner, then summary — while their scroll position stays where the table used to be.
+   * Every long-running footer action scrolls this back to the top so what happens next happens
+   * on screen.
+   */
+  let bodyEl: HTMLDivElement | undefined
+  const showTheWork = () => {
+    bodyEl?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const [subScan, setSubScan] = createSignal<{
+    chosenCount: () => number
+    submitting: () => boolean
+    addSelected: () => Promise<number>
+  } | null>(null)
+
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
       <h2 class={styles.stepTitle}>Your subscriptions, spotted</h2>
@@ -768,6 +792,8 @@ export function OnboardingWizard() {
         active={() => onboardingOpen() && onboardingStep() === 'subscriptions'}
         onAdded={(n) => setSubsAdded((prev) => prev + n)}
         emptyHint="You can always scan again later: Bills → Subscriptions → Scan transactions."
+        expose={setSubScan}
+        hideAddButton
       />
     </div>
   )
@@ -824,6 +850,8 @@ export function OnboardingWizard() {
     label: string
     run: () => void
     disabled: boolean
+    /** The action is running: the button shows a spinner and the label switches to this. */
+    busy?: string | false
     testId?: string
     secondary?: { label: string; run: () => void; disabled?: boolean; testId: string }
   }
@@ -880,8 +908,12 @@ export function OnboardingWizard() {
         const readyEntryAction = (): FooterAction | null => {
           const go = (label: string, run: () => void, testId: string): FooterAction => ({
             label,
-            run,
+            run: () => {
+              showTheWork()
+              run()
+            },
             disabled: importFlow.loading(),
+            busy: importFlow.loading() && 'Processing…',
             testId,
           })
           switch (importFlow.activeImportTab()) {
@@ -909,16 +941,24 @@ export function OnboardingWizard() {
           case 'mapping':
             return {
               label: 'Continue to preview',
-              run: () => void importFlow.goToPreview(),
+              run: () => {
+                showTheWork()
+                void importFlow.goToPreview()
+              },
               disabled: importFlow.loading(),
+              busy: importFlow.loading() && 'Building the preview…',
               testId: 'onboarding-import-to-preview',
               secondary: dontImport,
             }
           case 'preview':
             return {
               label: `Import selected (${importFlow.selectedRows().size})`,
-              run: () => void importFlow.handleImport('selected'),
+              run: () => {
+                showTheWork()
+                void importFlow.handleImport('selected')
+              },
               disabled: importFlow.loading() || importFlow.selectedRows().size === 0,
+              busy: importFlow.loading() && 'Importing…',
               testId: 'onboarding-import-selected',
               secondary: dontImport,
             }
@@ -941,14 +981,30 @@ export function OnboardingWizard() {
           }
         }
       }
-      case 'subscriptions':
+      case 'subscriptions': {
+        const scan = subScan()
+        const picked = scan?.chosenCount() ?? 0
+        if (picked > 0) {
+          return {
+            label: `Add ${picked} subscription${picked === 1 ? '' : 's'} & continue`,
+            run: () => {
+              void scan!.addSelected().then(() => {
+                nextOnboardingStep()
+              })
+            },
+            disabled: scan!.submitting(),
+            busy: scan!.submitting() && 'Adding…',
+            testId: 'onboarding-subs-add-continue',
+          }
+        }
         return {
           label: 'Continue',
           run: () => {
             nextOnboardingStep()
           },
-          disabled: false,
+          disabled: scan?.submitting() ?? false,
         }
+      }
       case 'done':
         return { label: 'Go to my dashboard', run: finish, disabled: false }
     }
@@ -993,7 +1049,7 @@ export function OnboardingWizard() {
             </span>
           </header>
 
-          <div class={styles.body}>
+          <div class={styles.body} ref={bodyEl}>
             <Show when={onboardingStep() === 'welcome'}>{welcomeStep()}</Show>
             <Show when={onboardingStep() === 'space'}>{spaceStep()}</Show>
             <Show when={onboardingStep() === 'account'}>{accountStep()}</Show>
@@ -1049,11 +1105,17 @@ export function OnboardingWizard() {
                   (onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next')
                 }
                 disabled={primaryAction()!.disabled}
+                aria-busy={primaryAction()!.busy ? 'true' : undefined}
                 onClick={() => {
                   primaryAction()!.run()
                 }}
               >
-                {primaryAction()!.label}
+                <Show when={primaryAction()!.busy} fallback={primaryAction()!.label}>
+                  {/* The click's first feedback happens ON the button that was clicked — the
+                      spinner further up the panel can be a whole table above the viewport. */}
+                  <span class={styles.btnSpinner} aria-hidden="true" />
+                  {primaryAction()!.busy}
+                </Show>
               </button>
             </span>
           </footer>

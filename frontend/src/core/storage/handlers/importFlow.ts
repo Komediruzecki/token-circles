@@ -242,14 +242,31 @@ async function detectNewAccounts(
   for (const [k, v] of Object.entries(categoryTypes)) catTypeLower[k.toLowerCase().trim()] = v
   const out: string[] = []
   const seen = new Set<string>()
-  for (const row of rows) {
-    const raw = toStr(row.category).trim()
-    if (!raw) continue
-    const lower = raw.toLowerCase()
-    if (catTypeLower[lower] !== 'account') continue
-    if (existingAcct.has(lower) || seen.has(lower)) continue
+  const offer = (raw: string) => {
+    const name = raw.trim()
+    if (!name) return
+    const lower = name.toLowerCase()
+    if (existingAcct.has(lower) || seen.has(lower)) return
     seen.add(lower)
-    out.push(raw)
+    out.push(name)
+  }
+  for (const row of rows) {
+    /*
+     * Both columns, and a transfer needs no marking.
+     *
+     * A transfer's destination comes from Category and its SOURCE from Means of Payment, and this
+     * read only Category, only when marked 'account'. So a Means-of-Payment value was enumerated
+     * nowhere and never created — and on a profile with no accounts yet that rejects every
+     * transfer row for a missing source, which is what a first import is. A row the sheet itself
+     * calls a transfer names an account in both columns whatever anyone marked: there is no
+     * reading of "transfer to Groceries" that makes Groceries a category.
+     */
+    const category = toStr(row.category).trim()
+    const isTransfer = toStr(row.type).trim().toLowerCase() === 'transfer'
+    if (category && (catTypeLower[category.toLowerCase()] === 'account' || isTransfer)) {
+      offer(category)
+    }
+    offer(toStr(row.means_of_payment))
   }
   return out
 }
@@ -1017,17 +1034,36 @@ export async function importExecute(body: unknown): Promise<Response> {
         transfer_account_id: transferAccountId,
       })
       if (invariantError) {
-        // Mirror of the Worker: name the account when a transfer points at itself, so the user
-        // knows which cell to fix rather than being told two ids are equal.
-        const sameAccount =
-          resolvedAccountId !== null && resolvedAccountId === transferAccountId
-            ? accountNameById.get(resolvedAccountId)
-            : undefined
+        // Mirror of the Worker: the invariant only sees ids, so on its own it names neither the
+        // side that is missing nor the cell to fix — repeated over hundreds of rows that is
+        // unreadable. Say which side failed and quote the value that did not resolve.
+        const detail = (() => {
+          if (type !== 'transfer') return undefined
+          if (resolvedAccountId !== null && resolvedAccountId === transferAccountId) {
+            const name = accountNameById.get(resolvedAccountId)
+            return `both sides resolve to "${name}" (source comes from Means of Payment, destination from Category)`
+          }
+          const missing: string[] = []
+          if (resolvedAccountId === null) {
+            missing.push(
+              mopValue
+                ? `no account named "${toStr(row.means_of_payment).trim()}" (Means of Payment, the source)`
+                : 'the Means of Payment cell is empty, so there is no source account'
+            )
+          }
+          if (transferAccountId === null) {
+            const cat = toStr(row.category).trim()
+            missing.push(
+              cat
+                ? `no account named "${cat}" (Category, the destination)`
+                : 'the Category cell is empty, so there is no destination account'
+            )
+          }
+          return missing.length ? missing.join('; ') : undefined
+        })()
         skipped.push({
           index: i,
-          reason: sameAccount
-            ? `${invariantError} — both sides resolve to "${sameAccount}" (source comes from Means of Payment, destination from Category)`
-            : invariantError,
+          reason: detail ? `${invariantError} — ${detail}` : invariantError,
           label: importRowLabel(row.date, row.description),
         })
         continue
