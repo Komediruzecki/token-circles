@@ -99,6 +99,31 @@ export default function BillingPlans(props: {
   }
   const isCurrent = (id: string) => currentId() === id
 
+  /**
+   * Where a plan sits in the ladder.
+   *
+   * The catalogue arrives from GET /api/plans as `Object.values(PLANS)`, which preserves plans.ts's
+   * declaration order — free, basic, advanced, ultimate — and that is the same order this grid
+   * renders in. Reading the position rather than keeping a second hardcoded list here means a tier
+   * slotted into plans.ts later is labelled correctly with no change to this file.
+   */
+  const rank = (id: string) => plans().findIndex((p) => p.id === id)
+
+  /**
+   * "Upgrade" on every card was wrong half the time. From Advanced, the Basic card still said
+   * Upgrade — the opposite of what clicking it does — and there was nothing on the page to tell a
+   * subscriber which direction any of the other cards were in.
+   */
+  const ctaLabel = (id: string) => {
+    const from = rank(currentId())
+    const to = rank(id)
+    // A current plan that is not in the catalogue — a legacy value, or one granted out of band —
+    // says nothing about direction. "Upgrade" is the safe reading of a paid card from an unknown
+    // starting point, and it is what the button said before this existed.
+    if (from < 0 || to < 0) return 'Upgrade'
+    return to < from ? 'Downgrade' : 'Upgrade'
+  }
+
   const fmt = (n: number | null) =>
     n === null ? 'Unlimited' : n === 0 ? '—' : n.toLocaleString('en-US')
 
@@ -305,7 +330,7 @@ export default function BillingPlans(props: {
                       {props.busyKey() === p.id
                         ? 'Redirecting…'
                         : props.configured() && props.availablePlans().includes(p.id)
-                          ? 'Upgrade'
+                          ? ctaLabel(p.id)
                           : 'Coming soon'}
                     </button>
                   </Show>
