@@ -8,11 +8,28 @@ on:
 
 jobs:
   e2e:
-    name: E2E Tests
+    name: E2E Tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    # The suite runs serially on CI (see playwright.config.ts); a clean run is well under this,
-    # so hitting it means something is hung rather than slow.
-    timeout-minutes: 30
+    # Per shard, not for the suite. Each shard is ~5 min of setup plus a few minutes of tests, so
+    # hitting this means something is hung rather than slow. The previous bound was 30 minutes for
+    # the WHOLE suite run serially in one job, which a clean run already spent 22 of; the next push
+    # to main went over and GitHub killed it — and a `timeout-minutes` kill reports as *cancelled*,
+    # which reads like a broken test suite when nothing failed.
+    timeout-minutes: 25
+
+    strategy:
+      # One shard failing should not cancel the other three. The point of splitting the suite is to
+      # see everything that is broken in one run, not the first thing.
+      fail-fast: false
+      matrix:
+        # A pull request runs the 44-test smoke subset, which fits in one job in under four
+        # minutes. A push to main runs all 515 tests, split four ways.
+        #
+        # Four JOBS, not four workers. playwright.config.ts pins `workers: 1` on CI because four
+        # headless Chromiums against one wrangler got workerd killed twenty seconds in. Sharding
+        # buys back the wall-clock without putting a second browser on any one workerd: every
+        # shard is its own runner with its own wrangler and its own local D1.
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1]' || '[1, 2, 3, 4]') }}
 
     steps:
       - name: Checkout
@@ -66,22 +83,20 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             pnpm run test:e2e:smoke
           else
-            pnpm run test:e2e
+            pnpm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
           fi
         continue-on-error: false
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
-
-      - name: Upload test screenshots
+      # Both of these used to be wrong, and silently so. They uploaded `playwright-report/` and
+      # `test-results/` from the REPO ROOT, but Playwright writes them next to its config, under
+      # `frontend/`. Every run since they were added produced zero artifacts, so a failing spec's
+      # trace was never actually collected. The name has to carry the shard too — upload-artifact
+      # v4 rejects a second upload under a name another job already claimed.
+      - name: Upload failure traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-screenshots
-          path: test-results/
+          name: playwright-traces-${{ matrix.shard }}
+          path: frontend/test-results/
           retention-days: 30
+          if-no-files-found: ignore
