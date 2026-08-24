@@ -15,24 +15,41 @@ either repository could have told you that.
 ## Shooting a set
 
 This repository often has several worktrees running at once. **Do this in a
-worktree of your own, on ports nobody else is using** — `3847` and `3800` are
-the shared backend and Playwright ports. `db/*.db` is gitignored, so a fresh
-worktree gets its own database rather than sharing one.
+worktree of your own, on ports nobody else is using** — `8787` and `3800` are
+the e2e suite's. `worker/.wrangler` is gitignored, so a fresh worktree gets its
+own local D1 rather than sharing one.
+
+The app is the e2e suite's app: `wrangler dev` against a local D1, vite proxying
+`/api` at it, and the seeded fixture account. Three steps, because the capturer
+needs the servers to still be up when it runs and Playwright stops the ones it
+starts.
 
 ```sh
-# 1. seed this worktree's own db/test.db
-NODE_ENV=test node backend/scripts/nuke-demo.js
+# 1. the Worker, on ports of your own (it keeps running)
+cd worker
+pnpm run d1:migrate:local && pnpm exec wrangler dev --port 8790 &
 
-# 2. backend, on a port of your own
-NODE_ENV=test PORT=3947 node backend/index.js &
+# 2. the dev server pointed at it
+cd ../frontend
+API_PROXY_TARGET=http://127.0.0.1:8790 npx vite --port 3900 --strictPort &
 
-# 3. dev server pointed at it
-cd frontend
-API_PROXY_TARGET=http://127.0.0.1:3947 npx vite --port 3900 --strictPort &
+# 3. register and seed the fixture account against those two
+E2E_PORT=3900 E2E_API_PORT=8790 \
+  npx playwright test --config=playwright.shots.config.ts --project=setup
 
 # 4. shoot
-npm run marketing:shots
+BASE_URL=http://127.0.0.1:3900 npm run marketing:shots
 ```
+
+Step 3 is `--project=setup` deliberately: without it the config also re-shoots
+the PWA install screenshots into `public/`, which is a different job (see
+[PWA Install Assets](pwa-install-assets.md)). It is idempotent — run it again on
+a database that already has the account and it signs in and re-seeds what is
+missing.
+
+A capture against an unseeded database photographs six empty states without
+complaint, which is why the script checks each frame for content and prints the
+row and digit counts it found.
 
 Output lands in `frontend/local/marketing-shots/` (gitignored). To write
 straight into the gallery instead:
@@ -58,25 +75,44 @@ Both sites carry the gallery, so both need a version bump and a tag
 | `BASE_URL` | `http://127.0.0.1:3900`          | where the dev server is                     |
 | `OUT`      | `frontend/local/marketing-shots` | output directory                            |
 | `SHOT`     | all six                          | one slug or route, e.g. `SHOT=05-portfolio` |
-| `PROFILE`  | `3`                              | demo profile id                             |
+| `PROFILE`  | looked up                        | profile id; default is the fixture, by name |
+| `EMAIL`    | `e2e@tokencircles.test`          | account to sign in as                       |
+| `PASSWORD` | the fixture's                    | its password                                |
 | `LIGHT=1`  | off                              | light theme instead of the published dark   |
 | `CHROMIUM` | Playwright's own                 | chromium binary path                        |
 
-## Why seed with the script and not the endpoint
+## Where the data comes from
 
-Use `backend/scripts/nuke-demo.js`. **Not** `POST /api/profiles/reseed-demo`:
-the endpoint does not clear `portfolio_holdings`, so every call appends another
-copy of them. A database reseeded a few times shows a portfolio of the same two
-tickers repeated four times over, and the endpoint still answers
-`{"ok":true,"message":"Demo data has been restored"}`.
+`frontend/tests/e2e-seed.ts` — the same fixture the e2e suite runs against.
+Twenty-four months of transactions across six categories, two accounts, four
+monthly budgets, two savings goals, a loan, three holdings and two bills.
 
-## Why profile 3
+One fixture, shot by both, on purpose: a screenshot pipeline with its own idea
+of what the data looks like drifts from the app the moment either side moves,
+and it drifts silently — the frames still render.
 
-Profile 1 seeds two ETFs, which makes a threadbare portfolio frame. Profile 3
-("Example High Income") seeds eight tickers, and its transaction, budget and
-analytics data is correspondingly denser. Shooting a mixed set — five frames
-from one profile and one from another — puts a different profile name in one
-sidebar, so the whole set moves together.
+**Do not use `POST /api/profiles/reseed-demo`.** On the Worker it only resets
+the current profile to default categories; the rich three-profile demo it used
+to run is client-only now. It will empty the profile you are about to shoot.
+
+## What changed when the Express server went
+
+The published set before 2026-08-24 was shot from the Express server's demo
+profile 3 ("Example High Income"), seeded by `backend/scripts/nuke-demo.js`.
+That runtime and that script are gone — see [AGENTS.md](../AGENTS.md).
+
+The fixture account replaces them, and it is thinner: one checking account and
+one savings account rather than a full set, three tickers rather than eight.
+Frames that leaned on the old profile's density — `05-portfolio` most of all —
+read leaner. The content gates in the script were re-checked against the fixture
+and all six pass; they catch a collapse, they do not grade the frame.
+
+## Why the profile is looked up, not pinned
+
+The fixture profile's id is whatever the database handed out, so it differs
+between worktrees and between resets. The script reads `GET /api/profiles` and
+picks the one named `E2E Fixture`. A wrong id is not an error anywhere — it is
+six shots of somebody else's empty profile. Set `PROFILE` to override.
 
 ## Things that fail by looking fine
 
@@ -109,7 +145,10 @@ that one frame does not reproduce byte-for-byte later.
 It read a flat `€0.00` everywhere until the `yahoo-finance2` v3 client bug was
 found — the price lookup was throwing into a silent fallback, so every holding
 reported `currentPrice === purchase_price`. If the column ever goes flat again,
-suspect the app before the capture: `backend/services/yahooFinanceService.js`.
+suspect the app before the capture. The quote path is now
+`worker/src/routes/portfolio.ts` (the Express service that hosted the original
+bug is gone with the rest of that runtime), and it fails the same way: a lookup
+that cannot answer leaves the purchase price in place rather than erroring.
 
 ## Sizing
 

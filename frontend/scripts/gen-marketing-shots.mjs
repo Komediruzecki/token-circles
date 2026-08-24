@@ -8,19 +8,29 @@
 //
 // See docs/marketing-screenshots.md for the full walkthrough.
 //
-// Quick version, from the repository root:
+// Quick version, from `frontend/`. The app and its database are the e2e suite's: wrangler
+// against a local D1, vite proxying /api at it, and the seeded fixture account. Playwright
+// brings all three up and tears them down, so this is the whole setup:
 //
-//   NODE_ENV=test node backend/scripts/nuke-demo.js      # seed this checkout's db/test.db
-//   NODE_ENV=test PORT=3947 node backend/index.js &
-//   cd frontend
-//   API_PROXY_TARGET=http://127.0.0.1:3947 npx vite --port 3900 --strictPort &
+//   E2E_PORT=3900 E2E_API_PORT=8790 npx playwright test --config=playwright.shots.config.ts
 //   BASE_URL=http://127.0.0.1:3900 npm run marketing:shots
+//
+// The first command is what seeds the database and leaves it seeded; it also re-shoots the PWA
+// install screenshots, which is harmless. It has to run FIRST and it has to have finished — a
+// capture against an unseeded database photographs six empty states without complaint.
+//
+// (The set used to come from the Express server's three-profile demo, seeded by
+// `backend/scripts/nuke-demo.js` and shot from profile 3. That runtime is gone; the fixture
+// account is what the repository has now. It is thinner — one checking account, three tickers —
+// so frames that leaned on the old profile's density read leaner.)
 //
 // Env vars:
 //   BASE_URL   app URL                                   (default http://127.0.0.1:3900)
 //   OUT        output directory                          (default frontend/local/marketing-shots)
 //   SHOT       capture one slug or route only            (default: all six)
-//   PROFILE    demo profile id to shoot                  (default 3)
+//   PROFILE    profile id to shoot                       (default: the fixture, looked up by name)
+//   EMAIL      account to sign in as                     (default e2e@tokencircles.test)
+//   PASSWORD   its password
 //   LIGHT=1    light theme instead of the published dark one
 //   CHROMIUM   chromium executable path
 //
@@ -53,7 +63,12 @@ const BASE = process.env.BASE_URL || 'http://127.0.0.1:3900'
 // create it.
 const OUT = process.env.OUT || fileURLToPath(new URL('../local/marketing-shots', import.meta.url))
 const ONLY = process.env.SHOT || ''
-const PROFILE = process.env.PROFILE || '3'
+// Resolved after login when not pinned: the fixture profile's id depends on what else the
+// database has seen, so hardcoding one is how a set comes back showing an empty profile.
+let PROFILE = process.env.PROFILE || ''
+const FIXTURE_PROFILE = 'E2E Fixture'
+const EMAIL = process.env.EMAIL || 'e2e@tokencircles.test'
+const PASSWORD = process.env.PASSWORD || 'something-like-this'
 const DARK = process.env.LIGHT !== '1'
 
 // The published masters are exactly this size, and showcase-gallery/src/index.ts declares
@@ -139,7 +154,7 @@ const reachable = await fetch(BASE, { method: 'HEAD' }).then(
 if (!reachable) {
   console.error(
     `FATAL: nothing answering at ${BASE}.\n` +
-      `  Start the dev server:  API_PROXY_TARGET=http://127.0.0.1:3947 npx vite --port 3900 --strictPort\n` +
+      `  Bring it up (and seed it):  E2E_PORT=3900 E2E_API_PORT=8790 npx playwright test --config=playwright.shots.config.ts\n` +
       `  Or point BASE_URL at wherever it is already running.`
   )
   process.exit(1)
@@ -168,17 +183,37 @@ const ctx = await browser.newContext({
 // Authenticate through the API the way the e2e helpers do, so the session cookie is in
 // the context before the first paint and no shot catches a login screen.
 const loginRes = await ctx.request.post(`${BASE}/api/auth/login`, {
-  data: { username: 'person', password: 'something-like-this' },
-  headers: { 'x-skip-ratelimit': 'true' },
+  data: { email: EMAIL, password: PASSWORD },
 })
 if (!loginRes.ok()) {
   console.error(
-    `FATAL: login returned ${loginRes.status()}. The dev server is up, so this is the ` +
-      `backend behind it: check it is running with NODE_ENV=test and that the dev ` +
-      `server's API_PROXY_TARGET points at it.`
+    `FATAL: login returned ${loginRes.status()} for ${EMAIL}. The dev server is up, so this is ` +
+      `the Worker behind it. Run the shots config first — it registers and seeds this ` +
+      `account:\n` +
+      `  E2E_PORT=3900 E2E_API_PORT=8790 npx playwright test --config=playwright.shots.config.ts`
   )
   await browser.close()
   process.exit(1)
+}
+
+// The fixture profile's id is whatever the database handed out. Reading it back beats guessing:
+// a wrong id is not an error anywhere, it is six shots of somebody else's empty profile.
+if (!PROFILE) {
+  const profilesRes = await ctx.request.get(`${BASE}/api/profiles`)
+  const body = profilesRes.ok() ? await profilesRes.json() : null
+  const profiles = Array.isArray(body) ? body : (body?.profiles ?? [])
+  const fixture = profiles.find((p) => p.name === FIXTURE_PROFILE) ?? profiles[0]
+  if (!fixture) {
+    console.error(
+      `FATAL: ${EMAIL} owns no profiles. Run the shots config first to seed the fixture.`
+    )
+    await browser.close()
+    process.exit(1)
+  }
+  PROFILE = String(fixture.id)
+  if (fixture.name !== FIXTURE_PROFILE) {
+    console.warn(`  no "${FIXTURE_PROFILE}" profile; shooting "${fixture.name}" instead`)
+  }
 }
 
 await ctx.addInitScript(
@@ -253,7 +288,8 @@ for (const shot of wanted) {
     if (found < shot.expect.min) {
       throw new Error(
         `only ${found} of an expected ${shot.expect.min}+ "${shot.expect.selector}" — ` +
-          `is profile ${PROFILE} seeded? (node backend/scripts/nuke-demo.js)`
+          `is profile ${PROFILE} seeded? ` +
+          `(npx playwright test --config=playwright.shots.config.ts --project=setup)`
       )
     }
     const digits = await page.evaluate(() => (document.body.innerText.match(/\d/g) || []).length)

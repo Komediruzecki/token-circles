@@ -166,6 +166,28 @@ export async function seedProfile(
     })
   }
 
+  // Budgets on the four spending categories that carry transactions, so the budgets page and
+  // the dashboard's budget alerts have real progress to draw rather than an empty state. The
+  // start date is the first of the current month: a budget's period is derived from it, so one
+  // dated mid-month reads as a partial period and every figure on the page is a fraction.
+  const today = new Date(now)
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))
+    .toISOString()
+    .slice(0, 10)
+  for (const b of [
+    { category: 'Housing', amount: 1400 },
+    { category: 'Groceries', amount: 450 },
+    { category: 'Eating out', amount: 220 },
+    { category: 'Utilities', amount: 180 },
+  ]) {
+    await post(api, '/api/budgets', profileId, {
+      category_id: categoryIds[b.category],
+      amount: b.amount,
+      period: 'monthly',
+      start_date: monthStart,
+    })
+  }
+
   // One of each, so both bill sections render. `mark-paid` is what actually makes a bill paid —
   // the field is derived from last_paid_date against the bill's frequency, not stored as a flag.
   await post(api, '/api/bills', profileId, {
