@@ -47,16 +47,19 @@ Open **http://localhost:3800** — it runs entirely in your browser (client-only
 
 - **Frontend** — SolidJS + TypeScript + Vite. Runs standalone on IndexedDB, or against the Worker API.
 - **Backend (current)** — [`worker/`](./worker): a Cloudflare Worker (Hono) with **D1** (SQLite) for data and **R2** for receipts. Auth is Google sign-in + email/password (HS256 JWT cookie); Stripe for billing; Resend for email; Cloudflare Turnstile on the auth forms.
-- **Backend (legacy)** — [`backend/`](./backend): the original Node/Express + SQLite server, superseded by the Worker and slated for removal.
+- **Backend (legacy)** — [`backend/`](./backend): the original Node/Express + SQLite server. Retired: nothing deploys it and CI does not test it. It survives only as the API the Playwright suite drives, and is slated for removal. The Docker files and `docs/docker.md` describe this server, not anything that runs today.
 
 ```
 finance-manager/
 ├── frontend/   # SolidJS app (local-first, or against the Worker)
 ├── worker/     # Cloudflare Worker API — D1 + R2 (the maintained backend)
-├── backend/    # legacy Express/SQLite server (deprecated)
+├── backend/    # legacy Express/SQLite server (retired — do not add to it)
+├── shared/     # pure TypeScript used by both runtimes
 ├── docs/       # specs, guides, postmortems
 └── .github/    # CI + deploy workflows, issue/PR templates
 ```
+
+Contributing or pointing an agent at this repo? Start with **[AGENTS.md](./AGENTS.md)**.
 
 ## Self-hosting
 

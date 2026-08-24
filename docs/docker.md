@@ -1,5 +1,10 @@
 # Docker Deployment Guide
 
+> **Retired.** This guide covers the Node/Express + SQLite server under `backend/`, which no
+> longer ships: nothing deploys it and CI does not test it. Self-hosting Token Circles today means
+> running your own copy of the Cloudflare Worker against your own D1 and R2 — see
+> [worker/README.md](../worker/README.md). Kept for anyone still running an old Docker image.
+
 This guide covers building, running, and managing the finance-manager application with Docker.
 
 ## Prerequisites
@@ -27,11 +32,11 @@ The app will be available at **http://localhost:3847**.
 
 ### Environment Variables
 
-| Variable    | Default | Description                          |
-|-------------|---------|--------------------------------------|
-| `APP_PORT`  | `3847`  | Host port to map the container port  |
-| `NODE_ENV`  | `production` | Runtime mode                    |
-| `PORT`      | `3847`  | Container internal port (do not change) |
+| Variable   | Default      | Description                             |
+| ---------- | ------------ | --------------------------------------- |
+| `APP_PORT` | `3847`       | Host port to map the container port     |
+| `NODE_ENV` | `production` | Runtime mode                            |
+| `PORT`     | `3847`       | Container internal port (do not change) |
 
 Set these in a `.env` file in the project root:
 
@@ -73,6 +78,7 @@ docker compose watch
 ```
 
 Changes are handled automatically:
+
 - `backend/` changes → full image rebuild + container restart
 - `frontend/` changes → sync files to container + restart
 - `package.json` changes → full image rebuild
@@ -265,6 +271,7 @@ APP_PORT=8080 docker compose up -d
 ### Database Locked Errors
 
 SQLite uses WAL mode. If you see "database is locked":
+
 - Ensure only one container instance is running
 - Do not access the database file directly while the container is running
 - Restart the container: `docker compose restart app`

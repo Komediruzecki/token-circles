@@ -1,5 +1,10 @@
 # Self-Hosting Guide
 
+> **Retired.** This guide covers the Node/Express + SQLite server under `backend/`, which no
+> longer ships: nothing deploys it and CI does not test it. Self-hosting Token Circles today means
+> running your own copy of the Cloudflare Worker against your own D1 and R2 — see
+> [worker/README.md](../worker/README.md). Kept for anyone still running an old Docker image.
+
 Deploy Finance Manager on your own server with Docker, a reverse proxy, and automated backups.
 
 ## Prerequisites

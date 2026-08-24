@@ -1,22 +1,28 @@
 # Documentation Index
 
+**Start here if you are an agent or a new contributor: [AGENTS.md](../AGENTS.md)** — what ships
+(the SolidJS frontend and the Cloudflare Worker), what does not (the retired Express/SQLite server
+under `backend/`, and the Docker files that describe it), and the rules that are not negotiable.
+
 ## Getting Started
 
 - [README.md](../README.md) — Project overview, setup, features, API reference
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — Development setup, workflow, testing, PR guidelines
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) — Community standards
 - [SECURITY.md](../SECURITY.md) — Vulnerability reporting and security features
+- [AGENTS.md](../AGENTS.md) — Repository orientation: what ships, what is retired, migration and deploy rules
 - [ROADMAP.md](../ROADMAP.md) — Planned features and improvements
 - [CHANGELOG.md](../CHANGELOG.md) — Version history and release notes
 - [LICENSE](../LICENSE) — GNU AGPL-3.0
 
 ## Deploying
 
-- [Self-Hosting Guide](self-hosting.md) — Docker, reverse proxy, environment variables
-- [Docker Guide](docker.md) — Container setup and configuration
+- [worker/README.md](../worker/README.md) — **Self-hosting today**: your own Cloudflare Worker, D1 and R2
+- [Self-Hosting Guide](self-hosting.md) — _retired_ — Docker, reverse proxy, environment variables for the Express server
+- [Docker Guide](docker.md) — _retired_ — container setup for the Express server
 - [Deploy-Update Pipeline](deploy-update-pipeline.md) — How open tabs cross a release: service worker, version.json, reload bounds, manual verification
-- [Docker Compose](../docker-compose.yml) — One-command production deployment
-- [Dockerfile](../Dockerfile) — Container image definition
+- [Docker Compose](../docker-compose.yml) — _retired_ — one-command deployment of the Express server
+- [Dockerfile](../Dockerfile) — _retired_ — container image for the Express server
 
 ## Marketing
 
@@ -49,6 +55,10 @@ Detailed EARS (Exactly As Required Specification) documents for all features:
 | Loans             | [specs/frontend/loans.md](specs/frontend/loans.md)                         |
 
 ### Backend
+
+> These describe the **API contract** — the routes, their inputs and their guarantees. They were
+> written against the retired Express implementation, so read them for _what the API does_, not
+> for how it is built. The implementation is `worker/src/routes/`. See [AGENTS.md](../AGENTS.md).
 
 | Module         | Spec                                                             |
 | -------------- | ---------------------------------------------------------------- |

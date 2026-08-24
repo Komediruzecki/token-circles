@@ -2,13 +2,16 @@
 
 Thank you for your interest in contributing!
 
+Before your first change, read **[AGENTS.md](./AGENTS.md)** — it says what ships, what is retired
+but still in the tree, and the few rules that will bite you (migrations are append-only; only a
+`v*` tag reaches production).
+
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 20+
 - pnpm 10+
-- SQLite 3
 
 ### Setup
 
@@ -20,18 +23,23 @@ pnpm install
 
 ### Development
 
-This is a monorepo with two main workspaces:
+Two things ship: the app and the API.
 
-- **`frontend/`** — SolidJS SPA with Vite
-- **`backend/`** — Node.js/Express API server
+- **`frontend/`** — SolidJS SPA with Vite. Also runs with no server at all, on IndexedDB.
+- **`worker/`** — the API: Hono on Cloudflare Workers, with D1 for data and R2 for receipts.
 
 ```bash
-# Start backend (port 3847)
-cd backend && node index.js
+# The API on :8787 — wrangler dev against a local D1
+pnpm run dev:worker
+pnpm -C worker run d1:migrate:local   # once, and after pulling new migrations
 
-# Start frontend dev server (port 5173)
+# The app on :3800, proxying /api to :8787
 pnpm run dev
 ```
+
+`backend/` is a retired Express + SQLite server. Nothing deploys it and CI does not test it; it
+survives only as the API the Playwright suite currently drives. Do not add to it — see
+[AGENTS.md](./AGENTS.md).
 
 ## Workflow
 
@@ -58,20 +66,29 @@ pnpm run dev
 ## Testing
 
 ```bash
-pnpm run test        # Run all tests
-pnpm run test -- --watch  # Watch mode
-npx jest <path>      # Run specific test file
+pnpm run test                       # frontend — vitest + fake-indexeddb
+pnpm -C worker run test             # worker — vitest in a real Worker isolate, against a real D1
+pnpm run typecheck                  # both
+pnpm run lint                       # frontend eslint
 ```
 
-Tests require the backend server running on port 3847 with `NODE_ENV=test`.
-The test database (`db/test.db`) is reset automatically between test files.
-Run `pnpm run test` once to initialize the test database before running individual tests.
+Neither suite needs a server running: the frontend fakes IndexedDB, and the Worker suite boots the
+Worker itself with migrations applied.
+
+New behaviour needs a test that fails without the change. A guard needs a test that fails when the
+guard is removed — it is worth deleting the guard once to check that it does.
+
+The Playwright suite (`frontend/tests/`) is the exception: it drives the real built app and needs
+an API answering on :3847. `.github/workflows/e2e.yml` is the reference for how it is started and
+seeded.
 
 ## Code Style
 
 - TypeScript for frontend code
 - ESLint + Prettier configured — run `pnpm run lint` before committing
 - Follow existing patterns in the codebase
+- **No emojis** — not in components, buttons, headings, labels, logs, or commit messages. Use an
+  SVG icon: reuse one from the file you are editing, or add a new icon component.
 
 ### Editable form controls
 
