@@ -2,7 +2,14 @@ import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import styles from './LoginModal.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
-import Turnstile, { resetTurnstile, turnstileEnabled, waitForTurnstileToken } from './Turnstile'
+import Turnstile, {
+  captchaIsStuck,
+  captchaStatusMessage,
+  resetTurnstile,
+  turnstileEnabled,
+  waitForTurnstileToken,
+} from './Turnstile'
+import type { TurnstileStatus } from './Turnstile'
 
 export interface LoginModalProps {
   onClose: () => void
@@ -22,6 +29,16 @@ export default function LoginModal(props: LoginModalProps) {
   // register → auto-sign-in handoff runs (mirrors LoginScreen).
   const [stage, setStage] = createSignal<'form' | 'signing-in'>('form')
   const [turnstileToken, setTurnstileToken] = createSignal('')
+  const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
+    turnstileEnabled ? 'loading' : 'disabled'
+  )
+  // See LoginScreen: a spent token has to take the status with it, or the form explains
+  // nothing under a submit button it has just disabled. A stuck widget stays stuck.
+  const clearCaptcha = () => {
+    resetTurnstile()
+    setTurnstileToken('')
+    setCaptchaStatus((s) => (captchaIsStuck(s) ? s : 'ready'))
+  }
 
   // Set when the user closes the modal; the register → auto-sign-in
   // continuation checks it so a completed login can't reload the page out from
@@ -68,8 +85,7 @@ export default function LoginModal(props: LoginModalProps) {
         // credentials they just chose. The register call consumed the single-use
         // captcha token; reset and wait for a fresh one before the login call.
         setStage('signing-in')
-        resetTurnstile()
-        setTurnstileToken('')
+        clearCaptcha()
         try {
           const token = await waitForTurnstileToken(turnstileToken, 20000)
           // The user closed the modal while we waited — drop the handoff
@@ -90,8 +106,7 @@ export default function LoginModal(props: LoginModalProps) {
           setPassword('')
           setNotice('Almost done — sign in with your password below.')
           setLoading(false)
-          resetTurnstile()
-          setTurnstileToken('')
+          clearCaptcha()
           return
         }
       }
@@ -101,8 +116,7 @@ export default function LoginModal(props: LoginModalProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
-      resetTurnstile()
-      setTurnstileToken('')
+      clearCaptcha()
     }
   }
 
@@ -148,7 +162,7 @@ export default function LoginModal(props: LoginModalProps) {
               {/* The form's widget unmounted with the form; this fresh instance
                   issues the sign-in token (and stays visible in case Cloudflare
                   wants an interactive check). */}
-              <Turnstile onToken={setTurnstileToken} />
+              <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
             </div>
           }
         >
@@ -219,7 +233,29 @@ export default function LoginModal(props: LoginModalProps) {
                 {error()}
               </div>
             </Show>
-            <Turnstile onToken={setTurnstileToken} />
+            <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+            {/* Turnstile draws its own, actionable panel for the states the user has to fix
+                (blocked script, widget error); this is only the ordinary "not solved yet" hint.
+                Without it the modal disabled Sign in and said nothing about why. */}
+            <Show
+              when={
+                turnstileEnabled &&
+                !turnstileToken() &&
+                !loading() &&
+                !captchaIsStuck(captchaStatus())
+              }
+            >
+              <div
+                data-test-id="captcha-hint"
+                style={{
+                  color: 'var(--text-secondary)',
+                  'font-size': '12px',
+                  margin: '2px 0 10px',
+                }}
+              >
+                {captchaStatusMessage(captchaStatus())}
+              </div>
+            </Show>
             <button
               class={styles.btnSubmit}
               type="submit"

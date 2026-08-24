@@ -6,7 +6,14 @@ import layoutStyles from './Layout.module.css'
 import { LogoMark } from './Logo'
 import { OrbitSpinner } from './OrbitSpinner'
 import SupportContact from './SupportContact'
-import Turnstile, { resetTurnstile, turnstileEnabled, waitForTurnstileToken } from './Turnstile'
+import Turnstile, {
+  captchaIsStuck,
+  captchaStatusMessage,
+  resetTurnstile,
+  turnstileEnabled,
+  waitForTurnstileToken,
+} from './Turnstile'
+import type { TurnstileStatus } from './Turnstile'
 
 /**
  * Full-page sign-in gate, shown in server (self-hosted) mode when there's no valid session.
@@ -30,6 +37,18 @@ export default function LoginScreen() {
   // register → auto-sign-in handoff runs.
   const [stage, setStage] = createSignal<'form' | 'signing-in'>('form')
   const [turnstileToken, setTurnstileToken] = createSignal('')
+  const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
+    turnstileEnabled ? 'loading' : 'disabled'
+  )
+  // A captcha token is single-use, so every attempt ends by burning it and re-arming the widget.
+  // The status has to follow: left at 'solved' while we hold no token, the form would explain
+  // nothing at all under a submit button it has just disabled. A widget that is stuck stays
+  // stuck — resetting a script that never loaded does not load it.
+  const clearCaptcha = () => {
+    resetTurnstile()
+    setTurnstileToken('')
+    setCaptchaStatus((s) => (captchaIsStuck(s) ? s : 'ready'))
+  }
   // Show the "invalid email" hint only after the user has interacted with the
   // field (on blur or first submit), so an untouched empty form isn't red.
   const [emailTouched, setEmailTouched] = createSignal(false)
@@ -66,8 +85,7 @@ export default function LoginScreen() {
         setError(err instanceof Error ? err.message : 'Something went wrong')
       } finally {
         setLoading(false)
-        resetTurnstile()
-        setTurnstileToken('')
+        clearCaptcha()
       }
       return
     }
@@ -92,8 +110,7 @@ export default function LoginScreen() {
         // The register call consumed the single-use captcha token; reset and
         // wait for the widget to issue a fresh one before the login call.
         setStage('signing-in')
-        resetTurnstile()
-        setTurnstileToken('')
+        clearCaptcha()
         try {
           const token = await waitForTurnstileToken(turnstileToken, 20000)
           await api.loginWithPassword(em, pw, token)
@@ -108,8 +125,7 @@ export default function LoginScreen() {
           setPassword('')
           setNotice('Almost done — sign in with your password below.')
           setLoading(false)
-          resetTurnstile()
-          setTurnstileToken('')
+          clearCaptcha()
           return
         }
       }
@@ -119,8 +135,7 @@ export default function LoginScreen() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
-      resetTurnstile()
-      setTurnstileToken('')
+      clearCaptcha()
     }
   }
 
@@ -198,7 +213,7 @@ export default function LoginScreen() {
               {/* The form's widget unmounted with the form; this fresh instance
                   issues the sign-in token (and stays visible in case Cloudflare
                   wants an interactive check). */}
-              <Turnstile onToken={setTurnstileToken} />
+              <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
             </div>
           }
         >
@@ -305,16 +320,27 @@ export default function LoginScreen() {
                 {error()}
               </div>
             </Show>
-            <Turnstile onToken={setTurnstileToken} />
-            <Show when={turnstileEnabled && !turnstileToken() && !loading()}>
+            <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+            {/* Turnstile draws its own, actionable panel for the states the user has to fix
+                (blocked script, widget error). This is only the ordinary "not solved yet" hint,
+                so the two never stack up saying different things about the same widget. */}
+            <Show
+              when={
+                turnstileEnabled &&
+                !turnstileToken() &&
+                !loading() &&
+                !captchaIsStuck(captchaStatus())
+              }
+            >
               <div
+                data-test-id="captcha-hint"
                 style={{
                   color: 'var(--text-secondary)',
                   'font-size': '12px',
                   margin: '2px 0 10px',
                 }}
               >
-                Complete the verification above to continue.
+                {captchaStatusMessage(captchaStatus())}
               </div>
             </Show>
             <button
