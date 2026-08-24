@@ -361,29 +361,40 @@ export default function Categories() {
                       </div>
                     </div>
                     <div data-test-id="category-spending" class={styles.categorySpending}>
+                      {/* Two rows, not four. The limit rides along with the amount it bounds, and
+                          what is left rides along with the bar that shows it — so a budgeted
+                          category costs the card one line more than an unbudgeted one, instead of
+                          three. */}
                       <div class={styles.spendingHeader}>
                         <span class={styles.spendingLabel}>Spent</span>
                         <span class={`${styles.spendingAmount} ${isOverBudget ? styles.over : ''}`}>
                           {formatCurrency(spent)}
+                          {category.type === 'expense' && budget > 0 && (
+                            <span class={styles.spendingOf}>of {formatCurrency(budget)}</span>
+                          )}
                         </span>
                       </div>
                       {category.type === 'expense' && budget > 0 && (
-                        <>
-                          <div class={styles.progressBar}>
+                        <div class={styles.meterRow}>
+                          <div
+                            class={styles.meter}
+                            role="img"
+                            aria-label={`${formatCurrency(spent)} spent of a ${formatCurrency(budget)} budget`}
+                          >
                             <div
-                              class={`${styles.progressFill} ${isOverBudget ? styles.over : ''}`}
+                              class={`${styles.meterFill} ${isOverBudget ? styles.over : ''}`}
                               style={{ width: `${Math.min(100, percentUsed)}%` }}
                             />
                           </div>
-                          <div class={styles.spendingFooter}>
-                            <span class={styles.budgetLimits}>{formatCurrency(budget)} limit</span>
-                            <span
-                              class={`${styles.remainingAmount} ${isOverBudget ? styles.over : ''}`}
-                            >
-                              {formatCurrency(remaining)} remaining
-                            </span>
-                          </div>
-                        </>
+                          <span
+                            class={`${styles.meterNote} ${isOverBudget ? styles.over : ''}`}
+                            data-test-id="category-remaining"
+                          >
+                            {isOverBudget
+                              ? `${formatCurrency(Math.abs(remaining))} over`
+                              : `${formatCurrency(remaining)} left`}
+                          </span>
+                        </div>
                       )}
                     </div>
                     <div class={styles.categoryColors}>

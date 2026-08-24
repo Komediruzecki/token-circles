@@ -1208,17 +1208,26 @@
 }
 
 /* Icon field: the input sits next to a live preview of the icon the typed keyword
-   resolves to, so the choice is visible before saving. */
-.iconField {
+   resolves to, so the choice is visible before saving.
+   
+   Kebab-case, like every other rule in this file, and not merely for consistency. Vite is
+   configured with `localsConvention: 'camelCase'`, which exports a camelCase ALIAS for every
+   kebab-case class — so `.form-input` and `.formInput` both arrive in the JS as `styles.formInput`
+   and the later one silently wins. Writing this block in camelCase made `styles.formInput` resolve
+   to `.formInput` here rather than to `.form-input` above — a selector that only matches inside
+   `.icon-field` — so all six uses of it in Budgets.tsx rendered with no background, no border and
+   no padding. In dark mode a transparent `<select>` is what Chrome paints its option list white
+   behind, under text that is still light: white on white. */
+.icon-field {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.iconField .formInput {
+.icon-field .form-input {
   flex: 1;
   min-width: 0;
 }
-.iconPreview {
+.icon-preview {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1230,7 +1239,7 @@
   background: var(--btn-secondary-bg);
   color: var(--text-secondary);
 }
-.fieldHint {
+.field-hint {
   display: block;
   margin-top: 6px;
   font-size: 12px;

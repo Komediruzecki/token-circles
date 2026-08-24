@@ -162,82 +162,6 @@
   margin-top: 2px;
 }
 
-.categories-page .budget-limits {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.categories-page .budget-limit {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.categories-page .budget-limit-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.categories-page .budget-limit-amount {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.categories-page .remaining-amount {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.categories-page .remaining-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.categories-page .remaining-amount-value {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.categories-page .remaining-amount-value.positive {
-  color: var(--success);
-}
-
-.categories-page .remaining-amount-value.negative {
-  color: var(--danger);
-}
-
-.categories-page .budget-progress {
-  height: 6px;
-  background: var(--budget-bar-bg);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 8px;
-}
-
-.categories-page .budget-progress-bar {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s;
-}
-
-.categories-page .budget-progress-bar.warning {
-  background: var(--warning);
-}
-
-.categories-page .budget-progress-bar.danger {
-  background: var(--danger);
-}
-
-.categories-page .budget-progress-bar.success {
-  background: var(--success);
-}
-
-.categories-page .budget-progress-bar.normal {
-  background: var(--primary);
-}
-
 .categories-page .category-colors {
   display: flex;
   gap: 6px;
@@ -451,51 +375,87 @@
   color: var(--expense);
 }
 
-.progress-bar {
-  height: 6px;
+/*
+ * The budget meter: one row carrying both the bar and what is left of the budget.
+ *
+ * It replaces a 6px track followed by two text rows ("… limit" / "… remaining"), which cost a
+ * budgeted category three extra lines and drew a second horizontal rule directly under a bar of
+ * almost the same weight — reading as one divider accidentally painted twice.
+ *
+ * The number sits BESIDE the bar rather than inside it. Inside looks tighter until the fill
+ * reaches it, and then the text is on the fill in one theme and on the track in the other, with
+ * no single colour that reads well against both.
+ */
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+
+.meter {
+  position: relative;
+  flex: 1;
+  /* Enough to read as a capsule rather than a hairline, still slimmer than a line of text. */
+  height: 10px;
+  min-width: 0;
+  border-radius: 999px;
   background: var(--budget-bar-bg);
-  border-radius: 3px;
   overflow: hidden;
-  margin-top: 8px;
 }
 
-.progress-fill {
+.meter-fill {
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s;
-}
-
-.progress-fill.warning {
-  background: var(--warning);
-}
-
-.progress-fill.danger {
-  background: var(--danger);
-}
-
-.progress-fill.success {
-  background: var(--success);
-}
-
-.progress-fill.normal {
+  border-radius: 999px;
   background: var(--primary);
 }
 
-.spending-footer {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+@media (prefers-reduced-motion: no-preference) {
+  .meter-fill {
+    transition: width 0.3s ease;
+  }
 }
 
-.budget-limits {
+.meter-fill.over {
+  background: var(--danger);
+}
+
+.meter-note {
+  flex-shrink: 0;
   font-size: 12px;
+  /* Figures line up across a grid of cards instead of jittering with the digits. */
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.meter-note.over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* The limit, tucked in beside the amount it bounds. Muted, because the spend is the number being
+   read and this is only the thing it is measured against. */
+.spending-of {
+  margin-left: 5px;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--text-secondary);
 }
 
-.remaining-amount {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-align: right;
+/*
+ * A very narrow card (a phone, three columns collapsed to one) would otherwise squeeze the bar to
+ * nothing to keep the number on the same line. Below this the number drops underneath, full width.
+ */
+@media (max-width: 380px) {
+  .meter-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .meter {
+    flex-basis: 100%;
+  }
 }
 
 .category-colors {
