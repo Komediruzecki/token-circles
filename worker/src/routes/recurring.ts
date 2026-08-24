@@ -309,9 +309,10 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Idempotency guard: if next_date is already in the future, the current
-  // period was already populated (or hasn't arrived yet). Either way,
-  // prevent double-population from creating duplicate transactions.
+  // Pre-flight, for the message. It is NOT what makes this safe: reading next_date and then
+  // writing leaves a window in which another request does the same, and both then populate the
+  // same period — two identical transactions, the account debited twice. The guard carried by
+  // every statement below is what closes it.
   if (r.next_date && r.next_date > todayStr) {
     throw new HttpError(409, 'Recurring transaction already populated for current period');
   }
@@ -346,13 +347,21 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
 
   const stmts: D1PreparedStatement[] = [];
 
+  // Every statement is conditional on `next_date` still being what we read. A batch is one
+  // transaction, so a competing batch either commits entirely before this one — in which case
+  // next_date has already moved and nothing here matches — or entirely after, and sees ours.
+  // The statement that moves next_date goes LAST, so the writes before it still see the pre-state.
+  const guard = `(SELECT COUNT(*) FROM recurring_transactions
+                   WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3) = 1`;
+  const claim = [id, pid, r.next_date ?? null] as const;
+
   // 1. Insert the transaction, including account_id / transfer_account_id if set.
   stmts.push(
     c.env.DB.prepare(
       `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor, currency, amount_local)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       SELECT ?2, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?5 WHERE ${guard}`
     ).bind(
-      pid,
+      ...claim,
       r.description,
       r.amount,
       r.type,
@@ -361,10 +370,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
       r.transfer_account_id ?? null,
       date,
       r.notes || '',
-      '',
-      '',
-      baseCurrency,
-      r.amount
+      baseCurrency
     )
   );
 
@@ -376,8 +382,8 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   //      - an account-less recurring is a pure reminder (no balance change).
   const bal = (delta: number, accId: number) =>
     c.env.DB.prepare(
-      'UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?'
-    ).bind(delta, accId, pid);
+      `UPDATE accounts SET balance = balance + ?4 WHERE id = ?5 AND profile_id = ?2 AND ${guard}`
+    ).bind(...claim, delta, accId);
   if (r.account_id != null) {
     if (r.type === 'transfer' && r.transfer_account_id != null) {
       stmts.push(bal(-r.amount, r.account_id), bal(r.amount, r.transfer_account_id));
@@ -388,14 +394,18 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
     stmts.push(bal(r.amount, r.transfer_account_id));
   }
 
-  // 3. Advance next_date.
+  // 3. Advance next_date. This is the claim — last, and guarded like the rest.
   stmts.push(
     c.env.DB.prepare(
-      'UPDATE recurring_transactions SET next_date = ? WHERE id = ? AND profile_id = ?'
-    ).bind(nextStr, id, pid)
+      `UPDATE recurring_transactions SET next_date = ?4
+       WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3`
+    ).bind(...claim, nextStr)
   );
 
   const results = await c.env.DB.batch(stmts);
+  if ((results[results.length - 1]?.meta?.changes ?? 0) === 0) {
+    throw new HttpError(409, 'Recurring transaction already populated for current period');
+  }
   const txLastRowId = results[0]?.meta?.last_row_id;
 
   return c.json({

@@ -42,7 +42,7 @@ import RecurringSection from '../components/RecurringSection'
 import { SkeletonTable } from '../components/Skeleton'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
-import { api, getLocalCurrency, toast } from '../core/api'
+import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
@@ -559,6 +559,10 @@ export default function Transactions() {
       setTransactions(data)
     } catch (error) {
       console.error('Failed to apply category:', error)
+      if (errorStatus(error) === 409) {
+        toast(error instanceof Error ? error.message : 'That transaction changed', 'error')
+        await refreshTransactions()
+      }
     }
   }
 
@@ -1583,6 +1587,14 @@ export default function Transactions() {
                   revokePreviewUrl()
                 } catch (error) {
                   console.error('Failed to save transaction:', error)
+                  const message =
+                    error instanceof Error ? error.message : 'Could not save this transaction'
+                  toast(message, 'error')
+                  // 409: the row moved under us — another device edited or deleted it between
+                  // this form opening and Save. The refusal is only useful if the screen catches
+                  // up to what is actually there, so pull it in and leave the modal open with
+                  // the user's typing intact.
+                  if (errorStatus(error) === 409) await refreshTransactions()
                 }
               }}
             >

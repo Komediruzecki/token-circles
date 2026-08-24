@@ -100,6 +100,45 @@ function typeChangeBalanceStmts(
   return stmts;
 }
 
+/**
+ * "This transaction is still exactly as I read it" — as SQL, for the balance-relevant fields only.
+ *
+ * Editing or deleting a transaction means reversing its OLD effect on the account and applying the
+ * new one, and the old effect is computed in JS from a row read before the write. Two edits landing
+ * together each read the same original, so each reversed it: a 100 expense edited to 50 on a laptop
+ * and to 30 on a phone credited the account 200 and debited 80, and the balance was permanently
+ * 50 out. The batch was atomic; what was not atomic was the decision.
+ *
+ * Every statement in those batches carries this, and the statement that changes the row goes LAST
+ * so the ones before it still see the pre-state. A batch is one transaction, so the loser sees the
+ * winner's committed row, matches nothing, and writes nothing — and says so with a 409 rather than
+ * reporting a success that silently lost.
+ *
+ * The fields are exactly the ones the reversal arithmetic reads. An edit that only touches the
+ * description does not collide with one that only touches the notes, because neither changes what
+ * the other has to reverse.
+ */
+export function unchangedSince(row: TxRow, id: number | string, pid: number) {
+  return {
+    sql: `(SELECT COUNT(*) FROM transactions
+            WHERE id = ? AND profile_id = ?
+              AND type = ? AND amount = ?
+              AND amount_local IS ? AND account_id IS ? AND transfer_account_id IS ?) = 1`,
+    binds: [
+      id,
+      pid,
+      row.type,
+      row.amount,
+      row.amount_local ?? null,
+      row.account_id ?? null,
+      row.transfer_account_id ?? null,
+    ] as const,
+  };
+}
+
+const CONCURRENT_EDIT =
+  'This transaction was changed on another device. Reload and try again.';
+
 interface TagRow {
   id: number;
   name: string;
@@ -1028,49 +1067,29 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
 
   const stmts: D1PreparedStatement[] = [];
 
+  // Guarded on the row still being what the reversal below was computed from — see unchangedSince.
+  const guard = unchangedSince(oldTx, id, pid);
+  const bal = (delta: number, accId: number) =>
+    c.env.DB.prepare(
+      `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ? AND ${guard.sql}`
+    ).bind(delta, accId, pid, ...guard.binds);
+
   // Reverse old transaction effect on old account(s). Balance mutations are scoped to the single
   // write profile `pid` (the row lives in `pid`; local scopes deltas the same way) — NOT the full
   // selected set, which on legacy cross-linked data could move another profile's balance (#3).
   if (oldTx.account_id) {
     if (oldTx.type === 'transfer' && oldTx.transfer_account_id) {
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(oldV, oldTx.account_id, pid),
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
-        ).bind(oldV, oldTx.transfer_account_id, pid)
-      );
+      stmts.push(bal(oldV, oldTx.account_id), bal(-oldV, oldTx.transfer_account_id));
     } else if (oldTx.type === 'transfer') {
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(oldV, oldTx.account_id, pid)
-      );
+      stmts.push(bal(oldV, oldTx.account_id));
     } else if (oldTx.type === 'income' || oldTx.type === 'expense') {
-      const oldDelta = oldTx.type === 'income' ? -oldV : oldV;
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(oldDelta, oldTx.account_id, pid)
-      );
+      stmts.push(bal(oldTx.type === 'income' ? -oldV : oldV, oldTx.account_id));
     }
   }
   // Reverse old transfer TO effect (money added to transfer_account_id).
   if (oldTx.transfer_account_id && oldTx.type === 'transfer' && !oldTx.account_id) {
-    stmts.push(
-      c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
-      ).bind(oldV, oldTx.transfer_account_id, pid)
-    );
+    stmts.push(bal(-oldV, oldTx.transfer_account_id));
   }
-
-  // Update the transaction row itself.
-  stmts.push(
-    c.env.DB.prepare(
-      `UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND profile_id = ?`
-    ).bind(...params)
-  );
 
   // Apply new transaction effect on account(s).
   const newAccountId = account_id !== undefined ? account_id || null : oldTx.account_id;
@@ -1102,38 +1121,28 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   if (invariantError) throw new HttpError(400, invariantError);
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
-        ).bind(newAmountLocal, newAccountId, pid),
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(newAmountLocal, newTransferAccountId, pid)
-      );
+      stmts.push(bal(-newAmountLocal, newAccountId), bal(newAmountLocal, newTransferAccountId));
     } else if (newType === 'transfer') {
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
-        ).bind(newAmountLocal, newAccountId, pid)
-      );
+      stmts.push(bal(-newAmountLocal, newAccountId));
     } else if (newType === 'income' || newType === 'expense') {
-      const newDelta = newType === 'income' ? newAmountLocal : -newAmountLocal;
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(newDelta, newAccountId, pid)
-      );
+      stmts.push(bal(newType === 'income' ? newAmountLocal : -newAmountLocal, newAccountId));
     }
   }
   if (!newAccountId && newTransferAccountId && newType === 'transfer') {
-    stmts.push(
-      c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-      ).bind(newAmountLocal, newTransferAccountId, pid)
-    );
+    stmts.push(bal(newAmountLocal, newTransferAccountId));
   }
 
-  await c.env.DB.batch(stmts);
+  // The row itself goes LAST, so every balance statement above still matched the pre-state.
+  stmts.push(
+    c.env.DB.prepare(
+      `UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND profile_id = ? AND ${guard.sql}`
+    ).bind(...params, ...guard.binds)
+  );
+
+  const results = await c.env.DB.batch(stmts);
+  if ((results[results.length - 1]?.meta?.changes ?? 0) === 0) {
+    throw new HttpError(409, CONCURRENT_EDIT);
+  }
 
   // Recalculate linked goal progress.
   if (category_id !== undefined) await recalcGoalsByCategory(c.env.DB, category_id || null, pids);
@@ -1162,47 +1171,43 @@ transactionsRoutes.delete('/api/transactions/:id', requireAuth, async (c) => {
   if (!tx) throw new HttpError(404, 'Not found');
 
   const v = baseAmount(tx);
-  const stmts: D1PreparedStatement[] = [
-    c.env.DB.prepare('DELETE FROM transactions WHERE id = ? AND profile_id = ?').bind(id, pid),
-  ];
+  // Same guard as the edit path: the reversal below is computed from a row read before the write,
+  // so a delete racing an edit would reverse an amount the row no longer has. See unchangedSince.
+  const guard = unchangedSince(tx, id, pid);
+  const bal = (delta: number, accId: number) =>
+    c.env.DB.prepare(
+      `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ? AND ${guard.sql}`
+    ).bind(delta, accId, pid, ...guard.binds);
+
+  const stmts: D1PreparedStatement[] = [];
   // Reverse transaction effect on linked account(s). Scoped to the single write profile `pid`
   // (the row was fetched WHERE profile_id = pid; local reverses deltas the same way) — NOT the
   // full selected set, which on legacy cross-linked data could move another profile's balance (#3).
   if (tx.account_id) {
     if (tx.type === 'transfer' && tx.transfer_account_id) {
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(v, tx.account_id, pid),
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
-        ).bind(v, tx.transfer_account_id, pid)
-      );
+      stmts.push(bal(v, tx.account_id), bal(-v, tx.transfer_account_id));
     } else if (tx.type === 'transfer') {
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(v, tx.account_id, pid)
-      );
+      stmts.push(bal(v, tx.account_id));
     } else if (tx.type === 'income' || tx.type === 'expense') {
-      const delta = tx.type === 'income' ? -v : v;
-      stmts.push(
-        c.env.DB.prepare(
-          `UPDATE accounts SET balance = balance + ? WHERE id = ? AND profile_id = ?`
-        ).bind(delta, tx.account_id, pid)
-      );
+      stmts.push(bal(tx.type === 'income' ? -v : v, tx.account_id));
     }
   }
   // Reverse transfer TO effect (remove money added to transfer_account_id).
   if (tx.transfer_account_id && tx.type === 'transfer' && !tx.account_id) {
-    stmts.push(
-      c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?`
-      ).bind(v, tx.transfer_account_id, pid)
-    );
+    stmts.push(bal(-v, tx.transfer_account_id));
   }
 
-  await c.env.DB.batch(stmts);
+  // The DELETE goes last, so the reversals above still saw the row they were computed from.
+  stmts.push(
+    c.env.DB.prepare(
+      `DELETE FROM transactions WHERE id = ? AND profile_id = ? AND ${guard.sql}`
+    ).bind(id, pid, ...guard.binds)
+  );
+
+  const results = await c.env.DB.batch(stmts);
+  if ((results[results.length - 1]?.meta?.changes ?? 0) === 0) {
+    throw new HttpError(409, CONCURRENT_EDIT);
+  }
 
   if (tx.category_id) await recalcGoalsByCategory(c.env.DB, tx.category_id, pids);
 

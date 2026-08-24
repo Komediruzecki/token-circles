@@ -98,8 +98,12 @@ export class ApiClient {
             'ApiClient'
           )
         }
-        const err = new Error(errorMsg) as Error & { __handled?: boolean }
+        const err = new Error(errorMsg) as Error & { __handled?: boolean; status?: number }
         err.__handled = true
+        // Carried so a caller can tell a refusal it should act on from one it can only report —
+        // a 409 means "someone else changed this, catch up", which is different advice from
+        // "that did not work".
+        err.status = response.status
         throw err
       }
 
@@ -1320,11 +1324,20 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
     const data = (await response.json()) as T
     if (!response.ok) {
       const errorData = data as { error?: string } | undefined
-      throw new Error(errorData?.error || `Request failed with status ${response.status}`)
+      const err = new Error(
+        errorData?.error || `Request failed with status ${response.status}`
+      ) as Error & { status?: number }
+      err.status = response.status
+      throw err
     }
     return data
   }
   throw new Error('Invalid response format')
+}
+
+/** The HTTP status behind a thrown API error, when there was one. */
+export function errorStatus(error: unknown): number | undefined {
+  return (error as { status?: number } | null)?.status
 }
 
 export async function apiGet<T = unknown>(
@@ -1336,7 +1349,6 @@ export async function apiGet<T = unknown>(
     method: 'GET',
     headers: jsonHeaders(profileScope),
   })
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
 }
 
@@ -1373,7 +1385,6 @@ export async function apiPost<T = unknown>(
     headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
   })
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
 }
 
@@ -1389,7 +1400,6 @@ export async function apiPut<T = unknown>(
     headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
   })
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
 }
 
@@ -1399,6 +1409,5 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
     method: 'DELETE',
     headers: profileRequestHeaders('active'),
   })
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
   return parseJsonResponse<T>(response)
 }

@@ -449,30 +449,43 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   );
   if (!bill) throw new HttpError(404, 'Not found');
 
-  // Idempotency guard: prevent double-submission from creating duplicate
-  // transactions for the same bill in the same period.
+  // Pre-flight, for the message: "already paid this month" is a period question the SQL guard
+  // below does not try to answer. It is NOT what makes this safe — see the guard.
   if (isBillPaidForCurrentPeriod(bill, new Date())) {
     throw new HttpError(409, 'Bill already paid for current period');
   }
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Atomic batch: INSERT transaction, adjust linked account balance (if
-  // account_id is set), and update last_paid_date on the bill.
+  // Every statement carries the same guard: the bill has not already been marked paid today.
+  //
+  // Reading `last_paid_date` and then writing was a check against a value that could already be
+  // stale by the time the batch ran — two taps (a phone that felt slow, or a phone and a laptop)
+  // both saw an unpaid bill, and both inserted a transaction and both debited the account. The
+  // money left twice.
+  //
+  // A batch is one transaction, so a second batch either runs entirely before or entirely after
+  // the first; running after, it sees `last_paid_date = today` and every guarded statement
+  // matches nothing. The UPDATE goes LAST so the two before it still see the pre-state.
+  const guard = `(SELECT COUNT(*) FROM bills
+                   WHERE id = ?1 AND profile_id = ?2
+                     AND (last_paid_date IS NULL OR last_paid_date <> ?3)) = 1`;
+
   const stmts: D1PreparedStatement[] = [];
 
   stmts.push(
     c.env.DB.prepare(
       `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9 WHERE ${guard}`
     ).bind(
+      id,
+      pid,
+      todayStr,
       pid,
       bill.name,
       bill.amount,
-      'expense',
       bill.category_id,
       bill.account_id ?? null,
-      todayStr,
       bill.notes || ''
     )
   );
@@ -480,20 +493,24 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   if (bill.account_id != null) {
     stmts.push(
       c.env.DB.prepare(
-        'UPDATE accounts SET balance = balance - ? WHERE id = ? AND profile_id = ?'
-      ).bind(bill.amount, bill.account_id, pid)
+        `UPDATE accounts SET balance = balance - ?4
+         WHERE id = ?5 AND profile_id = ?2 AND ${guard}`
+      ).bind(id, pid, todayStr, bill.amount, bill.account_id)
     );
   }
 
   stmts.push(
-    c.env.DB.prepare('UPDATE bills SET last_paid_date = ? WHERE id = ? AND profile_id = ?').bind(
-      todayStr,
-      id,
-      pid
-    )
+    c.env.DB.prepare(
+      `UPDATE bills SET last_paid_date = ?3 WHERE id = ?1 AND profile_id = ?2 AND ${guard}`
+    ).bind(id, pid, todayStr)
   );
 
   const results = await c.env.DB.batch(stmts);
+  // The claim is the last statement. Zero rows changed means another request got there first
+  // between our read and our write, and this one wrote nothing at all.
+  if ((results[results.length - 1]?.meta?.changes ?? 0) === 0) {
+    throw new HttpError(409, 'Bill already paid for current period');
+  }
   const txLastRowId = results[0]?.meta?.last_row_id;
 
   return c.json({ ok: true, transactionId: txLastRowId });

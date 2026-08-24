@@ -380,27 +380,43 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   if (!token) return c.json({ error: 'Missing reset token' }, 400);
   if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
 
+  // Deliberately does NOT filter on `used_at IS NULL`. Whether the link is still unspent is
+  // decided by the conditional UPDATE below and nowhere else — two gates for one fact means the
+  // read can say yes while the write says no, and the read is the one that is not a claim.
   const row = await c.env.DB.prepare(
-    "SELECT id, user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')"
+    "SELECT id, user_id FROM password_resets WHERE token_hash = ? AND expires_at > datetime('now')"
   )
     .bind(await sha256Hex(token))
     .first<{ id: number; user_id: number }>();
   if (!row) return c.json({ error: 'This reset link is invalid or has expired' }, 400);
 
-  const passwordHash = await hashPassword(password);
-  // Set the password, mark the email verified (they proved control), and bump token_version
-  // to revoke every previously issued session.
-  await c.env.DB.prepare(
-    'UPDATE users SET password_hash = ?, email_verified = 1, token_version = token_version + 1 WHERE id = ?'
+  // Spend the token, and only if it is still unspent. This is the gate. It used to be a read
+  // (`used_at IS NULL` in the SELECT) followed by an unconditional write, so two requests carrying
+  // the same link — a mail client prefetching it while the person clicks, a forwarded message —
+  // both passed the read and both set a password, with no way to say which one won.
+  const claimed = await c.env.DB.prepare(
+    "UPDATE password_resets SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL"
   )
-    .bind(passwordHash, row.user_id)
-    .run();
-  await c.env.DB.prepare("UPDATE password_resets SET used_at = datetime('now') WHERE id = ?")
     .bind(row.id)
     .run();
-  await c.env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
-    .bind(row.user_id)
-    .run();
+  if ((claimed.meta.changes ?? 0) === 0) {
+    return c.json({ error: 'This reset link is invalid or has expired' }, 400);
+  }
+
+  const passwordHash = await hashPassword(password);
+  // One batch, so the password change and the retiring of the account's other pending links
+  // either both happen or neither does. They used to be separate awaited writes: a failure
+  // between them left live reset links pointing at an account whose password had just changed.
+  await c.env.DB.batch([
+    // Set the password, mark the email verified (they proved control), and bump token_version
+    // to revoke every previously issued session.
+    c.env.DB.prepare(
+      'UPDATE users SET password_hash = ?, email_verified = 1, token_version = token_version + 1 WHERE id = ?'
+    ).bind(passwordHash, row.user_id),
+    c.env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL').bind(
+      row.user_id
+    ),
+  ]);
   // Do NOT auto-login: send the user back to the sign-in screen to log in with the new
   // password (avoids a half-authenticated state). The token_version bump above already
   // revoked any existing sessions.
@@ -424,8 +440,11 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
 
   const token = c.req.query('token') ?? '';
   if (!token) return fail('missing_token');
+  // Same shape as the reset link: the read finds the token, the conditional UPDATE below decides
+  // whether it is still spendable. Checking `used_at` here as well would let the read say yes
+  // while the write says no.
   const row = await c.env.DB.prepare(
-    'SELECT id, user_id, email, expires_at FROM email_verifications WHERE token_hash = ? AND used_at IS NULL'
+    'SELECT id, user_id, email, expires_at FROM email_verifications WHERE token_hash = ?'
   )
     .bind(await sha256Hex(token))
     .first<{ id: number; user_id: number; email: string; expires_at: string }>();
@@ -433,10 +452,15 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
   // token state, so both land here.
   if (!row) return fail('invalid_or_used');
   // Single-use: spend the token whatever the outcome below, so a link that failed for any reason
-  // cannot be retried until it happens to succeed.
-  await c.env.DB.prepare("UPDATE email_verifications SET used_at = datetime('now') WHERE id = ?")
+  // cannot be retried until it happens to succeed. `AND used_at IS NULL` makes spending it the
+  // claim rather than a follow-up to one — the SELECT above is a read, and two requests carrying
+  // the same link (a mail client prefetching while the person clicks) both pass a read.
+  const claimed = await c.env.DB.prepare(
+    "UPDATE email_verifications SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL"
+  )
     .bind(row.id)
     .run();
+  if ((claimed.meta.changes ?? 0) === 0) return fail('invalid_or_used');
   if (Date.parse(row.expires_at) < Date.now()) return fail('expired');
   const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
     .bind(row.user_id)

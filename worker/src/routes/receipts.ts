@@ -68,6 +68,9 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
       `File too large (max ${Math.round(RECEIPT_MAX_BYTES / 1024 / 1024)}MB)`
     );
   }
+  // Pre-flight, so an over-quota upload is refused before the file is streamed to R2. It is not
+  // the enforcement: counting and then inserting leaves a window where two uploads both see
+  // "one under the limit". The conditional INSERT further down is what actually holds the line.
   const countRow = await db.first<{ c: number }>(
     c.env.DB,
     'SELECT COUNT(*) AS c FROM receipts WHERE profile_id = ?',
@@ -120,15 +123,41 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
 
   let res: D1Result;
   try {
-    res = await db.insert(c.env.DB, 'receipts', {
-      transaction_id: transactionId,
-      filename: key,
-      original_name: file.name,
-      file_type: file.type,
-      file_size: file.size,
-      storage_path: key,
-      profile_id: pid,
-    });
+    // Conditional on the quota, evaluated as part of the write. The COUNT above is a read, and two
+    // uploads arriving together — a phone finishing in the background while a laptop starts —
+    // both read "one under the limit" and both inserted. One statement, so the second sees the
+    // first's committed row and inserts nothing.
+    res =
+      limit === null
+        ? await db.insert(c.env.DB, 'receipts', {
+            transaction_id: transactionId,
+            filename: key,
+            original_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+            storage_path: key,
+            profile_id: pid,
+          })
+        : await c.env.DB.prepare(
+            `INSERT INTO receipts (transaction_id, filename, original_name, file_type, file_size, storage_path, profile_id)
+             SELECT ?, ?, ?, ?, ?, ?, ?
+             WHERE (SELECT COUNT(*) FROM receipts WHERE profile_id = ?) < ?`
+          )
+            .bind(
+              transactionId,
+              key,
+              file.name,
+              file.type,
+              file.size,
+              key,
+              pid,
+              pid,
+              limit
+            )
+            .run();
+    if ((res.meta.changes ?? 0) === 0) {
+      throw new HttpError(403, `Receipt limit reached (${limit ?? 0} per profile)`);
+    }
   } catch (e) {
     // Don't orphan the R2 object if the metadata insert fails.
     await c.env.RECEIPTS.delete(key).catch((delErr: unknown) => {
