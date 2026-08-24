@@ -1304,6 +1304,7 @@ export default function Budgets() {
       {/* Add/Edit Category Modal */}
       {showCatModal() && (
         <div
+          data-test-id="budgets-category-modal"
           class={styles.modalOverlay}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -1383,6 +1384,8 @@ export default function Budgets() {
                   <For each={CATEGORY_PALETTE}>
                     {(color) => (
                       <button
+                        type="button"
+                        data-test-id="category-color-swatch"
                         class={`${styles.catColorDot} ${styles.catColorDotLarge} ${catFormData().color === color ? styles.catColorDotActive : ''}`}
                         style={{ background: color }}
                         onClick={() => setCatFormData({ ...catFormData(), color })}

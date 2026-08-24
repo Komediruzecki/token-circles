@@ -541,6 +541,8 @@ export default function Categories() {
                   <For each={COLOR_CHOICES}>
                     {(color) => (
                       <button
+                        type="button"
+                        data-test-id="category-color-swatch"
                         class={`${styles.colorPickerBtn} ${formData().color === color ? styles.active : ''}`}
                         style={{ background: color }}
                         onClick={() => setFormData({ ...formData(), color })}
