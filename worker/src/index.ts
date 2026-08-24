@@ -36,6 +36,7 @@ import { runScheduledReminders } from './reminders';
 import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
+import { sweepExpiredSessions } from './auth';
 import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
 
@@ -180,6 +181,7 @@ export default {
       Promise.all([
         runScheduledReminders(event.cron, env),
         sweepRateLimits(env),
+        sweepExpiredSessions(env),
         runScheduledSheetSyncs(event.cron, env),
       ])
     );

@@ -14,6 +14,7 @@ import {
   clearedSessionCookie,
   hashPassword,
   verifyPassword,
+  TOKEN_TTL_SECONDS,
 } from '../auth';
 import { sendMail } from '../email';
 import {
@@ -547,6 +548,13 @@ authRoutes.post('/api/auth/logout', requireAuth, async (c) => {
 /**
  * Where this account is signed in. The current device is flagged rather than hidden — seeing
  * yourself in the list is how you know the list is the whole truth.
+ *
+ * Bounded by the token lifetime. A session row outlives the token that points at it — nothing
+ * rewrites `exp`, and the sweep that removes the row runs on a cron — so listing the table
+ * unfiltered showed devices that had been signed out by the clock weeks ago, mixed in with the
+ * live ones and impossible to tell apart. `last_seen_at` cannot answer this: it says when the
+ * session was last used, not when it expires, and a token issued seven days ago and used a minute
+ * ago is dead either way.
  */
 authRoutes.get('/api/auth/sessions', requireAuth, async (c) => {
   const rows = await db.all<{
@@ -559,8 +567,11 @@ authRoutes.get('/api/auth/sessions', requireAuth, async (c) => {
   }>(
     c.env.DB,
     `SELECT id, provider, user_agent, ip, created_at, last_seen_at
-     FROM auth_sessions WHERE user_id = ? ORDER BY last_seen_at DESC`,
-    c.get('userId')
+     FROM auth_sessions
+     WHERE user_id = ? AND created_at > datetime('now', ?)
+     ORDER BY last_seen_at DESC`,
+    c.get('userId'),
+    `-${TOKEN_TTL_SECONDS} seconds`
   );
   const current = c.get('sessionId');
   return c.json({

@@ -20,7 +20,11 @@ import { logAuthEvent } from './authlog';
 const encoder = new TextEncoder();
 
 export const SESSION_COOKIE = 'fm_session';
-const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+/**
+ * How long a session token is good for. Not refreshed: `issueSessionCookie` is called only at
+ * sign-in, so `auth_sessions.created_at + TOKEN_TTL_SECONDS` is exactly when a session dies.
+ */
+export const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 // Cloudflare Workers' WebCrypto rejects PBKDF2 with more than 100,000 iterations
 // ("iteration counts above 100000 are not supported"), so this is the runtime ceiling — a
@@ -311,6 +315,25 @@ export async function authenticateRequest(request: Request, env: Env): Promise<A
     };
   }
   return { user: null, reason, cookieCount: tokens.length };
+}
+
+/**
+ * Delete `auth_sessions` rows whose token has expired.
+ *
+ * The row is what "signed in on this device" means, and nothing else removes one except an
+ * explicit sign-out. So without this the table grew by a row per sign-in forever, and — worse —
+ * `GET /api/auth/sessions` listed every one of them: a browser signed into once a month showed up
+ * a dozen times, each entry indistinguishable from the live session, and "sign out this device"
+ * on any of them revoked nothing because there was nothing left to revoke.
+ *
+ * A day of slack past the TTL, so a row is never removed while its token still verifies. Being
+ * swept early would sign someone out a moment before their token was due to expire, for no reason
+ * beyond the two clocks disagreeing.
+ */
+export async function sweepExpiredSessions(env: Env): Promise<void> {
+  await env.DB.prepare(`DELETE FROM auth_sessions WHERE created_at <= datetime('now', ?)`)
+    .bind(`-${TOKEN_TTL_SECONDS + 24 * 60 * 60} seconds`)
+    .run();
 }
 
 export async function getAuthFromRequest(request: Request, env: Env): Promise<AuthUser | null> {

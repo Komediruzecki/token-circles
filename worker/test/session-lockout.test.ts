@@ -14,7 +14,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { hashPassword, issueSessionCookie } from '../src/auth';
+import { hashPassword, issueSessionCookie, sweepExpiredSessions } from '../src/auth';
 import { humanWait } from '../src/ratelimit';
 
 const EMAIL = 'locked@example.com';
@@ -202,6 +202,83 @@ describe('signing out', () => {
     });
 
     expect((await me(phone)).status).toBe(401);
+  });
+});
+
+// ── 3b. sessions that the clock already ended ──────────────────────────────────────────────────
+
+/** Backdate a session row, which is the only thing that decides whether its token is still good. */
+const ageSession = (id: string, days: number) =>
+  env.DB.prepare(`UPDATE auth_sessions SET created_at = datetime('now', ?) WHERE id = ?`)
+    .bind(`-${days} days`, id)
+    .run();
+
+const sessionIds = async (): Promise<string[]> => {
+  const { results } = await env.DB.prepare('SELECT id FROM auth_sessions ORDER BY created_at').all<{
+    id: string;
+  }>();
+  return results.map((r) => r.id);
+};
+
+const listedDevices = async (cookie: string) => {
+  const res = await SELF.fetch('https://api.example.com/api/auth/sessions', {
+    headers: { Cookie: cookie },
+  });
+  const body = (await res.json()) as { sessions: { id: string }[] };
+  return body.sessions;
+};
+
+describe('a session whose token has expired', () => {
+  it('is not offered as a device you could sign out of', async () => {
+    const laptop = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const [oldId] = await sessionIds();
+    // A row nothing has touched since before the token lifetime. Its cookie expired with it; the
+    // row is all that is left, and it used to be listed as if the device were still signed in.
+    await ageSession(oldId!, 8);
+    const phone = cookiePair(await issueSessionCookie(UID, 'password', env));
+
+    const devices = await listedDevices(phone);
+
+    expect(devices.map((d) => d.id)).not.toContain(oldId);
+    expect(devices).toHaveLength(1);
+    // And the one that IS listed is the live one, not merely "some row".
+    expect((await me(phone)).status).toBe(200);
+    expect(laptop).toBeTruthy();
+  });
+
+  it('is deleted by the sweep, so the table does not grow by a row per sign-in', async () => {
+    await issueSessionCookie(UID, 'password', env);
+    await issueSessionCookie(UID, 'password', env);
+    const [first, second] = await sessionIds();
+    await ageSession(first!, 30);
+
+    await sweepExpiredSessions(env);
+
+    expect(await sessionIds()).toEqual([second]);
+  });
+
+  it('survives the sweep while its token is still good', async () => {
+    const live = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const [id] = await sessionIds();
+    // Six days old: expired tomorrow, not today. Sweeping it now would sign someone out early.
+    await ageSession(id!, 6);
+
+    await sweepExpiredSessions(env);
+
+    expect(await sessionIds()).toEqual([id]);
+    expect((await me(live)).status).toBe(200);
+  });
+
+  it('is left alone by the sweep for a day past expiry, so no live token loses its row', async () => {
+    await issueSessionCookie(UID, 'password', env);
+    const [id] = await sessionIds();
+    // Past the 7-day token lifetime but inside the grace, which exists so a clock that disagrees
+    // with D1 by a few minutes cannot end a session the JWT would still have accepted.
+    await ageSession(id!, 7.5);
+
+    await sweepExpiredSessions(env);
+
+    expect(await sessionIds()).toEqual([id]);
   });
 });
 
