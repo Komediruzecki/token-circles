@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The month buttons say which month.** The first two quick-period buttons read "This month" and "Last month", shortened to "This mo." and "Last mo." on a phone — where they were still too wide and the text ran out through the sides of the buttons. They now say the month itself: "August" and "July", or "Aug" and "Jul" where space is tight. Shorter, and it answers the question the old wording left open, since knowing what "this month" selects meant already knowing what month it is. Hovering still explains each one.
+
 ### Added
 
 - **The month control can stay with you as you scroll.** On a long page — Budgets especially — the bar you change period with is at the very top, so seeing a number that makes you want to look at another month meant scrolling all the way up and all the way back down. Turn on Settings > Appearance > "Keep the period bar in view" and it stays pinned to the top of the screen while the page moves underneath it, on Budgets, the Dashboard and Transactions, on a phone as well as a desktop. It is off unless you ask for it, since it costs a line of screen on every page that has one.

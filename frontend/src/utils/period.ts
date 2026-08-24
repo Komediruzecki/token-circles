@@ -66,16 +66,50 @@ export interface PeriodPill {
   id: Exclude<PeriodPreset, 'custom'>
   label: string
   short: string
+  /** What the pill *means*, for the tooltip, when the label is a month name rather than a phrase. */
+  title: string
 }
 
-export const PERIOD_PILLS: PeriodPill[] = [
-  { id: 'thisMonth', label: 'This month', short: 'This mo.' },
-  { id: 'lastMonth', label: 'Last month', short: 'Last mo.' },
-  { id: 'ytd', label: 'Year to date', short: 'YTD' },
-  { id: 'last30', label: 'Last 30 days', short: '30D' },
-  { id: 'last90', label: 'Last 90 days', short: '90D' },
-  { id: 'all', label: 'All time', short: 'All' },
-]
+/**
+ * The quick-period pills, named for the months they land on.
+ *
+ * The first two used to read "This month" and "Last month", abbreviated to "This mo." and
+ * "Last mo." on a phone — which is four syllables of grammar to say a thing the month's own name
+ * says in one, and still wide enough to overflow its pill on a narrow screen. "August" and "July"
+ * are shorter, and they answer the question the phrase leaves open: someone looking at March who
+ * taps "This month" has to already know what month it is now.
+ *
+ * The wording each one replaces survives as the `title`, so hovering still explains a pill whose
+ * label is only a month.
+ *
+ * A function, not a constant: a constant would capture the month at import and a tab left open
+ * across midnight on the 1st would name the wrong one for as long as it stayed open. Call it
+ * where it is rendered.
+ */
+export function periodPills(now: Date = new Date()): PeriodPill[] {
+  const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const thisName = MONTH_NAMES[now.getMonth()]!
+  const lastName = MONTH_NAMES[previous.getMonth()]!
+
+  return [
+    {
+      id: 'thisMonth',
+      label: thisName,
+      short: MONTH_NAMES_SHORT[now.getMonth()]!,
+      title: `This month (${thisName})`,
+    },
+    {
+      id: 'lastMonth',
+      label: lastName,
+      short: MONTH_NAMES_SHORT[previous.getMonth()]!,
+      title: `Last month (${lastName})`,
+    },
+    { id: 'ytd', label: 'Year to date', short: 'YTD', title: 'Year to date' },
+    { id: 'last30', label: 'Last 30 days', short: '30D', title: 'Last 30 days' },
+    { id: 'last90', label: 'Last 90 days', short: '90D', title: 'Last 90 days' },
+    { id: 'all', label: 'All time', short: 'All', title: 'All time' },
+  ]
+}
 
 const pad2 = (n: number): string => (n < 10 ? `0${n}` : `${n}`)
 

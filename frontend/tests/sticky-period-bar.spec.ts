@@ -18,6 +18,8 @@ const PAGES = [
   { route: 'dashboard', container: 'dashboard-container' },
 ] as const
 
+const PILL_IDS = ['thisMonth', 'lastMonth', 'ytd', 'last30', 'last90', 'all'] as const
+
 const barIn = (page: Page, container: string) =>
   getByTestId(page, container).getByTestId('period-bar')
 
@@ -215,13 +217,76 @@ test.describe('the bar on a phone', () => {
     await expect(bar).toBeVisible()
 
     const box = (await bar.boundingBox())!
-    for (const id of ['thisMonth', 'lastMonth', 'ytd', 'last30', 'last90', 'all']) {
+    for (const id of PILL_IDS) {
       const pill = (await bar.getByTestId(`period-pill-${id}`).boundingBox())!
       expect(pill.x, `${id} starts left of the bar`).toBeGreaterThanOrEqual(box.x - 1)
       expect(pill.x + pill.width, `${id} runs past the bar`).toBeLessThanOrEqual(
         box.x + box.width + 1
       )
     }
+  })
+
+  /*
+   * The boxes fitting is not the same thing as the text fitting.
+   *
+   * "This mo." and "Last mo." ran out through the sides of their own pills on a phone, while
+   * every assertion above still passed: the pill's border-box was inside the bar, and only the
+   * glyphs were not. What catches it is the element's scrollWidth against its clientWidth.
+   */
+  test.describe('at the narrowest phone width', () => {
+    test.use({ viewport: { width: 320, height: 700 } })
+
+    test('no pill label spills out of its pill', async ({ page }) => {
+      await login(page)
+      await navigateToRoute(page, 'budgets')
+      const bar = barIn(page, 'budgets-page')
+      await expect(bar).toBeVisible()
+
+      for (const id of PILL_IDS) {
+        const overflow = await bar.getByTestId(`period-pill-${id}`).evaluate((el: HTMLElement) => {
+          const span = [...el.querySelectorAll('span')].find(
+            (s) => window.getComputedStyle(s).display !== 'none'
+          )
+          return {
+            text: span?.textContent ?? '',
+            pill: el.scrollWidth - el.clientWidth,
+            label: span ? span.scrollWidth - (span.clientWidth || span.scrollWidth) : 0,
+          }
+        })
+        // 1px of rounding is not an overflow; a clipped word is.
+        expect(overflow.pill, `"${overflow.text}" overflows its pill`).toBeLessThanOrEqual(1)
+        expect(overflow.label, `"${overflow.text}" is clipped`).toBeLessThanOrEqual(1)
+      }
+    })
+
+    test('the month pills are named for months, not for "this" and "last"', async ({ page }) => {
+      await login(page)
+      await navigateToRoute(page, 'budgets')
+      const bar = barIn(page, 'budgets-page')
+      const first = bar.getByTestId('period-pill-thisMonth')
+      await expect(first).toBeVisible()
+
+      /*
+       * The visible span, not the button. Both the full and the short label are in the DOM at
+       * all times with CSS choosing between them, so `toHaveText` on the button returns them
+       * concatenated — "AugustAug" — and an assertion written against it fails for a reason
+       * that has nothing to do with what is on screen.
+       */
+      const shown = (id: string) =>
+        bar.getByTestId(`period-pill-${id}`).evaluate((el: HTMLElement) =>
+          [...el.querySelectorAll('span')]
+            .filter((s) => window.getComputedStyle(s).display !== 'none')
+            .map((s) => s.textContent)
+            .join('')
+        )
+
+      // Three letters, and one of the twelve — whichever month the test happens to run in.
+      const MONTH = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/
+      expect(await shown('thisMonth')).toMatch(MONTH)
+      expect(await shown('lastMonth')).toMatch(MONTH)
+      // And the wording they replaced is still reachable.
+      await expect(first).toHaveAttribute('title', /^This month \(/)
+    })
   })
 })
 

@@ -8,7 +8,7 @@
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import { setOrbitOpen, usePeriod } from '../core/periodStore'
-import { isoDate, MONTH_NAMES, MONTH_NAMES_SHORT, monthPeriod, PERIOD_PILLS } from '../utils/period'
+import { isoDate, MONTH_NAMES, MONTH_NAMES_SHORT, monthPeriod, periodPills } from '../utils/period'
 import styles from './PeriodOrbit.module.css'
 import type { Period } from '../utils/period'
 
@@ -73,7 +73,7 @@ export default function PeriodOrbit(props: Props) {
     props.onClose()
   }
 
-  const applyPill = (id: (typeof PERIOD_PILLS)[number]['id']) => {
+  const applyPill = (id: ReturnType<typeof periodPills>[number]['id']) => {
     setPeriod(helpers.fromPill(id))
     props.onClose()
   }
@@ -364,12 +364,13 @@ export default function PeriodOrbit(props: Props) {
           </Show>
 
           <div class={styles.pills} role="group" aria-label="Quick periods">
-            <For each={PERIOD_PILLS}>
+            <For each={periodPills()}>
               {(pill) => (
                 <button
                   type="button"
                   class={styles.pill}
                   classList={{ [styles.pillActive]: activePill() === pill.id }}
+                  title={pill.title}
                   onClick={() => {
                     applyPill(pill.id)
                   }}

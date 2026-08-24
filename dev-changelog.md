@@ -9,6 +9,16 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The month pills overflowed their own buttons on a phone** (`frontend/src/utils/period.ts`, `components/PeriodBar.tsx`, `PeriodOrbit.tsx`, `PeriodBar.module.css`). `PERIOD_PILLS` gave the first two pills the short forms "This mo." and "Last mo.", which at `flex: 1 1 0` on a 320-390px viewport were wider than the pill they sat in — and with only `white-space: nowrap` and no `overflow`, the glyphs ran straight out through the border.
+  - `PERIOD_PILLS` is replaced by `periodPills(now = new Date())`, which names the first two for the months they actually select: `label` "August"/"July", `short` "Aug"/"Jul". A function and not a constant, because a constant captures the month at import and a tab left open across midnight on the 1st would keep naming the month it was opened in.
+  - A new `title` field carries the wording the label gave up ("This month (August)"), so the tooltip still explains a pill whose label is only a month. `PeriodOrbit` gained the same tooltip; it previously had none.
+  - `.pill` gets `overflow: hidden; text-overflow: ellipsis`. The labels are short now, but a pill that cannot contain its own text is a bug waiting for the next longer word. Mobile padding drops 10px → 8px, which buys the text a few pixels before the ellipsis does.
+  - Tests: 6 unit in `utils/__tests__/period.test.ts` (both months, the January→December year boundary, the titles, that the ids are untouched, that every short form is ≤ 4 characters and no longer than its label, and that the result is computed per call) plus 3 e2e at a 320px viewport.
+  - **The e2e test that already covered this passed the whole time.** It compared each pill's bounding box against the bar's, and the box was inside it — only the glyphs were not. The new one reads `scrollWidth - clientWidth` on the pill and on its visible label, which is the difference between "the button fits" and "the text fits". Against the old labels it fails with `"This mo." overflows its pill`.
+  - The label assertion reads the visible `<span>`, not the button: both the full and the short label are in the DOM at all times with CSS choosing between them, so `toHaveText` on the button returns them concatenated ("AugustAug").
+
 ### Added
 
 - **A sticky period bar, and the `overflow-x` that had been quietly disabling `position: sticky` app-wide** (`frontend/src/core/uiPrefs.ts`, `components/PeriodBar.tsx`, `PeriodBar.module.css`, `components/Layout.module.css`). The month control is how you change period, and on a long page — Budgets above all — it scrolls away exactly when the numbers being read make you want to change month. Settings > Appearance > "Keep the period bar in view" pins it to the top. **Off by default**: it changes how every page with a period bar behaves and costs a line of screen on each, which is not a change to make on someone's behalf.

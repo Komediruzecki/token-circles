@@ -6,7 +6,7 @@
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { usePeriod } from '../core/periodStore'
 import { stickyPeriodBar } from '../core/uiPrefs'
-import { PERIOD_PILLS } from '../utils/period'
+import { periodPills } from '../utils/period'
 import styles from './PeriodBar.module.css'
 import PeriodOrbit from './PeriodOrbit'
 import type { PeriodPreset } from '../utils/period'
@@ -15,9 +15,15 @@ import type { PeriodPreset } from '../utils/period'
  * The pills, split where the mobile layout needs them: everything up to the last one, and the
  * last one on its own. Derived rather than written out, so adding a pill cannot leave the two
  * halves disagreeing about what is in the list.
+ *
+ * Built per render rather than once at import: the first two are named for the current and
+ * previous month, and a tab left open across midnight on the 1st would otherwise keep naming
+ * the month it was opened in.
  */
-const ROW_PILLS = PERIOD_PILLS.slice(0, -1)
-const TRAILING_PILL = PERIOD_PILLS[PERIOD_PILLS.length - 1]!
+const pills = () => {
+  const all = periodPills()
+  return { row: all.slice(0, -1), trailing: all[all.length - 1]! }
+}
 
 interface Props {
   /** Hide the pill row (e.g. a page that only wants month stepping). */
@@ -77,12 +83,12 @@ export default function PeriodBar(props: Props) {
   }
 
   /** One quick-period pill. Rendered from both groups, so its markup lives in one place. */
-  const Pill = (p: { pill: (typeof PERIOD_PILLS)[number] }) => (
+  const Pill = (p: { pill: ReturnType<typeof periodPills>[number] }) => (
     <button
       type="button"
       class={styles.pill}
       classList={{ [styles.pillActive]: activePill() === p.pill.id }}
-      title={p.pill.label}
+      title={p.pill.title}
       data-test-id={`period-pill-${p.pill.id}`}
       onClick={() => {
         setPeriod(helpers.fromPill(p.pill.id))
@@ -163,10 +169,10 @@ export default function PeriodBar(props: Props) {
         */}
         <Show when={props.showPills !== false}>
           <div class={styles.pills} role="group" aria-label="Quick periods">
-            <For each={ROW_PILLS}>{(pill) => <Pill pill={pill} />}</For>
+            <For each={pills().row}>{(pill) => <Pill pill={pill} />}</For>
           </div>
           <div class={styles.pillsTrailing}>
-            <Pill pill={TRAILING_PILL} />
+            <Pill pill={pills().trailing} />
           </div>
         </Show>
       </div>

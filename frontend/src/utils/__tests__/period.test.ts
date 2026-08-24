@@ -6,6 +6,7 @@ import {
   label,
   monthPeriod,
   parsePeriod,
+  periodPills,
   periodsEqual,
   serializePeriod,
   shift,
@@ -214,5 +215,64 @@ describe('serialize / parse round-trips', () => {
 
   it('parse returns null for empty params', () => {
     expect(parsePeriod({}, NOW)).toBeNull()
+  })
+})
+
+/**
+ * The first two pills used to read "This month" and "Last month", shortened to "This mo." and
+ * "Last mo." on a phone — four syllables of grammar to say what the month's own name says in one,
+ * and still wide enough to run out through the side of its pill on a narrow screen.
+ *
+ * They are named for the months they land on now. That is shorter, and it answers the question
+ * the phrase left open: someone looking at March who taps "This month" has to already know what
+ * month it is now.
+ */
+describe('the quick-period pills', () => {
+  it('names the first two for the months they select', () => {
+    const pills = periodPills(new Date(2026, 7, 24)) // August
+    expect(pills[0]!.label).toBe('August')
+    expect(pills[0]!.short).toBe('Aug')
+    expect(pills[1]!.label).toBe('July')
+    expect(pills[1]!.short).toBe('Jul')
+  })
+
+  it('crosses the year boundary backwards', () => {
+    // The one arithmetic that can go wrong: January's "last month" is in the previous year.
+    const pills = periodPills(new Date(2026, 0, 15))
+    expect(pills[0]!.label).toBe('January')
+    expect(pills[1]!.label).toBe('December')
+  })
+
+  it('keeps saying what each pill means, for the tooltip', () => {
+    // The label is now only a month, so the wording it replaced has to live somewhere.
+    const pills = periodPills(new Date(2026, 7, 24))
+    expect(pills[0]!.title).toBe('This month (August)')
+    expect(pills[1]!.title).toBe('Last month (July)')
+    expect(pills[2]!.title).toBe('Year to date')
+  })
+
+  it('leaves the ids alone', () => {
+    // The label is cosmetic; the id is what `fromPill` dispatches on.
+    expect(periodPills(new Date(2026, 7, 24)).map((p) => p.id)).toEqual([
+      'thisMonth',
+      'lastMonth',
+      'ytd',
+      'last30',
+      'last90',
+      'all',
+    ])
+  })
+
+  it('gives every pill a short form no longer than the full one', () => {
+    for (const pill of periodPills(new Date(2026, 7, 24))) {
+      expect(pill.short.length, `${pill.id} short form`).toBeLessThanOrEqual(pill.label.length)
+      expect(pill.short.length, `${pill.id} short form`).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it('is computed per call, not frozen at import', () => {
+    // A tab open across midnight on the 1st would otherwise keep naming the month it opened in.
+    expect(periodPills(new Date(2026, 2, 1))[0]!.label).toBe('March')
+    expect(periodPills(new Date(2026, 9, 1))[0]!.label).toBe('October')
   })
 })

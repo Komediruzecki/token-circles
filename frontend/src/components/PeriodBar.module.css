@@ -240,6 +240,11 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  /* `nowrap` on its own means a label too wide for its pill runs straight out through the
+     border. The labels are short now, but a pill that cannot contain its own text is a bug
+     waiting for the next longer word, so clip it here rather than relying on the wording. */
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition:
     background 0.15s ease,
     color 0.15s ease,
@@ -295,7 +300,8 @@
     justify-content: space-between;
   }
   .pill {
-    padding: 6px 10px;
+    /* Narrower padding buys the text a few more pixels before the ellipsis does. */
+    padding: 6px 8px;
     flex: 1 1 0;
     min-width: 0;
     text-align: center;
