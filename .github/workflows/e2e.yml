@@ -74,6 +74,11 @@ jobs:
       # fixture profile and saves the signed-in state every spec starts from. See
       # frontend/playwright.config.ts and frontend/tests/global.setup.ts — the whole thing runs
       # locally with `pnpm run test:e2e`, which the four curl commands this replaces never did.
+      # `pnpm exec playwright`, not `pnpm run test:e2e -- --shard=…`: pnpm did not forward the
+      # flag, so every shard silently ran the WHOLE suite. Each one reported `529 passed (22.9m)`
+      # and then died on the 25-minute job bound — a timeout that reads as "the suite got slower"
+      # rather than "the split never happened". `pnpm exec playwright test --shard=1/4 --list`
+      # reports 133 tests; through `pnpm run` it reports an error.
       - name: Run E2E tests
         working-directory: ./frontend
         env:
@@ -83,7 +88,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             pnpm run test:e2e:smoke
           else
-            pnpm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+            pnpm exec playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
           fi
         continue-on-error: false
 

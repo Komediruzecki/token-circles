@@ -8,9 +8,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- **The month buttons say which month.** The first two quick-period buttons read "This month" and "Last month", shortened to "This mo." and "Last mo." on a phone — where they were still too wide and the text ran out through the sides of the buttons. They now say the month itself: "August" and "July", or "Aug" and "Jul" where space is tight. Shorter, and it answers the question the old wording left open, since knowing what "this month" selects meant already knowing what month it is. Hovering still explains each one.
+## [5.10.0] — 2026-08-24
 
 ### Added
 
@@ -31,6 +29,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The month buttons say which month.** The first two quick-period buttons read "This month" and "Last month", shortened to "This mo." and "Last mo." on a phone — where they were still too wide and the text ran out through the sides of the buttons. They now say the month itself: "August" and "July", or "Aug" and "Jul" where space is tight. Shorter, and it answers the question the old wording left open, since knowing what "this month" selects meant already knowing what month it is. Hovering still explains each one.
 - **Onboarding's import step now leads with importing.** Once you had chosen a statement, the big button at the bottom of the setup wizard still said "Continue without importing" — the one action that abandons the step — while the button that actually did what you came for sat further up the page, under the account pickers and, on a phone, below the fold. The forward action now takes the main button as soon as there is something to import, with skipping demoted to a quiet button beside it. The import page itself is unchanged.
 - **The plan cards now say which way they go.** Every paid plan's button said "Upgrade", whatever plan you were on — so from Advanced, the Basic card invited you to upgrade to something cheaper. Cards below your plan now say "Downgrade" and cards above it say "Upgrade". Free is unchanged: it never had a button, because ending a subscription belongs in Manage rather than in a checkout for a plan that costs nothing.
 - **Picking a colour no longer closes the category form.** Choosing a colour while creating or editing a category saved it there and then and shut the dialog, before you had finished with the name or the icon — the swatches were being treated by the browser as a second Save button. They now just pick a colour. Fixed on the Categories page and in the category form on Budgets.
