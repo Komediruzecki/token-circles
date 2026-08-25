@@ -309,6 +309,7 @@ export default function Transactions() {
         // Drop the row locally instead of re-fetching. The refetch asks for EVERY
         // transaction in the profile (the list request sends no limit) plus its tags, so it
         // — not the delete — is the wall-clock cost here, and it grows with the table.
+        // The row also leaves the selection — see the reconciliation effect below.
         setTransactions((prev) => prev.filter((t) => t.id !== transaction.id))
       },
     })
@@ -436,6 +437,34 @@ export default function Transactions() {
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
   }
+
+  // Keep the selection a subset of the rows we actually hold.
+  //
+  // Deleting a ticked row with its own row-level delete button used to leave the id behind: the
+  // bulk bar kept counting a row that was gone, and the next bulk action posted an id the server
+  // no longer had, so it silently under-applied. Every call site that drops rows would have to
+  // remember to unselect them — and the refetch paths cannot, since a profile switch or a
+  // background re-fetch swaps the whole list out from under whatever was selected. One invariant
+  // in one place instead.
+  //
+  // Deliberately intersected against transactions() — the full list — and NOT
+  // filteredTransactions(). Filtering here is derived, so a row hidden by a filter or sitting on
+  // another page is still selected on purpose; selecting across pages and then acting on the lot
+  // is the point of the bulk bar. Returning `prev` unchanged keeps the same array reference, so
+  // the common case does not notify.
+  //
+  // Load-bearing: this assumes transactions() holds EVERY row of the profile, which it does only
+  // because refreshTransactions() calls api.getTransactions() with no arguments and the worker
+  // appends no LIMIT without one. The endpoint does accept `limit` (and date/category/type/search
+  // filters), so anyone who server-paginates or server-filters this list must revisit the line
+  // below first — otherwise a row merely outside the fetched window reads as deleted and is
+  // silently unselected.
+  createEffect(() => {
+    const present = new Set(transactions().map((t) => t.id))
+    setSelectedTransactions((prev) =>
+      prev.every((id) => present.has(id)) ? prev : prev.filter((id) => present.has(id))
+    )
+  })
 
   // Calculate filtered results
   const filteredTransactions = createMemo(() => {

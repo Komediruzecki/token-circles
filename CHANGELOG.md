@@ -17,6 +17,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Checkout works again for returning subscribers.** Anyone who had subscribed before — cancelled and come back, or changed tier — got an error instead of a payment page. A plan that was granted to you now says so, rather than offering billing controls that could not work.
 - **Deleting transactions holds the dialog until the rows are actually gone**, shows progress while it works, and says so if it fails instead of closing on an unchanged list. Deletes are faster as well.
+- **A row you delete no longer stays in your selection.** The bulk bar kept counting a row that was already gone, and the next bulk action — delete, categorize, tag, reconcile — quietly skipped it. Switching profile with rows selected left the same stale count behind. Rows hidden by a filter are still selected, as before.
 - **A first import no longer warns about accounts it is about to create.** The preview judged every transfer against accounts that did not exist yet, flagging hundreds of rows that would have imported fine.
 - **"App Crashed" now reloads into the new version** instead of back into the build that crashed.
 - **A guided tour no longer takes keys the page is using.** Pressing Enter on the tour's own Next button skipped two steps, an arrow key typed into a field moved the tour instead of the caret, and walking a tour quietly shifted the period you were looking at. Escape still leaves a tour from anywhere.
