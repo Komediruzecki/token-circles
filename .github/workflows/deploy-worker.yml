@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload D1 backup artifact
         if: env.DEPLOY_ENABLED == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: d1-backup-${{ steps.env.outputs.env }}-${{ github.sha }}
           path: worker/d1-backup.sql

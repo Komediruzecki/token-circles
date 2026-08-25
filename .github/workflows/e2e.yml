@@ -109,7 +109,7 @@ jobs:
       # is already ignore, so this costs a clean run nothing.
       - name: Upload failure traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-${{ matrix.shard }}
           path: frontend/test-results/
@@ -121,7 +121,7 @@ jobs:
       # from the job log — which is exactly where the 2026-08-25 investigation ran out of road.
       - name: Upload wrangler logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wrangler-logs-${{ matrix.shard }}
           path: ~/.config/.wrangler/logs/
