@@ -44,10 +44,37 @@ gh run list --branch main --limit 5   # the head commit must be green
       git diff --name-only $(git describe --tags --abbrev=0)..HEAD -- worker/migrations/
       ```
 
-      For anything non-trivial, build a local D1 at prod's current state, apply the new
-      migrations, and diff `sqlite_master` against a fresh full build — they must match. The
-      deploy takes a `d1 export` backup before migrating, but a rehearsal is what stops you
-      needing it.
+      Rehearse against a copy of REAL prod, not a fresh build — a fresh build cannot tell you
+      what 20k existing rows will do. Export prod, load it into a throwaway local D1, and run
+      the same `migrations apply` the deploy runs. Verified working 2026-08-25 on 0025+0026:
+
+      ```sh
+      SP=$(mktemp -d)
+      pnpm exec wrangler d1 export finance-manager --remote \
+        --config worker/wrangler.jsonc --env prod --output "$SP/prod.sql"
+      pnpm exec wrangler d1 execute finance-manager --local --persist-to "$SP/d1" \
+        --config worker/wrangler.jsonc --env prod --file "$SP/prod.sql"
+      pnpm exec wrangler d1 migrations apply finance-manager --local --persist-to "$SP/d1" \
+        --config worker/wrangler.jsonc --env prod
+      ```
+
+      Four things that make this a real rehearsal rather than a ritual:
+
+      - **`--persist-to` a throwaway dir.** Without it the dump lands in the repo's `.wrangler`
+        state — real customer data inside your dev environment, and your local test data gone.
+      - **`--env` is mandatory** on every one of these. The top-level d1 binding in
+        `wrangler.jsonc` is `database_id: "local"` and shadows the real DB when it is omitted.
+      - **The export carries `d1_migrations`**, which is the whole point: wrangler then applies
+        exactly the migrations prod has not, in prod's order.
+      - **Count rows before and after.** `ALTER TABLE ADD COLUMN` should not move them; assert
+        it rather than assume it. Then run the routes' actual SQL against the migrated copy —
+        migrating cleanly and the code still working are two different claims.
+
+      Re-run `migrations apply` afterwards; it must say `No migrations to apply!`, which is what
+      makes a re-deploy safe. Then **delete `$SP`** — it is a full copy of production.
+
+      The deploy takes its own `d1 export` backup before migrating, but a rehearsal is what
+      stops you needing it.
 
 ## Filling the changelogs
 
