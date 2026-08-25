@@ -9,6 +9,39 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Worker dependencies bumped to their current releases**, and Dependabot taught not to hand
+  us the same broken PRs again. `hono` 4.6.0 -> 4.13.4, `postal-mime` 2.7.5 -> 3.0.0,
+  `@cloudflare/workers-types` 4 -> 5, `@cloudflare/vitest-pool-workers` 0.17.0 -> 0.22.0,
+  `vitest` 4.1.9 -> 4.1.11. `wrangler` deliberately stays at 4.126.0.
+  - Landed as one commit rather than the five PRs Dependabot opened (#467, #468, #470, #471),
+    because every one of them failed CI the same way: Dependabot rewrote `worker/package.json`
+    and left `worker/pnpm-lock.yaml` untouched, so `pnpm install --frozen-lockfile
+    --ignore-workspace` refused each with `ERR_PNPM_OUTDATED_LOCKFILE`. Not a stale snapshot —
+    an explicit `@dependabot recreate` produced the same manifest-only diff. `worker/` is not
+    listed in `pnpm-workspace.yaml`, so its standalone lockfile is not one Dependabot's pnpm
+    updater manages. `.github/dependabot.yml` now documents the drill and groups all worker
+    updates into a single PR, since each one costs that manual lockfile step.
+  - `postal-mime` 3 is a major on a path with **no test coverage**: the suite covers
+    `parseAttachment` but never `PostalMime.parse`, so 488 green tests proved nothing about it.
+    Checked by hand instead — `email.attachments` is still `Attachment[]`, and the three fields
+    `import-email.ts` reads (`filename`, `mimeType`, `content`) are unchanged. v3 types `content`
+    as `ArrayBuffer | Uint8Array | string`; `toBytes` already handles all three arms explicitly.
+  - `@cloudflare/workers-types` 4 -> 5 is clean under `tsc --noEmit`.
+- **GitHub Actions bumped past several majors** (#462-#466): `actions/checkout`,
+  `actions/setup-node`, `actions/upload-artifact` 4 -> 7, `actions/github-script` 7 -> 9,
+  `cloudflare/wrangler-action` 3 -> 4. The artifact/checkout/setup-node majors are Node-runtime
+  bumps with no behavioural change, which matters because `upload-artifact` carries the
+  pre-migration D1 backup and `deploy-worker.yml` never runs on a PR — green PR CI does not
+  cover it. `github-script` v9 breaks `require('@actions/github')`; we use the injected globals
+  and Node builtins only. `wrangler-action` v4's one breaking change is defaulting to wrangler
+  v4, which our explicit `wranglerVersion` overrides.
+- **TypeScript 7 held back** (#469, #474 closed). `typescript-eslint` 8.x crashes on it
+  (`Cannot read properties of undefined (reading 'FunctionType')`) and `tsc` rejects our own
+  config: `baseUrl` is removed in 7 and every `paths` entry is non-relative. That is a
+  migration, not a bump. Pinned via `ignore` in `dependabot.yml` with the reason recorded.
+
 ## [5.11.0] — 2026-08-25
 
 ### Added

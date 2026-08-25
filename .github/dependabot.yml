@@ -37,9 +37,32 @@ updates:
       runtime-patches:
         dependency-type: production
         update-types: [patch]
+    ignore:
+      # TypeScript 7 is the native port and the ecosystem has not caught up. On the 5.9.3 -> 7.0.2
+      # PR, typescript-eslint 8.x crashed outright (`Cannot read properties of undefined (reading
+      # 'FunctionType')`) and tsc rejected our own tsconfig: `baseUrl` is removed in 7 and the
+      # `paths` entries are all non-relative. That is a migration, not a bump. Revisit when
+      # typescript-eslint ships TS 7 support.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
   # worker/ installs on its own with --ignore-workspace, so it needs its own entry — the root
   # ecosystem does not reach it. This is the one that was completely unpinned.
+  #
+  # KNOWN LIMITATION — worker PRs from here arrive WITHOUT a lockfile update. Dependabot rewrites
+  # worker/package.json and leaves worker/pnpm-lock.yaml alone, so CI's `pnpm install
+  # --frozen-lockfile --ignore-workspace` refuses the PR with ERR_PNPM_OUTDATED_LOCKFILE. It is
+  # not a stale snapshot; an explicit `@dependabot recreate` produced the same manifest-only diff.
+  # The cause is that pnpm-workspace.yaml does not list worker/, so the nested standalone lockfile
+  # is not one Dependabot's pnpm updater manages.
+  #
+  # The drill, until that changes: check the branch out and commit the lockfile it should have had.
+  #
+  #     cd worker && pnpm install --no-frozen-lockfile --ignore-workspace
+  #
+  # Everything lands in ONE group deliberately. Each of these PRs costs the manual step above, so
+  # five small PRs a week is five times the handling of one — and they conflict with each other on
+  # the lockfile besides. Majors still break out on their own: those are the ones worth reading.
   - package-ecosystem: npm
     directory: /worker
     schedule:
@@ -47,12 +70,9 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
-      dev-tooling:
-        dependency-type: development
+      worker-deps:
+        patterns: ['*']
         update-types: [minor, patch]
-      runtime-patches:
-        dependency-type: production
-        update-types: [patch]
     ignore:
       # wrangler is the deploy toolchain and the E2E dev server. It ships a new minor most weeks,
       # each carrying a different miniflare, and an unattended bump is how a `wrangler dev` that
@@ -60,6 +80,13 @@ updates:
       # is a deliberate choice made against a green E2E run.
       - dependency-name: wrangler
         update-types: [version-update:semver-minor, version-update:semver-major]
+      # TypeScript 7 is the native port and the ecosystem has not caught up. On the 5.9.3 -> 7.0.2
+      # PR, typescript-eslint 8.x crashed outright (`Cannot read properties of undefined (reading
+      # 'FunctionType')`) and tsc rejected our own tsconfig: `baseUrl` is removed in 7 and the
+      # `paths` entries are all non-relative. That is a migration, not a bump. Revisit when
+      # typescript-eslint ships TS 7 support.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
   # The actions themselves. A compromised third-party action runs with the workflow's token, so
   # these matter as much as anything in package.json.
