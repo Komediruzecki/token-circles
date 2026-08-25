@@ -71,7 +71,7 @@ settingsRoutes.post('/api/settings/set-storage', requireAuth, async (c) => {
   return c.json({ ok: true, message });
 });
 
-// Storage-mode endpoints the frontend Settings/SettingsDialog call. The worker IS the
+// Storage-mode endpoints the frontend Settings page calls. The worker IS the
 // self-hosted (D1/SQLite) backend and the active mode actually lives client-side
 // (localStorage 'finance_storage_mode'), so GET reports self-hosted and POST just
 // acknowledges the switch. Public — touches no user data.
