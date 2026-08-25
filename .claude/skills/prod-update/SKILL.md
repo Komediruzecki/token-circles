@@ -24,9 +24,18 @@ gh run list --branch main --limit 5   # the head commit must be green
 - [ ] **Guided tours walk clean.** Run the `tour-check` skill (`pnpm run test:tours`, and
       `MOBILE=1` too). Tours break silently when page layout changes, and nothing in CI
       catches it — this is the one manual gate that has to happen before a tag.
-- [ ] **Changelogs updated.** `CHANGELOG.md` gets the user-facing entry under the new version
-      heading with today's date; `dev-changelog.md` carries the detail. Written for a user, not
-      a commit log.
+- [ ] **Changelogs updated.** Both of them, and to the rules in "Filling the changelogs"
+      below — not to taste. Before tagging, check that `## [Unreleased]` actually accounts for
+      every PR merged since the last tag:
+
+      ```sh
+      git log --oneline $(git describe --tags --abbrev=0)..HEAD
+      ```
+
+      An empty `## [Unreleased]` with ten commits behind it means ten PRs skipped their entry.
+      Reconstructing them from commit messages afterwards is guesswork; do it anyway, but the
+      fix is to stop it happening in the PR.
+
 - [ ] **Version bumped** if the repo tracks it in `package.json` (the built app takes its
       version from the tag, so this is for tidiness, not correctness).
 - [ ] **Migrations rehearsed**, if `worker/migrations/` gained files since the last release:
@@ -39,6 +48,68 @@ gh run list --branch main --limit 5   # the head commit must be green
       migrations, and diff `sqlite_master` against a fresh full build — they must match. The
       deploy takes a `d1 export` backup before migrating, but a rehearsal is what stops you
       needing it.
+
+## Filling the changelogs
+
+Two files, two audiences. They are not the same document written twice.
+
+- **`CHANGELOG.md` is a product surface, not a document.**
+  `frontend/src/components/ChangelogModal.tsx` imports it with `?raw` and renders it in the
+  app, so what you write here is literally what a user reads in "What's new".
+- **`dev-changelog.md` is the record.** File paths, mechanisms, migrations, why the obvious
+  fix was wrong — all of it goes here, and nothing is too detailed for it.
+
+**Write both entries in the PR that makes the change**, under `## [Unreleased]`. The
+`chore(release)` commit does one thing to these files: insert the `## [X.Y.Z] — date` heading
+directly beneath `## [Unreleased]`, turning whatever accumulated there into that release. It
+is not where entries get written.
+
+### CHANGELOG.md — what earns a line
+
+Only what a user would notice and care about: a new feature, something visibly broken now
+working, anything touching their money, their data, or their ability to sign in.
+
+**One or two sentences. Lead with the outcome.** No mechanism, no archaeology, no account of
+what was wrong under the hood — that is what `dev-changelog.md` is for. A bullet that runs to
+four lines is a dev-changelog entry that got lost.
+
+Leave out entirely:
+
+- Visual and layout polish — spacing, alignment, a control that was the wrong colour, text
+  that wrapped badly, a dialog whose buttons were reordered.
+- Refactors, dead-code removal, dependency bumps, test and CI work.
+- Anything a user could not have noticed, or would not think about twice.
+
+Related fixes go in **one** bullet, not five. A patch release is usually three to six lines;
+if yours is thirty, most of them do not belong there.
+
+Two mechanical constraints from `parseChangelog()` in `ChangelogModal.tsx`:
+
+- **Top-level `- ` bullets only.** An indented sub-bullet matches no rule and is dropped
+  silently — it renders on GitHub and vanishes in the app. Nest in `dev-changelog.md`, never
+  here.
+- **`## [Unreleased]` is filtered out of the modal**, so entries staged there are invisible in
+  the app until the release commit inserts the version heading. That is the intended flow, not
+  a reason to write the version heading early.
+
+Length is the thing that goes wrong. Compare — same fix, both real:
+
+> **Too long.** A backup is always the whole account. The full backup exported whichever
+> profiles happened to be selected, but restoring one replaces _every_ profile on the account
+> — so a backup taken while looking at two of your three profiles quietly deleted the third
+> when you restored it. The backup file now always covers everything a restore would replace.
+> Per-resource CSV exports are unchanged: those follow your selection, and nothing restores
+> from them.
+
+> **Right.** **Backups now cover the whole account.** Restoring replaces every profile, so a
+> backup taken while viewing only some of them could delete the rest.
+
+### dev-changelog.md — what goes in
+
+Everything, **including what you kept out of `CHANGELOG.md`**. A UI fix too small for the
+user changelog still gets its developer entry; that is where it lives instead, not nowhere.
+Name the files, state the mechanism, and record what a future reader would otherwise have to
+rediscover.
 
 ## 2. Tag and push
 
