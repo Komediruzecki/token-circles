@@ -52,7 +52,7 @@
     "d3-sankey": "^0.12.3",
     "idb": "^8.0.3",
     "jspdf": "^4.2.1",
-    "solid-js": "^1.9.12",
+    "solid-js": "^1.9.15",
     "xlsx": "file:../vendor/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
