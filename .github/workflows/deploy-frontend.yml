@@ -141,7 +141,7 @@ jobs:
       # Post or update PR comment with preview link from template
       - name: Post Preview Link
         if: env.DEPLOY_ENABLED == 'true' && steps.env.outputs.env == 'preview' && steps.deploy-preview.outputs.deployment-url != ''
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
