@@ -97,11 +97,28 @@ jobs:
       # `frontend/`. Every run since they were added produced zero artifacts, so a failing spec's
       # trace was never actually collected. The name has to carry the shard too — upload-artifact
       # v4 rejects a second upload under a name another job already claimed.
+      # `always()`, not `failure()`. When a shard hits the job's `timeout-minutes`, GitHub records
+      # it as CANCELLED, and a `failure()` step does not run on a cancelled job — so the one run
+      # that most needed its traces was the one guaranteed not to upload them. `trace:
+      # retain-on-failure` means a green shard writes nothing here anyway, and if-no-files-found
+      # is already ignore, so this costs a clean run nothing.
       - name: Upload failure traces
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces-${{ matrix.shard }}
           path: frontend/test-results/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # `wrangler dev` prints an empty `✘ [ERROR]` when workerd dies and points at a log file it
+      # writes outside the workspace. Without this the crash that ends a shard is undiagnosable
+      # from the job log — which is exactly where the 2026-08-25 investigation ran out of road.
+      - name: Upload wrangler logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrangler-logs-${{ matrix.shard }}
+          path: ~/.config/.wrangler/logs/
           retention-days: 30
           if-no-files-found: ignore

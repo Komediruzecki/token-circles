@@ -37,6 +37,15 @@ export default defineConfig({
   // remaining spec failed on a 502 from the vite proxy. Nothing restarts it mid-run, so one
   // crash costs the whole suite — which makes the serial run the cheaper trade.
   workers: process.env.CI ? 1 : Math.min(4, os.cpus().length),
+  // Stop a shard once the run has stopped producing information. `workers: 1` made the workerd
+  // death above rarer, not impossible: on 2026-08-25 it still died a minute into shard 3 (an
+  // empty `✘ [ERROR]`, every request 200 OK right up to it), and since nothing restarts it, the
+  // shard spent the next 22 minutes failing 120 specs against a dead proxy before the 25-minute
+  // job bound killed it. A `timeout-minutes` kill reports as *cancelled*, which reads like a
+  // broken suite and — because the trace upload was gated on `failure()` — collected nothing.
+  // Ten failures is already a dead run; stopping there turns a 25-minute mystery into a
+  // two-minute failure that still has its traces.
+  maxFailures: process.env.CI ? 10 : undefined,
   reporter: 'list',
   use: {
     baseURL: E2E_BASE,
