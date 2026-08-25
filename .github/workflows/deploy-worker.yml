@@ -39,7 +39,7 @@ jobs:
     env:
       DEPLOY_ENABLED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve environment
         id: env
