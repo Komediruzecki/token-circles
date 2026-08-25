@@ -565,6 +565,31 @@ export function startFullTour() {
   setShowTourSelection(false)
 }
 
+/** What an active tour should do about a keystroke, or null to leave it alone. */
+export type TourKeyAction = 'next' | 'prev' | 'end' | null
+
+/**
+ * The tour's keyboard contract, pure so the guard has a test.
+ *
+ * The overlay is `pointer-events: none`, so the page underneath stays live during a tour and
+ * the user can be typing in a field or resting on a control that owns arrows. Without a guard
+ * one ArrowRight both moved the caret and advanced the tour, and Enter both activated the
+ * focused button and skipped a step.
+ *
+ * Escape is deliberately exempt: someone who wants out of a tour must be able to leave from
+ * wherever they are, including mid-typing.
+ */
+export function tourKeyAction(
+  key: string,
+  opts: { modifier: boolean; editableFocus: boolean }
+): TourKeyAction {
+  if (key === 'Escape') return 'end'
+  if (opts.modifier || opts.editableFocus) return null
+  if (key === 'ArrowRight' || key === 'Enter') return 'next'
+  if (key === 'ArrowLeft') return 'prev'
+  return null
+}
+
 export function nextSpotlightStep() {
   const steps = tourSteps()
   const current = spotlightStep()

@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import appSrc from '../../App.tsx?raw'
 import routerSrc from '../../router.tsx?raw'
-import { SPOTLIGHT_TOURS } from '../spotlightStore'
+import { SPOTLIGHT_TOURS, tourKeyAction } from '../spotlightStore'
 
 // Raw source of every component that can host a tour anchor.
 const componentSources = import.meta.glob(
@@ -140,6 +140,45 @@ describe('spotlight tours', () => {
     for (const tour of SPOTLIGHT_TOURS) {
       const keys = tour.steps.map((s) => keyOf(s.targetSelector))
       expect(new Set(keys).size, `tour "${tour.id}" has distinct anchors`).toBe(keys.length)
+    }
+  })
+})
+
+describe('tourKeyAction', () => {
+  const free = { modifier: false, editableFocus: false }
+
+  it('drives the tour from the bare arrows and Enter', () => {
+    expect(tourKeyAction('ArrowRight', free)).toBe('next')
+    expect(tourKeyAction('Enter', free)).toBe('next')
+    expect(tourKeyAction('ArrowLeft', free)).toBe('prev')
+    expect(tourKeyAction('Escape', free)).toBe('end')
+  })
+
+  it('stands down while the focused control owns the key', () => {
+    // The overlay is pointer-events: none, so the page underneath stays live during a tour.
+    // Without this, one ArrowRight moved the caret in a field AND advanced the tour, and the
+    // period stepper fired on the same keypress.
+    const typing = { modifier: false, editableFocus: true }
+    expect(tourKeyAction('ArrowRight', typing)).toBeNull()
+    expect(tourKeyAction('ArrowLeft', typing)).toBeNull()
+    expect(tourKeyAction('Enter', typing)).toBeNull()
+  })
+
+  it('lets Escape out even mid-typing — leaving a tour must always work', () => {
+    expect(tourKeyAction('Escape', { modifier: false, editableFocus: true })).toBe('end')
+  })
+
+  it('ignores modifier chords so browser and app shortcuts still work', () => {
+    // Ctrl/Cmd+ArrowRight is tab and history navigation; it must not also walk the tour.
+    const chord = { modifier: true, editableFocus: false }
+    expect(tourKeyAction('ArrowRight', chord)).toBeNull()
+    expect(tourKeyAction('ArrowLeft', chord)).toBeNull()
+    expect(tourKeyAction('Enter', chord)).toBeNull()
+  })
+
+  it('leaves every other key alone', () => {
+    for (const key of ['a', 'Tab', 'ArrowUp', 'ArrowDown', ' ', 'Backspace']) {
+      expect(tourKeyAction(key, free), key).toBeNull()
     }
   })
 })

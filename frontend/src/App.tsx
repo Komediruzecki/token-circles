@@ -444,6 +444,10 @@ export function App() {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       if (orbitOpen()) return
+      // A running tour owns ←/→ (Spotlight registers its own handler on window). Both used to
+      // fire on one keypress, so the focus period drifted a month for every step walked and
+      // the user came out of the tour on a different period than they went in.
+      if (spotlightActive()) return
       if (isQuickAddOpen() || isLoginModalOpen() || isProfileModalOpen() || showDropdown()) return
       // `includeResting` because arrows belong to a focused slider or radio group, which
       // would otherwise move AND step the period on one keypress.

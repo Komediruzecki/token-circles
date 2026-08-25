@@ -3,12 +3,14 @@
  * Full-screen walkthrough overlay with target highlighting and tooltip
  */
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
+import { isEditableTarget } from '../core/domFocus'
 import {
   endSpotlight,
   nextSpotlightStep,
   prevSpotlightStep,
   spotlightActive,
   spotlightStep,
+  tourKeyAction,
   tourSteps,
 } from '../core/spotlightStore'
 import styles from './Spotlight.module.css'
@@ -258,13 +260,19 @@ export default function Spotlight() {
     if (!spotlightActive()) return
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'Enter') {
-        nextSpotlightStep()
-      } else if (e.key === 'ArrowLeft') {
-        prevSpotlightStep()
-      } else if (e.key === 'Escape') {
-        endSpotlight()
-      }
+      // `includeResting` because ←/→ are exactly the keys a range input and a radio group
+      // drive themselves, and the tour overlay does not take focus.
+      const action = tourKeyAction(e.key, {
+        modifier: e.ctrlKey || e.metaKey || e.altKey,
+        editableFocus: isEditableTarget(document.activeElement, { includeResting: true }),
+      })
+      if (!action) return
+      // preventDefault matters as much as the guard: without it, Enter on the tour's own Next
+      // button both activated the button and advanced the step, skipping two at a time.
+      e.preventDefault()
+      if (action === 'next') nextSpotlightStep()
+      else if (action === 'prev') prevSpotlightStep()
+      else endSpotlight()
     }
     window.addEventListener('keydown', onKey)
     onCleanup(() => {
