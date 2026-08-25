@@ -528,6 +528,24 @@ export async function executeImport(
     }
   }
 
+  if (dryRun && toCreate.length > 0) {
+    // A preview must answer for the state the import will PRODUCE, not the state before it
+    // runs. Nothing is inserted in a dry run, so these accounts still have no ids, and every
+    // transfer naming one is reported as `no account named "X"`. On a FIRST import -- where
+    // every account in the sheet is about to be created -- that is every transfer row in the
+    // file, so the user is told thousands of rows are broken when the real import accepts all
+    // of them (accounts are created above, before the row loop). Stand placeholder ids in for
+    // the rows the real run will insert. They count down from MAX_SAFE_INTEGER: distinct, so
+    // the "both sides resolve to the same account" check still fires, and positive, because
+    // the shared invariant rejects a non-positive account id. The dry run returns at the early
+    // exit below without ever writing a transaction or recomputing a balance with one.
+    let placeholder = Number.MAX_SAFE_INTEGER;
+    for (const a of toCreate) {
+      const lower = a.name.trim().toLowerCase();
+      if (!accountIdMap.has(lower)) accountIdMap.set(lower, placeholder--);
+    }
+  }
+
   // Existing categories -> map, then batch-create the DISTINCT new, non-account names.
   const categoryMap = new Map<string, number>();
   const loadCategories = async () => {

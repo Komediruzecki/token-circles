@@ -880,6 +880,20 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
     }
 
+    if (dryRun) {
+      // Mirror of the Worker: a preview must answer for the state the import will PRODUCE.
+      // Nothing is created in a dry run, so without this every transfer into an account this
+      // import is about to create is reported as "no account named X" — on a first import,
+      // that is every transfer row in the file. The ids count down from MAX_SAFE_INTEGER:
+      // distinct, so the "both sides are the same account" check still fires, and positive,
+      // because the shared invariant rejects a non-positive account id. A dry run inserts
+      // nothing, so they are never persisted.
+      let placeholder = Number.MAX_SAFE_INTEGER
+      for (const config of accountConfigs) {
+        if (!accountIdMap.has(config.lower)) accountIdMap.set(config.lower, placeholder--)
+      }
+    }
+
     const imported: number[] = []
     // Collected transaction objects to insert in a single batched IndexedDB
     // transaction (see below). One-by-one inserts with an awaited read-modify-

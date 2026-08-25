@@ -115,6 +115,33 @@ describe('a transfer whose accounts do not exist yet', () => {
     expect(tx?.account_id).not.toBe(tx?.transfer_account_id);
   });
 
+  it('does not reject a transfer in the PREVIEW whose accounts this run will create', async () => {
+    // The preview is a dry run, so it inserts nothing -- but the real run creates the approved
+    // accounts before it validates a single row. Answering from the pre-import state told a
+    // first-time importer that every transfer in the sheet was broken (5183 rows, every
+    // transfer among them) while the very same file imported cleanly the moment they pressed
+    // the button. The preview has to describe what the import will produce.
+    const res = await execute({
+      rows: [TRANSFER_ROW],
+      mapping: MAPPING,
+      categoryTypes: { Revolut: 'account', 'Erste Current': 'account' },
+      dry_run: true,
+    });
+    const body = (await res.json()) as ExecuteBody;
+    expect(res.status).toBe(200);
+    expect(body.skipped_items ?? []).toEqual([]);
+
+    // ...and it must still be a dry run: nothing written, placeholder ids never persisted.
+    const accounts = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM accounts WHERE profile_id = 970'
+    ).first<{ n: number }>();
+    const txs = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM transactions WHERE profile_id = 970'
+    ).first<{ n: number }>();
+    expect(accounts?.n).toBe(0);
+    expect(txs?.n).toBe(0);
+  });
+
   it('says which side is missing and which value did not resolve', async () => {
     // Nothing approved: the row still cannot import, but the rejection has to be actionable.
     // "A transfer must have both source and destination accounts" names neither the side nor
