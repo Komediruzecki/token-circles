@@ -382,6 +382,30 @@ describe('the tracked subscription ending', () => {
   });
 });
 
+describe('lifting a cancellation', () => {
+  it('clears cancel_at_period_end when the resumed subscription reports it', async () => {
+    // The other half of the checkout change: the flag is only ever written from a webhook, so
+    // the account keeps showing "canceled" until this lands.
+    await subscribedTo('sub_live', 'basic');
+    await env.DB.prepare('UPDATE users SET cancel_at_period_end = 1 WHERE id = ?').bind(UID).run();
+
+    await deliver('customer.subscription.updated', {
+      id: 'sub_live',
+      customer: CUSTOMER,
+      status: 'active',
+      cancel_at_period_end: false,
+      metadata: { plan: 'advanced', interval: 'annual' },
+      items: { data: [{ price: { id: ADVANCED_ANNUAL }, current_period_end: 1800000000 }] },
+    });
+
+    expect(await readUser()).toMatchObject({
+      plan: 'advanced',
+      subscription_status: 'active',
+      cancel_at_period_end: 0,
+    });
+  });
+});
+
 describe('failure and legacy paths', () => {
   it('falls back to free when Stripe cannot be reached, and still acks', async () => {
     // An unacked webhook is retried, and the retry is swallowed by the idempotency ledger — so

@@ -183,6 +183,75 @@ describe('switching tier never creates a second subscription', () => {
   });
 });
 
+describe('changing plan after cancelling takes the cancellation back', () => {
+  // Reported from dev: cancel, think better of it, pick a different tier -- and the billing card
+  // still said the new plan was ending. Choosing a paid plan is asking to be billed for it, so it
+  // is also the clearest statement available that the cancellation was a mistake. Leaving it in
+  // place charges one more period on the NEW tier and then cuts them off anyway.
+
+  it('lifts the pending cancellation while it moves the price', async () => {
+    await seed(CUSTOMER, 'sub_1');
+    listReply = () =>
+      ok({ data: [stripeSub('sub_1', BASIC, 'active', { cancel_at_period_end: true })] });
+
+    await choose('advanced');
+
+    expect(sessions()).toHaveLength(0);
+    const p = updates()[0].params;
+    expect(p.get('cancel_at_period_end')).toBe('false');
+    expect(p.get('items[0][price]')).toBe(ADVANCED);
+  });
+
+  it('says so in the response, so the page can word it', async () => {
+    await seed(CUSTOMER, 'sub_1');
+    listReply = () =>
+      ok({ data: [stripeSub('sub_1', BASIC, 'active', { cancel_at_period_end: true })] });
+
+    const body = (await (await choose('advanced')).json()) as {
+      changed: boolean;
+      resumed: boolean;
+    };
+
+    expect(body).toMatchObject({ changed: true, resumed: true });
+  });
+
+  it('resumes the SAME tier rather than answering "you already have that"', async () => {
+    // Without this the endpoint tells someone whose plan is ending that there is nothing to do.
+    await seed(CUSTOMER, 'sub_1');
+    listReply = () =>
+      ok({ data: [stripeSub('sub_1', ADVANCED, 'active', { cancel_at_period_end: true })] });
+
+    const body = (await (await choose('advanced')).json()) as {
+      changed: boolean;
+      resumed: boolean;
+    };
+
+    expect(body).toMatchObject({ changed: true, resumed: true });
+    expect(updates()[0].params.get('cancel_at_period_end')).toBe('false');
+  });
+
+  it('sends nothing about cancellation on an ordinary switch', async () => {
+    // A write nobody asked for, on the common path, is worth not making.
+    await seed(CUSTOMER, 'sub_1');
+    listReply = () => ok({ data: [stripeSub('sub_1', BASIC)] });
+
+    const body = (await (await choose('advanced')).json()) as { resumed: boolean };
+
+    expect(updates()[0].params.get('cancel_at_period_end')).toBeNull();
+    expect(body.resumed).toBe(false);
+  });
+
+  it('still no-ops for the same tier when nothing is ending', async () => {
+    await seed(CUSTOMER, 'sub_1');
+    listReply = () => ok({ data: [stripeSub('sub_1', ADVANCED)] });
+
+    const body = (await (await choose('advanced')).json()) as { changed: boolean };
+
+    expect(body.changed).toBe(false);
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+  });
+});
+
 describe('what counts as already subscribed', () => {
   it('counts a trial: selling a trialing customer a second subscription is the same bug', async () => {
     await seed(CUSTOMER, 'sub_1');

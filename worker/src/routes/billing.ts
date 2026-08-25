@@ -276,8 +276,18 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
   // Prefer the one the account's plan is actually on; fall back to the newest.
   const current = live.find((s) => s.id === u?.stripe_subscription_id) ?? live[0];
   if (current) {
-    // Asked for what they already have. Nothing to send Stripe, and nothing to wait for.
-    if (current.priceId === price) return c.json({ url: null, changed: false, plan, interval });
+    // Choosing a paid plan is asking to be billed for it, so it also takes back a cancellation.
+    //
+    // Someone who cancelled, thought better of it, and picked a tier has stated their intent as
+    // plainly as this UI allows. Leaving the subscription set to end would charge them for one
+    // more period on the NEW tier and then cut them off anyway -- and the billing card would sit
+    // there saying "your Advanced plan is canceled" directly underneath the upgrade they just
+    // chose. Stripe's own portal keeps the cancellation through a price change, but the portal
+    // has a separate Renew button to undo it and this grid does not.
+    const resuming = current.cancelAtPeriodEnd === 1;
+    // Asked for what they already have, and not ending. Nothing to send, nothing to wait for.
+    if (current.priceId === price && !resuming)
+      return c.json({ url: null, changed: false, plan, interval });
     await stripePost(c.env, `subscriptions/${current.id}`, {
       // Replacing the item's price, NOT adding a second item -- omit the id and Stripe appends,
       // which bills both tiers on one subscription.
@@ -287,13 +297,16 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
       // require SCA, and a POST from a settings page has nowhere to send someone to complete it;
       // the tier itself changes straight away either way.
       proration_behavior: 'create_prorations',
+      // Only sent when there is a cancellation to lift. Sending it unconditionally would work,
+      // but it would also be a write nobody asked for on every ordinary tier change.
+      ...(resuming ? { cancel_at_period_end: 'false' } : {}),
       // Keep the subscription's own metadata truthful -- customer.subscription.updated reads the
       // tier back off it, and a stale value here would re-apply the tier they just left.
       'metadata[plan]': plan,
       'metadata[interval]': interval,
     });
     // No url: nothing to redirect to. The plan is still written by the webhook, never from here.
-    return c.json({ url: null, changed: true, plan, interval });
+    return c.json({ url: null, changed: true, plan, interval, resumed: resuming });
   }
 
   const origin = c.env.CORS_ORIGIN ?? new URL(c.req.url).origin;

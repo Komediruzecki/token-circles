@@ -546,7 +546,12 @@ export default function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan, interval }),
       })
-      const data = (await res.json()) as { url?: string | null; changed?: boolean; error?: string }
+      const data = (await res.json()) as {
+        url?: string | null
+        changed?: boolean
+        resumed?: boolean
+        error?: string
+      }
       if (!res.ok) throw new Error(data.error || 'Could not start checkout')
       if (data.url) {
         // Leave the button reading "Redirecting…" — the page is on its way out, and flipping it
@@ -561,8 +566,13 @@ export default function Settings() {
       }
       await awaitBillingActivation({
         expected: plan,
-        pending: 'Updating your plan…',
-        done: (name) => `Switched to the ${name} plan.`,
+        pending: data.resumed ? 'Restarting your plan…' : 'Updating your plan…',
+        // Choosing a plan after cancelling lifts the cancellation, and that is the part worth
+        // saying out loud -- it is the thing they would otherwise reload the page to check.
+        done: (name) =>
+          data.resumed
+            ? `Back on the ${name} plan — it will renew, not end.`
+            : `Switched to the ${name} plan.`,
         slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
       })
     } catch (e) {
