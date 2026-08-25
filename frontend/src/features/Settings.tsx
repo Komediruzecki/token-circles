@@ -38,11 +38,12 @@ import { ResendVerification } from '../components/ResendVerification'
 import SignedInDevices from '../components/SignedInDevices'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
+import TokenOrbitLink from '../components/TokenOrbitLink'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
-import { confirmBillingActivation } from '../core/billingActivation'
+import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
@@ -408,6 +409,7 @@ export default function Settings() {
     status: string | null
     renews_at: string | null
     cancel_at_period_end?: boolean
+    interval?: string | null
     configured: boolean
     availablePlans?: string[]
     email_verification_required?: boolean
@@ -460,11 +462,23 @@ export default function Settings() {
         color: 'var(--danger, #ef4444)',
         text: `Your ${name} plan payment is past due — update your card to keep access.`,
       }
+    // Which interval, now that the status route returns it. Worth saying: monthly and annual are
+    // the same tier at different prices, so "the Basic plan" alone left the one number a person
+    // actually wants to check — what comes off the card, and how often — nowhere on the page.
+    // Omitted rather than guessed for a row that predates migration 0025 and has no interval yet.
+    const billed =
+      b.interval === 'annual'
+        ? ', billed annually'
+        : b.interval === 'monthly'
+          ? ', billed monthly'
+          : ''
     return {
       color: 'var(--text-secondary)',
-      text: `You're on the ${name} plan${b.renews_at ? ` — renews ${fmtBillingDate(b.renews_at)}` : ''}.`,
+      text: `You're on the ${name} plan${billed}${b.renews_at ? ` — renews ${fmtBillingDate(b.renews_at)}` : ''}.`,
     }
   }
+  /** See hasManageableSubscription — a comped plan has no Stripe subscription to manage. */
+  const canManageBilling = (): boolean => hasManageableSubscription(billing())
   // Which billing CTA is mid-redirect ('manage' or a plan id) — so only that button shows
   // "Redirecting…", not all of them. Reset on pageshow (onMount) when returning from Stripe.
   const [billingBusyKey, setBillingBusyKey] = createSignal<string | null>(null)
@@ -491,6 +505,8 @@ export default function Settings() {
    */
   const awaitBillingActivation = async (opts: {
     expected: string | null
+    /** Monthly or annual, when known — without it a same-tier interval switch looks instant. */
+    expectedInterval?: string | null
     /** Shown on the billing card for as long as this is waiting. */
     pending: string
     done: (planName: string) => string
@@ -510,6 +526,7 @@ export default function Settings() {
     try {
       const outcome = await confirmBillingActivation({
         expected: opts.expected,
+        expectedInterval: opts.expectedInterval,
         read: loadBilling,
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         onChanged: (after) => {
@@ -566,6 +583,7 @@ export default function Settings() {
       }
       await awaitBillingActivation({
         expected: plan,
+        expectedInterval: interval,
         pending: data.resumed ? 'Restarting your plan…' : 'Updating your plan…',
         // Choosing a plan after cancelling lifts the cancellation, and that is the part worth
         // saying out loud -- it is the thing they would otherwise reload the page to check.
@@ -716,6 +734,7 @@ export default function Settings() {
       if (billingParam === 'success')
         void awaitBillingActivation({
           expected: billingParams.get('plan'),
+          expectedInterval: billingParams.get('interval'),
           pending: 'Confirming your subscription with Stripe…',
           done: (name) => `${name} plan activated.`,
           slow: 'Payment received. Your plan will appear here once Stripe confirms it — reload if it does not.',
@@ -1754,7 +1773,7 @@ export default function Settings() {
               <div class={styles.card}>
                 <CardHead icon={<IconBilling />} title="Plan & billing" />
                 <p
-                  style={`margin: 0 0 ${billing() && billing()?.plan !== 'free' ? '8px' : '16px'}; font-size: 13px; color: ${billingStatusLine().color};`}
+                  style={`margin: 0 0 ${canManageBilling() ? '10px' : '16px'}; font-size: 13px; color: ${billingStatusLine().color};`}
                 >
                   {billingStatusLine().text}
                 </p>
@@ -1763,10 +1782,9 @@ export default function Settings() {
                     which competes with the Upgrade buttons beside it and is easy to read as one
                     more of them. Someone looking for "how do I cancel" reads the status line
                     first, so the way out belongs directly under it. */}
-                <Show when={billing() && billing()?.plan !== 'free'}>
+                <Show when={canManageBilling()}>
                   <p style="margin: 0 0 16px; font-size: 13px;">
-                    <button
-                      type="button"
+                    <TokenOrbitLink
                       onClick={() =>
                         redirectToStripe(
                           '/api/billing/portal',
@@ -1775,13 +1793,13 @@ export default function Settings() {
                         )
                       }
                       disabled={billingBusyKey() !== null}
+                      busy={billingBusyKey() === 'manage'}
                       data-testid="billing-manage-link"
-                      style="background: none; border: none; padding: 0; font: inherit; color: var(--primary); text-decoration: underline; cursor: pointer;"
                     >
                       {billingBusyKey() === 'manage'
                         ? 'Redirecting…'
                         : 'Manage or cancel your subscription'}
-                    </button>
+                    </TokenOrbitLink>
                   </p>
                 </Show>
                 {/* Said here rather than discovered at the Stripe redirect: the checkout route

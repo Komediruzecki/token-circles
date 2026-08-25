@@ -3,6 +3,7 @@ import {
   BILLING_CONFIRM_DELAYS_MS,
   billingActivated,
   confirmBillingActivation,
+  hasManageableSubscription,
 } from '../billingActivation'
 
 /**
@@ -12,7 +13,9 @@ import {
  */
 
 /** Reads the given snapshots in order, then repeats the last one forever. */
-const reader = (sequence: Array<{ plan?: string; status?: string | null } | null>) => {
+const reader = (
+  sequence: Array<{ plan?: string; status?: string | null; interval?: string | null } | null>
+) => {
   let i = 0
   const read = async () => {
     const value = sequence[Math.min(i, sequence.length - 1)]
@@ -73,6 +76,47 @@ describe('billingActivated', () => {
     expect(billingActivated('advanced', null)).toBe(false)
   })
 
+  /**
+   * The interval switch. Monthly -> annual keeps the same tier, and that tier is already
+   * entitled, so tier-only matching said "landed" on the very first read and the toast announced
+   * a switch Stripe had not made yet. Without the interval argument every one of these is true.
+   */
+  it('is false while a same-tier interval switch is still on the old interval', () => {
+    expect(
+      billingActivated('basic', { plan: 'basic', status: 'active', interval: 'monthly' }, 'annual')
+    ).toBe(false)
+  })
+
+  it('is true once the interval has actually moved', () => {
+    expect(
+      billingActivated('basic', { plan: 'basic', status: 'active', interval: 'annual' }, 'annual')
+    ).toBe(true)
+  })
+
+  it('still requires the tier to match when an interval is expected', () => {
+    expect(
+      billingActivated(
+        'ultimate',
+        { plan: 'basic', status: 'active', interval: 'annual' },
+        'annual'
+      )
+    ).toBe(false)
+  })
+
+  it('ignores the interval when the caller has no hint to give', () => {
+    expect(
+      billingActivated('basic', { plan: 'basic', status: 'active', interval: 'monthly' })
+    ).toBe(true)
+  })
+
+  it('does not hold out for an interval the row has never carried', () => {
+    // A subscription that predates migration 0025 has no interval. Waiting for one would poll the
+    // full backoff and then announce nothing, so an absent interval means "cannot tell".
+    expect(
+      billingActivated('basic', { plan: 'basic', status: 'active', interval: null }, 'annual')
+    ).toBe(true)
+  })
+
   it('falls back to any entitled paid plan when the URL carries no hint', () => {
     // Links minted before the plan param shipped, or a hand-typed ?billing=success.
     expect(billingActivated(null, advanced)).toBe(true)
@@ -107,6 +151,29 @@ describe('confirmBillingActivation', () => {
     expect(outcome).toBe('changed')
     expect(onChanged).toHaveBeenCalledTimes(1)
     expect(onChanged).toHaveBeenCalledWith(ultimate)
+  })
+
+  it('keeps waiting through a same-tier interval switch', async () => {
+    // Basic monthly -> Basic annual. Every read here is an entitled Basic plan, so tier-only
+    // matching announced on the first one; only the interval separates "before" from "after".
+    const monthly = { plan: 'basic', status: 'active', interval: 'monthly' }
+    const annual = { plan: 'basic', status: 'active', interval: 'annual' }
+    const { read, reads } = reader([monthly, monthly, annual])
+    const { sleep } = recorder()
+    const onChanged = vi.fn()
+
+    const outcome = await confirmBillingActivation({
+      expected: 'basic',
+      expectedInterval: 'annual',
+      read,
+      sleep,
+      onChanged,
+    })
+
+    expect(outcome).toBe('changed')
+    expect(reads()).toBe(3)
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    expect(onChanged).toHaveBeenCalledWith(annual)
   })
 
   it('waits before the first read — the mount fetch has already happened', async () => {
@@ -153,5 +220,39 @@ describe('confirmBillingActivation', () => {
     // the bug for anyone slower than that, which is the whole point of this file.
     const total = BILLING_CONFIRM_DELAYS_MS.reduce((a, b) => a + b, 0)
     expect(total).toBeGreaterThanOrEqual(15_000)
+  })
+})
+
+/**
+ * The manage link is a way OUT — cancelling, switching, replacing a card. Offering it to someone
+ * it cannot work for is worse than not offering it, because the only way to find out is to click
+ * it and be told "No billing account yet".
+ */
+describe('hasManageableSubscription', () => {
+  it('is false on Free, which has no subscription at all', () => {
+    expect(hasManageableSubscription({ plan: 'free', status: null })).toBe(false)
+  })
+
+  it('is false for a comped plan, which has no Stripe customer behind it', () => {
+    // The regression: gating on "not free" alone offered the portal to granted accounts, where
+    // /api/billing/portal can only answer 400 — directly above a card reading
+    // "Granted — nothing to manage".
+    expect(hasManageableSubscription({ plan: 'basic', status: 'comped' })).toBe(false)
+  })
+
+  it('is true for a paying subscriber', () => {
+    expect(hasManageableSubscription({ plan: 'basic', status: 'active' })).toBe(true)
+  })
+
+  it('is true while payment is past due — that is exactly when the card needs replacing', () => {
+    expect(hasManageableSubscription({ plan: 'advanced', status: 'past_due' })).toBe(true)
+  })
+
+  it('is true for a cancelled-but-not-yet-expired plan, so the cancellation can be taken back', () => {
+    expect(hasManageableSubscription({ plan: 'ultimate', status: 'canceled' })).toBe(true)
+  })
+
+  it('is false before the status has loaded, rather than flashing a link that may not apply', () => {
+    expect(hasManageableSubscription(null)).toBe(false)
   })
 })

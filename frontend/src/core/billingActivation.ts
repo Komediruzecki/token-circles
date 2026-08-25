@@ -1,5 +1,7 @@
 /**
- * Waiting for a checkout to land, after Stripe sends the browser back.
+ * Pure decisions about the `/api/billing/status` payload — chiefly waiting for a checkout to
+ * land after Stripe sends the browser back, and what the resulting state entitles the UI to
+ * offer.
  *
  * Separate from Settings.tsx on purpose, and for the same reason billingMail.ts is separate
  * from the webhook route: the interesting part is not the fetching, it is the decision — what
@@ -18,6 +20,7 @@
 export interface BillingSnapshot {
   plan?: string
   status?: string | null
+  interval?: string | null
 }
 
 /**
@@ -38,13 +41,41 @@ const ENTITLED = new Set(['active', 'trialing', 'past_due'])
  *
  * 'premium' is the legacy single-price alias for 'advanced'; a row still carrying it satisfies
  * an expectation of either.
+ *
+ * `expectedInterval` exists because the tier alone cannot see a monthly <-> annual switch: the
+ * plan either side of it is the same one, and it is already entitled, so the very first read
+ * matched and we announced "Switched to the Basic plan" before Stripe had moved anything. When
+ * an interval is expected, it has to be the one on the row before this counts as landed. Null
+ * means no hint -- a checkout link made before the interval travelled in the URL, or a caller
+ * that has none -- and is not treated as a mismatch.
  */
-export function billingActivated(expected: string | null, after: BillingSnapshot | null): boolean {
+export function billingActivated(
+  expected: string | null,
+  after: BillingSnapshot | null,
+  expectedInterval?: string | null
+): boolean {
   if (!after?.plan || !ENTITLED.has(after.status ?? '')) return false
+  // A row that predates migration 0025 has no interval at all. Holding out for one would poll
+  // the full 17 seconds and then announce nothing, so an absent interval is "cannot tell",
+  // never "wrong".
+  if (expectedInterval && after.interval && after.interval !== expectedInterval) return false
   if (!expected) return after.plan !== 'free' // no hint in the URL: any entitled paid plan will do
   if (expected === 'advanced' || expected === 'premium')
     return after.plan === 'advanced' || after.plan === 'premium'
   return after.plan === expected
+}
+
+/**
+ * Is there a Stripe subscription behind this plan for the user to go and manage?
+ *
+ * Free has none. Neither does a comped plan: it was granted directly, so the account has no
+ * `stripe_customer_id` and `/api/billing/portal` answers 400 "No billing account yet". The
+ * manage link was offered on "not free" alone, which put a link that could only fail directly
+ * above a plan card already reading "Granted — nothing to manage".
+ */
+export function hasManageableSubscription(billing: BillingSnapshot | null): boolean {
+  if (!billing?.plan || billing.plan === 'free') return false
+  return billing.status !== 'comped'
 }
 
 /**
@@ -65,6 +96,8 @@ export type BillingConfirmOutcome = 'changed' | 'timeout'
  */
 export async function confirmBillingActivation(opts: {
   expected: string | null
+  /** Monthly or annual, when the caller knows which was bought. See billingActivated. */
+  expectedInterval?: string | null
   read: () => Promise<BillingSnapshot | null>
   sleep: (ms: number) => Promise<void>
   delays?: number[]
@@ -74,7 +107,7 @@ export async function confirmBillingActivation(opts: {
   for (const wait of delays) {
     await opts.sleep(wait)
     const after = await opts.read()
-    if (billingActivated(opts.expected, after)) {
+    if (billingActivated(opts.expected, after, opts.expectedInterval)) {
       opts.onChanged?.(after as BillingSnapshot)
       return 'changed'
     }

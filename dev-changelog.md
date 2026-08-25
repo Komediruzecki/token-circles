@@ -9,6 +9,48 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The billing card offered a manage link that could only fail for granted plans.**
+  `Settings.tsx` gated it on `plan !== 'free'` alone, so a comped account got
+  "Manage or cancel your subscription" — while the plan card two inches below it correctly read
+  "Granted — nothing to manage". A comped plan has no `stripe_customer_id`, so
+  `POST /api/billing/portal` can only answer 400 "No billing account yet"; the only way to find
+  that out was to click it. The predicate now lives in `core/billingActivation.ts` as
+  `hasManageableSubscription`, pure and covered, and the status line's bottom margin follows the
+  same condition so hiding the link does not leave a gap.
+- **A monthly <-> annual switch announced itself before Stripe had moved anything.**
+  `billingActivated` matched on tier alone, and an interval switch keeps the tier — which is
+  already entitled — so the first poll matched and toasted "Switched to the X plan" immediately.
+  `billingActivated` and `confirmBillingActivation` now take an optional `expectedInterval`, and
+  `choosePlan` passes the interval it asked for. An absent interval on the row (a subscription
+  predating migration 0025) means "cannot tell" rather than "wrong", so those never hang waiting
+  for a field that will not arrive.
+
+### Added
+
+- **`/api/billing/status` returns `interval`.** `users.subscription_interval` has been written by
+  the webhook since 0025 and read back by nothing, so the app could not say whether an account
+  was on monthly or annual — and could not tell an interval switch from a no-op. The billing
+  status line now says "billed monthly" / "billed annually", and `success_url` carries `interval`
+  alongside `plan` so the checkout return is equally precise. Null for comped plans and for rows
+  that predate the column.
+- **`TokenOrbitLink`** (`components/TokenOrbitLink.tsx` + `.module.css`) — the manage action as an
+  engraved pill with three of the product's tokens tracing slow circles around it. The tokens ride
+  the button's own `border-box` via `offset-path`, so the orbit is the shape of the button and
+  stays right at any label length or font size; nothing is measured in JS and there is no path to
+  re-cut when the copy changes. Three sizes at three periods (9s / 11s / 13s) rather than evenly
+  matched dots at even spacing, which would read as a loading spinner. Hover tightens and
+  brightens them; the busy state pulls all three to a 1.6s sweep so the same tokens report the
+  redirect. Behind `@supports (offset-path: border-box)` — without it the tokens are hidden
+  entirely, since a dot that cannot follow the path would pile up at the pill's top-left corner.
+  `prefers-reduced-motion` parks them at three points around the rim and stops the orbit.
+  Covered by `TokenOrbitLink.test.tsx`, which pins the case worth pinning: `.t1` is declared
+  ONLY inside the nested `@media (prefers-reduced-motion) > @supports` block, so if the CSS
+  modules transform did not export a local for it, `styles.t1` would be `undefined` and that
+  token would render `class="token undefined"` — no crash, no failing build, one token silently
+  unstyled. It does export it (`_t1_ff23fe`), and the test now says so.
+
 ### Changed
 
 - **Worker dependencies bumped to their current releases**, and Dependabot taught not to hand

@@ -323,7 +323,10 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
     // load has no memory of what the plan was before checkout, so without this it can only
     // compare against whatever it reads first — which on a tier switch is the OLD paid tier,
     // and it would announce that one as activated.
-    success_url: `${origin}/?billing=success&plan=${encodeURIComponent(plan)}#settings`,
+    // `interval` rides along with `plan` so the return can tell an annual checkout landed and not
+    // merely that the tier is entitled. Links made before this shipped carry no interval, which
+    // billingActivated treats as "no hint" rather than a mismatch.
+    success_url: `${origin}/?billing=success&plan=${encodeURIComponent(plan)}&interval=${encodeURIComponent(interval)}#settings`,
     cancel_url: `${origin}/?billing=cancel#settings`,
     // EU VAT / tax compliance — requires Stripe Tax to be enabled in the Stripe
     // dashboard. If Stripe Tax is not configured the Stripe API will reject the
@@ -398,17 +401,23 @@ billingRoutes.get('/api/billing/status', requireAuth, async (c) => {
     subscription_status: string | null;
     plan_renews_at: string | null;
     cancel_at_period_end: number | null;
+    subscription_interval: string | null;
     auth_provider: string | null;
     email_verified: number | null;
   }>(
     c.env.DB,
-    'SELECT plan, subscription_status, plan_renews_at, cancel_at_period_end, auth_provider, email_verified FROM users WHERE id = ?',
+    'SELECT plan, subscription_status, plan_renews_at, cancel_at_period_end, subscription_interval, auth_provider, email_verified FROM users WHERE id = ?',
     userId
   );
   return c.json({
     plan: u?.plan ?? 'free',
     status: u?.subscription_status ?? null,
     renews_at: u?.plan_renews_at ?? null,
+    // Monthly vs annual. The column has been maintained since 0025 and nothing read it back, so
+    // the app could not say which one you were on -- and could not tell a monthly -> annual
+    // switch from a no-op, because the tier either side of it is the same. Null for a plan that
+    // predates the column, and for comped plans, which have no Price behind them.
+    interval: u?.subscription_interval ?? null,
     // True when the user canceled but still has access until renews_at (the period end).
     cancel_at_period_end: !!u?.cancel_at_period_end,
     configured: !!c.env.STRIPE_SECRET_KEY,
@@ -623,8 +632,7 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       const metaPlan = paidPlan(meta?.plan);
       const item = (
         obj.items as
-          | { data?: Array<{ price?: { id?: string }; current_period_end?: number }> }
-          | undefined
+          { data?: Array<{ price?: { id?: string }; current_period_end?: number }> } | undefined
       )?.data?.[0];
       const subPlan = item?.price?.id ? planForPrice(c.env, item.price.id) : null;
       // current_period_end moved onto the subscription item in recent API versions; fall back to the

@@ -1,0 +1,181 @@
+/* TokenOrbitLink — an inline action with the brand's tokens orbiting it (see TokenOrbitLink.tsx). */
+
+.token-orbit-link {
+  /* A button that reads as a link, so it keeps the surrounding paragraph's rhythm. */
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  /* Room for the orbit: the tokens ride the border box, so they need clearance from the text. */
+  padding: 5px 13px;
+  border-radius: 999px;
+  font: inherit;
+  line-height: 1.2;
+  color: var(--primary);
+  cursor: pointer;
+
+  /* Engraved, not drawn on top: a hairline ring plus an inner highlight below it and a soft
+     shadow above, so the pill reads as pressed into the card rather than sitting on it. */
+  background: color-mix(in oklab, var(--primary) 7%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 26%, transparent);
+  box-shadow:
+    inset 0 1px 1px color-mix(in oklab, #000 22%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, #fff 10%, transparent);
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    box-shadow 0.25s,
+    color 0.25s;
+}
+
+.token-orbit-link:hover:not(:disabled),
+.token-orbit-link:focus-visible {
+  background: color-mix(in oklab, var(--primary) 13%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  box-shadow:
+    inset 0 1px 1px color-mix(in oklab, #000 26%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, #fff 14%, transparent),
+    0 0 0 3px color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.token-orbit-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.token-orbit-link:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+/* The label. Nothing decorative on it — the orbit is the decoration, and an underline as well
+   would be two treatments competing over one short line. */
+.label {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * The tokens. Each one rides the pill's own border box, so the path is the shape of the button
+ * and stays right however long the label is — no hardcoded path to re-measure when the copy
+ * changes, which is what makes this reusable rather than a one-off for this sentence.
+ *
+ * offset-path only accepts `border-box` in reasonably recent engines. Everything lives behind
+ * @supports rather than degrading, because a token that cannot follow the path would otherwise
+ * sit in a heap at the pill's top-left corner — worse than no orbit at all.
+ */
+.token {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--primary);
+  pointer-events: none;
+}
+
+@supports (offset-path: border-box) {
+  .token {
+    display: block;
+    offset-path: border-box;
+    offset-rotate: 0deg;
+    animation: orbit 9s linear infinite;
+    box-shadow: 0 0 6px color-mix(in oklab, var(--primary) 70%, transparent);
+    transition:
+      opacity 0.25s,
+      box-shadow 0.25s;
+    opacity: 0.55;
+  }
+
+  /* Three, spaced around the ring rather than chasing each other, and each a little different —
+     evenly-matched dots at even spacing read as a loading spinner, which this is not. */
+  .t2 {
+    width: 3px;
+    height: 3px;
+    margin: -1.5px 0 0 -1.5px;
+    animation-duration: 13s;
+    animation-delay: -4s;
+    opacity: 0.4;
+  }
+
+  .t3 {
+    width: 4px;
+    height: 4px;
+    margin: -2px 0 0 -2px;
+    animation-duration: 11s;
+    animation-delay: -7.5s;
+    opacity: 0.45;
+  }
+
+  /* Hover draws them in: brighter and quicker, so the affordance answers the pointer. */
+  .token-orbit-link:hover:not(:disabled) .token,
+  .token-orbit-link:focus-visible .token {
+    opacity: 1;
+    animation-duration: 4.5s;
+    box-shadow: 0 0 9px color-mix(in oklab, var(--primary) 90%, transparent);
+  }
+
+  .token-orbit-link:hover:not(:disabled) .t2,
+  .token-orbit-link:focus-visible .t2 {
+    animation-duration: 6.5s;
+  }
+
+  .token-orbit-link:hover:not(:disabled) .t3,
+  .token-orbit-link:focus-visible .t3 {
+    animation-duration: 5.5s;
+  }
+
+  /* Mid-redirect the orbit tightens into a steady sweep — the same tokens, now reporting work.
+     One rule covers all three: `.token-orbit-link.busy .token` is three classes to `.t2`/`.t3`'s
+     one, so it already outranks their own durations. The hover rules above need a rule each only
+     because they set three DIFFERENT values. */
+  .token-orbit-link.busy .token {
+    opacity: 1;
+    animation-duration: 1.6s;
+  }
+}
+
+@keyframes orbit {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+/* Circles going in circles is exactly the kind of thing this setting is asking us to stop.
+   The engraved pill carries the whole affordance on its own, so the tokens simply rest. */
+@media (prefers-reduced-motion: reduce) {
+  .token-orbit-link,
+  .token {
+    transition: none;
+  }
+
+  @supports (offset-path: border-box) {
+    .token,
+    .token-orbit-link:hover:not(:disabled) .token,
+    .token-orbit-link:focus-visible .token,
+    .token-orbit-link.busy .token {
+      animation: none;
+      opacity: 0.5;
+    }
+
+    /* Parked at three points around the ring rather than stacked at its start. */
+    .t1 {
+      offset-distance: 8%;
+    }
+    .t2 {
+      offset-distance: 42%;
+    }
+    .t3 {
+      offset-distance: 71%;
+    }
+  }
+}
