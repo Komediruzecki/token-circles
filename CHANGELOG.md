@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.11.0] — 2026-08-25
+
 ### Added
 
 - **A new version now announces itself with a Reload button.** Update notices appear in the top right and stay long enough to act on, instead of a four-second message at the bottom with nothing to press.
@@ -15,6 +17,9 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Changing your plan no longer leaves you paying for the old one too.** Every tier switch started a _new_ subscription instead of moving the one you already had, so switching a couple of times could leave three running at once, all charging your card — and cancelling any one of them dropped your account to Free while the others kept billing. A switch now changes the subscription you have, and does it without leaving the page.
+- **Cancelling and then choosing another plan keeps you subscribed.** The cancellation used to survive the change, so you were billed for one more period on the plan you had just picked and then dropped to Free anyway.
+- **Your plan shows up as soon as it changes.** The billing card sat on Free until you reloaded the page, and the plan grid could go on offering to sell you the tier you were already paying for.
 - **Checkout works again for returning subscribers.** Anyone who had subscribed before — cancelled and come back, or changed tier — got an error instead of a payment page. A plan that was granted to you now says so, rather than offering billing controls that could not work.
 - **Deleting transactions holds the dialog until the rows are actually gone**, shows progress while it works, and says so if it fails instead of closing on an unchanged list. Deletes are faster as well.
 - **A row you delete no longer stays in your selection.** The bulk bar kept counting a row that was already gone, and the next bulk action — delete, categorize, tag, reconcile — quietly skipped it. Switching profile with rows selected left the same stale count behind. Rows hidden by a filter are still selected, as before.
