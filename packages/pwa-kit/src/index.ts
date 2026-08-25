@@ -9,6 +9,7 @@ export {
   canInstall,
   installPwaInstallListeners,
   isStandalone,
+  needsAndroidInstallHint,
   needsIosInstallHint,
   promptInstall,
 } from './install';

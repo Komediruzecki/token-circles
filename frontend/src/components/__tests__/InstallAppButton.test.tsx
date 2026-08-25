@@ -14,6 +14,7 @@ const toasts: { message: string; type: string }[] = []
 
 let installable = false
 let ios = false
+let android = false
 let outcome: 'accepted' | 'dismissed' | 'unavailable' = 'accepted'
 let prompts = 0
 
@@ -22,6 +23,7 @@ async function mount() {
   vi.doMock('@pwa-kit', () => ({
     canInstall: () => installable,
     needsIosInstallHint: () => ios,
+    needsAndroidInstallHint: () => android,
     promptInstall: () => {
       prompts += 1
       return Promise.resolve(outcome)
@@ -39,6 +41,7 @@ async function mount() {
 const block = () => host.querySelector('[data-testid="install-app"]')
 const button = () => host.querySelector<HTMLButtonElement>('[data-testid="install-app-button"]')
 const iosHint = () => host.querySelector('[data-testid="install-app-ios-hint"]')
+const androidHint = () => host.querySelector('[data-testid="install-app-android-hint"]')
 const flush = async () => {
   await Promise.resolve()
   await Promise.resolve()
@@ -49,6 +52,7 @@ beforeEach(() => {
   prompts = 0
   installable = false
   ios = false
+  android = false
   outcome = 'accepted'
 })
 
@@ -79,6 +83,7 @@ describe('when the browser can install', () => {
     vi.doMock('@pwa-kit', () => ({
       canInstall: () => true,
       needsIosInstallHint: () => false,
+      needsAndroidInstallHint: () => false,
       promptInstall: () => {
         prompts += 1
         return new Promise((r) => (release = r as (v: 'accepted') => void))
@@ -131,6 +136,26 @@ describe('on iOS, where there is no install API', () => {
 
     expect(button()).toBeNull()
     expect(iosHint()?.textContent).toContain('Add to Home Screen')
+  })
+})
+
+describe('on Android without a captured prompt', () => {
+  it('explains the browser menu instead of rendering nothing', async () => {
+    android = true
+    await mount()
+
+    expect(button()).toBeNull()
+    expect(iosHint()).toBeNull()
+    expect(androidHint()?.textContent).toContain('Add to Home screen')
+  })
+
+  it('prefers the real button the moment the prompt is available', async () => {
+    android = true
+    installable = true
+    await mount()
+
+    expect(button()).not.toBeNull()
+    expect(androidHint()).toBeNull()
   })
 })
 

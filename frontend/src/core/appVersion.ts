@@ -6,8 +6,9 @@
  * matches this running build, a deploy has happened. We then update the service worker and
  * reload at a SAFE moment — the user's next in-app navigation (a hashchange) — so a mid-session
  * deploy never strands them on a dead lazy chunk ("Unexpected token '<'") and never yanks the
- * page from under an active view. A toast is the visible fallback for a user who parks on one
- * page and never navigates.
+ * page from under an active view. A toast with a Reload action is the visible affordance: the
+ * user can take the update immediately, and a user who parks on one page and never navigates
+ * still has a button instead of a message that expires on them.
  *
  * Reload discipline (the deploy-transition audit): at most one auto-reload per server sha AND
  * a rolling cap across shas, so back-to-back releases each get their one reload while a
@@ -24,6 +25,7 @@
 import { reloadToLatest } from '@pwa-kit'
 import { createSignal } from 'solid-js'
 import { toast } from './api'
+import { hasToastOnChannel, removeToastsByChannel } from './toastStore'
 
 export interface VersionInfo {
   version?: string
@@ -33,6 +35,11 @@ export interface VersionInfo {
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 const FIRST_CHECK_DELAY_MS = 15 * 1000 // let the app settle before the first probe
+/** One toast per category: a re-announcement replaces the previous notice, never stacks. */
+const UPDATE_TOAST_CHANNEL = 'app-update'
+/** Longer than a normal toast because it asks for a decision, but not sticky: ignoring it is a
+ *  valid answer — the next in-app navigation applies the update anyway. */
+const UPDATE_TOAST_DURATION_MS = 60 * 1000
 const RELOAD_GUARD_KEY = 'tc-version-reload'
 const RELOAD_HISTORY_KEY = 'tc-version-reload-times'
 /** Rolling cap: at most this many auto-reloads per window, across ALL shas. */
@@ -131,6 +138,74 @@ export function recordAutoReload(sha: string, now: number): void {
   }
 }
 
+/** Input types whose focus is a resting state, not an entry in progress. A checkbox or a
+ *  toggle keeps focus long after the click; treating that as "mid-entry" would veto the
+ *  auto-reload forever. */
+const NON_ENTRY_INPUT_TYPES = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+])
+
+/**
+ * True while the user is visibly in the middle of something a reload would eat: a text-entry
+ * control holds focus, or a modal dialog is OPEN. The hashchange reload defers to the NEXT
+ * navigation instead — losing a half-typed form to an update we chose the timing of is exactly
+ * what the "safe moment" contract promises never happens.
+ *
+ * "Open" is decided by computed pointer-events, not mere presence: CommandBar and GuidedOrbit
+ * keep their `role="dialog"` nodes mounted permanently and hide them with `pointer-events:
+ * none` + opacity, so a presence check would be true on every page and quietly kill the
+ * auto-reload (found in review). Conditionally-rendered dialogs compute `auto` and count.
+ */
+export function userIsMidEntry(doc: Document = document): boolean {
+  const el = doc.activeElement
+  if (el instanceof HTMLInputElement && !NON_ENTRY_INPUT_TYPES.has(el.type)) return true
+  if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true
+  if (el instanceof HTMLElement && el.isContentEditable) return true
+
+  const view = doc.defaultView
+  for (const dialog of doc.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {
+    const style = view?.getComputedStyle(dialog)
+    if (!style) continue
+    if (style.display === 'none' || style.visibility === 'hidden') continue
+    // pointer-events is inherited, so a dialog inside a closed overlay computes 'none'.
+    if (style.pointerEvents === 'none') continue
+    return true
+  }
+  return false
+}
+
+/**
+ * The one visible notice: what is ready, and a Reload button that takes it now. Channelled, so a
+ * re-announcement (SW signal first, poll later) replaces the toast instead of stacking it.
+ */
+function announceUpdate(): void {
+  const server = serverVersion()
+  toast(
+    server ? `Token Circles v${server} is ready.` : 'A new version of Token Circles is ready.',
+    'info',
+    {
+      title: 'Update',
+      channel: UPDATE_TOAST_CHANNEL,
+      durationMs: UPDATE_TOAST_DURATION_MS,
+      action: {
+        // `reloadToLatest`, not `location.reload()` — see reloadForUpdate. A user click skips the
+        // auto-reload guards on purpose: an explicit request must always work, and the kit's own
+        // once-guard absorbs a racing hashchange reload.
+        onClick: () => void reloadToLatest(),
+        label: 'Reload',
+      },
+    }
+  )
+}
+
 /** Reload to pick up `serverSha`; guarded against loops. */
 function reloadForUpdate(serverSha: string): void {
   const now = Date.now()
@@ -155,7 +230,7 @@ function reloadForUpdate(serverSha: string): void {
 export function noteWaitingBuild(): void {
   if (!updateAvailable()) {
     setUpdateAvailable(true)
-    toast('A new version is available — it will load on your next move.', 'info')
+    announceUpdate()
   }
   pendingReload = true
   // No sha to key the guard on: the browser told us there is a newer worker, not which commit it
@@ -179,6 +254,8 @@ export async function checkForUpdate(): Promise<void> {
     setUpdateAvailable(false)
     pendingReload = false
     latestServerSha = null
+    // An update notice that was on screen is now a lie (rollback) — take it down.
+    removeToastsByChannel(UPDATE_TOAST_CHANNEL)
     return
   }
 
@@ -186,7 +263,13 @@ export async function checkForUpdate(): Promise<void> {
   setServerVersion(verdict.serverVersion)
   if (!updateAvailable()) {
     setUpdateAvailable(true)
-    toast('A new version is available — it will load on your next move.', 'info')
+    announceUpdate()
+  } else if (!hasToastOnChannel(UPDATE_TOAST_CHANNEL)) {
+    // The earlier notice expired (or came from the SW signal with no version to name). Each
+    // poll re-raises it — now with the server's version — so a user who missed one 60-second
+    // toast is not stranded with no visible affordance. A notice still on screen is left
+    // alone; re-announcing over it would restart its animation and its clock.
+    announceUpdate()
   }
   pendingReload = true
 }
@@ -197,7 +280,10 @@ export async function checkForUpdate(): Promise<void> {
  */
 export function initVersionWatch(): () => void {
   const onHashChange = () => {
-    if (pendingReload && latestServerSha) reloadForUpdate(latestServerSha)
+    // A hashchange normally means the old page is gone, but focus can survive it (a global
+    // search box, a filter bar) and modals with in-page navigation exist; when it does, wait
+    // for a later navigation rather than yanking a form out from under the user.
+    if (pendingReload && latestServerSha && !userIsMidEntry()) reloadForUpdate(latestServerSha)
   }
   const onVisible = () => {
     if (document.visibilityState === 'visible') void checkForUpdate()

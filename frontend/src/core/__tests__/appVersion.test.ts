@@ -8,7 +8,7 @@
  * stand-down). The build identity under test is pinned by vitest.config define:
  * __APP_VERSION__ = '0.0.0-test', __GIT_SHA__ = 'testsha'.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api', () => ({
   toast: vi.fn(),
@@ -128,6 +128,64 @@ describe('auto-reload guards', () => {
   })
 })
 
+describe('userIsMidEntry', () => {
+  afterEach(() => {
+    // In afterEach, not inline: a failing assertion must not leave a focused input or a
+    // dialog node behind to pollute every later test in this file.
+    document.body.innerHTML = ''
+  })
+
+  it('is false on a plain page', async () => {
+    const { userIsMidEntry } = await freshModule()
+    expect(userIsMidEntry()).toBe(false)
+  })
+
+  it('is true while a text-entry control holds focus', async () => {
+    const { userIsMidEntry } = await freshModule()
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+    expect(userIsMidEntry()).toBe(true)
+  })
+
+  it('ignores focus resting on a checkbox — that is not an entry in progress', async () => {
+    const { userIsMidEntry } = await freshModule()
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    document.body.appendChild(input)
+    input.focus()
+    expect(userIsMidEntry()).toBe(false)
+  })
+
+  it('is true while a modal dialog is open', async () => {
+    const { userIsMidEntry } = await freshModule()
+    const modal = document.createElement('div')
+    modal.setAttribute('role', 'dialog')
+    document.body.appendChild(modal)
+    expect(userIsMidEntry()).toBe(true)
+  })
+
+  it('counts an alertdialog (destructive confirms) as open too', async () => {
+    const { userIsMidEntry } = await freshModule()
+    const confirm = document.createElement('div')
+    confirm.setAttribute('role', 'alertdialog')
+    document.body.appendChild(confirm)
+    expect(userIsMidEntry()).toBe(true)
+  })
+
+  it('ignores a permanently-mounted dialog hidden behind pointer-events: none', async () => {
+    // CommandBar and GuidedOrbit keep their role="dialog" nodes in the DOM at all times and
+    // hide them with pointer-events: none — presence alone must NOT read as mid-entry, or the
+    // auto-reload would be vetoed on every page forever (found in review).
+    const { userIsMidEntry } = await freshModule()
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'dialog')
+    overlay.style.pointerEvents = 'none'
+    document.body.appendChild(overlay)
+    expect(userIsMidEntry()).toBe(false)
+  })
+})
+
 describe('checkForUpdate signal reconciliation', () => {
   it('adopts the network version string when the server runs our commit (mis-stamped build)', async () => {
     const mod = await freshModule()
@@ -149,13 +207,25 @@ describe('checkForUpdate signal reconciliation', () => {
     expect(mod.serverVersion()).toBe('9.9.9')
   })
 
-  it('announces an update with a toast exactly once across repeated polls', async () => {
+  it('announces once while the notice is on screen, re-announces after it expires', async () => {
     const mod = await freshModule()
+    // Post-freshModule so both resolve to the same registry instance as the module under test.
     const { toast } = await import('../api')
+    const store = await import('../toastStore')
     stubVersionJson({ version: '9.9.9', gitSha: 'newsha' })
+
     await mod.checkForUpdate()
+    // The api mock swallows the real addToast, so plant the live notice the announce would
+    // have created; while it is on screen a second poll must not restart it.
+    store.addToast('a new version is ready', 'info', { channel: 'app-update' })
     await mod.checkForUpdate()
     expect(vi.mocked(toast)).toHaveBeenCalledTimes(1)
+
+    // Simulate the 60-second expiry: the next poll must raise the notice again, so a user
+    // who missed one toast is never stranded without an affordance.
+    store.removeToastsByChannel('app-update')
+    await mod.checkForUpdate()
+    expect(vi.mocked(toast)).toHaveBeenCalledTimes(2)
   })
 
   it('stands down after a rollback to the running commit', async () => {

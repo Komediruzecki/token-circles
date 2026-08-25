@@ -1,6 +1,13 @@
-import { createSignal, ErrorBoundary as SolidErrorBoundary, onCleanup, onMount } from 'solid-js'
+import { reloadToLatest } from '@pwa-kit'
+import {
+  createSignal,
+  ErrorBoundary as SolidErrorBoundary,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js'
 import { displayVersion } from '../core/appVersion'
-import { isChunkLoadError } from '../core/bootRecovery'
+import { isChunkLoadError, isChunkRecoveryInFlight } from '../core/bootRecovery'
 import type { Component, JSX } from 'solid-js'
 
 interface Props {
@@ -40,6 +47,17 @@ export const ErrorBoundary: Component<Props> = (props) => {
   }
 
   onMount(() => {
+    // A stale-chunk failure that bootRecovery is already reloading for must not ALSO raise
+    // the crash modal — the same failure reaches both listeners, and a "crashed" flash over a
+    // page that is about to recover is the bug users report as "the update crashed the app".
+    // Shared by both handlers so the guard cannot drift between the two event paths.
+    const escalate = (err: Error) => {
+      if (isChunkLoadError(err) && isChunkRecoveryInFlight()) return
+      if (!fatalError()) {
+        setFatalError(err)
+      }
+    }
+
     const handleGlobalError = (event: ErrorEvent) => {
       const msg = event.message || (event.error ? String(event.error) : '')
       if (isBenignError(msg)) return
@@ -48,18 +66,14 @@ export const ErrorBoundary: Component<Props> = (props) => {
       // Third-party/opaque errors are logged (visible in any later crash modal)
       // but never escalate to the full-screen fatal takeover.
       if (isThirdPartyError(event)) return
-      if (!fatalError()) {
-        setFatalError(err)
-      }
+      escalate(err)
     }
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const err = event.reason instanceof Error ? event.reason : new Error(String(event.reason))
       if (isBenignError(err.message)) return
       addToLog(`[${new Date().toISOString()}] Unhandled: ${err.message}`)
-      if (!fatalError()) {
-        setFatalError(err)
-      }
+      escalate(err)
     }
 
     window.addEventListener('error', handleGlobalError)
@@ -71,8 +85,13 @@ export const ErrorBoundary: Component<Props> = (props) => {
     })
   })
 
+  // `reloadToLatest`, never `location.reload()`: the controlling service worker answers a plain
+  // reload from its own precache, so after a deploy has dropped this build's chunks the modal's
+  // "Reload" would land back on the identical dead build, forever. reloadToLatest adopts a
+  // waiting worker when there is one and unregisters first when there is not; offline it falls
+  // back to the plain reload, which is then the only copy of the app there is.
   const handleReload = () => {
-    window.location.reload()
+    void reloadToLatest()
   }
   const handleClearLocalStorage = () => {
     localStorage.clear()
@@ -119,19 +138,24 @@ export const ErrorBoundary: Component<Props> = (props) => {
     <SolidErrorBoundary
       fallback={(err, _reset) => {
         addToLog(`[${new Date().toISOString()}] Render error: ${err.toString()}`)
-        const displayError = fatalError() || err
-        const logs = errorLog()
+        // The commonest render error is a lazy route whose chunk died after a deploy — the
+        // exact failure bootRecovery is reloading for. While that reload is in flight, render
+        // nothing at all: the modal would only flash over a page that is about to go. The
+        // in-flight flag is a signal with a deadline, so if the reload never lands the modal
+        // appears once the flag releases.
         return (
-          <CrashModal
-            error={displayError}
-            logs={logs}
-            isUpdateError={isChunkLoadError(displayError)}
-            onReload={handleReload}
-            onClearCaches={handleClearCaches}
-            onClearLocalStorage={handleClearLocalStorage}
-            onClearIndexedDB={handleClearIndexedDB}
-            onDismiss={handleDismiss}
-          />
+          <Show when={!isChunkRecoveryInFlight()}>
+            <CrashModal
+              error={fatalError() || err}
+              logs={errorLog()}
+              isUpdateError={isChunkLoadError(fatalError() || err)}
+              onReload={handleReload}
+              onClearCaches={handleClearCaches}
+              onClearLocalStorage={handleClearLocalStorage}
+              onClearIndexedDB={handleClearIndexedDB}
+              onDismiss={handleDismiss}
+            />
+          </Show>
         )
       }}
     >

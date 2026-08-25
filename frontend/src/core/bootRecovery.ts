@@ -15,6 +15,7 @@
  */
 
 import { reloadToLatest } from '@pwa-kit'
+import { createSignal } from 'solid-js'
 
 declare global {
   interface Window {
@@ -23,6 +24,27 @@ declare global {
 }
 
 const RELOAD_GUARD_KEY = 'tc-chunk-reloaded'
+
+/**
+ * How long the ErrorBoundary suppression may outlive the reload request. reloadToLatest's
+ * slowest path is bounded (~4s waiting for controllerchange before it falls back), so a page
+ * still alive this much later is NOT reloading — the flag must release, or every later failure
+ * would be swallowed silently for the life of the page.
+ */
+const RECOVERY_IN_FLIGHT_MAX_MS = 10_000
+
+/**
+ * True from the moment a quiet chunk-failure reload has been initiated until the page actually
+ * goes (or the deadline above passes). The ErrorBoundary consults this so the same failure that
+ * triggered the reload does not also raise the crash modal — a flash of "App Crashed" over a
+ * page that is about to recover. A signal, not a boolean: the boundary's fallback renders
+ * nothing while this is true and must re-render the modal if the reload never lands.
+ */
+const [recoveryInFlight, setRecoveryInFlight] = createSignal(false)
+
+export function isChunkRecoveryInFlight(): boolean {
+  return recoveryInFlight()
+}
 
 function hasReloadedThisSession(): boolean {
   try {
@@ -44,6 +66,8 @@ function markReloaded(): void {
 function reloadForNewBuild(): void {
   if (hasReloadedThisSession()) return
   markReloaded()
+  setRecoveryInFlight(true)
+  window.setTimeout(() => setRecoveryInFlight(false), RECOVERY_IN_FLIGHT_MAX_MS)
   // `reloadToLatest`, never `location.reload()`. The worker serves navigations from its own
   // precache, so a plain reload after the origin has dropped this build's chunks re-serves the
   // same dead shell and fails identically, forever. It adopts a waiting worker if there is one,
@@ -82,8 +106,13 @@ function clearReloadGuard(): void {
 /** Install the runtime recovery listeners. Call once, as early as possible. */
 export function installBootRecovery(): void {
   // Vite's signal for a failed dynamic import (lazy routes/components). preventDefault stops it
-  // rethrowing; we reload to fetch the current chunk graph.
+  // rethrowing; we reload to fetch the current chunk graph. Only prevented when we WILL reload:
+  // a prevented event makes Vite resolve the import as `undefined`, which surfaces later as a
+  // generic TypeError ("reading 'default'") that nothing can classify as a stale chunk. When
+  // recovery has stood down, the original error must rethrow so the ErrorBoundary can show its
+  // update-flavoured modal instead of a bare crash.
   window.addEventListener('vite:preloadError', (event) => {
+    if (hasReloadedThisSession()) return
     event.preventDefault()
     reloadForNewBuild()
   })

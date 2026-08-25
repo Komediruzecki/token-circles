@@ -125,6 +125,53 @@ describe('pwa install state', () => {
     expect(pwa.needsIosInstallHint()).toBe(false);
   });
 
+  it('hints at the browser menu on Android while no prompt has been captured', async () => {
+    const pwa = await freshModule();
+    expect(pwa.needsAndroidInstallHint()).toBe(true);
+  });
+
+  it('drops the Android hint the moment beforeinstallprompt arrives', async () => {
+    const pwa = await freshModule();
+    const target = new EventTarget();
+    pwa.installPwaInstallListeners(target);
+    target.dispatchEvent(beforeInstallPrompt('accepted'));
+
+    expect(pwa.canInstall()).toBe(true);
+    expect(pwa.needsAndroidInstallHint()).toBe(false);
+  });
+
+  it('never swaps the hint back in after the prompt is consumed mid-session', async () => {
+    // promptInstall nulls the pending event BEFORE the native sheet resolves; a hint keyed on
+    // "no prompt available" alone would appear behind the still-open sheet.
+    const pwa = await freshModule();
+    const target = new EventTarget();
+    pwa.installPwaInstallListeners(target);
+    target.dispatchEvent(beforeInstallPrompt('dismissed'));
+
+    await pwa.promptInstall();
+
+    expect(pwa.canInstall()).toBe(false);
+    expect(pwa.needsAndroidInstallHint()).toBe(false);
+  });
+
+  it('stays silent in an Android WebView, which has no install menu at all', async () => {
+    setUserAgent(
+      'Mozilla/5.0 (Linux; Android 14; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126 Mobile Safari/537.36'
+    );
+    const pwa = await freshModule();
+    expect(pwa.needsAndroidInstallHint()).toBe(false);
+  });
+
+  it('never hints at the Android menu on iOS or desktop', async () => {
+    setUserAgent(SAFARI_IOS, 5);
+    let pwa = await freshModule();
+    expect(pwa.needsAndroidInstallHint()).toBe(false);
+
+    setUserAgent(IPADOS_SAFARI, 0);
+    pwa = await freshModule();
+    expect(pwa.needsAndroidInstallHint()).toBe(false);
+  });
+
   it('hides every affordance when already running installed', async () => {
     vi.stubGlobal('matchMedia', (q: string) => ({
       matches: q === '(display-mode: standalone)',

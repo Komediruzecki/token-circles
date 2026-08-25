@@ -1295,12 +1295,14 @@ export const formatDate = (dateStr: string): string => {
 }
 
 import { addToast } from './toastStore'
+import type { ToastOptions } from './toastStore'
 
 export const toast = (
   message: string,
-  type: 'info' | 'success' | 'error' | 'warning' = 'info'
+  type: 'info' | 'success' | 'error' | 'warning' = 'info',
+  opts?: ToastOptions
 ): void => {
-  addToast(message, type)
+  addToast(message, type, opts)
 }
 
 // Re-export for backward compatibility — prefer toast() for new code

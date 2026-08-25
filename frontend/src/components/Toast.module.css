@@ -1,45 +1,145 @@
+/* Toasts: a plain rounded rectangle, one row, stacked in the top-right corner.
+   Phones get edge-to-edge banners at the top, safe-area aware.
+
+   Deliberately plain — the icon, the message and a border tinted by severity are
+   what carry information; the surface and shadow come from the app's own theme
+   tokens so the toast belongs to whichever theme is active. */
+
 .toastContainer {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: calc(env(safe-area-inset-top) + 0.6rem);
+  right: 0.6rem;
   z-index: 10000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.4rem;
+  width: min(360px, calc(100vw - 1.2rem));
   pointer-events: none;
 }
 
+.toastContainer:empty {
+  display: none;
+}
+
 .toast {
-  padding: 12px 20px;
-  border-radius: 6px;
-  color: white;
-  font-size: 14px;
+  --toast-accent: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.4rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.55rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 32%, var(--border));
+  border-radius: 0.6rem;
+  box-shadow: var(--shadow-lg);
+  line-height: 1.35;
+  pointer-events: auto;
+  animation: toastIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast.info {
+  --toast-accent: var(--primary);
+}
+
+.toast.success {
+  --toast-accent: var(--success);
+}
+
+.toast.warning {
+  --toast-accent: var(--warning);
+}
+
+.toast.error {
+  --toast-accent: var(--danger);
+}
+
+/* Severity reads from the icon and the border alone. */
+.icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--toast-accent);
+}
+
+.icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A title is a *prefix*, not a heading: same size as the message, set apart by
+   colour only. */
+.title {
+  margin-right: 0.35rem;
+  color: var(--toast-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.text {
+  color: var(--text-primary);
+  font-size: 0.82rem;
   font-weight: 500;
-  animation: slideIn 0.3s ease-out;
-  min-width: 200px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow-wrap: anywhere;
 }
 
-.success {
-  background: var(--success, #22c55e);
+.actionBtn {
+  flex-shrink: 0;
+  padding: 0.26rem 0.55rem;
+  color: var(--toast-accent);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 40%, transparent);
+  border-radius: 0.4rem;
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
 }
 
-.error {
-  background: var(--danger, #dc3545);
+.actionBtn:hover {
+  background: color-mix(in srgb, var(--toast-accent) 14%, transparent);
 }
 
-.info {
-  background: var(--primary, #3b82f6);
+.closeBtn {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 0.35rem;
+  cursor: pointer;
 }
 
-.warning {
-  background: var(--warning, #f59e0b);
+.closeBtn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
-@keyframes slideIn {
+.closeBtn svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.actionBtn:focus-visible,
+.closeBtn:focus-visible {
+  outline: 2px solid var(--toast-accent);
+  outline-offset: 2px;
+}
+
+@keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateX(20px);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
@@ -47,29 +147,37 @@
   }
 }
 
-@media (max-width: 768px) {
-  .toastContainer {
-    top: auto;
-    bottom: 80px;
-    left: 16px;
-    right: 16px;
-    align-items: stretch;
+@keyframes toastInMobile {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
   }
-
-  .toast {
-    min-width: unset;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@media (max-width: 480px) {
+/* Stacked toasts must never push their buttons off screen. The bound lives in the STORE
+   (MAX_TOASTS caps the stack), not in an overflow scroller here — the container keeps
+   pointer-events: none so clicks between toasts fall through, and a scroller under that
+   setting could never receive the scroll gesture anyway. */
+@media (max-width: 768px) {
   .toastContainer {
-    bottom: 70px;
-    left: 8px;
-    right: 8px;
+    top: calc(env(safe-area-inset-top) + 0.5rem);
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    gap: 0.35rem;
   }
 
   .toast {
-    padding: 10px 14px;
-    font-size: 13px;
+    animation-name: toastInMobile;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
   }
 }

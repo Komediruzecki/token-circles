@@ -28,6 +28,12 @@ const STANDALONE_QUERY = '(display-mode: standalone)';
 
 const [pendingPrompt, setPendingPrompt] = createSignal<BeforeInstallPromptEvent | null>(null);
 const [installed, setInstalled] = createSignal(false);
+/**
+ * True once `beforeinstallprompt` has fired at all this session, surviving the event's
+ * consumption. `promptInstall` nulls `pendingPrompt` BEFORE the native sheet resolves, so
+ * anything keyed on "no prompt available" alone would flip mid-sheet; this stays true.
+ */
+const [promptSeen, setPromptSeen] = createSignal(false);
 
 function matchesStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -69,11 +75,42 @@ function iosUserAgent(userAgent: string, maxTouchPoints: number): boolean {
  * the home screen at all, so a hint there would send the user somewhere that does not exist.
  */
 export function needsIosInstallHint(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  if (standalone() || installed()) return false;
+  if (!hintEligible()) return false;
   const { userAgent } = navigator;
   if (!iosUserAgent(userAgent, navigator.maxTouchPoints)) return false;
   return !/CriOS|FxiOS|EdgiOS|OPiOS/.test(userAgent);
+}
+
+/** Shared gate for every install hint: a browser context, and not already installed. */
+function hintEligible(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return !standalone() && !installed();
+}
+
+/**
+ * True on an Android browser where the menu hint is the best offer available. Every major
+ * Android browser can install from its own menu — "Add to Home screen" or "Install app" — so a
+ * menu hint is honest there even when `beforeinstallprompt` never arrives: Firefox and Samsung
+ * Internet do not fire it at all, and Chrome withholds it when the app is already installed or
+ * the device fails its installability checks. Excluded on top of the shared eligibility rules:
+ *
+ * - A session where the event HAS arrived (`promptSeen`), even if already consumed — a real
+ *   install button existed, and swapping it for a menu hint mid-session (the sheet nulls the
+ *   pending event before the user answers it) would replace a working control with a lecture.
+ * - Android WebViews (the `; wv)` UA marker — Gmail/Instagram in-app browsers), which have no
+ *   browser menu to point at.
+ * - Desktop, as with iOS: a desktop browser without the event cannot install PWAs at all.
+ *
+ * Known residual: an app installed in an EARLIER session, opened in a Chrome tab, still shows
+ * the hint (`appinstalled` only marks the session it fired in, and Chrome's menu then reads
+ * "Open app") — detecting that needs getInstalledRelatedApps + manifest wiring, out of scope.
+ */
+export function needsAndroidInstallHint(): boolean {
+  if (!hintEligible()) return false;
+  if (canInstall() || promptSeen()) return false;
+  const { userAgent } = navigator;
+  if (!/Android/i.test(userAgent)) return false;
+  return !userAgent.includes('; wv)');
 }
 
 /**
@@ -110,6 +147,7 @@ export function installPwaInstallListeners(
     // makes the event reusable later.
     event.preventDefault();
     setPendingPrompt(event as BeforeInstallPromptEvent);
+    setPromptSeen(true);
   });
 
   target.addEventListener('appinstalled', () => {
