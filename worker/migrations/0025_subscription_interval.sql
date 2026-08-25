@@ -1,0 +1,11 @@
+-- Which billing period a subscriber is actually on.
+--
+-- 0003 recorded the plan and the renewal date but not the interval, so a row saying
+-- plan='advanced' could be €6/month or €60/year and nothing in the database could tell them
+-- apart. That makes recurring revenue unknowable rather than merely unreported: any MRR figure
+-- would be a guess about which half of the price list each subscriber is on.
+--
+-- Nullable on purpose. Existing rows stay NULL until their next customer.subscription.* event
+-- backfills them (billing.ts resolves the interval from the Price id when the metadata is absent,
+-- so old subscriptions self-correct rather than needing a data migration).
+ALTER TABLE users ADD COLUMN subscription_interval TEXT;  -- 'monthly' | 'annual' | NULL

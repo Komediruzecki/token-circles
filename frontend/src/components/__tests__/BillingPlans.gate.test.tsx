@@ -41,7 +41,9 @@ let host: HTMLDivElement
 let dispose: (() => void) | undefined
 let upgraded: string[] = []
 
-async function mount(opts: { blocked?: string | null; currentPlan?: string } = {}) {
+async function mount(
+  opts: { blocked?: string | null; currentPlan?: string; comped?: boolean } = {}
+) {
   host = document.createElement('div')
   document.body.appendChild(host)
   dispose = render(
@@ -52,6 +54,7 @@ async function mount(opts: { blocked?: string | null; currentPlan?: string } = {
         availablePlans={() => ['advanced']}
         busyKey={() => null}
         upgradeBlockedReason={() => opts.blocked ?? null}
+        comped={() => opts.comped ?? false}
         onUpgrade={(id) => upgraded.push(id)}
         onManage={() => {}}
       />
@@ -184,5 +187,26 @@ describe('the plan you are on', () => {
 
     expect(manageButton()?.textContent).toContain('Manage subscription')
     expect(currentCard()?.textContent).toContain('cancel')
+  })
+})
+
+/**
+ * A granted plan has no Stripe subscription behind it, so the portal route answers 400. Offering
+ * the button anyway teaches someone to press it and read an error; say what they have instead.
+ */
+describe('when the plan was granted rather than bought', () => {
+  it('replaces Manage billing with what the account actually has', async () => {
+    await mount({ currentPlan: 'advanced', comped: true })
+
+    // toBeNull, not toBeUndefined: manageButton() is a querySelector, which misses as null.
+    expect(manageButton()).toBeNull()
+    expect(host.textContent).toContain('Granted — nothing to manage')
+  })
+
+  it('still shows Manage billing for a real subscription', async () => {
+    await mount({ currentPlan: 'advanced' })
+
+    expect(manageButton()).toBeDefined()
+    expect(host.textContent).not.toContain('nothing to manage')
   })
 })

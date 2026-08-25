@@ -75,8 +75,15 @@ export default function BillingPlans(props: {
    * to reach the portal and cancel.
    */
   upgradeBlockedReason?: () => string | null
+  /**
+   * True when the current plan was granted rather than bought. There is no Stripe subscription
+   * behind it, so "Manage billing" would open a portal session for a customer that does not
+   * exist — the route answers 400. Show what they have instead of a button that cannot work.
+   */
+  comped?: () => boolean
 }) {
   const upgradeBlocked = (): string | null => props.upgradeBlockedReason?.() ?? null
+  const comped = (): boolean => props.comped?.() ?? false
   const [plans, setPlans] = createSignal<PlanDef[]>([])
   const [notices, setNotices] = createSignal<{ beta?: string; fairUse?: string }>({})
   const [interval, setInterval] = createSignal<'monthly' | 'annual'>('monthly')
@@ -276,7 +283,7 @@ export default function BillingPlans(props: {
                 <div style={{ 'margin-top': '14px' }}>
                   <Show when={mine}>
                     <Show
-                      when={p.id !== 'free'}
+                      when={p.id !== 'free' && !comped()}
                       fallback={
                         <div
                           style={{
@@ -286,7 +293,7 @@ export default function BillingPlans(props: {
                             padding: '8px',
                           }}
                         >
-                          Free forever
+                          {p.id === 'free' ? 'Free forever' : 'Granted — nothing to manage'}
                         </div>
                       }
                     >

@@ -433,6 +433,16 @@ export default function Settings() {
     if (!b || b.plan === 'free')
       return { color: 'var(--text-secondary)', text: "You're on the Free plan." }
     const name = planLabel(b.plan)
+    // A comped plan was granted directly (support, or testing on dev) and has no Stripe
+    // subscription behind it. Say so plainly: nothing is being charged, and there is no card to
+    // update, so the usual renewal wording would be a small lie.
+    if (b.status === 'comped')
+      return {
+        color: 'var(--text-secondary)',
+        text: `You're on the ${name} plan, granted — no payment method attached${
+          b.renews_at ? `, until ${fmtBillingDate(b.renews_at)}` : ''
+        }.`,
+      }
     if (b.cancel_at_period_end)
       return {
         color: 'var(--warning, #f59e0b)',
@@ -1680,6 +1690,7 @@ export default function Settings() {
                   currentPlan={() => billing()?.plan ?? 'free'}
                   configured={() => billing()?.configured ?? false}
                   availablePlans={() => billing()?.availablePlans ?? []}
+                  comped={() => billing()?.status === 'comped'}
                   upgradeBlockedReason={() =>
                     billing()?.email_verification_required === true
                       ? 'Upgrading is available once your email address is confirmed.'

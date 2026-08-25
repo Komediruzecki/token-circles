@@ -39,9 +39,42 @@ async function stripePost(
   });
   const data = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {
-    const msg =
-      (data.error as { message?: string } | undefined)?.message ?? 'Stripe request failed';
-    throw new HttpError(502, msg);
+    const err = (data.error ?? {}) as {
+      message?: string;
+      type?: string;
+      code?: string;
+      param?: string;
+    };
+    // Stripe's own words go to the logs, never to the page. A rejected Session create is almost
+    // always OUR misconfiguration (a missing param, a feature not enabled on the account), and
+    // relaying it — "tax ID collection requires a customer name" — puts a sentence in front of the
+    // one person who cannot act on it. Observability is enabled in wrangler.jsonc, so this line is
+    // queryable, and Stripe's request id makes it findable in their dashboard too.
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        source: 'stripe',
+        path,
+        status: res.status,
+        type: err.type,
+        code: err.code,
+        param: err.param,
+        message: err.message,
+        requestId: res.headers.get('request-id'),
+      })
+    );
+    // A card_error is written for the cardholder and is the one kind worth showing them.
+    if (err.type === 'card_error' && err.message) throw new HttpError(402, err.message);
+    // 502 either way — an upstream call we could not complete is a server error, and only 5xx
+    // reaches logWorkerError/error_logs. The WORDING has to differ, though: a Stripe 4xx means we
+    // sent something wrong and will keep sending it, so "try again shortly" is a retry loop against
+    // a permanent failure. Stripe's own 5xx and network faults are the case where waiting works.
+    throw new HttpError(
+      502,
+      res.status >= 500
+        ? 'Billing is temporarily unavailable. Please try again shortly.'
+        : 'Could not start checkout — something is wrong on our side, and it has been logged.'
+    );
   }
   return data;
 }
@@ -73,6 +106,16 @@ function priceId(env: AppEnv['Bindings'], plan: string, interval: Interval): str
 function planForPrice(env: AppEnv['Bindings'], id: string): PaidPlan | null {
   for (const p of PAID)
     if (priceId(env, p, 'monthly') === id || priceId(env, p, 'annual') === id) return p;
+  return null;
+}
+// Monthly or annual, from the Price the subscription is actually on. The interval also travels in
+// the subscription metadata, but reading it back off the Price is what lets subscriptions created
+// before we started sending it fill in `users.subscription_interval` on their next event.
+function intervalForPrice(env: AppEnv['Bindings'], id: string): Interval | null {
+  for (const p of PAID) {
+    if (priceId(env, p, 'monthly') === id) return 'monthly';
+    if (priceId(env, p, 'annual') === id) return 'annual';
+  }
   return null;
 }
 function availablePlans(env: AppEnv['Bindings']): PaidPlan[] {
@@ -113,7 +156,9 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
     'line_items[0][quantity]': '1',
     client_reference_id: String(userId),
     'metadata[plan]': plan,
+    'metadata[interval]': interval,
     'subscription_data[metadata][plan]': plan, // so subscription.updated/deleted know the tier
+    'subscription_data[metadata][interval]': interval, // …and monthly vs annual, for MRR
     success_url: `${origin}/?billing=success#settings`,
     cancel_url: `${origin}/?billing=cancel#settings`,
     // EU VAT / tax compliance — requires Stripe Tax to be enabled in the Stripe
@@ -126,8 +171,19 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
     billing_address_collection: 'required',
     'tax_id_collection[enabled]': 'true',
   };
-  if (u?.stripe_customer_id) params.customer = u.stripe_customer_id;
-  else if (u?.email) params.customer_email = u.email;
+  if (u?.stripe_customer_id) {
+    params.customer = u.stripe_customer_id;
+    // Both are REQUIRED once an existing Customer is attached, and both are about the two params
+    // above: tax ID collection needs somewhere to write the legal business name it collects, and
+    // automatic tax needs permission to overwrite the saved address with the one typed at
+    // checkout. Without them Stripe refuses the Session outright — so this branch (every returning
+    // subscriber: re-subscribing after a cancel, or switching tier) 502'd while a first-time
+    // checkout, which takes the customer_email branch below, worked fine.
+    params['customer_update[name]'] = 'auto';
+    params['customer_update[address]'] = 'auto';
+  } else if (u?.email) {
+    params.customer_email = u.email;
+  }
   const session = await stripePost(c.env, 'checkout/sessions', params);
   return c.json({ url: session.url });
 });
@@ -252,16 +308,20 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
     plan: string,
     status: string,
     renews: number | null,
-    cancelAtPeriodEnd: number
+    // Null here means CLEAR — the subscription is no longer entitled. That is why this one does
+    // not COALESCE the way the checkout.session.completed branch above does.
+    cancelAtPeriodEnd: number,
+    interval: Interval | null
   ) =>
     db.run(
       c.env.DB,
-      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, cancel_at_period_end = ?, stripe_event_at = ?
+      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, cancel_at_period_end = ?, subscription_interval = ?, stripe_event_at = ?
          WHERE stripe_customer_id = ? AND ? >= stripe_event_at`,
       plan,
       status,
       renews ? new Date(renews * 1000).toISOString() : null,
       cancelAtPeriodEnd,
+      interval,
       eventCreated,
       customerId,
       eventCreated
@@ -300,14 +360,23 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       // (client_reference_id) so it runs regardless of ordering — it establishes the customer link
       // every later subscription event needs. Only advances the watermark (never rolls it back).
       const userId = obj.client_reference_id;
-      const plan = paidPlan((obj.metadata as { plan?: string } | undefined)?.plan) ?? 'premium';
+      const sessionMeta = obj.metadata as { plan?: string; interval?: string } | undefined;
+      const plan = paidPlan(sessionMeta?.plan) ?? 'premium';
+      const interval =
+        sessionMeta?.interval === 'monthly' || sessionMeta?.interval === 'annual'
+          ? sessionMeta.interval
+          : null;
       if (userId) {
         await db.run(
           c.env.DB,
-          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ?, cancel_at_period_end = 0, stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
+          // COALESCE, unlike applySubscription below: a session with no interval metadata (created
+          // before we sent it) means "unknown", and this branch has no ordering guard, so a plain
+          // write would clobber what customer.subscription.created had already resolved.
+          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ?, cancel_at_period_end = 0, subscription_interval = COALESCE(?, subscription_interval), stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
           String(obj.customer),
           plan,
           'active',
+          interval,
           eventCreated,
           Number(userId)
         );
@@ -317,7 +386,8 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const status = String(obj.status);
-      const metaPlan = paidPlan((obj.metadata as { plan?: string } | undefined)?.plan);
+      const meta = obj.metadata as { plan?: string; interval?: string } | undefined;
+      const metaPlan = paidPlan(meta?.plan);
       const item = (
         obj.items as
           | { data?: Array<{ price?: { id?: string }; current_period_end?: number }> }
@@ -330,12 +400,20 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
         item?.current_period_end ?? (obj.current_period_end as number | undefined) ?? null;
       // cancel_at_period_end = the user canceled but keeps access until the period end.
       const cancelAtPeriodEnd = obj.cancel_at_period_end ? 1 : 0;
+      // Prefer what we stamped on the subscription; fall back to the Price, which backfills
+      // subscriptions created before the metadata existed. Cleared along with the plan when the
+      // subscription stops being entitled, so a free row never carries a stale interval.
+      const entitled = isEntitled(status);
+      const interval =
+        (meta?.interval === 'monthly' || meta?.interval === 'annual' ? meta.interval : null) ??
+        (item?.price?.id ? intervalForPrice(c.env, item.price.id) : null);
       await applySubscription(
         String(obj.customer),
-        isEntitled(status) ? (metaPlan ?? subPlan ?? 'premium') : 'free',
+        entitled ? (metaPlan ?? subPlan ?? 'premium') : 'free',
         status,
         renews,
-        cancelAtPeriodEnd
+        cancelAtPeriodEnd,
+        entitled ? interval : null
       );
       break;
     }
@@ -343,7 +421,15 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       // Read before the update: after it the plan is 'free', and a mail that says "your Free plan
       // has ended" is nonsense.
       const acct = await accountFor(obj.customer);
-      const applied = await applySubscription(String(obj.customer), 'free', 'canceled', null, 0);
+      // Interval clears with the plan: a free row must not keep saying it is billed annually.
+      const applied = await applySubscription(
+        String(obj.customer),
+        'free',
+        'canceled',
+        null,
+        0,
+        null
+      );
       // A stale event neither changes the plan nor announces that it did.
       if (applied.meta.changes) await notify(acct);
       break;
