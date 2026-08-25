@@ -1,0 +1,74 @@
+# Dependency updates.
+#
+# This file is the other half of committing lockfiles, and the two only make sense together.
+#
+# Before: nothing was pinned in worker/ and nothing watched anything anywhere. The argument for
+# leaving it floating was security — "if something urgent lands we want the fix". It does not hold:
+#
+#   * Floating is the supply-chain risk, not the mitigation. Every CI run and every prod deploy
+#     downloaded whatever npm served at that moment, unreviewed and with no integrity check. That
+#     is the exact path a hijacked or republished package takes into a deploy pipeline. A lockfile
+#     pins hashes, so a tampered tarball is refused.
+#   * "Automatically latest" only helps if somebody notices. Nothing was watching for advisories,
+#     nothing opened a PR, nothing tested an upgrade. New versions arrived silently and untested.
+#   * Every prod deploy used a different toolchain than CI had tested, so a regression could not be
+#     reproduced or rolled back to a known-good build.
+#
+# After: versions are pinned and reproducible, AND upgrades arrive as reviewed, CI-tested PRs.
+# Crucially, Dependabot raises SECURITY updates as soon as an advisory lands regardless of the
+# schedule below — the weekly cadence only paces routine version bumps. Pinning therefore gets
+# security fixes *faster and more visibly* than floating did, because someone is told.
+version: 2
+
+updates:
+  # The pnpm workspace root — covers frontend/ and packages/.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine dev-tooling bumps instead of a dozen. Majors stay separate: they are
+      # the ones that need reading.
+      dev-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+      runtime-patches:
+        dependency-type: production
+        update-types: [patch]
+
+  # worker/ installs on its own with --ignore-workspace, so it needs its own entry — the root
+  # ecosystem does not reach it. This is the one that was completely unpinned.
+  - package-ecosystem: npm
+    directory: /worker
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+      runtime-patches:
+        dependency-type: production
+        update-types: [patch]
+    ignore:
+      # wrangler is the deploy toolchain and the E2E dev server. It ships a new minor most weeks,
+      # each carrying a different miniflare, and an unattended bump is how a `wrangler dev` that
+      # crashes mid-run reaches main. Patches and security advisories still come through; a minor
+      # is a deliberate choice made against a green E2E run.
+      - dependency-name: wrangler
+        update-types: [version-update:semver-minor, version-update:semver-major]
+
+  # The actions themselves. A compromised third-party action runs with the workflow's token, so
+  # these matter as much as anything in package.json.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        update-types: [minor, patch]

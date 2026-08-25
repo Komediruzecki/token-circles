@@ -72,9 +72,13 @@ jobs:
 
       - name: Install worker deps (outside the pnpm workspace)
         working-directory: worker
-        # worker/.gitignore deliberately does not pin a lockfile ("deps installed fresh"),
-        # so --frozen-lockfile always failed here with ERR_PNPM_NO_LOCKFILE. Install fresh.
-        run: pnpm install --no-frozen-lockfile --ignore-workspace
+        # --frozen-lockfile, which the header above always claimed this did. It could not: the
+        # lockfile was gitignored, so this ran --no-frozen-lockfile and every deploy — including
+        # every PROD deploy — built with whatever npm served that morning. A deploy that cannot be
+        # reproduced cannot be rolled back to a known-good toolchain either. The lockfile is now
+        # committed and pins integrity hashes, so a republished or tampered tarball is refused
+        # rather than installed.
+        run: pnpm install --frozen-lockfile --ignore-workspace
 
       - name: Typecheck
         working-directory: worker

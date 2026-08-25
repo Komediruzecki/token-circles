@@ -3,6 +3,7 @@ node_modules/
 .dev.vars
 dist/
 worker-configuration.d.ts
-# scaffold: deps are installed fresh on first use, so the lockfile isn't pinned here
-pnpm-lock.yaml
+# pnpm-lock.yaml IS tracked. It was ignored here from the scaffold days ("deps installed fresh"),
+# which meant every CI run and every prod deploy resolved the toolchain afresh and no two were
+# guaranteed to be the same build. npm-lock is still ignored — pnpm is the package manager.
 package-lock.json

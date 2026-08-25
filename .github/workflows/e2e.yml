@@ -50,10 +50,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # worker/ is deliberately NOT a pnpm workspace member (see deploy-worker.yml), so the root
-      # install does not reach it — and the suite now needs its wrangler.
+      # install does not reach it — and the suite needs its wrangler.
+      #
+      # --frozen-lockfile, against a worker/pnpm-lock.yaml that is now actually committed. It was
+      # `--no-frozen-lockfile` against an ignored lockfile, so every run resolved the toolchain
+      # afresh: CI never ran the wrangler anyone had tested locally, and a `wrangler dev` crash
+      # could not be told from a code change because the version moved underneath the suite.
       - name: Install worker dependencies
         working-directory: worker
-        run: pnpm install --no-frozen-lockfile --ignore-workspace
+        run: pnpm install --frozen-lockfile --ignore-workspace
 
       # `wrangler dev` runs the Worker locally against a local D1 and R2 under worker/.wrangler —
       # no Cloudflare account, no network. It needs a signing key like any other deployment; this
