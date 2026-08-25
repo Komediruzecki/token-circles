@@ -1,0 +1,17 @@
+-- Which Stripe subscription this row's plan actually reflects.
+--
+-- Until now the webhook matched on stripe_customer_id alone. That is only correct while a
+-- customer has exactly one subscription -- and ours did not, because checkout created a new one
+-- on every tier switch instead of moving the existing subscription onto the new price. A
+-- customer could end up holding three at once, all billing, with the users row showing whichever
+-- webhook happened to land last, and a `customer.subscription.deleted` for ANY of them dropping
+-- the account to free while the others kept charging: paying and locked out at the same time.
+--
+-- Checkout no longer creates duplicates (routes/billing.ts), so this column is the second half:
+-- it lets the webhook tell "the subscription this account is on ended" from "one of the strays
+-- ended", which is undecidable from the customer id.
+--
+-- Nullable on purpose. Rows that predate this have no id to backfill, and the webhook reads NULL
+-- as "not tracked yet" and behaves exactly as it did before -- the next subscription event fills
+-- it in. No data migration, no backfill script, nothing to run by hand.
+ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT;

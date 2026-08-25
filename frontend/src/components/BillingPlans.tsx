@@ -105,6 +105,16 @@ export default function BillingPlans(props: {
     return p === 'premium' ? 'advanced' : p || 'free'
   }
   const isCurrent = (id: string) => currentId() === id
+  /**
+   * Does choosing another tier leave the page?
+   *
+   * Only a first purchase goes to Stripe Checkout — there is a card to collect. A subscriber
+   * switching tier has the worker move the subscription they already have onto the new price,
+   * which is what stops a second subscription being created, and never redirects anywhere. The
+   * button has to say which of the two is about to happen. A comped plan has no subscription
+   * behind it, so it buys like a new one.
+   */
+  const switchesInPlace = () => currentId() !== 'free' && !comped()
 
   /**
    * Where a plan sits in the ladder.
@@ -193,20 +203,26 @@ export default function BillingPlans(props: {
         <For each={plans()}>
           {(p) => {
             const recommended = p.id === RECOMMENDED
-            const mine = isCurrent(p.id)
+            // An ACCESSOR, not a value. <For> runs this callback once per plan; a plain const
+            // freezes at whatever the plan was on first render — which, before /api/billing/status
+            // resolves, is 'free'. That is what left the Free card wearing "Your plan" and Basic
+            // offering Upgrade after a real subscription landed, and why switching tabs (a
+            // remount, so the callback re-runs) appeared to fix it. `price` and `per` below were
+            // already accessors for the same reason.
+            const mine = () => isCurrent(p.id)
             const price = () => (interval() === 'annual' ? p.annualPriceUsd : p.monthlyPriceUsd)
             const per = () => (interval() === 'annual' ? '/yr' : '/mo')
             return (
               <div
-                data-testid={mine ? 'plan-card-current' : undefined}
+                data-testid={mine() ? 'plan-card-current' : undefined}
                 style={{
                   position: 'relative',
                   // The plan you are ON outranks the plan we recommend. Before this the only
                   // coloured border on the grid belonged to RECOMMENDED, so a subscriber whose
                   // plan happened to be the recommended one saw nothing at all saying it was
                   // theirs — and one whose plan was not saw a highlight on somebody else's card.
-                  border: `${mine ? 2 : 1}px solid ${
-                    mine
+                  border: `${mine() ? 2 : 1}px solid ${
+                    mine()
                       ? 'var(--success, #22c55e)'
                       : recommended
                         ? 'var(--primary)'
@@ -214,19 +230,19 @@ export default function BillingPlans(props: {
                   }`,
                   'border-radius': '12px',
                   // 2px vs 1px would shift the card's contents by a pixel against its neighbours.
-                  padding: mine ? '15px' : '16px',
+                  padding: mine() ? '15px' : '16px',
                   background: 'var(--bg, #0b0e14)',
                   display: 'flex',
                   'flex-direction': 'column',
                 }}
               >
-                <Show when={mine || recommended}>
+                <Show when={mine() || recommended}>
                   <span
                     style={{
                       position: 'absolute',
                       top: '-9px',
                       left: '16px',
-                      background: mine ? 'var(--success, #22c55e)' : 'var(--primary)',
+                      background: mine() ? 'var(--success, #22c55e)' : 'var(--primary)',
                       color: '#fff',
                       'font-size': '10px',
                       'font-weight': 700,
@@ -236,7 +252,7 @@ export default function BillingPlans(props: {
                       'border-radius': '999px',
                     }}
                   >
-                    {mine ? 'Your plan' : 'Recommended'}
+                    {mine() ? 'Your plan' : 'Recommended'}
                   </span>
                 </Show>
 
@@ -281,7 +297,7 @@ export default function BillingPlans(props: {
 
                 {/* CTA */}
                 <div style={{ 'margin-top': '14px' }}>
-                  <Show when={mine}>
+                  <Show when={mine()}>
                     <Show
                       when={p.id !== 'free' && !comped()}
                       fallback={
@@ -320,7 +336,7 @@ export default function BillingPlans(props: {
                       </div>
                     </Show>
                   </Show>
-                  <Show when={!mine && p.id !== 'free'}>
+                  <Show when={!mine() && p.id !== 'free'}>
                     <button
                       type="button"
                       onClick={() => {
@@ -335,7 +351,9 @@ export default function BillingPlans(props: {
                       style={ctaStyle(recommended)}
                     >
                       {props.busyKey() === p.id
-                        ? 'Redirecting…'
+                        ? switchesInPlace()
+                          ? 'Switching…'
+                          : 'Redirecting…'
                         : props.configured() && props.availablePlans().includes(p.id)
                           ? ctaLabel(p.id)
                           : 'Coming soon'}

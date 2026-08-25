@@ -412,8 +412,10 @@ export default function Settings() {
     availablePlans?: string[]
     email_verification_required?: boolean
   } | null>(null)
-  // True while awaitBillingActivation is polling after a successful checkout.
-  const [billingConfirming, setBillingConfirming] = createSignal(false)
+  // The line to show while awaitBillingActivation is polling, or null when it is not. A string
+  // rather than a boolean because the two things it waits for want different words: a checkout
+  // return is waiting on Stripe, a tier switch is waiting on our own webhook.
+  const [billingConfirming, setBillingConfirming] = createSignal<string | null>(null)
   // Real tier name (the per-tier webhook stores 'basic'/'advanced'/'ultimate'; 'premium' is legacy).
   const planLabel = (p: string | undefined): string => {
     if (p === 'basic') return 'Basic'
@@ -433,11 +435,8 @@ export default function Settings() {
   // own colour/message; otherwise show the tier (and renewal date for an active paid plan).
   const billingStatusLine = (): { color: string; text: string } => {
     const b = billing()
-    if (billingConfirming())
-      return {
-        color: 'var(--text-secondary)',
-        text: 'Confirming your subscription with Stripe…',
-      }
+    const confirming = billingConfirming()
+    if (confirming) return { color: 'var(--text-secondary)', text: confirming }
     if (!b || b.plan === 'free')
       return { color: 'var(--text-secondary)', text: "You're on the Free plan." }
     const name = planLabel(b.plan)
@@ -482,41 +481,101 @@ export default function Settings() {
     }
   }
 
-  // Waiting for checkout.session.completed to land after Stripe sends us back. The polling
-  // decision lives in core/billingActivation.ts; this is only the wiring and the wording.
-  const awaitBillingActivation = async (expected: string | null) => {
-    setBillingConfirming(true)
+  /**
+   * Wait for the plan to land, whoever we are waiting on.
+   *
+   * The plan is only ever written by the webhook, which arrives out of band and takes a few
+   * seconds — so both the return from Stripe Checkout and an in-place tier switch have to read
+   * back rather than draw what they asked for. The polling decision lives in
+   * core/billingActivation.ts; this is the wiring and the wording.
+   */
+  const awaitBillingActivation = async (opts: {
+    expected: string | null
+    /** Shown on the billing card for as long as this is waiting. */
+    pending: string
+    done: (planName: string) => string
+    /** Said when the wait runs out. Never an error: the change happened at Stripe either way. */
+    slow: string
+  }) => {
+    setBillingConfirming(opts.pending)
+    // Freeze every plan CTA while this runs, using a key no card can match so none of them shows
+    // a busy label -- they just go inert.
+    //
+    // This is the duplicate-subscription bug arriving through the front door. Until
+    // checkout.session.completed lands, `users.stripe_customer_id` is still NULL, so
+    // /api/billing/checkout can see nothing to move and would open a SECOND Checkout Session. The
+    // window is the few seconds between Stripe sending the browser back and the webhook arriving
+    // -- exactly when the page is showing Free with live Upgrade buttons on it.
+    setBillingBusyKey('confirming')
     try {
       const outcome = await confirmBillingActivation({
-        expected,
+        expected: opts.expected,
         read: loadBilling,
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         onChanged: (after) => {
-          toast(`${planLabel(after.plan)} plan activated.`, 'success')
+          toast(opts.done(planLabel(after.plan)), 'success')
         },
       })
       // Stripe took the money, so a timeout is "not seen yet", never "failed". Announcing
       // success unconditionally is what this whole change is fixing, and overshooting into
       // "something went wrong" would be the same mistake pointed the other way.
-      if (outcome === 'timeout')
-        toast(
-          'Payment received. Your plan will appear here once Stripe confirms it — reload if it does not.',
-          'info'
-        )
+      if (outcome === 'timeout') toast(opts.slow, 'info')
     } finally {
-      setBillingConfirming(false)
+      setBillingConfirming(null)
+      setBillingBusyKey(null)
     }
   }
-  const redirectToStripe = async (path: string, failMsg: string, key: string, body?: unknown) => {
-    setBillingBusyKey(key)
+
+  /**
+   * Buy a tier, or move to a different one.
+   *
+   * Two operations behind one button, and the SERVER decides which. A first subscription needs
+   * Stripe Checkout, because there is a card to collect. A CHANGE must not: `mode: subscription`
+   * creates a new subscription every time and Stripe lets one customer hold several, so
+   * checkout-on-every-click billed people two and three times over. The route answers with a
+   * `url` for the first case and `changed` for the second — deciding it here instead would put
+   * the rule in two places, and this is the one where being wrong costs money.
+   */
+  const choosePlan = async (plan: string, interval: 'monthly' | 'annual') => {
+    setBillingBusyKey(plan)
+    let leaving = false
     try {
-      const res = await apiFetch(path, {
+      const res = await apiFetch('/api/billing/checkout', {
         method: 'POST',
         credentials: 'include',
-        ...(body
-          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-          : {}),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, interval }),
       })
+      const data = (await res.json()) as { url?: string | null; changed?: boolean; error?: string }
+      if (!res.ok) throw new Error(data.error || 'Could not start checkout')
+      if (data.url) {
+        // Leave the button reading "Redirecting…" — the page is on its way out, and flipping it
+        // back to "Upgrade" mid-navigation looks like the click did nothing.
+        leaving = true
+        window.location.href = data.url
+        return
+      }
+      if (data.changed === false) {
+        toast(`You're already on the ${planLabel(plan)} plan.`, 'info')
+        return
+      }
+      await awaitBillingActivation({
+        expected: plan,
+        pending: 'Updating your plan…',
+        done: (name) => `Switched to the ${name} plan.`,
+        slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
+      })
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not start checkout', 'error')
+    } finally {
+      if (!leaving) setBillingBusyKey(null)
+    }
+  }
+  /** Open a Stripe-hosted page. Only the portal now — choosing a plan may not redirect at all. */
+  const redirectToStripe = async (path: string, failMsg: string, key: string) => {
+    setBillingBusyKey(key)
+    try {
+      const res = await apiFetch(path, { method: 'POST', credentials: 'include' })
       const data = await res.json()
       if (res.ok && data.url) window.location.href = data.url
       else throw new Error(data.error || failMsg)
@@ -644,7 +703,13 @@ export default function Settings() {
       // activation we had not seen. confirmBillingActivation says it once it is true. `plan` is
       // the tier checkout was for (billing.ts puts it on success_url); absent on links made
       // before that shipped, which billingActivated handles.
-      if (billingParam === 'success') void awaitBillingActivation(billingParams.get('plan'))
+      if (billingParam === 'success')
+        void awaitBillingActivation({
+          expected: billingParams.get('plan'),
+          pending: 'Confirming your subscription with Stripe…',
+          done: (name) => `${name} plan activated.`,
+          slow: 'Payment received. Your plan will appear here once Stripe confirms it — reload if it does not.',
+        })
       else toast('Checkout canceled.', 'info')
       window.history.replaceState({}, '', window.location.pathname + window.location.hash)
     }
@@ -1736,12 +1801,7 @@ export default function Settings() {
                       : null
                   }
                   busyKey={billingBusyKey}
-                  onUpgrade={(plan, interval) =>
-                    redirectToStripe('/api/billing/checkout', 'Could not start checkout', plan, {
-                      plan,
-                      interval,
-                    })
-                  }
+                  onUpgrade={(plan, interval) => void choosePlan(plan, interval)}
                   onManage={() =>
                     redirectToStripe(
                       '/api/billing/portal',

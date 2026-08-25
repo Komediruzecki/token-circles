@@ -19,10 +19,14 @@ const UID = 8300;
 const CUSTOMER = 'cus_TestExisting';
 const PRICE = 'price_advanced_monthly_test';
 
-/** Bodies posted to api.stripe.com, parsed back into params. */
+/** Bodies POSTed to api.stripe.com, parsed back into params. GETs carry none and are not here. */
 let posted: URLSearchParams[] = [];
-/** What the stubbed Stripe answers with next. */
+/** Paths GETed from api.stripe.com, in order. */
+let fetched: string[] = [];
+/** What the stubbed Stripe answers a POST with next. */
 let stripeReply: () => Response;
+/** The customer's live subscriptions, as the list endpoint would answer. */
+let liveSubs: unknown[] = [];
 
 const seed = async (customer: string | null) =>
   env.DB.prepare(
@@ -48,12 +52,24 @@ beforeEach(async () => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
+  fetched = [];
+  liveSubs = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (!url.startsWith('https://api.stripe.com/'))
         return new Response('unexpected', { status: 500 });
+      // Checkout asks what the customer already has before it creates anything -- the whole
+      // point of billing-single-subscription.test.ts. Empty here: these cases are about the
+      // params of a session that IS created.
+      if ((init?.method ?? 'GET') === 'GET') {
+        fetched.push(url);
+        return new Response(JSON.stringify({ data: liveSubs }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       posted.push(new URLSearchParams(String(init?.body ?? '')));
       return stripeReply();
     })
@@ -80,6 +96,8 @@ describe('checkout session params', () => {
 
     expect(res.status).toBe(200);
     expect(posted).toHaveLength(1);
+    // It looked before it leapt, and only then created the session.
+    expect(fetched.some((u) => u.includes('subscriptions?customer='))).toBe(true);
     const p = posted[0];
     expect(p.get('customer')).toBe(CUSTOMER);
     expect(p.get('customer_update[name]')).toBe('auto');
@@ -101,6 +119,8 @@ describe('checkout session params', () => {
     const res = await checkout();
 
     expect(res.status).toBe(200);
+    // No customer id means nothing could exist to duplicate -- so no lookup at all.
+    expect(fetched).toEqual([]);
     const p = posted[0];
     expect(p.get('customer_email')).toBe('returning@example.com');
     expect(p.get('customer')).toBeNull();

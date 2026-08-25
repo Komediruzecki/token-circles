@@ -22,20 +22,20 @@ const encoder = new TextEncoder();
 // reads current_period_end off the subscription item, which is where recent versions put it).
 const STRIPE_API_VERSION = '2024-06-20';
 
-// Form-encoded POST to the Stripe REST API.
-async function stripePost(
+// One call to the Stripe REST API. POSTs are form-encoded; GETs carry their query in `path`.
+async function stripeCall(
   env: AppEnv['Bindings'],
   path: string,
-  params: Record<string, string>
+  params: Record<string, string> | null
 ): Promise<Record<string, unknown>> {
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: 'POST',
+    method: params ? 'POST' : 'GET',
     headers: {
       Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
       'Stripe-Version': STRIPE_API_VERSION,
+      ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     },
-    body: new URLSearchParams(params).toString(),
+    ...(params ? { body: new URLSearchParams(params).toString() } : {}),
   });
   const data = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {
@@ -78,6 +78,10 @@ async function stripePost(
   }
   return data;
 }
+
+const stripePost = (env: AppEnv['Bindings'], path: string, params: Record<string, string>) =>
+  stripeCall(env, path, params);
+const stripeGet = (env: AppEnv['Bindings'], path: string) => stripeCall(env, path, null);
 
 // ── Per-tier price mapping ───────────────────────────────────────────────────
 type Interval = 'monthly' | 'annual';
@@ -122,17 +126,111 @@ function availablePlans(env: AppEnv['Bindings']): PaidPlan[] {
   return PAID.filter((p) => priceId(env, p, 'monthly') || priceId(env, p, 'annual'));
 }
 
-// POST /api/billing/checkout — start a subscription checkout for { plan, interval }; returns { url }.
+// ── The customer's live subscriptions ────────────────────────────────────────
+
+/**
+ * Statuses that entitle. `past_due` is in the list because Stripe is still retrying the card --
+ * it is a dunning grace window, not a lapse -- and `trialing` because a trial is the plan.
+ * The webhook's isEntitled and frontend/src/core/billingActivation.ts read the same three.
+ */
+const ENTITLED_STATUSES = new Set(['active', 'trialing', 'past_due']);
+
+/** One live Stripe subscription, reduced to what a tier switch and the webhook need. */
+interface LiveSub {
+  id: string;
+  /** The subscription ITEM id. Updating a price means replacing this item, not adding one. */
+  itemId: string;
+  priceId: string;
+  status: string;
+  /** Stripe's creation timestamp -- the only honest way to order duplicates. */
+  created: number;
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: number;
+  metaPlan?: string;
+  metaInterval?: string;
+}
+
+/**
+ * The subscriptions this customer holds that still entitle them, newest first.
+ *
+ * `status=all` on purpose: the endpoint's default is `active` alone, which would hide `trialing`
+ * and `past_due` -- and treating a trialing customer as having nothing is exactly how you sell
+ * somebody a second subscription. The filter lives here so ENTITLED_STATUSES stays the one
+ * definition.
+ *
+ * Throws like any other Stripe call. Callers on the checkout path WANT that: not knowing whether
+ * a subscription exists is not a reason to create one. Callers in the webhook catch it, because
+ * an unacked webhook is retried and the retry is swallowed by the idempotency ledger.
+ */
+async function liveSubscriptions(env: AppEnv['Bindings'], customerId: string): Promise<LiveSub[]> {
+  if (!env.STRIPE_SECRET_KEY) return [];
+  const data = await stripeGet(
+    env,
+    `subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=100`
+  );
+  const rows = (Array.isArray(data.data) ? data.data : []) as Array<Record<string, unknown>>;
+  return (
+    rows
+      .filter((r) => ENTITLED_STATUSES.has(String(r.status)))
+      .map((r): LiveSub | null => {
+        const item = (
+          r.items as
+            | {
+                data?: Array<{ id?: string; price?: { id?: string }; current_period_end?: number }>;
+              }
+            | undefined
+        )?.data?.[0];
+        const meta = r.metadata as { plan?: string; interval?: string } | undefined;
+        if (typeof r.id !== 'string' || !item?.id || !item.price?.id) return null;
+        return {
+          id: r.id,
+          itemId: item.id,
+          priceId: item.price.id,
+          status: String(r.status),
+          created: typeof r.created === 'number' ? r.created : 0,
+          // current_period_end moved onto the item in recent API versions; the top-level field is
+          // the older shape. Same fallback the webhook uses.
+          currentPeriodEnd: item.current_period_end ?? (r.current_period_end as number) ?? null,
+          cancelAtPeriodEnd: r.cancel_at_period_end ? 1 : 0,
+          metaPlan: meta?.plan,
+          metaInterval: meta?.interval,
+        };
+      })
+      .filter((s): s is LiveSub => s !== null)
+      // Newest first. Stripe already returns the list this way, but "newest" decides which
+      // subscription a duplicated account gets moved onto, so it is worth stating rather than
+      // inheriting from the response order.
+      .sort((a, b) => b.created - a.created)
+  );
+}
+
+/** The tier a live subscription represents: what we stamped on it, else what its Price says. */
+function planForSub(env: AppEnv['Bindings'], s: LiveSub): PaidPlan | null {
+  return paidPlan(s.metaPlan) ?? planForPrice(env, s.priceId);
+}
+/** Monthly or annual, resolved the same way and for the same reason. */
+function intervalForSub(env: AppEnv['Bindings'], s: LiveSub): Interval | null {
+  return s.metaInterval === 'monthly' || s.metaInterval === 'annual'
+    ? s.metaInterval
+    : intervalForPrice(env, s.priceId);
+}
+
+// POST /api/billing/checkout — put the account on { plan, interval }.
+//
+// Two outcomes, and the caller has to handle both: { url } when there is a Checkout Session to
+// send them to (a first subscription), and { url: null, changed } when the subscription they
+// already have was moved onto the new price and nothing needs to redirect.
 billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
   const userId = c.get('userId');
   const u = await db.first<{
     email: string | null;
     stripe_customer_id: string | null;
+    stripe_subscription_id: string | null;
     auth_provider: string | null;
     email_verified: number | null;
   }>(
     c.env.DB,
-    'SELECT email, stripe_customer_id, auth_provider, email_verified FROM users WHERE id = ?',
+    'SELECT email, stripe_customer_id, stripe_subscription_id, auth_provider, email_verified FROM users WHERE id = ?',
     userId
   );
   // First, and before anything about Stripe: this is a fact about the account, true or false
@@ -148,6 +246,55 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
   const interval: Interval = b.interval === 'annual' ? 'annual' : 'monthly';
   const price = priceId(c.env, plan, interval);
   if (!price) throw new HttpError(501, `The ${plan} (${interval}) plan isn't available yet`);
+
+  // ── Already subscribed? Then this is a CHANGE, not a purchase. ─────────────
+  //
+  // `mode: subscription` creates a new subscription every single time, and Stripe is happy to
+  // let one customer hold several at once -- that is a real feature, for products that sell more
+  // than one thing. We sell one plan, so for us it was a bug with a bill attached: every tier
+  // switch stacked another subscription, the portal filled up with "active" rows, the card was
+  // charged for all of them, and `users` showed whichever webhook landed last.
+  //
+  // Moving the existing subscription onto the new Price is the correct operation and the only
+  // one that cannot duplicate. Note this asks STRIPE what exists rather than trusting our own
+  // column: accounts that predate migration 0026 have no subscription id recorded, and they are
+  // precisely the accounts already carrying strays.
+  const live = u?.stripe_customer_id ? await liveSubscriptions(c.env, u.stripe_customer_id) : [];
+  if (live.length > 1) {
+    // Not fatal -- we still switch exactly one and create none -- but it means an account is
+    // paying more than once, which nothing else on this path would ever say out loud.
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        source: 'billing',
+        message: 'customer holds more than one live subscription',
+        customer: u?.stripe_customer_id,
+        subscriptions: live.map((s) => s.id),
+      })
+    );
+  }
+  // Prefer the one the account's plan is actually on; fall back to the newest.
+  const current = live.find((s) => s.id === u?.stripe_subscription_id) ?? live[0];
+  if (current) {
+    // Asked for what they already have. Nothing to send Stripe, and nothing to wait for.
+    if (current.priceId === price) return c.json({ url: null, changed: false, plan, interval });
+    await stripePost(c.env, `subscriptions/${current.id}`, {
+      // Replacing the item's price, NOT adding a second item -- omit the id and Stripe appends,
+      // which bills both tiers on one subscription.
+      'items[0][id]': current.itemId,
+      'items[0][price]': price,
+      // Put the difference on the next invoice instead of charging now. An immediate invoice can
+      // require SCA, and a POST from a settings page has nowhere to send someone to complete it;
+      // the tier itself changes straight away either way.
+      proration_behavior: 'create_prorations',
+      // Keep the subscription's own metadata truthful -- customer.subscription.updated reads the
+      // tier back off it, and a stale value here would re-apply the tier they just left.
+      'metadata[plan]': plan,
+      'metadata[interval]': interval,
+    });
+    // No url: nothing to redirect to. The plan is still written by the webhook, never from here.
+    return c.json({ url: null, changed: true, plan, interval });
+  }
 
   const origin = c.env.CORS_ORIGIN ?? new URL(c.req.url).origin;
   const params: Record<string, string> = {
@@ -301,8 +448,7 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
   // Entitlement: keep the paid plan while active/trialing, and through `past_due` (Stripe is still
   // retrying payment — a dunning grace window). Anything else (canceled, unpaid, incomplete_expired)
   // drops to free. The displayed subscription_status still reflects the real Stripe status.
-  const isEntitled = (status: string) =>
-    status === 'active' || status === 'trialing' || status === 'past_due';
+  const isEntitled = (status: string) => ENTITLED_STATUSES.has(status);
 
   // Apply subscription state by customer, but ONLY if this event isn't older than the last one we
   // applied for that customer (ordering guard: `created >= stripe_event_at`), which also advances
@@ -315,21 +461,87 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
     // Null here means CLEAR — the subscription is no longer entitled. That is why this one does
     // not COALESCE the way the checkout.session.completed branch above does.
     cancelAtPeriodEnd: number,
-    interval: Interval | null
+    interval: Interval | null,
+    // Which subscription the row now reflects. Recorded so a later `deleted` can tell "the
+    // subscription this account is on ended" from "one of the strays ended" -- see
+    // isStraySubscription. Null alongside a free plan: nothing is tracked once nothing is live.
+    subscriptionId: string | null
   ) =>
     db.run(
       c.env.DB,
-      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, cancel_at_period_end = ?, subscription_interval = ?, stripe_event_at = ?
+      `UPDATE users SET plan = ?, subscription_status = ?, plan_renews_at = ?, cancel_at_period_end = ?, subscription_interval = ?, stripe_subscription_id = ?, stripe_event_at = ?
          WHERE stripe_customer_id = ? AND ? >= stripe_event_at`,
       plan,
       status,
       renews ? new Date(renews * 1000).toISOString() : null,
       cancelAtPeriodEnd,
       interval,
+      subscriptionId,
       eventCreated,
       customerId,
       eventCreated
     );
+
+  /**
+   * Is this event about a subscription the account is NOT on?
+   *
+   * Asked only before events that would REMOVE entitlement. A customer can hold more than one
+   * subscription -- our own checkout used to create them on every tier switch, and one added
+   * from the Stripe dashboard looks identical -- and a stray ending says nothing about the plan
+   * the account is actually on. Deciding that from the customer id alone is what used to set
+   * people to free while a second subscription carried on charging their card.
+   *
+   * A row with no tracked id (anything predating migration 0026) has no opinion, so it is NOT a
+   * stray: those accounts keep behaving exactly as they did, and fill the column in on their
+   * next subscription event.
+   */
+  const isStraySubscription = async (customerId: unknown, subId: unknown): Promise<boolean> => {
+    if (typeof subId !== 'string' || !subId) return false;
+    const row = await db.first<{ stripe_subscription_id: string | null }>(
+      c.env.DB,
+      'SELECT stripe_subscription_id FROM users WHERE stripe_customer_id = ?',
+      String(customerId)
+    );
+    const tracked = row?.stripe_subscription_id ?? null;
+    return !!tracked && tracked !== subId;
+  };
+
+  /**
+   * A subscription stopped entitling. Move the account onto whatever else is still live, or off
+   * the plan entirely.
+   *
+   * The lookup is the point. An account can be holding more than one subscription -- checkout
+   * used to create them on every tier switch, and the Stripe dashboard still can -- and dropping
+   * to free while another one keeps charging the card is the most expensive wrong answer
+   * available here. Both routes into this (a `deleted`, and an `updated` that lands on a status
+   * that no longer entitles) get the same answer, because the account's position is the same
+   * either way.
+   *
+   * A failed lookup drops the plan. That is what this did before the lookup existed, it fails in
+   * the safe direction -- inferring "still entitled" from an error would hand out the product --
+   * and it must not throw: an unacked webhook is retried, and the retry is swallowed by the
+   * idempotency ledger above, so the event would be lost outright.
+   */
+  const endSubscription = async (customerId: unknown, deadSubId: unknown, status: string) => {
+    const remaining = (await liveSubscriptions(c.env, String(customerId)).catch(() => [])).filter(
+      (sub) => sub.id !== deadSubId
+    );
+    const keep = remaining[0];
+    // Interval and subscription id clear with the plan: a free row must not keep saying it is
+    // billed annually, nor point at a subscription that no longer exists.
+    const applied = keep
+      ? await applySubscription(
+          String(customerId),
+          planForSub(c.env, keep) ?? 'premium',
+          keep.status,
+          keep.currentPeriodEnd,
+          keep.cancelAtPeriodEnd,
+          intervalForSub(c.env, keep),
+          keep.id
+        )
+      : await applySubscription(String(customerId), 'free', status, null, 0, null, null);
+    return { applied, keep: keep ?? null };
+  };
 
   const appOrigin =
     c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
@@ -376,8 +588,12 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
           // COALESCE, unlike applySubscription below: a session with no interval metadata (created
           // before we sent it) means "unknown", and this branch has no ordering guard, so a plain
           // write would clobber what customer.subscription.created had already resolved.
-          'UPDATE users SET stripe_customer_id = ?, plan = ?, subscription_status = ?, cancel_at_period_end = 0, subscription_interval = COALESCE(?, subscription_interval), stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
+          // COALESCE on the subscription id for the same reason as the interval: a session for
+          // something other than a subscription carries none, and blanking it would untrack a
+          // subscription that is very much still running.
+          'UPDATE users SET stripe_customer_id = ?, stripe_subscription_id = COALESCE(?, stripe_subscription_id), plan = ?, subscription_status = ?, cancel_at_period_end = 0, subscription_interval = COALESCE(?, subscription_interval), stripe_event_at = MAX(stripe_event_at, ?) WHERE id = ?',
           String(obj.customer),
+          typeof obj.subscription === 'string' ? obj.subscription : null,
           plan,
           'active',
           interval,
@@ -408,34 +624,39 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       // subscriptions created before the metadata existed. Cleared along with the plan when the
       // subscription stops being entitled, so a free row never carries a stale interval.
       const entitled = isEntitled(status);
+      if (!entitled) {
+        // A stray losing entitlement says nothing about the plan the account is on.
+        if (await isStraySubscription(obj.customer, obj.id)) break;
+        await endSubscription(obj.customer, obj.id, status);
+        break;
+      }
+      // An entitled event is always ours to apply: money is changing hands and the account
+      // should be on what it is paying for. This is also where a stray that outlives the tracked
+      // subscription gets adopted.
       const interval =
         (meta?.interval === 'monthly' || meta?.interval === 'annual' ? meta.interval : null) ??
         (item?.price?.id ? intervalForPrice(c.env, item.price.id) : null);
       await applySubscription(
         String(obj.customer),
-        entitled ? (metaPlan ?? subPlan ?? 'premium') : 'free',
+        metaPlan ?? subPlan ?? 'premium',
         status,
         renews,
         cancelAtPeriodEnd,
-        entitled ? interval : null
+        interval,
+        typeof obj.id === 'string' ? obj.id : null
       );
       break;
     }
     case 'customer.subscription.deleted': {
+      // A stray ending is not this account losing its plan.
+      if (await isStraySubscription(obj.customer, obj.id)) break;
       // Read before the update: after it the plan is 'free', and a mail that says "your Free plan
       // has ended" is nonsense.
       const acct = await accountFor(obj.customer);
-      // Interval clears with the plan: a free row must not keep saying it is billed annually.
-      const applied = await applySubscription(
-        String(obj.customer),
-        'free',
-        'canceled',
-        null,
-        0,
-        null
-      );
-      // A stale event neither changes the plan nor announces that it did.
-      if (applied.meta.changes) await notify(acct);
+      const { applied, keep } = await endSubscription(obj.customer, obj.id, 'canceled');
+      // A stale event neither changes the plan nor announces that it did -- and neither does one
+      // that moved the account onto a subscription it still holds. Nothing ended, for them.
+      if (applied.meta.changes && !keep) await notify(acct);
       break;
     }
     case 'invoice.payment_failed':
