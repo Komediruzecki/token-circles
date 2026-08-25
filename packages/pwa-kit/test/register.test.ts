@@ -63,8 +63,8 @@ class FakeContainer extends EventTarget {
   controller: FakeWorker | null = null;
   readonly registration = new FakeRegistration();
   readonly register = vi.fn(async () => Promise.resolve(this.registration));
-  readonly getRegistration = vi.fn(
-    async (): Promise<FakeRegistration | undefined> => Promise.resolve(this.registration)
+  readonly getRegistration = vi.fn(async (): Promise<FakeRegistration | undefined> =>
+    Promise.resolve(this.registration)
   );
 }
 

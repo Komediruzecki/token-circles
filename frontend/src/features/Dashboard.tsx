@@ -33,8 +33,8 @@ import { toRange, toYYYYMM } from '../utils/period'
 import styles from './DashboardPage.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { CalcTrace } from '../components/CalcTracer'
-import type { SankeyData } from '../types/models'
 import type * as Models from '../types/models'
+import type { SankeyData } from '../types/models'
 
 // Format money in the user's selected currency (not the EUR default of formatCurrency).
 const money = (amount: number) => formatCurrency(amount, getLocalCurrency())

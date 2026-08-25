@@ -123,7 +123,9 @@ describe('the device list', () => {
     sessionsResponse = () => Promise.resolve(json({ sessions: [LAPTOP] }))
     host.querySelector<HTMLButtonElement>('button')!.click()
 
-    await vi.waitFor(() => { expect(rows()).toHaveLength(1); })
+    await vi.waitFor(() => {
+      expect(rows()).toHaveLength(1)
+    })
   })
 
   it('explains an empty list rather than implying you are signed in nowhere', async () => {

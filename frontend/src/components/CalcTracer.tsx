@@ -45,7 +45,9 @@ export default function CalcTracer(props: CalcTracerProps) {
           'justify-content': 'center',
           padding: '16px',
         }}
-        onClick={() => { props.onClose(); }}
+        onClick={() => {
+          props.onClose()
+        }}
       >
         <div
           style={{
@@ -59,7 +61,9 @@ export default function CalcTracer(props: CalcTracerProps) {
             overflow: 'auto',
             padding: '20px',
           }}
-          onClick={(e) => { e.stopPropagation(); }}
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
         >
           <div
             style={{
@@ -73,7 +77,9 @@ export default function CalcTracer(props: CalcTracerProps) {
               Calculation trace: {props.trace!.title}
             </h3>
             <button
-              onClick={() => { props.onClose(); }}
+              onClick={() => {
+                props.onClose()
+              }}
               aria-label="Close calculation trace"
               style={{
                 background: 'transparent',
@@ -84,7 +90,14 @@ export default function CalcTracer(props: CalcTracerProps) {
                 display: 'inline-flex',
               }}
             >
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
                 <path d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -106,7 +119,9 @@ export default function CalcTracer(props: CalcTracerProps) {
             {props.trace!.formula}
           </div>
 
-          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '14px', 'margin-bottom': '14px' }}>
+          <div
+            style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '14px', 'margin-bottom': '14px' }}
+          >
             <For each={props.trace!.inputs}>
               {(inp) => (
                 <div>
@@ -166,7 +181,9 @@ export default function CalcTracer(props: CalcTracerProps) {
           </Show>
 
           <Show when={props.trace!.note}>
-            <div style={{ 'font-size': '12px', color: 'var(--text-secondary)', 'margin-top': '12px' }}>
+            <div
+              style={{ 'font-size': '12px', color: 'var(--text-secondary)', 'margin-top': '12px' }}
+            >
               {props.trace!.note}
             </div>
           </Show>

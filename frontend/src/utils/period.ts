@@ -11,13 +11,7 @@
 export type PeriodMode = 'month' | 'range' | 'year'
 
 export type PeriodPreset =
-  | 'thisMonth'
-  | 'lastMonth'
-  | 'ytd'
-  | 'last30'
-  | 'last90'
-  | 'all'
-  | 'custom'
+  'thisMonth' | 'lastMonth' | 'ytd' | 'last30' | 'last90' | 'all' | 'custom'
 
 export interface Period {
   mode: PeriodMode

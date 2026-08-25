@@ -42,6 +42,32 @@ All notable changes to Token Circles are documented here. The format is based on
   config: `baseUrl` is removed in 7 and every `paths` entry is non-relative. That is a
   migration, not a bump. Pinned via `ignore` in `dependabot.yml` with the reason recorded.
 
+- **Root and frontend dev tooling bumped to current** (#472, #475, #476 landed together):
+  `@playwright/test`/`playwright` 1.59.1 -> 1.62.1, `typescript-eslint` and both
+  `@typescript-eslint/*` 8.58.2 -> 8.67.0, `vite` 8.0.9 -> 8.2.2, `vitest` -> 4.1.11,
+  `prettier` 3.8.3 -> 3.9.6, `eslint-plugin-solid` 0.14.5 -> 0.16.0, `eslint-plugin-sonarjs`
+  4.1.0 -> 4.2.0, `eslint-plugin-simple-import-sort` 12.1.1 -> **14.0.0**, `@squoosh/lib`
+  0.3.1 -> 0.5.3, `@fontsource/fraunces` 5.2.9 -> 5.3.0, plus assorted patches.
+  - Three Dependabot PRs rather than one because they were raised separately, and each of the
+    last two conflicted with whichever merged first on `pnpm-lock.yaml`. Landed as one branch
+    with the lockfile resolved once.
+  - Two of the new linter versions found real things, and both are fixed here rather than
+    suppressed:
+    - `simple-import-sort` 14 changed its ordering, which `frontend/src/features/Dashboard.tsx`
+      violated. Autofixed.
+    - `sonarjs` 4.2.0 added `no-fixed-wait-in-tests`, which caught the
+      `page.waitForTimeout(1200)` in `frontend/tests-shots/pwa-shots.spec.ts` — a guess at how
+      long Chart.js needs for its first draw. Replaced with the condition that guess was
+      standing in for: the init script wraps `requestAnimationFrame` to record when a frame
+      callback last ran, and the shot waits for 400ms of no frames. Faster when charts settle
+      early, correct when they take longer than 1200ms, and `.catch(() => {})` so a view that
+      animates forever degrades to an early screenshot instead of failing the run.
+  - `frontend/vitest.config.ts` uses `import.meta.dirname` instead of `__dirname`: Vite 8.2
+    warns that `configLoader: 'native'`, planned as a future default, does not support it.
+  - Prettier 3.9.6 reformats seven existing files. Folded in here, since this is the commit
+    that introduces that prettier — otherwise the next person to touch `period.ts` gets the
+    churn in their diff. CI does not check formatting, so this was drift either way.
+
 ## [5.11.0] — 2026-08-25
 
 ### Added

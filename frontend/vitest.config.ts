@@ -13,16 +13,16 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
-      '@/core': resolve(__dirname, 'src/core'),
-      '@/features': resolve(__dirname, 'src/features'),
-      '@/components': resolve(__dirname, 'src/components'),
-      '@/stores': resolve(__dirname, 'src/stores'),
-      '@/types': resolve(__dirname, 'src/types'),
-      '@/lib': resolve(__dirname, 'src/lib'),
+      '@': resolve(import.meta.dirname, 'src'),
+      '@/core': resolve(import.meta.dirname, 'src/core'),
+      '@/features': resolve(import.meta.dirname, 'src/features'),
+      '@/components': resolve(import.meta.dirname, 'src/components'),
+      '@/stores': resolve(import.meta.dirname, 'src/stores'),
+      '@/types': resolve(import.meta.dirname, 'src/types'),
+      '@/lib': resolve(import.meta.dirname, 'src/lib'),
       // packages/pwa-kit is app-agnostic source, deliberately outside the pnpm workspace so it
       // costs the lockfile nothing until it is extracted. Aliased rather than installed.
-      '@pwa-kit': resolve(__dirname, '../packages/pwa-kit/src/index.ts'),
+      '@pwa-kit': resolve(import.meta.dirname, '../packages/pwa-kit/src/index.ts'),
     },
   },
   // Mirror vite.config.ts. Without it a kebab-case class reached through its camelCase name —

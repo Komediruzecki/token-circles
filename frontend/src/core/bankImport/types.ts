@@ -9,15 +9,7 @@
 
 /** Supported bank identifiers. Extend by adding an adapter + a registry entry. */
 export type BankId =
-  | 'revolut'
-  | 'erste'
-  | 'pbz'
-  | 'ynab'
-  | 'n26'
-  | 'wise'
-  | 'ing'
-  | 'sparkasse'
-  | 'dkb'
+  'revolut' | 'erste' | 'pbz' | 'ynab' | 'n26' | 'wise' | 'ing' | 'sparkasse' | 'dkb'
 
 /**
  * Transaction type in the app's canonical vocabulary. `/api/import/execute`

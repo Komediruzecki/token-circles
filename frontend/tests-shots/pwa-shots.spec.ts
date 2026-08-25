@@ -60,14 +60,36 @@ for (const { route, slug, ready } of SHOTS) {
           'transition-duration:0s!important;transition-delay:0s!important}' +
           '::-webkit-scrollbar{width:0!important;height:0!important}'
         document.addEventListener('DOMContentLoaded', () => document.head.appendChild(css))
+
+        // Charts animate their first draw on rAF, which the CSS suppression above does not
+        // reach. Rather than sleeping a guessed 1200ms, record when a frame callback last ran
+        // so the shot can wait on the page having actually gone quiet. Faster when the charts
+        // settle early, and correct when they take longer than a guess would have allowed.
+        let lastFrameAt = window.performance.now()
+        const raf = window.requestAnimationFrame.bind(window)
+        window.requestAnimationFrame = (cb) =>
+          raf((t) => {
+            lastFrameAt = window.performance.now()
+            cb(t)
+          })
+        ;(window as unknown as { __msSinceLastFrame: () => number }).__msSinceLastFrame = () =>
+          window.performance.now() - lastFrameAt
       })
 
       await page.goto(`${E2E_BASE}/#${route}`, { waitUntil: 'domcontentloaded' })
       await expect(page.getByTestId(ready)).toBeVisible({ timeout: 30000 })
       await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
-      // Charts animate their first draw; the suppression above kills CSS transitions but not
-      // canvas work scheduled on rAF.
-      await page.waitForTimeout(1200)
+      // No frame callback for 400ms means every chart has finished drawing. Tolerated rather
+      // than awaited: a view that animates forever would never satisfy this, and a slightly
+      // early screenshot beats failing the whole shot run.
+      await page
+        .waitForFunction(
+          () =>
+            (window as unknown as { __msSinceLastFrame: () => number }).__msSinceLastFrame() > 400,
+          null,
+          { timeout: 15000 }
+        )
+        .catch(() => {})
 
       await page.screenshot({ path: `${OUT}${form}-${slug}.png`, scale: 'css' })
     })

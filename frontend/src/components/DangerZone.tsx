@@ -10,13 +10,7 @@ export interface DangerZoneProps {
 }
 
 type ConfirmAction =
-  | 'reset'
-  | 'transactions'
-  | 'categories'
-  | 'profile'
-  | 'profile-delete'
-  | 'reseed-demo'
-  | null
+  'reset' | 'transactions' | 'categories' | 'profile' | 'profile-delete' | 'reseed-demo' | null
 
 export default function DangerZone(props: DangerZoneProps) {
   const [confirming, setConfirming] = createSignal<ConfirmAction>(null)

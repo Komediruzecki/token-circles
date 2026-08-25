@@ -59,8 +59,7 @@ describe('localHandlers - tag rules', () => {
   async function tagsOf(txId: number): Promise<{ ids: number[]; names: string[] }> {
     const db = await getDB()
     const row = (await db.get('transactions', txId)) as
-      | { tag_ids?: number[]; tags?: { id: number; name: string }[] }
-      | undefined
+      { tag_ids?: number[]; tags?: { id: number; name: string }[] } | undefined
     return {
       ids: [...(row?.tag_ids ?? [])].sort((a, b) => a - b),
       names: (row?.tags ?? []).map((t) => t.name).sort(),
