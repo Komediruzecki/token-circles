@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.10.1] — 2026-08-25
+
 ### Fixed
 
 - **A first import no longer rejects every transfer.** A transfer row names two accounts — the one the money left (the "Means of payment" column) and the one it landed in (the "Category" column) — but only category values anyone had explicitly marked as accounts were ever offered for creation, and nothing at all read the Means of payment column. On a fresh profile with no accounts yet, that rejected every transfer row with "A transfer must have both source and destination accounts", hundreds of times over. Both columns now count: values from Means of payment, and the destination of any row the sheet itself calls a transfer, are offered as accounts to create like everything else.

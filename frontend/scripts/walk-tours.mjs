@@ -119,7 +119,10 @@ async function openTourModal() {
    * below is what handles the vertical half, and it needs the drawer open first.
    */
   const drawerOpen = async () => {
-    const box = await btn.boundingBox().catch(() => null)
+    // Bounded: without a timeout this waits 30s for an element that is not attached, and the
+    // retry loop below turns a dead page (an API that stopped answering, a shell that never
+    // rendered) into half an hour of apparent hang before anything is reported.
+    const box = await btn.boundingBox({ timeout: 1000 }).catch(() => null)
     if (!box) return false
     return box.x >= 0 && box.x < page.viewportSize().width
   }
@@ -143,9 +146,17 @@ async function openTourModal() {
     }
   }
   if (!(await drawerOpen())) {
+    // Say what the page actually was before dying — a hang here has twice turned out to be a
+    // dead page (no shell at all), not a drawer problem, and the error alone cannot tell the
+    // two apart.
+    const url = page.url()
+    const btnAttached = (await btn.count().catch(() => 0)) > 0
+    const shot = 'test-results/walk-tours-drawer-fail.png'
+    await page.screenshot({ path: shot, fullPage: false }).catch(() => {})
     throw new Error(
-      'the sidebar drawer never opened after 4 attempts at the toggle. Every tour is started ' +
-        'from it, so nothing can be walked.'
+      `the sidebar drawer never opened after 4 attempts at the toggle. Every tour is started ` +
+        `from it, so nothing can be walked. url=${url} whats-new-btn attached=${btnAttached} ` +
+        `screenshot=${shot}`
     )
   }
   await btn.scrollIntoViewIfNeeded().catch(() => {})

@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.10.1] — 2026-08-25
+
 ### Fixed
 
 - **A first import rejected every transfer row** (`worker/src/routes/imports.ts`, `frontend/src/core/storage/handlers/importFlow.ts`, `frontend/src/features/import/importFlow.ts`). A transfer's `account_id` resolves from the Means-of-Payment column and its `transfer_account_id` from Category — but account creation was driven entirely by `categoryTypes`, a map built from the CATEGORY column's distinct values, and the preview's `new_accounts` scan read only that column too. Means-of-Payment values were enumerated nowhere, classified nowhere, offered nowhere. On a profile with no accounts yet — which is what onboarding is — every transfer row failed the shared invariant and was rejected; the reported sheet had 341 of them.
@@ -34,6 +36,10 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Onboarding: the footer button carries its own progress, and the panel scrolls to the work** (`frontend/src/components/onboarding/OnboardingWizard.tsx`, `Onboarding.module.css`). The processing spinner and the import summary render at the top of the wizard body; with a 5000-row preview the user is a whole table below, so "Import selected" looked like it did nothing. `FooterAction` gained `busy` — the primary button disables, shows an inline spinner and switches label ("Importing…", "Building the preview…", "Processing…", "Adding…") — and every long-running footer action first scrolls the body back to the top (`showTheWork`). Spinner respects `prefers-reduced-motion`.
 - **Onboarding: one primary action on the subscriptions step** (`frontend/src/components/SubscriptionScan.tsx`, `OnboardingWizard.tsx`). The scan panel's own "Add N" sat mid-panel while the footer's "Continue" silently did not add. `SubscriptionScanPanel` gained `expose` (hands the host `chosenCount` / `submitting` / `addSelected`, which now resolves with how many were created) and `hideAddButton`; the wizard folds both into the footer: "Add 2 subscriptions & continue" when something is selected, "Continue" otherwise. The standalone Bills modal keeps its own button — `hideAddButton` is opt-in.
   - `tests/onboarding.spec.ts` asserts the in-panel button is GONE in the wizard and the unified label adds and advances in one click.
+
+### Tooling
+
+- **The tour walk fails fast when the page never renders.** `walk-tours.mjs` polled the sidebar button with an unbounded `boundingBox()` — on a page that never mounted (an intermittent dev-stack flake), each poll waited the 30s default and a bounded-looking retry loop became twenty minutes of silent hang until `timeout` killed it, reporting "browser has been closed" from the kill rather than anything about the page. The poll is bounded at 1s now, and the drawer failure names the URL, whether the button was attached at all, and saves a screenshot.
 
 ## [5.10.0] — 2026-08-24
 
