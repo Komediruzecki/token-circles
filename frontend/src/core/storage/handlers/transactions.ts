@@ -305,15 +305,21 @@ export async function transactionsBulk(body: unknown, headers?: HeadersInit): Pr
     }
 
     if (action === 'delete') {
-      let deleted = 0
-      for (const id of ids) {
+      // Ownership first, then ONE IndexedDB write transaction for the whole batch. The
+      // per-id loop this replaces opened a readwrite transaction per row and reapplied the
+      // account-balance deltas each time, so deleting a full page cost 50 of them on the
+      // main thread — the "deleting is slow" report. bulkDeleteTransactions does not filter
+      // by profile, which is why the ownership pass stays.
+      // Deduplicated: the loop this replaces re-read each id AFTER the previous delete had
+      // committed, so a repeated id read back undefined and was skipped. Checking ownership
+      // up front instead would otherwise count the same row twice.
+      const owned: number[] = []
+      for (const id of new Set(ids)) {
         const tx = await db.get('transactions', id)
-        if (tx && tx.profile_id === pid) {
-          await adapter.deleteTransaction(id)
-          deleted++
-        }
+        if (tx && tx.profile_id === pid) owned.push(id)
       }
-      return json({ ok: true, deleted })
+      if (owned.length > 0) await adapter.bulkDeleteTransactions(owned)
+      return json({ ok: true, deleted: owned.length })
     }
 
     if (action === 'update') {

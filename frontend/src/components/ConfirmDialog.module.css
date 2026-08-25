@@ -73,3 +73,64 @@
 .btnDanger:hover {
   background: color-mix(in oklab, var(--danger, #ef4444) 85%, #000);
 }
+
+/* Held while the confirmed work runs: neither button may fire again, and the dialog
+   cannot be dismissed out from under an in-flight request. */
+.btnCancel:disabled,
+.btnConfirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btnCancel:disabled:hover {
+  background: var(--btn-secondary-bg, #f1f5f9);
+}
+
+.btnConfirm:disabled:hover {
+  background: var(--primary, #2563eb);
+}
+
+.btnDanger:disabled:hover {
+  background: var(--danger, #ef4444);
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px 0;
+}
+
+.progressLabel {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted, #64748b);
+  text-align: center;
+}
+
+.barTrack {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border, #e2e8f0);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary, #2563eb);
+  transition: width 0.2s ease;
+}
+
+.error {
+  margin: 0 0 20px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--danger, #ef4444);
+  background: color-mix(in oklab, var(--danger, #ef4444) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--danger, #ef4444) 35%, transparent);
+}

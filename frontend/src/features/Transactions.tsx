@@ -282,39 +282,60 @@ export default function Transactions() {
     }
   }
 
+  // Both deletes run INSIDE the confirm dialog: it holds, shows what is happening, and
+  // closes only once the row is actually gone from the database. It used to close on click
+  // and then spend the whole round trip with nothing on screen, which on a slow connection
+  // is indistinguishable from the button not working (reported from production). A failure
+  // now stays on the dialog too, instead of going only to the console.
   const handleDeleteTransaction = async (transaction: Transaction) => {
-    if (
-      !(await showConfirm(`Delete transaction "${transaction.description}"?`, {
-        danger: true,
-        confirmText: 'Delete',
-      }))
-    )
-      return
-    try {
-      await api.deleteTransaction(transaction.id)
-      await refreshTransactions()
-    } catch (error) {
-      console.error('Failed to delete transaction:', error)
-    }
+    await showConfirm(`Delete transaction "${transaction.description}"?`, {
+      danger: true,
+      confirmText: 'Delete',
+      onConfirm: async (report) => {
+        report({ label: 'Deleting the transaction…' })
+        try {
+          await api.deleteTransaction(transaction.id)
+        } catch (error) {
+          // A 404 means the row is already gone, which is exactly what this action wanted.
+          // Treating it as failure made Try again unwinnable: if the delete succeeded and only
+          // the response was lost, every retry would 404 on a row that no longer exists.
+          if (errorStatus(error) !== 404) {
+            // Anything else may have deleted it and failed afterwards — resync rather than
+            // leaving the table asserting something we no longer know to be true.
+            await refreshTransactions()
+            throw error
+          }
+        }
+        // Drop the row locally instead of re-fetching. The refetch asks for EVERY
+        // transaction in the profile (the list request sends no limit) plus its tags, so it
+        // — not the delete — is the wall-clock cost here, and it grows with the table.
+        setTransactions((prev) => prev.filter((t) => t.id !== transaction.id))
+      },
+    })
   }
 
   const handleBulkDelete = async () => {
     const ids = selectedTransactions()
     if (ids.length === 0) return
-    if (
-      !(await showConfirm(
-        `Delete ${ids.length} selected transaction${ids.length !== 1 ? 's' : ''}?`,
-        { danger: true, confirmText: 'Delete' }
-      ))
-    )
-      return
-    try {
-      await api.bulkDeleteTransactions(ids)
-      setSelectedTransactions([])
-      await refreshTransactions()
-    } catch (error) {
-      console.error('Failed to bulk delete transactions:', error)
-    }
+    const noun = `transaction${ids.length !== 1 ? 's' : ''}`
+    await showConfirm(`Delete ${ids.length} selected ${noun}?`, {
+      danger: true,
+      confirmText: 'Delete',
+      onConfirm: async (report) => {
+        report({ label: `Deleting ${ids.length} ${noun}…` })
+        try {
+          await api.bulkDeleteTransactions(ids)
+        } catch (error) {
+          // A bulk delete can fail part-way through, so the local list is no longer
+          // trustworthy — pay for the refetch on the error path only.
+          await refreshTransactions()
+          throw error
+        }
+        const removed = new Set(ids)
+        setTransactions((prev) => prev.filter((t) => !removed.has(t.id)))
+        setSelectedTransactions([])
+      },
+    })
   }
 
   const handleBulkReconcile = () => {
