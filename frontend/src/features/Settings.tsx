@@ -42,6 +42,7 @@ import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
+import { confirmBillingActivation } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
@@ -411,6 +412,8 @@ export default function Settings() {
     availablePlans?: string[]
     email_verification_required?: boolean
   } | null>(null)
+  // True while awaitBillingActivation is polling after a successful checkout.
+  const [billingConfirming, setBillingConfirming] = createSignal(false)
   // Real tier name (the per-tier webhook stores 'basic'/'advanced'/'ultimate'; 'premium' is legacy).
   const planLabel = (p: string | undefined): string => {
     if (p === 'basic') return 'Basic'
@@ -430,6 +433,11 @@ export default function Settings() {
   // own colour/message; otherwise show the tier (and renewal date for an active paid plan).
   const billingStatusLine = (): { color: string; text: string } => {
     const b = billing()
+    if (billingConfirming())
+      return {
+        color: 'var(--text-secondary)',
+        text: 'Confirming your subscription with Stripe…',
+      }
     if (!b || b.plan === 'free')
       return { color: 'var(--text-secondary)', text: "You're on the Free plan." }
     const name = planLabel(b.plan)
@@ -467,8 +475,36 @@ export default function Settings() {
       const data = res.ok ? await res.json() : null
       setBilling(data)
       setCurrentPlan(data?.plan ?? null)
+      return data
     } catch {
       setBilling(null)
+      return null
+    }
+  }
+
+  // Waiting for checkout.session.completed to land after Stripe sends us back. The polling
+  // decision lives in core/billingActivation.ts; this is only the wiring and the wording.
+  const awaitBillingActivation = async (expected: string | null) => {
+    setBillingConfirming(true)
+    try {
+      const outcome = await confirmBillingActivation({
+        expected,
+        read: loadBilling,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        onChanged: (after) => {
+          toast(`${planLabel(after.plan)} plan activated.`, 'success')
+        },
+      })
+      // Stripe took the money, so a timeout is "not seen yet", never "failed". Announcing
+      // success unconditionally is what this whole change is fixing, and overshooting into
+      // "something went wrong" would be the same mistake pointed the other way.
+      if (outcome === 'timeout')
+        toast(
+          'Payment received. Your plan will appear here once Stripe confirms it — reload if it does not.',
+          'info'
+        )
+    } finally {
+      setBillingConfirming(false)
     }
   }
   const redirectToStripe = async (path: string, failMsg: string, key: string, body?: unknown) => {
@@ -600,13 +636,16 @@ export default function Settings() {
           /* signed out — leave null */
         })
     }
-    const billingParam = new URLSearchParams(window.location.search).get('billing')
+    const billingParams = new URLSearchParams(window.location.search)
+    const billingParam = billingParams.get('billing')
     if (billingParam === 'success' || billingParam === 'cancel') {
       setActiveTab('billing')
-      toast(
-        billingParam === 'success' ? 'Subscription activated.' : 'Checkout canceled.',
-        billingParam === 'success' ? 'success' : 'info'
-      )
+      // The success toast used to fire here, before anything had been read back — it announced an
+      // activation we had not seen. confirmBillingActivation says it once it is true. `plan` is
+      // the tier checkout was for (billing.ts puts it on success_url); absent on links made
+      // before that shipped, which billingActivated handles.
+      if (billingParam === 'success') void awaitBillingActivation(billingParams.get('plan'))
+      else toast('Checkout canceled.', 'info')
       window.history.replaceState({}, '', window.location.pathname + window.location.hash)
     }
 

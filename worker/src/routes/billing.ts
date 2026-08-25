@@ -159,7 +159,11 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
     'metadata[interval]': interval,
     'subscription_data[metadata][plan]': plan, // so subscription.updated/deleted know the tier
     'subscription_data[metadata][interval]': interval, // …and monthly vs annual, for MRR
-    success_url: `${origin}/?billing=success#settings`,
+    // The tier travels back with the redirect so Settings knows what to wait for. A fresh page
+    // load has no memory of what the plan was before checkout, so without this it can only
+    // compare against whatever it reads first — which on a tier switch is the OLD paid tier,
+    // and it would announce that one as activated.
+    success_url: `${origin}/?billing=success&plan=${encodeURIComponent(plan)}#settings`,
     cancel_url: `${origin}/?billing=cancel#settings`,
     // EU VAT / tax compliance — requires Stripe Tax to be enabled in the Stripe
     // dashboard. If Stripe Tax is not configured the Stripe API will reject the

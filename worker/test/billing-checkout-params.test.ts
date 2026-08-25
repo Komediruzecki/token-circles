@@ -85,6 +85,10 @@ describe('checkout session params', () => {
     expect(p.get('customer_update[name]')).toBe('auto');
     expect(p.get('customer_update[address]')).toBe('auto');
     // The two params that make the customer_update mandatory in the first place.
+    // Settings polls for THIS tier after the redirect. A checkout return is a fresh page load
+    // with no memory of the previous plan, so without the hint a tier switch confirms the tier
+    // being left. frontend/src/core/billingActivation.ts is the other half.
+    expect(p.get('success_url')).toContain('billing=success&plan=advanced');
     expect(p.get('automatic_tax[enabled]')).toBe('true');
     expect(p.get('tax_id_collection[enabled]')).toBe('true');
     // customer and customer_email are mutually exclusive to Stripe.
