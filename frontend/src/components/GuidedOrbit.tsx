@@ -7,6 +7,7 @@
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
+import { isEditableTarget } from '../core/domFocus'
 import styles from './GuidedOrbit.module.css'
 import type { Account, Category } from '../types/models'
 
@@ -158,9 +159,7 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
       // Never hijack keyboard shortcuts (⌘K, Ctrl+digit tab-switch, …) — only
       // plain keystrokes drive the amount.
       if (e.ctrlKey || e.metaKey || e.altKey) return
-      const el = document.activeElement as HTMLElement | null
-      const inField =
-        !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+      const inField = isEditableTarget(document.activeElement)
       if (step() === 1 && !inField) {
         if (e.key >= '0' && e.key <= '9') {
           e.preventDefault()

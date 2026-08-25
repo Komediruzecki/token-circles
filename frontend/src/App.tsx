@@ -51,6 +51,7 @@ import {
 import { initVersionWatch } from './core/appVersion'
 import { loadBillingPlan } from './core/billingStore'
 import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
+import { isEditableTarget } from './core/domFocus'
 import { resolvePageFromHash } from './core/hashRoute.js'
 import { logger } from './core/logger.js'
 import { maybeOfferOnboarding, onboardingOpen } from './core/onboardingStore'
@@ -425,9 +426,7 @@ export function App() {
     // "?" opens the keyboard-shortcuts guide (skipped while typing in a field).
     const handleHelpKey = (e: KeyboardEvent) => {
       if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return
-      const el = document.activeElement as HTMLElement | null
-      const tag = el?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      if (isEditableTarget(document.activeElement)) return
       // Don't stack on top of an already-open modal/menu.
       if (isQuickAddOpen() || isLoginModalOpen() || isProfileModalOpen() || showDropdown()) return
       e.preventDefault()
@@ -446,9 +445,9 @@ export function App() {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       if (orbitOpen()) return
       if (isQuickAddOpen() || isLoginModalOpen() || isProfileModalOpen() || showDropdown()) return
-      const el = document.activeElement as HTMLElement | null
-      const tag = el?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      // `includeResting` because arrows belong to a focused slider or radio group, which
+      // would otherwise move AND step the period on one keypress.
+      if (isEditableTarget(document.activeElement, { includeResting: true })) return
       e.preventDefault()
       stepPeriod(e.key === 'ArrowRight' ? 1 : -1)
     }

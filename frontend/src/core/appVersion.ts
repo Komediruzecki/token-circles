@@ -25,6 +25,7 @@
 import { reloadToLatest } from '@pwa-kit'
 import { createSignal } from 'solid-js'
 import { toast } from './api'
+import { isEditableTarget } from './domFocus'
 import { hasToastOnChannel, removeToastsByChannel } from './toastStore'
 
 export interface VersionInfo {
@@ -138,21 +139,6 @@ export function recordAutoReload(sha: string, now: number): void {
   }
 }
 
-/** Input types whose focus is a resting state, not an entry in progress. A checkbox or a
- *  toggle keeps focus long after the click; treating that as "mid-entry" would veto the
- *  auto-reload forever. */
-const NON_ENTRY_INPUT_TYPES = new Set([
-  'button',
-  'checkbox',
-  'color',
-  'file',
-  'image',
-  'radio',
-  'range',
-  'reset',
-  'submit',
-])
-
 /**
  * True while the user is visibly in the middle of something a reload would eat: a text-entry
  * control holds focus, or a modal dialog is OPEN. The hashchange reload defers to the NEXT
@@ -165,10 +151,7 @@ const NON_ENTRY_INPUT_TYPES = new Set([
  * auto-reload (found in review). Conditionally-rendered dialogs compute `auto` and count.
  */
 export function userIsMidEntry(doc: Document = document): boolean {
-  const el = doc.activeElement
-  if (el instanceof HTMLInputElement && !NON_ENTRY_INPUT_TYPES.has(el.type)) return true
-  if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true
-  if (el instanceof HTMLElement && el.isContentEditable) return true
+  if (isEditableTarget(doc.activeElement)) return true
 
   const view = doc.defaultView
   for (const dialog of doc.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {

@@ -157,6 +157,22 @@ describe('userIsMidEntry', () => {
     expect(userIsMidEntry()).toBe(false)
   })
 
+  it('is true for the other entry controls the shared predicate covers', async () => {
+    // The focus half of this check lives in core/domFocus (exercised in full there); these
+    // pin that userIsMidEntry still delegates to it rather than growing its own copy back.
+    const { userIsMidEntry } = await freshModule()
+    const select = document.createElement('select')
+    document.body.appendChild(select)
+    select.focus()
+    expect(userIsMidEntry()).toBe(true)
+
+    const editable = document.createElement('div')
+    editable.setAttribute('contenteditable', 'true')
+    document.body.appendChild(editable)
+    editable.focus()
+    expect(userIsMidEntry()).toBe(true)
+  })
+
   it('is true while a modal dialog is open', async () => {
     const { userIsMidEntry } = await freshModule()
     const modal = document.createElement('div')
