@@ -581,11 +581,15 @@ export type TourKeyAction = 'next' | 'prev' | 'end' | null
  */
 export function tourKeyAction(
   key: string,
-  opts: { modifier: boolean; editableFocus: boolean }
+  opts: { modifier: boolean; editableFocus: boolean; activatableFocus?: boolean }
 ): TourKeyAction {
   if (key === 'Escape') return 'end'
   if (opts.modifier || opts.editableFocus) return null
-  if (key === 'ArrowRight' || key === 'Enter') return 'next'
+  // Enter belongs to a focused button or link, and the handler preventDefaults whatever it
+  // claims — so claiming Enter here stopped the tour's OWN "End Tour" and "Back" buttons from
+  // activating and advanced the tour instead. Arrows are still ours: a button does not use them.
+  if (key === 'Enter') return opts.activatableFocus === true ? null : 'next'
+  if (key === 'ArrowRight') return 'next'
   if (key === 'ArrowLeft') return 'prev'
   return null
 }

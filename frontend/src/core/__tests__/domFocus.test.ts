@@ -6,7 +6,7 @@
  * just as well with the element detached and nothing focused at all.
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { isEditableTarget } from '../domFocus'
+import { isActivatableTarget, isEditableTarget } from '../domFocus'
 import type { EditableTargetOptions } from '../domFocus'
 
 afterEach(() => {
@@ -127,5 +127,35 @@ describe('isEditableTarget contentEditable', () => {
       expect(isEditableTarget(editableDiv(value)), value).toBe(false)
     }
     expect(isEditableTarget(editableDiv())).toBe(false)
+  })
+})
+
+describe('isActivatableTarget', () => {
+  function mount(html: string): HTMLElement {
+    document.body.innerHTML = html
+    return document.body.firstElementChild as HTMLElement
+  }
+
+  it('claims the controls that activate themselves on Enter', () => {
+    expect(isActivatableTarget(mount('<button>End Tour</button>'))).toBe(true)
+    expect(isActivatableTarget(mount('<a href="#settings">Settings</a>'))).toBe(true)
+    expect(isActivatableTarget(mount('<div role="button">Next</div>'))).toBe(true)
+    expect(isActivatableTarget(mount('<div role="BUTTON">Next</div>'))).toBe(true)
+    expect(isActivatableTarget(mount('<span role="link">Go</span>'))).toBe(true)
+  })
+
+  it('leaves everything else alone', () => {
+    // An anchor with no href is not focusable and does not activate, so Enter is not its key.
+    expect(isActivatableTarget(mount('<a>not a link</a>'))).toBe(false)
+    expect(isActivatableTarget(mount('<div>plain</div>'))).toBe(false)
+    expect(isActivatableTarget(mount('<input type="text" />'))).toBe(false)
+    expect(isActivatableTarget(null)).toBe(false)
+  })
+
+  it('answers for document.activeElement, which is how the tour asks', () => {
+    const button = mount('<button>Back</button>')
+    button.focus()
+    expect(document.activeElement).toBe(button)
+    expect(isActivatableTarget(document.activeElement)).toBe(true)
   })
 })

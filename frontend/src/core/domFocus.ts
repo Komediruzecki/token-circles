@@ -61,3 +61,22 @@ export function isEditableTarget(el: Element | null, opts: EditableTargetOptions
   const editable = el.getAttribute('contenteditable')?.toLowerCase()
   return editable === '' || editable === 'true' || editable === 'plaintext-only'
 }
+
+/**
+ * True when `el` activates itself on Enter — a button, a real link, anything wearing one of
+ * their roles. Enter is that control's OWN key, so a global handler must not claim it, and
+ * must certainly not `preventDefault` it.
+ *
+ * Separate from `isEditableTarget` because the two answer different questions and a caller
+ * usually wants both: a button owns Enter but not the arrow keys, so a tour still steps with
+ * ←/→ while focus rests on one. `input[type=button|submit|reset]` is already covered by
+ * `includeResting`, which is the only mode a caller guarding Enter would use.
+ */
+export function isActivatableTarget(el: Element | null): boolean {
+  if (el instanceof HTMLButtonElement) return true
+  // A bare <a> with no href is not focusable and does not activate; only a real link counts.
+  if (el instanceof HTMLAnchorElement) return el.hasAttribute('href')
+  if (!(el instanceof HTMLElement)) return false
+  const role = el.getAttribute('role')?.toLowerCase()
+  return role === 'button' || role === 'link'
+}

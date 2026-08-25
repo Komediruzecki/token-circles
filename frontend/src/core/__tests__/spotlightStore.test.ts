@@ -176,6 +176,21 @@ describe('tourKeyAction', () => {
     expect(tourKeyAction('Enter', chord)).toBeNull()
   })
 
+  it('leaves Enter to a focused button — it is that button that activates', () => {
+    // The handler preventDefaults whatever it claims, so claiming Enter here stopped the
+    // tour's own "End Tour" and "Back" from firing and advanced the tour instead: tab to
+    // End Tour, press Enter, and the tour went forward rather than closing.
+    const onButton = { modifier: false, editableFocus: false, activatableFocus: true }
+    expect(tourKeyAction('Enter', onButton)).toBeNull()
+  })
+
+  it('still takes the arrows while a button holds focus — a button does not use them', () => {
+    const onButton = { modifier: false, editableFocus: false, activatableFocus: true }
+    expect(tourKeyAction('ArrowRight', onButton)).toBe('next')
+    expect(tourKeyAction('ArrowLeft', onButton)).toBe('prev')
+    expect(tourKeyAction('Escape', onButton)).toBe('end')
+  })
+
   it('leaves every other key alone', () => {
     for (const key of ['a', 'Tab', 'ArrowUp', 'ArrowDown', ' ', 'Backspace']) {
       expect(tourKeyAction(key, free), key).toBeNull()

@@ -3,7 +3,7 @@
  * Full-screen walkthrough overlay with target highlighting and tooltip
  */
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
-import { isEditableTarget } from '../core/domFocus'
+import { isActivatableTarget, isEditableTarget } from '../core/domFocus'
 import {
   endSpotlight,
   nextSpotlightStep,
@@ -265,6 +265,7 @@ export default function Spotlight() {
       const action = tourKeyAction(e.key, {
         modifier: e.ctrlKey || e.metaKey || e.altKey,
         editableFocus: isEditableTarget(document.activeElement, { includeResting: true }),
+        activatableFocus: isActivatableTarget(document.activeElement),
       })
       if (!action) return
       // preventDefault matters as much as the guard: without it, Enter on the tour's own Next
