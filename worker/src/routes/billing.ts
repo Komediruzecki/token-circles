@@ -6,6 +6,7 @@ import * as db from '../db';
 import { sendMail } from '../email';
 import type { BillingAccount } from '../billingMail';
 import { mailForBillingEvent } from '../billingMail';
+import { STRIPE_API_VERSION } from '../stripe';
 
 // Stripe billing — implemented with raw fetch to the Stripe REST API (no SDK, so the Worker
 // bundle stays lean and there's no SDK/Workers version drift). Webhook signatures are verified
@@ -16,11 +17,6 @@ import { mailForBillingEvent } from '../billingMail';
 export const billingRoutes = new Hono<AppEnv>();
 
 const encoder = new TextEncoder();
-
-// Pin the Stripe API version for our outbound calls so response shapes are deterministic. Set the
-// webhook endpoint to the SAME version in the Stripe dashboard so event payloads match (the webhook
-// reads current_period_end off the subscription item, which is where recent versions put it).
-const STRIPE_API_VERSION = '2024-06-20';
 
 // One call to the Stripe REST API. POSTs are form-encoded; GETs carry their query in `path`.
 async function stripeCall(
@@ -188,8 +184,10 @@ async function liveSubscriptions(env: AppEnv['Bindings'], customerId: string): P
           priceId: item.price.id,
           status: String(r.status),
           created: typeof r.created === 'number' ? r.created : 0,
-          // current_period_end moved onto the item in recent API versions; the top-level field is
-          // the older shape. Same fallback the webhook uses.
+          // basil moved current_period_end onto the item and removed the top level, so the item
+          // is the only shape our own pinned calls can return now. The fallback is kept because
+          // this same reader shape is mirrored in the webhook branch, where the sending version
+          // is the endpoint's and not ours.
           currentPeriodEnd: item.current_period_end ?? (r.current_period_end as number) ?? null,
           cancelAtPeriodEnd: r.cancel_at_period_end ? 1 : 0,
           metaPlan: meta?.plan,
@@ -443,6 +441,8 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
     id?: string;
     type?: string;
     created?: number;
+    /** The version the ENDPOINT is configured with, which decides the payload's shape. */
+    api_version?: string;
     data?: { object?: Record<string, unknown> };
   };
   try {
@@ -664,10 +664,13 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       const metaPlan = paidPlan(meta?.plan);
       const item = (
         obj.items as
-          { data?: Array<{ price?: { id?: string }; current_period_end?: number }> } | undefined
+          | { data?: Array<{ price?: { id?: string }; current_period_end?: number }> }
+          | undefined
       )?.data?.[0];
       const subPlan = item?.price?.id ? planForPrice(c.env, item.price.id) : null;
-      // current_period_end moved onto the subscription item in recent API versions; fall back to the
+      // basil moved current_period_end onto the subscription item and removed the top-level
+      // field. Unlike our outbound calls, this payload's shape is set by the WEBHOOK endpoint's
+      // version, which is configured separately and can still be older -- so fall back to the
       // legacy top-level field for older webhook versions.
       const renews =
         item?.current_period_end ?? (obj.current_period_end as number | undefined) ?? null;
@@ -682,6 +685,25 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
         if (await isStraySubscription(obj.customer, obj.id)) break;
         await endSubscription(obj.customer, obj.id, status);
         break;
+      }
+      if (renews === null) {
+        // Entitled, but no period end in either the item or the top level. Either Stripe moved
+        // the field again in the version this endpoint is pinned to, or this subscription really
+        // has no current period -- and nothing downstream can tell those apart, which is why the
+        // sending version is logged rather than just the absence. Not an error: the plan still
+        // applies, and refusing the event over a missing date would be far worse than the date
+        // being missing. This is the tripwire for the shape drift audited in src/stripe.ts.
+        console.error(
+          JSON.stringify({
+            level: 'warn',
+            source: 'stripe',
+            message: 'entitled subscription event carried no current_period_end',
+            apiVersion: event.api_version,
+            expectedApiVersion: STRIPE_API_VERSION,
+            subscription: obj.id,
+            type: event.type,
+          })
+        );
       }
       // An entitled event is always ours to apply: money is changing hands and the account
       // should be on what it is paying for. This is also where a stray that outlives the tracked

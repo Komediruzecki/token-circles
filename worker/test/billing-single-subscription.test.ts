@@ -21,6 +21,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { STRIPE_API_VERSION } from '../src/stripe';
 
 const UID = 8500;
 const CUSTOMER = 'cus_SingleSub';
@@ -29,7 +30,7 @@ const ADVANCED = 'price_advanced_monthly_test';
 const ADVANCED_ANNUAL = 'price_advanced_annual_test';
 
 /** Every call the worker made to Stripe: method, path, and the form body for POSTs. */
-let calls: Array<{ method: string; path: string; params: URLSearchParams }> = [];
+let calls: Array<{ method: string; path: string; params: URLSearchParams; version?: string }> = [];
 /** What the subscriptions list endpoint answers with. */
 let listReply: () => Response;
 
@@ -87,7 +88,12 @@ beforeEach(async () => {
         return new Response('unexpected', { status: 500 });
       const method = init?.method ?? 'GET';
       const path = url.slice('https://api.stripe.com/v1/'.length);
-      calls.push({ method, path, params: new URLSearchParams(String(init?.body ?? '')) });
+      calls.push({
+        method,
+        path,
+        params: new URLSearchParams(String(init?.body ?? '')),
+        version: (init?.headers as Record<string, string> | undefined)?.['Stripe-Version'],
+      });
       if (method === 'GET') return listReply();
       if (path.startsWith('subscriptions/')) return ok(stripeSub('sub_updated', ADVANCED));
       return ok({ url: 'https://checkout.stripe.com/c/pay/cs_test_123' });
@@ -435,5 +441,38 @@ describe('the gates in front of all of this still hold', () => {
 
     expect(res.status).toBe(501);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('every call is pinned to one API version', () => {
+  // The drift this closes: routes/billing.ts pinned 2024-06-20 while the prod webhook endpoint
+  // sent 2026-06-24.dahlia, four breaking releases apart. Two knobs, nothing enforcing either.
+  // This asserts the half we control -- that no outbound call quietly rides the account default,
+  // which is how a Stripe-side upgrade would change our response shapes without a deploy.
+  it('sends Stripe-Version on the list, the subscription update, and the session create', async () => {
+    await seed(CUSTOMER, 'sub_1');
+    listReply = () => ok({ data: [stripeSub('sub_1', BASIC)] });
+    await choose('advanced');
+    // …and the first-purchase path, which creates a Checkout Session instead.
+    await env.DB.prepare('DELETE FROM users').run();
+    await seed(null);
+    await choose('advanced');
+
+    expect(calls.map((c) => c.path)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('subscriptions?customer='),
+        'subscriptions/sub_1',
+        'checkout/sessions',
+      ])
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => c.version === STRIPE_API_VERSION)).toBe(true);
+  });
+
+  it('is pinned to the version the prod webhook endpoint sends', async () => {
+    // Not a style rule -- Stripe is happy to run these apart. It means one payload shape to reason
+    // about instead of two. Change it here and in the dashboard endpoints together, after
+    // re-running the changelog audit in src/stripe.ts for every flora release crossed.
+    expect(STRIPE_API_VERSION).toBe('2026-06-24.dahlia');
   });
 });

@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { requireAuth, clearedSessionCookie } from '../auth';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { STRIPE_API_VERSION } from '../stripe';
 
 // Account-level operations (distinct from profile CRUD). Today: permanent account deletion.
 export const accountRoutes = new Hono<AppEnv>();
@@ -40,7 +41,13 @@ async function deleteStripeCustomer(
   try {
     await fetch(`https://api.stripe.com/v1/customers/${customerId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      // Pinned like every other call, even though this one sends no params and reads no response,
+      // so that "no call rides the account's default version" holds without case-by-case reasoning
+      // about which calls happen to be version-insensitive today.
+      headers: {
+        Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+        'Stripe-Version': STRIPE_API_VERSION,
+      },
     });
   } catch (err) {
     /* Continue with local deletion — GDPR requires it. Log the error so the
