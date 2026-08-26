@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.12.0] — 2026-08-26
+
 ### Added
 
 - **You can now switch from monthly to annual billing without cancelling first.** Pick Annual on your current plan and the change is applied to the subscription you already have, with the difference added to your next invoice. To move from annual back to monthly, get in touch.

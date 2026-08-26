@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.12.0] — 2026-08-26
+
 ### Added
 
 - **Monthly subscribers can move to annual billing from the plan grid.** The worker has been able
