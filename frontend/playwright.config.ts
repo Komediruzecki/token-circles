@@ -24,9 +24,12 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: process.env.CI !== undefined,
-  // One retry on CI only. A single dropped fetch should not sink a 44-test run, and locally a
-  // retry hides the flake you are trying to see.
-  retries: process.env.CI ? 1 : 0,
+  // Two retries on CI, none locally. One retry covers a single dropped fetch. The second exists
+  // for the wrangler crash: the Worker is supervised and comes back within a few seconds (see the
+  // webServer command below), but a spec caught in that gap fails, and its immediate retry can
+  // land in the same gap before the restart finishes. A third attempt clears that residual.
+  // Locally, retries only hide the flake you are trying to see.
+  retries: process.env.CI ? 2 : 0,
   // Capped, not one-per-CPU. Every worker drives the same local D1 through one wrangler process,
   // and a machine with a lot of cores turned that into enough contention that pages timed out
   // waiting for their first fetch — which reads as "the goals list is empty", not as "slow".
@@ -37,14 +40,12 @@ export default defineConfig({
   // remaining spec failed on a 502 from the vite proxy. Nothing restarts it mid-run, so one
   // crash costs the whole suite — which makes the serial run the cheaper trade.
   workers: process.env.CI ? 1 : Math.min(4, os.cpus().length),
-  // Stop a shard once the run has stopped producing information. `workers: 1` made the workerd
-  // death above rarer, not impossible: on 2026-08-25 it still died a minute into shard 3 (an
-  // empty `✘ [ERROR]`, every request 200 OK right up to it), and since nothing restarts it, the
-  // shard spent the next 22 minutes failing 120 specs against a dead proxy before the 25-minute
-  // job bound killed it. A `timeout-minutes` kill reports as *cancelled*, which reads like a
-  // broken suite and — because the trace upload was gated on `failure()` — collected nothing.
-  // Ten failures is already a dead run; stopping there turns a 25-minute mystery into a
-  // two-minute failure that still has its traces.
+  // A backstop, no longer the main defence. The webServer command below now supervises wrangler
+  // and restarts it within seconds of the crash that used to end a shard, so "one death fails
+  // every remaining spec" is gone — the case this guarded against on 2026-08-25, when a workerd
+  // death a minute into shard 3 left it failing 120 specs against a dead proxy for 22 minutes.
+  // What remains is the ordinary one: ten genuine failures already means something is broken, and
+  // stopping there beats grinding through the rest. Kept for that, not for the crash.
   maxFailures: process.env.CI ? 10 : undefined,
   reporter: 'list',
   use: {
@@ -68,8 +69,12 @@ export default defineConfig({
       // Local D1 and R2 under worker/.wrangler — no network, no Cloudflare account. Migrations
       // are applied first because a fresh checkout has an empty database and every route 500s
       // against one. JWT_SECRET comes from worker/.dev.vars.
-      command: `pnpm run d1:migrate:local && pnpm exec wrangler dev --port ${E2E_API_PORT}`,
-      cwd: '../worker',
+      //
+      // Not `wrangler dev` directly: it crashes a minute or two into a run and nothing here would
+      // restart it, which turned one death into a whole failed shard. serve-worker.mjs supervises
+      // it — same babysitter the tour gate uses — and brings it back within seconds. It runs from
+      // frontend/ (its imports live there); the migrate step stays in the worker via `-C`.
+      command: `pnpm -C ../worker run d1:migrate:local && node scripts/serve-worker.mjs`,
       url: `${E2E_API_BASE}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120000,

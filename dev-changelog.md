@@ -82,6 +82,33 @@ All notable changes to Token Circles are documented here. The format is based on
   shares the same `wrangler dev`, which is why one upstream bug surfaces in both and reads as two
   unrelated problems.
 
+- **CI's E2E suite was a coin-flip for the same wrangler crash.** The suite's other job, the one
+  that _does_ run in CI: Playwright started `wrangler dev` once through its `webServer` config and
+  never restarted it, so the crash above — a minute or two into a run — turned the API into a
+  502 for every remaining spec in the shard. A clean run reported `529 passed`; an unlucky one
+  reported a hundred failures with no code change between them, and `maxFailures: 10` existed only
+  to stop a dead-worker shard grinding for 22 minutes before the job bound killed it.
+
+  - **`frontend/scripts/serve-worker.mjs`** (new) is now the Worker's `webServer` command. It
+    hands `wrangler dev` to the same `WorkerSupervisor` the tour gate uses (crash recovery only,
+    no proactive recycling — there is no test boundary this process can see, so a scheduled
+    restart would land under a running spec), stays alive as the server Playwright waits on, and
+    brings wrangler back within a couple of seconds of each death. Its own SIGINT/SIGTERM cleanup
+    kills wrangler's process group, so Playwright's teardown leaves nothing on the port.
+  - **`playwright.config.ts`** points the Worker `webServer` at it (migrations still run first, now
+    via `pnpm -C ../worker`), and CI retries go 1 -> 2: a spec caught in the few-second recovery
+    gap fails, and its _immediate_ retry can land in the same gap before the restart finishes, so
+    the second retry is what clears that residual. `maxFailures: 10` stays as an ordinary
+    backstop, no longer the defence against the crash.
+  - Verified locally on the real CI path (`CI=true`, the `@smoke` subset): the run took two real
+    `wrangler exited (code 1)` crashes, at 5s and 49s, each recovered in ~1.3s, and finished
+    `42 passed` with the single spec caught mid-recovery passing on retry — where before the first
+    death would have failed every spec after it.
+
+  Not fixed here: the crash itself is upstream in `wrangler dev` and there is no version to pin
+  around it (a full writeup is under the tour-gate entry above). Surviving it is the only lever,
+  and now both jobs that share the Worker do.
+
 ## [5.12.0] — 2026-08-26
 
 ### Added
