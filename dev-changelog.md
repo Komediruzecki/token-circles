@@ -9,6 +9,79 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The guided-tour gate reported a dead API as a tour regression.** `pnpm run test:tours` walks
+  every spotlight tour in a real browser and asserts each step highlights a visible element. It
+  assumed the Worker underneath it would outlive the walk. It does not: `wrangler dev` exits
+  partway through a long run —
+
+  ```
+  [ERROR] Error in ProxyController: Error inside ProxyWorker
+    cause: { message: 'Network connection lost.' }
+    at castErrorCause -> emitErrorEvent -> onProxyWorkerMessage
+  ```
+
+  — the ProxyWorker websocket to workerd drops, ProxyController treats it as fatal, and the
+  process goes, measured at `durationMs: 104348`, roughly 100s after startup. A 15-tour walk
+  always outlives that, so it could never finish inside one wrangler lifetime.
+
+  From the browser's side a dead API is indistinguishable from a broken app: pages render their
+  empty states, spotlights have nothing to point at, and every remaining tour MISSes. The gate
+  duly reported a UI regression that had not happened — five consecutive times, each one really
+  the same crash. That is a defect in the gate, not just bad luck: **a check that cannot tell its
+  own infrastructure dying from the thing it is checking cannot be trusted either way.**
+
+  - **`frontend/scripts/lib/worker-supervisor.mjs`** (new) owns the Worker for the length of a
+    run. It spawns `wrangler dev` in its own process group — wrangler forks workerd, and killing
+    only the parent leaves that child holding the port — waits on `/api/health`, and watches it
+    two ways, because neither alone is enough: the child's `exit` event catches a crash, and a 3s
+    health poll (two consecutive misses, so one dropped probe under load is not a death) catches a
+    worker that wedges without exiting. A wrangler already listening is **adopted rather than
+    killed** — another terminal's process is not this script's to close — and replaced with a
+    managed one the first time it dies. SIGINT/SIGTERM/exit all kill the group, so a Ctrl-C
+    mid-walk no longer strands a wrangler on :8787.
+  - **`walk-tours.mjs` re-walks instead of blaming.** A death mid-tour rolls that attempt back
+    wholesale — its steps, its MISSes and its failure lines all disappear — and the tour restarts
+    from step 1 against a fresh Worker, up to three attempts. Before recording _any_ MISS the walk
+    probes `/api/health` twice; if the API is gone that is a `[worker]` line and a re-walk, never a
+    failure line. Only a walk that ran end to end on a live API is allowed to say anything about a
+    tour.
+  - **It recycles the Worker between tours** once it is older than `WORKER_MAX_UPTIME_MS` (default
+    60000; 0 keeps only crash recovery). A restart costs a couple of seconds, a mid-tour death
+    costs the restart _plus_ a re-walk, so replacing a worker that is about to die is the cheaper
+    trade.
+  - **Three verdicts, three exit codes.** `GATE: PASSED` / 0, `GATE: FAILED` / 1 (a real tour
+    regression, listed under "Failures"), `GATE: UNPROVEN` / 2 (the Worker would not stay up, so
+    those tours were never walked — not a pass, and not a tour failure). Two non-zero exits meaning
+    opposite things is the point; reading the second as the first is the confusion this replaces,
+    so the run says which in words as well as in its exit code.
+  - Worker events print on `[worker]` lines and are counted apart from MISSes:
+    `Worker: 1 adopted, 1 start, 1 crash recovered, 1 tour re-walk. None of that is a tour failure.`
+
+  **There is no version to pin your way out of the crash**, which is why the gate has to survive it
+  rather than avoid it. It reproduces identically on wrangler 4.116.0 with stable miniflare
+  4.20260730.0 (death at 154s) and on the 4.126.0 / miniflare 5 alpha this repo pins (~104s) —
+  same stack, same cause. It is an upstream `wrangler dev` bug.
+
+  It is also hard to see, which is its own reason for the `[worker]` lines. The signature above
+  **never reaches stdout**: all wrangler prints there is an empty `[ERROR]` marker, and the
+  ProxyController stack goes only to the debug log under `~/.config/.wrangler/logs/` — which
+  `.github/workflows/e2e.yml` already uploads as an artifact for exactly this reason. Grepping job
+  stdout for "ProxyController" therefore comes back empty on runs that did crash, and has already
+  sent one investigation to a wrong root cause.
+
+  Verified end to end: 15/15 tours desktop and 15/15 `MOBILE=1`, both exit 0, each run recovering
+  real crashes mid-walk (one at 78s, two more on the mobile pass) without a single false MISS;
+  plus fault injection for the paths that are hard to wait for — a killed worker mid-tour, a wedged
+  worker that never exits, an adopted worker taken over on death, a worker that cannot start at
+  all, and a tour abandoned after three deaths (`GATE: UNPROVEN`, exit 2, zero steps counted). The
+  `tour-check` skill is updated to match — the walk no longer wants a hand-started `wrangler dev`,
+  which drops the setup from three terminals to two, and the skill now says plainly that **no CI
+  workflow runs this walk**; it is a local gate. The E2E suite is a different job that merely
+  shares the same `wrangler dev`, which is why one upstream bug surfaces in both and reads as two
+  unrelated problems.
+
 ## [5.12.0] — 2026-08-26
 
 ### Added
