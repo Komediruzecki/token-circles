@@ -622,6 +622,38 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
           eventCreated,
           Number(userId)
         );
+        // The session says WHICH tier was bought. It cannot say when it renews -- a Checkout
+        // Session carries no period end -- and for a FIRST-TIME subscriber the event that does
+        // carry one is routinely lost. customer.subscription.created/updated match on
+        // stripe_customer_id, which the UPDATE above has only just written, so an event that
+        // arrives first matches nothing; and one that arrives second can still be rejected,
+        // because its `created` is often a second EARLIER than the session's and the ordering
+        // guard refuses anything older than the watermark. Either way plan_renews_at stayed NULL
+        // and the billing card showed no renewal date until the first renewal, a month later.
+        // Observed on prod: one subscriber, one missing date, no error anywhere.
+        //
+        // So ask Stripe, now that the link exists. Best effort on purpose: an unacked webhook is
+        // retried and the retry is swallowed by the idempotency ledger above, which would lose
+        // the event outright -- this must never throw.
+        const live = await liveSubscriptions(c.env, String(obj.customer)).catch(() => []);
+        const bought =
+          live.find((sub) => sub.id === obj.subscription) ?? (live.length === 1 ? live[0] : null);
+        if (bought) {
+          await db.run(
+            c.env.DB,
+            // COALESCE with the COLUMN FIRST, which is the whole contract of this statement: it
+            // fills gaps and never overwrites. Argument order is the entire difference --
+            // COALESCE(?, col) writes whenever the reply is non-null and would stamp on a value
+            // some other event already got right, while COALESCE(col, ?) only writes into a
+            // hole. This write carries no ordering guard, unlike applySubscription, so being
+            // unable to clobber is what makes it safe to run at any point in the sequence.
+            'UPDATE users SET plan_renews_at = COALESCE(plan_renews_at, ?), subscription_interval = COALESCE(subscription_interval, ?), stripe_subscription_id = COALESCE(stripe_subscription_id, ?) WHERE id = ?',
+            bought.currentPeriodEnd ? new Date(bought.currentPeriodEnd * 1000).toISOString() : null,
+            intervalForSub(c.env, bought),
+            bought.id,
+            Number(userId)
+          );
+        }
       }
       break;
     }
