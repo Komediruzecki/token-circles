@@ -1,8 +1,10 @@
 # Documentation Index
 
 **Start here if you are an agent or a new contributor: [AGENTS.md](../AGENTS.md)** — what ships
-(the SolidJS frontend and the Cloudflare Worker), what does not (the retired Express/SQLite server
-under `backend/`, and the Docker files that describe it), and the rules that are not negotiable.
+(the SolidJS frontend and the Cloudflare Worker), what no longer exists (the Express/SQLite server
+that stood under `backend/`, and the Docker files that described it — all deleted, though the
+guides below are kept for anyone still running an old image), and the rules that are not
+negotiable.
 
 ## Getting Started
 
@@ -22,8 +24,6 @@ under `backend/`, and the Docker files that describe it), and the rules that are
 - [Docker Guide](docker.md) — _retired_ — container setup for the Express server
 - [Deploy-Update Pipeline](deploy-update-pipeline.md) — How open tabs cross a release: service worker, version.json, reload bounds, manual verification
 - [PWA Install Assets](pwa-install-assets.md) — The maskable icon and the install-dialog screenshots: what they are, why they fail silently, and how to regenerate them
-- [Docker Compose](../docker-compose.yml) — _retired_ — one-command deployment of the Express server
-- [Dockerfile](../Dockerfile) — _retired_ — container image for the Express server
 
 ## Marketing
 
@@ -38,6 +38,7 @@ Detailed EARS (Exactly As Required Specification) documents for all features:
 | Module            | Spec                                                                       |
 | ----------------- | -------------------------------------------------------------------------- |
 | Dashboard         | [specs/frontend/dashboard.md](specs/frontend/dashboard.md)                 |
+| Onboarding        | [specs/frontend/onboarding.md](specs/frontend/onboarding.md)               |
 | Transactions      | [specs/frontend/transactions.md](specs/frontend/transactions.md)           |
 | Accounts          | [specs/frontend/accounts.md](specs/frontend/accounts.md)                   |
 | Categories        | [specs/frontend/categories.md](specs/frontend/categories.md)               |
@@ -45,7 +46,6 @@ Detailed EARS (Exactly As Required Specification) documents for all features:
 | Goals             | [specs/frontend/goals.md](specs/frontend/goals.md)                         |
 | Loans             | [specs/frontend/loans.md](specs/frontend/loans.md)                         |
 | Bills             | [specs/frontend/bills.md](specs/frontend/bills.md)                         |
-| Housing           | [specs/frontend/housing.md](specs/frontend/housing.md)                     |
 | Retirement        | [specs/frontend/retirement.md](specs/frontend/retirement.md)               |
 | Compound Interest | [specs/frontend/compound-interest.md](specs/frontend/compound-interest.md) |
 | Emergency Fund    | [specs/frontend/emergency-fund.md](specs/frontend/emergency-fund.md)       |
@@ -53,7 +53,6 @@ Detailed EARS (Exactly As Required Specification) documents for all features:
 | Import            | [specs/frontend/import.md](specs/frontend/import.md)                       |
 | Settings          | [specs/frontend/settings.md](specs/frontend/settings.md)                   |
 | Rent vs Buy       | [specs/frontend/rent-buy.md](specs/frontend/rent-buy.md)                   |
-| Loans             | [specs/frontend/loans.md](specs/frontend/loans.md)                         |
 
 ### Backend
 
@@ -81,6 +80,5 @@ Detailed EARS (Exactly As Required Specification) documents for all features:
 | Receipts       | [specs/backend/receipts.md](specs/backend/receipts.md)           |
 | Recurring      | [specs/backend/recurring.md](specs/backend/recurring.md)         |
 | Calculator     | [specs/backend/calculator.md](specs/backend/calculator.md)       |
-| Profiles       | [specs/backend/profiles.md](specs/backend/profiles.md)           |
 
 See also: [specs/INDEX.md](specs/INDEX.md)

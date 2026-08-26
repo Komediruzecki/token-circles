@@ -1,19 +1,19 @@
-# Finance Manager — Cloudflare Worker + D1
+# Token Circles — Cloudflare Worker + D1
 
-A self-contained Worker (Hono + D1) reimplementing the API off the Apache + SQLite
-(`better-sqlite3`) host. **Not live yet** and intentionally **not** part of the pnpm
-workspace, so it doesn't touch the existing backend, lockfile, or CI. Install and run it
-on its own when you're ready.
+The API. A Hono Worker on **D1** (SQLite) for data and **R2** for receipts, live in
+production at `api.tokencircles.com` and on dev at `api.dev.tokencircles.com`. It is the
+only backend: the original Node/Express + `better-sqlite3` server was retired in #428.
 
-The frontend already deploys to Cloudflare ("Workers Builds"), so the API becomes a
-sibling Worker (e.g. `api.<your-domain>`) and the whole stack lives on one platform.
+`worker/` is deliberately **not** a pnpm workspace member — it installs and deploys on its
+own (`pnpm install --ignore-workspace`) so the API's dependency set is independent of the
+frontend's. It has its own committed `pnpm-lock.yaml`, and CI installs it with
+`--frozen-lockfile`, so the wrangler that runs the tests is the wrangler you have locally.
 
 ## Why D1
 
-The app is already SQLite, and D1 _is_ SQLite — so the schema transfers almost verbatim
-(`migrations/0001_init.sql`, with the `users` table adapted for the Worker's auth). The
-real work was swapping the runtime: `better-sqlite3` (sync, native) → D1's async
-`prepare().bind().all()/first()/run()`, and Express → [Hono](https://hono.dev).
+The app was already SQLite and D1 _is_ SQLite, so the schema transferred almost verbatim.
+The real work was the runtime: `better-sqlite3` (sync, native) became D1's async
+`prepare().bind().all()/first()/run()`, and Express became [Hono](https://hono.dev).
 
 ## Layout
 
@@ -21,7 +21,7 @@ real work was swapping the runtime: `better-sqlite3` (sync, native) → D1's asy
 worker/
   wrangler.jsonc            Worker config: top-level bindings = local dev; env.dev / env.prod deploys
   package.json              hono + wrangler deps and the d1:* / dev / deploy:{dev,prod} scripts
-  migrations/0001_init.sql  D1 schema
+  migrations/*.sql          D1 schema, applied in order (0001_init.sql onward)
   src/index.ts              Hono entry: CORS, /api/health, mounts every route module, error handler
   src/http.ts               HttpError (mapped to JSON by app.onError)
   src/db.ts                 async D1 helpers (all/first/run/insert/update/del) — analog of baseRepo
@@ -31,13 +31,13 @@ worker/
   .dev.vars.example         local secrets template
 ```
 
-## Ported routes (status)
+## Routes
 
 Every module in `src/routes/` follows one pattern (requireAuth → `getProfileId`/
 `getProfileIds` → async D1) and is mounted in `index.ts`. Data is scoped by the
 `X-Profile-Id` header, verified to belong to the authenticated user.
 
-- **Ported (≈all of the app):** auth (Google), profiles, transactions (list/filter/
+- **Covered (all of the app):** auth (Google + email/password), billing (Stripe), profiles, transactions (list/filter/
   summary/CRUD + bulk + reconcile), accounts (+ balance history), categories (+ mappings,
   auto-map, apply-mappings), tags (+ transaction tagging), budgets (+ summary/history/
   alerts/forecast/zero-based/allocate/…), bills (+ upcoming/summary/calendar/mark-paid),
@@ -51,9 +51,8 @@ Every module in `src/routes/` follows one pattern (requireAuth → `getProfileId
 - Remaining gaps are edge-only: the Google-Sheets **xlsx fallback** (CSV export covers the
   common case) and the old stateful `/import/file-sheet` (replaced by re-uploading with a
   `sheetName` field).
-- **Status:** typechecks, bundles, and **boots locally** — `pnpm run dev` serves the full
-  Hono app off a local D1 + R2 (`/api/health` → `{"ok":true}`, protected routes 401 without a
-  session). Not yet run against a **remote** D1/R2 — smoke-test after the first deploy.
+- **Tests:** `pnpm run test` — vitest through `@cloudflare/vitest-pool-workers`, so every
+  case runs in a real workerd against a real (local, per-run) D1.
 
 ## Local dev (worker + frontend interplay)
 
@@ -116,7 +115,11 @@ Prerequisites:
 - The one-time `d1:create` / `r2:create` / `secret:` setup above must be done per env, and the
   printed `database_id` pasted into `wrangler.jsonc`, before the first CI deploy.
 - **Disable Cloudflare "Workers Builds"** for the frontend — its auto-deploy targets the same
-  `finance-manager` worker as the prod job and would race on a tag.
+  worker as the prod job and would race on a tag.
+- Prod deploys **only** from a `v*` tag. A `workflow_dispatch` build stamps its version from
+  `git describe`, so it ships as `5.11.0-3-gabc1234`; see `docs/deploy-update-pipeline.md` for
+  the incident that taught us. The worker job takes a full `d1 export` backup and uploads it as
+  an artifact _before_ applying migrations.
 
 ## Auth
 
@@ -125,26 +128,35 @@ Implemented (adapted from mercurypitch's zero-dependency WebCrypto module): stat
 (server-side code flow with a signed-state CSRF guard and a returnTo allowlist), in
 `src/auth.ts` + `src/routes/auth.ts`. Routes: `/api/auth/google/start`, `/callback`,
 `/me`, `/logout`. Logout bumps `users.token_version` to revoke all issued tokens.
-**Setup steps:** `~/.dotfiles/personal/finance/google-oauth-setup.md`. Password login uses
-PBKDF2; existing **bcrypt** hashes need a re-hash-on-next-login migration.
+Password login uses **PBKDF2-SHA256 at 100,000 iterations** — the ceiling Workers' WebCrypto
+allows, which is why the number is not higher.
 
 `src/auth.ts` depends only on WebCrypto + a `D1Database` handle (the Hono-specific part is
 just the `requireAuth` wrapper), so it's designed to lift into a shared cross-app auth lib
 later, alongside the wrangler/D1 setup.
 
-## Open items
+## Billing
 
-- **Domain** — `tokencircles.com`. Dev is wired and being brought up first: app at
-  `dev.tokencircles.com`, API at `api.dev.tokencircles.com` (cookie shared via
-  `COOKIE_DOMAIN=.dev.tokencircles.com`). Prod (`app.`/`api.tokencircles.com`) is filled but its
-  route stays commented until you deploy it. The zone must be active in Cloudflare so the
-  `custom_domain` routes can provision DNS on deploy. Remaining placeholders: D1 `database_id`s
-  (from `d1:create:dev`/`:prod`), `GOOGLE_CLIENT_ID`, optional `account_id`, and the secrets.
-- **Premium billing** — receipt upload is gated to `users.plan = 'premium'`, but there's no
-  billing/upgrade flow yet; set a user premium manually for now
-  (`UPDATE users SET plan='premium' WHERE id=?`). PDF reports + spreadsheet import are free.
+Stripe, in `src/routes/billing.ts` with the tier catalogue in `src/plans.ts` — which is the
+single source of truth for what each tier gets, served to the frontend at `/api/plans` so the
+comparison table cannot drift from what the Worker enforces.
+
+- Checkout is a Stripe Checkout Session; a tier or interval **change** modifies the existing
+  subscription rather than opening a second one (`users.stripe_subscription_id`, migration
+  0026). Opening a second Session is how an account ends up paying twice.
+- `POST /api/billing/webhook` is the only writer of plan state — signature-verified, and
+  ordered by `users.stripe_event_at` so an out-of-order delivery cannot roll a plan backwards.
+- Entitlement is `active` / `trialing` / `past_due` (`isEntitled`). `past_due` is a dunning
+  grace window, not a lapse.
+- A **comped** plan is granted directly and has no Stripe customer behind it, so the portal
+  and every "manage" affordance must be hidden for it, not merely disabled.
+
+## Setup notes
+
+- **Zone** — the `tokencircles.com` zone must be active in Cloudflare for the `custom_domain`
+  routes in `wrangler.jsonc` to provision DNS on deploy.
 - **R2 bucket** — create the per-env buckets (`pnpm run r2:create:dev` / `:prod`) and keep
-  their names in `wrangler.jsonc`; receipt endpoints return 501 until the bucket is bound.
-- **Data migration** — to move existing rows into D1:
-  `sqlite3 finance.db .dump > dump.sql`, strip pragmas/transactions, then
-  `npx wrangler d1 execute finance-manager --remote --file dump.sql`.
+  their names in `wrangler.jsonc`; receipt endpoints return 501 until a bucket is bound.
+- **Fresh fork** — fill the placeholders before the first deploy: D1 `database_id`s (from
+  `d1:create:dev` / `:prod`), `GOOGLE_CLIENT_ID`, optional `account_id`, and the secrets from
+  `pnpm run secret:dev` / `:prod`.

@@ -23,8 +23,8 @@ All core budgeting, analytics, calculators, and monthly/annual PDF exports work 
 ## Quick start (local-first, no account)
 
 ```bash
-git clone https://github.com/Komediruzecki/finance-manager.git
-cd finance-manager
+git clone https://github.com/Komediruzecki/token-circles.git
+cd token-circles
 pnpm install
 pnpm dev            # frontend on http://localhost:3800
 ```
@@ -52,10 +52,11 @@ Open **http://localhost:3800** — it runs entirely in your browser (client-only
 > The original Node/Express + SQLite server has been removed. Self-hosting means running your own Worker; `docs/self-hosting.md` and `docs/docker.md` describe the old server and are kept only for anyone still running an old Docker image.
 
 ```
-finance-manager/
+token-circles/
 ├── frontend/   # SolidJS app (local-first, or against the Worker)
-├── worker/     # Cloudflare Worker API — D1 + R2 (the maintained backend)
-├── shared/     # pure TypeScript used by both runtimes
+├── worker/     # Cloudflare Worker API — D1 + R2 (the only backend)
+├── shared/     # pure TypeScript imported by both the app and the Worker
+├── packages/   # standalone libraries (pwa-kit: install, update and offline plumbing)
 ├── docs/       # specs, guides, postmortems
 └── .github/    # CI + deploy workflows, issue/PR templates
 ```
