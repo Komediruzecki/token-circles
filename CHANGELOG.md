@@ -8,14 +8,16 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- **Granted plans no longer show a "Manage or cancel your subscription" link.** There is no subscription behind a granted plan, so the link could only fail.
-- **Switching between monthly and annual billing now confirms when it has actually gone through**, instead of saying so straight away.
-
 ### Added
 
+- **You can now switch from monthly to annual billing without cancelling first.** Pick Annual on your current plan and the change is applied to the subscription you already have, with the difference added to your next invoice. To move from annual back to monthly, get in touch.
 - **Your plan now says whether you are billed monthly or annually.**
+
+### Fixed
+
+- **A new subscription now shows its renewal date straight away.** A first-time subscriber's plan could sit without one for a month.
+- **Granted plans no longer show a "Manage or cancel your subscription" link.** There is no subscription behind a granted plan, so the link could only fail.
+- **Switching between monthly and annual billing now confirms when it has actually gone through**, instead of saying so straight away.
 
 ## [5.11.0] — 2026-08-25
 

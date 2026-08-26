@@ -1823,6 +1823,7 @@ export default function Settings() {
                   configured={() => billing()?.configured ?? false}
                   availablePlans={() => billing()?.availablePlans ?? []}
                   comped={() => billing()?.status === 'comped'}
+                  currentInterval={() => billing()?.interval}
                   upgradeBlockedReason={() =>
                     billing()?.email_verification_required === true
                       ? 'Upgrading is available once your email address is confirmed.'

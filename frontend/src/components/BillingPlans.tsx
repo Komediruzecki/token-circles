@@ -1,4 +1,4 @@
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 
 // Renders the plan catalogue from the worker's GET /api/plans (single source of truth = plans.ts)
 // so the comparison can never drift from what the worker enforces. Server-mode only.
@@ -69,6 +69,12 @@ export default function BillingPlans(props: {
   onUpgrade: (planId: string, interval: 'monthly' | 'annual') => void
   onManage: () => void
   /**
+   * How the current subscription is billed — 'monthly', 'annual', or null when unknown (Free, a
+   * comped plan, or a row predating migration 0025). Without it the grid cannot tell a
+   * same-tier interval switch from a no-op, because the tier either side of one is the same.
+   */
+  currentInterval?: () => string | null | undefined
+  /**
    * Why upgrading is unavailable right now, or null when it is available. Separate from
    * `configured`, which is about the server; this is about this account. Managing an existing
    * subscription stays enabled either way — someone who is already paying must always be able
@@ -87,6 +93,24 @@ export default function BillingPlans(props: {
   const [plans, setPlans] = createSignal<PlanDef[]>([])
   const [notices, setNotices] = createSignal<{ beta?: string; fairUse?: string }>({})
   const [interval, setInterval] = createSignal<'monthly' | 'annual'>('monthly')
+  const myInterval = (): 'monthly' | 'annual' | null => {
+    const i = props.currentInterval?.()
+    return i === 'monthly' || i === 'annual' ? i : null
+  }
+  /**
+   * Open on what they are actually paying, not on 'monthly' regardless.
+   *
+   * Once only, and not on every read: the status arrives after mount, so this cannot be an
+   * initial value, and re-running it would drag the toggle back every time the caller refetched
+   * — which is exactly when someone is mid-click on the other option.
+   */
+  let intervalSeeded = false
+  createEffect(() => {
+    const mine = myInterval()
+    if (intervalSeeded || !mine) return
+    intervalSeeded = true
+    setInterval(mine)
+  })
 
   onMount(async () => {
     try {
@@ -115,6 +139,33 @@ export default function BillingPlans(props: {
    * behind it, so it buys like a new one.
    */
   const switchesInPlace = () => currentId() !== 'free' && !comped()
+
+  /**
+   * Can this tier's card offer a move from monthly to annual billing?
+   *
+   * Monthly -> annual only, deliberately. It is a price increase, so Stripe prorates the
+   * difference onto the next invoice and nothing has to be given back. The reverse is a price
+   * DECREASE mid-period, which leaves a credit balance rather than a refund — a conversation
+   * about money, not a button. Someone on annual who wants monthly contacts support, which is
+   * what the note under their card says.
+   *
+   * Requires a known 'monthly' interval: null means Free, comped, or a row that predates
+   * migration 0025, and offering an in-place switch for any of those would be wrong.
+   */
+  const canSwitchToAnnual = (id: string) =>
+    isCurrent(id) &&
+    id !== 'free' &&
+    !comped() &&
+    myInterval() === 'monthly' &&
+    interval() === 'annual'
+
+  /** On annual, looking at monthly. Nothing to click — say where the change actually happens. */
+  const wantsMonthlyFromAnnual = (id: string) =>
+    isCurrent(id) &&
+    id !== 'free' &&
+    !comped() &&
+    myInterval() === 'annual' &&
+    interval() === 'monthly'
 
   /**
    * Where a plan sits in the ladder.
@@ -313,6 +364,35 @@ export default function BillingPlans(props: {
                         </div>
                       }
                     >
+                      {/* Monthly -> annual, on the tier they already hold. The worker moves the
+                          existing subscription onto the annual price; no second subscription, no
+                          redirect. It leads the card because it is the action being looked at —
+                          somebody on monthly who flipped this toggle to Annual is asking for
+                          exactly this, and until now the card answered with "Manage
+                          subscription". */}
+                      <Show when={canSwitchToAnnual(p.id)}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            props.onUpgrade(p.id, 'annual')
+                          }}
+                          disabled={props.busyKey() !== null || !props.configured()}
+                          style={ctaStyle(true)}
+                          data-testid="switch-to-annual"
+                        >
+                          {props.busyKey() === p.id ? 'Switching…' : 'Switch to annual billing'}
+                        </button>
+                        <div
+                          style={{
+                            'text-align': 'center',
+                            'font-size': '11.5px',
+                            color: 'var(--text-secondary)',
+                            margin: '6px 0 10px',
+                          }}
+                        >
+                          The difference is added to your next invoice
+                        </div>
+                      </Show>
                       <button
                         type="button"
                         onClick={props.onManage}
@@ -334,6 +414,22 @@ export default function BillingPlans(props: {
                       >
                         Change plan, update your card, or cancel
                       </div>
+                      {/* Annual, looking at monthly. Deliberately not a button: dropping to a
+                          cheaper interval mid-period leaves a credit rather than a refund, and
+                          that is a conversation, not a click. */}
+                      <Show when={wantsMonthlyFromAnnual(p.id)}>
+                        <div
+                          style={{
+                            'text-align': 'center',
+                            'font-size': '11.5px',
+                            color: 'var(--text-secondary)',
+                            'margin-top': '6px',
+                          }}
+                          data-testid="annual-to-monthly-note"
+                        >
+                          You're billed annually. Get in touch to move to monthly.
+                        </div>
+                      </Show>
                     </Show>
                   </Show>
                   <Show when={!mine() && p.id !== 'free'}>

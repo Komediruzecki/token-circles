@@ -9,8 +9,47 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Monthly subscribers can move to annual billing from the plan grid.** The worker has been able
+  to do this since the duplicate-subscription fix — `POST /api/billing/checkout` with a new
+  `{ plan, interval }` moves the existing subscription onto the new price rather than opening a
+  second one. The grid could not ASK for it: `mine()` in `BillingPlans.tsx` keyed on tier alone,
+  and the tier either side of an interval switch is the same one, so a monthly subscriber who
+  flipped the toggle to Annual still got "Manage subscription" and no way to act on what they
+  were reading. The `expectedInterval` plumbing added alongside the interval status field existed
+  for this case and could never fire from the UI.
+  - `BillingPlans` takes `currentInterval`, fed from `billing()?.interval`. The Monthly/Annual
+    toggle seeds from it **once**, in an effect rather than as an initial value — the status
+    arrives after mount, and re-running the seed on every read would drag the toggle back exactly
+    when someone is mid-click on the other option.
+  - **Monthly -> annual only, deliberately.** It is a price increase, so Stripe prorates the
+    difference onto the next invoice and nothing is given back; the card says so under the button.
+    The reverse is a price decrease mid-period, which leaves a Stripe credit balance rather than a
+    refund — a conversation, not a click. An annual subscriber looking at monthly gets a note
+    pointing at support instead of a dead end. `BillingPlans.interval.test.tsx` pins the asymmetry,
+    because the obvious "improvement" is to make it symmetric.
+  - Nothing is offered when the interval is unknown (`null`): Free, a comped plan, or a row that
+    predates migration 0025. Guessing monthly there would offer an annual switch to someone who
+    might already be annual.
+  - Manage stays reachable on the same card throughout — cancelling must never be crowded out by
+    an upsell.
+
 ### Fixed
 
+- **A first subscription now lands with its renewal date** (#486). A Checkout Session carries the
+  tier but no period end, and for a first-time subscriber the event that does carry one is
+  routinely lost: `customer.subscription.created/updated` matches on `stripe_customer_id`, which
+  `checkout.session.completed` has only just written, so an event arriving first matches nothing —
+  and one arriving second is often refused, because its `created` is frequently a second earlier
+  than the session's and the ordering guard rejects anything older than the watermark the session
+  just advanced. Prod's timeline was the second case exactly (subscription.updated 15:39:21,
+  session 15:39:22). `plan_renews_at` stayed NULL and self-corrected a month later at the first
+  renewal. The session branch now reads the subscription from Stripe once the link exists and
+  writes with `COALESCE(column, ?)` — column first, so it can only fill a hole and never stamp on
+  a value another event already got right, which is what makes it safe without an ordering guard.
+  Best effort throughout: an unacked webhook is retried and the retry is swallowed by the
+  idempotency ledger, so this must never throw.
 - **The billing card offered a manage link that could only fail for granted plans.**
   `Settings.tsx` gated it on `plan !== 'free'` alone, so a comped account got
   "Manage or cancel your subscription" — while the plan card two inches below it correctly read
@@ -53,6 +92,26 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Changed
 
+- **One Stripe API version, pinned everywhere and matched to the webhook endpoint** (#487).
+  `STRIPE_API_VERSION` had sat on `2024-06-20` while the prod endpoint sent `2026-06-24.dahlia` —
+  four breaking releases apart, with nothing enforcing or noticing the gap. Moved to
+  `worker/src/stripe.ts` so "every call we make is pinned" is checkable by grepping the import
+  rather than by reading each call site, and `DELETE /v1/customers/{id}` in `routes/account.ts`
+  is pinned too — it was the one call sending no version header at all, silently riding the
+  account default. Of everything acacia/basil/clover/dahlia broke, exactly two reach this worker:
+  basil moved `current_period_end` onto the subscription item (both readers already took the item
+  first), and clover made flexible billing mode the default for newly created subscriptions,
+  which changes how prorations are calculated — the one live behavioural difference, since every
+  tier change sends `proration_behavior=create_prorations`. The subscription branch now logs the
+  sending version when an entitled event carries no period end in either shape, as a tripwire for
+  the next drift.
+- **READMEs brought back in line with what ships** (#485). `worker/README.md` still opened with
+  "Not live yet" and claimed there was no billing flow; `README.md` told contributors to clone
+  `finance-manager`, which only worked via GitHub's rename redirect; `docs/README.md` had three
+  links that 404 and a spec table that had drifted in both directions. Verified by resolving every
+  relative link against the filesystem and diffing both spec tables against `docs/specs/*/`.
+- **The prod-update skill gained a real migration-rehearsal recipe** (#477).
+
 - **Worker dependencies bumped to their current releases**, and Dependabot taught not to hand
   us the same broken PRs again. `hono` 4.6.0 -> 4.13.4, `postal-mime` 2.7.5 -> 3.0.0,
   `@cloudflare/workers-types` 4 -> 5, `@cloudflare/vitest-pool-workers` 0.17.0 -> 0.22.0,
@@ -60,7 +119,7 @@ All notable changes to Token Circles are documented here. The format is based on
   - Landed as one commit rather than the five PRs Dependabot opened (#467, #468, #470, #471),
     because every one of them failed CI the same way: Dependabot rewrote `worker/package.json`
     and left `worker/pnpm-lock.yaml` untouched, so `pnpm install --frozen-lockfile
-    --ignore-workspace` refused each with `ERR_PNPM_OUTDATED_LOCKFILE`. Not a stale snapshot —
+--ignore-workspace` refused each with `ERR_PNPM_OUTDATED_LOCKFILE`. Not a stale snapshot —
     an explicit `@dependabot recreate` produced the same manifest-only diff. `worker/` is not
     listed in `pnpm-workspace.yaml`, so its standalone lockfile is not one Dependabot's pnpm
     updater manages. `.github/dependabot.yml` now documents the drill and groups all worker
