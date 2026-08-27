@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.12.1] — 2026-08-27
+
 ### Fixed
 
 - **Transaction filters were sent under names the Worker does not read, so they did nothing.**
@@ -154,6 +156,19 @@ All notable changes to Token Circles are documented here. The format is based on
   Not fixed here: the crash itself is upstream in `wrangler dev` and there is no version to pin
   around it (a full writeup is under the tour-gate entry above). Surviving it is the only lever,
   and now both jobs that share the Worker do.
+
+- **Delete-with-balance-reversal is now covered for income and for two-account transfers.**
+  `DELETE /api/transactions/:id` reverses the row's effect on every account it touched and
+  removes it in one `DB.batch` with the DELETE last, guarded by `unchangedSince` so a delete
+  racing an edit either reverses the amount the row actually has or 409s. The suite proved
+  that for an expense and for a legacy destination-only transfer; a normal two-account
+  transfer was asserted on create only. That is the case with two balances to put back, and
+  the one where a half-applied reversal is hardest to spot — each account still looks
+  individually plausible on its own. Income was unpinned in the same way, and the reversal
+  takes its sign from `tx.type`, so a flipped comparison would pass one direction and fail
+  the other. `worker/test/transactions-balance.test.ts` now covers both, the transfer case
+  asserting both balances and that the pair sums back to its pre-transaction total. Both
+  passed against existing code — nothing was broken, it simply was not pinned.
 
 ## [5.12.0] — 2026-08-26
 
