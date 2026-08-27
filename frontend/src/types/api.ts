@@ -77,15 +77,25 @@ export interface ProfileStore {
 
 // ============ API ENDPOINTS TYPE DEFINITIONS ============
 
+/**
+ * Filters for `GET /api/transactions`, in the app's vocabulary. `api.getTransactions` translates
+ * these to the names the worker actually reads — see the note there before adding a field, since
+ * a name that reaches the worker unrecognised is silently ignored rather than rejected.
+ *
+ * `page`/`perPage`/`category_name`/`profile_id`/`profile_ids` are historical: nothing forwards
+ * them, and the endpoint has no equivalent. Use `limit`/`offset`.
+ */
 export type TransactionListParams = {
   profile_id?: number
   profile_ids?: number[]
   date_from?: string
   date_to?: string
   category_id?: number
+  account_id?: number
   search?: string
   type?: 'income' | 'expense'
   limit?: number
+  offset?: number
   page?: number
   perPage?: number
   reconciled?: boolean

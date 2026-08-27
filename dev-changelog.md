@@ -11,6 +11,52 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **Transaction filters were sent under names the Worker does not read, so they did nothing.**
+  `GET /api/transactions` reads `startDate`, `endDate` and `category_ids`
+  (`worker/src/routes/transactions.ts:183-186`). Both typed client helpers —
+  `api.getTransactions()` and `storageFactory.listTransactions()` — forwarded the app's own
+  vocabulary (`date_from`, `date_to`, `category_id`) verbatim. An unrecognised query parameter is
+  not an error: the WHERE clause is simply never built, so a "filtered" request returned **every
+  row in the profile** and reported success.
+
+  It survived because nothing failed loudly and the two parameters that are exercised most,
+  `search` and `type`, happen to have the same name on both sides. The date filter also _looked_
+  right, because the only caller narrows client-side afterwards. Every hand-built call site in the
+  app (`clientPdfReports.ts:97`, `Analytics.tsx:359`, `Accounts.tsx:79`) already used the Worker's
+  names — the typed helpers were the odd ones out.
+
+  - Both helpers now translate to the Worker's names, and `getTransactions` additionally forwards
+    `limit`, `offset`, `account_id` and `reconciled`, none of which were reachable through it
+    before. `TransactionListParams` gained `offset`/`account_id` and a note that `page`, `perPage`,
+    `category_name`, `profile_id` and `profile_ids` are historical and forwarded nowhere.
+  - **The unfiltered default is unchanged on purpose.** `Transactions.tsx:456-461` documents that
+    its cross-page bulk selection intersects against the whole list, so a default `limit` would
+    make a row outside the window read as deleted and silently unselect it. `limit` stays opt-in
+    until that is reworked; a test pins the no-argument call as sending no window at all.
+
+- **`?offset=` without a `limit` returned HTTP 500.** Found by the tests above, and older than
+  them. SQLite accepts OFFSET only as a suffix of LIMIT, so `... ORDER BY t.date DESC OFFSET 2`
+  is a syntax error rather than a no-op, and the whole request failed. The handler now emits
+  SQLite's own `LIMIT -1` ("no upper bound") when an offset arrives alone. Inert values
+  (`?offset=0`, `?offset=abc`) emit no clause at all.
+
+### Changed
+
+- **The transaction list no longer runs a redundant `COUNT(*)` on unwindowed reads.** `total` is
+  the size of the whole filtered set, which differs from what was just returned only when a window
+  was actually applied — unwindowed, the returned rows _are_ the whole set, so the count recomputed
+  a number already in hand. It is skipped when no window reached the SQL. Tests cover both shapes,
+  including that an unwindowed _filtered_ read still reports the filtered count and not the table
+  size.
+
+  **Measured, so nobody inherits an overclaim:** on a 5000-row profile the unwindowed read went
+  from a 44 ms median to 38–42 ms — inside the run-to-run spread. This removes genuinely redundant
+  work and is worth keeping, but it is **not** the fix for the "deleting is slow" class of report.
+  The dominant cost is serialising and transferring every row, and that stays until the list is
+  windowed or stops re-reading the world after each mutation (11 call sites in `Transactions.tsx`).
+  Both are blocked on the cross-page-selection invariant documented at `Transactions.tsx:456-461`,
+  which is the actual next piece of work.
+
 - **The guided-tour gate reported a dead API as a tour regression.** `pnpm run test:tours` walks
   every spotlight tour in a real browser and asserts each step highlights a visible element. It
   assumed the Worker underneath it would outlive the walk. It does not: `wrangler dev` exits

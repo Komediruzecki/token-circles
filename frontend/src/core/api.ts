@@ -278,18 +278,44 @@ export class ApiClient {
   // ============ TRANSACTIONS ============
 
   /**
-   * Get all transactions with optional filters
+   * Get all transactions with optional filters.
+   *
+   * The parameter NAMES here are not cosmetic. `TransactionListParams` speaks the app's
+   * vocabulary (`date_from`, `category_id`); `GET /api/transactions` reads `startDate`, `endDate`
+   * and `category_ids` (worker/src/routes/transactions.ts:183-186). Those three used to be
+   * forwarded verbatim, so the worker never saw a filter it recognised and simply returned
+   * everything — a filter that reports success, changes nothing, and leaves the narrowing to
+   * whatever the caller does client-side. `search` and `type` happened to match, which is why the
+   * gap stayed invisible.
+   *
+   * Every other call site in the app hand-builds this URL with the worker's own names
+   * (clientPdfReports, Analytics, Accounts), so this helper was the odd one out. Translating in
+   * one place keeps the app's vocabulary at the call sites and the worker's on the wire.
+   *
+   * Passing NO params deliberately returns every row: Transactions.tsx documents that its
+   * cross-page bulk selection depends on holding the whole list, so `limit` is opt-in and the
+   * default must stay unbounded until that is reworked.
    */
   async getTransactions(params?: ApiTypes.TransactionListParams): Promise<Models.Transaction[]> {
     const queryParams = new URLSearchParams()
-    if (params?.date_from !== undefined) queryParams.append('date_from', params.date_from)
-    if (params?.date_to !== undefined) queryParams.append('date_to', params.date_to)
+    if (params?.date_from !== undefined) queryParams.append('startDate', params.date_from)
+    if (params?.date_to !== undefined) queryParams.append('endDate', params.date_to)
+    // Singular in the app, a comma-separated IN-list on the wire.
     if (params?.category_id !== undefined)
-      queryParams.append('category_id', params.category_id.toString())
+      queryParams.append('category_ids', params.category_id.toString())
     if (params?.search !== undefined) queryParams.append('search', params.search)
     if (params?.type !== undefined) {
       queryParams.append('type', params.type)
     }
+    // The worker caps `limit` at 1000 and ignores a non-numeric one; both are its call to make.
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString())
+    if (params?.offset !== undefined) queryParams.append('offset', params.offset.toString())
+    if (params?.account_id !== undefined)
+      queryParams.append('account_id', params.account_id.toString())
+    // Explicitly '1'/'0': the worker tests the string, and `String(false)` is 'false', which it
+    // also accepts — but only these two are documented on both sides.
+    if (params?.reconciled !== undefined)
+      queryParams.append('reconciled', params.reconciled ? '1' : '0')
 
     const res = await this.request<any>(
       `/transactions?${queryParams.toString()}`,

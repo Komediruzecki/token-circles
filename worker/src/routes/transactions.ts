@@ -136,8 +136,7 @@ export function unchangedSince(row: TxRow, id: number | string, pid: number) {
   };
 }
 
-const CONCURRENT_EDIT =
-  'This transaction was changed on another device. Reload and try again.';
+const CONCURRENT_EDIT = 'This transaction was changed on another device. Reload and try again.';
 
 interface TagRow {
   id: number;
@@ -271,14 +270,18 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
     sql += ' ORDER BY t.date DESC, t.id DESC';
   }
 
+  // SQLite only accepts OFFSET as a suffix of LIMIT — a bare `... ORDER BY x OFFSET 2` is a
+  // syntax error, not a no-op, so `?offset=` alone used to 500 the whole request. `LIMIT -1` is
+  // SQLite's own spelling of "no upper bound", which is what an offset without a limit means.
+  const off = offset ? parseInt(offset, 10) : NaN;
+  const hasOffset = !isNaN(off) && off > 0;
   if (limit) {
     const lim = parseInt(limit, 10);
     sql += ` LIMIT ${isNaN(lim) ? 50 : Math.min(lim, 1000)}`;
+  } else if (hasOffset) {
+    sql += ' LIMIT -1';
   }
-  if (offset) {
-    const off = parseInt(offset, 10);
-    if (!isNaN(off)) sql += ` OFFSET ${off}`;
-  }
+  if (hasOffset) sql += ` OFFSET ${off}`;
 
   const rows = await db.all<TxRow>(c.env.DB, sql, ...pids, ...params);
 
@@ -307,9 +310,26 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
     for (const row of rows) (row as Record<string, unknown>).tags = byTx.get(row.id) ?? [];
   }
 
-  const countSql = `SELECT COUNT(*) as c FROM transactions t WHERE t.profile_id IN (${inClause})${whereSql}`;
-  const countRow = await db.first<{ c: number }>(c.env.DB, countSql, ...pids, ...params);
-  const total = countRow?.c ?? 0;
+  // `total` is the size of the whole filtered set, which only differs from what we just returned
+  // when a window was actually requested. Unwindowed, `rows` IS the whole set, so the COUNT is a
+  // second full aggregate over the same rows for a number we are already holding.
+  //
+  // Worth skipping rather than tidying: the app's main list calls this with no window at all and
+  // re-calls it after every mutation (11 sites in Transactions.tsx), so this ran on every
+  // create, edit, delete and bulk action — each time scanning the profile's entire transaction
+  // table to recount what the row query had just counted.
+  // The test mirrors the window construction above exactly — `!limit` matches its `if (limit)`,
+  // and `hasOffset` is the same value that decided whether an OFFSET clause was emitted. So the
+  // count runs whenever a window reached the SQL and never when one did not, including the edge
+  // cases where a parameter was present but inert (`?limit=`, `?offset=0`, `?offset=abc`).
+  let total: number;
+  if (!limit && !hasOffset) {
+    total = rows.length;
+  } else {
+    const countSql = `SELECT COUNT(*) as c FROM transactions t WHERE t.profile_id IN (${inClause})${whereSql}`;
+    const countRow = await db.first<{ c: number }>(c.env.DB, countSql, ...pids, ...params);
+    total = countRow?.c ?? 0;
+  }
 
   return c.json({
     rows,

@@ -235,10 +235,14 @@ class SelfHostedAdapter implements StorageAdapter {
 
   // Transaction management
   async listTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
+    // Worker names on the wire, app names in `filters` — same translation, and same reason, as
+    // api.getTransactions(). `date_from`/`date_to`/`category_id` went out verbatim and the worker
+    // (which reads startDate/endDate/category_ids) ignored all three, so every "filtered" call
+    // here quietly returned the whole profile.
     const params = new URLSearchParams()
-    if (filters?.date_from) params.append('date_from', filters.date_from)
-    if (filters?.date_to) params.append('date_to', filters.date_to)
-    if (filters?.category_id) params.append('category_id', filters.category_id.toString())
+    if (filters?.date_from) params.append('startDate', filters.date_from)
+    if (filters?.date_to) params.append('endDate', filters.date_to)
+    if (filters?.category_id) params.append('category_ids', filters.category_id.toString())
     if (filters?.search) params.append('search', filters.search)
     if (filters?.type) params.append('type', filters.type)
 
