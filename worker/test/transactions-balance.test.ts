@@ -239,6 +239,45 @@ describe('worker transactions — account balance integrity (D1 batch)', () => {
     expect(await txCount()).toBe(0);
   });
 
+  it('deleting an income reverses the credit', async () => {
+    // The mirror of the expense case above. Both directions matter because the reversal picks its
+    // sign from `tx.type`, so a flipped comparison would pass one and fail the other.
+    const id = await createdId(
+      await post({ description: 'Paycheck', amount: 200, type: 'income', account_id: 1 })
+    );
+    expect(await balanceOf(1)).toBe(1200);
+
+    expect((await api(`/api/transactions/${id}`, { method: 'DELETE' })).status).toBe(200);
+
+    expect(await balanceOf(1)).toBe(1000);
+  });
+
+  it('deleting a two-account transfer restores BOTH balances', async () => {
+    // The case with two accounts to put back. Create is covered above; delete was not, and it is
+    // the one where a half-applied reversal would leave money missing from one account and
+    // duplicated in the other — silently, since each account still looks individually plausible.
+    const id = await createdId(
+      await post({
+        description: 'Move',
+        amount: 300,
+        type: 'transfer',
+        account_id: 1,
+        transfer_account_id: 2,
+      })
+    );
+    expect(await balanceOf(1)).toBe(700);
+    expect(await balanceOf(2)).toBe(800);
+
+    expect((await api(`/api/transactions/${id}`, { method: 'DELETE' })).status).toBe(200);
+
+    expect(await balanceOf(1)).toBe(1000);
+    expect(await balanceOf(2)).toBe(500);
+    // The pair must also sum back to where it started — a reversal that moved both in the same
+    // direction could still satisfy one assertion above on its own.
+    expect((await balanceOf(1)) + (await balanceOf(2))).toBe(1500);
+    expect(await txCount()).toBe(0);
+  });
+
   it('deleting a legacy destination-only transfer reverses its historical credit', async () => {
     const inserted = await env.DB.prepare(
       `INSERT INTO transactions
