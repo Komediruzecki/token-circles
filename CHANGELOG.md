@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.12.2] — 2026-08-29
+
 ### Fixed
 
 - **The top of the screen is usable again in the iPhone home-screen app.** The status bar sat on top of the page rather than above it, so the clock and battery washed out over the app — worst on the light theme — and the controls beneath them were hard to reach.

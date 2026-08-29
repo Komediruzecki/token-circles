@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.12.2] — 2026-08-29
+
 ### Fixed
 
 - **iOS home-screen installs drew the app under the status bar, with white glyphs over it.**
