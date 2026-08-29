@@ -3,3 +3,4 @@ db/
 coverage/
 assets/
 templates/pages.html
+chart.umd.min.js

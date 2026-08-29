@@ -114,9 +114,6 @@ importers:
       prettier:
         specifier: 3.9.6
         version: 3.9.6
-      prettier-plugin-one-line-imports:
-        specifier: 1.0.3
-        version: 1.0.3(prettier@3.9.6)
       solid-devtools:
         specifier: ^0.34.5
         version: 0.34.5(solid-js@1.9.15)(vite@8.2.2(@types/node@22.20.1)(less@4.9.0)(sass@1.103.1)(stylus@0.62.0)(terser@5.50.0)(yaml@2.9.0))
@@ -3216,11 +3213,6 @@ packages:
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
-
-  prettier-plugin-one-line-imports@1.0.3:
-    resolution: {integrity: sha512-qHQ2EmiShV/rhq+/MoXAybQcVETA1EEokvn/CjKrjhoPurV7hNBs/49Z7G6guRKnwwfZpyGEoEySVuUwqOeuOQ==}
-    peerDependencies:
-      prettier: '>=3.0.0'
 
   prettier@3.9.6:
     resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
@@ -7225,10 +7217,6 @@ snapshots:
       source-map-js: 1.2.1
 
   prelude-ls@1.2.1: {}
-
-  prettier-plugin-one-line-imports@1.0.3(prettier@3.9.6):
-    dependencies:
-      prettier: 3.9.6
 
   prettier@3.9.6: {}
 
