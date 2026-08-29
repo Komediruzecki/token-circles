@@ -98,3 +98,9 @@ jobs:
 
       - name: Run ESLint
         run: pnpm run lint
+
+      # frontend/.prettierrc is the only prettier config under frontend/. A second one
+      # (.prettierrc.json) once sat beside it, silently losing to .prettierrc by precedence
+      # while declaring a plugin that never ran -- this gate makes any such drift fail loudly.
+      - name: Check formatting
+        run: pnpm run format:check

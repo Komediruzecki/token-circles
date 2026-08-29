@@ -24,6 +24,7 @@
     "lint": "pnpm -C frontend run lint",
     "typecheck": "pnpm -C packages/pwa-kit run typecheck && pnpm -C frontend run typecheck",
     "format": "pnpm -C frontend run format",
+    "format:check": "pnpm -C frontend run format:check",
     "test": "pnpm -C frontend run test",
     "test:worker": "pnpm -C worker run test",
     "test:e2e": "pnpm -C frontend run test:e2e",
