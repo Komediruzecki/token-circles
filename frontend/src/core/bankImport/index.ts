@@ -1,46 +1,54 @@
 /**
- * Bank statement import — public API.
+ * Bank statement import — public API for the browser.
  *
- * The Bank Imports tab imports from here. Everything below is additive: parsing
- * and transformation run fully client-side and emit the app's canonical import
- * table, which the existing mapping → preview → `/api/import/execute` pipeline
- * consumes unchanged in both serverless and self-hosted modes.
+ * The detection/parse/transform core lives in `shared/bankImport` so the Worker's
+ * `/api/v1/import` runs the exact same adapters (AGENTS.md: "Import it, don't fork it").
+ * This barrel re-exports it and adds the browser-only persistence layer, so the Bank
+ * Imports tab keeps a single import site.
  */
+export { resolveTargetAccount, statementSignature } from '../../../../shared/bankImport'
+export type { AccountLike } from '../../../../shared/bankImport'
+export { CANONICAL_HEADERS, txnsToTable, txnToRow } from '../../../../shared/bankImport'
+export { detectBank, getAdapter, listAdapters } from '../../../../shared/bankImport'
+export type { DetectResult } from '../../../../shared/bankImport'
+export { processFiles, toDetectInput } from '../../../../shared/bankImport'
 export type {
-  BankId,
+  BankFileInput,
+  FileResult,
+  ProcessOptions,
+  ProcessResult,
+} from '../../../../shared/bankImport'
+export {
+  categorize,
+  DEFAULT_CATEGORY_RULES,
+  DEFAULT_CATEGORY_RULES_WORLDWIDE,
+  DEFAULT_RULE_GROUP_ID,
+  matchCategory,
+  RULE_GROUPS,
+  rulesForGroup,
+} from '../../../../shared/bankImport'
+export type { RuleGroup } from '../../../../shared/bankImport'
+export {
+  DEFAULT_TRANSFER_RULES,
+  isTransfer,
+  resolveCounterpart,
+} from '../../../../shared/bankImport'
+export type {
   BankAdapter,
+  BankId,
   CanonicalTxn,
   CanonicalType,
   CategoryRule,
   CategoryRuleSet,
-  TransferRuleSet,
   StatementMeta,
-} from './types'
-
-export { CANONICAL_HEADERS, txnsToTable, txnToRow } from './canonical'
-export { listAdapters, getAdapter, detectBank } from './registry'
-export type { DetectResult } from './registry'
-export { processFiles, toDetectInput } from './process'
-export type { BankFileInput, ProcessOptions, ProcessResult, FileResult } from './process'
-export { resolveTargetAccount, statementSignature } from './accountResolver'
-export type { AccountLike } from './accountResolver'
-export {
-  DEFAULT_CATEGORY_RULES,
-  DEFAULT_CATEGORY_RULES_WORLDWIDE,
-  RULE_GROUPS,
-  DEFAULT_RULE_GROUP_ID,
-  rulesForGroup,
-  matchCategory,
-  categorize,
-} from './categoryRules'
-export type { RuleGroup } from './categoryRules'
-export { DEFAULT_TRANSFER_RULES, isTransfer, resolveCounterpart } from './transferRules'
+  TransferRuleSet,
+} from '../../../../shared/bankImport'
 export {
   loadCategoryRules,
-  saveCategoryRules,
   loadRuleGroup,
-  saveRuleGroup,
   loadTransferRules,
-  saveTransferRules,
   resetBankImportRules,
+  saveCategoryRules,
+  saveRuleGroup,
+  saveTransferRules,
 } from './rulesStore'

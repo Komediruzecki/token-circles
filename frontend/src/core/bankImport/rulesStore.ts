@@ -7,9 +7,9 @@
  * browser storage, keeping the engine (`categoryRules.ts` / `transferRules.ts`)
  * pure and testable.
  */
-import { DEFAULT_RULE_GROUP_ID, rulesForGroup } from './categoryRules'
-import { DEFAULT_TRANSFER_RULES } from './transferRules'
-import type { CategoryRuleSet, TransferRuleSet } from './types'
+import { DEFAULT_RULE_GROUP_ID, rulesForGroup } from '../../../../shared/bankImport/categoryRules'
+import { DEFAULT_TRANSFER_RULES } from '../../../../shared/bankImport/transferRules'
+import type { CategoryRuleSet, TransferRuleSet } from '../../../../shared/bankImport/types'
 
 const CAT_KEY = 'bankImportCategoryRules'
 const TRANSFER_KEY = 'bankImportTransferRules'

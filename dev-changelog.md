@@ -9,6 +9,68 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Remote MCP server at `POST /mcp`, plus a bearer-authed account API.** Stateless streamable
+  HTTP JSON-RPC (`initialize` / `tools/list` / `tools/call` / `ping`), 15 tools across read,
+  write and import scopes. Tokens are `tc_pat_`-prefixed, stored as a SHA-256 hash (migration
+  `0027_api_tokens`), and minted from cookie-authed routes under `/api/account/api-tokens`.
+  - **Auth is an allow-list, not a widening of `authenticateRequest`.** A bearer token reaches
+    `/mcp` and `/api/v1/*` and nothing else; a regression test asserts it still gets 401 on
+    `/api/transactions`, `/api/accounts` and `/api/billing/status`.
+  - **File bytes never travel through a tool argument.** A model emitting a base64 spreadsheet
+    token by token is slow, costly and truncates, so `prepare_import` returns a 15-minute
+    HMAC-signed capability URL bound to one purpose, and the bytes go over plain HTTP. The same
+    applies in reverse for `export_snapshot`.
+  - Cross-user isolation is asserted table-driven over the live tool registry, so a new tool is
+    covered the moment it is registered.
+
+- **`POST /api/v1/import` runs the bank adapters before falling back to generic CSV.** The
+  generic path guesses a mapping from row 1, which assumes an already app-shaped file: header on
+  the first line, one signed amount column, UTF-8, comma-separated. An Erste export is none of
+  those — Windows-1250, semicolon-delimited, a bank preamble above the header, and debit/credit
+  split across `Isplate`/`Uplate` — so it was refused 422 while the Bank Imports tab accepted it.
+  `?bank=` forces an adapter, `?account=` names the target account, and the response and import
+  log both record which parser ran.
+
+### Changed
+
+- **The bank-import core moved to `shared/bankImport/`.** Detection, parsing, the nine adapters
+  and the canonical table were under `frontend/src/`, so only the browser could reach them; they
+  are pure TypeScript, so both runtimes now import the same code rather than forking it. Browser
+  persistence (`memory.ts`, `rulesStore.ts`) stays in the frontend. The barrel re-exports the
+  same 42 names, unchanged.
+  - `shared/` sits at the repo root and `xlsx` is installed under `frontend/` and `worker/`, so a
+    bare import from `shared/` does not resolve. Rather than hoist a package to the workspace
+    root, `BankAdapter.parse` takes an optional third argument carrying an xlsx loader and each
+    runtime supplies its own `() => import('xlsx')`; the eight adapters that parse text are
+    untouched.
+
+### Fixed
+
+- **API-imported rows were left with `account_id NULL`.** `executeImport` creates an account only
+  for a name the caller marks as one — the app marks them from the import preview's tick-boxes —
+  and the endpoint marked nothing. A real 94-row Erste statement reported "94 imported, 0
+  skipped" while every transaction belonged to no account and appeared in no balance or report.
+  The account `?account=` names is now created and linked; on the generic path, minting accounts
+  from arbitrary means-of-payment values stays opt-in behind `autoCreateAccounts=true`.
+- **`parseDateString` accepted any year the JS `Date` parser invented.** `new Date('REF-88213')`
+  is not an error, it is 1 January year 88213 — the parser scavenges a number and calls it a
+  year — so an unmapped bank reference column imported as transactions dated eighty-six millennia
+  out. The free-form fallback is now bounded to 1900–2200; ISO and `dd/mm/yyyy` inputs are
+  handled by earlier branches and are unaffected.
+- **`list_transactions` never terminated a full pagination walk.** `truncated` compared the page
+  size against the total row count, which cannot distinguish a full last page from a full middle
+  one: 18 rows at limit 6 left page 3 reporting more to come with a cursor that returned nothing.
+  It now fetches one row past the page.
+- **Tool results were measured once but transmitted twice** — as `structuredContent` and as the
+  JSON text block clients without structured support read — so the 200 KB cap delivered ~400 KB.
+- **`whoami` read the `settings` table with no user filter**, relying on profile-id keying to stay
+  correct.
+- The API import no longer shares a rate-limit bucket with the app's own import routes, and a
+  commit that imports nothing still writes an `import_logs` row — "ran and found nothing new" and
+  "never ran" were indistinguishable.
+
 ## [5.12.2] — 2026-08-29
 
 ### Fixed
@@ -71,7 +133,6 @@ All notable changes to Token Circles are documented here. The format is based on
   right, because the only caller narrows client-side afterwards. Every hand-built call site in the
   app (`clientPdfReports.ts:97`, `Analytics.tsx:359`, `Accounts.tsx:79`) already used the Worker's
   names — the typed helpers were the odd ones out.
-
   - Both helpers now translate to the Worker's names, and `getTransactions` additionally forwards
     `limit`, `offset`, `account_id` and `reconciled`, none of which were reachable through it
     before. `TransactionListParams` gained `offset`/`account_id` and a note that `page`, `perPage`,
@@ -124,7 +185,6 @@ All notable changes to Token Circles are documented here. The format is based on
   duly reported a UI regression that had not happened — five consecutive times, each one really
   the same crash. That is a defect in the gate, not just bad luck: **a check that cannot tell its
   own infrastructure dying from the thing it is checking cannot be trusted either way.**
-
   - **`frontend/scripts/lib/worker-supervisor.mjs`** (new) owns the Worker for the length of a
     run. It spawns `wrangler dev` in its own process group — wrangler forks workerd, and killing
     only the parent leaves that child holding the port — waits on `/api/health`, and watches it
@@ -181,7 +241,6 @@ All notable changes to Token Circles are documented here. The format is based on
   502 for every remaining spec in the shard. A clean run reported `529 passed`; an unlucky one
   reported a hundred failures with no code change between them, and `maxFailures: 10` existed only
   to stop a dead-worker shard grinding for 22 minutes before the job bound killed it.
-
   - **`frontend/scripts/serve-worker.mjs`** (new) is now the Worker's `webServer` command. It
     hands `wrangler dev` to the same `WorkerSupervisor` the tour gate uses (crash recovery only,
     no proactive recycling — there is no test boundary this process can see, so a scheduled

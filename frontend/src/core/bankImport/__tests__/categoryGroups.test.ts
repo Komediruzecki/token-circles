@@ -6,7 +6,7 @@ import {
   matchCategory,
   RULE_GROUPS,
   rulesForGroup,
-} from '../categoryRules'
+} from '../../../../../shared/bankImport/categoryRules'
 import { loadCategoryRules, loadRuleGroup, saveCategoryRules, saveRuleGroup } from '../rulesStore'
 
 describe('category rule groups', () => {

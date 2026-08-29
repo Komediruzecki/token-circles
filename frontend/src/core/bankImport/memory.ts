@@ -7,8 +7,8 @@
  * localStorage, scoped per profile. Keep it dependency-free so the pure core can
  * stay pure — this is the only module here that touches browser storage.
  */
-import { statementSignature } from './accountResolver'
-import type { BankId, StatementMeta } from './types'
+import { statementSignature } from '../../../../shared/bankImport/accountResolver'
+import type { BankId, StatementMeta } from '../../../../shared/bankImport/types'
 
 const KEY = 'bankImportAccountMemory'
 

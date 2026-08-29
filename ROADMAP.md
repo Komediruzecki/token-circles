@@ -15,8 +15,8 @@ Contributions toward any of these are welcome — please open an issue to discus
 
 ## 💰 Bills & Subscriptions
 
-- [ ] **Subscription detection** — Automatically identify recurring payments (Netflix, gym, cloud services). Monthly/annual cost summary
-- [ ] **Bill calendar** — Calendar view of all upcoming bills. "Due in 7 days" and "Overdue" visual indicators
+- [x] **Subscription detection** — Automatically identify recurring payments (Netflix, gym, cloud services). Monthly/annual cost summary
+- [x] **Bill calendar** — Calendar view of all upcoming bills. "Due in 7 days" and "Overdue" visual indicators
 - [ ] **Bill payment matching** — Auto-match transactions to bills when the payment goes through
 - [ ] **Renewal reminders** — "Your annual Prime subscription renews next week ($139)"
 
@@ -36,7 +36,7 @@ Contributions toward any of these are welcome — please open an issue to discus
 
 ## 📱 Mobile & PWA
 
-- [ ] **PWA install** — "Add to Home Screen" with offline support and native-like experience
+- [x] **PWA install** — "Add to Home Screen" with offline support and native-like experience
 - [ ] **Swipe actions** — Swipe left to delete, right to edit — like your favorite email app
 - [ ] **Pull-to-refresh** — On transaction lists and dashboard
 - [ ] **Mobile quick-capture** — Lightning-fast transaction entry optimized for mobile
@@ -44,9 +44,10 @@ Contributions toward any of these are welcome — please open an issue to discus
 
 ## 🔌 Integrations
 
+- [x] **MCP server** — Remote MCP at `/mcp` with personal access tokens: read your account, import statements, write back categorizations. See [docs/mcp-server.md](docs/mcp-server.md)
 - [ ] **Bank sync via GoCardless/Plaid** — Connect your bank accounts for automatic transaction import
 - [ ] **Email receipt parsing** — Forward receipts to a dedicated email, auto-extract merchant/amount/date
-- [ ] **Google Sheets sync** — Push budgets and transactions to Sheets for custom analysis
+- [x] **Google Sheets sync** — Push budgets and transactions to Sheets for custom analysis
 - [ ] **Calendar integration** — Push bill due dates to Google Calendar / Apple Calendar
 - [ ] **Multi-currency support** — Live exchange rates, automatic conversion at transaction time
 
@@ -75,7 +76,7 @@ Contributions toward any of these are welcome — please open an issue to discus
 - [ ] **Dashboard widget customization** — Drag to reorder, show/hide widgets, preset layouts
 - [ ] **Command palette** — `Ctrl+K` fuzzy-search palette: "New transaction", "Go to budgets", "Export PDF"
 - [ ] **Full keyboard navigation** — Tab order, shortcuts for power users, `?` cheat sheet
-- [ ] **Natural language input** — "coffee 4.50 yesterday at starbucks #food" → parsed automatically
+- [x] **Natural language input** — "coffee 4.50 yesterday at starbucks #food" → parsed automatically
 - [ ] **Undo support** — Toast with "Undo" after deletes, inline editing on table cells
 - [ ] **Budget scenario planner** — What-if modeling: new job, relocation, baby, sabbatical
 - [ ] **Transaction receipt OCR** — Snap a photo, extract merchant/amount/date
@@ -83,14 +84,14 @@ Contributions toward any of these are welcome — please open an issue to discus
 ## 🛡️ Security & Account
 
 - [ ] **Two-factor authentication (TOTP)** — QR code setup, backup codes, remember-device
-- [ ] **OAuth sign-in** — Google, GitHub, Apple sign-in options
+- [x] **OAuth sign-in** — Google, GitHub, Apple sign-in options
 - [ ] **Session management** — View active sessions, remote logout from other devices
 - [ ] **One-click data export** — Full GDPR-compliant data export (JSON)
 - [ ] **Account deletion** — Complete data purge with confirmation and cooldown
 
 ## Infrastructure
 
-- [ ] **CI/CD pipeline** — GitHub Actions: lint → test → build on PR, auto-deploy on merge
+- [x] **CI/CD pipeline** — GitHub Actions: lint → test → build on PR, auto-deploy on merge
 - [ ] **Docker Compose for dev** — One-command development environment
 - [ ] **S3-compatible backup** — Scheduled DB backups to S3/Backblaze/R2
 - [ ] **Redis session & caching layer** — Multi-process support, faster queries
@@ -98,7 +99,7 @@ Contributions toward any of these are welcome — please open an issue to discus
 
 ## Testing & Quality
 
-- [ ] **Playwright E2E tests** — Critical user flows: signup → transaction → budget → report
+- [x] **Playwright E2E tests** — Critical user flows: signup → transaction → budget → report
 - [ ] **Visual regression tests** — Screenshot diffs on PR to catch UI regressions
 - [ ] **Load testing** — Artillery/k6 scripts to validate API under load
 - [ ] **Accessibility audit (WCAG 2.1 AA)** — axe-core audit + manual screen reader pass

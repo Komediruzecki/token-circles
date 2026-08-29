@@ -32,6 +32,9 @@ import { billingRoutes } from './routes/billing';
 import { notificationsRoutes } from './routes/notifications';
 import { supportRoutes } from './routes/support';
 import { plansRoutes } from './routes/plans';
+import { apiTokensRoutes } from './routes/api-tokens';
+import { v1Routes } from './routes/v1';
+import { mcpRoutes } from './mcp';
 import { runScheduledReminders } from './reminders';
 import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
@@ -39,6 +42,7 @@ import { sweepRateLimits } from './ratelimit';
 import { sweepExpiredSessions } from './auth';
 import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
+import { type TokenIdentity } from './apitoken';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -71,7 +75,10 @@ export interface Env {
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
-export type AppEnv = { Bindings: Env; Variables: { userId: number; sessionId?: string } };
+export type AppEnv = {
+  Bindings: Env;
+  Variables: { userId: number; sessionId?: string; token?: TokenIdentity };
+};
 
 const app = new Hono<AppEnv>();
 
@@ -153,6 +160,9 @@ app.route('/', billingRoutes);
 app.route('/', notificationsRoutes);
 app.route('/', supportRoutes);
 app.route('/', plansRoutes);
+app.route('/', apiTokensRoutes);
+app.route('/', v1Routes);
+app.route('/', mcpRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 

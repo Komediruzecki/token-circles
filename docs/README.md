@@ -13,6 +13,7 @@ negotiable.
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) — Community standards
 - [SECURITY.md](../SECURITY.md) — Vulnerability reporting and security features
 - [AGENTS.md](../AGENTS.md) — Repository orientation: what ships, what is retired, migration and deploy rules
+- [MCP Server and Account API](mcp-server.md) — Personal access tokens, the MCP tools, and importing statements over the API
 - [ROADMAP.md](../ROADMAP.md) — Planned features and improvements
 - [CHANGELOG.md](../CHANGELOG.md) — Version history and release notes
 - [LICENSE](../LICENSE) — GNU AGPL-3.0

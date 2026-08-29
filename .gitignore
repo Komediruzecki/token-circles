@@ -101,3 +101,7 @@ CLAUDE.md
 
 # Playwright signed-in state, written by tests/global.setup.ts. Holds a session cookie.
 frontend/tests/.auth/
+
+# Implementation plans and specs are internal working documents, kept outside this
+# public repo (they live in the owner's dotfiles). See docs/ for user-facing docs.
+docs/superpowers/

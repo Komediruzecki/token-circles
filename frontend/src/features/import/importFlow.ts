@@ -942,7 +942,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         bankId: r.bankId!,
         targetAccount: r.targetAccount,
       })),
-      { categoryRules, transferRules, knownAccounts }
+      { categoryRules, transferRules, knownAccounts, xlsx: () => import('xlsx') }
     )
     const filename =
       recognized.length === 1 ? recognized[0].file.name : `${recognized.length} statements`

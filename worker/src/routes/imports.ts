@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import { parseImportCsv } from '../../../shared/importCsv';
+import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
@@ -142,7 +143,13 @@ function parseDateString(dateStr: unknown): string {
   // (a bare Excel serial isn't handled here — that branch is intentionally dropped, above).
   const date = new Date(s);
   if (!isNaN(date.getTime())) {
-    return format(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+    // Bounded, because this parser does not fail on nonsense -- it scavenges. new Date('REF-88213')
+    // is not an error, it is the first of January, year 88213, so an unmapped bank reference column
+    // would land as a transaction dated eighty-six millennia out instead of falling back to today.
+    const y = date.getUTCFullYear();
+    if (y >= MIN_YEAR && y <= MAX_YEAR) {
+      return format(y, date.getUTCMonth() + 1, date.getUTCDate());
+    }
   }
   return today();
 }
@@ -150,7 +157,7 @@ function parseDateString(dateStr: unknown): string {
 // Cap the uploaded file size BEFORE parsing (S8). /import/upload parses xlsx/csv entirely in
 // memory, so an unbounded body is a memory-exhaustion vector; 10 MB comfortably covers real
 // bank exports. Mirrors the RECEIPT_MAX_BYTES guard in routes/receipts.ts.
-const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
+export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 
 // Pull a value from a row using any of the casing variants the Express code checks.
 function pick(row: Record<string, any>, mapping: Record<string, any>, key: string): any {

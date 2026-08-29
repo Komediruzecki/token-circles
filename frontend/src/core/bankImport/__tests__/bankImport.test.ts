@@ -1,18 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { autoDetectMapping, FIELD_NAMES } from '../../importMapping'
-import { resolveTargetAccount, statementSignature } from '../accountResolver'
-import { dkbAdapter } from '../adapters/dkb'
-import { ersteAdapter } from '../adapters/erste'
-import { ingAdapter } from '../adapters/ing'
-import { n26Adapter } from '../adapters/n26'
-import { pbzAdapter } from '../adapters/pbz'
-import { revolutAdapter } from '../adapters/revolut'
-import { sparkasseAdapter } from '../adapters/sparkasse'
-import { wiseAdapter } from '../adapters/wise'
-import { ynabAdapter } from '../adapters/ynab'
-import { CANONICAL_HEADERS } from '../canonical'
-import { matchCategory } from '../categoryRules'
+import {
+  resolveTargetAccount,
+  statementSignature,
+} from '../../../../../shared/bankImport/accountResolver'
+import { dkbAdapter } from '../../../../../shared/bankImport/adapters/dkb'
+import { ersteAdapter } from '../../../../../shared/bankImport/adapters/erste'
+import { ingAdapter } from '../../../../../shared/bankImport/adapters/ing'
+import { n26Adapter } from '../../../../../shared/bankImport/adapters/n26'
+import { pbzAdapter } from '../../../../../shared/bankImport/adapters/pbz'
+import { revolutAdapter } from '../../../../../shared/bankImport/adapters/revolut'
+import { sparkasseAdapter } from '../../../../../shared/bankImport/adapters/sparkasse'
+import { wiseAdapter } from '../../../../../shared/bankImport/adapters/wise'
+import { ynabAdapter } from '../../../../../shared/bankImport/adapters/ynab'
+import { CANONICAL_HEADERS } from '../../../../../shared/bankImport/canonical'
+import { matchCategory } from '../../../../../shared/bankImport/categoryRules'
 import {
   decodeText,
   decodeTextSniffed,
@@ -22,11 +24,16 @@ import {
   parseEuropeanNumber,
   parseFlexibleNumber,
   splitDelimited,
-} from '../parse'
-import { processFiles, toDetectInput } from '../process'
-import { detectBank } from '../registry'
-import { resolveCounterpart } from '../transferRules'
-import type { CategoryRuleSet, TransferRuleSet, TransformContext } from '../types'
+} from '../../../../../shared/bankImport/parse'
+import { processFiles, toDetectInput } from '../../../../../shared/bankImport/process'
+import { detectBank } from '../../../../../shared/bankImport/registry'
+import { resolveCounterpart } from '../../../../../shared/bankImport/transferRules'
+import { autoDetectMapping, FIELD_NAMES } from '../../importMapping'
+import type {
+  CategoryRuleSet,
+  TransferRuleSet,
+  TransformContext,
+} from '../../../../../shared/bankImport/types'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 
@@ -258,7 +265,7 @@ describe('pbz adapter', () => {
     expect(
       pbzAdapter.detect(toDetectInput('Izvjesce o transakcijama_HR78.xls', bytes))
     ).toBeGreaterThan(0.9)
-    const parsed = await pbzAdapter.parse(bytes, 'Izvjesce.xls')
+    const parsed = await pbzAdapter.parse(bytes, 'Izvjesce.xls', { xlsx: async () => XLSX })
     expect(parsed.rows).toHaveLength(3) // 3 data rows, metadata + header skipped
     expect(parsed.meta.iban).toBe('HR9876543210987654321')
 

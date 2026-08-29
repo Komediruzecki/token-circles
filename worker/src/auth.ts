@@ -33,20 +33,20 @@ const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const PBKDF2_ITERATIONS = 100_000;
 
 // ── base64url ────────────────────────────────────────────────────────────────
-function b64urlEncode(data: ArrayBuffer | Uint8Array): string {
+export function b64urlEncode(data: ArrayBuffer | Uint8Array): string {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function b64urlDecode(s: string): Uint8Array {
+export function b64urlDecode(s: string): Uint8Array {
   const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
   const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + pad);
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
 // ── JWT (HS256) ──────────────────────────────────────────────────────────────
-async function hmacKey(secret: string): Promise<CryptoKey> {
+export async function hmacKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     'raw',
     encoder.encode(secret),
