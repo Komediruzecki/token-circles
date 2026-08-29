@@ -79,7 +79,10 @@
   left: 0;
   height: 100vh;
   height: 100dvh;
-  padding: 20px 0 calc(120px + env(safe-area-inset-bottom, 0px)) 0;
+  /* Top inset as well as bottom: the drawer is `top: 0`, so without it the logo and the first
+     nav item render under the status bar on a notched phone. */
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 0
+    calc(120px + env(safe-area-inset-bottom, 0px)) 0;
   z-index: 100;
   overflow-y: auto;
   overflow-x: hidden;
@@ -384,8 +387,11 @@
 .mobile-toggle {
   display: none;
   position: fixed;
-  top: max(12px, env(safe-area-inset-top, 0px));
-  left: max(12px, env(safe-area-inset-left, 0px));
+  /* calc, not max: `max(12px, inset)` resolves to the inset itself once it exceeds 12px, which
+     parks the button flush against the status bar (and, in landscape, against the notch) with no
+     gap at all. Adding to the inset keeps the same 12px breathing room everywhere. */
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
   z-index: 101;
   width: 36px;
   height: 36px;

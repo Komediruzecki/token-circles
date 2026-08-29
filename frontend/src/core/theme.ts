@@ -27,6 +27,23 @@ const DEFAULT_THEME = 'dark'
 export type Theme = string
 
 /**
+ * Point <meta name="theme-color"> at the active theme's page background.
+ *
+ * iOS tints the standalone status bar with this colour, so a theme switch that does not update it
+ * leaves a strip of the *other* theme above the app — the light theme under a dark navy bar. Read
+ * from the live computed `--bg` rather than a table, so a theme that changes its background only
+ * has to change it in one place. public/theme-init.js carries the same two values as literals for
+ * the pre-paint stamp, because no stylesheet has loaded that early; a test pins them together.
+ */
+function syncStatusBarColor(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (!meta) return
+  const bg = window.getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+  if (bg) meta.setAttribute('content', bg)
+}
+
+/**
  * Theme store - handles theme state and CSS variable updates
  */
 export class ThemeStore {
@@ -59,11 +76,8 @@ export class ThemeStore {
    */
   setTheme(theme: Theme): void {
     const resolved = THEMES.some((t) => t.id === theme) ? theme : DEFAULT_THEME
-    this.currentTheme = resolved
-    document.documentElement.setAttribute('data-theme', resolved)
     localStorage.setItem(THEME_STORAGE_KEY, resolved)
-    // Trigger chart refreshes
-    this.refreshCharts()
+    this.applyTheme(resolved)
   }
 
   /**
@@ -107,6 +121,7 @@ export class ThemeStore {
     const resolved = THEMES.some((t) => t.id === theme) ? theme : DEFAULT_THEME
     this.currentTheme = resolved
     document.documentElement.setAttribute('data-theme', resolved)
+    syncStatusBarColor()
     this.refreshCharts()
   }
 

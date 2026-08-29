@@ -56,6 +56,33 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Opaque ground behind the status bar.
+ *
+ * With `apple-mobile-web-app-status-bar-style: default` iOS keeps the status bar out of the page
+ * and this collapses to nothing — `env(safe-area-inset-top)` is 0, so the strip has no height and
+ * costs a paint of zero pixels. It exists for every case where the inset is NOT zero and page
+ * content would otherwise sit under the status bar: Safari in landscape on a notched phone, and
+ * any future iOS that goes back to letting the web view run full-bleed. There the strip gives the
+ * clock and battery a solid, theme-coloured ground instead of blurred page content.
+ *
+ * `pointer-events: none` because it spans the full width: without it this would silently eat taps
+ * along the top edge of the app, which is the failure it is here to prevent, not cause.
+ * Fixed-position, so it is out of flow and never becomes a flex item of the flex `body`.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg);
+  /* Above the highest z-index in the app (10001) — the status bar strip belongs to no component. */
+  z-index: 10002;
+  pointer-events: none;
+}
+
 /* Brand voice: page-level headings speak in the display serif. Everything
    from h3 down stays in Inter — tables, modals, and forms are instruments. */
 h1,

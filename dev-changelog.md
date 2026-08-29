@@ -9,6 +9,49 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **iOS home-screen installs drew the app under the status bar, with white glyphs over it.**
+  `index.html` declared `apple-mobile-web-app-status-bar-style: black-translucent` alongside
+  `viewport-fit=cover`. That combination does two separate things in standalone mode, and both
+  hurt:
+
+  - **The web view fills the screen, status bar included.** `body` padded
+    `env(safe-area-inset-bottom)` and nothing at the top, so page content ran underneath the
+    clock. `.sidebar` is `position: fixed; top: 0` with `padding: 20px 0 ...`, which put the logo
+    and the first nav item squarely behind it.
+  - **It forces the status-bar glyphs WHITE whatever the theme.** `dawn-light` is `--bg: #f7f9ff`,
+    so on the light theme the clock and battery were white on near-white. `theme-color` was the
+    hardcoded `#0a0e1c` — `orbit-dark`'s background — and nothing updated it on a theme switch, so
+    it described the wrong theme half the time. iOS 26 then glasses that strip, which is the blur
+    in the report; the blur was the symptom, the unreadable overlap was the cause.
+
+  Apple also lists `black-translucent` as deprecated, so this needed replacing regardless.
+
+  - `apple-mobile-web-app-status-bar-style` is now `default`: iOS keeps the status bar out of the
+    page and tints it from `theme-color`. Every existing `calc(56px + env(safe-area-inset-top, 0px))`
+    rule degrades to its pre-notch value, because the inset is then 0.
+  - **`theme-color` follows the active theme.** `public/theme-init.js` stamps it before first paint
+    — it has to be there, since by the time `core/theme.ts` runs the bar is already painted — and
+    `syncStatusBarColor()` re-reads the live `--bg` on every switch. `setTheme` now delegates to
+    `applyTheme` instead of restating the same four lines, so there is one path that touches the
+    document and it cannot forget the sync.
+  - **`body::before` paints an opaque strip of exactly `env(safe-area-inset-top)`.** Insurance, not
+    the fix: under `default` the inset is 0 and it has no height at all. It covers the cases where
+    the inset is not 0 — Safari in landscape on a notched phone, and any future iOS that returns to
+    a full-bleed web view — so the glyphs always have a solid, theme-coloured ground. It is
+    `pointer-events: none`, because a full-width fixed strip that swallowed taps along the top edge
+    would cause the exact failure it exists to prevent.
+  - **`.mobile-toggle` used `max(12px, env(safe-area-inset-top, 0px))`**, which resolves to the
+    inset itself once that exceeds 12px — parking the button flush against the status bar with no
+    gap, and against the notch in landscape. It adds to the inset now. `.sidebar` pads the top
+    inset for the same reason.
+
+  `src/__tests__/statusBarColor.test.ts` pins the two colour literals in `theme-init.js` against
+  the `--bg` of the theme files they duplicate (the script runs before any stylesheet exists, so it
+  cannot read them), and asserts `black-translucent` never comes back. Verified to fail on injected
+  drift rather than assumed to work.
+
 ## [5.12.1] — 2026-08-27
 
 ### Fixed

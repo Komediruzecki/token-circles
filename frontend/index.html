@@ -3,10 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Kept in sync with the active theme's --bg by public/theme-init.js (pre-paint) and
+         core/theme.ts (on switch). The literal here is only the pre-script default. -->
     <meta name="theme-color" content="#0a0e1c" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- `default`, not `black-translucent`. The translucent value makes the web view fill the
+         screen UNDER the status bar and forces WHITE status-bar glyphs regardless of theme, so
+         on the light theme the clock and battery sat invisibly on a near-white page while iOS
+         glassed the strip over the top. Apple also lists it as deprecated. `default` keeps the
+         status bar out of the page and tints it from theme-color below. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- Pre-paint theme stamp (external, not inline: the self-hosted Express
