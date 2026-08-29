@@ -33,6 +33,26 @@ All notable changes to Token Circles are documented here. The format is based on
   `?bank=` forces an adapter, `?account=` names the target account, and the response and import
   log both record which parser ran.
 
+### Added
+
+- **Settings → API access: create, inspect and revoke personal access tokens.** Until now a
+  token could only be minted with curl, which is why the feature shipped without a user-facing
+  changelog line. `frontend/src/features/ApiAccess.tsx` drives the three cookie-authed endpoints
+  added in #497.
+  - **The reveal is a modal that only an acknowledgement closes.** The worker returns the secret
+    exactly once and keeps only a SHA-256 hash, so a value shown in a table row would be lost to
+    a stray refresh. A backdrop click deliberately does not dismiss it; a test pins that.
+  - **The tab is hidden in serverless mode.** `apiFetch` answers from IndexedDB there and never
+    reaches a Worker, so a token would authenticate nothing. The rule moved into
+    `settingsStore.isTabVisible`, which also now covers the pre-existing billing gate.
+  - **The default-profile picker is a safety control, not a convenience.** The MCP tools resolve
+    "token default, then the FIRST profile", so an unpinned token silently acts on whichever
+    profile sorts first once you have more than one.
+  - `GET /api/account/api-tokens` now returns `scopes` as an array. They are stored stringified,
+    and passing that through made every client `JSON.parse` a field of an already-parsed
+    response; a row that does not hold an array degrades to no scopes rather than failing the
+    whole listing.
+
 ### Changed
 
 - **The bank-import core moved to `shared/bankImport/`.** Detection, parsing, the nine adapters

@@ -51,12 +51,25 @@ apiTokensRoutes.post('/api/account/api-tokens', requireAuth, async (c) => {
 });
 
 apiTokensRoutes.get('/api/account/api-tokens', requireAuth, async (c) => {
-  const tokens = await db.all(
+  const rows = await db.all<{ scopes: string } & Record<string, unknown>>(
     c.env.DB,
     `SELECT id, name, hint, scopes, default_profile_id, created_at, last_used_at, expires_at, revoked_at
        FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC`,
     c.get('userId')
   );
+  // Scopes are stored stringified; hand back an array rather than make every client JSON.parse
+  // a field of an already-parsed response. A row written before this (or by hand) that does not
+  // hold an array degrades to no scopes rather than throwing the whole listing away.
+  const tokens = rows.map((row) => {
+    let scopes: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(row.scopes);
+      if (Array.isArray(parsed)) scopes = parsed.filter((s): s is string => typeof s === 'string');
+    } catch {
+      /* leave empty */
+    }
+    return { ...row, scopes };
+  });
   return c.json({ tokens });
 });
 

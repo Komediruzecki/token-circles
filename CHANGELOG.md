@@ -10,7 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **You can now connect Claude, or any other MCP client, to your account** with a personal access token, and have it read your transactions, summarise your spending, or categorise them for you.
+- **You can now connect Claude, or any other MCP client, to your account.** Create a personal access token under Settings → API access, choose what it is allowed to do, and revoke it whenever you like.
 - **Bank statements can be imported over the API**, in the same formats the Bank Imports tab already understands. Re-importing a statement you have already imported adds nothing.
 
 ## [5.12.2] — 2026-08-29

@@ -55,6 +55,17 @@ describe('token management endpoints', () => {
     expect(after?.revoked_at).not.toBeNull();
   });
 
+  it('lists scopes as an array, not a JSON-encoded string', async () => {
+    // They are stored stringified (apitoken.ts), and passing that straight back would make the
+    // client JSON.parse a field of an already-parsed response.
+    await mintApiToken(env.DB, USER_ID, { name: 'three', scopes: ['read', 'write', 'import'] });
+    const listed = await SELF.fetch('https://api.example.com/api/account/api-tokens', {
+      headers: { Cookie: cookie },
+    });
+    const list = (await listed.json()) as { tokens: { scopes: unknown }[] };
+    expect(list.tokens[0]!.scopes).toEqual(['read', 'write', 'import']);
+  });
+
   it('refuses to mint without a cookie, even with a valid bearer token', async () => {
     const minted = await mintApiToken(env.DB, USER_ID, { name: 'x', scopes: ['read', 'write'] });
     const res = await SELF.fetch('https://api.example.com/api/account/api-tokens', {
